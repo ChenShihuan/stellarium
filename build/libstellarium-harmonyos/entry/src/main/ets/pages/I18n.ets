@@ -247,6 +247,8 @@ const RICH_PHRASES: Record<string, Record<string, string>> = {
 const UI_STRINGS: Record<string, Record<string, string>> = {
   'btn_start_recording': { 'en': 'Start Recording', 'zh_CN': '开始录制', 'ja': '録画開始', 'ko': '녹화 시작', 'fr': 'Commencer l\'enregistrement', 'de': 'Aufnahme starten', 'es': 'Iniciar grabación', 'ru': 'Начать запись' },
   'btn_stop_recording': { 'en': 'Stop Recording', 'zh_CN': '停止录制', 'ja': '録画停止', 'ko': '녹화 중지', 'fr': 'Arrêter l\'enregistrement', 'de': 'Aufnahme stoppen', 'es': 'Detener grabación', 'ru': 'Остановить запись' },
+  'btn_bookmark_object': { 'en': 'Bookmark Object', 'zh_CN': '收藏天体', 'ja': '天体をブックマーク', 'ko': '천체 북마크', 'fr': 'Marquer l\'objet', 'de': 'Objekt markieren', 'es': 'Marcar objeto', 'ru': 'Добавить объект' },
+  'bookmark_selected_object_hint': { 'en': 'Selected', 'zh_CN': '当前选中', 'ja': '選択中', 'ko': '선택됨', 'fr': 'Sélectionné', 'de': 'Ausgewählt', 'es': 'Seleccionado', 'ru': 'Выбран' },
   'msg_apply_failed': { 'en': 'Apply failed', 'zh_CN': '应用失败', 'ja': '適用失敗', 'ko': '적용 실패', 'fr': 'Échec de l\'application', 'de': 'Anwendung fehlgeschlagen', 'es': 'Error al aplicar', 'ru': 'Ошибка применения' },
   'msg_azimuth': { 'en': 'Az', 'zh_CN': '方位角', 'ja': '方位角', 'ko': '방위각', 'fr': 'Az', 'de': 'Az', 'es': 'Az', 'ru': 'Аз' },
   'msg_bookmark_deleted': { 'en': 'Bookmark deleted', 'zh_CN': '已删除书签', 'ja': 'ブックマーク削除済み', 'ko': '북마크 삭제됨', 'fr': 'Signet supprimé', 'de': 'Lesezeichen gelöscht', 'es': 'Marcador eliminado', 'ru': 'Закладка удалена' },
