@@ -4569,3 +4569,392 @@
 - **边界与协议：** 用户表示上次提交仍在审核，明确要求现在不改政策；不对 AGC 新建、修改、生成、替换协议或提交审核。本地既有草案不在本轮重写。重力传感器正式披露仍待政策可编辑后处理。其他 GPU 等待/业务线程冻结与 Release 压力复测不能用本轮结果代替。
 - **断点：** 准备保存此次应用开发状态至用户的 GitHub fork；不上传审核原始附件、原始日志、设备截图、签名材料、临时测试工程或不相关官网/服务器工作区。
 - **断点结果：** 应用开发状态已于本轮推送至 `joinother/stellarium` 的 `fix/api22-privacy-v2`，提交 `101acf6cd3`。官网与服务器相关未提交改动继续保留；本地旧政策草案随原有开发状态存档，不代表修改 AGC 托管协议。补充跟踪补丁文件的空白上下文属性，仅对 `.patch` 数据生效，不放宽应用源码检查。
+
+## [2026-09-08] Codex - 读取 AGC 新报告并保存原协议修订
+
+- **修改文件：** `docs/PRIVACY-POLICY.md`、`docs/privacy/index.html`、`AGC-REVIEW-2026-09-08.md`、`KNOWN-ISSUES.md`、本日志；AGC 原协议编辑。
+- **修改内容：** 读取16:46:59报告，区分三项阻塞和三项非阻塞建议；补齐传感器、SN/UDID、Qt SDK、粗略位置、撤回/本机保存及分享边界。纠正本地草案“SN 来源尚未核验”的旧状态，不宣称接口尝试等于成功取得标识。
+- **保存结果：** AGC 原 ID 在17:04:48提示保存成功，列表仅一条且状态草稿、链接为 `--`；未生成或提交审核。平台固定服务器存储句与离线版本冲突，记录为发布前待处理，未用附注冒充全文一致。
+- **构建结果：** 本轮无产品代码变更，未构建、安装、改签名或开放联网；原有工作区改动保留。
+- **验证结果：** 已检查预览正文和保存后列表；本地隐私回归与差异检查结果另附。不将9月7日提交旧包失败说成1000050再次失败。
+- **最终验证：** 重新进入原协议编辑页，状态草稿，传感器、SN/UDID、粗略位置及日期均已持久保存。首次误用 DevEco Node18 执行回归，因缺少 stripTypeScriptTypes 未运行测试；改用本机 Homebrew Node26.7 后19项隐私回归全部通过，git diff --check通过。未生成公开协议，不把此次文档回归当作系统审核通过。
+
+## [2026-09-08] Codex - 继续整改审核安全间距、字号与启动阻塞
+
+- **修改文件：** `QAbility.ets`、`MainWindowNativeNode.ets`、`StellariumResourceBootstrap.ets`、`QAbilityStage.ets`、隐私启动及审核回归脚本、生成工程。
+- **修改内容：** 监听系统导航避让区并转换像素至 vp，Dock 预留28vp及闲置位移余量，视觉、点击区及紧凑面板共享几何；固定文字及自适应最小字号不低于10fp。启动剩余批量资源读取、复制、目录枚举改为异步，完整写入后原子替换，异步结束再次核验当前隐私同意。没有减少画质、资源或分辨率。
+- **修改原因：** 处理 AGC 报告底部间距和 PC 小字建议，减少启动主线程同步文件操作；保留 SN/UDID 同意后 SDK 初始化能力，不将声明代替门禁。
+- **验证进度：** 26项隐私/审核回归通过，源工程已同步，正在 CompileArkTS 与独立 Debug 验证。尚未给出启动耗时改进数字或全部审核通过结论。
+- **官方依据：** 已通过华为 MCP 阅读 `arkts-develop-apply-immersive-effects` 与 `window-faqs`，导航区使用 avoidAreaChange 返回值；28vp/10fp为此次审核报告要求。主 Release 与独立 Debug 签名配置未编辑。
+- **补充调用链审计：** 用户要求不能仅凭 HiLog 判断 SN，已反汇编 Release HAP 内 ArkTS 字节码，并核对匹配 SDK 的 initDeviceInfo。发现备用 QChildProcess.onStart → runQtChildProcess 同样进入 initAppData，现补齐当前政策门禁及未同意/旧版本/拒绝/接口异常回归。未证明此备用入口曾在审核场景实际执行，不将静态存在夸大为已复现根因。
+- **政策状态变化：** 本轮只读发现原协议17:11:24已为完成态，编辑页保留整改正文，公开新标签仍显示8月旧文。用户要求先跳过政策；没有再保存、生成或覆盖。待公开正文与版本确认一致后再处理，不能将后台完成态代替公开内容验收。
+- **最终包检查：** 新增 `check-ohos-privacy-artifact.mjs`，用 SDK ark_disasm 检查实际签名 HAP；确实拦住一次 QChildProcess 未列入同步清单的遗漏，已补同步及回归，最终主 Release 包通过。28个Qt可加载文件内容节一致；整体库摘要差异来自打包去调试符号，不把哈希不同盲判旧库。核验快照及源码链见 `SN-CALL-BOUNDARY-AUDIT-2026-09-08.md`。
+- **最终构建/验证：** 47项回归、358命令目录、10项离线目录、平台补丁与生成源同步检查通过；最终主Release assembleHap成功20.029秒，独立Debug成功15.202秒并安装Pad。两套签名配置摘要均保持原值，未增加联网或标识权限。未上传新包或提交AGC审核。
+- **最终实机：** 进程53981同意时序脚本通过，SN/UDID尝试位于有效同意后，接口返回拒绝；20次复制/图层切换等83响应，最高790ms，PID不变，当前采样未匹配到AppFreeze。截图复核Dock与详情摘要，分辨率2560×1600。资源准备387ms，完整启动约13.6秒，核心启动优化、其他机型和Release系统隐私专项仍待做。主进程实测不冒充备用子进程已实机覆盖。
+- **失败记录：** 首次编译本身成功但shell退出状态处理使用zsh保留变量status报错，已更正并重新完整构建；第一次轮询日志缺启动首段而未通过时序检查，后改启动前连续采集并对准确PID验收。系统故障历史命令未提供可用记录，不以空输出证明无冻结。
+
+## [2026-09-08] Codex - 按用户要求切换主工程至 Debug 签名
+
+- **修改文件：** `build/libstellarium-harmonyos/build-profile.json5`、本日志。
+- **修改内容：** 产品的 signingConfig 从 release 切换为现有 default；该配置已与 Pad 独立 Debug 工程签名配置核对一致。不修改证书、密钥、密码、Profile、编译模式或版本号。
+- **修改原因：** 用户明确要求 JSON5 改用 Debug 签名。
+- **构建结果：** 未重新构建或安装；现有 HAP 不会因配置选择改变而自动重签。
+- **验证结果：** 采用 DevEco 自带 JSON5 解析器核对；签名定义应保持不变，仅切换产品引用。最初使用 JSON 解析器因模板注释失败，已改用 JSON5。
+
+## [2026-09-08] Codex - 审核六项复核及云调试隐私错误诊断
+
+- **修改文件：** `PrivacyConsent.ets`、`PrivacyBootstrap.ets`、`I18n.ets`、隐私启动回归、最终包检查脚本及审核报告。
+- **修改内容：** 保留隐私服务错误码，区分1006700003配置未取得、一般服务故障、用户未同意；重试时保留提示并限制快速连点。无有效同意仍阻止Qt。最终包报告加入真实编译模式与版本，允许显式要求debug/release并检查，避免只改签名却用错包。
+- **修改原因：** 云调试日志重复1006700003，截图无法区分配置异常和未同意；公开政策仍旧，不能声称六项意见全部落实。
+- **验证结果：** 50项回归通过；本地18:15旧HAP的Debug模式检查作为负例正确失败。只读核对AGC原报告和公开协议，未保存/生成/提交政策。
+- **构建结果：** 开始同步并按用户当前Debug签名选择构建真正的Debug测试包；后续追加结果。不会将Debug测试包视为正式上架包。
+- **最终构建：** CompileArkTS通过43.618秒，assembleHap通过64.432秒；保留既有NODE/onScroll弃用告警。50项回归、358命令、10项离线目录、平台补丁与生成源同步检查通过。签名定义摘要不变，产品仍用用户指定default。
+- **最终包：** app.debug=true、versionCode=1000050，SHA256为ea5c8651cf7b00b41fe734afbd1f512a629bb4277661d650bb77469225af7ec6；主入口三处检查、子进程门禁及28个Qt运行内容节核验通过。另存Downloads/星象仪-1.0.9-1000050-Debug-云调试.hap供云调试，未再次安装Pad或上传云端。Debug输出目录没有独立SourceMap侧文件，报告明确为null，不引用旧Release映射冒充当前构建。
+- **构建失败记录：** 首次从生成工程用相对scripts路径启动失败；改绝对路径后环境继承了无效DEVECO_SDK_HOME导致构建预检失败，随后显式指定DevEco自带SDK重新构建成功。未为环境问题改动项目SDK版本或签名。
+
+## [2026-09-08] Codex - 按用户要求将安装包 debug 切回 false
+
+- **修改内容：** 用显式buildMode=release重新构建主工程输出；保留default Debug签名选择，证书与签名定义摘要不变，不改代码、版本号或权限。
+- **修改原因：** 用户明确要求debug=false。云调试能运行Release包；官方预置隐私链接的Debug测试条件不能泛化为云调试必须Debug，也不能仅凭编译模式认定1006700003的唯一根因。
+- **构建结果：** CompileArkTS 44.625秒，assembleHap成功62.606秒。未安装Pad或上传AGC。
+- **验证结果：** EXPECT_OHOS_BUILD_MODE=release最终包检查通过，实际app.debug=false；主入口和子进程隐私门禁、Qt运行内容节检查通过。HAP SHA256为8678cc8bb508b28130c19a7ad97fb2903c21f2db8cdd4b6659cc5e24db0a6788。
+- **备注：** 主工程outputs/default/entry-default-signed.hap已更新；Downloads内此前另存的Debug云调试包未改写，仍是debug=true。编译模式与签名独立，当前不是正式Release签名上架包。
+
+## [2026-09-08] Codex - 开始个人软件著作权登记准备
+
+- **修改文件：** `SOFTWARE-COPYRIGHT-PREPARATION-2026-09-08.md`、`SOFTWARE-COPYRIGHT-DESIGN-DRAFT.md`、`SOFTWARE-COPYRIGHT-SOURCE-INDEX.md`、本日志。
+- **修改内容：** 阅读版权中心 R11 表单、填表说明、所需文件和问答；页面预填拟定名称/简称/V1.0.9，未提交或签章。准备功能与设计文档、上游/Qt许可边界、代码候选索引及内容摘要。
+- **修改原因：** 用户开始办理软著，确认个人申请、此前未登记且未公开安装包，但源码在GitHub公开；不能据未上架直接填写未发表。
+- **构建结果：** 文档任务，未构建、安装、改签名或提交应用审核。
+- **验证结果：** 已截图核对表单三项预填，GitHub API确认公开仓库与开发分支快照；当前为浅克隆且工作树未提交，未声称完全确定首次发表日期、原创比例或最终许可材料充分性。行数与摘要从当前文件读取。
+- **备注：** 待申请人确认完成日期、拟登记版本发表事实及版权中心对GPL许可证明的材料口径；未上传源码/身份文件、未取得受理号、未推送GitHub。不得将页面暂存状态或此准备稿描述为已受理。
+- **材料核验：** 10个源文件/版本文件摘要回读一致，三份草稿格式检查与 `git diff --check` 通过；本地发现8月21日已有1.0.9版本号，但不将commit日期当成首次公开日期。申请表保留待确认，未签署权利声明。
+
+## [2026-09-08] Codex - 最低支持版本提升至 API 23
+
+- **修改文件：** `harmonyos/build-profile.json5`、`build/libstellarium-harmonyos/build-profile.json5`、本日志。
+- **修改内容：** 两份工程配置的 compatibleSdkVersion 从 6.0.2(22) 改为 6.1.0(23)，compileSdkVersion 和 targetSdkVersion 保持 6.1.1(24)。
+- **修改原因：** 用户明确要求最低支持 API 23；后续新包不再支持 API 22 及以下系统。
+- **构建结果：** 本轮仅修改配置，未重新打包或安装，已有 HAP 不会随配置自动更新。
+- **验证结果：** 本机华为 SDK 版本映射确认 API 23 对应 6.1.0(23)；JSON5 解析及版本断言通过；屏蔽最低版本字段后的修改前后摘要完全一致，确认签名及其他配置未动。git diff --check 通过。
+- **备注：** 同步脚本明确不覆盖 build-profile.json5，因此分别做单字段修改，未运行会覆盖其他工作区改动的整体同步。首次验证因 JSON5 库路径不匹配失败，定位 DevEco 实际内置路径后重试通过。
+
+## [2026-09-08] Codex - 选择 Release 签名并提升 Build 号
+
+- **修改文件：** `build/libstellarium-harmonyos/build-profile.json5`、`harmonyos/AppScope/app.json5`、`build/libstellarium-harmonyos/AppScope/app.json5`、本日志。
+- **修改内容：** 实际打包工程 default 产品选择已有 release 签名；两份应用配置 versionCode 从 1000050 增至 1000051，versionName 保持 1.0.9，最低支持仍为 API 23。
+- **修改原因：** 用户明确要求切换 Release 签名并增加一个 Build 号。
+- **构建结果：** 未重新构建、签名、安装或提交；已有 HAP 仍为旧产物，须重新打包。
+- **验证结果：** JSON5 解析、版本一致性、Release 签名引用及 API 23 断言通过；排除 signingConfig 选择字段后的文件摘要与切换前完全一致，证书、密钥及其他构建配置未修改。
+- **备注：** Release 凭据仅存在于本地生成工程，未复制进源码模板或版本库；同步脚本继续保留本地签名选择。正式发布打包仍须使用 release 编译模式。
+
+## [2026-09-08] Codex - 复核 1000051 提交包的 SN 初始化门禁
+
+- **修改文件：** 本日志；未修改应用代码、签名或隐私政策。
+- **修改内容：** 从现有 `build/libstellarium-harmonyos/build/outputs/default/libstellarium-harmonyos-default-signed.app` 提取内嵌 `entry-default.hap`，运行最终产物反汇编检查和隐私启动回归。
+- **修改原因：** 用户要求确认准备提交的版本保留同意前 SN 初始化拦截；不能仅以单独 HAP 的模式或普通日志无 SN 作为依据。
+- **构建结果：** 未重新构建或安装，本轮检查已有 APP 内嵌 HAP，版本 1000051、release、debug=false。
+- **验证结果：** 主入口三处同意检查、备用子进程门禁、Qt 平台库 28 个运行内容节一致性通过；23 项隐私启动回归全部通过。内嵌 HAP SHA256：`59db0850d6d79f0c4d690e7bf48d39d6d31efa8d2c8bd86a1907aeb87e313b76`。
+- **备注：** SN/UDID 同意后 SDK 读取能力仍保留。该检查不是系统级敏感接口扫描或穷尽控制流证明；尚未取得该提交包华为隐私专项复测结果。报告 sourceMap=null 来自临时提取目录未附同次构建映射文件，不能据此判断原构建目录是否有映射。AGC 托管配置及公开政策生效仍需独立验收。
+
+## [2026-09-08] Codex - 隐私弹窗与启动页面防重入
+
+- **修改文件：** `harmonyos/ets-source/qability/PrivacyConsent.ets`、`pages/PrivacyBootstrap.ets`、`qability/QAbility.ets` 及三个对应生成副本、`scripts/test-ohos-privacy-startup.mjs`、本日志。
+- **修改内容：** 隐私服务层共享正在进行的请求，多个页面调用合并为一次系统请求；单个隐私页面生命周期仅自动尝试一次，拒绝或异常后只能主动重试；窗口创建/恢复共用正在加载的根页面任务，防止异步完成前重复 loadContent。
+- **修改原因：** 用户反馈隐私政策连续出现两三个。代码发现防重入仅限单个页面实例、根页面仅有完成标记且缺少加载中锁；这些是可复现的重入风险，尚不能认定用户设备上每个弹窗均由其引起，也不能将用户协议、权限申请误当重复隐私政策。
+- **构建结果：** 三个生成副本原有差异仅为本轮补丁，已定点同步，准备独立 release CompileArkTS 验证；不调用隐含默认构建模式的 check-ohos.sh，不覆盖现有发布 APP/HAP。
+- **验证结果：** 28 项隐私启动回归通过，新增并发请求合并、拒绝后主动重试、撤回后不沿用旧同意、服务异常释放锁、生命周期重复通知、并发根页面初始化及初始化失败重试。原有 SN 主/子进程门禁断言继续通过。
+- **备注：** 未更改签名、Build 号、公开政策、权限或 SN 读取策略；仅代码级检查，不代表真机弹窗次数已验收。已核对本机华为 SDK Privacy Manager 接口声明；官方网页正文未成功获取，未采纳第三方建议绕过同意。
+- **最终验证：** 用修改前后的请求函数做受控三调用对比：原实现产生 3 次系统接口请求，修复后仅 1 次；这是代码级并发复现，不是对设备实际弹窗的归因证明。release CompileArkTS 成功（9.678 秒），保留既有 NODE/onScroll 弃用告警；28 项隐私回归、7 项审核整改回归、Qt 平台补丁、10 项离线目录及三个生成副本一致性检查通过。Release 签名选择与 API 23 保持不变；没有重新 assembleApp/assembleHap，已有发布包不含本轮弹窗去重补丁，提交前须重新生成并真机复测。
+
+## [2026-09-08] Codex - 真机定位系统托管与主动请求叠加隐私弹窗
+
+- **修改文件：** `harmonyos/ets-source/pages/PrivacyBootstrap.ets`、`harmonyos/ets-source/qability/QAbility.ets` 及对应生成副本、`scripts/test-ohos-privacy-startup.mjs`、`PRIVACY-DOUBLE-DIALOG-2026-09-08.md`、`KNOWN-ISSUES.md`、本日志。
+- **修改原因：** MatePad Mini 上 1000050、debug=false 实测一次应用请求创建两个独立隐私 UIExtension；同一时刻系统启动拦截也发起托管弹窗。不是仅靠模块内请求合并可消除的并发来源。华为 MCP 官方完整指南确认托管启动自动弹窗及签署结果公共事件机制。
+- **修改内容：** 去掉启动页的自动主动请求，改为注册 `usual.event.PRIVACY_STATE_CHANGED`，注册后与收到事件时核验当前协议 ID/版本/类型/签署状态；不信任广播载荷作为授权。保留手动重试、请求合并和根页面加载锁，退出页面退订及拦截延迟回调；更新启动日志，避免误报主动请求。
+- **构建结果：** 定点同步两份生成副本，显式 release `default@CompileArkTS` 成功（4.661 秒），保留既有弃用告警。前两次任务名称不正确未执行编译，修正模块任务名后通过。
+- **验证结果：** 32 项隐私启动、7 项审核整改回归通过；未同意、旧协议、服务异常及 Qt 主/子进程门禁继续受测。设备已设最低亮度及调试保亮，未替用户同意政策。
+- **备注：** 未变更签名、Build、隐私政策、权限或 SN 策略；未重新打包和安装，Pad 仍是复现双弹窗的旧包，新代码真机验收待做。不能把本次编译成功当作设备已修复。
+
+## [2026-09-08] Codex - 提升 Build 至 1000052 并确认 Release 签名
+
+- **修改文件：** `harmonyos/AppScope/app.json5`、`build/libstellarium-harmonyos/AppScope/app.json5`、本日志。
+- **修改内容：** 两份 versionCode 从 1000051 增至 1000052，versionName 保持 1.0.9；生成工程 default 产品已经选择 release 签名，保持原样，未复制或修改证书、密钥和 Profile。
+- **修改原因：** 用户先要求提升 Build 并安装，随后明确改为仅提升 Build 并使用 Release 签名，不安装或卸载。
+- **构建结果：** 改口前已启动的 release assembleHap 完成（5.907 秒），签名成功；未执行 assembleApp，因此原发布 APP 文件不能视为本次 1000052 新包。
+- **验证结果：** 39 项隐私及审核整改回归通过；五份隐私入口源文件与生成副本一致；build-profile.json5 修改前后 SHA256 完全一致，Release 签名引用和 API 23 已核对，git diff --check 通过。
+- **备注：** 仅执行了设备调试保亮和最低亮度准备；未安装、卸载或清除应用数据。Pad 仍是原安装包，1000052 双弹窗修复的真机验收待做。
+
+## [2026-09-08] Codex - 修复独立渲染路径的纹理上传预算并重叠启动动画
+
+- **修改文件：** `src/core/StelApp.cpp`、`StelTextureMgr.cpp/.hpp`、`harmonyos/ets-source/pages/StartupSky.ets` 及生成副本、`scripts/test-texture-frame-budget.mjs`、`scripts/test-ohos-startup-stars.mjs`、`STARTUP-TEXTURE-BUDGET-2026-09-08.md`、`KNOWN-ISSUES.md`、本日志。
+- **修改原因：** 旧 Pad 包本地 674 张深空图片完整，M31 居中仍持续 loading。纹理每帧预算原依赖桌面 frameFinished 清零，鸿蒙独立 render pump 未走此路径，导致上传额度跨帧耗尽；月球、火星共用这一纹理管理器。
+- **修改内容：** 将计数清零统一放在核心 draw 初始化检查后、所有渲染 pass 前；保留异步解码、每帧预算和原分辨率。汇字与隐私放行后的核心加载并行，真实呈现就绪才散开，保留原柔和时长，长启动避免再等约1.59秒汇字。
+- **构建结果：** 鸿蒙 C++ stellarium 交叉构建成功，新库定点同步生成工程；1000052 Release assembleHap 成功（7.182秒）。签名配置摘要不变，未生成新版 APP 文件。
+- **验证结果：** 60 项检查通过；新 HAP 隐私产物审计通过，主入口3处检查、子进程门禁及28个Qt平台运行内容节匹配。HAP SHA256：`a7cb770f044c104eb6d1c8de9e6de3d9d67c6375d45ccfe846a0ae6e48ec89c3`。源码及生成副本、原生库一致性和 git diff --check 通过。
+- **真机状态：** 用户随后明确要求安装验收，已向无线 Pad 发起覆盖安装；本条暂不宣称安装成功或贴图真机通过，结果后续追加。隐私同意仍由用户本人操作。
+
+## [2026-09-09] Codex - 按用户授权切换 Default 签名并安装 Pad
+
+- **修改文件：** 本机生成工程 `build/libstellarium-harmonyos/build-profile.json5` 的 default 产品 signingConfig、`STARTUP-TEXTURE-BUDGET-2026-09-08.md`、`KNOWN-ISSUES.md`、本日志。
+- **修改原因：** Release 签名安装报 9568322、不受信任应用来源；用户明确要求主工程改用已有 Default 调试签名。不卸载、不清除数据，不修改证书、密钥、Profile 或隐私同意状态。
+- **构建结果：** Default 签名、Release 编译 assembleHap 成功（9.137 秒）；产物审计通过。未生成新版发布 APP。HAP SHA256：`502c0856a86b6115078920851ca506df45736bc758818b6939569e3f95aadbde`。
+- **安装结果：** 无线 MatePad Mini 覆盖安装成功，设备查询为 1.0.9 / 1000052 / debug=false。最低亮度=1，调试息屏超时设为24小时。
+- **验证结果：** M31 当前视野纹理 ready、loading=0，截图确认星图星系与详情图片；月球星图表面地貌及详情球体可见。火星详情球体可见，星图球面因测试中视角/FOV及详情标签变化尚未完成稳定验收。启动后的进程40248保持存活，实际尺寸首帧到文字完成约29ms、再到淡入结束约1.11秒；首次资源解包及此前重启原因仍需独立核验，不能宣称整体启动耗时已达标或全场景无冻结。
+- **隐私边界：** 编译门禁检查通过，日志确认当前协议核验先于 Qt 放行；未执行撤回后的专项测试，不把普通日志当系统隐私扫描证明。未代用户点击同意。测试证据保留于本机 `/tmp/stellarium-1000052-*`，不提交完整设备日志或敏感签名配置。
+
+## [2026-09-09] Codex - 默认选中固定并修复快速缩放的延迟回弹
+
+- **修改文件：** `src/StelMainView.cpp`、`src/StelOhosCommandCatalog.hpp`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`及生成副本、`scripts/test-ohos-screen-anchor.mjs`、`scripts/test-ohos-screen-anchor-pad.mjs`、`SCREEN-ANCHOR-2026-09-09.md`、`KNOWN-ISSUES.md`、本日志。
+- **修改内容：** 原生选择事件默认固定，详情响应直接同步状态；以实际显示FOV开始手势，取消旧自动缩放；惯性先于投影更新，松手在同帧校正后交接，任意天区缩放持续保存最终选择位置；不再通过整数拖动和极点方位角分支校正锚定，改为亚像素相机旋转。保留取消固定、手动拖动、惯性、脚本/陀螺仪优先及原画质。
+- **诊断接口：** 新增默认关闭的 setViewAnchorProbe 与只读 getViewAnchorState，提供本机解算样本、偏差和耗时，不采集身份信息、不联网。
+- **构建结果：** 鸿蒙 C++交叉构建成功，Release模式/Default签名 HAP成功（40.078秒）；产物隐私门禁检查通过。签名配置SHA校验不变，版本号仍1000052，未生成新版发布APP或提交Git。HAP SHA256：`86e1ce7c40af0aec23216fc50c309282b80bd29e2774fdbe64373673f45b8184`。
+- **验证结果：** 65项回归通过，含225组实际C++旋转公式数值案例；无线Pad覆盖安装成功，四组语义CLI场景通过。另经截图定位实际目标后进行220ms两指放大，最终FOV0.893864°确认惯性运行且目标不回弹，解算最大耗时0.101041ms。测试后关闭探针。
+- **验证边界：** DevEco Node18不足以执行既有类型剥离测试，改用Homebrew Node26通过；CLI重启Ability分发有约165ms间隔，不能当高频触摸，两个惯性强制断言实验失败后改用真实触摸路径验证，未放宽业务阈值。整体帧耗时仍约21—42ms采样，不等于所有卡顿已消除。证据和未覆盖设备矩阵见专项文档。
+
+## [2026-09-09] Codex - 修复隐私弹窗前后误闪“星图尚未启动”
+
+- **修改文件：** PrivacyBootstrap、ApplicationRoot、QAbility及生成副本，两份隐私/启动测试，`PRIVACY-STARTUP-UI-2026-09-09.md`、KNOWN-ISSUES、本日志。
+- **修改内容：** 区分未决定与失败，等待阶段不报错；15秒后仅提供手动帮助；核验同意立即清除旧提示，在同一背景中展示加载说明。过期异步错误不覆盖同意结果，退出清理计时器。原隐私门禁、SN检查及子进程门禁不变。
+- **验证结果：** 58项回归通过，CompileArkTS/Release HAP构建成功（9.091秒），编译产物隐私检查通过；已覆盖安装无线Pad，Default签名、1000052不变。系统取消正常退出；用户亲自同意后正常进入2560×1600星图，CLI ready=true，截图确认无残留恢复窗口。
+- **边界：** 同意瞬间未录制连续视频，异常恢复按钮本轮以逻辑测试覆盖；未以普通日志宣称通过系统隐私扫描。未改协议、签名、权限，未生成发布APP，未提交Git。详见专项记录。
+
+## [2026-09-09] Codex - 补齐托管用户协议核验及运行中重新签署
+
+- **修改文件：** PrivacyConsent、QAbility、ApplicationRoot、PrivacyBootstrap、I18n及生成副本、`test-ohos-privacy-startup.mjs`、`PRIVACY-AGREEMENT-RENEWAL.md`、KNOWN-ISSUES、本日志。
+- **修改内容：** 所有配置的隐私/用户协议分别匹配类型、编号、版本和同意结果；前台返回立即核验、前台30秒监测；失效时原窗口暂停相关业务、展示官方弹窗入口，不撤销旧签署记录或销毁Qt。补齐窗口待恢复、背景不恢复、CLI拒绝业务请求和只读getPrivacyConsentState。更正旧探针privacy-request-start为privacy-verification-start，避免误读为主动重复弹窗。
+- **验证结果：** 72项回归通过，CompileArkTS/Release assembleHap成功（12.361秒），产物隐私门禁及平台库检查通过。已安装无线Pad，原同意记录核验正常、星图ready=true（2560×1600），截图确认无遮罩残留。签名仍Default、版本仍1000052，配置SHA未变。
+- **边界：** 多协议版本变化、拒绝/重试及生命周期暂停以可执行逻辑测试覆盖；未变更AGC正式协议，需要新协议正式下发后的端到端复测。不承诺30秒获知未下发的云端修改，不以普通日志替代系统隐私扫描。未生成发布APP、未推送Git。
+
+## [2026-09-09] Codex - 撤回多余的应用侧协议更新工作流
+
+- **原因：** 用户提供的华为说明明确在AGC选择是否需要重新授权，由平台负责更新提示；MCP没有要求30秒查询。此前固定轮询属于应用自定兜底，不是官方要求。
+- **修改文件：** QAbility、ApplicationRoot、PrivacyBootstrap、I18n及生成副本，隐私回归测试、协议更新说明、KNOWN-ISSUES、本日志。
+- **修改内容：** 删除30秒轮询、全屏重签引导、全应用暂停/恢复和重签专用CLI全局阻断。只读CLI去掉renewalRequired；保留启动、Qt子进程、敏感功能同意核验、窗口恢复门禁及系统弹窗异常恢复。未改SN读取路径、AGC协议、签名或用户同意记录。
+- **验证结果：** 72项回归通过，生成同步及CompileArkTS/Release assembleHap成功（14.951秒）。Default签名、1000052及签名配置SHA不变。设备列表当前无无线Pad，本轮不声称已安装，未生成发布APP、未推送Git。
+- **后续安装：** 主动重连原无线Pad成功，已覆盖安装精简版。未同意阶段CLI返回原生未初始化，系统签署事件核验后才进入Qt；未代点同意。最终CLI ready=true、2560×1600，无自制renewalRequired状态。启动早期超时和ready=false已保留记录，约27秒资源准备仍为性能待排查。产物隐私审计通过，HAP SHA256见专项文档。
+
+## [2026-09-09] Codex - Release签名与Build 1000053产物复核
+
+- **修改文件：** `harmonyos/AppScope/app.json5`及同步生成副本；本地生成工程`build-profile.json5`仅将产品signingConfig从default切至现有release；本日志。
+- **修改内容：** 用户授权Build由1000052递增为1000053，版本名保持1.0.9；Release构建、debug=false。签名配置条目整体指纹前后一致，未改证书、密钥或Profile，未向源码模板复制本机签名材料。
+- **构建结果：** 源码同步成功，72项回归全通过，Release assembleHap成功（6.905秒，存在既有弃用告警）。未生成新APP、未安装Pad或推送Git。
+- **验证结果：** 新HAP反汇编审计确认主初始化3处当前协议核验、子进程onStart先核验再调用runQtChildProcess，拒绝分支先返回；28个Qt运行时节与审计补丁一致。产物版本1000053，HAP SHA256：`11283573e02f8e84cc13ee1cab1ea623623b4b27ba05a6314e68879e2f170673`。本机证据`/tmp/build53-tests.log`、`/tmp/build53-hap.log`、`/tmp/build53-artifact.json`。
+- **隐私边界：** 本次未删除同意后的SN能力；保护范围是未同意时阻断已审计的Qt初始化读取路径。编译门禁及运行库一致性检查不等同系统级隐私扫描，不承诺所有路径永远不读取SN或保证审核结果。
+
+## [2026-09-09] Codex - OnStep星闪控制器产品路线
+
+- **修改文件：** `ONSTEP-NEARLINK-PRODUCT-ROADMAP.md`、既有`TELESCOPE-NEARLINK-RESEARCH-2026-09-02.md`、`NETWORK-INVENTORY.md`、本日志。
+- **修改内容：** 承接既有接口预研，明确开发板桥接验证→单PCB双主控→可选单主控降本路线；补齐选型、Pad自定义服务互通、协议与CLI、断线安全、硬件在环测试、商用许可/认证待核项目。
+- **依据：** 华为MCP复核两套manager接口的API23/API26版本区别；沿用本轮查询的OnStepX与海思官方资料。不把通用星闪能力当自制望远镜已经兼容。
+- **验证结果：** 文档相对链接和差异格式检查通过；纯文档变更，未构建、未改签名/权限、未安装或采购硬件。阶段验收与成本均为规划，尚未完成星闪样机联调。
+
+## [2026-09-10] Codex - 个人软著申请续办与上架事实核对
+
+- **修改文件：** `SOFTWARE-COPYRIGHT-PREPARATION-2026-09-08.md`、本日志。
+- **操作内容：** 在用户打开的版权中心进入R11本人申请，预填名称与V1.0.9；开发页选择应用软件、修改软件、已发表并填写修改说明。只读AGC确认1.0.9已上架及平台时间，不把它直接当首次发表日期。
+- **验证结果：** 页面显示开发信息步骤、应用软件及42/50字修改说明；尚缺完成/首次发表日期与地点，权利和许可材料待核。未保存实名条目、未上传文件、未签署声明、未正式提交或生成受理号；不声称服务器已保存草稿。
+- **边界：** 只记录非敏感申请准备信息，不将证件、身份号码、联系方式写入仓库；本轮未构建、未改签名或应用代码。
+
+## [2026-09-10] Codex - 软著日期不确定时补查公开证据
+
+- **修改文件：** `SOFTWARE-COPYRIGHT-PREPARATION-2026-09-08.md`、本日志。
+- **核查结果：** GitHub公开事件包含8月21日20:43:55（北京时间）开发分支推送9a8dd78731，提交内为1.0.9/1000025；还存在8月11日事件。无Releases，事件第二页为空，本地浅克隆。不能将上架日、首次查到的事件或仓库创建日自动当申报首次发表日。
+- **处理：** 更新证据表和版权中心咨询稿，保留日期、地点及软件全称待确认；未修改网页日期、未提交或上传。当前源码与已上架包须另行匹配，不伪造开发完成或原创范围。
+- **验证：** Git对象与公开API记录已交叉核对，文档差异检查通过；纯文档变更，未构建应用。
+
+## [2026-09-10] Codex - 软著申请材料核对包
+
+- **修改文件：** `SOFTWARE-COPYRIGHT-PREPARATION-2026-09-08.md`、本日志；本机Downloads目录生成设计说明DOCX、功能填报稿、源码身份清单、来源许可及使用说明。
+- **内容：** 整理架构与主要模块，保留Stellarium/Qt权属边界；15个候选文件仅记录路径、行数和哈希，不冒充正式源码交存页或原创证明。实际申报源码与上架包的一致性尚待核对。
+- **流程：** 官方申请页仍停在开发信息，日期、地点及许可证明接受方式待确认；未上传材料、未签署法律声明、未最终提交。未改签名、应用代码或Git远端。
+- **验证：** 设计说明渲染为4页并逐页查看，中文可读，无文字重叠或裁切；GPL复制件与仓库原文逐字节一致，两份仓库文档差异检查通过。版式核对不等于正式交存格式或登记资格审核通过。
+
+## [2026-09-10] Codex - 软著上架Build与本地证据留存
+
+- **修改文件：** `SOFTWARE-COPYRIGHT-RELEASE-EVIDENCE-2026-09-10.md`、申请准备文档、本日志；本机材料包补充版本证据目录。
+- **核查：** AGC软件包管理显示9月9日10:37:23上传的是1.0.9/1000053/build1，与已上架版本历史相接；排除Downloads中的Build50/51同名旧包。本地Build53为最低API23/目标API24/debug=false，修正申请草稿旧API22。
+- **留存：** 本地APP原样复制，39文件候选源码ZIP与哈希记录；34个ETS/TS模板与生成文件一致，打包ABC与构建缓存一致。SourceMap无源码全文，未宣称完整编译源可追溯或云端原包完全相同。
+- **官方核实：** 浏览器读取版权中心证明文件、修改授权项、外文证明译本、日期及源程序量要求；GPL接受形式未取得个案答复。4页说明仍需正式交存排版，不把草稿当最终材料。
+- **验证：** 复制APP哈希一致，候选ZIP逐文件摘要检查通过，常见私钥/AK/密码模式未命中。未编译、未改签名、未上传申请材料；AGC下载页失败，已停止下载尝试。
+- **用户补充后操作：** 按申请人明确提供的城市填入首次发表国家/省/市，页面已显示选定地点；未根据户籍推断。日期仍空，未保存身份条目或提交；具体个人地点不写入公共Git文档。
+
+## [2026-09-10] Codex - 软著改进内容与官方邮件咨询准备
+
+- **修改文件：** `SOFTWARE-COPYRIGHT-MODIFICATIONS-2026-09-10.md`、申请准备文档、本日志；本机材料包增加改进说明和未发送咨询稿。
+- **内容：** 核对导航、CLI接入、导览快照、模型后台任务、离线资源和隐私协调8项实现与具体源码；明确可就有独创性且依法享有权利的新增修改表达准备登记，不因开源基础或许可证明形式待核而停止材料制作。
+- **官方依据：** 浏览器读到版权中心软件著作权部邮箱`rjdj@ccopyright.com`；核对登记办法第7条和最高法院对开源义务、独创性贡献权利基础的区分。未声称已有个案许可答复。
+- **验证与边界：** 核对实际函数与实现，原署名保留；未改应用代码、签名或构建。仅本地咨询草稿，未发送邮件、未上传或最终提交登记申请。
+
+## [2026-09-10] Codex - 软著续填及系统必填验证
+
+- **操作：** 按用户要求继续填写，补选修改他人软件需授权项；页面新增授权书PDF上传位。点击下一步后，两处日期出现“请选择日期”，未进入功能或最终提交页。
+- **状态：** 首次发表地点保持用户已确认选项。日期未捏造，GPL原文未冒充专项授权书，未上传、保存身份条目、签署或提交；本次不能报告申请已提交。申请标签已保留待续填。
+- **修改文件：** 申请准备文档、本日志；未改变应用代码、签名、Git远端。
+
+## [2026-09-10] Codex - 开源二次开发软著案例核查与办理决定
+
+- **修改文件：** `SOFTWARE-COPYRIGHT-MODIFICATIONS-2026-09-10.md`、本日志。
+- **内容：** 核实OfficeTen/OpenWRT二次开发登记及VirtualApp登记案例，区分法院认定、当事人说法、登记许可附件要求；决定继续修改软件路线，优先整理开源许可及来源说明，不以必须另取专项签字授权书或等待邮件回信阻断全部准备。
+- **验证结果：** 已阅读法院案情、判决与国家版权局第7、11条；未找到公开可核验的GPL附件具体受理样本，不宣称版权中心已认可材料形式。
+- **构建结果：** 纯材料研究，未构建；未改签名或应用代码。
+- **备注：** 日期未代造，未上传许可证明、签署或正式提交申请。
+
+## [2026-09-10] Codex - 生成软著开源许可说明及提交核对清单
+
+- **修改文件：** `SOFTWARE-COPYRIGHT-PREPARATION-2026-09-08.md`、本日志；本机申请包新增10页PDF、核验JSON、提交前清单。
+- **内容：** 将修改软件路线落实为来源说明、改进实现、固定上游对象及完整GPL许可附录；原署名和Qt模板许可单列，不伪造专项授权或签章。
+- **验证结果：** PDF 187333字节；10页逐页渲染检查通过；许可全文与源文件忽略排版空白后一致，源许可与上游对象逐字节一致，代表性版权声明与候选快照相同。
+- **网页状态：** 再次核对申请开发信息，日期、著作权人保存和附件仍待补齐；未上传核对稿、签署或提交，无受理号。
+- **构建结果：** 纯申请材料工作，未构建应用，未改签名或包版本，未推送Git。
+
+## [2026-09-10] Codex - 确认软著完成日期并复核早期源码发表
+
+- **操作：** 按申请人“昨天完成”的确认填入2026-09-09，R11字段回读一致。首次发表日期未填写，未签署提交。
+- **证据：** GitHub最新开发分支公开对象为9月8日1.0.9/1000050，8月21日公开对象为1.0.9/1000025；本次1000053候选的三个隐私入口文件及AppScope与最新公开对象不同。事件窗口有限，不把空页视为从未公开。
+- **建议：** 区分本次完成成品和早期源码；9月10日上架日仅作为本次成品首次发表候选，需排除此前其他渠道公开，不能由内部Build变化自动重置发表日期。
+- **修改文件：** 申请准备文档、本日志、本机提交清单；未构建、未修改应用或签名。
+
+## [2026-09-10] Codex - 按申请人确认补填本次成品首次发表日期
+
+- **操作：** 申请人确认上架前未另行公开该成品，结合已核对的GitHub旧版本，R11首次发表日期填2026-09-10，开发完成日期保留2026-09-09；两字段回读一致。
+- **材料：** 更新申请准备文档和本机提交清单，仍保留早期源码公开记录，避免将本次成品日期混同整个项目首次公开。
+- **状态：** 未上传材料、签署或正式提交；未构建、修改应用及签名。
+
+## [2026-09-10] Codex - 上传软著鉴别材料并保存官方草稿
+
+- **修改文件：** `SOFTWARE-COPYRIGHT-PREPARATION-2026-09-08.md`、本日志、本机办理清单和填报稿。
+- **修改内容：** 补齐功能环境与源程序量，制作源程序60页及设计说明2页；与10页许可核对稿一并上传，进入确认页并保存草稿。官方用户中心已显示本申请“暂存”，流水号仅留本机。
+- **验证结果：** 1068源码文件留存完整排列及摘要；既有39文件快照逐字节相同；62页渲染检查完成，PDF文本越界字符0；网页确认附件页数60/2/10。纠正此前根据隐藏校验文字认定著作权人未保存的判断。
+- **未完成：** 外文许可证明缺有资质机构盖章的中文译本，具体GPL证明形式仍待确认；未确认填报、本人签字、正式提交或受理。邮箱连接未授权，未发送咨询。
+- **构建结果：** 材料任务未构建，未改应用源码、签名、版本或Git远端。
+## [2026-09-12] 时间面板布局与控制整理
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`harmonyos/ets-source/pages/I18n.ets` 及同步生成工程。
+- **内容：** 为时间方程选项增加稳定行高和换行，修正长文本挤压；儒略日输入框增加垂直空间并保留完整历法说明；时间控制统一为倒带、暂停/继续、前进、倍率选择和实时，暂停/继续沿用状态切换动画。
+- **验证：** 已同步生成工程并通过 `git diff --check`；ArkTS 编译复核中。
+- **签名：** 未修改签名、证书或 Profile。
+## [2026-09-12] 极轴镜与选中详情层隔离
+
+- **内容：** 打开极轴镜时保留原生天体选中状态，但关闭详情卡片层，避免选中天体后的详情 UI 覆盖或抢占极轴镜首帧；极轴镜仍由独立覆盖层绘制。
+- **验证：** 待同步生成工程并执行 ArkTS 编译。
+## [2026-09-12] 时间变更保持地平线姿态
+
+- **内容：** 时间轴和快捷时间调整在更新模拟时刻前保存当前视图上方向，更新后恢复该方向，避免选中天体时地平线因视图滚转发生倾斜。
+- **验证：** 已修改原生时间命令；需重新构建原生库后在 Pad 上验证。
+## [2026-09-12] 本地天文通知服务基础层
+
+- **修改文件：** `harmonyos/ets-source/qability/AstronomyNotificationService.ets`。
+- **内容：** 新增 Notification Kit 基础服务，支持查询通知授权、按用户触发授权、发布普通/多行本地通知和取消通知；默认不联网、不读取设备标识，不自动申请授权。
+- **范围：** 本轮仅建立可复用服务层，尚未接入卫星过境调度、代理提醒、实况窗或桌面卡片；这些能力分别受后台调度、AGC 开放能力和 Form/Live View 生命周期约束。
+- **验证：** 待接入 QAbility 后执行 ArkTS 编译；未修改签名、证书或 Profile。
+
+## [2026-09-23] Codex - 官网部署、免费 HTTPS 与自动续期
+
+- **修改文件：** `website/app/{page,layout}.tsx`、`website/app/privacy/page.tsx`、`website/scripts/check-static.mjs`、`website/deploy/`、网站 README、`SERVER-SECURITY.md`、`NETWORK-INVENTORY.md`。
+- **修改内容：** 将真实静态页面部署到上海 ECS；经明确授权只开放 80/443，添加主域名/www 的 A 记录，官网 nginx 与原本机资源服务隔离。控制台核实网站备案号 `新ICP备2026008516号-1` 并更新页脚；网站隐私页与实际访问日志字段、180 天轮转一致。正式页面允许索引，本地预览仍发送 noindex 响应头。
+- **HTTPS：** 按用户对免费证书和订户协议的确认安装官方 acme.sh 3.1.6，双域名证书签发成功，私钥只留服务器。新增每日随机续期检查、证书/密钥/域名校验、原子安装与热重载。首次检查 Result=success、ExecMainStatus=0，尚未到续期时间跳过重签，不假称未来续期已验证。
+- **构建结果：** 网站 lint、TypeScript、生产构建和四条静态路由/资源/备案号审计通过；部署 shell 语法检查通过。不涉及应用编译、签名、Profile 或 Build 号。
+- **验证结果：** 服务器公网域名首页/隐私/致谢均 200、TLS 校验 0，HTTP/www 跳转正确；原 8080 服务仍 staging/非公开。390px 手机布局无横向溢出、无已加载坏图，首屏和页脚已看图。本机 utun6 代理路径主域名访问中断、www 可返回 301，独立用户公网浏览器验收仍待完成，未擅改网络。
+- **修正过程：** acme.sh 不支持 `--accept-terms`，使用用户已确认的客户端正常签发流程；首次 nginx 普通用户配置测试缺绑定端口能力，脚本自动还原 HTTP 配置，随后按 systemd 实际能力配置完成 HTTPS；未为此扩大普通用户权限。
+- **范围：** APP 联网构建切换仍未实施；已登记逐项服务开放门槛，不会盲目启用上游自动网络请求。AppGallery 徽章需核验官方鸿蒙下载链接后再放置，不伪造链接；未购买 OSS/CDN/证书服务。
+- **收尾：** 已关闭 root 维护会话，重新以 skyops 建立独立会话，通过日常 CLI 身份校验和资源服务健康检查；最终 HTTPS 拒绝隐藏路径 403、未知路径 404、POST 405，`git diff --check` 通过。
+
+## [2026-09-23] Codex - MatePad Mini 独立官网连通性复验
+
+- **操作：** 自动识别无线设备 MLR-AL00，通过设备 CLI 请求官网，未安装/重装应用、修改签名、关闭证书校验或更改系统网络。
+- **验证：** 主域名 DNS 正常；先用固定 IP 排除解析问题，再以真实域名连接，TLS 主机名与完整证书链验证退出 0。首页、隐私、致谢、星图图片 200；www 301 到主域名。首轮域名连接超时，复测通过。
+- **证书工具说明：** Pad 命令行 OpenSSL 没有默认 CA 目录，显式使用 Let's Encrypt 官方公开 ISRG Root X1 PEM（SHA-256 指纹 96:BC:EC:06:26:49:76:F3:74:60:77:9A:CF:28:C5:A7:CF:E8:A3:C0:AA:E1:1A:8F:FC:EE:05:C0:BD:DF:08:C6），只用于测试进程，未安装进系统信任库。
+- **范围：** 补齐服务器外独立客户端 HTTPS 验证；不冒充已完成 Pad 浏览器视觉验收，Mac 代理访问故障仍待解决。APP 联网开关、版本和证书均未改，无需应用构建。
+- **修改文件：** `website/deploy/README.md`、`SERVER-SECURITY.md`、本日志。
+
+## [2026-09-23] Codex - 应用联网部署清单及备案展示复核
+
+- **修改文件：** `NETWORK-DEPLOYMENT-PLAN-2026-09-23.md`、`NETWORK-INVENTORY.md`、本日志。
+- **核查：** 22 个来源注册表通过；确认 ArkUI/Qt/manifest 仍离线，资源服务 CLI 返回 staging/publicService=false。七类内置目录 gzip 合计约 0.99 MiB，优先统一轻量更新分发，不先购买 OSS/CDN。
+- **问题：** 卫星目录与清单哈希仍不一致，批量 fetchedAt 8 月 27 日、partial=true，不能直接发布为最新。初查应用源码和生成工程中没有备案号展示；官网 -1 号不能代替 APP 编号。AGC 登录过期，后续按用户要求在阿里云核对并补齐，见下条。
+- **依据：** 华为开发 MCP 核对核准指引、本地通知、Push、IAP；华为云/阿里云文档核对 APP 编号区别和设置/关于展示位置。完整报告区分需要自建、可随包、无需公网与后续托管能力。
+- **验证：** 只读审计及文档变更，无应用构建/安装、无 AGC 修改、无签名/Profile/联网权限变更。
+
+## [2026-09-23] Codex - 阿里云核实 APP 备案号并补入应用
+
+- **修改文件：** `harmonyos/ets-source/common/QtAppConstants.ets`、`pages/MainWindowNativeNode.ets`、`pages/I18n.ets`、`qability/QAbility.ets` 及生成工程；`src/StelOhosCommandCatalog.hpp`、`scripts/test-ohos-app-filing.mjs`、CLI/联网清单/部署报告和本日志。
+- **修改内容：** 阿里云“我的备案 → App”加载完成后显示星象仪 `新ICP备2026008516号-2A`，域名 skyinstrument.cn。设置“设备与隐私”及帮助“关于”共用同一编号组件，点击号码通过系统 Hyperlink 打开工信部核验首页；新增只读 `getAppFilingInfo` CLI。号码不随语言改变，标签提供常用语言翻译及英语回退。
+- **修改原因：** 应用此前缺备案展示，网站 -1 编号不能代替已核实的 APP -2A 编号。
+- **构建结果：** 同步后 CompileArkTS BUILD SUCCESSFUL，21.547 秒；初次发现 Hyperlink 不支持 fontSize，按本地 SDK 接口移除该属性后通过。未执行签名打包或原生重编。
+- **验证结果：** 备案号/共用 UI 与 CLI 常量/离线状态/四份生成源码一致性测试通过，22 项联网来源审计通过，git diff --check 通过。Pad 尚未安装本轮改动，真机点击跳转和 CLI 回读待新包验收，不冒充已经部署。
+- **备注：** 未新增 INTERNET、自动网络请求、SN 读取；未修改签名、Profile、Build 号或 AGC 申报。资源服务仍 staging，TLE 清单哈希和陈旧数据问题仍须修复后才公开分发。
+
+## [2026-09-23] Codex - 通知、桌面卡片与节气完成度复核
+
+- **修改文件：** `NOTIFICATION-AND-FORM-ROADMAP.md`、本日志。
+- **核查：** 普通/多行本地通知和四条 CLI 已有基础实现，但没有规则 UI、自动调度、图片通知或事件 WantAgent；源码及生成工程没有 Form 扩展和配置，也没有代理提醒权限/接入或实况窗。节气面板和 getAlmanac 只有二分二至四项，不是二十四节气。
+- **设计补充：** 节气、月相/食/合相/流星雨、关注卫星触发时机与可见性规则，卡片快照、实况窗资格、真实时间与模拟时间隔离。将规划和实现状态明确分开，修正旧文档“未备案”前提。
+- **验证结果：** 源码检索和华为 MCP 代理提醒文档核对完成；Pad 已连接但 getNotificationStatus 10 秒超时，安装包授权状态未确认，不推断超时原因。未发布通知/触发授权、修改应用、签名或安装。
+- **构建结果：** 仅文档更新，未构建；git diff --check 通过。
+
+## [2026-09-23] Codex - 补齐二十四节气离线计算与年历展示
+
+- **修改文件：** `src/core/modules/SpecificTimeMgr.{hpp,cpp}`、`src/StelMainView.cpp`、`harmonyos/ets-source/pages/{StellariumTypes,I18n,MainWindowNativeNode}.ets`、生成工程、`NOTIFICATION-AND-FORM-ROADMAP.md`、`CLI.md`。
+- **修改内容：** 新增按太阳黄经每 15°求根的 `getSolarTerm`，`getAlmanac` 返回小寒至冬至 24 项及 JD/本地时间；ArkTS 年历展示 24 项，支持点击跳转，并为中/英/日/韩界面提供节气名称。
+- **边界：** 当前实现是离线查询和跳转，不申请通知权限、不注册后台代理提醒、不新增服务卡片或联网请求。
+- **验证结果：** 待完成原生库构建、生成工程同步和 ArkTS 编译；未改签名、Profile、Build 号或 Pad 安装包。
+
+## [2026-09-23] Codex - 接入本地年历桌面服务卡片
+
+- **修改文件：** `harmonyos/ets-source/form/SkyInstrumentFormAbility.ets`、`SkyInstrumentCard.ets`、`harmonyos/resources/base/profile/form_config.json`、`harmonyos/module.json5`、`harmonyos/ets-source/qability/QAbility.ets`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`scripts/sync-ohos-build-sources.sh` 及通知/CLI 文档。
+- **修改内容：** 注册 ArkTS `FormExtensionAbility`，以本地偏好快照显示下一节气和更新时间；应用加载年历后更新快照；卡片点击经 `QAbility` 路由到天文计算年历页。保持通知服务为用户主动触发的本地通知，不新增代理提醒权限或网络请求。
+- **构建结果：** 桌面 `cmake --build build --parallel --target stellarium` 成功；生成工程同步成功；`default@CompileArkTS --no-daemon` 成功（22.494 秒）。
+- **验证结果：** 服务卡片配置 JSON、生成工程一致性、应用备案回归、审核整改回归、22 项 HarmonyOS 数据源联网审计和 `git diff --check` 均通过；ArkTS 仅有既有弃用/API 警告。
+- **签名：** 未修改签名、证书、Profile、Build 号，也未安装到 Pad；尚未执行 HAP 打包和真机服务卡片添加验收。
+
+## [2026-09-23] Codex - Pad 验收与官网 AppGallery 入口
+
+- **Pad 验收：** 通过独立 Debug 包安装到 `192.168.1.38:46135`，同意隐私托管后启动星图；`getPrivacyConsentState`、`getAppState`、`getAlmanac` 均返回成功，二十四节气字段完整，截图确认主界面已进入；未发现本轮新增的崩溃或冻结日志。
+- **网站修改：** `website/app/page.tsx` 增加官方 AppGallery App Linking 入口，使用包名 `com.joinother.skyinstrument`，并保留“详情页未公开时搜索星象仪”的回退说明；同步更新网站 README 和发布说明，不宣称华为认证或推荐。
+- **网站验证：** `lint:site`、TypeScript、生产构建和静态审计通过。Workbench CLI 当前上传因文件中转 OSS TLS 握手超时失败，且 `skyops` 没有无密码 `sudo`；官网线上内容尚未切换，未伪称已部署。
+- **签名边界：** 仅使用独立 Debug 包做 Pad 验收；源工程 `harmonyos/build-profile.json5`、证书、Profile、Build 号未修改，生成工程签名配置已恢复为原 Release 状态。
+
+## [2026-09-23] Codex - 后台天文提醒与联网服务分层
+
+- **修改文件：** `harmonyos/ets-source/qability/AstronomyReminderService.ets`、`harmonyos/ets-source/qability/QAbility.ets`、`harmonyos/module.json5`、`src/StelOhosCommandCatalog.hpp`、`scripts/sync-ohos-build-sources.sh`、`scripts/test-ohos-reminder-contract.mjs`、`docs/PRIVACY-POLICY.md`、`docs/privacy/index.html`、通知/联网规划文档。
+- **修改内容：** 接入 HarmonyOS `reminderAgentManager` 的一次性代理提醒；新增状态、列表、注册下一节气、取消和清理 CLI。提醒使用真实设备时间、用户主动授权和系统代理，不读取 SN/UDID、不上传位置、不访问公网。备案后的联网能力按自有资源更新、第三方查询、局域网望远镜控制分层规划，未盲目打开全部上游插件。
+- **修改原因：** 补齐后台自动提醒基础能力，同时避免把 APP 备案号误解为自动获得 INTERNET、AGC 开放能力、Push 或第三方数据授权。
+- **构建结果：** 生成工程同步成功；`default@CompileArkTS --no-daemon` BUILD SUCCESSFUL；`assembleHap --mode module -p product=default -p buildMode=release --no-daemon` BUILD SUCCESSFUL；随后执行 debug 模式清理构建 `assembleHap --mode module -p product=default -p buildMode=debug --no-daemon` BUILD SUCCESSFUL。
+- **验证结果：** `scripts/test-ohos-reminder-contract.mjs`、`test-ohos-app-filing.mjs`、`test-ohos-review-remediation.mjs`、`check-ohos-network-sources.mjs` 和 `git diff --check` 均通过；Pad 安装尝试被设备返回 `9568322 signature verification failed due to not trusted app source` 拒绝，未卸载现有应用、未冒充真机提醒已验收。
+- **备注：** AGC“代理提醒”开放能力和新 Profile 尚未确认；当前 HAP 仍不能作为已获批的后台提醒发布包。自有资源服务仍为 loopback staging，TLE 清单哈希/过期数据问题修复前不启用客户端自动更新。望远镜控制继续采用局域网/星闪本地链路，不新增公网代理。
+
+## [2026-09-23] Codex - 多设备协同与应用接续第一阶段
+
+- **修改文件：** `harmonyos/ets-source/qability/CollaborationSessionService.ets`、`qability/QAbility.ets`、`pages/MainWindowNativeNode.ets`、`pages/StellariumTypes.ets`、`pages/I18n.ets`、`harmonyos/module.json5`、`scripts/sync-ohos-build-sources.sh`、`src/StelOhosCommandCatalog.hpp`、`scripts/test-ohos-collaboration-contract.mjs`、`docs/harmonyos/COLLABORATION-AND-CONTINUATION-ROADMAP.md`、`CLI.md`、`NETWORK-INVENTORY.md`。
+- **修改内容：** 将原始复制粘贴会话改为版本化、带有效期和预览摘要的接续包；默认脱敏精确位置，不携带 SN、UDID、账号、密码或望远镜凭据。新增 CLI 创建、预览、导入、应用和复制能力；同时预留与未来系统 Ability 接续相同的脱敏信封，但当前不启用系统接续入口。
+- **修改原因：** 为手机、平板、桌面端统一多设备协同入口，区分完整配置备份、当前观测接续、系统流转和未来局域网/分布式协同，避免把原始 JSON 当作唯一用户入口；工具与数据入口新增用户主动触发的系统分享，可分享接续包或完整配置备份，并对手机窄宽度改为三按钮均分布局。
+- **构建结果：** 已完成生成工程同步和 `default@CompileArkTS --no-daemon`，构建成功；未修改签名、证书或 Build 号。
+- **验证结果：** `scripts/test-ohos-collaboration-contract.mjs` 契约测试、ArkTS 编译和 `git diff --check` 已通过；真机安装和系统设备发现尚未宣称完成。
+- **备注：** `continuable=false` 保持不变；分布式设备发现/软总线需在 Profile、AGC 接续服务和双设备验收完成后再开启。当前不新增 `INTERNET`，剪贴板/系统分享/本地文件是基础 SDK 兼容路径。
+
+## [2026-09-23] Codex - 华为地图位置选点接入（可选在线模式）
+
+- **修改文件：** `harmonyos/ets-source/pages/LocationOnlineMap.ets`、`harmonyos/ets-source/pages/MapCoordinate.ts`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`harmonyos/ets-source/pages/I18n.ets`、`harmonyos/ets-source/qability/QAbility.ets`、`src/StelOhosCommandCatalog.hpp`、`harmonyos/module.json5`、`scripts/sync-ohos-build-sources.sh`、`docs/PRIVACY-POLICY.md`、`docs/privacy/index.html`、`docs/harmonyos/NETWORK-INVENTORY.md`、`docs/harmonyos/MAP-KIT-INTEGRATION-PLAN.md`。
+- **修改内容：** 位置页保留离线世界地图，并新增用户主动选择的华为 Map Kit 在线地图；支持地图点击选点、地图中心选点、超时/失败提示和一键回退。通过官方坐标纠偏接口将地图坐标转换为天文引擎使用的 WGS84，未接入逆地理编码、持续定位、路线规划或文化地图在线瓦片。
+- **修改原因：** 让普通位置选择可以使用鸿蒙国产地图服务，同时不把文化历史分布图误当现代行政地图，不改变文化资料范围和语义。
+- **构建结果：** 代码已修改，待同步生成工程后执行 `default@CompileArkTS --no-daemon`；本条记录不代表 AGC 地图服务/Profile 已开通。
+- **验证结果：** 已通过华为开发者知识 MCP 核对 Map Kit、坐标纠偏、API 版本及隐私边界；Pad 真机在线地图尚未验收，需先确认地图服务能力/Profile 和签名包可安装。
+- **备注：** 新增 `ohos.permission.INTERNET` 仅服务用户主动开启的 Map Kit 模式；默认离线，不发送 SN/UDID。文化地图仍为本地 `worldmap.jpg` 与本地轮廓叠加。
+
+## [2026-09-23] Codex - 卫星搜索别名与详情本地化
+
+- **修改文件：** `plugins/Satellites/src/Satellites.cpp`、`plugins/Satellites/src/Satellite.cpp`、`src/StelMainView.cpp`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`po/stellarium/zh_CN.po`、`po/stellarium/zh_TW.po`、对应 `translations/stellarium/*.qm` 及生成工程镜像。
+- **修改内容：** 卫星插件增加 NORAD 名称、英文名称、官方译名及中文别名的统一匹配；支持“国际空间站/ISS/ZARYA/NAUKA”和“天宫空间站/中国空间站/TIANGONG/CSS/天和/问天/梦天”等搜索。补齐 CSS（天和、问天、梦天）中文译名，详情卡和卫星列表在简繁中文界面显示本地化名称，同时保留英文原始名称作副标题。修正 ISS 判断使用 NORAD 25544，而不是错误比较名称字符串。
+- **修改原因：** 当前卫星搜索只经过通用天体索引，无法稳定命中卫星模块别名；现代 TLE 名称使用 `CSS (...)`，旧翻译只覆盖 `TIANGONG (...)`，导致详情英文或搜不到空间站。
+- **构建结果：** 原生 `cmake --build build --parallel --target stellarium` 成功；`scripts/sync-ohos-resources.sh` 成功；`default@CompileArkTS --no-daemon` BUILD SUCCESSFUL；Debug `assembleHap` BUILD SUCCESSFUL。
+- **验证结果：** 本地目录确认已内置 ISS NORAD 25544、CSS/TIANHE 48274、CSS/WENTIAN 53239、CSS/MENGTIAN 54216，且均 `visible=true`；已用 Pad CLI 复现旧安装包对“国际空间站/天宫空间站”返回 `found=false`。新 Debug 包安装到 MatePad Mini 被设备拒绝，错误为 `9568322 signature verification failed due to not trusted app source`，未卸载现有包，故真机新逻辑待开启可信来源后复测。
+- **备注：** 未新增联网请求、未修改签名/Profile/Build 号；卫星 TLE 仍以随包数据为准，数据更新策略不在本次改动内。
+
+## [2026-09-23] Codex - 高频界面多语言与 DevEco/Clash 调试流程
+
+- **修改文件：** `harmonyos/ets-source/pages/I18n.ets`、生成工程镜像、`docs/harmonyos/NETWORK-INVENTORY.md`；新增本机 Skill `~/.codex/skills/clash-control/`。
+- **修改内容：** 补齐搜索、时间、位置、图层、观测、更多功能、脚本和常用分组在 43 种支持语言中的高频文案，重点修复阿拉伯语、乌克兰语等语言仍显示英文 `Place` 的问题；建立 Clash 外部控制器的安全只读检查流程和 DevEco 自动签名代理故障记录。
+- **构建验证：** `scripts/sync-ohos-build-sources.sh`、`scripts/check-ohos-i18n.mjs`、`git diff --check` 通过；生成工程 Debug `assembleHap` 成功，HAP 的 `appProvisionType` 为 `debug`、API 兼容版本为 23；已安装到 MatePad Mini 并通过 CLI `getAppState` 回读。
+- **Clash 结论：** DevEco 日志确认 GRS/Connect API 出现 TLS handshake/超时；当前构建和安装在代理开启时仍成功，因此本轮不盲目改动 Clash 配置。下次自动签名复现时按已建立的 Skill 先核对具体域名，再决定是否加最小 `DIRECT` 规则。
+- **安全边界：** 未提交 API 密钥、订阅地址、代理节点、证书或密码；未修改源码 Release 签名配置、运行时联网权限或应用网络行为。长尾 UI 仍有部分语言回退英文，审计报告已保留待后续分批补齐。
