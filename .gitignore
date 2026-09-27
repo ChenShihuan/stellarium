@@ -97,3 +97,5 @@ docs/harmonyos/signing/
 tmp/location-zh-cache.json
 harmonyos/.appanalyzer
 harmonyos/.codegenie/
+# DevEco Studio 打开 harmonyos/ 镜像时自动生成，内容与工程无关
+harmonyos/.gitignore
