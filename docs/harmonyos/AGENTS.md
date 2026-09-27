@@ -63,20 +63,15 @@ docs/harmonyos/
 ├── HANDOFF.md                 ← 项目交接文档（给新 Agent 的快速入门）
 ├── CHANGELOG.md               ← 修改日志（每次变更必须追加）
 ├── KNOWN-ISSUES.md            ← 已知问题列表（Bug 追踪）
-├── codex/                     ← Codex Agent 的工作记录
-│   ├── Stellarium-HarmonyOS-交接文档.md
-│   └── ohos_patch/            ← Codex 编写的补丁代码
+├── DEVELOPMENT-MCP-WORKFLOW.md ← 官方文档查询与设备验证流程
+├── BUILD-WINDOWS.md           ← Windows 构建与装机指南（含必需编译参数与报错速查）
+├── CLI.md                     ← 命令目录契约
 ├── workbuddy/                 ← WorkBuddy Agent 的工作记录
-│   ├── memory/                ← Agent 记忆文件
-│   ├── phase2/                ← 第二阶段进度
-│   └── outputs/               ← 测试截图
-├── trae/                      ← TRAE Agent 的工作记录
-│   └── memory/                ← Agent 记忆文件
-├── harmonyos-project/         ← HarmonyOS 工程源码快照
-│   ├── ets-source/            ← ArkUI/ETS 源码
-│   ├── cpp-source/            ← C++ Native 源码
-│   └── *.json5                ← 构建配置
-└── signing/                   ← 签名证书和配置
+│   ├── memory/                ← Agent 记忆文件（含 Qt for OHOS 工具链踩坑记录）
+│   └── phase2/                ← 第二阶段工具包（Qt 交叉编译脚本与补丁）
+├── skills/                    ← 可复制到 Agent 运行时的技能包
+├── culture-review-batches/    ← 星空文化分批数据（被 scripts/review-skyculture-passages.py 读取）
+└── signing/                   ← 签名证书和配置（不入库，见 .gitignore）
     ├── stellarium-app-keypair.p12
     ├── stellarium-app-cert-chain.cer
     └── stellarium-ca-release-profile.p7b
@@ -489,7 +484,7 @@ $HDC -t 127.0.0.1:5555 shell uitest dumpLayout
 
 ## 7. 注意事项
 
-1. **不要修改 build 目录下的文件后忘记同步到 `docs/harmonyos/harmonyos-project/`**
+1. **ArkTS/资源只改 `harmonyos/ets-source/` 等镜像目录**，再用 `scripts/sync-ohos-build-sources.sh` 同步到生成工程 `build/libstellarium-harmonyos/`；不要只在生成工程里改（生成目录不入库，会被下次同步覆盖）
 2. **HAP 文件不要上传到 git（太大），只上传签名证书和配置**
 3. **不要推送到上游 `Stellarium/stellarium`**，推送到你自己的 fork
 4. **`entry/libs/` 目录不要删除！** 其中 .so 文件不在 git 中，丢失后只能通过 `harmonydeployqt` 重新生成
