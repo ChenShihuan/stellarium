@@ -5,7 +5,7 @@ import path from 'node:path'
 
 const root = process.cwd()
 const rawRoot = path.join(root, 'build/libstellarium-harmonyos/entry/src/main/resources/rawfile/stellarium')
-const output = path.join(root, 'docs/harmonyos/RESOURCE-COVERAGE-AUDIT-2026-08-24.md')
+const output = path.join(root, 'docs/harmonyos/archive/audits/RESOURCE-COVERAGE-AUDIT-2026-08-24.md')
 
 function walk(directory) {
   if (!fs.existsSync(directory)) return []
