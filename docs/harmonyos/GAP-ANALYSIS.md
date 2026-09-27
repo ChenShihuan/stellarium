@@ -3,7 +3,7 @@
 > **更新日期：** 2026-07-24
 > **分析范围：** C++ 桥接命令、ArkUI 面板、桌面版截图功能逐项对比
 > **当前版本：** commit 待补充 (openharmony-preview-v1)
-> **参考截图：** `docs/harmonyos/screenshots/desktop-ref/` (48 张桌面版截图)
+> **参考截图：** 已从仓库移除（原 48 张桌面版截图 + 16 张 Sky Guide 参考截图保留在 git 历史中，见第六节说明）
 
 ## 一、C++ 桥接命令完成度
 
@@ -154,16 +154,9 @@
 | 高级选择工具 | 中 |
 | 天文摄影模拟 | 中 |
 
-## 六、参考截图目录
+## 六、曾用于对照的桌面版界面
 
-```
-docs/harmonyos/screenshots/
-├── desktop-ref/     # 48 张桌面版 Stellarium 截图（功能参考）
-│                     # 涵盖：星图/搜索/设置/投影/卫星/Oculars/计算/帮助等
-└── harmonyos-ref/   # 16 张 Sky Guide 参考 + HarmonyOS UI 截图
-```
-
-桌面版截图文件名与功能对应：
+> 原 `docs/harmonyos/screenshots/` 已从仓库移除（48 张桌面版 Stellarium 截图 + 16 张 iPhone 上的 Sky Guide 参考截图，共约 216 MB，需要时可从 git 历史找回）。下表保留当时的对照关系，便于追溯这些桌面版对话框对应到鸿蒙端的哪些面板：
 
 | 文件名范围 | 展示内容 |
 |-----------|---------|
