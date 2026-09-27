@@ -1,7 +1,2 @@
 {
-  "common": {
-    "multiModalInputOptions": {
-      "mouse2TouchEventMode": "disabled"
-    }
-  }
 }
