@@ -1,3 +1,14 @@
+## [2026-09-27] DevEco Code - Windows 平台打通 API 26 编译链并真机验证星图
+
+- **修改文件：** `harmonyos/oh-package.json5`、`harmonyos/build-profile.json5`、`harmonyos/hvigor/hvigor-config.json5`、`harmonyos/resources/base/profile/easy_go.json`、`harmonyos/ets-source/qability/QtWindowStageAdapter.ets`、`scripts/sync-ohos-build-sources.sh`、`scripts/check-ohos.sh`、`scripts/build-ohos-hap-windows.ps1`、`scripts/sync-ohos-resources-windows.ps1`、`docs/harmonyos/BUILD-WINDOWS.md`、`.gitignore`。
+- **工具链对齐：** 本机只有 DevEco Studio 26.0.0.821 与 HarmonyOS 26.0.0（API 26）SDK，原工程 `compileSdkVersion: 6.1.1(24)` 无法解析。按 IDE 迁移结果把 `modelVersion`、`compileSdkVersion`、`targetSdkVersion` 统一为 `26.0.0`，`hvigor/hvigor-config.json5` 与 `oh-package.json5` 成对修正。`build-profile.json5` 仅改这两行，并移除其中他人本机的证书路径引用与悬空的 `signingConfig`：签名一律由 DevEco Studio 自动签名在 `~/.ohos/config` 生成，本仓库不保存任何证书路径或口令。
+- **API 26 适配：** `easy_go.json` 的 `multiModalInputOptions.mouse2TouchEventMode` 在 API 26 schema 中已移除（实测触发 `00303038 Schema validate failed`）；`QtWindowStageAdapter` 补齐 API 26 新增的 `setImageForRecent` / `removeImageForRecent`，否则 ArkTS 编译报 `incorrectly implements interface 'WindowStage'`。
+- **构建脚本修复：** `sync-ohos-build-sources.sh` 由显式文件清单改为整目录镜像——旧清单漏了 34 个媒体图标与 34 个 ets/ts 模块，导致 `Unknown resource name 'ic_globe'` 与 `Cannot find module '../process/QChildProcess'`；并停止覆盖 `AppScope/app.json5`，否则本地包名被还原、自动签名随即失配。`check-ohos.sh` 的 JPEG 检查改为按实际 `DT_NEEDED` 判定：Qt 6.12.0 的 `libqjpeg.so` 静态链接了 libjpeg，旧逻辑在官方 Qt 上必然误报缺少 `libjpeg.so`。
+- **Windows 链路（新增）：** 原 `CODEX_BUILD_AND_INSTALL.md` 全为 macOS 路径、且依赖 `rsync`/`ffmpeg`。新增 `scripts/build-ohos-hap-windows.ps1`（引擎交叉编译 → 修 `DT_NEEDED` → `harmonydeployqt` → 灌资源 → 同步源码 → `hvigorw assembleHap --no-daemon` → 可选装机）与 `scripts/sync-ohos-resources-windows.ps1`（`robocopy` 替 `rsync`、`System.Drawing` 替 `ffmpeg`），并附 `docs/harmonyos/BUILD-WINDOWS.md` 记录三个必需编译参数与全部实测报错。
+- **验证结果：** 引擎以 Qt 6.12.0 `harmonyos_arm64_v8a` 交叉编译出 41.1 MB `libstellarium.so`（AArch64）；`rawfile/stellarium` 灌入 549 MB（63 个星空文化、84 个 `.ssc`）；签名 HAP 679.8 MB 安装到 HUAWEI Mate 80 Pro（SGT-AL00，HarmonyOS 7.0.0 / API 26，`arm64-v8a`），`aa start` 成功且进程存活，hilog 出现 `StelRootItem paint reached`、`zero-copy frame bridge resolved`、`startOhosRenderPump entered`、`command on Qt thread: "setLanguage" "zh_CN"`、`ohosDrainCommandQueue`，截图为真实星场与银河，选中天体显示「河鼓二 Altair」、方位显示「南」。`build-ohos-hap-windows.ps1` 的构建路径与 `-Install` 路径均 EXIT=0，`git diff --check` 通过。
+- **范围约束：** 未改动签名材料、隐私门控、联网与画质配置，仓库内未新增任何证书、密钥或口令；`build-profile.json5` 的改动仅限 SDK 版本与移除他人本机证书引用（本机仅存 API 26 SDK，属用户明确要求的编译修复）。本机调试包名 `com.cnchensh.stellarium` 只存在于被忽略的生成工程内，镜像仍保持上游 `com.joinother.skyinstrument`。未以 `check-ohos.sh` 作为通过依据（该脚本在 Windows 无法整脚本运行）。
+- **未解决项：** 见 `KNOWN-ISSUES.md` 的「Windows 构建链遗留技术债（2026-09-27）」。
+
 ## [2026-09-01] Codex - 天空文化名称选择与资料布局修复
 
 - **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets`

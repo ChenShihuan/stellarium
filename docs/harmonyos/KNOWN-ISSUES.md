@@ -27,6 +27,37 @@
 - **处理方向：** 发布前补强资源/清单一致性门禁、补丁来源记录和整批恢复。保留 8 月 27 日批量抓取、partial=true 与 9 月 6 日单条更新的不同语义；不能刷新时间或 verified 字段冒充全部最新。本轮未修改数据、清单或签名。
 - **详情：** `DOMESTIC-RESOURCE-DISTRIBUTION-RESEARCH-2026-09-07.md`；未因此认定当前卫星计算不可用，也不将格式通过等同于轨道精度已验证。
 
+## Windows 构建链遗留技术债（2026-09-27，DevEco Code，待处理）
+
+### 1. 引擎依赖名依赖二进制补丁 — 【严重：每次重编引擎都必须重打】
+
+- **现象：** `libstellarium.so` 的 `DT_NEEDED` 被写成构建树路径 `_deps/md4c-build/src/libmd4c-html.so`、`_deps/md4c-build/src/libmd4c.so`、`_deps/nlopt-build/libnlopt.so`。装机后 `dlopen` 失败：`Error loading shared library _deps/md4c-build/src/libmd4c-html.so (needed by libstellarium.so)`，Qt 上下文初始化随即退出（ArkUI 外壳仍在，无星图）。
+- **原因：** Qt 的 OHOS 工具链设置 `CMAKE_PLATFORM_NO_VERSIONED_SONAME`，而 `md4c`/`nlopt` 由 CPM 引入且没有 `SOVERSION`，链接器于是把链接时路径写入 `DT_NEEDED`。
+- **当前处理：** `scripts/build-ohos-hap-windows.ps1` 的 `Repair-NeededPaths` 在 `.dynstr` 内等长改写为普通库名（NUL 填充），并把三个库补进 `entry/libs/arm64-v8a`，随后自检不允许残留路径形式的 `NEEDED`（注意只检查 `NEEDED`，`RPATH`/`RUNPATH` 里的路径在设备上会被忽略）。
+- **根治方向：** 在 CMake 层给这些目标加 `SOVERSION`（或改为静态链接），由链接器直接写普通库名，去掉二进制补丁这一环。
+
+### 2. 行星细节模型纹理缺失（`.model.rgba` 未生成）— 【P2：影响细节模型外观】
+
+- 上游 `sync-ohos-resources.sh` 会用 `ffmpeg` 生成 512×256（行星）与 512×2（行星环）的 RGBA 侧车文件；Windows 移植版 `sync-ohos-resources-windows.ps1` 目前跳过该步，本机无 ffmpeg。
+- **影响：** 打开「细节模型」时纹理缺失或异常；主星图、星空文化、深空天体不受影响。
+- **补齐方式：** 安装 ffmpeg 后跑上游脚本；或用 `System.Drawing` 实现等价缩放（需先确认 `.model.rgba` 的 RGBA 字节序）。
+
+### 3. 平台插件补丁与已安装 Qt 版本不匹配 — 【P1：剪贴板修复进不了包】
+
+- `scripts/build-ohos-platform-patch.sh` 写死 qtbase `REVISION=97575d35c0cecdc0fb4e12fc3575afaa9fd9d3f1`（Qt 6.12.0 Beta2），而本机安装的是 6.12.0 Release（`sbom` 记录 revision 为 `a2c0b1ea39aad5c9600a7bd9ca605a58a5bada30`）→ 脚本在版本校验处硬失败。
+- **后果：** 剪贴板通知补丁版的 `libqohos.so` 编不出来，当前 HAP 使用原版平台插件，`QT-CLIPBOARD-REVIEW-FIX.md` 记录的 AppFreeze 修复未在本次构建中生效。
+- **处理方向：** 更新脚本的 revision 与 SHA，并把 `harmonyos/qt-platform-patch/clipboard-notification.patch` rebase 到 6.12.0 Release 源码。
+
+### 4. `check-ohos.sh` 无法在 Windows 整脚本运行 — 【P3：工具可用性】
+
+- 该脚本依赖 `rsync` / `ffmpeg` / `du`，Windows 上都不存在；ETS 同步检查与 ArkTS 反模式检查可单独运行，JPEG 检查本轮已改为按 `DT_NEEDED` 判定。
+- 本轮 Windows 验证以 `scripts/build-ohos-hap-windows.ps1` 端到端 EXIT=0 + 真机 install/start + hilog + 截图为准。
+
+### 5. 离线依赖需要人工预置 — 【P3：换机器时要注意】
+
+- `github.com` 不可达时 CPM/FetchContent 无法克隆 `fast_float`（OHOS libc++ 不支持浮点 `std::from_chars`，该依赖必需）、`md4c`、`nlopt`。本次用可达的 `codeload.github.com` 拉 tarball 填回 `build/_deps/{fastfloat,md4c,nlopt}-src`，再以 `-DFETCHCONTENT_FULLY_DISCONNECTED=ON` 离线配置。
+- 另注意：`qt-cmake.bat` 会优先使用 `E:\Qt\Tools\CMake_64`，中途更换 CMake 版本会让 CMake 判定现有 `_deps` 失效并触发重新克隆。步骤见 `BUILD-WINDOWS.md` §4.1。
+
 > 格式：每个 Bug 一条记录，标注优先级和状态。新 Agent 从这里选任务。
 
 ---
