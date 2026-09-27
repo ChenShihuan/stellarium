@@ -1,3 +1,14 @@
+## [2026-09-27] DevEco Code - 文档分层归集、清理冗余 JSON 并修复脚本编码
+
+- **修改文件：** `docs/harmonyos/`（61 个文档 + 34 个 JSON 重新分层）、`docs/harmonyos/AGENTS.md`、`docs/harmonyos/DEBUGGING-GUIDE.md`、`docs/harmonyos/NETWORK-INVENTORY.md`、`docs/harmonyos/KNOWN-ISSUES.md`、`scripts/review-skyculture-passages.py`、`scripts/audit-ohos-resource-coverage.mjs`、`scripts/generate-deep-sky-inventory.mjs`。
+- **重组原则（目标是降低新人接入负担）：** 根目录只保留 9 个「必读/常查」文档 —— `AGENTS`、`HANDOFF`、`KNOWN-ISSUES`、`CHANGELOG`、`DEVELOPMENT-MCP-WORKFLOW`、`BUILD-WINDOWS`、`DEBUGGING-GUIDE`、`CLI`、`NETWORK-INVENTORY`；其余按用途分层：`build/`（构建·发布·签名·上架）、`policy/`（合规与政策）、`specs/`（现行实现规格 16 篇）、`research/`（预研与路线图 10 篇）、`json/`（全部保留的数据文件，含 `json/culture-review-batches/`）、`archive/`（`audits/` 20 篇历史审计与复核报告、`design/` 4 篇早期设计稿、`MOBILE-UI-HANDOVER.md`）；`skills/`、`workbuddy/` 保持原位。
+- **已移除：** `screenshots/`（48 张桌面版 + 16 张 Sky Guide 参考截图，216 MB）、`harmonyos-project/`（7 月的 ArkTS 源码旧副本）、`codex/`、`trae/`、`releases/`、`workbuddy/{device-tests,outputs}`（7 月测试产物 115 个文件）及 3 篇被现役 `HANDOFF.md` 取代的旧交接文档；`docs/harmonyos` 由 435 个文件 / 242.8 MB 降为 238 个文件 / 16.0 MB。
+- **依赖保护：** `json/` 下 4 类数据（`skyculture-corpus/passage/section-revisions` 等 3 个 JSON + `json/culture-review-batches/*.json` 整目录）仍被 `scripts/review-skyculture-passages.py` 读取，脚本路径已同步更新；`specs/DEEP-SKY-RESOURCE-INVENTORY.md` 与 `archive/audits/RESOURCE-COVERAGE-AUDIT-2026-08-24.md` 是脚本的生成产物，输出路径同样更新。
+- **顺带修复：** `review-skyculture-passages.py` 原先用 `Path.read_text()` 的默认编码读取 UTF-8 数据，在中文 Windows（GBK 区域）下必报 `UnicodeDecodeError`；6 处读写已显式指定 `encoding='utf-8'`。
+- **验证结果：** 重组后 `scripts/review-skyculture-passages.py --check` EXIT=0（18 条规则、63 个 section、7 个批次文件、85 个目录全部加载，`changedFiles: 0`）；`git diff --check` 通过。
+- **范围约束：** 未改动任何应用源码、签名材料、隐私门控或联网配置；`CHANGELOG.md` 既有历史条目保持原样（其中的旧路径按追加式历史保留）。
+- **备注：** `CHANGELOG` 历史条目提到的 `STARGAZING-HUB-RESEARCH-2026-09-08.md` 在仓库中从未存在，属既有悬空引用，本轮未处理。
+
 ## [2026-09-27] DevEco Code - Windows 平台打通 API 26 编译链并真机验证星图
 
 - **修改文件：** `harmonyos/oh-package.json5`、`harmonyos/build-profile.json5`、`harmonyos/hvigor/hvigor-config.json5`、`harmonyos/resources/base/profile/easy_go.json`、`harmonyos/ets-source/qability/QtWindowStageAdapter.ets`、`scripts/sync-ohos-build-sources.sh`、`scripts/check-ohos.sh`、`scripts/build-ohos-hap-windows.ps1`、`scripts/sync-ohos-resources-windows.ps1`、`docs/harmonyos/BUILD-WINDOWS.md`、`.gitignore`。
