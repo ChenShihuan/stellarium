@@ -1,6 +1,7 @@
 import Window from '@ohos.window';
 import { AsyncCallback, Callback, BusinessError } from '@ohos.base';
 import { bundleManager } from '@kit.AbilityKit';
+import { image } from '@kit.ImageKit';
 import { WindowNativeNodeCreateInfo } from '../pages/StellariumTypes';
 import { hasCurrentPrivacyConsent } from './PrivacyConsent';
 import hilog from '@ohos.hilog';
@@ -109,4 +110,8 @@ export default class QtWindowStageAdapter implements Window.WindowStage {
   setSupportedWindowModes(modes: Array<bundleManager.SupportWindowMode>, grayOutMaximizeButton?: boolean): Promise<void> {
     return grayOutMaximizeButton === undefined ? this.stage.setSupportedWindowModes(modes) : this.stage.setSupportedWindowModes(modes, grayOutMaximizeButton);
   }
+  setImageForRecent(imageResource: number | image.PixelMap, value: ImageFit): Promise<void> {
+    return this.stage.setImageForRecent(imageResource, value);
+  }
+  removeImageForRecent(): Promise<void> { return this.stage.removeImageForRecent(); }
 }
