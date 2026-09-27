@@ -89,7 +89,7 @@ OpenHarmony/HarmonyOS 的 HAP 不是一个普通 zip 包。安装时 Bundle Mana
 
 所以不要简单得出“模拟器只接受 debug profile，release profile 命令行必失败”的结论。至少当前环境不是这样。
 
-详细命令见 `docs/harmonyos/build/SIGNING-GUIDE.md`。
+详细命令见 `docs/harmonyos/release/SIGNING-GUIDE.md`。
 
 ### 2.1 安全注意
 
