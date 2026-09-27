@@ -89,7 +89,11 @@ docs/harmonyos/signing/
 .release-signing/
 *.p12
 *.p7b
+*.csr
+**/local.properties
 
 # === HarmonyOS 移植：hvigor 本地产物目录 ===
 .hvigor/
 tmp/location-zh-cache.json
+harmonyos/.appanalyzer
+harmonyos/.codegenie/
