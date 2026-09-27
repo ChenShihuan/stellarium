@@ -57,24 +57,40 @@ OpenGL ES → XComponent → Framebuffer
 
 ### 2.2 文档结构
 
+**先读这 9 个（根目录），其余按需要再进子目录：**
+
+| 文件 | 用途 |
+| --- | --- |
+| `AGENTS.md` | 你正在读的这个文件：约定、环境、构建命令 |
+| `HANDOFF.md` | 项目交接（给新 Agent 的快速入门） |
+| `KNOWN-ISSUES.md` | 已知问题列表（Bug 追踪） |
+| `CHANGELOG.md` | 修改日志（每次变更必须追加） |
+| `DEVELOPMENT-MCP-WORKFLOW.md` | 官方文档查询与设备验证流程 |
+| `BUILD-WINDOWS.md` | Windows 构建与装机指南（必需编译参数、报错速查、离线依赖） |
+| `DEBUGGING-GUIDE.md` | 调试与日志查看 |
+| `CLI.md` | 命令目录契约（语义 CLI 的 payload / 返回 / 错误码） |
+| `NETWORK-INVENTORY.md` | 联网台账（合规必需） |
+
 ```
 docs/harmonyos/
-├── AGENTS.md                  ← 你正在读的这个文件
-├── HANDOFF.md                 ← 项目交接文档（给新 Agent 的快速入门）
-├── CHANGELOG.md               ← 修改日志（每次变更必须追加）
-├── KNOWN-ISSUES.md            ← 已知问题列表（Bug 追踪）
-├── DEVELOPMENT-MCP-WORKFLOW.md ← 官方文档查询与设备验证流程
-├── BUILD-WINDOWS.md           ← Windows 构建与装机指南（含必需编译参数与报错速查）
-├── CLI.md                     ← 命令目录契约
-├── workbuddy/                 ← WorkBuddy Agent 的工作记录
-│   ├── memory/                ← Agent 记忆文件（含 Qt for OHOS 工具链踩坑记录）
-│   └── phase2/                ← 第二阶段工具包（Qt 交叉编译脚本与补丁）
-├── skills/                    ← 可复制到 Agent 运行时的技能包
-├── culture-review-batches/    ← 星空文化分批数据（被 scripts/review-skyculture-passages.py 读取）
-└── signing/                   ← 签名证书和配置（不入库，见 .gitignore）
-    ├── stellarium-app-keypair.p12
-    ├── stellarium-app-cert-chain.cer
-    └── stellarium-ca-release-profile.p7b
+├── （上面 9 个常读文档）
+├── build/        ← 构建·发布·签名·上架：RELEASE-PACKAGING、BUILD-IDENTITY、SIGNING-GUIDE、
+│                    APP-STORE-SUBMISSION、STORE-LISTING-DRAFT、DEVECO-COLLAB、BUILD-CHECK
+├── policy/       ← 合规与政策：COMPLIANCE-GUIDE、LOCALIZATION-POLICY、
+│                    SKY-CULTURE-EDITORIAL-GUIDELINES、PRIVACY-REVIEW-2026-09-08、QT-CLIPBOARD-REVIEW-FIX
+├── specs/        ← 现行实现规格：MIST-HORIZON、POLAR-SCOPE-OVERLAY、PROCEDURAL-OBJECT-MODELS、
+│                    DETAIL-MODEL-*、SATELLITE-PANEL-ORBIT-UX、SEARCH-BROWSER-UX、SCRIPT-DESIGN、
+│                    I18N-ARCHITECTURE、STARTUP-MOTION-DESIGN、INTERACTIVE-ASTRONOMY-GUIDES、
+│                    ASTRO-CALC-MOTION、OFFLINE-*、DEEP-SKY-RESOURCE-INVENTORY
+├── research/     ← 预研与路线图：CELESTIA-INTEGRATION、MULTIWAVELENGTH-SKY、
+│                    SKY-GUIDE-FEATURE、TELESCOPE-NEARLINK、DESKTOP-GUI-ASSET-REUSE-PLAN、ROADMAP-*
+├── json/         ← 全部保留的数据文件（星空文化修订/复核数据、各轮 pad 实测记录）
+│   └── culture-review-batches/   ← 被 scripts/review-skyculture-passages.py 读取
+├── archive/      ← 历史留存量：audits/（各轮审计与复核报告）、design/（早期设计稿）、
+│                    MOBILE-UI-HANDOVER.md
+├── workbuddy/    ← WorkBuddy Agent 记录：memory/（Qt for OHOS 踩坑）、phase2/（工具包与补丁）
+├── skills/       ← 可复制到 Agent 运行时的技能包
+└── signing/      ← 签名证书和配置（不入库，见 .gitignore）
 ```
 
 ### 2.3 CHANGELOG.md 格式
@@ -159,7 +175,7 @@ cp -r /tmp/harmony-test/entry/libs /Users/jiexuanyang/stellarium-src/build/libst
 
 ### 4.2 构建 HAP
 
-只验证 ArkTS、且不执行签名打包时，先同步源码，在生成工程根目录使用 `--mode module -p product=default -p module=entry@default -p buildMode=debug default@CompileArkTS --no-daemon`。任务名必须有 `default@`；不要用裸 `CompileArkTS`，也不要把日志中的前导冒号复制成 `:entry:default@CompileArkTS`。当前 Hvigor 惰性任务可能不出现在 `tasks` 列表中，不要因此修改签名配置或重建工程。完整安全命令、实测与适用边界见 [CompileArkTS 独立构建诊断](culture-review-batches/BUILD-CHECK.md)。
+只验证 ArkTS、且不执行签名打包时，先同步源码，在生成工程根目录使用 `--mode module -p product=default -p module=entry@default -p buildMode=debug default@CompileArkTS --no-daemon`。任务名必须有 `default@`；不要用裸 `CompileArkTS`，也不要把日志中的前导冒号复制成 `:entry:default@CompileArkTS`。当前 Hvigor 惰性任务可能不出现在 `tasks` 列表中，不要因此修改签名配置或重建工程。完整安全命令、实测与适用边界见 [CompileArkTS 独立构建诊断](build/BUILD-CHECK.md)。
 
 ```bash
 cd /Users/jiexuanyang/stellarium-src/build/libstellarium-harmonyos

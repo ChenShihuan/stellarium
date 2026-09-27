@@ -11,7 +11,7 @@
 - 同意前 Qt 初始化链触发 SN：已延后并加入当前协议 ID/版本验证。Qt 官方 dev 源码已定位 setupQtApplicationImpl → initAppData → initDeviceInfo，字段表包含 serial/udid，缓存入 QOhosDeviceInfo。Pad 同意后存在 IDeviceInfo IPC 失败；不能视为读取成功，也不能宣布已完全停止尝试。用户最新要求暂不移除清单、保留同意后初始化；未实现按具体业务功能按需读取。继续核对实际 SDK 行为、披露及 AGC 检测，不扩大权限。
 - 重力/磁场/旋转矢量披露缺失：9 月 8 日实际核对，AGC 完成态仍是旧政策，先前草稿已不在列表。用户要求先修故障、最后处理协议；正文及发布关联仍为阻塞，不以数据标签代替正文。
 - 审核 ZIP 中 1000049 的 APP_INPUT_BLOCK 主线程为 libqohos → OH_Pasteboard_GetData → Binder 等待。已按 SDK SBOM 精确修订重建平台插件，剪贴板变化通知只失效缓存，不同步读取内容；生成工程校验防止旧库回流。Pad 独立 Debug 1000050 连续 20 次复制、图层切换和查询，83 个响应通过，原生探针确认新路径，本轮未检出 AppFreeze。QtMainThread 原栈驱动等待和另一次 BUSSINESS_THREAD_BLOCK_6S 不能据此认定完全解决，Release 系统隐私/压力复测仍需做。见 `QT-CLIPBOARD-REVIEW-FIX.md`。
-- 编译与 10 项测试通过不等于真机通过；隐私服务不支持模拟器。详见 `PRIVACY-REVIEW-2026-09-08.md`。
+- 编译与 10 项测试通过不等于真机通过；隐私服务不支持模拟器。详见 `policy/PRIVACY-REVIEW-2026-09-08.md`。
 
 ## Workbench 会话跨用户名复用与服务器安全维护（2026-09-07）
 
@@ -45,7 +45,7 @@
 ### 3. 平台插件补丁与已安装 Qt 版本不匹配 — 【P1：剪贴板修复进不了包】
 
 - `scripts/build-ohos-platform-patch.sh` 写死 qtbase `REVISION=97575d35c0cecdc0fb4e12fc3575afaa9fd9d3f1`（Qt 6.12.0 Beta2），而本机安装的是 6.12.0 Release（`sbom` 记录 revision 为 `a2c0b1ea39aad5c9600a7bd9ca605a58a5bada30`）→ 脚本在版本校验处硬失败。
-- **后果：** 剪贴板通知补丁版的 `libqohos.so` 编不出来，当前 HAP 使用原版平台插件，`QT-CLIPBOARD-REVIEW-FIX.md` 记录的 AppFreeze 修复未在本次构建中生效。
+- **后果：** 剪贴板通知补丁版的 `libqohos.so` 编不出来，当前 HAP 使用原版平台插件，`policy/QT-CLIPBOARD-REVIEW-FIX.md` 记录的 AppFreeze 修复未在本次构建中生效。
 - **处理方向：** 更新脚本的 revision 与 SHA，并把 `harmonyos/qt-platform-patch/clipboard-notification.patch` rebase 到 6.12.0 Release 源码。
 
 ### 4. `check-ohos.sh` 无法在 Windows 整脚本运行 — 【P3：工具可用性】
