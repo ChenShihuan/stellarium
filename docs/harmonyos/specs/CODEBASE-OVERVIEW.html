@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stellarium HarmonyOS 移植 — HAP 工程代码库与代码框架总览</title>
+<style>
+  :root{
+    --bg:#05070f; --panel:#0d1420; --panel2:#121b2b; --line:#22304a;
+    --fg:#e8eef7; --dim:#9fb0c8; --accent:#6ba3d6; --accent2:#9edcfa;
+    --warn:#ffd9a1; --ok:#8fdca1; --bad:#ff9b9b; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Cascadia Mono","Courier New",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 24px 96px}
+  header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:8px}
+  h1{font-size:27px;margin:0 0 10px;letter-spacing:.4px}
+  .meta{color:var(--dim);font-size:13px}
+  h2{font-size:20px;margin:44px 0 14px;padding-left:11px;border-left:3px solid var(--accent)}
+  h3{font-size:16px;margin:26px 0 10px;color:var(--accent2)}
+  h4{font-size:14px;margin:18px 0 8px;color:var(--dim);font-weight:600}
+  p{margin:10px 0}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:var(--mono);font-size:12.5px;background:var(--panel2);
+       border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:#cfe6ff}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+      padding:14px 16px;overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.6}
+  pre code{background:none;border:none;padding:0;color:#d7e6f7}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--accent2);font-weight:600;white-space:nowrap}
+  tbody tr:nth-child(even){background:rgba(255,255,255,.015)}
+  .num{font-family:var(--mono);text-align:right;white-space:nowrap}
+  .toc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px}
+  .toc ol{margin:6px 0 0;padding-left:22px;columns:2;column-gap:32px}
+  .toc li{margin:4px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+  .flow{display:flex;flex-direction:column;gap:8px;margin:14px 0}
+  .layer{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .layer b{color:var(--accent2)}
+  .arrow{text-align:center;color:var(--dim);font-family:var(--mono);font-size:12px}
+  .tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:20px;
+       border:1px solid var(--line);background:var(--panel2);color:var(--dim);margin-right:6px}
+  .tag.ok{color:var(--ok);border-color:#2c5a3a}
+  .tag.bad{color:var(--bad);border-color:#5c2c2c}
+  .tag.warn{color:var(--warn);border-color:#5c4a2c}
+  .note{border-left:3px solid var(--accent);background:rgba(107,163,214,.08);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0}
+  .warnbox{border-left:3px solid var(--warn);background:rgba(255,217,161,.07);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0}
+  footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:12.5px}
+  .small{font-size:12.5px;color:var(--dim)}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Stellarium HarmonyOS 移植 — HAP 工程代码库与代码框架总览</h1>
+  <div class="meta">
+    生成时间：2026-09-28 ｜ 生成方式：逐项从当前源码与构建产物核实（行号/文件均为实测）<br>
+    适用栈：DevEco Studio 26.0.0.821 · HarmonyOS SDK 26.0.0（API 26）· Qt 6.12.0 <code>harmonyos_arm64_v8a</code> · Hvigor 6.26.4<br>
+    入口文档：<code>docs/harmonyos/AGENTS.md</code> ｜ 界面层级见 <code>specs/UI-ARCHITECTURE.md</code> ｜ 构建见 <code>BUILD-WINDOWS.md</code>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>目录</b>
+  <ol>
+    <li><a href="#s1">一页速览（关键数字）</a></li>
+    <li><a href="#s2">三层运行时架构</a></li>
+    <li><a href="#s3">目录与文件职责</a></li>
+    <li><a href="#s4">启动时序（从 Ability 到首帧）</a></li>
+    <li><a href="#s5">命令桥契约（libentry.so）</a></li>
+    <li><a href="#s6">界面与窗口层级</a></li>
+    <li><a href="#s7">资源与离线数据</a></li>
+    <li><a href="#s8">构建系统与产物链</a></li>
+    <li><a href="#s9">测试与语义 CLI</a></li>
+    <li><a href="#s10">关键约束与常见坑</a></li>
+    <li><a href="#s11">术语与文档索引</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">1. 一页速览（关键数字）</h2>
+
+<div class="grid">
+  <div class="card"><h4>工程形态</h4>
+    <p class="small">
+      <code>harmonyos/</code> = <b>源码镜像</b>（入库，不可直接构建：缺少 <code>entry/</code> 模块）<br>
+      <code>build/libstellarium-harmonyos/</code> = <b>生成工程</b>（hvigor 真正编译的对象，入库外）
+    </p>
+  </div>
+  <div class="card"><h4>签名 HAP</h4>
+    <p class="num" style="text-align:left">681 MB（其中 rawfile 资源 549 MB、native 库约 190 MB）</p>
+  </div>
+  <div class="card"><h4>ArkTS / TS</h4>
+    <p class="num" style="text-align:left">119 个文件；<code>pages/</code> 21 个；核心 <code>MainWindowNativeNode.ets</code> <b>32,693 行</b></p>
+  </div>
+  <div class="card"><h4>Native（桥 + 引擎）</h4>
+    <p class="num" style="text-align:left">桥 <code>hello.cpp</code> 788 行；引擎 <code>libstellarium.so</code> 41.0 MB；HAP 内 native 库 45 个</p>
+  </div>
+  <div class="card"><h4>命令桥规模</h4>
+    <p class="num" style="text-align:left"><b>358</b> 条命令（<code>get*</code> 154 / <code>set*</code> 100）</p>
+  </div>
+  <div class="card"><h4>资源与翻译</h4>
+    <p class="num" style="text-align:left">rawfile 3,634 个文件 / 549 MB；Qt 侧 <code>.qm</code> 43 语言 × 9 域</p>
+  </div>
+  <div class="card"><h4>工具脚本</h4>
+    <p class="num" style="text-align:left"><code>scripts/</code> 150 个，其中 <code>test-ohos-*</code> 52 个验证脚本</p>
+  </div>
+  <div class="card"><h4>已验证设备</h4>
+    <p class="num" style="text-align:left">HUAWEI Mate 80 Pro（SGT-AL00，HarmonyOS 7.0.0 / API 26，arm64-v8a）</p>
+  </div>
+</div>
+
+<h2 id="s2">2. 三层运行时架构</h2>
+
+<p>应用是「<b>ArkTS 外壳 + C++ 命令桥 + Qt 引擎</b>」的三段结构。ArkUI 负责一切界面与交互；真正的星图由 Qt/Stellarium 渲染成帧，通过 XComponent 交给 ArkUI 显示。</p>
+
+<div class="flow">
+  <div class="layer">
+    <b>① ArkTS / ArkUI 层</b> <span class="tag">libentry.so 的调用方</span><br>
+    <span class="small">
+      <code>pages/ApplicationRoot.ets</code>（唯一 @Entry，隐私/启动/主界面三选一）→
+      <code>pages/MainWindowNativeNode.ets</code>（壳层、Dock、面板、星图触摸、帧显示）<br>
+      契约类型集中在 <code>pages/StellariumTypes.ets</code>；国际化 <code>pages/I18n.ets</code>；
+      中文位置库 <code>pages/location_*.ts</code>
+    </span>
+  </div>
+  <div class="arrow">▲ ▼ &nbsp; <code>command(name, payload) → JSON string</code>（NAPI，同步）</div>
+  <div class="layer">
+    <b>② NAPI 命令桥</b> <span class="tag">libentry.so ← cpp-source/hello.cpp</span><br>
+    <span class="small">
+      导出 <code>add</code> / <code>setEnv</code> / <code>command</code>；用 <code>dlopen(RTLD_NOLOAD)</code> 查找
+      <code>libstellarium.so</code> 的 <code>StellariumOhos_command</code>；
+      另负责 XComponent 回调注册与 <code>submitFrame/submitTexture</code> 帧提交
+    </span>
+  </div>
+  <div class="arrow">▲ ▼ &nbsp; <code>StellariumOhos_command(name, payload) → JSON</code>（Qt 主线程）</div>
+  <div class="layer">
+    <b>③ Qt / Stellarium 引擎</b> <span class="tag">libstellarium.so（41 MB，即 Qt 应用二进制）</span><br>
+    <span class="small">
+      <code>src/StelMainView.cpp</code>（渲染/计算/选星/搜索）+
+      <code>src/StelOhosCommandCatalog.hpp</code>（命令目录）+ 插件（Satellites / MeteorShowers / Novae / NebulaTextures…）<br>
+      运行库：15 个 <code>libQt6*.so</code> + <code>libqohos.so</code>（平台插件）+ <code>libmd4c/md4c-html/nlopt</code>
+    </span>
+  </div>
+  <div class="arrow">▼ &nbsp; OpenGL ES → XComponent(SURFACE) → PBO 异步回读 → ArkUI 显示</div>
+</div>
+
+<h3>两条 XComponent 通道</h3>
+<table>
+  <thead><tr><th>通道</th><th>声明</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>SURFACE 探针</td>
+      <td><code>XComponent({type: XComponentType.SURFACE, id:'stellarium_entry_gl_probe', libraryname:'entry'})</code><br><span class="small">zIndex 0 · HitTestMode.None</span></td>
+      <td>承载 EGL 上下文与帧回读（PBO 异步），把 Qt 渲染结果交给 ArkUI 合成</td>
+    </tr>
+    <tr>
+      <td>NODE 原生节点</td>
+      <td><code>XComponent({type: XComponentType.NODE, id:createInfo.xComponentId, libraryname:'qohos'})</code><br><span class="small">zIndex -1 · opacity 0.01 · HitTestMode.None · enabled(false)</span></td>
+      <td>Qt 自己的窗口节点（Qt for OHOS 平台插件 <code>qohos</code> 接管），受隐私门控后才创建</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="s3">3. 目录与文件职责</h2>
+
+<h3>3.1 <code>harmonyos/</code>（源码镜像，入库）</h3>
+<pre><code>harmonyos/
+├── AppScope/app.json5              bundleName / versionCode（发布配置，本地覆盖不入库）
+├── AppScope/resources/…            app_icon、app_name（多语言）
+├── module.json5                    模块清单：entry、QAbility、权限、pages/easyGo profile
+├── build-profile.json5             SDK 版本 / signingConfigs（签名材料由 DevEco 按机器生成）
+├── oh-package.json5                modelVersion（须与 hvigor/hvigor-config.json5 一致）
+├── hvigorfile.ts                   hapTasks
+├── hvigor/hvigor-config.json5      modelVersion
+├── ets-source/                     ★ ArkTS 源码（构建输入）
+│   ├── pages/          21 个   ApplicationRoot、MainWindowNativeNode（32,693 行）、
+│   │                            Float/Sub/UiExtensionNativeNode、I18n、StellariumTypes、
+│   │                            StartupSky、DetailModel*、location_*
+│   ├── qability/       10 个   QAbility（Ability 主体 + CLI 入口）、QtWindowStageAdapter、
+│   │                            PrivacyConsent、ClipboardService、QEmbeddedComponentCreator…
+│   ├── qabilitystage/   1 个   QAbilityStage（启动阶段，隐私门控延后创建）
+│   ├── common/          3 个   PrivacyStartup、StellariumLifecycle、QtAppConstants
+│   ├── process/         1 个   QChildProcess（子进程管理）
+│   └── resources/      83 个   图标 svg + 各语言 string.json（ArkTS 侧文案）
+├── cpp-source/                     ★ 命令桥 + 模板
+│   ├── hello.cpp       788 行  NAPI 桥（详见 §5）
+│   ├── PresentationGeometry.h  帧几何辅助
+│   ├── CMakeLists.txt          add_library(entry SHARED hello.cpp)
+│   └── types/libentry/         index.d.ts（add/setEnv/command）+ oh-package.json5
+├── resources/                      模块资源：main_pages.json、easy_go.json、string/color、
+│                                   rawfile/worldmap.jpg 等
+└── qt-platform-patch/              Qt OHOS 平台插件补丁（clipboard-notification）
+</code></pre>
+
+<h3>3.2 <code>build/libstellarium-harmonyos/</code>（生成工程，hvigor 编译对象）</h3>
+<pre><code>entry/
+├── build-profile.json5     apiType stageMode、externalNativeOptions(CMakeLists + abiFilters)
+├── oh-package.json5        依赖 "libentry.so": "file:./src/main/cpp/types/libentry"
+├── hvigorfile.ts           hapTasks
+├── src/main/
+│   ├── module.json5        ← 由 harmonyos/module.json5 同步
+│   ├── ets/                ← 由 harmonyos/ets-source 同步
+│   ├── cpp/                ← hello.cpp + CMakeLists + types/libentry
+│   ├── resources/          ← 图标/文案 + rawfile/stellarium（549 MB 离线数据）
+│   └── …
+├── libs/arm64-v8a/         45 个 native 库（libstellarium.so、libQt6*、libqohos.so、依赖）
+└── build/default/outputs/default/entry-default-signed.hap
+</code></pre>
+<p class="small">生成工程由三样东西拼成：<code>scripts/sync-ohos-build-sources.sh</code>（镜像→源码）、<code>harmonydeployqt</code>（Qt 运行库）、<code>scripts/sync-ohos-resources-windows.ps1</code>（549 MB 资源树）。</p>
+
+<h2 id="s4">4. 启动时序（从 Ability 到首帧）</h2>
+
+<table>
+  <thead><tr><th>#</th><th>阶段</th><th>关键调用 / 日志</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>AbilityStage 启动</td><td><code>QAbilityStage::onCreate()</code>；因隐私未决而延后 Qt 创建（<code>[privacy-gate] deferred AbilityStage create</code>）</td></tr>
+    <tr><td>2</td><td>窗口与页面</td><td><code>preparePrivacyHostPage()</code> → <code>getMainWindow()</code> → <code>new QtWindowStageAdapter(...)</code> → <code>loadContent('pages/ApplicationRoot', rootStorage)</code>（<b>全程只加载一次</b>）</td></tr>
+    <tr><td>3</td><td>沉浸式与安全区</td><td><code>enterImmersive(windowStage)</code>；<code>publishScreenSafeArea(avoidArea.topRect.height)</code> → AppStorage <code>stellariumScreenSafeTopPixels</code></td></tr>
+    <tr><td>4</td><td>系统隐私请求</td><td>官方隐私弹窗；同意后置 <code>stellariumPrivacyNativeStartupAllowed = true</code>（<code>[privacy-gate] system privacy consent accepted</code>）</td></tr>
+    <tr><td>5</td><td>资源 bootstrap</td><td>      <code>StellariumResourceBootstrap.prepareStellariumResourcesAsync()</code>：把 <code>rawfile/stellarium/</code> 整棵树复制到沙箱，写 <code>STELLARIUM_DATA_ROOT</code> 等环境变量；校验 10 个启动必需路径与标记文件</td></tr>
+    <tr><td>6</td><td>Qt 上下文</td><td><code>[privacy-probe] phase=qt-context-init-start</code> → 平台插件加载 <code>/data/storage/el1/bundle/libs/arm64/libstellarium.so</code> → <code>QAbilityStage</code> 转交成功</td></tr>
+    <tr><td>7</td><td>首帧</td><td><code>StelRootItem paint reached</code>、<code>zero-copy frame bridge resolved</code>、<code>startOhosRenderPump entered</code>、<code>framebuffer viewport …</code></td></tr>
+    <tr><td>8</td><td>命令桥上线</td><td>ArkTS 侧轮询 <code>command('getAppState')</code> 直到 <code>bridge resolved</code>，随后 <code>setLanguage</code> 等命令在 Qt 线程执行（<code>ohosDrainCommandQueue</code>）</td></tr>
+    <tr><td>9</td><td>启动层淡出</td><td><code>stellariumStartupSkyReady</code> + <code>…ArtComplete</code> → <code>animateTo(STARTUP_REVEAL_MS)</code> → <code>loadingVisible=false</code>（<code>[startup] sky-revealed</code>）</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+<b>关键设计：</b>Qt 主线程由 Qt for OHOS 平台插件创建并驱动渲染泵，<b>不走 Qt 事件循环</b>；因此跨线程投递的命令由 C++ 侧在每帧排空（<code>ohosDrainCommandQueue</code>），而不是依赖 <code>QueuedConnection</code>。
+</div>
+
+<h2 id="s5">5. 命令桥契约（libentry.so）</h2>
+
+<h3>5.1 对外导出（<code>cpp-source/types/libentry/index.d.ts</code>）</h3>
+<pre><code>export const add:     (a: number, b: number) => number;
+export const setEnv:  (name: string, value: string) => boolean;
+export const command: (name: string, payload: string) => string;   // 返回 JSON 字符串
+</code></pre>
+
+<p>模块注册（<code>hello.cpp</code> 尾部）：<code>napi_define_properties</code> 暴露三个函数 + <code>registerNativeXComponent</code>；<code>napi_module.nm_modname = "entry"</code>，由 <code>__attribute__((constructor)) RegisterEntryModule()</code> 注册。</p>
+
+<h3>5.2 加载策略（<b>最容易踩的坑</b>）</h3>
+<pre><code>void* handle = dlopen("libstellarium.so", RTLD_NOW | RTLD_NOLOAD);   // 只查“已加载”的库
+if (!handle) return nullptr;   // 未就绪时返回 null，由 ArkTS 侧重试
+command = dlsym(handle, "StellariumOhos_command");
+</code></pre>
+<div class="warnbox">
+<b>为什么必须 RTLD_NOLOAD：</b>若在 ArkUI 线程主动 <code>dlopen</code> 首次加载，会与 Qt 平台插件的
+<code>makeQtThreadWithMainFuncLauncher</code> 抢占主线程上下文，触发
+<code>Qt API was likely used before Qt initialization. Aborting.</code> → 进程 SIGABRT。
+</div>
+
+<h3>5.3 调用语义</h3>
+<table>
+  <thead><tr><th>行为</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>未就绪</td><td>返回 <code>{"ok":false,"error":"bridge not available"}</code>；ArkTS 侧重试直到成功</td></tr>
+    <tr><td>本地短路命令</td><td><code>getPresentationState</code> 由桥直接应答（不进入 Qt），用于判断首帧是否就绪</td></tr>
+    <tr><td>静默命令</td><td><code>dragView</code> / <code>zoomBy</code> / <code>panBy</code> / <code>setGyroView</code> 不写日志，避免拖动手势期间与 UI 线程争用</td></tr>
+    <tr><td>回包格式</td><td>统一 JSON：<code>{"ok":true,…}</code> / <code>{"ok":false,"error":"…"}</code>；ArkTS 侧对应 <code>StellariumBridgeResponse</code></td></tr>
+  </tbody>
+</table>
+
+<h3>5.4 命令目录（358 条）</h3>
+<p>权威清单在 C++ 侧 <code>src/StelOhosCommandCatalog.hpp</code>（302 行，<code>StellariumOhosCommandCatalog::names()</code>）：</p>
+<table>
+  <thead><tr><th>分类</th><th>数量</th><th>示例</th></tr></thead>
+  <tbody>
+    <tr><td>全部</td><td class="num">358</td><td>—</td></tr>
+    <tr><td>查询类 <code>get*</code></td><td class="num">154</td><td><code>getAppState</code>、<code>getSelectedObjectInfo</code>、<code>getEclipses</code>、<code>getAltAzCurve</code></td></tr>
+    <tr><td>设置类 <code>set*</code></td><td class="num">100</td><td><code>setLanguage</code>、<code>setPanel</code>、<code>setAstroTab</code>、<code>setScreenSafeArea</code></td></tr>
+    <tr><td>动作类</td><td class="num">其余</td><td><code>dragView</code>、<code>zoomBy</code>、<code>panBy</code>、<code>addBookmark</code>、<code>startGuide</code></td></tr>
+  </tbody>
+</table>
+<p class="small">另有 <b>ArkUI 专用命令</b>在 ArkTS 侧处理（<code>QAbility.isUiCliCommand</code>），不一定出现在原生目录中；测试前应同时查 <code>CLI.md</code>、命令目录与页面事件处理器。</p>
+
+<h2 id="s6">6. 界面与窗口层级（摘要）</h2>
+<p>完整版见 <code>docs/harmonyos/specs/UI-ARCHITECTURE.md</code>（含代码行号与核对命令）。要点：</p>
+<div class="flow">
+  <div class="layer"><b>窗口层</b>：单 Ability / 单窗口 / <b>单次</b> <code>loadContent('pages/ApplicationRoot')</code>；<code>QtWindowStageAdapter</code> 不二次加载</div>
+  <div class="arrow">▼</div>
+  <div class="layer"><b>页面层</b>：<code>ApplicationRoot</code> = 主界面 / 启动汇字覆盖层 / <code>PrivacyBootstrap</code> 三选一</div>
+  <div class="arrow">▼</div>
+  <div class="layer"><b>叠放层</b>：<code>MainWindowNativeNode.build()</code> 根 Stack —— zIndex <code>-1</code> 语言锚点与 Qt NODE、<code>0</code> EGL 探针与触摸反馈、壳层与四类 Overlay、<code>92</code> 状态条、<code>98/99</code> 夜间模式膜</div>
+  <div class="arrow">▼</div>
+  <div class="layer"><b>壳层</b>：<code>harmonyShell</code> → <code>compactShell</code> / <code>expandedShell</code> / <code>hoverObservatoryShell</code>，由窗口短边与折叠角判定（短边 &lt; 520 → compact；≥ 700 或 900×520 → expanded）</div>
+</div>
+<div class="note">
+<b>触摸层铁律</b>：星图触摸只挂<b>专属触摸面</b>（<code>Block</code>），UI 组件各自 <code>onClick</code>；<b>禁止</b>用全屏 <code>Column + HitTestMode.Block</code> 覆盖——历史上这样改导致星图不可拖、星星点不中、Dock 失灵，整个 commit 被回退。
+</div>
+
+<h2 id="s7">7. 资源与离线数据</h2>
+
+<h3>7.1 运行时资源树（HAP 内 <code>resources/rawfile/stellarium/</code>）</h3>
+<table>
+  <thead><tr><th>子目录</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td><code>data/</code></td><td><code>default_cfg.ini</code>、星表索引、<code>ohos/</code> 契约文件</td></tr>
+    <tr><td><code>textures/</code> <code>landscapes/</code> <code>scenery3d/</code></td><td>行星/地景/三维地景贴图（16-bit PNG 与灰度/索引图已转 RGBA）</td></tr>
+    <tr><td><code>stars/hip_gaia3/</code></td><td>HIP 星表 + <code>stars_4_1v0_6.cat</code>（精确 55,759,776 B）</td></tr>
+    <tr><td><code>nebulae/</code></td><td>深空天体索引与 674 张预览图</td></tr>
+    <tr><td><code>skycultures/</code></td><td>63 个星空文化（<code>modern/</code> 等）含插画</td></tr>
+    <tr><td><code>translations/</code></td><td>Qt 侧 <code>.qm</code>（43 语言 × 9 域，含 <code>stellarium/zh_CN.qm</code> 等）</td></tr>
+    <tr><td><code>scripts/</code></td><td>84 个 <code>.ssc</code> 天象脚本</td></tr>
+  </tbody>
+</table>
+<p class="small">合计 <b>3,634 个文件 / 549 MB</b>。启动时 ArkTS 把整棵树复制到应用沙箱，并用环境变量指向它（C++ 侧 <code>StelFileMgr</code> 读不到 HAP 内的 rawfile，所以必须搬一次）。资源缺失会直接导致 Qt 拒绝启动（<code>Startup resources are incomplete</code>）。</p>
+
+<h3>7.2 契约与台账文件（<code>data/ohos/</code>）</h3>
+<table>
+  <thead><tr><th>文件</th><th>用途</th></tr></thead>
+  <tbody>
+    <tr><td><code>catalog-manifest.json</code></td><td>星表清单与校验（离线目录一致性）</td></tr>
+    <tr><td><code>network-sources.json</code></td><td>联网源台账（配合 <code>NETWORK-INVENTORY.md</code>）</td></tr>
+    <tr><td><code>detail-model-registry.json</code></td><td>细节模型注册表</td></tr>
+    <tr><td><code>sky-guide-feature-contract.json</code></td><td>Sky Guide 对标功能契约</td></tr>
+    <tr><td><code>celestia-bridge-contract.json</code></td><td>Celestia 预研桥契约</td></tr>
+    <tr><td><code>skyculture_art_rgba_v1.txt</code></td><td>星空文化插画 RGBA 兼容转换标记（启动必需）</td></tr>
+  </tbody>
+</table>
+
+<h3>7.3 两条翻译路径</h3>
+<ul>
+  <li><b>Qt 侧</b>：<code>.qm</code> 由 <code>po/</code> 编译（<code>scripts/build-ohos-official-translations.mjs</code> + Qt <code>lrelease</code>），星名/界面文案由 C++ 渲染时取用 —— 真机上看到的「河鼓二 Altair」即来自此路径。</li>
+  <li><b>ArkTS 侧</b>：<code>resources/*/element/string.json</code> + <code>pages/I18n.ets</code>（ArkUI 文案、面板标题）。</li>
+</ul>
+
+<h2 id="s8">8. 构建系统与产物链</h2>
+
+<h3>8.1 三条独立构建链</h3>
+<table>
+  <thead><tr><th>链</th><th>工具</th><th>产物</th></tr></thead>
+  <tbody>
+    <tr><td>ArkTS / 资源 / 打包</td><td>hvigor 6.26.4 + ohpm（<code>libentry.so</code> 走本地 <code>file:</code> 依赖）</td><td><code>entry-default-signed.hap</code></td></tr>
+    <tr><td>命令桥 native</td><td>CMake + Ninja + <code>ohos.toolchain.cmake</code>（<code>abiFilters: arm64-v8a</code>，模拟器需加 <code>x86_64</code>）</td><td>HAP 内 <code>libs/&lt;abi&gt;/libentry.so</code></td></tr>
+    <tr><td>Qt 引擎</td><td><code>qt-cmake</code>（Qt 6.12 <code>harmonyos_arm64_v8a</code>）+ <code>harmonydeployqt</code></td><td><code>build/src/libstellarium.so</code> + <code>entry/libs/arm64-v8a/</code> 45 个库</td></tr>
+  </tbody>
+</table>
+
+<h3>8.2 引擎交叉编译的三个必需参数</h3>
+<pre><code>"$QT_OHOS/bin/qt-cmake" -S . -B build -G Ninja \
+  -DQT_HOST_PATH=E:/Qt/6.12.0/mingw_64 \                        # ① 套件不含宿主工具
+  -DQT_CHAINLOAD_TOOLCHAIN_FILE=&lt;SDK&gt;/native/build/cmake/ohos.toolchain.cmake \  # ② 否则回退宿主编译器
+  -DGLESv3_INCLUDE_DIR=&lt;SDK&gt;/native/sysroot/usr/include \       # ③ Windows 下 find_path 够不到 sysroot
+  -DEGL_INCLUDE_DIR=&lt;SDK&gt;/native/sysroot/usr/include
+</code></pre>
+
+<h3>8.3 同步与校验脚本</h3>
+<table>
+  <thead><tr><th>脚本</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><code>scripts/sync-ohos-build-sources.sh</code></td><td>镜像 → 生成工程（整目录镜像：ets/cpp/resources/AppScope；<b>不覆盖</b> <code>AppScope/app.json5</code> 与 <code>build-profile.json5</code>）</td></tr>
+    <tr><td><code>scripts/sync-ohos-resources-windows.ps1</code></td><td>灌入 549 MB rawfile 资源树（Windows 版：robocopy 替 rsync、System.Drawing 替 ffmpeg）</td></tr>
+    <tr><td><code>scripts/build-ohos-hap-windows.ps1</code></td><td>端到端：引擎编译 → 修 <code>DT_NEEDED</code> → deployqt → 资源 → 同步 → <code>assembleHap --no-daemon</code> →（可选）装机</td></tr>
+    <tr><td><code>scripts/check-ohos.sh</code></td><td>提交前检查：ETS 同步、ArkTS 反模式、JPEG 运行库、离线目录、HAP 编译</td></tr>
+  </tbody>
+</table>
+
+<h3>8.4 产物链</h3>
+<pre><code>harmonyos/*（镜像）
+   ├─ sync-ohos-build-sources.sh ─────────────┐
+Qt 6.12 harmonyos_arm64_v8a                    │
+   ├─ qt-cmake + cmake --build ─→ libstellarium.so ──┤
+   ├─ harmonydeployqt ─→ entry/libs/arm64-v8a/ ──────┤
+harmonyos/resources + ets-source/resources      │
+   └─ sync-ohos-resources-*.sh/ps1 ─→ rawfile/stellarium/ ─┤
+                                                          ▼
+                                          build/libstellarium-harmonyos/
+                                                          │ hvigor assembleHap
+                                                          ▼
+                                        entry-default-signed.hap（681 MB）
+</code></pre>
+
+<h2 id="s9">9. 测试与语义 CLI</h2>
+<ul>
+  <li><b>语义 CLI 优先</b>：日常测试通过 <code>scripts/stellarium-cli.mjs --device &lt;序列号&gt; --command &lt;命令&gt; --json</code> 调用，而不是坐标点击。命令契约见 <code>docs/harmonyos/CLI.md</code>。</li>
+  <li><b>验证脚本</b>：<code>scripts/test-ohos-*.mjs / *.py</code> 共 52 个（搜索、详情、卫星面板、极轴镜、深空、程序化模型、设置动效、陀螺仪姿态…），把结果写成 JSON 证据存入文档库的 <code>json/</code> 目录。</li>
+  <li><b>实机验收强度参考</b>：`hdc` 安装启动 → hilog 关键日志（<code>paint reached</code> / <code>frame bridge resolved</code> / <code>lit=…</code>）→ <code>snapshot_display</code> 截图 → CLI 结构化回包核对。</li>
+</ul>
+
+<h2 id="s10">10. 关键约束与常见坑</h2>
+<table>
+  <thead><tr><th>约束 / 坑</th><th>后果与做法</th></tr></thead>
+  <tbody>
+    <tr><td>必须构建 <code>build/libstellarium-harmonyos/</code></td><td>在 <code>harmonyos/</code> 里跑 hvigor 会报 <code>Path not found …/harmonyos/entry</code>（镜像没有 entry 模块）</td></tr>
+    <tr><td><code>modelVersion</code> 必须两处一致</td><td><code>oh-package.json5</code> 与 <code>hvigor/hvigor-config.json5</code> 同为 <code>26.0.0</code>，否则 IDE 直接报错</td></tr>
+    <tr><td>签名只能由 DevEco 自动签名产生</td><td>自签（OpenHarmony CA）会被真机拒绝：<code>code:9568257 fail to verify pkcs7 file</code></td></tr>
+    <tr><td>ArkUI 线程不得抢先 <code>dlopen</code> 引擎</td><td>触发 <code>Qt API was likely used before Qt initialization. Aborting.</code>；只允许 <code>RTLD_NOLOAD</code> 查找</td></tr>
+    <tr><td>星图触摸不能挂全屏 UI 父</td><td>会吞掉子组件 <code>onClick</code>；用专属触摸面</td></tr>
+    <tr><td>HAP 内 Qt 依赖名不能是构建树路径</td><td>CPM 依赖无 SONAME 时 <code>DT_NEEDED</code> 会写成 <code>_deps/…</code>，装机后 <code>dlopen</code> 失败；需等长改写并补齐 <code>libmd4c/md4c-html/nlopt</code></td></tr>
+    <tr><td>资源树缺失 = Qt 拒绝启动</td><td><code>Startup resources are incomplete after asynchronous extraction</code></td></tr>
+    <tr><td>DevEco 开着时构建加 <code>--no-daemon</code></td><td>否则其常驻 daemon 接管任务并报 <code>spawn java ENOENT</code></td></tr>
+    <tr><td>模拟器是 x86_64，应用是 arm64</td><td>Windows 模拟器<b>跑不了星图</b>（Qt 无 x86_64 目标）；只能验证 ArkUI 外壳（<code>abiFilters</code> 加 <code>x86_64</code>）</td></tr>
+    <tr><td>真机启动需解锁并保持亮屏</td><td>开发者模式下系统不允许自动解锁：<code>aa start</code> 返回 <code>10106102</code></td></tr>
+  </tbody>
+</table>
+
+<h2 id="s11">11. 术语与文档索引</h2>
+<table>
+  <thead><tr><th>术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td>镜像 / 生成工程</td><td><code>harmonyos/</code>（入库源码） / <code>build/libstellarium-harmonyos/</code>（hvigor 编译对象）</td></tr>
+    <tr><td>命令桥</td><td>ArkTS 与 C++ 之间的 JSON 字符串调用协议，经 NAPI 同步返回</td></tr>
+    <tr><td>壳层（Shell）</td><td><code>compactShell</code> / <code>expandedShell</code> / <code>hoverObservatoryShell</code> 三种响应式界面形态</td></tr>
+    <tr><td>汇字启动</td><td><code>StartupSky</code> 粒子汇聚成字的启动动效，完成后再淡出</td></tr>
+    <tr><td>隐私门控</td><td>未同意系统隐私声明前不构建 Qt 内容、不初始化引擎</td></tr>
+  </tbody>
+</table>
+
+<h4>相关文档</h4>
+<ul>
+  <li><code>docs/harmonyos/AGENTS.md</code> — 约定、环境、构建命令（入口）</li>
+  <li><code>docs/harmonyos/specs/UI-ARCHITECTURE.md</code> — 界面与窗口层级（含行号与核对命令）</li>
+  <li><code>docs/harmonyos/BUILD-WINDOWS.md</code> — Windows 构建与装机全流程</li>
+  <li><code>docs/harmonyos/testing/PLATFORM-MATRIX.md</code> — 模拟器/真机/云调试能力与约束</li>
+  <li><code>docs/harmonyos/CLI.md</code> — 命令目录契约 ｜ <code>DEBUGGING-GUIDE.md</code> — 调试手册</li>
+  <li><code>docs/harmonyos/HANDOFF.md</code> — 项目交接 ｜ <code>KNOWN-ISSUES.md</code> — 已知问题 ｜ <code>CHANGELOG.md</code> — 变更历史</li>
+</ul>
+
+<footer>
+  本文由 DevEco Code 于 2026-09-28 依据当前源码与构建产物整理；所有数字与行号均为实测。
+  文档库结构见 <code>docs/harmonyos/AGENTS.md</code> 第 2.2 节。若代码演进，请以源码为准并回填本页。
+</footer>
+
+</div>
+</body>
+</html>

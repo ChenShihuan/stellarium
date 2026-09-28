@@ -1,3 +1,11 @@
+## [2026-09-28] DevEco Code - 新增 HAP 工程代码库与代码框架总览（HTML）
+
+- **新增文件：** `docs/harmonyos/specs/CODEBASE-OVERVIEW.html`（397 行 / 31 KB，纯内联样式、无外部资源，可离线打开）；同步更新 `docs/harmonyos/AGENTS.md` 结构树中 `specs/` 的条目。
+- **文档内容：** ① 一页速览（8 组实测数字）；② 三层运行时架构图（ArkTS/ArkUI ↔ NAPI 命令桥 ↔ Qt/Stellarium 引擎）与两条 XComponent 通道（SURFACE 探针 / NODE 原生节点）的声明与作用；③ `harmonyos/` 镜像与 `build/libstellarium-harmonyos/` 生成工程的目录职责逐项说明；④ 九步启动时序（AbilityStage → 单次 loadContent → 沉浸式与安全区 → 隐私门控 → 资源 bootstrap → Qt 上下文 → 首帧 → 命令桥上线 → 启动层淡出）；⑤ 命令桥契约：三个导出（`add`/`setEnv`/`command`）、`napi_module` 注册方式、**必须用 `RTLD_NOLOAD` 只查已加载库**的原因与后果、静默命令、回包格式，以及 **358 条命令目录**（`get*` 154 / `set*` 100）；⑥ 界面与窗口层级摘要（指向 `UI-ARCHITECTURE.md`）；⑦ 资源与离线数据（rawfile 3,634 文件 / 549 MB 的六个子目录、`data/ohos/` 六个契约文件、Qt `.qm` 与 ArkTS string.json 两条翻译路径）；⑧ 构建系统三条独立链、引擎交叉编译的三个必需参数、四个同步/校验脚本与产物链图；⑨ 测试与语义 CLI（150 个脚本、52 个 `test-ohos-*`）；⑩ 十条关键约束与常见坑速查；⑪ 术语表与文档索引。
+- **数据来源：** 全部数字与行为均实测——`MainWindowNativeNode.ets` 32,693 行、`hello.cpp` 788 行、HAP 内 native 库 45 个、`libstellarium.so` 41.0 MB、`StelOhosCommandCatalog.hpp` 命令数与分类、各 ABI 的 `libentry.so` 等。
+- **验证结果：** 无外部资源引用（离线自包含）、11 个目录锚点与 `id` 全部对应、标签配平检查通过（div/table/tr/td/pre/ul/li 等 17 类标签开闭数量一致）、`git diff --check` 通过；未改动任何应用源码。
+- **范围约束：** 仅新增文档与结构树条目，未修改 `build-profile.json5`、签名材料、隐私门控或联网配置。
+
 ## [2026-09-28] DevEco Code - 补写界面与窗口层级总览（以代码为准）
 
 - **新增文件：** `docs/harmonyos/specs/UI-ARCHITECTURE.md`；同步更新 `docs/harmonyos/AGENTS.md` 结构树中 `specs/` 的条目。
