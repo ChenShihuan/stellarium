@@ -1,3 +1,11 @@
+## [2026-09-28] DevEco Code - 补写界面与窗口层级总览（以代码为准）
+
+- **新增文件：** `docs/harmonyos/specs/UI-ARCHITECTURE.md`；同步更新 `docs/harmonyos/AGENTS.md` 结构树中 `specs/` 的条目。
+- **背景：** 文档库中没有任何一份描述「Ability → WindowStage → ApplicationRoot → 四种 NativeNode → 壳层」完整链路的文档，界面设计分散在 `HANDOFF.md`、`archive/MOBILE-UI-HANDOVER.md`、`policy/PRIVACY-REVIEW-2026-09-08.md` 与代码四处，且 `MOBILE-UI-HANDOVER.md` 处于回退态。本次从当前 ArkTS 源码逐条核验后补齐。
+- **文档内容（全部标注代码出处与行号）：** ① 窗口层：`QAbility.preparePrivacyHostPage()` → `loadContent('pages/ApplicationRoot')` → `enterImmersive()`，以及 `QtWindowStageAdapter` 不再二次 `loadContent` 的单窗口约束；② `ApplicationRoot` 的三个互斥子层（主界面 / 启动汇字覆盖层 / 隐私宿主）及各自的 AppStorage 门控键；③ `MainWindowNativeNode.build()` 根 Stack 的完整叠放表（zIndex -1 隐藏语言锚点、-1 Qt NODE、0 探针与触摸反馈、条件壳层与四类 Overlay、92 状态条、98/99 夜间模式膜）与实测 zIndex 取值分布；④ 响应式断点：`compactWindow` 短边 < 520、`tabletCanvas` 短边 ≥ 700、`desktopCanvas` 900×520、半折角 158/140/68/55，以及 220ms 切换与 `springMotion(0.55, 0.88)` 转场；⑤ Dock（`dockButton(ShellAction)`）与 `setPanel` 的 6 个面板 id、跨设备唯一入口约定；⑥ `HitTestMode` 实测分布（Block 36 / None 23 / Default 23 / Transparent 10 / BLOCK_HIERARCHY 7）与命中规则及历史教训；⑦ 视觉常量 `UI_RADIUS_CONTROL/PANEL/SHEET/PILL` 与 `UI_OPTION_ANIMATION_MS=180`，并标注"项目选择而非官方强制值"；⑧ 沉浸式与顶部安全区（`stellariumScreenSafeTopPixels`）链路；⑨ 与既有文档的差异表（明确 `MOBILE-UI-HANDOVER.md` 为回退态、`DESIGN-VISION.html` 参数与落地实现不同、`HANDOFF.md` 的 API 版本描述滞后）；⑩ 可复现的核对命令。
+- **验证结果：** 文中每条结论均附 `文件:行号` 或 `Select-String` 命令；`git diff --check` 通过；未改动任何应用源码。
+- **范围约束：** 仅新增文档与结构树条目，未修改 `build-profile.json5`、签名材料、隐私门控或联网配置。
+
 ## [2026-09-27] DevEco Code - 记录平台与验证环境矩阵（模拟器/真机/云调试）
 
 - **新增文件：** `docs/harmonyos/testing/PLATFORM-MATRIX.md`；同步更新 `docs/harmonyos/AGENTS.md` 的文档结构树。
