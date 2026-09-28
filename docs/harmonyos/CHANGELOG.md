@@ -1,3 +1,14 @@
+## [2026-09-27] DevEco Code - 记录平台与验证环境矩阵（模拟器/真机/云调试）
+
+- **新增文件：** `docs/harmonyos/testing/PLATFORM-MATRIX.md`；同步更新 `docs/harmonyos/AGENTS.md` 的文档结构树。
+- **查证结论：** Windows 本机的 HarmonyOS 模拟器**无法运行本应用**。官方《使用环境》限定模拟器宿主只有 Windows(x86_64) 与 macOS(Apple Silicon)（原文含"不支持采用 ARM CPU 的 Windows 计算机""支持 Apple Silicon 芯片，不支持 intel 芯片"）；本机 4 个模拟器 profile 实测全为 `abi: x86` / `hw.cpu.arch=x86_64`，且 `tools/emulator/pc-bios/` 只含 x86 固件、无 aarch64 固件。官方要求 x86 模拟器必须提供"已 x86 化"的 so，没有任何 arm→x86 转译能力。
+- **组件层面：** `libentry.so` 可编 x86_64（OHOS NDK 自带 x86_64 sysroot），但 `libstellarium.so` 与 15 个 `libQt6*.so` 不能——Qt for HarmonyOS 只发布 `harmonyos_arm64_v8a`（已核对 `E:\Qt\components.xml` 组件元数据与 `libQt6Core.so` 的 ELF 头）。因此仅"为 OHOS x86_64 从源码编译整个 Qt"这一条理论路径，成本以周计，不建议。
+- **可用组合：** 真机（已实测 Mate 80 Pro 渲染星图）、Apple Silicon Mac 上的官方 arm64 模拟器、AGC 云调试/云测试。另记录低成本"半验证"：`abiFilters` 加 `x86_64` 可在 x86 模拟器看到 ArkUI 外壳，但 Qt 星图必然加载失败。
+- **云调试：** 整理 5 项硬约束（HAP 格式、机型系统版本须匹配、形态匹配、证书类型、实名+额度）与能力边界（官方记录云调试下折叠状态监听失效，传感器类验证必须留真机）。额度方面确认本地文档库无计费页（已穷举检索 8 组关键词），仅两条有依据的事实：额度形态为"免费体验时长"，且**上传时间计入同一份额度**（官方建议"在 云调试-我的信息-应用 中提前上传"）；查询入口、4 项待确认项与 3 分钟自测办法一并记录。
+- **树莓派 4B：** 评估为不可行——模拟器无 Linux/ARM 宿主；树莓派只能刷 OpenHarmony（社区 22 款开发板之一），而本项目是 `runtimeOS: HarmonyOS` 且依赖 HarmonyOS SDK 26.0.0，两者运行环境不通用（官方 FAQ 记录"改为 OpenHarmony 后加载 so 闪退"）；且 OHOS SDK 原生工具链只有 x86_64 二进制，无法当构建机。
+- **验证结果：** 文档内每条结论均附官方文档 ID 与本地复现命令（`lists.json` / `pc-bios` / `components.xml` / `devecocli docs search`）；本文件不改动任何应用代码、签名或系统配置。
+- **范围约束：** 仅新增文档与结构树条目，未修改 `build-profile.json5`、签名材料、隐私门控或联网配置。
+
 ## [2026-09-27] DevEco Code - 文档分层归集、清理冗余 JSON 并修复脚本编码
 
 - **修改文件：** `docs/harmonyos/`（61 个文档 + 34 个 JSON 重新分层）、`docs/harmonyos/AGENTS.md`、`docs/harmonyos/DEBUGGING-GUIDE.md`、`docs/harmonyos/NETWORK-INVENTORY.md`、`docs/harmonyos/KNOWN-ISSUES.md`、`scripts/review-skyculture-passages.py`、`scripts/audit-ohos-resource-coverage.mjs`、`scripts/generate-deep-sky-inventory.mjs`。

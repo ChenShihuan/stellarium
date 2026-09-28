@@ -1,7 +1,7 @@
 # Stellarium HarmonyOS 调试经验手册
 
-给 WorkBuddy / TRAE / 后续接手者使用。  
-日期：2026-07-22  
+给 WorkBuddy / TRAE / 后续接手者使用。
+日期：2026-07-22
 分支：`openharmony-preview-v1`
 
 这份文档记录的是实战调试经验，不是最终产品说明。重点是帮助下一个人少绕路：先确认环境，再确认签名，再确认应用是否真的启动、是否真的渲染、ArkUI 是否真的把事件送到了 Qt/Stellarium。
@@ -73,12 +73,13 @@ OpenHarmony/HarmonyOS 的 HAP 不是一个普通 zip 包。安装时 Bundle Mana
 
 常见错误和含义：
 
-| 现象 | 真实含义 | 处理 |
-|---|---|---|
-| `install sign info inconsistent` | 设备上已有同 bundle，但签名 fingerprint 不同 | 用同一套材料重签后覆盖，或卸载旧包 |
-| `verify-app` 找不到 signing block | 这是 unsigned HAP 或签名过程没完成 | 重新跑 `hap-sign-tool.jar sign-app` |
-| profile bundle-name 不匹配 | profile 不是给 `org.qtproject.example.stellarium` 的 | 换正确 profile |
-| `keytool` 打不开 DevEco 字段 | `build-profile.json5` 里的字段不等于普通明文密码 | 不要把那串值直接喂给 `keytool` |
+
+| 现象                              | 真实含义                                            | 处理                               |
+| ----------------------------------- | ----------------------------------------------------- | ------------------------------------ |
+| `install sign info inconsistent`  | 设备上已有同 bundle，但签名 fingerprint 不同        | 用同一套材料重签后覆盖，或卸载旧包 |
+| `verify-app` 找不到 signing block | 这是 unsigned HAP 或签名过程没完成                  | 重新跑`hap-sign-tool.jar sign-app` |
+| profile bundle-name 不匹配        | profile 不是给`org.qtproject.example.stellarium` 的 | 换正确 profile                     |
+| `keytool` 打不开 DevEco 字段      | `build-profile.json5` 里的字段不等于普通明文密码    | 不要把那串值直接喂给`keytool`      |
 
 当前本机实测结论：
 
