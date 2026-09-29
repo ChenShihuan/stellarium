@@ -1,3 +1,13 @@
+## [2026-09-29] DevEco Code - 重构工程总览 HTML（浅色·图形化·新增 Qt/C++ 工程师知识地图）
+
+- **修改文件：** `docs/harmonyos/specs/CODEBASE-OVERVIEW.html` 整页重写（v2：31 KB/397 行 → 45 KB/614 行）。
+- **重写动机（用户反馈）：** ① 换浅色底色；② 减少文字化叙述、增加图形化；③ 第一章排版混乱需修正；④ 读者为 C++/Qt/嵌入式工程师，需要总览全局、打通 ArkTS/移动端框架知识体系的内容。
+- **版式改造：** ① 全站浅色主题（`--bg:#f5f7fa` 白卡片 + 蓝/青/紫/琥珀四色系）；② §1 重做为「工程形态流程图 + 8 张统一规格统计卡」（大数字 + 标签 + 副注，替代原先混排的卡片）；③ 目录强化：12 项目录锚点 + 「建议阅读路径」chips + 每章标题右侧「↑ 目录」回链；④ §5 启动时序从表格改为三色相位的竖向时间线（系统与权限 / 引擎与首帧 / 上线完成）；⑤ §6 新增「一次调用的旅程」步骤流与 RTLD_NOLOAD 成败分支图；⑥ §8 新增资源 bootstrap 流程图；⑦ §9 产物链从 ASCII 图改为 CSS 流程节点；⑧ QML↔ArkTS、桌面 Qt↔本工程的对照均为双栏图。
+- **新增 §2「Qt/C++ 工程师知识地图」：** 一句话心智模型（Qt 应用原样变 `.so`，移植的本质是造系统级宿主外壳 + 命令翻译层）；15 行概念映射表（main→AbilityStage、QApplication+exec→UIAbility、QML→ArkTS/ArkUI、QML 绑定→@State、JNI→NAPI、QQuickWidget→XComponent、qeglfs→libqohos、deployqt→harmonydeployqt、qrc→rawfile+沙箱解包、交叉工具链→ohos.toolchain.cmake、vcpkg→ohpm、qputenv→setEnv、.qm 原样复用、dlopen→RTLD_NOLOAD、多窗口→zIndex 叠放）；桌面 Qt 应用 vs 本工程的 5 层对照图；ArkTS 60 秒速览（QML 与 ArkTS 代码并排）；移动端三件套卡片（生命周期托管 / 沙箱权限 / 签名分发）。
+- **事实修正：** 原文「ApplicationRoot 为唯一 @Entry」不准确——`main_pages.json` 实际注册 4 个 @Entry 页（ApplicationRoot 主窗口 + FloatWindow/SubWindow/UiExtension 三个独立窗口），已改为「主窗口只加载 ApplicationRoot，其余 3 个属独立窗口」并落入统计卡；确认壳层为 V1 状态体系（`@Component`/`@State`，主文件近千处装饰器）。
+- **验证结果：** 乱码/损坏实体 0、Markdown `**` 误用 0、23 类标签全部配平、13 个锚点与 13 个 id 一一对应（12 章 + #toc）、无外部资源引用（离线自包含）、目录 12 项 = 章节 12 个、CSS 花括号 97/97、`git diff --check` 通过。
+- **范围约束：** 仅改文档，未触碰应用源码、`build-profile.json5`、签名材料、隐私门控或联网配置。
+
 ## [2026-09-28] DevEco Code - 新增 HAP 工程代码库与代码框架总览（HTML）
 
 - **新增文件：** `docs/harmonyos/specs/CODEBASE-OVERVIEW.html`（397 行 / 31 KB，纯内联样式、无外部资源，可离线打开）；同步更新 `docs/harmonyos/AGENTS.md` 结构树中 `specs/` 的条目。
