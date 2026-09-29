@@ -4,6 +4,8 @@ import UIAbility from '@ohos.app.ability.UIAbility';
 import Want from '@ohos.app.ability.Want';
 import Window from '@ohos.window'
 import hilog from '@ohos.hilog';
+import deviceInfo from '@ohos.deviceInfo';
+import BuildProfile from 'BuildProfile';
 import qpa from 'libqohos.so';
 import { command } from 'libentry.so';
 import { notifyLifecycle } from '../common/StellariumLifecycle';
@@ -24,6 +26,21 @@ interface StellariumCliRequest {
 interface WindowAvoidAreaChange {
   type: Window.AvoidAreaType;
   area: Window.AvoidArea;
+}
+
+// UI-shell-only runs on the x86_64 emulator.
+//
+// The Stellarium/Qt engine is built for arm64 only (scripts/build-ohos-hap-windows.ps1
+// stages entry/libs/arm64-v8a), while the pura_phone emulator reports abiList=x86_64,
+// so on that emulator Qt can never release the native-node gate and the ArkUI shell
+// stays hidden behind the privacy page. Debug builds there open the startup gates
+// directly, which lets layout, panels and interaction be exercised without the engine
+// (the star map itself stays blank because libstellarium.so is absent).
+//
+// This predicate is inert on shipping configurations: productModel is 'emulator' only
+// on emulators, and DEBUG is false in release builds.
+function engineLessEmulatorUiOnly(): boolean {
+  return BuildProfile.DEBUG && deviceInfo.productModel === 'emulator' && deviceInfo.abiList.includes('x86_64');
 }
 
 export default class QAbility extends UIAbility {
@@ -360,6 +377,19 @@ export default class QAbility extends UIAbility {
       `qtInitialized=${this.qtInitialized}; windowPrepared=${this.qtWindowPrepared}${suffix}`);
   }
 
+  // Opens the four startup gates that the consent flow and Qt would otherwise
+  // release (see engineLessEmulatorUiOnly). ApplicationRoot watches the sky/art
+  // keys to dismiss its loading layer, so the gate keys are written first and
+  // the two sky keys last.
+  private releaseUiOnlyStartupGates(): void {
+    hilog.warn(LOG_DOMAIN, LOG_TAG,
+      '[ui-only] x86_64 emulator without the Stellarium engine; releasing startup gates for a UI-shell-only run');
+    AppStorage.setOrCreate('stellariumPrivacyNativeStartupAllowed', true);
+    AppStorage.setOrCreate('stellariumQtContentReady', true);
+    AppStorage.setOrCreate('stellariumStartupSkyReady', true);
+    AppStorage.setOrCreate('stellariumStartupArtComplete', true);
+  }
+
   private async preparePrivacyHostPage(windowStage: Window.WindowStage): Promise<boolean> {
     if (this.rootContentLoaded) {
       return true;
@@ -376,6 +406,9 @@ export default class QAbility extends UIAbility {
       this.qtWindowStage = new QtWindowStageAdapter(windowStage, this.rootStorage);
       await windowStage.loadContent('pages/ApplicationRoot', this.rootStorage);
       this.rootContentLoaded = true;
+      if (engineLessEmulatorUiOnly()) {
+        this.releaseUiOnlyStartupGates();
+      }
       await this.enterImmersive(windowStage);
       this.logPrivacyProbe('privacy-window-ready', 'Qt context and resource preparation remain blocked');
       return true;
