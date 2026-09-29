@@ -1,3 +1,16 @@
+## [2026-09-30] DevEco Code - 时间面板重排、时间/速率入标题栏、主界面 Dock 常驻时钟；新增两条协作规则
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`（镜像；经 `scripts/sync-ohos-build-sources.sh` 同步到生成工程，生成目录不入库）、`docs/harmonyos/AGENTS.md`、`docs/harmonyos/CHANGELOG.md`。
+- **修改内容（时间面板）：** ① 上轮已完成：`timeScrubberSlider()`（时间转轴）移至 `activePanel === 'time'` 分支最前，手机端打开面板即可直接拖动（上轮改动未单独记录，并入本条）；② 本轮：`timeSpeedChips()`（倒带/现在/停止/实时/快进/超快）与日出日落跳转 `quickChips`（-12h/+12h/日出/中天/日落/天文昏）两行上移到时间转轴正下方，保持「转轴 → 速度 → 太阳跳转」顺序；③ 删除正文中「观测时间」「时间速率」两行，改由 `panelSubtitle()` 在 `activePanel === 'time'` 时返回 `观测时间 · 速率`，渲染进面板标题栏副标题（`panelHeader()` 早已支持非空副标题）；④ 面板头高度由固定 44 改为 `panelSubtitle().length > 0 ? 52 : 44`（Column 与外层 Row 两处同步），副标题加 `maxLines(1)` + 省略号防窄屏溢出；⑤ `julianDateControls()`、恒星时行、均时差块位置不变。
+- **修改内容（Dock 时钟）：** 新增 `@State dockClockText` 与独立 `dockClockTimer`（1s），配 `stopDockClockTimer()`/`syncDockClockTimer()`/`refreshDockClock()`，完全照抄 `viewCoordinateTimer` 生命周期范本接线（初始化、前台恢复各启一次；`aboutToDisappear` 与后台分支各停一次）；新增 `dockClockChip()`（HH:mm 胶囊）与 `dockClockLayer()`（复用 `dockLeft()/dockWidthPixels()/dockTop()`，右端与 dock 栏对齐，空白区 `HitTestMode.Transparent` 穿透回星图、仅时钟本体 `Block`），挂载到 `expandedShell`（`expandedUiAllowed()` 内）与 `compactShell`；显示条件 `!panelVisible && !polarScopeVisible && dockClockText.length > 0`，点按时钟 `setPanel('time')` 直接打开时间面板；`hoverObservatoryShell` 不挂（顶部已有时间条）。
+- **修改内容（AGENTS.md）：** 新增 §2.6 提交策略（Agent 不得自动 `git commit`/`git push`，仅用户明确要求「整理代码并提交」时才提交）；新增 §7 第 9 条（仅改 ArkTS 界面布局/文案的调试装机，构建+安装+启动成功即算验证通过，无需再拉渲染链日志或截图；涉及 C++/引擎、桥接、渲染管线、权限、资源仍需完整启动链验证）。
+- **修改内容（用户复核后的二次微调）：** ① 删除 `timeScrubberSlider()` 内「时间转轴」小标题行（连同其 Row 容器）；② 面板标题行改为 `时间 + 时分秒`（`panelTitle()` 的 time 分支拼接 `timePanelClockText()`），副标题改为单独显示年月日（`timePanelDateText()`，附当前速率 ` · 1x`），新增两个私有拆分方法（按 `observationTimeText` 第一个空格切分，避免依赖 locale 格式）；③ 副标题字号 11 → 14，面板头高度 52 → 56；④ 主界面 Dock 时钟字号 12 → 22（大于面板主标题 18），胶囊高度 26 → 36、内边距 10 → 14，定位层高度 30 → 44、上移量 34 → 48 以保持与 dock 栏的间距。
+- **修改原因：** 用户要求——手机端时间面板首屏应直接可用（转轴+控制按钮前置），时间/速率不必占用正文空间；主界面在未打开时间面板时需常驻 hh:mm 显示（建议置于 Dock 右上）；并把「界面布局类调试免渲染确认」「不自动提交」固化为项目规则；随后复核要求：去掉转轴小标题、时分秒与主标题同行、副标题单独显示年月日且字号加大、Dock 时钟字号需大于面板主标题。
+- **设计要点：** 时钟用独立 1s 定时器 + 独立 @State，不并入时间面板 125ms 高频刷新链（`refreshSimTimeLight()` 注释明确警告高频路径勿改其他 @State，否则全局重排、拖星图卡顿）；时钟文本固定由 `jdToLocalTimeText(jd + utcOffsetHours/24)` 截取 `substring(11,16)` 得到（定长格式，不解析 locale 不定的 `formattedTime`）。
+- **构建结果：** BUILD SUCCESSFUL in 58 s 816 ms（`scripts/build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources`），签名 HAP 681.2 MB；二次微调后再次 BUILD SUCCESSFUL in 58 s 465 ms；`arkts_check` 对镜像文件无错误。
+- **验证结果：** 真机 `192.168.1.4:40565`（包名 `com.cnchensh.stellarium`，Ability `QAbility`）两轮均安装并启动成功：`install bundle successfully` / `start ability successfully`。按新增 §7.9 规则，本轮为纯 ArkTS 布局改动，未再拉渲染链日志或截图确认。
+- **备注：** 本仓库工作区仍有未提交改动（上轮转轴前移 + 本轮全部改动），按 §2.6 由用户明确要求后再提交。
+
 ## [2026-09-29] DevEco Code - 重构工程总览 HTML（浅色·图形化·新增 Qt/C++ 工程师知识地图）
 
 - **修改文件：** `docs/harmonyos/specs/CODEBASE-OVERVIEW.html` 整页重写（v2：31 KB/397 行 → 45 KB/614 行）。
