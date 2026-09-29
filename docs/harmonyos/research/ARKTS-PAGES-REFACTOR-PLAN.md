@@ -231,9 +231,12 @@ Comp({ timeStore: this.timeStore })
 4. **高频链优先隔离**：1 s / 125 ms 时间链、惯性、传感器分别独立成 store，
    与 `panelVisible` 之类的壳层状态彻底分离（对应 L16156 的既有告警）。
 5. **不使用 `@Provide/@Consume` 泛化**（当前为 0，保持）；跨层仅在确有主题/常量需求时逐一评估。
-6. **过渡手段**：字段搬入 store 后，根 struct 保留**同名 getter 委托**，
-   203 个 `callInteractive` 调用点与 1,109 个私有方法**暂不改动**；
-   单域迁移即可编译、可回滚。
+6. **过渡手段（已修订，见 §11 修订 1）**：字段搬入 store 后，根 struct **不能**用同名 getter 委托
+   —— V1 的 `@Component` 不允许 getter 访问器（ArkTS 转换会丢弃它们，存在运行期崩溃风险）。
+   可行做法只有两条：① 调用点机械替换为 `this.timeStore.xxx`（读写都改，编译器全程把关）；
+   ② 把该域的 UI 与 store **同步**抽成子组件（`@ObjectLink` 订阅），一步到位。
+   由于未加装饰器的 store 字段在 V1 中不会触发宿主重渲染，**单独搬 store 会在搬完那一刻丢失该域的刷新**，
+   因此 Phase 3 必须与 Phase 4 的对应面板同步进行，不能先全量搬 store 再补组件。
 7. **定时器随域迁移**：每个 store 自带 `start()/stop()`，
    在现有四个生命周期挂点（初始化 / 前台恢复 / 后台 / `aboutToDisappear`）统一收口，
    不再逐个手动接线。
@@ -249,7 +252,7 @@ Comp({ timeStore: this.timeStore })
 | **0 基线** | 固化回归契约：33 个 `activePanel`、41 个 `.id()` 锚点、CLI 冒烟清单、构建/装机基线快照，落成可复跑脚本 | 1 天 | 基线快照入库（不入代码库则放 `docs/harmonyos/json/`） |
 | **1 纯叶子** | `UI_RADIUS_*` / `UI_OPTION_ANIMATION_MS` → `common/ui/UiTokens.ets`；无状态 builder（iconButton、dockButton、switchRow、chip、面板骨架）→ `common/ui/*.ets` | 3–5 天 | `arkts_check` + 构建 + 装机 + CLI 冒烟 |
 | **2 命令桥** | `bridge/BridgeClient.ets` 封装 `callInteractive`（保留同名薄委托），203 个调用点不动 | 2–3 天 | 同上；重点回归命令回包/错误码 |
-| **3 状态 store** | 逐域抽 store（见 4.1/4.2），根保留 getter 委托：`TimeStore` → `PanelStore` → `SearchStore` → `AstroStore` → `SkyViewStore` → `ObjectStore` → `SkyCultureStore` → `SatelliteStore` → `SensorStore` → `ScriptStore` → `TelescopeStore` → `SessionStore` → `ToolStore` | 每域 0.5–2 天，合计 ≈2 周 | **每域 1 次提交**；重点回归该域面板的交互与刷新 |
+| **3 状态 store** | **必须与 Phase 4 的对应面板同步进行**（见 §11 修订 1）：逐域把状态与该域 UI 一起抽成 store + 子组件，`TimeStore`+时间面板先行，再 `PanelStore` → `SearchStore` → `AstroStore` → `SkyViewStore` → `ObjectStore` → `SkyCultureStore` → `SatelliteStore` → `SensorStore` → `ScriptStore` → `TelescopeStore` → `SessionStore` → `ToolStore` | 每域 1–3 天，合计 ≈3 周 | **每域 1 次提交**；重点回归该域面板的交互与刷新 |
 | **4 面板组件化** | 按 Builder 体积**从大到小**逐面板抽取为 `@Component`；`panelContent` 改 `PanelHost` 表驱动 + 懒加载 | 每面板 0.5–2 天，合计 ≈3–4 周 | **每面板 1 次提交**；回归该面板全部交互 + 平板/手机断点 |
 | **5 Overlay** | 信息窗、详情卡、时间轮、Dock 时钟 → `window/overlay/` | 1 周 | 叠放顺序 / zIndex / HitTestMode 回归（按 `specs/UI-ARCHITECTURE.md` §3 §6） |
 | **6 壳层** | expanded / compact / hover 三壳 + bottomDock → `window/shell/` | 1–2 周 | 断点切换（短边 520 / 700 / 900×520）、折叠半折角、220 ms 转场回归 |
@@ -389,3 +392,40 @@ Select-String -Path scripts\sync-ohos-build-sources.sh -Pattern 'find .* -type f
 1. 用户评审本文；确认范围、阶段划分与是否接受"不做 V2 迁移"。
 2. 评审通过后执行 Phase 0（固化回归契约），再从 Phase 1 开始逐阶段推进。
 3. 每阶段完成后汇报，**按 `AGENTS.md` §2.6 由用户明确要求后才提交**。
+
+---
+
+## 11. 执行记录与修订（2026-09-30）
+
+用户授权无人值守推进后，已按计划完成以下切片，每片均经 `arkts_check` + 构建 + 模拟器安装启动 + 契约校验后独立提交：
+
+| 切片 | 内容 | 提交 |
+|---|---|---|
+| Phase 0 | `scripts/check-ohos-ui-contract.mjs` + `docs/harmonyos/json/ui-contract-baseline.json`（33 面板 / 22 静态 id / 17 动态前缀 / 41 锚点） | `405666e626` |
+| Phase 1a | `common/ui/UiTokens.ets`（5 个视觉常量，856 处引用不变） | `f65357f8fa` |
+| Phase 1b | `common/ui/ShellIcons.ets`（纯函数 `getIcon`，61 处调用点去掉 `this.`） | `5b97eb9b07` |
+| Phase 2 | `bridge/BridgeClient.ets`（`request`/`send`/`requestWhenReady`/`requestInteractive`，单体只留薄委托，`libentry.so` 导入移出单体） | `307108f331` |
+| Phase 1c | `pages/MainWindowModels.ets`（93 个文件作用域类型/常量，764 行） | `f56751e66e` |
+
+单体行数：**32,705 → 31,961**（净减 744 行；新增 4 个职责单一的文件）。
+
+### 修订 1（重要，推翻原 §4.2 第 6 条）：V1 的 `@Component` 不能用 getter 委托
+
+原方案设想「字段搬入 store 后，根 struct 用同名 getter 委托，调用点零改动」。实测不可行：
+V1 `@Component` **不允许 getter 访问器**（ArkTS 转换会丢弃，存在运行期崩溃风险）。同时，
+未加装饰器的 store 字段不会触发宿主重渲染，因此**单独搬 store 会让该域失去刷新**。
+→ Phase 3 必须与 Phase 4 的对应面板**同步**进行；或采用「调用点机械替换为 `this.store.xxx`」，
+由编译器全程把关。§4.2 第 6 条与 §5 表格已按此修订。
+
+### 修订 2：Phase 1 的"无状态 builder"实测多为有状态
+
+`dockButton` 依赖 `isExpandedLayout`、`compactDockIconSize()`、`dockActionActive()`、
+`handleDockTouch()`、`activateDockAction()`；`switchRow` 依赖 `actionId`/`cmd` 与宿主回调；
+`iconButton` 仅 1 处调用、28 行。三者均不属于无状态叶子，其组件化并入 Phase 4/6，
+避免先生成一次会被 store 化推翻的组件。Phase 1 以 UiTokens / ShellIcons / MainWindowModels 三个纯叶子切片收口。
+
+### 修订 3：验收矩阵需要补真机
+
+x86_64 模拟器的 UI-only 通道（见 CHANGELOG 2026-09-30 条目）能验证布局、文案、面板开关与交互，
+但**星图与引擎相关状态全部不可验**（`libstellarium.so`/`libQt6*.so` 无 x86_64 构建，时间面板显示 `--`）。
+因此 store 与面板阶段的验收矩阵必须包含**真机（Mate 80 Pro）复验**，模拟器只作为快速结构回归。
