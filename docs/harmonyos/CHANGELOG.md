@@ -1,3 +1,11 @@
+## [2026-09-30] DevEco Code - Phase 1c：抽出 MainWindowModels（93 个文件作用域类型与常量）
+
+- **新增文件：** `harmonyos/ets-source/pages/MainWindowModels.ets`（764 行）—— 原单体序言区（`interface CityPreset` 起、`@Component` 前）的全部文件作用域声明整体搬移，共 93 个（interface / const / class），逐条加 `export`；并复制单体的 `./StellariumTypes` 导入，因为 `Scenery3dResponse` 等引用了 `Scenery3dItem` 等类型。
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets` —— 序言区替换为一条折行的 `import { ... } from './MainWindowModels'`（93 个符号、16 行，按 6 个/行折行）。
+- **过程中修正：** 首轮构建报 `Cannot find name 'Scenery3dItem'`（模型模块内 `Scenery3dResponse` 的字段类型来自 StellariumTypes）→ 把单体的 `./StellariumTypes` 导入整条复制进模型模块后构建通过。
+- **验证结果：** `arkts_check` 两文件无错误；`BUILD SUCCESSFUL in 58 s 212 ms`；`node scripts/check-ohos-ui-contract.mjs` 通过；模拟器 `127.0.0.1:5555` 安装启动成功，点击 Dock「时间」仍能打开时间面板（标题「时间 --」、`panel-close`、速度 chips 倒带/实时/快进），且截图字节数与改动前完全相同（70,061 B）。
+- **范围约束：** 纯搬移（只有类型与常量声明，无运行时代码改动），行为零变更。
+
 ## [2026-09-30] DevEco Code - Phase 2：抽出命令桥 BridgeClient（libentry.so 唯一出口）
 
 - **新增文件：** `harmonyos/ets-source/bridge/BridgeClient.ets` —— `request()`（发送并解析回包，失败统一 `{ ok:false, error:'bridge parse failed' }`）、`send()`（fire-and-forget 原始回包）、`requestWhenReady()`（未就绪时短退避重试）、`requestInteractive()`（50 ms × 40 交互轮询）。
