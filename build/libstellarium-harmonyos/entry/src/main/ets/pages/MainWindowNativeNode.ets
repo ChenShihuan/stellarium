@@ -1030,6 +1030,10 @@ export struct WindowNativeNode {
   private stateRefreshQueued: boolean = false
   private lastMusicToggle: number = 0
   @State private timeRateText: string = '1x'
+  /** 主界面 Dock 右上的常驻时钟文本（HH:mm），面板未打开时显示。 */
+  @State private dockClockText: string = ''
+  /** Dock 时钟的独立轻量刷新定时器（1s），不并入时间面板 125ms 高频刷新。 */
+  private dockClockTimer: number = 0
   /** Current speed-step index into TIME_SPEED_STEPS. */
   @State private timeSpeedIndex: number = 7  // 7=1x realtime (default, new index)
   // 原生命令在下一渲染帧才生效。此窗口内忽略轮询到的旧速率，避免按钮
@@ -3117,6 +3121,7 @@ export struct WindowNativeNode {
     if (this.musicEnabled) { AudioEngine.getInstance().start() }
     I18n.setLanguage(I18n.fromStellariumCode(this.selectedLanguage))
     this.syncViewCoordinateTimer()
+    this.syncDockClockTimer()
   }
 
   private saveAppSettings(): void {
@@ -3197,6 +3202,7 @@ export struct WindowNativeNode {
     this.stopSkyTextureStatusObserver()
     this.stopTimePanelTimers()
     this.stopViewCoordinateTimer()
+    this.stopDockClockTimer()
     this.stopSkyCultureTimeFollowTimer()
     this.stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
@@ -3239,6 +3245,7 @@ export struct WindowNativeNode {
         hilog.info(0x0000, 'StellariumArkUI', 'foreground: gyroscope subscriptions restored')
       }
       this.syncViewCoordinateTimer()
+      this.syncDockClockTimer()
       this.syncSkyCultureTimeFollowTimer()
       this.syncPolarScopeTimer()
       this.syncAstroCalcContextTimer()
@@ -3251,6 +3258,7 @@ export struct WindowNativeNode {
     this.foregroundRefreshPaused = this.timePanelTimer !== 0 || this.detailTimer !== 0
     this.stopTimePanelTimers()
     this.stopViewCoordinateTimer()
+    this.stopDockClockTimer()
     this.stopSkyCultureTimeFollowTimer()
     this.stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
@@ -4133,6 +4141,35 @@ export struct WindowNativeNode {
     this.viewCoordinateTimer = setInterval(() => {
       this.refreshViewCenterCoordinates()
     }, 50)
+  }
+
+  private stopDockClockTimer(): void {
+    if (this.dockClockTimer !== 0) {
+      clearInterval(this.dockClockTimer)
+      this.dockClockTimer = 0
+    }
+  }
+
+  /** Dock 常驻时钟：1s 轮询 getSimulationTime，只写 dockClockText 一个 @State。 */
+  private syncDockClockTimer(): void {
+    this.stopDockClockTimer()
+    if (!this.applicationInForeground) { return }
+    this.refreshDockClock()
+    this.dockClockTimer = setInterval(() => {
+      this.refreshDockClock()
+    }, 1000)
+  }
+
+  private refreshDockClock(): void {
+    this.callInteractive('getSimulationTime', '', (r: StellariumBridgeResponse) => {
+      if (r.ok !== true || r.jd === undefined) { return }
+      const jd: number = r.jd as number
+      // 固定走本地 jd 格式化：jdToLocalTimeText 返回定长 'YYYY-MM-DD HH:mm:ss'，截取后 5 位为 HH:mm
+      const text: string = this.jdToLocalTimeText(jd + this.utcOffsetHours / 24.0).substring(11, 16)
+      if (text !== this.dockClockText) {
+        this.dockClockText = text
+      }
+    })
   }
 
   private setViewCoordinatesVisible(visible: boolean): void {
@@ -19387,6 +19424,9 @@ private loadPlanetPositions(): void {
           .hitTestBehavior(HitTestMode.Block)
           .zIndex(40)
           .animation({ duration: 300, curve: curves.springMotion(0.46, 0.86) })
+        if (!this.panelVisible && !this.polarScopeVisible && this.dockClockText.length > 0) {
+          this.dockClockLayer()
+        }
       }
       // 陀螺仪校准面板（开启陀螺仪时显示在侧栏右侧）
       if (this.gyroscopeEnabled && this.gyroCalibPanelOpen) {
@@ -19539,6 +19579,10 @@ private loadPlanetPositions(): void {
         .position({ x: 0, y: this.skyHeight - 80 })
         .hitTestBehavior(HitTestMode.Block)
         .zIndex(40)
+
+      if (!this.panelVisible && !this.polarScopeVisible && this.dockClockText.length > 0) {
+        this.dockClockLayer()
+      }
 
       // 手机端右上角常驻快捷区：陀螺仪 + 音频（与平板左侧栏入口一致）
       Stack() { this.compactTopQuickControls() }
@@ -22465,6 +22509,41 @@ private loadPlanetPositions(): void {
     }
   }
 
+  /** 主界面 Dock 右上常驻时钟（HH:mm）：点按直接打开时间面板。 */
+  @Builder
+  dockClockChip() {
+    Row() {
+      Text(this.dockClockText)
+        .fontSize(22)
+        .fontColor('rgba(229, 255, 255, 0.85)')
+    }
+      .height(36)
+      .padding({ left: 14, right: 14 })
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor('rgba(10, 14, 26, 0.55)')
+      .backdropBlur(20)
+      .borderRadius(UI_RADIUS_PILL)
+      .clickEffect({ level: ClickEffectLevel.LIGHT })
+      .onClick(() => { this.setPanel('time') })
+  }
+
+  /** Dock 时钟定位层：右端与 dock 栏对齐；空白区触摸穿透回星图，仅时钟本体拦截点击。 */
+  @Builder
+  dockClockLayer() {
+    Row() {
+      Stack() { this.dockClockChip() }
+        .hitTestBehavior(HitTestMode.Block)
+    }
+      .width(this.dockWidthPixels())
+      .height(44)
+      .justifyContent(FlexAlign.End)
+      .padding({ right: 4 })
+      .position({ x: this.dockLeft(), y: this.dockTop() - 48 })
+      .hitTestBehavior(HitTestMode.Transparent)
+      .zIndex(40)
+  }
+
   @Builder
   bottomDock() {
     Row() {
@@ -24026,12 +24105,14 @@ private loadPlanetPositions(): void {
           .fontColor('#E5FFFFFF')
         if (this.panelSubtitle().length > 0) {
           Text(this.panelSubtitle())
-            .fontSize(11)
+            .fontSize(14)
             .fontColor('#99FFFFFF')
-            .margin({ top: 3 })
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .margin({ top: 4 })
         }
       }
-        .height(44)
+        .height(this.panelSubtitle().length > 0 ? 56 : 44)
         .justifyContent(FlexAlign.Center)
         .opacity(this.panelRouteOpacity)
         .translate({ x: this.panelRouteOffsetX, y: 0 })
@@ -24057,7 +24138,7 @@ private loadPlanetPositions(): void {
       .margin({ right: 6 })
     }
       .width('100%')
-      .height(44)
+      .height(this.panelSubtitle().length > 0 ? 56 : 44)
       .alignItems(VerticalAlign.Center)
       .margin({ bottom: 14 })
       .zIndex(4)
@@ -24641,20 +24722,17 @@ private loadPlanetPositions(): void {
 		      }
       } // end object selectedName else
     } else if (this.activePanel === 'time') {
-      // 直接绑定 @State：不能走 infoRow(@Builder)，其简单类型参数按值捕获，
-      // observationTimeText/timeRateText 变化不会触发 Builder 重建（表现为数值钉死不动）
-      Row() {
-        Text(I18n.t('i0054')).fontSize(11).fontColor('#99FFFFFF').width(64).textAlign(TextAlign.Start)
-        Text(this.observationTimeText)
-          .fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%').padding({ left: 10, right: 10, top: 3, bottom: 3 })
-      Row() {
-        Text(I18n.t('i0055')).fontSize(11).fontColor('#99FFFFFF').width(64).textAlign(TextAlign.Start)
-        Text(this.timeRateText)
-          .fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%').padding({ left: 10, right: 10, top: 3, bottom: 3 })
+      // 观测时间/速率已移入面板标题栏副标题（panelSubtitle() 在 Builder 内直接读 @State，
+      // 不经参数传递，变化可正常触发重建）；面板首屏直接给时间转轴与时间控制按钮
+      // Sky Guide 风格时间拖动滑块（-365天 ~ +365天）：置于面板最前，手机端打开即可直接拖动
+      this.timeScrubberSlider()
+      // 时间控制按钮：[倒带][现在][停止][实时][快进][超快]
+      this.timeSpeedChips()
+      this.quickChips([
+        { id: '-12h', label: '-12h' }, { id: '+12h', label: '+12h' },
+        { id: 'sunRise', label: '日出' }, { id: 'sunTransit', label: '中天' },
+        { id: 'sunSet', label: '日落' }, { id: 'astronomicalSet', label: '天文昏' }
+      ])
       Row() {
         Text('恒星时').fontSize(11).fontColor('#99FFFFFF').width(64).textAlign(TextAlign.Start)
         Text(this.siderealTimeText)
@@ -24701,16 +24779,7 @@ private loadPlanetPositions(): void {
       if (this.equationOfTimeStatus.length > 0) {
         Text(this.equationOfTimeStatus).fontSize(10).fontColor('#FFD59A').width('100%').padding({ left: 10, right: 10 })
       }
-      // 时间控制按钮：[倒带][现在][停止][实时][快进][超快]
-      this.timeSpeedChips()
-      // Sky Guide 风格时间拖动滑块（-365天 ~ +365天）
-      this.timeScrubberSlider()
       this.julianDateControls()
-      this.quickChips([
-        { id: '-12h', label: '-12h' }, { id: '+12h', label: '+12h' },
-        { id: 'sunRise', label: '日出' }, { id: 'sunTransit', label: '中天' },
-        { id: 'sunSet', label: '日落' }, { id: 'astronomicalSet', label: '天文昏' }
-      ])
       // 观测辅助：夜视模式 / 大气折射
       Row()
         .width('100%').height(0.5)
@@ -30270,12 +30339,6 @@ private loadPlanetPositions(): void {
   @Builder
   timeScrubberSlider() {
     Column({ space: 8 }) {
-      Row() {
-        Text('时间转轴')
-          .fontSize(11).fontColor('rgba(180, 210, 235, 0.7)')
-      }
-      .width('100%')
-
       // 顶部字段即视频中的日期时间条：先点字段，再用下方单一转轴调节。
       Row({ space: 1 }) {
         this.timeWheelYearField()
@@ -31188,7 +31251,7 @@ private loadPlanetPositions(): void {
       return I18n.t('panel_observing_list')
     }
     if (this.activePanel === 'time') {
-      return I18n.t('i0054')
+      return I18n.t('i0054') + ' ' + this.timePanelClockText()
     }
     if (this.activePanel === 'place') {
       return I18n.t('i0014')
@@ -31271,7 +31334,25 @@ private loadPlanetPositions(): void {
   }
 
   private panelSubtitle(): string {
+    if (this.activePanel === 'time') {
+      return this.timePanelDateText()
+    }
     return ''
+  }
+
+  /** 面板标题行的时分秒：从 observationTimeText 拆出第一个空格之后的部分。 */
+  private timePanelClockText(): string {
+    const text = this.observationTimeText
+    const idx = text.indexOf(' ')
+    return idx > 0 ? text.substring(idx + 1) : text
+  }
+
+  /** 面板副标题行的年月日（附带当前时间速率）。 */
+  private timePanelDateText(): string {
+    const text = this.observationTimeText
+    const idx = text.indexOf(' ')
+    const date = idx > 0 ? text.substring(0, idx) : ''
+    return date.length > 0 ? date + ' · ' + this.timeRateText : this.timeRateText
   }
 
   private layerTabItems(): TabItem[] {

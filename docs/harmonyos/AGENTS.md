@@ -132,6 +132,12 @@ docs/harmonyos/
 3. 如果代码改了一半导致编译失败，**立即回滚**（`git checkout .`），不要留半成品
 4. 如果代码改了一半但逻辑正确，在 `CHANGELOG.md` 精确记录改了哪些行、下一步该做什么
 
+### 2.6 提交策略
+
+1. Agent 完成改动并验证后，**不得自动执行 `git commit` / `git push`**，改动保留在工作区并向用户汇报结果
+2. 仅当用户**明确要求**「整理代码并提交」时才提交；届时一并整理 `CHANGELOG.md` 记录、复核暂存内容
+3. （推送目标仍遵循第 7 节第 3 条：推自己的 fork，不推上游 `Stellarium/stellarium`）
+
 ---
 
 ## 3. 环境要求
@@ -510,3 +516,4 @@ $HDC -t 127.0.0.1:5555 shell uitest dumpLayout
 6. **ArkTS 限制：** `@Builder` 内不能有 `const/let` 赋值；属性链式调用必须在容器组件 `}` 之后；`Blank()` 只能放在 `Column/Row/Flex` 中
 7. **坐标单位：** `onAreaChange` 返回 vp；`TouchObject.windowX/Y` 是 vp；C++ 侧 `selectAt` 需要 vp
 8. **action ID 必须与 C++ 源码一致**，不能凭记忆编造。修改前必须 grep C++ 源码验证
+9. **仅改 ArkTS 界面布局/文案的调试装机**：hvigor 构建成功 + hdc 安装启动成功即算验证通过，无需再拉星图渲染链日志（StelRootItem paint / frame bridge / sky-revealed）或截图确认；涉及 C++/引擎、桥接协议、渲染管线、权限、资源的改动仍需完整启动链验证
