@@ -1,4 +1,3 @@
-import { command } from 'libentry.so'
 import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit'
 import { geoLocationManager } from '@kit.LocationKit'
 import { sensor } from '@kit.SensorServiceKit'
@@ -33,6 +32,7 @@ import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES, PROJECTION_KEYS } from './
 import { DeepSkyWarmupStatus, getDeepSkyResourceWarmupStatus, isStellariumDetailMediaPreparationFailed, resolveStellariumDetailMediaAsset } from '../qability/StellariumResourceBootstrap'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PANEL, UI_RADIUS_SHEET, UI_RADIUS_PILL, UI_OPTION_ANIMATION_MS } from '../common/ui/UiTokens'
 import { getIcon } from '../common/ui/ShellIcons'
+import { BridgeClient } from '../bridge/BridgeClient'
 
 interface CityPreset {
   lat: number
@@ -3967,32 +3967,25 @@ export struct WindowNativeNode {
   }
 
   private callNative(name: string, payload: string = ''): StellariumBridgeResponse {
-    try {
-      const r = JSON.parse(command(name, payload)) as StellariumBridgeResponse
-      // 录制：仅在录制开启、非回放、且命令可录制时记录，并对短时重试用去重窗口避免重复。
-      if (r.ok === true) { this.recordAcceptedCommand(name, payload) }
-      return r
-    } catch (err) {
-      return { ok: false, error: 'bridge parse failed' }
-    }
+    const r = BridgeClient.request(name, payload)
+    // 录制：仅在录制开启、非回放、且命令可录制时记录，并对短时重试用去重窗口避免重复。
+    if (r.ok === true) { this.recordAcceptedCommand(name, payload) }
+    return r
   }
 
   // Fire-and-forget: 调用 C++ 桥但不解析返回的 JSON，减少拖动时的 GC 压力。
   // 用于 dragView / zoomBy / panBy 等不需要返回值的连续命令。
   private callNativeFire(name: string, payload: string = ''): void {
-    try {
-      const raw = command(name, payload)
-      if (this.recording && !this.recordingPaused && !this.replaying && this.isRecordable(name)) {
-        let accepted = false
-        try {
-          accepted = (JSON.parse(raw) as StellariumBridgeResponse).ok === true
-        } catch (err) {
-          accepted = false
-        }
-        if (accepted) { this.recordAcceptedCommand(name, payload) }
+    const raw = BridgeClient.send(name, payload)
+    if (raw.length === 0) { return }
+    if (this.recording && !this.recordingPaused && !this.replaying && this.isRecordable(name)) {
+      let accepted = false
+      try {
+        accepted = (JSON.parse(raw) as StellariumBridgeResponse).ok === true
+      } catch (err) {
+        accepted = false
       }
-    } catch (err) {
-      // 忽略：拖动期间不需要错误处理
+      if (accepted) { this.recordAcceptedCommand(name, payload) }
     }
   }
 
@@ -4056,16 +4049,11 @@ export struct WindowNativeNode {
   // bootstrapping; those calls return ok:false and are retried on a short
   // backoff instead of crashing the process.
   private callNativeWhenReady(name: string, payload: string = '', onOk?: (r: StellariumBridgeResponse) => void, attempt: number = 0, intervalMs: number = 200, maxAttempts: number = 60, onFailure?: (r: StellariumBridgeResponse) => void): void {
-    const r = this.callNative(name, payload)
-    if (r.ok === true) {
+    BridgeClient.requestWhenReady(name, payload, (r: StellariumBridgeResponse) => {
+      // 录制：仅在录制开启、非回放、且命令可录制时记录，并对短时重试用去重窗口避免重复。
+      this.recordAcceptedCommand(name, payload)
       if (onOk) onOk(r)
-      return
-    }
-    if (attempt < maxAttempts) {
-      setTimeout(() => this.callNativeWhenReady(name, payload, onOk, attempt + 1, intervalMs, maxAttempts, onFailure), intervalMs)
-    } else if (onFailure) {
-      onFailure(r)
-    }
+    }, attempt, intervalMs, maxAttempts, onFailure)
   }
 
   // Interactive commands (tap-select, search, get-info, move-to) run on the
