@@ -84,7 +84,9 @@ docs/harmonyos/
 │                    STARTUP-MOTION-DESIGN、INTERACTIVE-ASTRONOMY-GUIDES、ASTRO-CALC-MOTION、
 │                    OFFLINE-*、DEEP-SKY-RESOURCE-INVENTORY
 ├── research/     ← 预研与路线图：CELESTIA-INTEGRATION、MULTIWAVELENGTH-SKY、
-│                    SKY-GUIDE-FEATURE、TELESCOPE-NEARLINK、DESKTOP-GUI-ASSET-REUSE-PLAN、ROADMAP-*
+│                    SKY-GUIDE-FEATURE、TELESCOPE-NEARLINK、DESKTOP-GUI-ASSET-REUSE-PLAN、ROADMAP-*、
+│                    PANEL-PLUGIN-ARCHITECTURE-ROADMAP（面板/插件产品级归属）、
+│                    ARKTS-PAGES-REFACTOR-PLAN（pages/ 代码结构重构方案）
 ├── testing/      ← 验证环境与测试平台：PLATFORM-MATRIX（模拟器/真机/云调试各自能验什么、约束与证据）
 ├── json/         ← 全部保留的数据文件（星空文化修订/复核数据、各轮 pad 实测记录）
 │   └── culture-review-batches/   ← 被 scripts/review-skyculture-passages.py 读取
