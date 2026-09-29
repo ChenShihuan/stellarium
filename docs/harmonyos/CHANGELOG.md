@@ -1,3 +1,20 @@
+## [2026-09-30] DevEco Code - 真机三版对照实验定论：冻结根因是参数化 @Builder；store + 组件实时刷新成立并修复既有 bug
+
+- **背景：** 上一轮两片 store 因"无法证明实时刷新等价"被回退。用户指示在真机做实验，遂在 **Mate 80 Pro（SGT-AL00 / arm64-v8a / API 26，引擎存活，`192.168.1.4:40565`）** 上做同一交互（打开时间面板 → 点「快进」）的三版对照。
+- **实验数据（`devecocli ui layout` 实测）：**
+  | 版本 | 副标题 | 「快进」chip | 判定 |
+  |---|---|---|---|
+  | ① 原生（`@State` + 参数化 `@Builder speedChip(...)`） | `2x` / `10x` | 始终「快进」、未高亮 | **既有 bug**（重开面板才更新） |
+  | ② `TimeStore`+`TimeSpeedChips`，chip 仍走参数化 `@Builder` | `2x` / `10x` | 始终「快进」 | 与①**行为等价**（继承同一 bug） |
+  | ③ `TimeStore`+`TimeSpeedChips`，chip **内容内联、直接读 store** | `2x` → `10x` | **「快进 2x」→「快进 10x」实时更新且高亮**（宽度随标签变化） | **修复 bug**，store 通路正确 |
+- **定论（修正上一轮的推断）：** 冻结根因是**参数化 `@Builder` 的简单类型参数按值捕获**（`speedChip(id,label,icon,active)` 子树首帧后冻结），与"组件是否创建在 `panelContent()` 这个 @Builder 体内"**无关**。`@ObjectLink`（store 字段变化）与 `@Prop`（父传 `rateText`）**都能实时驱动子组件重渲染**——③ 版实时更新即为证据。因此上一轮"Phase 4 的 PanelHost 可能必须先于 Phase 3"的推断被推翻：**Phase 3 不必等 Phase 4**。
+- **对后续每个切片的强制自检项：** 搬迁 UI 时必须**去掉参数化 `@Builder`**（改为子组件 `@Prop` 或直接读状态），并且验收必须包含"点击后是否实时更新"的交互实测，不能只看布局是否一致。
+- **UI-only 模拟器的适用范围修正：** 该实验证明模拟器（无引擎、定时器不产生写入）**不能裁决刷新类问题**——原生与重构版在模拟器上都表现为"不刷新"。刷新类验收必须在真机执行。
+- **本轮改动：** 保留 ③ 版（`state/TimeStore.ets`、`panels/time/TimeSpeedChips.ets`、单体 `timeSpeedIndex` → `@State timeStore` 与 21 处引用改写、删除已迁走的 `speedChip` 参数化 builder）；文档更新 `research/ARKTS-PAGES-REFACTOR-PLAN.md` §11 修订 4。
+- **构建/验证：** `arkts_check` 无错误；`BUILD SUCCESSFUL in 1 min 331 ms`；真机 `install bundle successfully` / `start ability successfully`；上述三版数据均在同一台真机、同一交互下实测。
+- **已知取舍：** ③ 版内联写法有重复代码（5 个 chip 各一份属性），后续清洗为子组件 `SpeedChip`（`@Prop`）时**必须重做真机实时刷新实测**。
+- **行为变更声明：** 本轮**有意**改变了用户可见行为——「快进」等速度 chip 的标签与高亮现在会实时更新（原先需重开面板）。这是修复既有 bug，不是等价重构。
+
 ## [2026-09-30] DevEco Code - Phase 3 首两片尝试后回退：store + 组件的实时刷新路径未证实（既有现象）
 
 - **经过：** 按 (b) 方案试做两片并各自单独提交 —— ① `BookmarkStore` + `BookmarkPanel`（3 字段 / 12 引用 / 85 行面板分支）；② `TimeStore` + `TimeSpeedChips`（`timeSpeedIndex` / 21 处引用 / 速度 chips）。两片均通过 `arkts_check`、`BUILD SUCCESSFUL`、契约校验与模拟器安装启动，并实证了**状态归属正确**：书签面板输入后切走再切回（组件销毁重建），输入内容仍在。
