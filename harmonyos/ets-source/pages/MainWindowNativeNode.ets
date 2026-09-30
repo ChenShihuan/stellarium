@@ -47,6 +47,8 @@ import { TimeSettingsSection } from '../panels/settings/TimeSettingsSection'
 import { SettingsChoiceButton } from '../common/ui/SettingsChoiceButton'
 import { NightModeStore } from '../state/NightModeStore'
 import { TimeWheelController } from '../state/TimeWheelController'
+import { BookmarkStore } from '../state/BookmarkStore'
+import { BookmarkPanel } from '../panels/BookmarkPanel'
 import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
 import { QuickChipRow } from '../panels/QuickChipRow'
 import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
@@ -1019,9 +1021,7 @@ export struct WindowNativeNode {
   @State private catalogBusy: boolean = false
   @State private catalogDownloadingId: string = ''
   @State private catalogMsg: string = ''
-  @State private bookmarkList: BookmarkItem[] = []
-  @State private bookmarkLoading: boolean = false
-  @State private newBookmarkName: string = ''
+  @State private bookmarkStore: BookmarkStore = new BookmarkStore()
   // 望远镜/目镜配置（Oculars）
   @State private ocularMode: boolean = false
   @State private telradOn: boolean = false
@@ -3580,7 +3580,7 @@ export struct WindowNativeNode {
     try {
       const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
       const store = await preferences.getPreferences(ctx, BOOKMARK_STORE)
-      const jsonStr: string = JSON.stringify(this.bookmarkList)
+      const jsonStr: string = JSON.stringify(this.bookmarkStore.list)
       await store.put('bookmarks', jsonStr)
       await store.flush()
     } catch (e) {
@@ -3595,7 +3595,7 @@ export struct WindowNativeNode {
       const jsonStr: string = (await store.get('bookmarks', '[]')) as string
       const parsed: BookmarkItem[] = JSON.parse(jsonStr)
       if (parsed.length > 0) {
-        this.bookmarkList = parsed
+        this.bookmarkStore.list = parsed
       }
     } catch (e) {
       hilog.warn(0xD002, 'Stellarium', 'load bookmarks failed: %{public}s', String(e))
@@ -3630,27 +3630,27 @@ export struct WindowNativeNode {
 
   // ===== 书签（C++ 桥：addBookmark / getBookmarks / deleteBookmark / gotoBookmark）=====
   private loadBookmarks(): void {
-    this.bookmarkLoading = true
+    this.bookmarkStore.loading = true
     this.callNativeWhenReady('getBookmarks', '', (r: StellariumBridgeResponse) => {
       const resp = r as BookmarksResponse
       const list = resp.items ?? []
-      this.bookmarkList = list.map((b: BookmarkRaw): BookmarkItem => ({
+      this.bookmarkStore.list = list.map((b: BookmarkRaw): BookmarkItem => ({
         id: b.id ?? '',
         name: b.name ?? I18n.t('bookmark_fallback'),
         fov: b.fov ?? 60,
         object: b.object ?? '',
       }))
-      this.bookmarkLoading = false
+      this.bookmarkStore.loading = false
       this.saveBookmarksToStorage()
     })
   }
 
   // 保存当前视图为书签。C++ 端读取当前 J2000 视方向 + 视场 + 选中天体，名称由 payload 传入。
   private addCurrentBookmark(): void {
-    const name = this.newBookmarkName.trim()
+    const name = this.bookmarkStore.draftName.trim()
     this.callNativeWhenReady('addBookmark', name, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.newBookmarkName = ''
+        this.bookmarkStore.draftName = ''
         this.flashHint(I18n.t('msg_bookmark_saved'))
         this.loadBookmarks()
       } else {
@@ -25418,70 +25418,14 @@ private loadPlanetPositions(): void {
       }
       }
     } else if (this.activePanel === 'bookmarks') {
-      // 书签面板：保存当前视图 + 已存书签列表（点击跳转 / 删除）
-      Column({ space: 10 }) {
-        Row({ space: 8 }) {
-          TextInput({ text: this.newBookmarkName, placeholder: I18n.t('c_bookmark_name_hint') })
-            .fontSize(13).fontColor('#E5FFFFFF').placeholderColor('#99FFFFFF')
-            .backgroundColor('rgba(255,255,255,0.06)').borderRadius(UI_RADIUS_CONTROL)
-            .height(36).layoutWeight(1).padding({ left: 10, right: 10 })
-            .onChange((v: string) => { this.newBookmarkName = v })
-          Button(I18n.t('btn_save_current_view'))
-            .fontSize(12).fontColor('#E5FFFFFF')
-            .backgroundColor('rgba(107,163,214,0.35)')
-            .borderRadius(UI_RADIUS_CONTROL).height(36).padding({ left: 14, right: 14 })
-            .onClick(() => { this.addCurrentBookmark() })
-        }.width('100%')
-        if (this.selectedName.length > 0) {
-          Row() {
-            Text(I18n.t('bookmark_selected_object_hint') + ': ' + this.selectedName)
-              .fontSize(12).fontColor('#99FFFFFF').layoutWeight(1)
-            Button(I18n.t('btn_bookmark_object'))
-              .fontSize(12).fontColor('#E5FFFFFF')
-              .backgroundColor('rgba(91,147,191,0.35)')
-              .borderRadius(UI_RADIUS_CONTROL).height(36).padding({ left: 14, right: 14 })
-              .onClick(() => { this.addCurrentBookmark() })
-          }.width('100%').margin({ top: 4 })
-        }
-        if (this.bookmarkLoading) {
-          Column() {
-            Text(I18n.t('c_loading_bookmarks')).fontSize(13).fontColor('#99FFFFFF')
-          }.width('100%').height(80).justifyContent(FlexAlign.Center)
-        } else if (this.bookmarkList.length === 0) {
-          Column() {
-            Text(I18n.t('m_no_bookmarks')).fontSize(14).fontColor('#E5FFFFFF').margin({ top: 8 })
-            Text(I18n.t('m_save_view_hint')).fontSize(12).fontColor('#CC8FB6FF').margin({ top: 6 })
-          }.width('100%').height(100).justifyContent(FlexAlign.Center)
-        } else {
-          Scroll() {
-            Column({ space: 8 }) {
-              ForEach(this.bookmarkList, (b: BookmarkItem) => {
-                Row() {
-                  Column() {
-                    Text(b.name)
-                      .fontSize(14).fontColor('#E5FFFFFF').fontWeight(FontWeight.Medium)
-                      .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    Text((b.object.length > 0 ? (b.object + ' · ') : '') + 'FOV ' + b.fov.toFixed(1) + '°')
-                      .fontSize(11).fontColor('#99FFFFFF').margin({ top: 2 })
-                      .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                    .onClick(() => { this.gotoBookmark(b.id) })
-                  Button(I18n.t('btn_delete'))
-                    .fontSize(12).fontColor('#E5FFFFFF')
-                    .backgroundColor('rgba(255,255,255,0.10)')
-                    .borderRadius(UI_RADIUS_CONTROL).height(32).padding({ left: 14, right: 14 })
-                    .onClick(() => { this.deleteBookmark(b.id) })
-                }
-                .width('100%')
-                .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-                .backgroundColor('rgba(255,255,255,0.04)')
-                .borderRadius(UI_RADIUS_CONTROL)
-                .border({ width: 1, color: this.nmBorder() })
-              }, (b: BookmarkItem) => b.id)
-            }.width('100%').padding({ left: 2, right: 2 })
-          }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-        }
-      }.width('100%').layoutWeight(1)
+      BookmarkPanel({
+        store: this.bookmarkStore,
+        selectedName: this.selectedName,
+        cardBorderColor: this.nmBorder(),
+        onSaveView: () => { this.addCurrentBookmark() },
+        onGoto: (id: string) => { this.gotoBookmark(id) },
+        onDelete: (id: string) => { this.deleteBookmark(id) }
+      })
     } else if (this.activePanel === 'oculars') {
       Scroll() {
         Column({ space: 12 }) {
