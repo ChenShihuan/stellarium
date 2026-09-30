@@ -741,6 +741,8 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
 - **替换"外层有条件包裹的块"时必须保留/补回 `if (...) {` 那一行**：若起始标记落在条件语句内部、而替换文本只写了新内容，会把 `if` 的开括号一起删掉，其闭合 `}` 变成孤儿 → 文件括号深度失衡 → 数千行之后爆出上百条 `UI component ... cannot be used in this place` / `Cannot find name 'width'`。**定位法**：脚本扫描全文件括号净深度（与 HEAD 对比应为 0），再逐 diff hunk 统计 `{`/`}` 净差额，锁定"删了一个 `{` 未补回"的 hunk。
 - **`arkts_check` 会漏掉结构失衡，绝不可替代构建**：曾出现 `arkts_check` 对四个文件全部报 "No errors"、而 `devecocli build` 立即失败的情况（括号深度 −1）。§13.2 第 5 步的"必须跑构建"因此是硬性要求。
 - **面板内的嵌套滚动会吞掉手势**：如搜索面板"目录天体"网格自身可滚动且占满可视区，`dumpLayout` 下无法把外层滚动拖到网格下方的块（星座 chips / 坐标输入曾因此无法交互验证）→ 需要交互验证尾部内容时，可先切到对象很少的分类让网格变短。
+- **批量改引用时必须同时补宿主 store 字段声明**：只把 `this.X` 改成 `this.store.X` 而忘了 `@State private store: XStore = new XStore()`，会让**所有**该引用推断为 `any`，构建报 `arkts-no-any-unknown`，且报错行号散落在毫不相关的业务方法里（13066/13948/18815…），极难一眼定位。**这两步必须成对执行。**
+- **类型导入要找对模块**：Phase 1c 的 `pages/MainWindowModels.ets` **只包含原单体序言区**的声明；`ObjectDetailField` / `ObjectDetailModel` / `SatellitePass` / `SkyCultureDescriptionBlock` 等类型的导出仍在 **`pages/StellariumTypes.ets`**。导入错模块会报 `declares 'X' locally, but it is not exported`。
 
 ### 13.4 常用命令
 
