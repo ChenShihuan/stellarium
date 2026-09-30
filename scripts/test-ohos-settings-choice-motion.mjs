@@ -24,7 +24,7 @@ test('choice buttons have an explicit normal type and shared control radius', ()
   assert.match(button, /Button\(\{ type: ButtonType.Normal \}\)/);
   assert.match(button, /borderRadius\(UI_RADIUS_CONTROL\)/);
   assert.doesNotMatch(button, /UI_RADIUS_PILL|maxLines|minFontSize/);
-  assert.match(button, /minHeight: 40, maxWidth: '100%'/);
+  assert.match(button, /minHeight: this\.isLargeDesktopCanvas\(\) \? 48 : 40, maxWidth: '100%'/);
 });
 
 test('selection animation follows the background, but does not animate button layout', () => {
@@ -45,5 +45,5 @@ test('CLI and touch share time response animations and semantic settings routes'
   const route = method('private openPanelFromCli(');
   assert.match(route, /settingsInformation/);
   assert.match(route, /settingsTime/);
-  assert.match(route, /this.selectConfigTab\(panel === 'settingsInformation' \? 1 : 3\)/);
+  assert.match(route, /this.selectConfigTab\(panel === 'settingsInformation' \? 1 : \(panel === 'settingsTime' \? 3 : -1\)\)/);
 });

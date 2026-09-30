@@ -10,12 +10,13 @@ namespace StellariumOhosCommandCatalog
 inline QStringList names()
 {
 	return QStringLiteral(
-		"copyTextToClipboard,getGuideState,startGuide,guideAction,beginGuidedSession,endGuidedSession,"
+		"copyTextToClipboard,getAppFilingInfo,getNotificationStatus,requestNotificationAuthorization,publishAstronomyNotification,cancelAstronomyNotification,getAstronomyReminderStatus,getAstronomyReminders,scheduleAstronomyReminder,scheduleNextSolarTermReminder,cancelAstronomyReminder,clearAstronomyReminders,getGuideState,startGuide,guideAction,beginGuidedSession,endGuidedSession,"
 		"setAstroTab,setAstroGroup,setAstroFilter,setAstroScroll,getAstroPanelState,"
-		"addBookmark,addDay,addHour,addMinute,addMonth,addYear,advanceTime,angleMeasurePoint,applySessionState,"
-		"beginGyroViewTransition,beginSkyGesture,cancelGyroViewTransition,clearSelection,cycleCCD,cycleLens,cycleOcular,cycleTelescope,"
+		"addBookmark,addDay,addHour,addMinute,addMonth,addYear,advanceTime,angleMeasurePoint,applyCollaborationSession,applySessionState,"
+		"beginGyroViewTransition,beginSkyGesture,cancelGyroViewTransition,clearSelection,cycleCCD,cycleLens,cycleOcular,cycleTelescope,getViewAnchorState,setViewAnchorProbe,"
 		"deleteBookmark,deleteRecording,downloadStarCatalog,dragView,endPinch,exportConfig,getAboutInfo,"
 		"getAbsoluteStarScale,getActionState,getAlmanac,getAltAzCurve,getAngleMeasure,getAnnualElevation,getAppState,"
+		"getARCapabilities,getARState,"
 		"getAppVersion,getAstroCalcContext,getAtmosphereBrightness,getAtmosphereFlags,getAtmosphereIntensity,getAtmosphereParams,"
 		"getAutoMoveDuration,getAutoZoom,getAutoZoomResets,getBasicInfo,getBookmarks,getCatalogHealth,getCelestialPositions,getConfigString,"
 		"getConstellationArtStatus,getConstellationFlags,getConstellationForPosition,getConstellationInfo,getConstellationList,getCurrentViewInfo,"
@@ -29,16 +30,16 @@ inline QStringList names()
 		"getObserverPlanetList,getOculars,getMosaicCamera,getEquationOfTime,getArchaeoLines,getNavStars,getOrbitDisplaySettings,getPhenomena,getPlanetCalc,getPlanetPairDistanceCurve,"
 		"getPlanetPositions,getPlanetTimeSeries,getPlanetaryTransits,getPluginList,getPointerCoordinates,getPolarScopeData,getProjectionInfo,getProjectionList,"
 		"getRTS,getRTSCalendar,getSatellites,getSatelliteSources,getSatelliteDetail,getSatellitePasses,getScreenInfo,getScriptList,getScriptRate,getScriptStatus,getScriptCaptions,"
-		"getSelectedObjectInfo,getSelectedObjects,getSelectedType,getObjectDetailModel,getObjectDetailConnector,getSessionState,getSiderealTime,getSimulationTime,"
-			"getSkyCultureDetails,getSkyCultureInfo,getSkyCultureList,getSkyCultureMakerDraft,getSkyCultureState,getSkyCultureTerritoryGeometry,getSkyCultureVisualSettings,"
+		"getSelectedObjectInfo,getSelectedObjects,getSelectedType,getObjectDetailModel,getObjectDetailConnector,getCollaborationState,getSessionState,getSiderealTime,getSimulationTime,"
+		"getSkyCultureDetails,getSkyCultureInfo,getSkyCultureList,getSkyCultureMakerDraft,getSkyCultureState,getSkyCultureTerritoryGeometry,getSkyCultureVisualSettings,getLocationMapState,"
 		"getSkyCultures,getSolarElongation,getSolarSystemFlags,getStarCatalogStatus,getStarCatalogs,getStarCount,"
-		"getStarCountFull,getStarFlags,getStarScale,getState,getTimeFormat,getTimeInfo,getTonightEvents,"
+		"getStarCountFull,getStarFlags,getStarScale,getState,getTimeFormat,getTimeInfo,getTimeNavigationTarget,getTonightEvents,"
 		"getTracking,getTrailDisplaySettings,getVMagnitude,getVideoRecordingState,getViewCenterCoordinates,getViewDirection,getViewportOffset,getNavigationSettings,getInformationSettings,getTimeSettings,getEphemerisSettings,"
-		"getViewportSize,getWutTargets,gotoBookmark,gotoNebulaTexture,gotoRADec,gyroDiagnostic,importConfig,importNebulaTexture,importScript,listMatchingObjects,listNebulaTextures,listObjects,"
+		"getViewportSize,getUiLayout,getWutTargets,gotoBookmark,gotoNebulaTexture,gotoRADec,gyroDiagnostic,importCollaborationSession,importConfig,importNebulaTexture,importScript,listMatchingObjects,listNebulaTextures,listObjects,"
 		"listRecordings,loadPlugin,loadRecording,moveToAltAz,moveToSelected,moveToSelectedAt,panBy,pauseScript,playScript,"
 		"pointAtSky,pointAtSkyStop,refreshNebulaTextures,reloadSkyCulture,removeNebulaTexture,resetAngleMeasure,retryDeepSkyImages,resumeScript,saveRecording,saveScreenShot,searchObject,"
 		"selectAt,selftestActions,setAbsoluteStarScale,setActionChecked,setActionStates,setApplicationForeground,"
-		"setAtmosphereFlag,setAtmosphereParams,setAutoMoveDuration,setAutoZoom,setAutoZoomResets,setBortleScale,setCCD,"
+		"setARMode,setARRevealProgress,setAtmosphereFlag,setAtmosphereParams,setAutoMoveDuration,setAutoZoom,setAutoZoomResets,setBortleScale,setCCD,"
 		"setConfigString,setConstellationFlag,setCrosshairs,setDate,setDateFormat,setDitheringMode,setDsoLabels,setFOV,"
 		"setFieldOfView,setFlagClearSky,setFlagGravityLabels,setFlatHorizon,setFovMarkerSetting,setGridFlag,setGyroView,"
 		"setJD,setLandscape,setLandscapeFadeWithZoom,setLandscapeOpacity,setLandscapeTransparency,setLandscapeUseTransparency,"
@@ -49,8 +50,8 @@ inline QStringList names()
 		"setSkyCultureCommonNames,setSkyCultureDefault,setSkyCultureLabelStyle,setSkyCultureScreenLabelStyle,"
 		"setSkyCultureShortLabels,setSkyCultureVisualColor,setSkyCultureVisualSetting,setSkyDisplaySetting,setSolarSystemFlag,setObjectDetailConnector,"
 		"setStarFlag,setStarLabelsAmount,setStarScale,setTelrad,setTimeFormat,setTimeRate,setTimeToJD,setJulianDate,setTracking,"
-		"setTrailDisplaySetting,setVerticalClamp,setViewLock,setViewportOffset,setNavigationSetting,setInformationSetting,setTimeSetting,setEphemerisSetting,setTelescopeLivePosition,saveCurrentView,saveAllSettings,restoreDefaultSettings,startPanInertia,startVideoRecording,openPluginFeature,"
-		"stopPanInertia,stopScript,continueScript,sendKey,stopVideoRecording,importLandscape,getTelescopeControl,getTelescopeProfiles,saveTelescopeProfile,deleteTelescopeProfile,selectTelescopeProfile,testTelescopeConnection,getTelescopePosition,centerScreenOnTelescope,telescopeLx200Abort,telescopeLx200GotoSelected,telescopeLx200SyncSelected,"
+		"setTrailDisplaySetting,setVerticalClamp,setViewLock,setViewportOffset,setNavigationSetting,setInformationSetting,setTimeSetting,setEphemerisSetting,setTelescopeLivePosition,setLocationMapProvider,setUiLayoutMode,saveCurrentView,saveAllSettings,restoreDefaultSettings,startPanInertia,startVideoRecording,openPluginFeature,"
+		"stopPanInertia,stopScript,continueScript,sendKey,stopVideoRecording,createCollaborationSession,exportCollaborationSession,previewCollaborationSession,importLandscape,getTelescopeControl,getTelescopeProfiles,saveTelescopeProfile,deleteTelescopeProfile,selectTelescopeProfile,testTelescopeConnection,getTelescopePosition,centerScreenOnTelescope,telescopeLx200Abort,telescopeLx200GotoSelected,telescopeLx200SyncSelected,"
 			"triggerAction,unloadPlugin,validateNebulaTexture,zoomBy,zoomStep,getCommandCatalog,getCommandSchema,getCommandStatus,"
 			"saveSkyCultureMakerDraft,resetSkyCultureMakerDraft,addSkyCultureMakerConstellation,updateSkyCultureMakerConstellation,removeSkyCultureMakerConstellation,"
 			"addSkyCultureMakerLine,addSkyCultureMakerSelectedStar,importSkyCultureMakerArtwork,setSkyCultureMakerArtworkAnchor,removeSkyCultureMakerArtwork,"
@@ -70,9 +71,11 @@ inline QString categoryFor(const QString& name)
 
 inline bool isRestricted(const QString& name)
 {
-	return name == "setConfigString" || name == "importConfig" || name == "importScript" || name == "exportConfig" ||
+	return name == "setConfigString" || name == "importConfig" || name == "importScript" || name == "exportConfig" || name == "applyCollaborationSession" || name == "importCollaborationSession" ||
 		name == "downloadStarCatalog" || name == "loadPlugin" || name == "unloadPlugin" || name == "setPluginLoadAtStartup" ||
 		name.startsWith("telescope") || name == "setTelescopeLivePosition" || name == "startVideoRecording" || name == "stopVideoRecording" ||
+		name == "requestNotificationAuthorization" || name == "publishAstronomyNotification" || name == "cancelAstronomyNotification" ||
+		name == "scheduleAstronomyReminder" || name == "scheduleNextSolarTermReminder" || name == "cancelAstronomyReminder" || name == "clearAstronomyReminders" ||
 			name == "importNebulaTexture" || name == "removeNebulaTexture" || name == "resetSkyCultureMakerDraft" ||
 				name == "removeSkyCultureMakerConstellation" || name == "importSkyCultureMaker" || name == "exportSkyCultureMaker" ||
 				name == "importSkyCultureMakerArtwork" || name == "removeSkyCultureMakerArtwork";
@@ -87,6 +90,12 @@ inline QJsonObject item(const QString& name)
 	value["mutatesState"] = !(name.startsWith("get") || name.startsWith("list") || name == "selftestActions");
 	value["requiresConfirmation"] = isRestricted(name);
 	value["offline"] = name != "downloadStarCatalog";
+	if (name.contains("AstronomyReminder") || name == "getNotificationStatus" || name == "requestNotificationAuthorization" || name == "publishAstronomyNotification" || name == "cancelAstronomyNotification")
+	{
+		value["transport"] = QStringLiteral("ArkUI");
+		value["description"] = QStringLiteral("使用 HarmonyOS 通知/后台代理提醒；仅在用户主动授权后执行，不读取设备序列号，不依赖公网。");
+		value["offline"] = true;
+	}
 	value["payload"] = QJsonObject{{"type", "string"}, {"required", false}, {"encoding", "legacy-or-json"}};
 	if (name == "copyTextToClipboard")
 	{

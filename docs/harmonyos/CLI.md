@@ -1,5 +1,62 @@
 # Stellarium 鸿蒙 CLI
 
+## APP 备案查询（2026-09-23）
+
+- `getAppFilingInfo` 为 ArkUI CLI 只读入口，返回 `type=app`、`number=新ICP备2026008516号-2A`、`verificationUrl=https://beian.miit.gov.cn/`。与设置/关于共用常量，不请求网络、不读取个人信息。
+- 号码由阿里云“我的备案 → App”核实；不是网站的 `-1` 编号。命令需要安装本轮新构建，旧包不具备此入口。
+
+## 本地通知命令（2026-09-15）
+
+- `getNotificationStatus` 查询系统通知授权状态。
+- `requestNotificationAuthorization` 由用户主动触发系统授权页面。
+- `publishAstronomyNotification` 发布本地普通或多行通知，payload 为 `{"id":1,"title":"...","text":"..."}`，可选 `additionalText` 和 `lines`。
+- `cancelAstronomyNotification` 按通知 ID 取消通知。
+
+这些命令只操作本地 Notification Kit，不联网、不读取 SN 或位置；卫星和天象调度器接入后，将由规则层生成通知 payload。
+
+## 后台代理提醒（2026-09-23）
+
+- `getAstronomyReminderStatus` 查询通知授权和系统代理提醒数量。
+- `getAstronomyReminders` 列出当前应用仍有效的代理提醒，不返回设备标识或观测位置。
+- `scheduleAstronomyReminder` 通过 JSON 注册一次真实时间提醒：`{"at":"2026-09-24T08:00:00+08:00","title":"星象仪","content":"下一节气即将到来","eventId":"solar-term-1","kind":"solar-term","panel":"astro","tab":8}`。
+- `scheduleNextSolarTermReminder` 从本地 `getAlmanac` 结果中找到下一节气并注册一次提醒；它不会请求网络，也不使用用户加速后的模拟时间。
+- `cancelAstronomyReminder` 按提醒 ID 取消，`clearAstronomyReminders` 清理本应用全部代理提醒。注册、取消和授权请求属于改变系统状态的命令，调用方应要求用户确认。
+
+这些命令使用 HarmonyOS `reminderAgentManager`，不是应用内定时器；应用被挂起或进程结束后由系统负责触发。使用前仍需用户开启系统通知、AGC 申请“代理提醒”开放能力并用包含该能力的新 Profile 签名。若设备/配置尚未获批，CLI 会返回明确错误，不会回退为偷偷运行的后台轮询。
+
+```bash
+node scripts/stellarium-cli.mjs --device <设备ID> --command getAstronomyReminderStatus --json
+node scripts/stellarium-cli.mjs --device <设备ID> --command scheduleNextSolarTermReminder --json
+node scripts/stellarium-cli.mjs --device <设备ID> --command getAstronomyReminders --json
+```
+
+## 二十四节气（2026-09-23）
+
+- `getAlmanac` 返回 `almanac.solarTerms`，包含 `index`、`key`、`label`、`jd` 和本地化 `date`。索引从小寒 `0` 到冬至 `23`，每项代表太阳视黄经每增加 15° 的交节时刻。
+- 该计算使用随包太阳系模型，不联网、不读取 SN/位置上传；设备观测位置只影响年历中的本地时间换算，不改变节气的全球交节时刻。
+- 目前查询和点击跳转默认不注册提醒；需要时通过 `scheduleNextSolarTermReminder` 主动注册一次系统代理提醒，不会因为读取年历而自动订阅。
+
+### 桌面服务卡片（2026-09-23）
+
+- 生成工程已注册 `SkyInstrumentFormAbility` 和 `sky_instrument_card` ArkTS 卡片。卡片数据来自应用年历成功加载后写入的本地偏好快照，不联网、不加载 Qt、不读取 SN。
+- 卡片默认展示“星象仪 / 下一节气 / 交节本地时间 / 快照更新时间”，用户点按卡片通过 `FormLink` 打开天文计算年历页。卡片不是通知，也不是实况窗。
+- `form_config.json` 启用 30 分钟被动刷新；它只刷新最近一次本地快照，不代表后台重新计算了星历。首次使用应先在应用内打开并刷新年历。
+- 代理提醒代码和 CLI 已接入；卫星过境倒计时、锁屏实况窗仍未接入。代理提醒仍需要单独的用户订阅、AGC 开放能力审查和包含能力的新 Profile。
+
+## AR 星空与地景递进预研（2026-09-23）
+
+AR 预研面板验证“抠除地面、只保留星空”的交互，不会在当前版本启动摄像头或读取真实地景。真实设备接入时，需要由 AR Engine 的平面、深度或环境 Mesh 生成遮罩；普通星图模式不受影响：
+
+```bash
+node scripts/stellarium-cli.mjs --device <设备ID> --command openUiPanel --payload ar --json
+node scripts/stellarium-cli.mjs --device <设备ID> --command getARCapabilities --json
+node scripts/stellarium-cli.mjs --device <设备ID> --command setARMode --payload portal --json
+node scripts/stellarium-cli.mjs --device <设备ID> --command setARRevealProgress --payload 0.75 --json
+node scripts/stellarium-cli.mjs --device <设备ID> --command getARState --json
+```
+
+`overlay` 是星空叠加，`portal` 是从地景递进到星空的门户预览，`depth` 是未来的深度遮挡契约，`sky-only` 是只保留星空的预览状态。`setARRevealProgress` 接受 `0–1`，1 表示预览中地景遮罩完全抠除。真实 AR 还需用户主动授权相机、能力检测和真机验收，不会把“预览模式”报告为已启动 AR。
+
 ## 剪贴板写入回归（2026-09-08）
 
 - `copyTextToClipboard` 的 payload 为待复制文本（CLI 最多 32768 字符）。仅当前隐私同意且前台可用，调用与界面复制按钮相同的异步服务，不读取现有剪贴板。
@@ -414,3 +471,33 @@ UI 空闲时按 180ms 周期尝试更新；桥接未返回或用户拖动星图�
 ## 交互式天文导览（2026-09-08）
 
 `startGuide solar-neighbours` 或 `startGuide deep-sky-discovery` 启动原生触屏导览；`guideAction` 接受 `next/previous/pause/resume/explore/return/closer/wider/center/auto-on/auto-off/retry/stop`。`getGuideState` 返回状态、导览清单和最近请求结果：必须核对 `lastRequestId`、`result.ok` 与 `state.phase`，不能把命令 accepted 当作完成。导览默认手动推进，后台暂停，退出恢复原生完整脚本快照。`beginGuidedSession/endGuidedSession` 是播放器内部快照接口，不直接替代 startGuide/guideAction。详见 `INTERACTIVE-ASTRONOMY-GUIDES.md`。
+
+## 多设备协同与应用接续
+
+接续包与完整配置备份分开。接续包只恢复当前观测状态，默认不包含精确位置；完整配置仍使用 `exportConfig/importConfig`，导入前应明确确认会覆盖配置项。
+
+```bash
+node scripts/stellarium-cli.mjs --command createCollaborationSession --payload-json '{"includeLocation":false}' --json
+node scripts/stellarium-cli.mjs --command previewCollaborationSession --payload '<接续包 JSON>' --json
+node scripts/stellarium-cli.mjs --command applyCollaborationSession --payload '<接续包 JSON>' --json
+```
+
+- `createCollaborationSession` 和 `getCollaborationState` 生成版本化接续包；`exportCollaborationSession` 传入 `{"copy":true}` 时复制到系统剪贴板。
+- `previewCollaborationSession` 只校验类型、版本、大小和有效期并返回摘要，不改变当前星图；`importCollaborationSession` 是同样的校验入口。
+- `applyCollaborationSession` 通过现有 `applySessionState` 恢复视线、视场、模拟时间、选中目标和图层状态；位置只有在接续包明确包含时才应用。
+- 接续包不会携带 SN、UDID、账号、密码或望远镜主机凭据，默认 24 小时过期，最长 7 天。
+- 系统 Ability 接续接口已预研但当前未开启（`continuable=false`）；完成 Profile、AGC 接续服务和双设备验收后再启用。当前剪贴板、系统分享或本地文件是兼容路径。
+- ArkUI“分享接续包”会生成临时本地 JSON 后调用系统分享面板；分享内容先脱敏，临时文件只用于分享，不作为完整配置备份。
+- ArkUI“分享备份”只在用户主动点击时调用系统分享面板；完整配置可能包含位置和插件设置，因此不与“接续包”混用，也不后台发送。
+
+完整设计、配对、局域网和未来云端边界见 `COLLABORATION-AND-CONTINUATION-ROADMAP.md`。
+
+## PC 响应式布局与触控诊断
+
+```bash
+node scripts/stellarium-cli.mjs --command getUiLayout --json
+node scripts/stellarium-cli.mjs --command setUiLayoutMode --payload expanded --json
+node scripts/stellarium-cli.mjs --command setUiLayoutMode --payload auto --json
+```
+
+`getUiLayout` 返回当前 ArkUI 画布尺寸、`compact/hover/expanded` 布局、覆盖模式和触摸坐标系。`setUiLayoutMode` 只用于测试和自动化复现，不改变系统窗口的真实尺寸；PC 窗口大小仍由 HarmonyOS/桌面窗口管理器调整。正式使用应恢复 `auto`。

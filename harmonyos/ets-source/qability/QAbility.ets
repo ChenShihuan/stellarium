@@ -3,16 +3,20 @@ import QAbilityStage from '../qabilitystage/QAbilityStage';
 import UIAbility from '@ohos.app.ability.UIAbility';
 import Want from '@ohos.app.ability.Want';
 import Window from '@ohos.window'
+import display from '@ohos.display';
 import hilog from '@ohos.hilog';
 import qpa from 'libqohos.so';
 import { command } from 'libentry.so';
 import { notifyLifecycle } from '../common/StellariumLifecycle';
-import {LOG_DOMAIN, LOG_TAG} from '../common/QtAppConstants';
+import {LOG_DOMAIN, LOG_TAG, APP_ICP_FILING_NUMBER, APP_ICP_FILING_URL} from '../common/QtAppConstants';
 import { hasCurrentPrivacyConsent } from './PrivacyConsent';
 import { writeClipboardText } from './ClipboardService';
 import QtWindowStageAdapter from './QtWindowStageAdapter';
 import { setConsentAcceptedListener, setStartupCanvasReadyListener } from '../common/PrivacyStartup';
 import { scheduleDeepSkyImageExtraction, setDeepSkyImageExtractionForeground } from './StellariumResourceBootstrap';
+import { AstronomyNotificationService, AstronomyNotificationPayload } from './AstronomyNotificationService';
+import { AstronomyReminderService, AstronomyReminderRequest } from './AstronomyReminderService';
+import { CollaborationSessionOptions, collaborationNativeState, collaborationPreview, createCollaborationSession } from './CollaborationSessionService';
 
 interface StellariumCliRequest {
   commandName: string;
@@ -26,6 +30,23 @@ interface WindowAvoidAreaChange {
   area: Window.AvoidArea;
 }
 
+interface AstronomyReminderResponse {
+  ok: boolean;
+  reminderId?: number;
+  error?: string;
+  code?: number;
+  notificationEnabled?: boolean;
+  reminderCount?: number;
+  event?: SolarTermCandidate;
+}
+
+interface SolarTermCandidate {
+  date: string;
+  jd: number;
+  label: string;
+  key: string;
+}
+
 export default class QAbility extends UIAbility {
 
   private pendingWant: Want | null = null;
@@ -33,12 +54,24 @@ export default class QAbility extends UIAbility {
   private pendingWindowStage: Window.WindowStage | null = null;
   private privacyRequestStarted: boolean = false;
   private privacyAccepted: boolean = false;
+  private pendingPrivacyWindowRestore: boolean = false;
+
+  private restoreWindowAfterConsent(): void {
+    if (!this.pendingPrivacyWindowRestore || !this.rootContentLoaded ||
+      this.qtWindowStage === undefined || !hasCurrentPrivacyConsent()) return;
+    qpa.handleAbilityOnWindowStageRestore(this, this.qtWindowStage);
+    this.pendingPrivacyWindowRestore = false;
+    AppStorage.setOrCreate('stellariumPrivacyNativeStartupAllowed', true);
+  }
+
   private rootContentLoaded: boolean = false;
+  private rootContentLoading: Promise<boolean> | undefined = undefined;
   private rootStorage: LocalStorage = new LocalStorage();
   private qtWindowStage: QtWindowStageAdapter | undefined = undefined;
   private qtAbilityCreated: boolean = false;
   private qtInitialized: boolean = false;
   private qtStartupInProgress: boolean = false;
+  private desktopWindowRepairAttempts: number = 0;
   private inputStallProbeTimer: number = -1;
 
   private stopInputStallProbe(): void {
@@ -72,6 +105,8 @@ export default class QAbility extends UIAbility {
   private readonly avoidAreaChangeCallback = (data: WindowAvoidAreaChange): void => {
     if (data.type === Window.AvoidAreaType.TYPE_SYSTEM || data.type === Window.AvoidAreaType.TYPE_CUTOUT) {
       this.publishScreenSafeArea(data.area.topRect.height);
+    } else if (data.type === Window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR) {
+      this.publishNavigationSafeArea(data.area.bottomRect.height);
     }
   };
 
@@ -85,6 +120,33 @@ export default class QAbility extends UIAbility {
     }
     const value = parameters[key];
     return typeof value === 'string' ? value : '';
+  }
+
+  private routeCardWant(want: Want): void {
+    const parameters = want.parameters as Record<string, Object> | undefined;
+    if (parameters === undefined) return;
+    let panel = this.readCliString(parameters, 'panel').trim();
+    let tab = this.readCliString(parameters, 'tab').trim();
+    const nested = parameters['params'];
+    if (panel.length === 0 && typeof nested === 'string') {
+      try {
+        const parsed = JSON.parse(nested) as Record<string, Object>;
+        panel = typeof parsed['panel'] === 'string' ? String(parsed['panel']).trim() : '';
+        tab = typeof parsed['tab'] === 'string' ? String(parsed['tab']).trim() : tab;
+      } catch (error) {
+        hilog.warn(LOG_DOMAIN, LOG_TAG, '[form-route] ignored malformed card params');
+      }
+    } else if (panel.length === 0 && nested !== undefined && typeof nested === 'object') {
+      const parsed = nested as Record<string, Object>;
+      panel = typeof parsed['panel'] === 'string' ? String(parsed['panel']).trim() : '';
+      tab = typeof parsed['tab'] === 'string' ? String(parsed['tab']).trim() : tab;
+    }
+    if (panel.length === 0) return;
+    AppStorage.setOrCreate('stellariumCardRoute', JSON.stringify({
+      panel: panel,
+      tab: tab,
+      routeId: Date.now().toString()
+    }));
   }
 
   private queueCliRequest(want: Want): void {
@@ -120,6 +182,28 @@ export default class QAbility extends UIAbility {
     if (this.cliRequests.some((request: StellariumCliRequest) => request.requestId === requestId)) {
       return;
     }
+    if (commandName === 'getPrivacyConsentState') {
+      this.finishCliRequest({ commandName, payload, requestId, attempts: 0 }, JSON.stringify({
+        ok: true, currentAgreementsAccepted: hasCurrentPrivacyConsent(),
+        nativeInitialized: this.qtInitialized,
+        foreground: this.isForeground
+      }));
+      return;
+    }
+    if (commandName === 'getUiLayout') {
+      this.finishCliRequest({ commandName, payload, requestId, attempts: 0 },
+        AppStorage.get<string>('stellariumUiLayoutState') ?? JSON.stringify({
+          ok: true, ready: false, mode: 'unknown', override: 'auto'
+        }));
+      return;
+    }
+    if (commandName === 'getLocationMapState') {
+      this.finishCliRequest({ commandName, payload, requestId, attempts: 0 },
+        AppStorage.get<string>('stellariumLocationMapState') ?? JSON.stringify({
+          ok: true, provider: 'offline', phase: 'ready', observerCoordinateSystem: 'WGS84'
+        }));
+      return;
+    }
     this.cliRequests.push({ commandName: commandName, payload: payload, requestId: requestId, attempts: 0 });
     hilog.info(LOG_DOMAIN, LOG_TAG, '[cli] queued requestId=%{public}s command=%{public}s', requestId, commandName);
     this.drainCliRequests();
@@ -140,7 +224,36 @@ export default class QAbility extends UIAbility {
     if (commandName === 'setObjectDetailTab') return true;
     if (commandName === 'setObjectModelView') return true;
     return commandName === 'openUiPanel' || commandName === 'openPluginFeature' || commandName === 'closeUiPanel' || commandName === 'backUiPanel' ||
-      commandName === 'setLayerTab' || commandName === 'setSkyCultureMakerTab' || commandName === 'setGyroscopeEnabled' || commandName === 'setTelescopeLivePosition';
+      commandName === 'setLayerTab' || commandName === 'setSkyCultureMakerTab' || commandName === 'setGyroscopeEnabled' || commandName === 'setTelescopeLivePosition' || commandName === 'setLocationMapProvider' || commandName === 'setUiLayoutMode';
+  }
+
+  private async createCollaborationCli(request: StellariumCliRequest): Promise<void> {
+    try {
+      let options: CollaborationSessionOptions = {};
+      if (request.payload.trim().length > 0) options = JSON.parse(request.payload) as CollaborationSessionOptions;
+      const session = createCollaborationSession(command('getSessionState', ''), options);
+      const response: Record<string, Object> = {};
+      response['ok'] = true;
+      response['session'] = session;
+      response['preview'] = collaborationPreview(JSON.stringify(session));
+      if (request.commandName === 'exportCollaborationSession' && options.copy === true) {
+        response['clipboard'] = await writeClipboardText(JSON.stringify(session, null, 2));
+      }
+      this.finishCliRequest(request, JSON.stringify(response));
+    } catch (error) {
+      this.finishCliRequest(request, JSON.stringify({ ok: false, error: String(error) }));
+    }
+  }
+
+  private async applyCollaborationCli(request: StellariumCliRequest): Promise<void> {
+    try {
+      const nativeState = collaborationNativeState(request.payload);
+      const result = JSON.parse(command('applySessionState', nativeState)) as Record<string, Object>;
+      result['sessionPreview'] = collaborationPreview(request.payload);
+      this.finishCliRequest(request, JSON.stringify(result));
+    } catch (error) {
+      this.finishCliRequest(request, JSON.stringify({ ok: false, error: String(error) }));
+    }
   }
 
   private drainCliRequests(): void {
@@ -149,11 +262,188 @@ export default class QAbility extends UIAbility {
     }
     const request = this.cliRequests[0];
     request.attempts += 1;
+    if (request.commandName.includes('Collaboration') && (!hasCurrentPrivacyConsent() || !this.isForeground)) {
+      this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'privacy consent and foreground are required' }));
+      return;
+    }
+    if (request.commandName === 'getNotificationStatus') {
+      AstronomyNotificationService.isEnabled().then((enabled: boolean) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: true, enabled: enabled }));
+      });
+      return;
+    }
+    if (request.commandName === 'requestNotificationAuthorization') {
+      AstronomyNotificationService.requestAuthorization(this.context).then((enabled: boolean) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: true, enabled: enabled }));
+      });
+      return;
+    }
+    if (request.commandName === 'publishAstronomyNotification') {
+      let payload: AstronomyNotificationPayload;
+      try {
+        payload = JSON.parse(request.payload) as AstronomyNotificationPayload;
+      } catch (error) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'payload must be notification JSON' }));
+        return;
+      }
+      if (!Number.isInteger(payload.id) || payload.id <= 0 || payload.title.length === 0 || payload.text.length === 0) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'id, title and text are required' }));
+        return;
+      }
+      AstronomyNotificationService.publish(payload).then((published: boolean) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: published, published: published }));
+      });
+      return;
+    }
+    if (request.commandName === 'cancelAstronomyNotification') {
+      const id = Number(request.payload.trim());
+      if (!Number.isInteger(id) || id <= 0) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'notification id must be a positive integer' }));
+        return;
+      }
+      AstronomyNotificationService.cancel(id);
+      this.finishCliRequest(request, JSON.stringify({ ok: true, cancelled: id }));
+      return;
+    }
+    if (request.commandName === 'getAstronomyReminderStatus') {
+      AstronomyReminderService.status().then((status) => {
+        this.finishCliRequest(request, JSON.stringify(status));
+      });
+      return;
+    }
+    if (request.commandName === 'getAstronomyReminders') {
+      AstronomyReminderService.list().then((result) => {
+        this.finishCliRequest(request, JSON.stringify(result));
+      });
+      return;
+    }
+    if (request.commandName === 'scheduleAstronomyReminder') {
+      let payload: AstronomyReminderRequest;
+      try {
+        payload = JSON.parse(request.payload) as AstronomyReminderRequest;
+      } catch (error) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'payload must be reminder JSON' }));
+        return;
+      }
+      AstronomyReminderService.schedule(payload).then((result) => {
+        this.finishCliRequest(request, JSON.stringify(result));
+      });
+      return;
+    }
+    if (request.commandName === 'scheduleNextSolarTermReminder') {
+      let nativeResponse: Record<string, Object>;
+      try {
+        nativeResponse = JSON.parse(command('getAlmanac', '')) as Record<string, Object>;
+      } catch (error) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'almanac is not ready' }));
+        return;
+      }
+      if (nativeResponse['pending'] === true) {
+        if (request.attempts < 120) {
+          setTimeout(() => this.drainCliRequests(), 80);
+          return;
+        }
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'almanac command timed out', pending: true }));
+        return;
+      }
+      const nestedResult = nativeResponse['result'] as Record<string, Object> | undefined;
+      const nestedAlmanac = nestedResult?.['almanac'] as Record<string, Object> | undefined;
+      const almanac = (nativeResponse['almanac'] as Record<string, Object> | undefined)
+        ?? nestedAlmanac
+        ?? nativeResponse;
+      const rawTerms = almanac['solarTerms'] ?? nativeResponse['solarTerms'] ?? nestedResult?.['solarTerms'];
+      const terms = Array.isArray(rawTerms) ? rawTerms as Array<SolarTermCandidate> : [];
+      const rawCurrentJD = almanac['currentJD'] ?? nativeResponse['currentJD'] ?? nestedResult?.['currentJD'];
+      const currentJD = Number(String(rawCurrentJD ?? ''));
+      const directNextDate = String(almanac['nextSolarTermDate'] ?? nativeResponse['nextSolarTermDate'] ?? nestedResult?.['nextSolarTermDate'] ?? '');
+      const directNextJD = Number(String(almanac['nextSolarTermJD'] ?? nativeResponse['nextSolarTermJD'] ?? nestedResult?.['nextSolarTermJD'] ?? ''));
+      const directNextLabel = String(almanac['nextSolarTermLabel'] ?? nativeResponse['nextSolarTermLabel'] ?? nestedResult?.['nextSolarTermLabel'] ?? '下一节气');
+      const directNext: SolarTermCandidate | undefined = directNextDate.length > 0
+        ? { date: directNextDate, jd: directNextJD, label: directNextLabel, key: directNextLabel }
+        : undefined;
+      const next = directNext ?? terms.find((term) => {
+        const termJD = Number(String(term['jd'] ?? ''));
+        if (Number.isFinite(currentJD) && Number.isFinite(termJD)) {
+          return termJD > currentJD + (30 / 86400);
+        }
+        const rawDate = String(term['date'] ?? '');
+        const dateParts = rawDate.split('T');
+        const dayParts = dateParts[0].split('-');
+        const timeParts = (dateParts[1] ?? '00:00:00').split(':');
+        const date = dayParts.length === 3 && timeParts.length >= 2
+          ? new Date(Number(dayParts[0]), Number(dayParts[1]) - 1, Number(dayParts[2]), Number(timeParts[0]), Number(timeParts[1]), Number(timeParts[2] ?? 0))
+          : new Date(rawDate);
+        return Number.isFinite(date.getTime()) && date.getTime() > Date.now() + 30 * 1000;
+      });
+      if (next === undefined) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'no upcoming solar term in the current almanac' }));
+        return;
+      }
+      const label = String(next['label'] ?? '下一节气');
+      AstronomyReminderService.schedule({
+        at: String(next['date']),
+        title: '星象仪 · 下一节气',
+        content: `${label} 即将到来，打开星象仪查看年历和观测信息。`,
+        eventId: String(next['key'] ?? label),
+        kind: 'solar-term',
+        panel: 'astro',
+        tab: 8
+      }).then((result) => {
+        const response: AstronomyReminderResponse = { ok: result.ok };
+        if (result.reminderId !== undefined) response['reminderId'] = result.reminderId;
+        if (result.error !== undefined) response['error'] = result.error;
+        if (result.code !== undefined) response['code'] = result.code;
+        if (result.notificationEnabled !== undefined) response['notificationEnabled'] = result.notificationEnabled;
+        if (result.reminderCount !== undefined) response['reminderCount'] = result.reminderCount;
+        response.event = next;
+        this.finishCliRequest(request, JSON.stringify(response));
+      });
+      return;
+    }
+    if (request.commandName === 'cancelAstronomyReminder') {
+      const reminderId = Number(request.payload.trim());
+      AstronomyReminderService.cancel(reminderId).then((result) => {
+        this.finishCliRequest(request, JSON.stringify(result));
+      });
+      return;
+    }
+    if (request.commandName === 'clearAstronomyReminders') {
+      AstronomyReminderService.cancelAll().then((result) => {
+        this.finishCliRequest(request, JSON.stringify(result));
+      });
+      return;
+    }
     if (request.commandName === 'copyTextToClipboard') {
       if (request.attempts > 1) return;
       writeClipboardText(request.payload).then((result) => {
         this.finishCliRequest(request, JSON.stringify(result));
       });
+      return;
+    }
+    if (request.commandName === 'getCollaborationState') {
+      this.finishCliRequest(request, JSON.stringify({
+        ok: true, systemContinuation: false, cloudSync: false, liveCollaboration: false,
+        fileTransfer: true, sessionSchemaVersion: 2,
+        ui: AppStorage.get<string>('stellariumCollaborationUi') ?? '{}'
+      }));
+      return;
+    }
+    if (request.commandName === 'createCollaborationSession' || request.commandName === 'exportCollaborationSession') {
+      if (request.attempts > 1) return;
+      void this.createCollaborationCli(request);
+      return;
+    }
+    if (request.commandName === 'previewCollaborationSession' || request.commandName === 'importCollaborationSession') {
+      this.finishCliRequest(request, JSON.stringify(collaborationPreview(request.payload)));
+      return;
+    }
+    if (request.commandName === 'applyCollaborationSession') {
+      if (request.attempts > 1) return;
+      void this.applyCollaborationCli(request);
+      return;
+    }
+    if (request.commandName === 'getAppFilingInfo') {
+      this.finishCliRequest(request, JSON.stringify({ ok: true, type: 'app', number: APP_ICP_FILING_NUMBER, verificationUrl: APP_ICP_FILING_URL }));
       return;
     }
     if (request.commandName === 'getGuideState') {
@@ -364,10 +654,23 @@ export default class QAbility extends UIAbility {
     if (this.rootContentLoaded) {
       return true;
     }
+    if (this.rootContentLoading !== undefined) {
+      this.logPrivacyProbe('privacy-window-prepare-joined');
+      return this.rootContentLoading;
+    }
+    this.rootContentLoading = this.loadPrivacyHostPage(windowStage);
+    try {
+      return await this.rootContentLoading;
+    } finally {
+      this.rootContentLoading = undefined;
+    }
+  }
 
+  private async loadPrivacyHostPage(windowStage: Window.WindowStage): Promise<boolean> {
     try {
       this.logPrivacyProbe('privacy-window-prepare-start');
       AppStorage.setOrCreate('stellariumPrivacyNativeStartupAllowed', false);
+      AppStorage.setOrCreate('stellariumPrivacyConsentVerifiedUi', false);
       AppStorage.setOrCreate('stellariumStartupSkyReady', false);
       AppStorage.setOrCreate('stellariumStartupArtComplete', false);
       AppStorage.setOrCreate('stellariumQtContentReady', false);
@@ -387,6 +690,10 @@ export default class QAbility extends UIAbility {
   }
 
   private async requestPrivacyThenStart(): Promise<void> {
+    if (this.qtInitialized) {
+      if (this.isForeground) this.restoreWindowAfterConsent();
+      return;
+    }
     if (this.privacyRequestStarted || this.privacyAccepted || this.qtInitialized || this.pendingWindowStage === null) {
       return;
     }
@@ -394,8 +701,8 @@ export default class QAbility extends UIAbility {
     if (!hasCurrentPrivacyConsent()) return;
 
     this.privacyRequestStarted = true;
-    this.logPrivacyProbe('privacy-request-start');
-    this.logPrivacyGate('requesting system privacy consent');
+    this.logPrivacyProbe('privacy-verification-start');
+    this.logPrivacyGate('verifying current hosted agreements');
     this.privacyRequestStarted = false;
     if (!hasCurrentPrivacyConsent()) {
       hilog.warn(LOG_DOMAIN, LOG_TAG, 'Privacy consent was not accepted; Qt startup remains blocked');
@@ -413,7 +720,7 @@ export default class QAbility extends UIAbility {
       return;
     }
     this.logPrivacyProbe('privacy-host-ready', 'single ApplicationRoot loaded; Qt content will bind in place');
-    this.logPrivacyGate('privacy host page is ready; requesting system privacy consent');
+    this.logPrivacyGate('privacy host page is ready; observing system-managed privacy consent without an automatic request');
     AppStorage.setOrCreate('stellariumPrivacyHostReady', true);
   }
 
@@ -519,10 +826,61 @@ export default class QAbility extends UIAbility {
       if (canIUse('SystemCapability.Window.SessionManager')) {
         await mainWindow.setSpecificSystemBarEnabled('navigationIndicator', false);
       }
+      await this.repairSmallFreeformWindow(windowStage);
       if (this.qtAbilityCreated && hasCurrentPrivacyConsent()) this.registerScreenSafeArea(mainWindow);
       hilog.info(LOG_DOMAIN, LOG_TAG, 'QAbility::enterImmersive() success');
     } catch (err) {
       hilog.error(LOG_DOMAIN, LOG_TAG, 'QAbility::enterImmersive() failed: ' + JSON.stringify(err));
+    }
+  }
+
+  private async repairSmallFreeformWindow(windowStage: Window.WindowStage): Promise<void> {
+    if (this.desktopWindowRepairAttempts >= 3) return;
+    this.desktopWindowRepairAttempts += 1;
+    try {
+      const mainWindow = await windowStage.getMainWindow();
+      const status = mainWindow.getWindowStatus();
+      const properties = mainWindow.getWindowProperties();
+      const rect = properties.windowRect;
+      const globalRect = mainWindow.getGlobalRect();
+      const displayInfo = display.getDefaultDisplaySync();
+      const displayWidth = Number(displayInfo.width);
+      const displayHeight = Number(displayInfo.height);
+      const sessionManagerAvailable = canIUse('SystemCapability.Window.SessionManager');
+      const left = Number.isFinite(globalRect.left) ? globalRect.left : rect.left;
+      const top = Number.isFinite(globalRect.top) ? globalRect.top : rect.top;
+      hilog.info(LOG_DOMAIN, LOG_TAG,
+        '[window-probe] attempt=%{public}d capability=%{public}s status=%{public}s rect=%{public}s global=%{public}s display=%{public}s',
+        this.desktopWindowRepairAttempts, String(sessionManagerAvailable), String(status),
+        `${rect.left},${rect.top},${rect.width}x${rect.height}`,
+        `${globalRect.left},${globalRect.top},${globalRect.width}x${globalRect.height}`,
+        `${displayWidth}x${displayHeight}`);
+      if (status !== Window.WindowStatusType.FLOATING) {
+        this.desktopWindowRepairAttempts = 3;
+        return;
+      }
+      if (rect.width <= 0 || rect.height <= 0) {
+        setTimeout(() => { void this.repairSmallFreeformWindow(windowStage); }, 350);
+        return;
+      }
+      const smallerThanDisplay = displayWidth > 0 && displayHeight > 0 &&
+        (rect.width < displayWidth * 0.9 || rect.height < displayHeight * 0.9);
+      const needsInitialMaximize = smallerThanDisplay || (rect.width < 800 && rect.height < 600 && left <= 32 && top <= 32);
+      if (!needsInitialMaximize) {
+        this.desktopWindowRepairAttempts = 3;
+        return;
+      }
+      hilog.warn(LOG_DOMAIN, LOG_TAG,
+        '[window-probe] undersized freeform startup window detected; requesting maximize');
+      await mainWindow.maximize(Window.MaximizePresentation.FOLLOW_APP_IMMERSIVE_SETTING);
+      hilog.info(LOG_DOMAIN, LOG_TAG, '[window-probe] maximize requested for stale freeform window');
+      this.desktopWindowRepairAttempts = 3;
+    } catch (err) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG,
+        '[window-probe] repair unavailable: %{public}s', JSON.stringify(err));
+      if (this.desktopWindowRepairAttempts < 3) {
+        setTimeout(() => { void this.repairSmallFreeformWindow(windowStage); }, 350);
+      }
     }
   }
 
@@ -539,6 +897,11 @@ export default class QAbility extends UIAbility {
     }
   }
 
+  private publishNavigationSafeArea(bottomPixels: number): void {
+    const bottom = Number.isFinite(bottomPixels) ? Math.max(0, bottomPixels) : 0;
+    AppStorage.setOrCreate<number>('stellariumScreenSafeBottomPixels', bottom);
+  }
+
   private registerScreenSafeArea(mainWindow: Window.Window): void {
     if (this.safeAreaWindow !== null && this.safeAreaWindow !== mainWindow) {
       try {
@@ -548,6 +911,13 @@ export default class QAbility extends UIAbility {
       }
     }
     this.safeAreaWindow = mainWindow;
+    try {
+      const navigationArea = mainWindow.getWindowAvoidArea(Window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
+      this.publishNavigationSafeArea(navigationArea.bottomRect.height);
+    } catch (err) {
+      this.publishNavigationSafeArea(0);
+      hilog.warn(LOG_DOMAIN, LOG_TAG, '[safe-area] navigation area unavailable');
+    }
     try {
       const systemArea = mainWindow.getWindowAvoidArea(Window.AvoidAreaType.TYPE_SYSTEM);
       const cutoutArea = mainWindow.getWindowAvoidArea(Window.AvoidAreaType.TYPE_CUTOUT);
@@ -577,6 +947,7 @@ export default class QAbility extends UIAbility {
     });
     this.pendingWant = want;
     this.pendingLaunchParam = launchParam;
+    this.routeCardWant(want);
     this.queueCliRequest(want);
   }
 
@@ -610,12 +981,12 @@ export default class QAbility extends UIAbility {
     this.pendingWindowStage = windowStage;
     this.logPrivacyProbe('window-stage-restore');
     if (this.qtInitialized) {
+      this.pendingPrivacyWindowRestore = true;
       void this.preparePrivacyHostPage(windowStage).then((ready: boolean) => {
-        if (ready && this.qtWindowStage !== undefined && hasCurrentPrivacyConsent()) {
-          qpa.handleAbilityOnWindowStageRestore(this, this.qtWindowStage);
-          AppStorage.setOrCreate('stellariumPrivacyNativeStartupAllowed', true);
-          void this.enterImmersive(windowStage);
-        }
+        if (!ready) return;
+        AppStorage.setOrCreate('stellariumPrivacyHostReady', true);
+        this.restoreWindowAfterConsent();
+        void this.enterImmersive(windowStage);
       });
     } else {
       void this.requestPrivacyAfterWindowReady(windowStage);
@@ -626,6 +997,7 @@ export default class QAbility extends UIAbility {
     hilog.info(LOG_DOMAIN, LOG_TAG, 'QAbility::onNewWant()');
     this.pendingWant = want;
     this.pendingLaunchParam = launchParam;
+    this.routeCardWant(want);
     this.queueCliRequest(want);
     if (this.qtAbilityCreated) {
       qpa.handleAbilityOnNewWant(this, want, launchParam);
@@ -637,6 +1009,7 @@ export default class QAbility extends UIAbility {
     AppStorage.setOrCreate('stellariumStartupForeground', true);
     hilog.info(LOG_DOMAIN, LOG_TAG, 'QAbility::onForeground()');
     this.isForeground = true;
+    this.restoreWindowAfterConsent();
     this.startInputStallProbe();
     this.logPrivacyProbe('ability-foreground');
     setDeepSkyImageExtractionForeground(true);
@@ -687,8 +1060,6 @@ export default class QAbility extends UIAbility {
   }
 
   onContinue(wantParam: Record<string, Object>): AbilityConstant.OnContinueResult | Promise<AbilityConstant.OnContinueResult> {
-    return this.qtAbilityCreated
-      ? qpa.handleAbilityOnContinue(this, wantParam)
-      : AbilityConstant.OnContinueResult.REJECT;
+    return AbilityConstant.OnContinueResult.REJECT;
   }
 }

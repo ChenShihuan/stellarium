@@ -13,6 +13,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 node "$SCRIPT_DIR/check-ohos-platform-patch.mjs" --sync
 
+if [ -d "$REPO_ROOT/build/libstellarium-harmonyos/entry/src/main/ets" ]; then
+  mkdir -p "$REPO_ROOT/build/libstellarium-harmonyos/entry/src/main/ets/form"
+fi
+
 SOURCES=(
   # DevEco owns build-profile.json5 and its local signing credentials; never sync it here.
   "harmonyos/AppScope/app.json5:build/libstellarium-harmonyos/AppScope/app.json5"
@@ -23,10 +27,13 @@ SOURCES=(
   "harmonyos/cpp-source/hello.cpp:build/libstellarium-harmonyos/entry/src/main/cpp/hello.cpp"
   "harmonyos/cpp-source/PresentationGeometry.h:build/libstellarium-harmonyos/entry/src/main/cpp/PresentationGeometry.h"
   "harmonyos/ets-source/common/QtAppConstants.ets:build/libstellarium-harmonyos/entry/src/main/ets/common/QtAppConstants.ets"
+  "harmonyos/ets-source/process/QChildProcess.ets:build/libstellarium-harmonyos/entry/src/main/ets/process/QChildProcess.ets"
   "harmonyos/ets-source/qability/ClipboardService.ets:build/libstellarium-harmonyos/entry/src/main/ets/qability/ClipboardService.ets"
   "harmonyos/ets-source/common/StellariumLifecycle.ets:build/libstellarium-harmonyos/entry/src/main/ets/common/StellariumLifecycle.ets"
   "harmonyos/ets-source/pages/PrivacyBootstrap.ets:build/libstellarium-harmonyos/entry/src/main/ets/pages/PrivacyBootstrap.ets"
   "harmonyos/ets-source/pages/MainWindowNativeNode.ets:build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets"
+  "harmonyos/ets-source/form/SkyInstrumentFormAbility.ets:build/libstellarium-harmonyos/entry/src/main/ets/form/SkyInstrumentFormAbility.ets"
+  "harmonyos/ets-source/form/SkyInstrumentCard.ets:build/libstellarium-harmonyos/entry/src/main/ets/form/SkyInstrumentCard.ets"
   "harmonyos/ets-source/pages/AstronomyGuide.ts:build/libstellarium-harmonyos/entry/src/main/ets/pages/AstronomyGuide.ts"
   "harmonyos/ets-source/pages/location_hierarchy.ts:build/libstellarium-harmonyos/entry/src/main/ets/pages/location_hierarchy.ts"
   "harmonyos/ets-source/pages/location_countries.ts:build/libstellarium-harmonyos/entry/src/main/ets/pages/location_countries.ts"
@@ -43,7 +50,12 @@ SOURCES=(
   "harmonyos/ets-source/pages/SubWindowNativeNode.ets:build/libstellarium-harmonyos/entry/src/main/ets/pages/SubWindowNativeNode.ets"
   "harmonyos/ets-source/pages/UiExtensionNativeNode.ets:build/libstellarium-harmonyos/entry/src/main/ets/pages/UiExtensionNativeNode.ets"
   "harmonyos/ets-source/pages/I18n.ets:build/libstellarium-harmonyos/entry/src/main/ets/pages/I18n.ets"
+  "harmonyos/ets-source/pages/LocationOnlineMap.ets:build/libstellarium-harmonyos/entry/src/main/ets/pages/LocationOnlineMap.ets"
+  "harmonyos/ets-source/pages/MapCoordinate.ts:build/libstellarium-harmonyos/entry/src/main/ets/pages/MapCoordinate.ts"
   "harmonyos/ets-source/qability/QAbility.ets:build/libstellarium-harmonyos/entry/src/main/ets/qability/QAbility.ets"
+  "harmonyos/ets-source/qability/AstronomyNotificationService.ets:build/libstellarium-harmonyos/entry/src/main/ets/qability/AstronomyNotificationService.ets"
+  "harmonyos/ets-source/qability/AstronomyReminderService.ets:build/libstellarium-harmonyos/entry/src/main/ets/qability/AstronomyReminderService.ets"
+  "harmonyos/ets-source/qability/CollaborationSessionService.ets:build/libstellarium-harmonyos/entry/src/main/ets/qability/CollaborationSessionService.ets"
   "harmonyos/ets-source/qability/QtWindowStageAdapter.ets:build/libstellarium-harmonyos/entry/src/main/ets/qability/QtWindowStageAdapter.ets"
   "harmonyos/ets-source/common/PrivacyStartup.ets:build/libstellarium-harmonyos/entry/src/main/ets/common/PrivacyStartup.ets"
   "harmonyos/ets-source/pages/ApplicationRoot.ets:build/libstellarium-harmonyos/entry/src/main/ets/pages/ApplicationRoot.ets"
@@ -92,6 +104,7 @@ SOURCES=(
   "harmonyos/module.json5:build/libstellarium-harmonyos/entry/src/main/module.json5"
   "harmonyos/resources/base/profile/main_pages.json:build/libstellarium-harmonyos/entry/src/main/resources/base/profile/main_pages.json"
   "harmonyos/resources/base/profile/easy_go.json:build/libstellarium-harmonyos/entry/src/main/resources/base/profile/easy_go.json"
+  "harmonyos/resources/base/profile/form_config.json:build/libstellarium-harmonyos/entry/src/main/resources/base/profile/form_config.json"
   "harmonyos/resources/base/element/string.json:build/libstellarium-harmonyos/entry/src/main/resources/base/element/string.json"
   "harmonyos/resources/zh_CN/element/string.json:build/libstellarium-harmonyos/entry/src/main/resources/zh_CN/element/string.json"
   "harmonyos/resources/base/media/background.png:build/libstellarium-harmonyos/entry/src/main/resources/base/media/background.png"
@@ -151,6 +164,22 @@ for tree in AppScope/resources resources; do
     echo "  -> $dst"
   done < <(find "$REPO_ROOT/harmonyos/$tree" -type f -path '*/element/string.json' -print | sort)
 done
+
+# The generated project owns the HAP rawfile tree, so a normal source mirror
+# can otherwise package an older catalog-manifest than the source tree. Refresh
+# the full resource mirror only when its manifest changed (or when the caller
+# explicitly requests it). This keeps ordinary ArkTS-only syncs fast while
+# making catalog updates reproducible.
+RAWFILE_ROOT="$REPO_ROOT/build/libstellarium-harmonyos/entry/src/main/resources/rawfile/stellarium"
+if [ "${OHOS_SYNC_RESOURCES:-auto}" != "0" ]; then
+  if [ "${OHOS_SYNC_RESOURCES:-auto}" = "1" ] || \
+    ! cmp -s "$REPO_ROOT/data/ohos/catalog-manifest.json" "$RAWFILE_ROOT/data/ohos/catalog-manifest.json"; then
+    echo "Resource manifest changed; synchronizing HAP rawfile resources"
+    "$SCRIPT_DIR/sync-ohos-resources.sh"
+  else
+    echo "HAP rawfile resources already match data/ohos/catalog-manifest.json"
+  fi
+fi
 
 OHOS_ADDITIONAL_PKGS="${OHOS_ADDITIONAL_PKGS:-$HOME/.local/opt/ohos/additional-packages}"
 JPEG_SOURCE="$OHOS_ADDITIONAL_PKGS/lib/libjpeg.so"

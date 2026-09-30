@@ -348,6 +348,8 @@ export interface SatellitePass {
 
 export interface StellariumBridgeResponse {
   ok?: boolean
+  session?: Object
+  preview?: Object
   id?: string
   format?: string
   isTimeNow?: boolean
@@ -836,6 +838,8 @@ export interface SessionSnapshot {
 
 export interface SeasonEvent {
   label?: string
+  key?: string
+  index?: number
   jd?: number
   date?: string
   durationDays?: number

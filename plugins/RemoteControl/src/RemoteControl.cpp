@@ -70,6 +70,7 @@ RemoteControl::RemoteControl()
 	, autoStart(false)
 	, usePassword(false)
 	, password("")
+	, host("127.0.0.1")
 	, enableCors(false)
 	, corsOrigin("")
 	, port(8090)
@@ -206,7 +207,12 @@ void RemoteControl::setFlagEnabled(bool b)
 		if (b)
 		{
 			qDebug() << "RemoteControl enabled";
-			startServer();
+			if (!startServer())
+			{
+				enabled = false;
+				emit flagEnabledChanged(false);
+				return;
+			}
 		}
 		else
 			stopServer();
@@ -242,6 +248,16 @@ void RemoteControl::setPassword(const QString &password)
 	}
 }
 
+void RemoteControl::setHost(const QString &host)
+{
+	const QString normalized = host.trimmed().isEmpty() ? QStringLiteral("127.0.0.1") : host.trimmed();
+	if (normalized != this->host)
+	{
+		this->host = normalized;
+		emit hostChanged(normalized);
+	}
+}
+
 void RemoteControl::setFlagEnableCors(bool b)
 {
 	if(b!=enableCors)
@@ -269,9 +285,18 @@ void RemoteControl::setPort(const int port)
 	}
 }
 
-void RemoteControl::startServer()
+bool RemoteControl::startServer()
 {
 	Q_ASSERT(httpListener == nullptr);
+	const QString bindHost = host.trimmed().isEmpty() ? QStringLiteral("127.0.0.1") : host.trimmed();
+	QHostAddress bindAddress;
+	const bool isLoopback = bindHost.compare(QStringLiteral("localhost"), Qt::CaseInsensitive) == 0 ||
+		(bindAddress.setAddress(bindHost) && bindAddress.isLoopback());
+	if (!isLoopback && !usePassword)
+	{
+		qWarning() << "[RemoteControl] Refusing non-loopback bind without password:" << bindHost;
+		return false;
+	}
 
 	//set request handler password settings
 	requestHandler->setPassword(password);
@@ -279,10 +304,18 @@ void RemoteControl::startServer()
 	requestHandler->setEnableCors(enableCors);
 	requestHandler->setCorsOrigin(corsOrigin);
 	HttpListenerSettings settings;
+	settings.host = bindHost;
 	settings.port = port;
 	settings.minThreads = minThreads;
 	settings.maxThreads = maxThreads;
 	httpListener = new HttpListener(settings,requestHandler);
+	if (!httpListener->isListening())
+	{
+		delete httpListener;
+		httpListener = nullptr;
+		return false;
+	}
+	return true;
 }
 
 void RemoteControl::stopServer()
@@ -313,6 +346,7 @@ void RemoteControl::loadSettings()
 	setPassword(conf->value("password", "").toString());
 	setFlagEnableCors(conf->value("enable_cors", false).toBool());
 	setCorsOrigin(conf->value("cors_origin", "").toString());
+	setHost(conf->value("host", "127.0.0.1").toString());
 	setPort(conf->value("port", 8090).toInt());
 	minThreads = conf->value("min_threads", 1).toInt();
 	maxThreads = conf->value("max_threads", 30).toInt();
@@ -325,6 +359,7 @@ void RemoteControl::saveSettings()
 	conf->setValue("autostart", autoStart);
 	conf->setValue("use_password", usePassword);
 	conf->setValue("password", password);
+	conf->setValue("host", host);
 	conf->setValue("enable_cors", enableCors);
 	conf->setValue("cors_origin", corsOrigin);
 	conf->setValue("port", port);

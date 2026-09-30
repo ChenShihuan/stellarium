@@ -1109,6 +1109,7 @@ void StelApp::draw()
 {
 	if (!initialized)
 		return;
+	textureMgr->beginFrame();
 
 	//find out which framebuffer is the current one
 	//this is usually NOT the "zero" FBO, but one provided by QOpenGLWidget

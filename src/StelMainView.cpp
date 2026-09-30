@@ -1897,7 +1897,12 @@ static bool s_verticalClamp = true;
 // bridge call for every 16 ms animation tick when presentation is slower.
 static bool s_ohosPanInertiaActive = false;
 static bool s_ohosPinchActive = false;
-static double s_ohosPinchAnchorRelaxUntilSec = 0.0;
+static bool s_ohosPinchEndPending = false;
+static double s_ohosPinchStartFov = 60.0;
+static bool s_ohosAnchorProbeEnabled = false;
+static int s_ohosAnchorProbeSamples = 0;
+static double s_ohosAnchorProbeMaxErrorPixels = 0.0;
+static double s_ohosAnchorProbeMaxSolveMs = 0.0;
 enum class OhosPinchAnchorMode
 {
 	None,
@@ -2353,9 +2358,83 @@ static void ohosCaptureSelectedZoomAnchor()
 	Vec3d projected;
 	if (!projector->project(selectedObject->getJ2000EquatorialPos(core), projected))
 		return;
-	s_ohosZoomAnchorObject = selectedObject->getEnglishName();
+	s_ohosZoomAnchorObject = selectedObject->getType() + '/' + selectedObject->getID() + '/' + selectedObject->getEnglishName();
 	s_ohosZoomAnchorXRatio = (projected[0] - viewport[0]) / viewport[2];
 	s_ohosZoomAnchorYRatio = (viewport[1] + viewport[3] - 1 - projected[1]) / viewport[3];
+}
+
+static void ohosAnchorSkyDirection(const Vec3d& directionJ2000, double xRatio, double yRatio)
+{
+	QElapsedTimer solveTimer;
+	if (s_ohosAnchorProbeEnabled) solveTimer.start();
+	StelCore* core = StelApp::getInstance().getCore();
+	StelMovementMgr* movementMgr = core ? core->getMovementMgr() : nullptr;
+	if (!movementMgr || core->getCurrentProjectionType() == StelCore::ProjectionCylinderFill)
+		return;
+	StelProjector::StelProjectorParams params = core->getCurrentStelProjectorParams();
+	params.fov = static_cast<float>(movementMgr->getCurrentFov());
+	core->setCurrentStelProjectorParams(params);
+	const StelProjectorP projector = core->getProjection(StelCore::FrameAltAz, StelCore::RefractionOff);
+	const Vec4i viewport = projector->getViewport();
+	if (viewport[2] <= 1 || viewport[3] <= 1)
+		return;
+	const double desiredX = viewport[0] + xRatio * viewport[2];
+	const double desiredY = viewport[1] + viewport[3] - 1 - yRatio * viewport[3];
+	Vec3d desiredDirection;
+	if (!projector->unProject(desiredX, desiredY, desiredDirection))
+		return;
+	Vec3d targetDirection = core->j2000ToAltAz(directionJ2000, StelCore::RefractionAuto);
+	if (desiredDirection.normSquared() < 1e-18 || targetDirection.normSquared() < 1e-18)
+		return;
+	desiredDirection.normalize();
+	targetDirection.normalize();
+	const double cosine = qBound(-1.0, desiredDirection.dot(targetDirection), 1.0);
+	const Vec3d rotationAxis = desiredDirection ^ targetDirection;
+	if (cosine < -0.999999 || rotationAxis.normSquared() < 1e-24)
+		return;
+	const auto rotate = [&rotationAxis, cosine](const Vec3d& vector) {
+		return vector + (rotationAxis ^ vector) + (rotationAxis ^ (rotationAxis ^ vector)) / (1.0 + cosine);
+	};
+	Vec3d view = rotate(core->j2000ToAltAz(movementMgr->getViewDirectionJ2000(), StelCore::RefractionOff));
+	// Rebuild the screen-up vector from the local zenith instead of rotating
+	// the previous inertial up vector.  The latter is mathematically valid for
+	// a fixed J2000 camera, but it makes the horizon roll whenever simulation
+	// time changes while a selected object is kept at a fixed screen position.
+	// Keeping zenith in the image plane makes the selected-object anchor and
+	// the horizon-level interaction model agree. Near zenith, retain the old
+	// vector because the horizon direction is undefined there.
+	Vec3d up = Vec3d(0., 0., 1.) - view * view[2];
+	if (up.normSquared() < 1e-18)
+		up = rotate(core->j2000ToAltAz(movementMgr->getViewUpVectorJ2000(), StelCore::RefractionOff));
+	view.normalize();
+	up -= view * up.dot(view);
+	if (up.normSquared() < 1e-18)
+		return;
+	up.normalize();
+	// Keep the local-zenith solution on the same screen-up branch as the
+	// previous frame. Without this sign continuity, a time-wheel update near
+	// the zenith can select the mathematically equivalent opposite vector and
+	// make the horizon appear to roll or flip for one frame.
+	Vec3d previousUp = core->j2000ToAltAz(movementMgr->getViewUpVectorJ2000(), StelCore::RefractionOff);
+	if (previousUp.normSquared() > 1e-18)
+	{
+		previousUp.normalize();
+		if (up.dot(previousUp) < 0.0)
+			up = -up;
+	}
+	movementMgr->setViewUpVectorJ2000(core->altAzToJ2000(up, StelCore::RefractionOff));
+	movementMgr->setViewDirectionJ2000(core->altAzToJ2000(view, StelCore::RefractionOff));
+	if (s_ohosAnchorProbeEnabled)
+	{
+		Vec3d projected;
+		if (core->getProjection(StelCore::FrameJ2000)->project(directionJ2000, projected))
+		{
+			++s_ohosAnchorProbeSamples;
+			s_ohosAnchorProbeMaxErrorPixels = qMax(s_ohosAnchorProbeMaxErrorPixels,
+				std::hypot(projected[0] - desiredX, projected[1] - desiredY));
+		}
+		s_ohosAnchorProbeMaxSolveMs = qMax(s_ohosAnchorProbeMaxSolveMs, solveTimer.nsecsElapsed() / 1000000.0);
+	}
 }
 
 static void ohosBeginPinchAnchor(double touchX, double touchY, double touchWidth, double touchHeight)
@@ -2418,27 +2497,8 @@ static void ohosMaintainPinchSkyAnchor()
 	if ((!s_ohosPinchActive && !s_ohosPinchSettleActive) ||
 		s_ohosPinchAnchorMode != OhosPinchAnchorMode::SkyPoint || s_gyroViewActive)
 		return;
-	StelApp* app = &StelApp::getInstance();
-	if (!app || !app->isInitialized())
-		return;
-	StelCore* core = app->getCore();
-	StelMovementMgr* movementMgr = core ? core->getMovementMgr() : nullptr;
-	if (!core || !movementMgr)
-		return;
-	const StelProjectorP projector = core->getProjection(StelCore::FrameJ2000);
-	if (!projector)
-		return;
-	const Vec4i viewport = projector->getViewport();
-	if (viewport[2] <= 1 || viewport[3] <= 1)
-		return;
-	Vec3d projected;
-	if (!projector->project(s_ohosPinchSkyPointJ2000, projected))
-		return;
-	const double desiredX = viewport[0] + s_ohosPinchTargetXRatio * viewport[2];
-	const double desiredY = viewport[1] + viewport[3] - 1 - s_ohosPinchTargetYRatio * viewport[3];
-	if (std::abs(desiredX - projected[0]) < 1.5 && std::abs(desiredY - projected[1]) < 1.5)
-		return;
-	movementMgr->dragView(qRound(projected[0]), qRound(projected[1]), qRound(desiredX), qRound(desiredY));
+	ohosAnchorSkyDirection(s_ohosPinchSkyPointJ2000, s_ohosPinchTargetXRatio, s_ohosPinchTargetYRatio);
+	ohosCaptureSelectedZoomAnchor();
 }
 
 static void ohosDeferSelectedAnchor(double seconds)
@@ -2454,7 +2514,8 @@ static void ohosMaintainSelectedZoomAnchor()
 	// camera owners. Tracking keeps the selected object at the view centre;
 	// anchoring keeps the user's released screen position. Never let the
 	// anchoring pass overwrite an active tracking move.
-	if (!s_viewLock)
+	if (!s_viewLock && !((s_ohosPinchActive || s_ohosPinchSettleActive) &&
+		s_ohosPinchAnchorMode == OhosPinchAnchorMode::SelectedObject))
 		return;
 	if (s_gyroViewActive)
 		return;
@@ -2478,38 +2539,14 @@ static void ohosMaintainSelectedZoomAnchor()
 	const StelObjectP selectedObject = objectMgr->getSelectedObject().constFirst();
 	const SatelliteP satellite = qSharedPointerDynamicCast<Satellite>(selectedObject);
 	if (satellite && !satellite->isOrbitValid()) return;
-	if (selectedObject->getEnglishName() != s_ohosZoomAnchorObject)
+	if (selectedObject->getType() + '/' + selectedObject->getID() + '/' + selectedObject->getEnglishName() != s_ohosZoomAnchorObject)
 	{
 		ohosCaptureSelectedZoomAnchor();
 		qInfo() << "[StellariumOhos][anchor] captured" << selectedObject->getEnglishName();
 		return;
 	}
-	const StelProjectorP projector = core->getProjection(StelCore::FrameJ2000);
-	if (!projector)
-		return;
-	const Vec4i viewport = projector->getViewport();
-	if (viewport[2] <= 1 || viewport[3] <= 1)
-		return;
-	Vec3d projected;
-	if (!projector->project(selectedObject->getJ2000EquatorialPos(core), projected))
-		return;
-	const double desiredX = viewport[0] + s_ohosZoomAnchorXRatio * viewport[2];
-	const double desiredY = viewport[1] + viewport[3] - 1
-		- s_ohosZoomAnchorYRatio * viewport[3];
-	const double deltaX = desiredX - projected[0];
-	const double deltaY = desiredY - projected[1];
-	// The projector and the native drag API both quantize to framebuffer
-	// pixels. Avoid alternating one-pixel corrections while a pinch is still
-	// changing the FOV; the subpixel error is invisible, the oscillation is not.
-	const double deadband = (s_ohosPinchActive || StelApp::getTotalRunTime() < s_ohosPinchAnchorRelaxUntilSec) ? 2.0 : 1.25;
-	if (std::abs(deltaX) < deadband && std::abs(deltaY) < deadband)
-		return;
-	// Do not approximate pixels as altitude/azimuth deltas here. That drifts at
-	// wide fields and near the poles. dragView unprojects both screen points in
-	// the current projection, so it preserves the selected body's exact screen
-	// position regardless of the active projection or FOV.
-	movementMgr->dragView(qRound(projected[0]), qRound(projected[1]),
-		qRound(desiredX), qRound(desiredY));
+	ohosAnchorSkyDirection(selectedObject->getJ2000EquatorialPos(core),
+		s_ohosZoomAnchorXRatio, s_ohosZoomAnchorYRatio);
 }
 
 static void markQtLoopRunning()
@@ -2860,6 +2897,7 @@ QJsonObject selectedObjectJson(StelCore* core = nullptr, bool includeDetails = f
 	infoTimer.start();
 	QJsonObject result;
 	result["ok"] = true;
+	result["viewLock"] = s_viewLock;
 	const QString infoMode = selectedObjectInfoMode();
 	result[QStringLiteral("infoMode")] = infoMode;
 	if (infoMode == QLatin1String("custom"))
@@ -4631,6 +4669,127 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			return result;
 		}
 
+		if (commandName == "getTimeNavigationTarget")
+		{
+			const QString actionId = arg.trimmed();
+			StelCore* core = StelApp::getInstance().getCore();
+			const double originalJD = core->getJD();
+			double targetJD = 0.0;
+			int year = 0, month = 0, day = 0;
+			StelUtils::getDateFromJulianDay(originalJD, &year, &month, &day);
+			SpecificTimeMgr* specific = GETSTELMODULE(SpecificTimeMgr);
+			if (specific)
+			{
+				const bool next = actionId.startsWith("actionNext_");
+				const bool previous = actionId.startsWith("actionPrevious_");
+				const int yearOffset = next ? 1 : (previous ? -1 : 0);
+				if (actionId.contains("March_Equinox")) targetJD = specific->getEquinox(year + yearOffset, SpecificTimeMgr::Equinox::March);
+				else if (actionId.contains("September_Equinox")) targetJD = specific->getEquinox(year + yearOffset, SpecificTimeMgr::Equinox::September);
+				else if (actionId.contains("June_Solstice")) targetJD = specific->getSolstice(year + yearOffset, SpecificTimeMgr::Solstice::June);
+				else if (actionId.contains("December_Solstice")) targetJD = specific->getSolstice(year + yearOffset, SpecificTimeMgr::Solstice::December);
+			}
+			if (targetJD <= 0.0 && (actionId.contains("Rising") || actionId.contains("Transit") || actionId.contains("Setting")))
+			{
+				const QList<StelObjectP>& selected = StelApp::getInstance().getStelObjectMgr().getSelectedObject();
+				if (!selected.isEmpty() && selected.first()->getType() != "Satellite")
+				{
+					const bool next = actionId.startsWith("actionNext_");
+					const bool previous = actionId.startsWith("actionPrevious_");
+					const int direction = next ? 1 : (previous ? -1 : 0);
+					const int eventIndex = actionId.contains("Rising") ? 0 : (actionId.contains("Transit") ? 1 : 2);
+					if (direction == 0)
+					{
+						const Vec4d rts = selected.first()->getRTSTime(core);
+						targetJD = rts[eventIndex];
+					}
+					else
+					{
+						for (int offset = direction; offset != direction * 4; offset += direction)
+						{
+							core->setJD(originalJD + offset);
+							core->update(0);
+							const Vec4d rts = selected.first()->getRTSTime(core);
+							const double candidate = rts[eventIndex];
+							if (candidate > 0.0 && ((next && candidate > originalJD) || (previous && candidate < originalJD)))
+							{
+								targetJD = candidate;
+								break;
+							}
+						}
+						core->setJD(originalJD);
+						core->update(0);
+					}
+				}
+			}
+			if (targetJD > 0.0)
+			{
+				result["ok"] = true;
+				result["jd"] = targetJD;
+				result["action"] = actionId;
+			}
+			else
+			{
+				result["ok"] = false;
+				result["error"] = "no time navigation target";
+			}
+			return result;
+		}
+
+		static QString arMode = QStringLiteral("off");
+		static double arRevealProgress = 0.0;
+		if (commandName == "getARCapabilities")
+		{
+			result["ok"] = true;
+			result["arEngineAvailable"] = false;
+			result["cameraPermissionRequired"] = true;
+			result["planeFinding"] = QStringLiteral("pending_adapter");
+			result["depthEstimation"] = QStringLiteral("pending_adapter");
+			result["environmentMesh"] = QStringLiteral("pending_adapter");
+			result["previewShell"] = true;
+			result["reason"] = QStringLiteral("HarmonyOS AR Engine adapter is not connected to the Qt sky renderer");
+			return result;
+		}
+		if (commandName == "getARState")
+		{
+			result["ok"] = true;
+			result["mode"] = arMode;
+			result["revealProgress"] = arRevealProgress;
+			result["previewOnly"] = true;
+			result["cameraRunning"] = false;
+			return result;
+		}
+		if (commandName == "setARMode")
+		{
+			const QString requested = arg.trimmed().toLower();
+			if (requested != "off" && requested != "overlay" && requested != "portal" && requested != "depth" && requested != "sky-only")
+			{
+				result["error"] = QStringLiteral("unsupported AR mode");
+				return result;
+			}
+			arMode = requested;
+			result["ok"] = true;
+			result["mode"] = arMode;
+			result["previewOnly"] = true;
+			result["cameraRunning"] = false;
+			result["cameraPermissionRequired"] = requested != "off";
+			return result;
+		}
+		if (commandName == "setARRevealProgress")
+		{
+			bool ok = false;
+			const double progress = arg.trimmed().toDouble(&ok);
+			if (!ok || progress < 0.0 || progress > 1.0)
+			{
+				result["error"] = QStringLiteral("AR reveal progress must be between 0 and 1");
+				return result;
+			}
+			arRevealProgress = progress;
+			result["ok"] = true;
+			result["revealProgress"] = arRevealProgress;
+			result["previewOnly"] = true;
+			return result;
+		}
+
 		if (commandName == "triggerAction" || commandName == "setActionChecked" || commandName == "getActionState")
 		{
 			StelAction* action = actionMgr ? actionMgr->findAction(arg.section('|', 0, 0)) : nullptr;
@@ -4936,6 +5095,20 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 						found = objectMgr->setSelectedObject(star);
 				}
 			}
+			if (!found && !query.isEmpty())
+			{
+				if (auto* satellites = static_cast<Satellites*>(StelApp::getInstance().getModuleMgr().getModule(QStringLiteral("Satellites"), true)))
+				{
+					StelObjectP satellite = satellites->searchByNameI18n(query);
+					if (!satellite)
+						satellite = satellites->searchByName(query);
+					if (satellite)
+					{
+						found = objectMgr->setSelectedObject(satellite);
+						query = satellite->getEnglishName();
+					}
+				}
+			}
 			if (!found)
 			{
 				found = !query.isEmpty() && (objectMgr->findAndSelectI18n(query) || objectMgr->findAndSelect(query));
@@ -5112,6 +5285,20 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 		addVariant(spacedQuery.simplified());
 		addVariant(normalizedQuery);
 		addVariant(StelUtils::substituteGreek(query));
+		if (!query.isEmpty())
+		{
+			if (auto* satellites = static_cast<Satellites*>(StelApp::getInstance().getModuleMgr().getModule(QStringLiteral("Satellites"), true)))
+			{
+				StelObjectP satellite = satellites->searchByNameI18n(query);
+				if (!satellite)
+					satellite = satellites->searchByName(query);
+				if (satellite)
+				{
+					addCandidate(satellite->getNameI18n(), satellite, 0, true);
+					addCandidate(satellite->getEnglishName(), satellite, 0, true);
+				}
+			}
+		}
 		for (const QString& variant : std::as_const(queryVariants))
 		{
 			const auto indexedMatches = objectMgr->listMatchingObjects(variant, maxItems * 4, false);
@@ -5631,6 +5818,11 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			// invalidates panel-safe-area timers before the drag threshold is met.
 			++s_ohosNavigationSerial;
 			movementMgr->cancelAutoMove();
+			movementMgr->cancelAutoZoom();
+			s_ohosPinchActive = false;
+			s_ohosPinchEndPending = false;
+			s_ohosPinchSettleActive = false;
+			s_ohosPinchAnchorMode = OhosPinchAnchorMode::None;
 			s_ohosPanInertiaActive = false;
 			s_ohosSelectedAnchorHoldUntilSec = 0.0;
 			ohosCaptureSelectedZoomAnchor();
@@ -5738,7 +5930,7 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			const double touchHeight = parts.value(5).toDouble(&okTouchHeight);
 			const bool hasTouchCenter = parts.size() >= 6 && okCenterX && okCenterY
 				&& okTouchWidth && okTouchHeight && touchWidth > 1.0 && touchHeight > 1.0;
-			if (!okScale || scale <= 0.0)
+			if (!okScale || !std::isfinite(scale) || scale <= 0.0)
 			{
 				result["error"] = "invalid zoom scale";
 				return result;
@@ -5749,6 +5941,13 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			if (started)
 			{
 				s_ohosPinchSettleActive = false;
+				s_ohosPinchEndPending = false;
+				s_ohosCaptureSelectedAnchorAfterPan = false;
+				s_ohosPanInertiaActive = false;
+				movementMgr->cancelAutoZoom();
+				movementMgr->setFlagTracking(false);
+				movementMgr->setFlagLockEquPos(false);
+				s_ohosPinchStartFov = movementMgr->getCurrentFov();
 				s_ohosPinchSettleVelocity = 0.0;
 				s_ohosPinchSettleElapsedSec = 0.0;
 				s_ohosPinchLastLogScale = std::log(scale);
@@ -5782,7 +5981,12 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			}
 			else if (hasTouchCenter)
 				ohosUpdatePinchTarget(centerX, centerY, touchWidth, touchHeight);
-			movementMgr->handlePinch(scale, started);
+			if (!s_ohosPinchActive || s_ohosPinchEndPending)
+			{
+				result["ok"] = true;
+				return result;
+			}
+			movementMgr->setFov(s_ohosPinchStartFov / scale);
 			markOhosInteraction();
 			result["ok"] = true;
 			result["fov"] = movementMgr->getCurrentFov();
@@ -5791,23 +5995,7 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 
 		if (commandName == "endPinch")
 		{
-			// The last absolute scale and endPinch may be drained in the same
-			// render frame. Apply its anchor once before clearing gesture state so
-			// the final frame cannot jump away from the fingers.
-			if (s_ohosPinchAnchorMode == OhosPinchAnchorMode::SkyPoint)
-				ohosMaintainPinchSkyAnchor();
-			else if (s_ohosPinchAnchorMode == OhosPinchAnchorMode::SelectedObject)
-				ohosMaintainSelectedZoomAnchor();
-			const bool wasPinchActive = s_ohosPinchActive;
-			const bool hasSettleVelocity = wasPinchActive && std::abs(s_ohosPinchSettleVelocity) >= 0.08 &&
-				s_ohosPinchLastSampleSec > 0.0;
-			s_ohosPinchActive = false;
-			s_ohosPinchSettleActive = hasSettleVelocity;
-			s_ohosPinchSettleElapsedSec = 0.0;
-			if (!hasSettleVelocity)
-				s_ohosPinchAnchorMode = OhosPinchAnchorMode::None;
-			s_ohosPinchAnchorRelaxUntilSec = StelApp::getTotalRunTime() + 0.18;
-			s_ohosCaptureSelectedAnchorAfterPan = true;
+			s_ohosPinchEndPending = s_ohosPinchActive;
 			result["ok"] = true;
 			return result;
 		}
@@ -6100,6 +6288,32 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			return result;
 		}
 
+		if (commandName == "setViewAnchorProbe" || commandName == "getViewAnchorState")
+		{
+			if (commandName == "setViewAnchorProbe")
+			{
+				s_ohosAnchorProbeEnabled = arg == "1" || arg == "true";
+				s_ohosAnchorProbeSamples = 0;
+				s_ohosAnchorProbeMaxErrorPixels = 0.0;
+				s_ohosAnchorProbeMaxSolveMs = 0.0;
+			}
+			result["ok"] = true;
+			result["viewLock"] = s_viewLock;
+			result["anchorObject"] = s_ohosZoomAnchorObject;
+			result["anchorXRatio"] = s_ohosZoomAnchorXRatio;
+			result["anchorYRatio"] = s_ohosZoomAnchorYRatio;
+			result["pinchMode"] = s_ohosPinchAnchorMode == OhosPinchAnchorMode::SkyPoint ? "skyPoint" :
+				(s_ohosPinchAnchorMode == OhosPinchAnchorMode::SelectedObject ? "selectedObject" : "none");
+			result["pinchActive"] = s_ohosPinchActive;
+			result["settling"] = s_ohosPinchSettleActive;
+			result["probeEnabled"] = s_ohosAnchorProbeEnabled;
+			result["samples"] = s_ohosAnchorProbeSamples;
+			result["maxErrorPixels"] = s_ohosAnchorProbeMaxErrorPixels;
+			result["maxSolveMs"] = s_ohosAnchorProbeMaxSolveMs;
+			result["fov"] = movementMgr ? movementMgr->getCurrentFov() : 0.0;
+			return result;
+		}
+
 		if (commandName == "setFlatHorizon")
 		{
 			// "画面防弯曲": cap the maximum FOV so the view can never zoom out
@@ -6194,7 +6408,9 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				result["error"] = "advanceTime expects hours";
 				return result;
 			}
+			const Vec3d viewUp = core->getMovementMgr()->getViewUpVectorJ2000();
 			core->setJD(core->getJD() + hours / 24.0);
+			core->getMovementMgr()->setViewUpVectorJ2000(viewUp);
 			markOhosInteraction();
 			result["ok"] = true;
 			result["jd"] = core->getJD();
@@ -6848,27 +7064,47 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 		if (commandName == "sendKey")
 		{
 			const QString key = arg.trimmed().toUpper();
+			QStringList parts = key.split('+', Qt::SkipEmptyParts);
+			QString base = parts.isEmpty() ? key : parts.takeLast().trimmed();
+			Qt::KeyboardModifiers modifiers = Qt::NoModifier;
+			for (const QString& modifier : parts)
+			{
+				if (modifier == QStringLiteral("CTRL") || modifier == QStringLiteral("CONTROL")) modifiers |= Qt::ControlModifier;
+				else if (modifier == QStringLiteral("SHIFT")) modifiers |= Qt::ShiftModifier;
+				else if (modifier == QStringLiteral("ALT")) modifiers |= Qt::AltModifier;
+				else { result["ok"] = false; result["error"] = "unsupported key modifier"; return result; }
+			}
 			int keyCode = 0;
-			if (key == QStringLiteral("N")) keyCode = Qt::Key_N;
-			else if (key == QStringLiteral("B")) keyCode = Qt::Key_B;
-			else if (key == QStringLiteral("F")) keyCode = Qt::Key_F;
-			else if (key == QStringLiteral("S")) keyCode = Qt::Key_S;
-			else if (key == QStringLiteral("+")) keyCode = Qt::Key_Plus;
-			else if (key == QStringLiteral("-")) keyCode = Qt::Key_Minus;
-			else if (key == QStringLiteral("[")) keyCode = Qt::Key_BracketLeft;
-			else if (key == QStringLiteral("]")) keyCode = Qt::Key_BracketRight;
-			else if (key == QStringLiteral("SPACE")) keyCode = Qt::Key_Space;
-			else if (key == QStringLiteral("PAGEUP")) keyCode = Qt::Key_PageUp;
-			else if (key == QStringLiteral("PAGEDOWN")) keyCode = Qt::Key_PageDown;
+			if (base == QStringLiteral("N")) keyCode = Qt::Key_N;
+			else if (base == QStringLiteral("B")) keyCode = Qt::Key_B;
+			else if (base == QStringLiteral("F")) keyCode = Qt::Key_F;
+			else if (base == QStringLiteral("S")) keyCode = Qt::Key_S;
+			else if (base == QStringLiteral("UP") || base == QStringLiteral("ARROWUP")) keyCode = Qt::Key_Up;
+			else if (base == QStringLiteral("DOWN") || base == QStringLiteral("ARROWDOWN")) keyCode = Qt::Key_Down;
+			else if (base == QStringLiteral("LEFT") || base == QStringLiteral("ARROWLEFT")) keyCode = Qt::Key_Left;
+			else if (base == QStringLiteral("RIGHT") || base == QStringLiteral("ARROWRIGHT")) keyCode = Qt::Key_Right;
+			else if (base == QStringLiteral("ENTER") || base == QStringLiteral("RETURN")) keyCode = Qt::Key_Return;
+			else if (base == QStringLiteral("ESC") || base == QStringLiteral("ESCAPE")) keyCode = Qt::Key_Escape;
+			else if (base == QStringLiteral("TAB")) keyCode = Qt::Key_Tab;
+			else if (base == QStringLiteral("BACKSPACE")) keyCode = Qt::Key_Backspace;
+			else if (base == QStringLiteral("HOME")) keyCode = Qt::Key_Home;
+			else if (base == QStringLiteral("END")) keyCode = Qt::Key_End;
+			else if (base == QStringLiteral("PLUS")) keyCode = Qt::Key_Plus;
+			else if (base == QStringLiteral("MINUS")) keyCode = Qt::Key_Minus;
+			else if (base == QStringLiteral("[")) keyCode = Qt::Key_BracketLeft;
+			else if (base == QStringLiteral("]")) keyCode = Qt::Key_BracketRight;
+			else if (base == QStringLiteral("SPACE")) keyCode = Qt::Key_Space;
+			else if (base == QStringLiteral("PAGEUP")) keyCode = Qt::Key_PageUp;
+			else if (base == QStringLiteral("PAGEDOWN")) keyCode = Qt::Key_PageDown;
 			if (keyCode == 0)
 			{
 				result["ok"] = false;
 				result["error"] = "unsupported script key";
 				return result;
 			}
-			QKeyEvent press(QEvent::KeyPress, keyCode, Qt::NoModifier);
+			QKeyEvent press(QEvent::KeyPress, keyCode, modifiers);
 			StelApp::getInstance().handleKeyEvent(&press);
-			QKeyEvent release(QEvent::KeyRelease, keyCode, Qt::NoModifier);
+			QKeyEvent release(QEvent::KeyRelease, keyCode, modifiers);
 			StelApp::getInstance().handleKeyEvent(&release);
 			result["ok"] = true;
 			result["key"] = key;
@@ -7002,6 +7238,40 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 					}
 					alm["seasonYear"] = year;
 					alm["seasonEvents"] = seasonEvents;
+
+					const QStringList solarTermNames = {
+						QStringLiteral("小寒"), QStringLiteral("大寒"), QStringLiteral("立春"), QStringLiteral("雨水"),
+						QStringLiteral("惊蛰"), QStringLiteral("春分"), QStringLiteral("清明"), QStringLiteral("谷雨"),
+						QStringLiteral("立夏"), QStringLiteral("小满"), QStringLiteral("芒种"), QStringLiteral("夏至"),
+						QStringLiteral("小暑"), QStringLiteral("大暑"), QStringLiteral("立秋"), QStringLiteral("处暑"),
+						QStringLiteral("白露"), QStringLiteral("秋分"), QStringLiteral("寒露"), QStringLiteral("霜降"),
+						QStringLiteral("立冬"), QStringLiteral("小雪"), QStringLiteral("大雪"), QStringLiteral("冬至")
+					};
+					QJsonArray solarTerms;
+					for (int index = 0; index < solarTermNames.size(); ++index)
+					{
+						const double termJD = specificTimeMgr->getSolarTerm(year, index);
+						if (termJD <= 0.0)
+							continue;
+						QJsonObject term;
+						term["index"] = index;
+						term["key"] = QStringLiteral("solar_term_%1").arg(index);
+						term["label"] = solarTermNames.at(index);
+						term["jd"] = termJD;
+						term["date"] = formatLocal(termJD);
+						solarTerms.append(term);
+					}
+					alm["solarTerms"] = solarTerms;
+					for (const QJsonValue& value : solarTerms)
+					{
+						const QJsonObject term = value.toObject();
+						if (term.value("jd").toDouble() <= core->getJD() + 30.0 / 86400.0)
+							continue;
+						alm["nextSolarTermLabel"] = term.value("label");
+						alm["nextSolarTermDate"] = term.value("date");
+						alm["nextSolarTermJD"] = term.value("jd");
+						break;
+					}
 				}
 				result["ok"] = true;
 			result["almanac"] = alm;
@@ -8377,7 +8647,9 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				return result;
 			}
 			StelCore* core = StelApp::getInstance().getCore();
+			const Vec3d viewUp = core->getMovementMgr()->getViewUpVectorJ2000();
 			core->setJD(jd);
+			core->getMovementMgr()->setViewUpVectorJ2000(viewUp);
 			core->setTimeRate(0.0);
 			result["ok"] = true;
 			result["jd"] = jd;
@@ -12352,9 +12624,26 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				result["offline"] = true;
 				result["error"] = "satellite refresh is disabled in the offline build; import a local TLE file";
 #else
+				const bool restoredDefaultSources = sats->getTleSources().isEmpty();
+				if (restoredDefaultSources)
+				{
+					sats->restoreDefaultTleSources();
+					sats->loadSettings();
+				}
+				const QStringList sources = sats->getTleSources();
+				if (sources.isEmpty())
+				{
+					result["ok"] = false;
+					result["offline"] = false;
+					result["error"] = "no satellite update sources are configured";
+					result["sourcesRestored"] = false;
+					return result;
+				}
 				sats->updateFromOnlineSources();
 				result["ok"] = true;
 				result["offline"] = false;
+				result["sourcesRestored"] = restoredDefaultSources;
+				result["sourceCount"] = sources.size();
 #endif
 				return result;
 			}
@@ -12851,14 +13140,45 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				{
 					const QList<StelObjectP> stars = category == QStringLiteral("carbonStars") ? starMgr->getHipparcosCarbonStars()
 						: (category == QStringLiteral("bariumStars") ? starMgr->getHipparcosBariumStars() : starMgr->getHipparcosStars());
-					for (const StelObjectP& star : stars) addCandidate(star, QString(), false, false);
+					// The full Hipparcos list is about 110k objects. The panel only
+					// returns the best 120 visible targets, so carrying every star
+					// through repeated time/altitude calculations wastes most of the
+					// work. Apply the same magnitude ceiling once while building the
+					// candidate list and keep a safety cap for an intentionally broad
+					// request. This preserves the normal bright-target result while
+					// preventing an accidental all-catalogue UI stall.
+					// Scan the 110k catalogue once, keep the brightest candidates,
+					// then run expensive dynamic altitude calculations on a bounded set.
+					const int starCandidateCap = maximumMagnitude <= 6.0 ? 1000 : (maximumMagnitude <= 8.0 ? 2000 : 3000);
+					QVector<QPair<double, StelObjectP>> brightStars;
+					for (const StelObjectP& star : stars)
+					{
+						if (!star) continue;
+						const double magnitude = star->getVMagnitude(core);
+						if (!std::isfinite(magnitude) || magnitude > maximumMagnitude) continue;
+						brightStars.append(qMakePair(magnitude, star));
+					}
+					std::sort(brightStars.begin(), brightStars.end(), [](const QPair<double, StelObjectP>& left, const QPair<double, StelObjectP>& right) { return left.first < right.first; });
+					for (int index = 0; index < qMin(starCandidateCap, brightStars.size()); ++index)
+						addCandidate(brightStars.at(index).second, QString(), false, false);
 				}
 				else if (starMgr && (category == QStringLiteral("variableStars") || category == QStringLiteral("algolVariables") || category == QStringLiteral("cepheidVariables") || category == QStringLiteral("highProperMotion")))
 				{
 					const QList<StelACStarData> stars = category == QStringLiteral("algolVariables") ? starMgr->getHipparcosAlgolTypeStars()
 						: (category == QStringLiteral("cepheidVariables") ? starMgr->getHipparcosClassicalCepheidsTypeStars()
 						: (category == QStringLiteral("highProperMotion") ? starMgr->getHipparcosHighPMStars() : starMgr->getHipparcosVariableStars()));
-					for (const StelACStarData& star : stars) addCandidate(star.first, QString(), false, false);
+					const int starCandidateCap = maximumMagnitude <= 6.0 ? 1000 : (maximumMagnitude <= 8.0 ? 2000 : 3000);
+					QVector<QPair<double, StelObjectP>> brightStars;
+					for (const StelACStarData& star : stars)
+					{
+						if (!star.first) continue;
+						const double magnitude = star.first->getVMagnitude(core);
+						if (!std::isfinite(magnitude) || magnitude > maximumMagnitude) continue;
+						brightStars.append(qMakePair(magnitude, star.first));
+					}
+					std::sort(brightStars.begin(), brightStars.end(), [](const QPair<double, StelObjectP>& left, const QPair<double, StelObjectP>& right) { return left.first < right.first; });
+					for (int index = 0; index < qMin(starCandidateCap, brightStars.size()); ++index)
+						addCandidate(brightStars.at(index).second, QString(), false, false);
 				}
 				else if (nebulaMgr)
 				{
@@ -16316,11 +16636,13 @@ void StelMainView::resizeEvent(QResizeEvent* event)
 		rootItem->setSize(sz);
 		if(guiItem)
 			guiItem->setGeometry(QRectF(0.0,0.0,sz.width(),sz.height()));
-		if (StelApp::isInitialized()  && !isFullScreen())
+		#if !defined(__OHOS__)
+		if (StelApp::isInitialized() && !isFullScreen())
 		{
 			StelApp::immediateSave("video/screen_w", sz.width());
 			StelApp::immediateSave("video/screen_h", sz.height());
 		}
+		#endif
 		emit sizeChanged(sz);
 	}
 	QGraphicsView::resizeEvent(event);
@@ -16553,6 +16875,26 @@ void StelMainView::init()
 	stelApp = new StelApp(this);
 	stelApp->setGui(gui);
 	stelApp->init(configuration);
+#if defined(__OHOS__)
+	connect(&stelApp->getStelObjectMgr(), &StelObjectMgr::selectedObjectChanged, this,
+		[this](StelModule::StelModuleSelectAction) {
+			if (stelApp->getScriptMgr().scriptIsRunning()) return;
+			s_ohosPanInertiaActive = false;
+			s_ohosPinchActive = false;
+			s_ohosPinchEndPending = false;
+			s_ohosPinchSettleActive = false;
+			s_ohosPinchAnchorMode = OhosPinchAnchorMode::None;
+			s_ohosCaptureSelectedAnchorAfterPan = false;
+			s_ohosSelectedAnchorHoldUntilSec = 0.0;
+			s_viewLock = !stelApp->getStelObjectMgr().getSelectedObject().isEmpty();
+			if (s_viewLock)
+			{
+				stelApp->getCore()->getMovementMgr()->cancelAutoMove();
+				stelApp->getCore()->getMovementMgr()->setFlagTracking(false);
+			}
+			ohosCaptureSelectedZoomAnchor();
+		});
+#endif
 	//this makes sure the app knows how large the window is
 	connect(stelScene, &StelGraphicsScene::sceneRectChanged, stelApp, &StelApp::glWindowHasBeenResized);
 #ifdef ENABLE_SPOUT
@@ -17196,12 +17538,23 @@ void StelMainView::renderOhosFrameNow()
 		// Capture the user's post-drag screen position before simulation time
 		// advances. The maintainer below then compensates this very frame instead
 		// of anchoring one time-step late and visibly drifting after release.
-		app.update(dt);
 		ohosUpdatePinchSettle(dt);
+		app.update(dt);
 		if ((s_ohosPinchActive || s_ohosPinchSettleActive) && s_ohosPinchAnchorMode == OhosPinchAnchorMode::SkyPoint)
 			ohosMaintainPinchSkyAnchor();
 		else
 			ohosMaintainSelectedZoomAnchor();
+		if (s_ohosPinchEndPending)
+		{
+			s_ohosPinchEndPending = false;
+			s_ohosPinchActive = false;
+			s_ohosPinchSettleVelocity = qBound(-1.5, s_ohosPinchSettleVelocity, 1.5);
+			s_ohosPinchSettleActive = std::abs(s_ohosPinchSettleVelocity) >= 0.08 &&
+				StelApp::getTotalRunTime() - s_ohosPinchLastSampleSec < 0.12;
+			s_ohosPinchSettleElapsedSec = 0.0;
+			if (!s_ohosPinchSettleActive)
+				s_ohosPinchAnchorMode = OhosPinchAnchorMode::None;
+		}
 		ohosProcessPendingPointSelect();
 		ohosUpdateSelectedScreenProjection();
 	const double t3 = StelApp::getTotalRunTime();
@@ -17420,6 +17773,9 @@ bool StelMainView::needsMaxFPS() const
 void StelMainView::moveEvent(QMoveEvent * event)
 {
 	const QPoint &pos=event->pos();
+#if defined(__OHOS__)
+	Q_UNUSED(pos);
+#endif
 
 	// We use the glWidget instead of the event, as we want the screen that shows most of the widget.
 	QWindow* win = glWidget->windowHandle();
@@ -17430,8 +17786,10 @@ void StelMainView::moveEvent(QMoveEvent * event)
 
 	if (StelApp::isInitialized())
 	{
+#if !defined(__OHOS__)
 		StelApp::immediateSave("video/screen_x", pos.x());
 		StelApp::immediateSave("video/screen_y", pos.y());
+#endif
 	}
 }
 

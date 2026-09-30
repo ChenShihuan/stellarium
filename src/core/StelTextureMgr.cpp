@@ -18,7 +18,6 @@
  */
 
 #include "Dithering.hpp"
-#include "StelMainView.hpp"
 #include "StelTextureMgr.hpp"
 
 #include <QFileInfo>
@@ -46,7 +45,6 @@ StelTextureMgr::StelTextureMgr(QObject *parent)
 		qCDebug(Tex) << "Max texture size:" << maxTexSize;
 	StelTexture::textureMgr = this;
 
-	connect(&StelMainView::getInstance(), &StelMainView::frameFinished, this, &StelTextureMgr::onFrameFinished);
 }
 
 StelTextureSP StelTextureMgr::createTexture(const QString& afilename, const StelTexture::StelTextureParams& params)
@@ -179,7 +177,7 @@ StelTextureSP StelTextureMgr::createTextureThread(const QString& url, const Stel
 	return tex;
 }
 
-void StelTextureMgr::onFrameFinished()
+void StelTextureMgr::beginFrame()
 {
 	totalLoadTimeTaken = 0;
 }

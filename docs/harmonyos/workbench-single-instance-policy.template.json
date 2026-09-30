@@ -1,0 +1,19 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["ecs-workbench:LoginECSInstance"],
+      "Resource": ["acs:ecs:<region>:<account-id>:instance/<instance-id>"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstances",
+        "ecs:DescribeCloudAssistantStatus",
+        "ecs:StartTerminalSession"
+      ],
+      "Resource": ["acs:ecs:<region>:<account-id>:instance/<instance-id>"]
+    }
+  ]
+}

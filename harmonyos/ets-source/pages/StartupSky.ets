@@ -14,6 +14,7 @@ export struct StartupSky {
   @Watch('refreshTitle') @StorageLink('i18nLang') private language: string = ''
   @Watch('updateMotion') @StorageLink('stellariumStartupForeground') private foreground: boolean = true
   @StorageLink('stellariumStartupSkyReady') private skyPrepared: boolean = false
+  @StorageLink('stellariumPrivacyNativeStartupAllowed') private nativeStartupAllowed: boolean = false
   private context: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
   private targets: StartupPoint[] = []
   private backgroundAppearance: StartupStarAppearance[] = []
@@ -118,7 +119,10 @@ export struct StartupSky {
       const now = Date.now()
       const step = Math.min(100, now - this.lastTick)
       this.elapsed += step
-      if (this.skyPrepared) this.assemblyElapsed += step
+      if (this.nativeStartupAllowed) {
+        this.assemblyElapsed = this.skyPrepared ? this.assemblyElapsed + step :
+          Math.min(STARTUP_REVEAL_AT_MS, this.assemblyElapsed + step)
+      }
       this.lastTick = now
       this.draw()
       if (!this.artComplete && this.skyPrepared && this.assemblyElapsed >= STARTUP_REVEAL_AT_MS) {
@@ -131,7 +135,7 @@ export struct StartupSky {
 
   private draw(): void {
     const pen = this.context
-    const reveal = startupReveal(this.assemblyElapsed)
+    const reveal = this.skyPrepared ? startupReveal(this.assemblyElapsed) : 0
     pen.globalAlpha = 1
     pen.fillStyle = '#05070F'
     pen.fillRect(0, 0, this.canvasWidth, this.canvasHeight)
@@ -163,7 +167,7 @@ export struct StartupSky {
       for (let index = 0; index < this.targets.length; index++) {
         if (this.letterGroups[index] !== group) continue
         const assembled = startupParticle(index, this.targets[index], this.canvasWidth, this.canvasHeight,
-          this.elapsed, this.skyPrepared ? this.assemblyElapsed : -1)
+          this.elapsed, this.nativeStartupAllowed ? this.assemblyElapsed : -1)
         const point = startupReleasePoint(index, assembled, this.canvasWidth, this.canvasHeight, reveal)
         pen.moveTo(point.x + radius, point.y)
         pen.arc(point.x, point.y, radius, 0, Math.PI * 2)
