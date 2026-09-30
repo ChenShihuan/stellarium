@@ -41,7 +41,12 @@ if (missingLabels.length > 0) failures.push(`missing labels: ${missingLabels.joi
 if (missingSections.length > 0) failures.push(`missing sections: ${missingSections.join(', ')}`)
 if (!types.includes('detailFields?: Array<ObjectDetailField>')) failures.push('detailFields bridge contract is missing')
 if (!ets.includes('LoadingProgress()')) failures.push('native detail loading indicator is missing')
-if ((ets.match(/this\.structuredObjectDetails\(/g) ?? []).length < 3) failures.push('not all object detail surfaces use the shared builder')
+// 共享 builder 需覆盖现存的全部详情面板（死代码清理后剩两处调用），且它必须委托给共享的行组件。
+if ((ets.match(/this\.structuredObjectDetails\(/g) ?? []).length < 2) failures.push('not all object detail surfaces use the shared builder')
+if (!ets.includes('StructuredDetailRow({ label: this.detailFieldLabel(field.key)')
+  || !ets.includes('DetailSectionTitle({ title: this.detailSectionTitle(section)')) {
+  failures.push('the shared detail builder no longer delegates to the shared row components')
+}
 
 for (const forbidden of ['selectedFullInfo', 'selectedRich', 'fullInfo?: string']) {
   if (ets.includes(forbidden) || types.includes(forbidden)) failures.push(`raw detail path remains: ${forbidden}`)

@@ -51,7 +51,9 @@ import { BookmarkStore } from '../state/BookmarkStore'
 import { BookmarkPanel } from '../panels/BookmarkPanel'
 import { SearchStore } from '../state/SearchStore'
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
+import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
+import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
@@ -118,6 +120,7 @@ export struct WindowNativeNode {
   private lastPanelBackAt: number = 0
   @State private searchStore: SearchStore = new SearchStore()
   @State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()
+  @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
   private searchHistory: string[] = []
   @State private objectCatalogCategories: CatOption[] = []
   private searchPanelScroller: Scroller = new Scroller()
@@ -163,29 +166,10 @@ export struct WindowNativeNode {
   private objectCardDragStartY: number = 0
   private objectCardDragStartOffsetX: number = 0
   private objectCardDragStartOffsetY: number = 0
-  @State private objectInspectorMoreOpen: boolean = false
-  @State private objectInspectorMediaPath: string = ''
-  @State private objectInspectorMediaKind: string = 'none'
-  @State private objectInspectorMediaLabel: string = ''
-  @State private objectInspectorMediaLoading: boolean = false
-  @State private objectInspectorMediaDecoding: boolean = false
-  @State private objectInspectorMediaPixelMap: image.PixelMap | undefined = undefined
-  @State private objectInspectorMediaLoadFailed: boolean = false
-  @State private objectInspectorMediaPreparationFailed: boolean = false
-  @State private objectInspectorMediaNoMatch: boolean = false
-  @State private objectInspectorMediaWarmupState: string = 'unknown'
-  @State private objectInspectorMediaWarmupInstalled: number = 0
-  @State private objectInspectorMediaWarmupTotal: number = 0
-  @State private objectInspectorMediaWarmupFailed: number = 0
   private objectInspectorMediaRequestPath: string = ''
   private objectInspectorMediaResolvedRequestPath: string = ''
   private objectInspectorMediaResolvedPath: string = ''
   private objectInspectorMediaResolutionComplete: boolean = false
-  @State private objectInspectorMediaFullscreen: boolean = false
-  @State private objectInspectorMediaViewportHeight: number = 0
-  @State private objectInspectorMediaPreviewPath: string = ''
-  @State private objectInspectorMediaPreviewLoading: boolean = false
-  @State private objectInspectorMediaPreviewFailed: boolean = false
   private objectInspectorMediaWarmupTimer: number = 0
   private objectInspectorMediaDecodeGeneration: number = 0
   @State private skyTextureStatusVisible: boolean = false
@@ -194,14 +178,9 @@ export struct WindowNativeNode {
   private skyTextureStatusTimer: number = 0
   private skyTextureStatusDelayTimer: number = 0
   private skyTextureStatusPolls: number = 0
-  @State private objectInspectorModelPixelMap: image.PixelMap | undefined = undefined
-  @State private objectInspectorProceduralKind: string = ''
   private objectInspectorProceduralKey: string = ''
   private objectInspectorProceduralParticles: number[][] = []
-  @State private objectInspectorModelImmersive: boolean = false
-  @State private objectInspectorModelOverlayOpacity: number = 0
   private objectInspectorModelOverlaySerial: number = 0
-  @State private objectInspectorModelScale: number = 1
   private objectInspectorModelRendering: boolean = false
   private objectInspectorModelRenderClient: DetailModelRenderClient | undefined = undefined
   private objectInspectorModelRotation: number[] = modelIdentity()
@@ -224,7 +203,6 @@ export struct WindowNativeNode {
   private objectInspectorModelRenderPending: boolean = false
   private objectInspectorModelRenderHighQuality: boolean = false
   private objectInspectorModelRenderTimer: number = 0
-  @State private objectInspectorModelInteracting: boolean = false
   @State private audioVolume: number = 0.7
   @State private sessionExportText: string = ''
   @State private sessionImportText: string = ''
@@ -1905,7 +1883,7 @@ export struct WindowNativeNode {
       }
       if (commandName === 'setObjectModelView') {
         const value = String(event['payload'] ?? '').trim()
-        if (this.objectInspectorMediaKind !== 'model') {
+        if (this.objectMediaStore.objectInspectorMediaKind !== 'model') {
           AppStorage.setOrCreate('stellariumObjectModelView', JSON.stringify({
             ok: false, requestId: requestId, error: 'selected object has no 3D model'
           }))
@@ -9428,7 +9406,7 @@ export struct WindowNativeNode {
 
   @Builder
   private objectInspectorMediaPreviewOverlay() {
-    if (this.objectInspectorMediaFullscreen) {
+    if (this.objectMediaStore.objectInspectorMediaFullscreen) {
       Stack() {
         Stack() { }
           .width('100%').height('100%')
@@ -9439,7 +9417,7 @@ export struct WindowNativeNode {
           Column({ space: 3 }) {
             Text(this.zhNameOf(this.objectDetailStore.selectedName)).fontSize(18).fontWeight(FontWeight.Medium).fontColor('#F0FAFF')
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-            Text(this.objectInspectorMediaLabel).fontSize(11).fontColor('#9CC7DB').width('100%')
+            Text(this.objectMediaStore.objectInspectorMediaLabel).fontSize(11).fontColor('#9CC7DB').width('100%')
           }
             .layoutWeight(1).alignItems(HorizontalAlign.Start)
           Button() {
@@ -9455,19 +9433,19 @@ export struct WindowNativeNode {
           .width('100%').height(54)
 
         Stack({ alignContent: Alignment.Center }) {
-          if (this.objectInspectorMediaPixelMap !== undefined) {
-            Image(this.objectInspectorMediaPixelMap)
+          if (this.objectMediaStore.objectInspectorMediaPixelMap !== undefined) {
+            Image(this.objectMediaStore.objectInspectorMediaPixelMap)
               .width('100%').height('100%').objectFit(ImageFit.Contain)
               .onComplete(() => { this.onObjectInspectorMediaPreviewLoaded() })
               .onError(() => { this.onObjectInspectorMediaPreviewError() })
           }
-          if (this.objectInspectorMediaPreviewLoading) {
+          if (this.objectMediaStore.objectInspectorMediaPreviewLoading) {
             Column({ space: 12 }) {
               LoadingProgress().width(36).height(36).color('#8EC9E9')
               Text('正在打开本地图像').fontSize(12).fontColor('#B8D7E6')
             }
-          } else if (this.objectInspectorMediaPreviewFailed ||
-            (!this.objectInspectorMediaPreviewLoading && this.objectInspectorMediaPreviewPath.length === 0)) {
+          } else if (this.objectMediaStore.objectInspectorMediaPreviewFailed ||
+            (!this.objectMediaStore.objectInspectorMediaPreviewLoading && this.objectMediaStore.objectInspectorMediaPreviewPath.length === 0)) {
             Column({ space: 12 }) {
               Image(getIcon('catalog_galaxy', false)).width(42).height(42).fillColor('#8EC9E9')
               Text('图像暂时无法显示').fontSize(14).fontColor('#E4F5FC')
@@ -9495,45 +9473,45 @@ export struct WindowNativeNode {
   }
 
   private openObjectInspectorMediaPreview(): void {
-    if (this.objectInspectorMediaPath.length === 0) { return }
-    this.objectInspectorMediaPreviewLoading = this.objectInspectorMediaPixelMap === undefined && !this.objectInspectorMediaLoadFailed
-    this.objectInspectorMediaPreviewFailed = this.objectInspectorMediaLoadFailed
-    this.objectInspectorMediaPreviewPath = this.objectInspectorMediaPath
-    this.objectInspectorMediaFullscreen = true
+    if (this.objectMediaStore.objectInspectorMediaPath.length === 0) { return }
+    this.objectMediaStore.objectInspectorMediaPreviewLoading = this.objectMediaStore.objectInspectorMediaPixelMap === undefined && !this.objectMediaStore.objectInspectorMediaLoadFailed
+    this.objectMediaStore.objectInspectorMediaPreviewFailed = this.objectMediaStore.objectInspectorMediaLoadFailed
+    this.objectMediaStore.objectInspectorMediaPreviewPath = this.objectMediaStore.objectInspectorMediaPath
+    this.objectMediaStore.objectInspectorMediaFullscreen = true
     hilog.info(0x0000, 'StellariumArkUI',
       '[detail-media-preview] open kind=%{public}s request=%{public}s resolved=%{public}s uri=%{public}s',
-      this.objectInspectorMediaKind, this.objectInspectorMediaResolvedRequestPath,
-      this.objectInspectorMediaResolvedPath, this.objectInspectorMediaPath)
+      this.objectMediaStore.objectInspectorMediaKind, this.objectInspectorMediaResolvedRequestPath,
+      this.objectInspectorMediaResolvedPath, this.objectMediaStore.objectInspectorMediaPath)
   }
 
   private closeObjectInspectorMediaPreview(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[detail-media-preview] close')
-    this.objectInspectorMediaFullscreen = false
-    this.objectInspectorMediaPreviewPath = ''
-    this.objectInspectorMediaPreviewLoading = false
-    this.objectInspectorMediaPreviewFailed = false
+    this.objectMediaStore.objectInspectorMediaFullscreen = false
+    this.objectMediaStore.objectInspectorMediaPreviewPath = ''
+    this.objectMediaStore.objectInspectorMediaPreviewLoading = false
+    this.objectMediaStore.objectInspectorMediaPreviewFailed = false
   }
 
   private retryObjectInspectorMediaPreview(): void {
-    this.objectInspectorMediaPreviewFailed = false
-    this.objectInspectorMediaPreviewLoading = true
-    this.objectInspectorMediaPreviewPath = ''
-    hilog.info(0x0000, 'StellariumArkUI', '[detail-media-preview] retry uri=%{public}s', this.objectInspectorMediaPath)
+    this.objectMediaStore.objectInspectorMediaPreviewFailed = false
+    this.objectMediaStore.objectInspectorMediaPreviewLoading = true
+    this.objectMediaStore.objectInspectorMediaPreviewPath = ''
+    hilog.info(0x0000, 'StellariumArkUI', '[detail-media-preview] retry uri=%{public}s', this.objectMediaStore.objectInspectorMediaPath)
     this.retryObjectInspectorMedia()
   }
 
   private onObjectInspectorMediaPreviewLoaded(): void {
-    if (!this.objectInspectorMediaFullscreen) { return }
-    this.objectInspectorMediaPreviewLoading = false
-    this.objectInspectorMediaPreviewFailed = false
-    hilog.info(0x0000, 'StellariumArkUI', '[detail-media-preview] image loaded uri=%{public}s', this.objectInspectorMediaPreviewPath)
+    if (!this.objectMediaStore.objectInspectorMediaFullscreen) { return }
+    this.objectMediaStore.objectInspectorMediaPreviewLoading = false
+    this.objectMediaStore.objectInspectorMediaPreviewFailed = false
+    hilog.info(0x0000, 'StellariumArkUI', '[detail-media-preview] image loaded uri=%{public}s', this.objectMediaStore.objectInspectorMediaPreviewPath)
   }
 
   private onObjectInspectorMediaPreviewError(): void {
-    if (!this.objectInspectorMediaFullscreen) { return }
-    this.objectInspectorMediaPreviewLoading = false
-    this.objectInspectorMediaPreviewFailed = true
-    hilog.error(0x0000, 'StellariumArkUI', '[detail-media-preview] image failed uri=%{public}s', this.objectInspectorMediaPreviewPath)
+    if (!this.objectMediaStore.objectInspectorMediaFullscreen) { return }
+    this.objectMediaStore.objectInspectorMediaPreviewLoading = false
+    this.objectMediaStore.objectInspectorMediaPreviewFailed = true
+    hilog.error(0x0000, 'StellariumArkUI', '[detail-media-preview] image failed uri=%{public}s', this.objectMediaStore.objectInspectorMediaPreviewPath)
   }
 
   private retryObjectInspectorMedia(): void {
@@ -9543,16 +9521,16 @@ export struct WindowNativeNode {
     hilog.info(0x0000, 'StellariumArkUI',
       '[detail-media] retry request=%{public}s resolved=%{public}s', retryPath, this.objectInspectorMediaResolvedPath)
     this.clearObjectInspectorDecodedImage()
-    this.objectInspectorMediaPath = ''
+    this.objectMediaStore.objectInspectorMediaPath = ''
     this.objectInspectorMediaResolvedPath = ''
     this.objectInspectorMediaResolvedRequestPath = ''
     this.objectInspectorMediaResolutionComplete = false
     this.objectInspectorMediaRequestPath = ''
-    this.objectInspectorMediaLoading = false
-    this.objectInspectorMediaDecoding = false
-    this.objectInspectorMediaLoadFailed = false
-    this.objectInspectorMediaPreparationFailed = false
-    this.objectInspectorMediaNoMatch = false
+    this.objectMediaStore.objectInspectorMediaLoading = false
+    this.objectMediaStore.objectInspectorMediaDecoding = false
+    this.objectMediaStore.objectInspectorMediaLoadFailed = false
+    this.objectMediaStore.objectInspectorMediaPreparationFailed = false
+    this.objectMediaStore.objectInspectorMediaNoMatch = false
     this.refreshObjectInspectorMedia()
   }
 
@@ -14080,7 +14058,7 @@ private loadPlanetPositions(): void {
       if (isNewSelection) {
         this.infoWinExpanded = true
         this.fullInspectorRequested = true
-        this.objectInspectorMoreOpen = false
+        this.objectMediaStore.objectInspectorMoreOpen = false
         this.bottomCardIndex = 2
         this.objectCardPlacementPending = true
         // The lightweight tap/search response deliberately has no detailFields.
@@ -14164,24 +14142,24 @@ private loadPlanetPositions(): void {
       this.objectDetailStore.selectedTransit = ''
       this.objectDetailStore.selectedPhase = ''
       this.objectDetailStore.selectedElongation = ''
-      this.objectInspectorMoreOpen = false
-      this.objectInspectorMediaPath = ''
-      this.objectInspectorMediaKind = 'none'
-      this.objectInspectorMediaLabel = ''
-      this.objectInspectorMediaLoading = false
-      this.objectInspectorMediaDecoding = false
+      this.objectMediaStore.objectInspectorMoreOpen = false
+      this.objectMediaStore.objectInspectorMediaPath = ''
+      this.objectMediaStore.objectInspectorMediaKind = 'none'
+      this.objectMediaStore.objectInspectorMediaLabel = ''
+      this.objectMediaStore.objectInspectorMediaLoading = false
+      this.objectMediaStore.objectInspectorMediaDecoding = false
       this.clearObjectInspectorDecodedImage()
-      this.objectInspectorMediaLoadFailed = false
-      this.objectInspectorMediaPreparationFailed = false
+      this.objectMediaStore.objectInspectorMediaLoadFailed = false
+      this.objectMediaStore.objectInspectorMediaPreparationFailed = false
       this.stopObjectInspectorMediaWarmup()
       this.objectInspectorMediaRequestPath = ''
       this.objectInspectorMediaResolvedRequestPath = ''
       this.objectInspectorMediaResolvedPath = ''
       this.objectInspectorMediaResolutionComplete = false
-      this.objectInspectorMediaFullscreen = false
-      this.objectInspectorMediaPreviewPath = ''
-      this.objectInspectorMediaPreviewLoading = false
-      this.objectInspectorMediaPreviewFailed = false
+      this.objectMediaStore.objectInspectorMediaFullscreen = false
+      this.objectMediaStore.objectInspectorMediaPreviewPath = ''
+      this.objectMediaStore.objectInspectorMediaPreviewLoading = false
+      this.objectMediaStore.objectInspectorMediaPreviewFailed = false
       this.infoWinVisible = false
       this.objectDetailStore.selectedInfo = '当前位置没有可选天体，请放大或使用搜索'
       this.clearRtsSelectionResults()
@@ -16235,7 +16213,7 @@ private loadPlanetPositions(): void {
         this.callNativeFire('setNightMode', this.nightModeStore.nightMode ? 'true' : 'false')
         return true
       case KeyCode.KEYCODE_ESCAPE:
-        if (this.objectInspectorModelImmersive) this.setObjectInspectorModelImmersive(false)
+        if (this.objectMediaStore.objectInspectorModelImmersive) this.setObjectInspectorModelImmersive(false)
         else this.closePanel()
         return true
       default: return false
@@ -18083,7 +18061,7 @@ private loadPlanetPositions(): void {
     this.infoWinVisible = false
     this.stopObjectDetailConnectorRefresh()
     this.infoWinExpanded = false
-    this.objectInspectorMoreOpen = false
+    this.objectMediaStore.objectInspectorMoreOpen = false
     this.dismissedObjectName = this.objectDetailStore.selectedName
     this.lastInfoWinCloseMs = Date.now()
     this.skyTouchActive = false
@@ -18150,7 +18128,7 @@ private loadPlanetPositions(): void {
     this.infoWinVisible = true
     this.infoWinExpanded = true
     this.fullInspectorRequested = true
-    this.objectInspectorMoreOpen = false
+    this.objectMediaStore.objectInspectorMoreOpen = false
     this.bottomCardIndex = 2
     this.objectCardPlacementPending = true
     this.dismissedObjectName = ''
@@ -18598,8 +18576,8 @@ private loadPlanetPositions(): void {
         })
         .onAreaChange((_oldArea: Area, newArea: Area) => {
           const height = Number(newArea.height)
-          if (Number.isFinite(height) && height > 0 && Math.abs(height - this.objectInspectorMediaViewportHeight) > 1) {
-            this.objectInspectorMediaViewportHeight = height
+          if (Number.isFinite(height) && height > 0 && Math.abs(height - this.objectMediaStore.objectInspectorMediaViewportHeight) > 1) {
+            this.objectMediaStore.objectInspectorMediaViewportHeight = height
           }
         })
 
@@ -18645,8 +18623,8 @@ private loadPlanetPositions(): void {
   }
 
   private clearObjectInspectorDecodedImage(): void {
-    const oldPixelMap = this.objectInspectorMediaPixelMap
-    this.objectInspectorMediaPixelMap = undefined
+    const oldPixelMap = this.objectMediaStore.objectInspectorMediaPixelMap
+    this.objectMediaStore.objectInspectorMediaPixelMap = undefined
     this.objectInspectorMediaDecodeGeneration++
     this.clearObjectInspectorModelRenderer()
     this.releaseDecodedImage(oldPixelMap, 'object-inspector')
@@ -18655,23 +18633,23 @@ private loadPlanetPositions(): void {
   private clearObjectInspectorModelRenderer(): void {
     this.objectInspectorModelRenderClient?.dispose()
     this.objectInspectorModelRenderClient = undefined
-    this.objectInspectorProceduralKind = ''
+    this.objectMediaStore.objectInspectorProceduralKind = ''
     this.objectInspectorProceduralKey = ''
     this.objectInspectorProceduralParticles = []
-    this.objectInspectorModelImmersive = false
-    this.objectInspectorModelOverlayOpacity = 0
+    this.objectMediaStore.objectInspectorModelImmersive = false
+    this.objectMediaStore.objectInspectorModelOverlayOpacity = 0
     this.objectInspectorModelOverlaySerial++
     AppStorage.setOrCreate('stellariumObjectModelView', JSON.stringify({
       ok: false, error: 'model is not ready'
     }))
     this.objectInspectorModelTouchCount = 0
     this.objectInspectorModelLastLighting = []
-    const oldModelPixelMap = this.objectInspectorModelPixelMap
+    const oldModelPixelMap = this.objectMediaStore.objectInspectorModelPixelMap
     if (this.objectInspectorModelRenderTimer !== 0) {
       clearTimeout(this.objectInspectorModelRenderTimer)
       this.objectInspectorModelRenderTimer = 0
     }
-    this.objectInspectorModelPixelMap = undefined
+    this.objectMediaStore.objectInspectorModelPixelMap = undefined
     this.objectInspectorModelTexturePixels = undefined
     this.objectInspectorModelTextureWidth = 0
     this.objectInspectorModelTextureHeight = 0
@@ -18683,7 +18661,7 @@ private loadPlanetPositions(): void {
     this.objectInspectorModelRendering = false
     this.objectInspectorModelRenderPending = false
     this.objectInspectorModelRenderHighQuality = false
-    this.objectInspectorModelInteracting = false
+    this.objectMediaStore.objectInspectorModelInteracting = false
     this.objectInspectorModelRenderGeneration++
     this.releaseDecodedImage(oldModelPixelMap, 'object-inspector-model')
   }
@@ -18761,34 +18739,34 @@ private loadPlanetPositions(): void {
 
   private updateObjectInspectorMediaWarmup(kind: string): void {
     if (kind !== 'image') {
-      this.objectInspectorMediaWarmupState = 'unknown'
-      this.objectInspectorMediaWarmupInstalled = 0
-      this.objectInspectorMediaWarmupTotal = 0
-      this.objectInspectorMediaWarmupFailed = 0
+      this.objectMediaStore.objectInspectorMediaWarmupState = 'unknown'
+      this.objectMediaStore.objectInspectorMediaWarmupInstalled = 0
+      this.objectMediaStore.objectInspectorMediaWarmupTotal = 0
+      this.objectMediaStore.objectInspectorMediaWarmupFailed = 0
       return
     }
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const status: DeepSkyWarmupStatus = getDeepSkyResourceWarmupStatus(context.getApplicationContext())
-      this.objectInspectorMediaWarmupState = status.state
-      this.objectInspectorMediaWarmupInstalled = status.installed
-      this.objectInspectorMediaWarmupTotal = status.total
-      this.objectInspectorMediaWarmupFailed = status.failed
+      this.objectMediaStore.objectInspectorMediaWarmupState = status.state
+      this.objectMediaStore.objectInspectorMediaWarmupInstalled = status.installed
+      this.objectMediaStore.objectInspectorMediaWarmupTotal = status.total
+      this.objectMediaStore.objectInspectorMediaWarmupFailed = status.failed
     } catch (err) {
-      this.objectInspectorMediaWarmupState = 'unknown'
+      this.objectMediaStore.objectInspectorMediaWarmupState = 'unknown'
       hilog.warn(0x0000, 'StellariumArkUI',
         '[detail-media] unable to read warmup status error=%{public}s', JSON.stringify(err))
     }
   }
 
   private objectInspectorMediaWarmupText(): string {
-    if (this.objectInspectorMediaWarmupTotal <= 0) {
+    if (this.objectMediaStore.objectInspectorMediaWarmupTotal <= 0) {
       return '正在检查离线图库'
     }
-    let text = '离线图库已准备 ' + this.objectInspectorMediaWarmupInstalled.toString() + '/' +
-      this.objectInspectorMediaWarmupTotal.toString()
-    if (this.objectInspectorMediaWarmupFailed > 0) {
-      text += ' · ' + this.objectInspectorMediaWarmupFailed.toString() + ' 项失败'
+    let text = '离线图库已准备 ' + this.objectMediaStore.objectInspectorMediaWarmupInstalled.toString() + '/' +
+      this.objectMediaStore.objectInspectorMediaWarmupTotal.toString()
+    if (this.objectMediaStore.objectInspectorMediaWarmupFailed > 0) {
+      text += ' · ' + this.objectMediaStore.objectInspectorMediaWarmupFailed.toString() + ' 项失败'
     }
     return text
   }
@@ -18798,7 +18776,7 @@ private loadPlanetPositions(): void {
       return
     }
     this.objectInspectorMediaWarmupTimer = setInterval(() => {
-      if (!this.objectInspectorMediaLoading || this.objectInspectorMediaKind !== 'image') {
+      if (!this.objectMediaStore.objectInspectorMediaLoading || this.objectMediaStore.objectInspectorMediaKind !== 'image') {
         this.stopObjectInspectorMediaWarmup()
         return
       }
@@ -18947,43 +18925,43 @@ private loadPlanetPositions(): void {
     const resolutionAlreadyAttempted = this.objectInspectorMediaResolutionComplete &&
       this.objectInspectorMediaResolvedRequestPath === requestedPath
     const shouldResolve = requestedPath.length > 0 && path.length === 0 && !resolutionAlreadyAttempted
-    const mediaKeySame = path === this.objectInspectorMediaPath && kind === this.objectInspectorMediaKind &&
+    const mediaKeySame = path === this.objectMediaStore.objectInspectorMediaPath && kind === this.objectMediaStore.objectInspectorMediaKind &&
       proceduralKey === this.objectInspectorProceduralKey
-    if (mediaKeySame && (this.objectInspectorMediaDecoding || this.objectInspectorModelRendering)) {
+    if (mediaKeySame && (this.objectMediaStore.objectInspectorMediaDecoding || this.objectInspectorModelRendering)) {
       return
     }
     const shouldDecode = path.length > 0 && (kind === 'image' || kind === 'constellation' || kind === 'model') &&
-      !(mediaKeySame && this.objectInspectorMediaLoadFailed) &&
+      !(mediaKeySame && this.objectMediaStore.objectInspectorMediaLoadFailed) &&
       (!mediaKeySame || (kind === 'model'
         ? this.objectInspectorModelTexturePixels === undefined
-        : this.objectInspectorMediaPixelMap === undefined))
+        : this.objectMediaStore.objectInspectorMediaPixelMap === undefined))
     if (mediaKeySame &&
-      this.objectInspectorMediaLoading === (shouldResolve || shouldDecode) &&
-      this.objectInspectorMediaDecoding === shouldDecode &&
+      this.objectMediaStore.objectInspectorMediaLoading === (shouldResolve || shouldDecode) &&
+      this.objectMediaStore.objectInspectorMediaDecoding === shouldDecode &&
       (!shouldResolve || this.objectInspectorMediaRequestPath === requestedPath)) { return }
     this.clearObjectInspectorDecodedImage()
-    this.objectInspectorMediaPath = path
-    this.objectInspectorMediaKind = kind
-    this.objectInspectorProceduralKind = proceduralKind
+    this.objectMediaStore.objectInspectorMediaPath = path
+    this.objectMediaStore.objectInspectorMediaKind = kind
+    this.objectMediaStore.objectInspectorProceduralKind = proceduralKind
     this.objectInspectorProceduralKey = proceduralKey
     this.objectInspectorProceduralParticles = proceduralParticles(proceduralKind, proceduralKey)
-    this.objectInspectorMediaLabel = kind === 'model'
+    this.objectMediaStore.objectInspectorMediaLabel = kind === 'model'
       ? (proceduralKind.length > 0 ? I18n.t('model_schematic') : I18n.t('model_offline'))
       : (kind === 'constellation' ? this.objectDetailStore.selectedDetailMediaLabel : (kind === 'image' ? '离线深空资料图像' : '本地天体类别示意'))
-    this.objectInspectorMediaFullscreen = false
-    this.objectInspectorMediaPreviewPath = ''
-    this.objectInspectorMediaPreviewLoading = false
-    this.objectInspectorMediaPreviewFailed = false
-    this.objectInspectorModelScale = 1
+    this.objectMediaStore.objectInspectorMediaFullscreen = false
+    this.objectMediaStore.objectInspectorMediaPreviewPath = ''
+    this.objectMediaStore.objectInspectorMediaPreviewLoading = false
+    this.objectMediaStore.objectInspectorMediaPreviewFailed = false
+    this.objectMediaStore.objectInspectorModelScale = 1
     this.objectInspectorModelRotation = this.defaultObjectInspectorModelRotation()
     this.objectInspectorModelLastPinchDistance = 0
-    this.objectInspectorMediaLoading = shouldResolve || shouldDecode
-    this.objectInspectorMediaDecoding = shouldDecode
-    this.objectInspectorMediaLoadFailed = false
-    this.objectInspectorMediaPreparationFailed = false
-    this.objectInspectorMediaNoMatch = false
+    this.objectMediaStore.objectInspectorMediaLoading = shouldResolve || shouldDecode
+    this.objectMediaStore.objectInspectorMediaDecoding = shouldDecode
+    this.objectMediaStore.objectInspectorMediaLoadFailed = false
+    this.objectMediaStore.objectInspectorMediaPreparationFailed = false
+    this.objectMediaStore.objectInspectorMediaNoMatch = false
     this.updateObjectInspectorMediaWarmup(kind)
-    this.objectInspectorMediaRequestPath = this.objectInspectorMediaLoading ? requestedPath : ''
+    this.objectInspectorMediaRequestPath = this.objectMediaStore.objectInspectorMediaLoading ? requestedPath : ''
     if (proceduralKind.length > 0) {
       this.requestObjectInspectorModelRender(true)
       return
@@ -19001,14 +18979,14 @@ private loadPlanetPositions(): void {
       resolveStellariumDetailMediaAsset(context.getApplicationContext(), requestedPath).then((actualPath: string) => {
         const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
         if (currentSelection !== expectedSelection || this.objectInspectorMediaRequestPath !== expectedRequestPath) { return }
-        this.objectInspectorMediaLoading = false
+        this.objectMediaStore.objectInspectorMediaLoading = false
         this.objectInspectorMediaRequestPath = ''
         this.objectInspectorMediaResolvedRequestPath = expectedRequestPath
         this.objectInspectorMediaResolvedPath = actualPath
         this.objectInspectorMediaResolutionComplete = true
-        this.objectInspectorMediaNoMatch = actualPath.length === 0
-        this.objectInspectorMediaLoadFailed = false
-        this.objectInspectorMediaPreparationFailed = false
+        this.objectMediaStore.objectInspectorMediaNoMatch = actualPath.length === 0
+        this.objectMediaStore.objectInspectorMediaLoadFailed = false
+        this.objectMediaStore.objectInspectorMediaPreparationFailed = false
         this.stopObjectInspectorMediaWarmup()
         this.updateObjectInspectorMediaWarmup(kind)
         hilog.info(0x0000, 'StellariumArkUI',
@@ -19018,12 +18996,12 @@ private loadPlanetPositions(): void {
       }).catch((err: Error) => {
         const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
         if (currentSelection !== expectedSelection || this.objectInspectorMediaRequestPath !== expectedRequestPath) { return }
-        this.objectInspectorMediaLoading = false
+        this.objectMediaStore.objectInspectorMediaLoading = false
         this.objectInspectorMediaRequestPath = ''
         this.objectInspectorMediaResolutionComplete = true
-        this.objectInspectorMediaNoMatch = false
-        this.objectInspectorMediaLoadFailed = false
-        this.objectInspectorMediaPreparationFailed =
+        this.objectMediaStore.objectInspectorMediaNoMatch = false
+        this.objectMediaStore.objectInspectorMediaLoadFailed = false
+        this.objectMediaStore.objectInspectorMediaPreparationFailed =
           isStellariumDetailMediaPreparationFailed(context.getApplicationContext(), expectedRequestPath)
         this.stopObjectInspectorMediaWarmup()
         hilog.error(0x0000, 'StellariumArkUI',
@@ -19042,35 +19020,35 @@ private loadPlanetPositions(): void {
       }
       this.decodeLocalImage(filePath, kind, (pixelMap: image.PixelMap) => {
         const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-        if (currentSelection !== expectedSelection || this.objectInspectorMediaPath !== expectedPath ||
+        if (currentSelection !== expectedSelection || this.objectMediaStore.objectInspectorMediaPath !== expectedPath ||
           generation !== this.objectInspectorMediaDecodeGeneration) {
           this.releaseDecodedImage(pixelMap, 'stale-object-inspector')
           return
         }
-        const oldPixelMap = this.objectInspectorMediaPixelMap
-        this.objectInspectorMediaPixelMap = pixelMap
+        const oldPixelMap = this.objectMediaStore.objectInspectorMediaPixelMap
+        this.objectMediaStore.objectInspectorMediaPixelMap = pixelMap
         this.releaseDecodedImage(oldPixelMap, 'previous-object-inspector')
-        this.objectInspectorMediaLoading = false
-        this.objectInspectorMediaLoadFailed = false
-        this.objectInspectorMediaDecoding = false
-        if (this.objectInspectorMediaFullscreen) {
-          this.objectInspectorMediaPreviewLoading = false
-          this.objectInspectorMediaPreviewFailed = false
+        this.objectMediaStore.objectInspectorMediaLoading = false
+        this.objectMediaStore.objectInspectorMediaLoadFailed = false
+        this.objectMediaStore.objectInspectorMediaDecoding = false
+        if (this.objectMediaStore.objectInspectorMediaFullscreen) {
+          this.objectMediaStore.objectInspectorMediaPreviewLoading = false
+          this.objectMediaStore.objectInspectorMediaPreviewFailed = false
         }
         hilog.info(0x0000, 'StellariumArkUI',
           '[detail-media] pixel map ready kind=%{public}s uri=%{public}s', kind, expectedPath)
       }, (err: Error) => {
         const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-        if (currentSelection !== expectedSelection || this.objectInspectorMediaPath !== expectedPath ||
+        if (currentSelection !== expectedSelection || this.objectMediaStore.objectInspectorMediaPath !== expectedPath ||
           generation !== this.objectInspectorMediaDecodeGeneration) {
           return
         }
-        this.objectInspectorMediaDecoding = false
-        this.objectInspectorMediaLoading = false
-        this.objectInspectorMediaLoadFailed = true
-        if (this.objectInspectorMediaFullscreen) {
-          this.objectInspectorMediaPreviewLoading = false
-          this.objectInspectorMediaPreviewFailed = true
+        this.objectMediaStore.objectInspectorMediaDecoding = false
+        this.objectMediaStore.objectInspectorMediaLoading = false
+        this.objectMediaStore.objectInspectorMediaLoadFailed = true
+        if (this.objectMediaStore.objectInspectorMediaFullscreen) {
+          this.objectMediaStore.objectInspectorMediaPreviewLoading = false
+          this.objectMediaStore.objectInspectorMediaPreviewFailed = true
         }
         hilog.error(0x0000, 'StellariumArkUI',
           '[detail-media] pixel map decode failed kind=%{public}s uri=%{public}s error=%{public}s',
@@ -19098,7 +19076,7 @@ private loadPlanetPositions(): void {
       fileIo.closeSync(file)
       file = undefined
       const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-      if (currentSelection !== expectedSelection || this.objectInspectorMediaPath !== expectedPath ||
+      if (currentSelection !== expectedSelection || this.objectMediaStore.objectInspectorMediaPath !== expectedPath ||
         mediaGeneration !== this.objectInspectorMediaDecodeGeneration) {
         return
       }
@@ -19143,9 +19121,9 @@ private loadPlanetPositions(): void {
             ringRawFilePath, JSON.stringify(ringErr))
         }
       }
-      this.objectInspectorMediaLoading = false
-      this.objectInspectorMediaDecoding = true
-      this.objectInspectorMediaLoadFailed = false
+      this.objectMediaStore.objectInspectorMediaLoading = false
+      this.objectMediaStore.objectInspectorMediaDecoding = true
+      this.objectMediaStore.objectInspectorMediaLoadFailed = false
       hilog.info(0x0000, 'StellariumArkUI',
         '[detail-model] CPU texture ready path=%{public}s bytes=%{public}s phase=%{public}s',
         rawFilePath, bytesRead.toString(), this.objectDetailStore.selectedPhase)
@@ -19159,9 +19137,9 @@ private loadPlanetPositions(): void {
       if (mediaGeneration !== this.objectInspectorMediaDecodeGeneration) {
         return
       }
-      this.objectInspectorMediaLoading = false
-      this.objectInspectorMediaDecoding = false
-      this.objectInspectorMediaLoadFailed = true
+      this.objectMediaStore.objectInspectorMediaLoading = false
+      this.objectMediaStore.objectInspectorMediaDecoding = false
+      this.objectMediaStore.objectInspectorMediaLoadFailed = true
       hilog.error(0x0000, 'StellariumArkUI',
         '[detail-model] CPU texture load failed path=%{public}s error=%{public}s',
         rawFilePath, JSON.stringify(err))
@@ -19176,7 +19154,7 @@ private loadPlanetPositions(): void {
     const changed = values.some((value: number, index: number) =>
       Math.abs(value - (this.objectInspectorModelLastLighting[index] ?? 10)) > 0.0001)
     if (changed && Date.now() - this.objectInspectorModelLastRenderTime >= 250) {
-      this.requestObjectInspectorModelRender(!this.objectInspectorModelInteracting)
+      this.requestObjectInspectorModelRender(!this.objectMediaStore.objectInspectorModelInteracting)
     }
   }
 
@@ -19234,7 +19212,7 @@ private loadPlanetPositions(): void {
       return
     }
     const generation = this.objectInspectorModelRenderGeneration
-    const immersive = this.objectInspectorModelImmersive
+    const immersive = this.objectMediaStore.objectInspectorModelImmersive
     const renderSize = highQuality ? (immersive ? 640 : 320) : 224
     const transform = this.objectInspectorModelTransform()
     const inspectionRotation = this.objectInspectorModelRotation.slice()
@@ -19247,7 +19225,7 @@ private loadPlanetPositions(): void {
     this.objectInspectorModelLastRenderTime = started
     this.objectInspectorModelLastLighting = lighting === undefined ? [] :
       lighting.viewToBody.concat(lighting.sunDirectionBody)
-    if (this.objectInspectorModelPixelMap === undefined) this.objectInspectorMediaDecoding = true
+    if (this.objectMediaStore.objectInspectorModelPixelMap === undefined) this.objectMediaStore.objectInspectorMediaDecoding = true
     const ring = this.objectInspectorPlanetRingSpec()
     const renderRing: DetailModelRing | undefined = ring === undefined ? undefined : {
       innerRadius: ring.innerRadius, outerRadius: ring.outerRadius, opacity: ring.opacity
@@ -19264,12 +19242,12 @@ private loadPlanetPositions(): void {
       ringWidth: this.objectInspectorModelRingTextureWidth,
       ringHeight: this.objectInspectorModelRingTextureHeight,
       ringSpec: renderRing,
-      kind: this.objectInspectorProceduralKind,
+      kind: this.objectMediaStore.objectInspectorProceduralKind,
       temperature: this.objectDetailStore.selectedTemperatureK,
       particles: this.objectInspectorProceduralParticles
     }
     const frame: DetailModelFrame = {
-      renderSize: renderSize, scale: this.objectInspectorModelScale, transform: transform, lighting: renderLighting
+      renderSize: renderSize, scale: this.objectMediaStore.objectInspectorModelScale, transform: transform, lighting: renderLighting
     }
     if (this.objectInspectorModelRenderClient === undefined) {
       this.objectInspectorModelRenderClient = new DetailModelRenderClient()
@@ -19296,14 +19274,14 @@ private loadPlanetPositions(): void {
         this.releaseDecodedImage(pixelMap, 'stale-object-inspector-model')
         return
       }
-      const oldPixelMap = this.objectInspectorModelPixelMap
-      this.objectInspectorModelPixelMap = pixelMap
+      const oldPixelMap = this.objectMediaStore.objectInspectorModelPixelMap
+      this.objectMediaStore.objectInspectorModelPixelMap = pixelMap
       AppStorage.setOrCreate('stellariumObjectModelView', JSON.stringify({
         ok: true, selectedEnglishName: this.objectDetailStore.selectedEnglishName,
         rotation: inspectionRotation, viewToBody: transform,
         lighting: lighting, renderSize: renderSize, renderedAt: this.objectInspectorModelLastRenderTime,
-        kind: this.objectInspectorProceduralKind || 'textured-sphere',
-        schematic: this.objectInspectorProceduralKind.length > 0,
+        kind: this.objectMediaStore.objectInspectorProceduralKind || 'textured-sphere',
+        schematic: this.objectMediaStore.objectInspectorProceduralKind.length > 0,
         temperatureK: this.objectDetailStore.selectedTemperatureK > 0 ? this.objectDetailStore.selectedTemperatureK : null,
         immersive: immersive, renderer: 'worker', computeMs: computeMs,
         uiPulseCount: uiPulseCount, uiMaxDelayMs: uiMaxDelayMs,
@@ -19311,8 +19289,8 @@ private loadPlanetPositions(): void {
       }))
       this.releaseDecodedImage(oldPixelMap, 'previous-object-inspector-model')
       this.objectInspectorModelRendering = false
-      this.objectInspectorMediaDecoding = false
-      this.objectInspectorMediaLoadFailed = false
+      this.objectMediaStore.objectInspectorMediaDecoding = false
+      this.objectMediaStore.objectInspectorMediaLoadFailed = false
       const renderAgain = this.objectInspectorModelRenderPending
       const renderAgainHighQuality = this.objectInspectorModelRenderHighQuality
       this.objectInspectorModelRenderPending = false
@@ -19325,8 +19303,8 @@ private loadPlanetPositions(): void {
         return
       }
       this.objectInspectorModelRendering = false
-      this.objectInspectorMediaDecoding = false
-      this.objectInspectorMediaLoadFailed = true
+      this.objectMediaStore.objectInspectorMediaDecoding = false
+      this.objectMediaStore.objectInspectorMediaLoadFailed = true
       hilog.error(0x0000, 'StellariumArkUI',
         '[detail-model] sphere render failed error=%{public}s', JSON.stringify(err))
       AppStorage.setOrCreate('stellariumObjectModelView', JSON.stringify({
@@ -19336,51 +19314,51 @@ private loadPlanetPositions(): void {
   }
 
   private objectInspectorModelReady(): boolean {
-    return this.objectInspectorProceduralKind.length > 0 ||
+    return this.objectMediaStore.objectInspectorProceduralKind.length > 0 ||
       (this.objectInspectorModelTexturePixels !== undefined && this.objectInspectorModelTextureWidth > 0 && this.objectInspectorModelTextureHeight > 0)
   }
 
   private defaultObjectInspectorModelRotation(): number[] {
-    return this.objectInspectorProceduralKind === 'quasar' ? modelDrag(modelIdentity(), 0, -100) : modelIdentity()
+    return this.objectMediaStore.objectInspectorProceduralKind === 'quasar' ? modelDrag(modelIdentity(), 0, -100) : modelIdentity()
   }
 
   private resetObjectInspectorModelView(): void {
     this.objectInspectorModelRotation = this.defaultObjectInspectorModelRotation()
-    this.objectInspectorModelScale = 1
+    this.objectMediaStore.objectInspectorModelScale = 1
     this.objectInspectorModelLastPinchDistance = 0
-    this.objectInspectorModelInteracting = false
+    this.objectMediaStore.objectInspectorModelInteracting = false
     this.requestObjectInspectorModelRender(true)
   }
 
   private objectInspectorModelNotice(): string {
-    return this.objectInspectorProceduralKind.length > 0
-      ? I18n.t('model_basis_' + this.objectInspectorProceduralKind)
+    return this.objectMediaStore.objectInspectorProceduralKind.length > 0
+      ? I18n.t('model_basis_' + this.objectMediaStore.objectInspectorProceduralKind)
       : I18n.t('model_lighting_note')
   }
 
   private setObjectInspectorModelImmersive(open: boolean): void {
-    if (open === this.objectInspectorModelImmersive &&
-      this.objectInspectorModelOverlayOpacity === (open ? 1 : 0)) return
+    if (open === this.objectMediaStore.objectInspectorModelImmersive &&
+      this.objectMediaStore.objectInspectorModelOverlayOpacity === (open ? 1 : 0)) return
     const serial = ++this.objectInspectorModelOverlaySerial
     if (open) {
-      this.objectInspectorModelImmersive = true
-      this.objectInspectorModelOverlayOpacity = 0
+      this.objectMediaStore.objectInspectorModelImmersive = true
+      this.objectMediaStore.objectInspectorModelOverlayOpacity = 0
       this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, () => {
-        this.objectInspectorModelOverlayOpacity = 1
+        this.objectMediaStore.objectInspectorModelOverlayOpacity = 1
       })
       this.requestObjectInspectorModelRender(true)
     } else {
       this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseIn, onFinish: () => {
         if (serial !== this.objectInspectorModelOverlaySerial) return
-        this.objectInspectorModelImmersive = false
+        this.objectMediaStore.objectInspectorModelImmersive = false
         this.requestObjectInspectorModelRender(true)
-      } }, () => { this.objectInspectorModelOverlayOpacity = 0 })
+      } }, () => { this.objectMediaStore.objectInspectorModelOverlayOpacity = 0 })
     }
   }
 
   @Builder
   private objectInspectorModelOverlay() {
-    if (this.objectInspectorModelImmersive) {
+    if (this.objectMediaStore.objectInspectorModelImmersive) {
       Stack({ alignContent: Alignment.Center }) {
         Stack() { }.width('100%').height('100%').backgroundColor('#020408')
           .hitTestBehavior(HitTestMode.Block)
@@ -19389,7 +19367,7 @@ private loadPlanetPositions(): void {
             Column({ space: 4 }) {
               Text(this.objectDetailStore.selectedName).fontSize(20).fontColor('#F2F4F8').maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-              Text(this.objectInspectorProceduralKind.length > 0 ? I18n.t('model_schematic') : I18n.t('model_offline'))
+              Text(this.objectMediaStore.objectInspectorProceduralKind.length > 0 ? I18n.t('model_schematic') : I18n.t('model_offline'))
                 .fontSize(12).fontColor('#B8BDC8').width('100%')
             }.layoutWeight(1).alignItems(HorizontalAlign.Start)
             Button() {
@@ -19401,8 +19379,8 @@ private loadPlanetPositions(): void {
               .onClick(() => { this.setObjectInspectorModelImmersive(false) })
           }.width('100%')
           Stack({ alignContent: Alignment.Center }) {
-            if (this.objectInspectorModelPixelMap !== undefined) {
-              Image(this.objectInspectorModelPixelMap).width('100%').height('100%').objectFit(ImageFit.Contain)
+            if (this.objectMediaStore.objectInspectorModelPixelMap !== undefined) {
+              Image(this.objectMediaStore.objectInspectorModelPixelMap).width('100%').height('100%').objectFit(ImageFit.Contain)
                 .hitTestBehavior(HitTestMode.None)
             }
           }.width('100%').layoutWeight(1).clip(true)
@@ -19420,7 +19398,7 @@ private loadPlanetPositions(): void {
         }.width('100%').height('100%')
           .padding({ left: 24, right: 24, top: this.mediaPreviewTopInset(), bottom: 32 })
       }.width('100%').height('100%').zIndex(1100)
-        .opacity(this.objectInspectorModelOverlayOpacity)
+        .opacity(this.objectMediaStore.objectInspectorModelOverlayOpacity)
         .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
     }
   }
@@ -19430,7 +19408,7 @@ private loadPlanetPositions(): void {
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.objectInspectorModelTouchCount = 0
       this.objectInspectorModelLastPinchDistance = 0
-      this.objectInspectorModelInteracting = false
+      this.objectMediaStore.objectInspectorModelInteracting = false
       this.requestObjectInspectorModelRender(true)
       return
     }
@@ -19440,7 +19418,7 @@ private loadPlanetPositions(): void {
     const y = this.touchScreenY(points[0])
     if (event.type === TouchType.Down || this.objectInspectorModelTouchCount !== points.length) {
       this.objectInspectorModelTouchCount = points.length
-      this.objectInspectorModelInteracting = true
+      this.objectMediaStore.objectInspectorModelInteracting = true
       this.objectInspectorModelLastX = x
       this.objectInspectorModelLastY = y
       if (points.length > 1) {
@@ -19465,8 +19443,8 @@ private loadPlanetPositions(): void {
           const rawScaleFactor = distance / this.objectInspectorModelLastPinchDistance
           if (Number.isFinite(rawScaleFactor) && Math.abs(rawScaleFactor - 1) > 0.002) {
             const scaleFactor = 1 + (rawScaleFactor - 1) * 0.68
-            this.objectInspectorModelScale = Math.max(0.82, Math.min(1.20,
-              this.objectInspectorModelScale * scaleFactor))
+            this.objectMediaStore.objectInspectorModelScale = Math.max(0.82, Math.min(1.20,
+              this.objectMediaStore.objectInspectorModelScale * scaleFactor))
             this.requestObjectInspectorModelRender(false)
           }
         }
@@ -19494,252 +19472,149 @@ private loadPlanetPositions(): void {
       Text(label).fontSize(12).fontColor('#E3F4FC').layoutWeight(1)
     }
       .width('100%').height(36).padding({ left: 10, right: 10 }).borderRadius(UI_RADIUS_CONTROL)
-      .onClick(() => { this.objectInspectorMoreOpen = false; action() })
+      .onClick(() => { this.objectMediaStore.objectInspectorMoreOpen = false; action() })
   }
 
   private objectInspectorImageHeight(): number {
-    return this.objectInspectorMediaViewportHeight > 0
-      ? Math.max(72, Math.min(210, this.objectInspectorMediaViewportHeight - 88)) : 210
+    return this.objectMediaStore.objectInspectorMediaViewportHeight > 0
+      ? Math.max(72, Math.min(210, this.objectMediaStore.objectInspectorMediaViewportHeight - 88)) : 210
   }
 
   @Builder
   tabletInspectorMedia() {
-    if ((this.objectInspectorMediaKind === 'image' || this.objectInspectorMediaKind === 'constellation') &&
-      this.objectInspectorMediaPixelMap !== undefined && !this.objectInspectorMediaLoadFailed) {
-      Column({ space: 0 }) {
-        Stack({ alignContent: Alignment.Center }) {
-          Image(this.objectInspectorMediaPixelMap)
-          .width('100%').height(this.objectInspectorImageHeight()).objectFit(ImageFit.Contain)
-          .onComplete(() => {
-            this.objectInspectorMediaDecoding = false
-            this.objectInspectorMediaLoadFailed = false
-            hilog.info(0x0000, 'StellariumArkUI', '[detail-media-card] image loaded uri=%{public}s', this.objectInspectorMediaPath)
-          })
-          .onError(() => {
-            this.objectInspectorMediaDecoding = false
-            this.objectInspectorMediaLoadFailed = true
-            hilog.error(0x0000, 'StellariumArkUI', '[detail-media-card] image failed uri=%{public}s', this.objectInspectorMediaPath)
-          })
-          if (this.objectInspectorMediaDecoding) {
-            Row({ space: 8 }) {
-              LoadingProgress().width(18).height(18).color('#8EC9E9')
-              Text('正在解码本地资料').fontSize(10).fontColor('#E4F5FC')
-            }
-              .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-              .backgroundColor('rgba(2,6,12,0.72)')
-              .borderRadius(UI_RADIUS_CONTROL)
-          }
-        }.width('100%').height(this.objectInspectorImageHeight())
-        Row({ space: 6 }) {
-          Text(this.objectInspectorMediaLabel + (this.objectInspectorMediaKind === 'constellation' &&
-            this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned'
-            ? ' · ' + I18n.t('detail_model_planned') : ''))
-            .fontSize(10).fontColor('#E4F5FC').layoutWeight(1)
-          Text('点按查看').fontSize(10).fontColor('#A4D8EF')
-        }
-          .width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
-          .backgroundColor('rgba(0,0,0,0.50)')
-      }
-        .width('100%').clip(true).borderRadius(UI_RADIUS_CONTROL)
-        .backgroundColor('#07101B').clickEffect({ level: ClickEffectLevel.LIGHT })
-        .onClick(() => { this.openObjectInspectorMediaPreview() })
-    } else if (this.objectInspectorMediaNoMatch) {
-      Row({ space: 10 }) {
-        Image(getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
-        Column({ space: 3 }) {
-          Text('没有匹配的离线资源').fontSize(11).fontColor('#E4F5FC').width('100%')
-          Text('当前天体没有随应用分发的对应图像或纹理').fontSize(10).fontColor('#9EC8DC').width('100%').maxLines(2)
-          Row({ space: 6 }) {
-            Button('重试').fontSize(10).fontColor('#E4F5FC').backgroundColor('rgba(91,147,191,0.32)')
-              .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-              .onClick(() => { this.retryObjectInspectorMedia() })
-          }
-        }.layoutWeight(1)
-      }
-        .width('100%').height(76).padding({ left: 12, right: 12 })
-        .backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL)
-    } else if (this.objectInspectorMediaPreparationFailed) {
-      Row({ space: 10 }) {
-        Image(getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#F1C27D')
-        Column({ space: 3 }) {
-          Text('离线资源准备失败').fontSize(11).fontColor('#E4F5FC').width('100%')
-          Text('文件未能完整复制到本地缓存，请重试').fontSize(10).fontColor('#9EC8DC').width('100%').maxLines(2)
-          Button('重试').fontSize(10).fontColor('#E4F5FC').backgroundColor('rgba(91,147,191,0.32)')
-            .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-            .onClick(() => { this.retryObjectInspectorMedia() })
-        }.layoutWeight(1)
-      }
-        .width('100%').height(76).padding({ left: 12, right: 12 })
-        .backgroundColor('rgba(241,194,125,0.08)').borderRadius(UI_RADIUS_CONTROL)
-    } else if ((this.objectInspectorMediaKind === 'image' || this.objectInspectorMediaKind === 'constellation' ||
-      this.objectInspectorMediaKind === 'model') && this.objectInspectorMediaLoadFailed) {
-      Row({ space: 10 }) {
-        Image(getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
-        Column({ space: 3 }) {
-          Text('本地资源解码失败').fontSize(11).fontColor('#E4F5FC').width('100%')
-          Text('资源已找到，但当前设备无法显示此文件').fontSize(10).fontColor('#9EC8DC').width('100%').maxLines(2)
-          Row({ space: 6 }) {
-            Button('重试').fontSize(10).fontColor('#E4F5FC').backgroundColor('rgba(91,147,191,0.32)')
-              .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-              .onClick(() => { this.retryObjectInspectorMedia() })
-          }
-        }.layoutWeight(1)
-      }
-        .width('100%').height(76).padding({ left: 12, right: 12 })
-        .backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL)
-    } else if (this.objectInspectorMediaKind === 'model' &&
-      (this.objectInspectorModelReady() || this.objectInspectorModelPixelMap !== undefined)) {
-      Column({ space: 8 }) {
-        Row({ space: 8 }) {
-          Column({ space: 2 }) {
-            Text(this.objectInspectorProceduralKind.length > 0 ? I18n.t('model_schematic') : I18n.t('model_offline')).fontSize(12).fontWeight(FontWeight.Medium)
-              .fontColor('#E4F5FC').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(I18n.t('model_inline_gesture_hint'))
-              .fontSize(11).fontColor(this.objectInspectorModelInteracting ? '#BDE8FF' : '#87B7CE')
-              .width('100%').maxLines(2)
-          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-          Button(I18n.t('model_expand'))
-            .fontSize(12).fontColor('#CBEAFF').height(44).padding({ left: 11, right: 11 })
-            .backgroundColor('rgba(35,74,98,0.58)').borderRadius(UI_RADIUS_PILL)
-            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
-            .hitTestBehavior(HitTestMode.Default)
-            .id('object-model-expand')
-            .onClick(() => { this.setObjectInspectorModelImmersive(true) })
-        }
-          .width('100%').height(54).padding({ left: 11, right: 8 })
-          .backgroundColor(Color.Transparent)
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.objectInspectorModelPixelMap !== undefined) {
-            Image(this.objectInspectorModelPixelMap)
-              .width(this.objectInspectorInlineModelSize()).height(this.objectInspectorInlineModelSize()).objectFit(ImageFit.Contain)
-              .hitTestBehavior(HitTestMode.None)
-              .onComplete(() => {
-                this.objectInspectorMediaDecoding = false
-                this.objectInspectorMediaLoadFailed = false
-                hilog.info(0x0000, 'StellariumArkUI',
-                  '[detail-media-card] sphere loaded uri=%{public}s', this.objectInspectorMediaPath)
-              })
-              .onError(() => {
-                this.objectInspectorMediaDecoding = false
-                this.objectInspectorMediaLoadFailed = true
-                hilog.error(0x0000, 'StellariumArkUI', '[detail-media-card] sphere failed uri=%{public}s', this.objectInspectorMediaPath)
-              })
-          }
-          if (this.objectInspectorMediaDecoding ||
-            (this.objectInspectorModelRendering && this.objectInspectorModelPixelMap === undefined)) {
-            Row({ space: 8 }) {
-              LoadingProgress().width(18).height(18).color('#8EC9E9')
-              Text(this.objectInspectorModelTexturePixels === undefined ? '正在解码本地纹理' : '正在生成三维球体')
-                .fontSize(10).fontColor('#E4F5FC')
-            }
-              .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-              .backgroundColor('rgba(2,6,12,0.72)')
-              .borderRadius(UI_RADIUS_CONTROL)
-              .align(Alignment.Center)
-          }
-        }
-          .width(this.objectInspectorInlineModelSize()).height(this.objectInspectorInlineModelSize())
-          .clip(true).backgroundColor(Color.Transparent)
-          .id('object-model-inline-stage')
-          .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
-          .onTouch((event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) })
-        Text(this.objectInspectorModelNotice())
-          .fontSize(10).fontColor('#769DB1').width('100%').textAlign(TextAlign.Center)
-      }
-        .width('100%').alignItems(HorizontalAlign.Center).padding({ top: 2, bottom: 3 })
-    } else if (this.objectInspectorMediaDecoding) {
-      Row({ space: 10 }) {
-        LoadingProgress().width(20).height(20).color('#8EC9E9')
-        Column({ space: 3 }) {
-          Text('正在解码本地图像').fontSize(11).fontColor('#E4F5FC').width('100%').maxLines(1)
-          Text('资源已找到，正在交给鸿蒙图像框架处理').fontSize(10).fontColor('#9EC8DC').width('100%').maxLines(1)
-        }.layoutWeight(1)
-      }
-        .width('100%').height(64).padding({ left: 12, right: 12 })
-        .backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL)
-    } else if (this.objectInspectorMediaLoading) {
-      Row({ space: 10 }) {
-        LoadingProgress().width(20).height(20).color('#8EC9E9')
-        Column({ space: 3 }) {
-          Text(this.objectInspectorMediaKind === 'image' ? '正在优先准备当前天体图像' : '正在准备本地表面纹理')
-            .fontSize(11).fontColor('#E4F5FC').width('100%').maxLines(1)
-          Text(this.objectInspectorMediaKind === 'image'
-            ? this.objectInspectorMediaWarmupText()
-            : '资源准备完成后将自动显示')
-            .fontSize(10).fontColor('#9EC8DC').width('100%').maxLines(1)
-        }.layoutWeight(1)
-      }
-        .width('100%').height(64).padding({ left: 12, right: 12 })
-        .backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL)
-    } else if (this.objectInspectorMediaKind === 'visual') {
-      this.tabletInspectorFallbackVisual()
+
+    if ((this.objectMediaStore.objectInspectorMediaKind === 'image' || this.objectMediaStore.objectInspectorMediaKind === 'constellation') &&
+
+      this.objectMediaStore.objectInspectorMediaPixelMap !== undefined && !this.objectMediaStore.objectInspectorMediaLoadFailed) {
+
+      TabletInspectorMediaCard({
+
+        store: this.objectMediaStore,
+
+        imageHeight: this.objectInspectorImageHeight(),
+
+        isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined &&
+
+          this.objectDetailStore.selectedDetailModel.state === 'planned',
+
+        onOpen: () => { this.openObjectInspectorMediaPreview() }
+
+      })
+
+    } else if (this.objectMediaStore.objectInspectorMediaNoMatch) {
+
+      TabletInspectorNoticeRow({
+
+        iconName: this.objectInspectorIcon(), iconFill: '#8EC9E9',
+
+        title: '没有匹配的离线资源', subtitle: '当前天体没有随应用分发的对应图像或纹理',
+
+        cardBackground: 'rgba(91,147,191,0.08)',
+
+        onRetry: () => { this.retryObjectInspectorMedia() }
+
+      })
+
+    } else if (this.objectMediaStore.objectInspectorMediaPreparationFailed) {
+
+      TabletInspectorNoticeRow({
+
+        iconName: this.objectInspectorIcon(), iconFill: '#F1C27D',
+
+        title: '离线资源准备失败', subtitle: '文件未能完整复制到本地缓存，请重试',
+
+        cardBackground: 'rgba(241,194,125,0.08)',
+
+        onRetry: () => { this.retryObjectInspectorMedia() }
+
+      })
+
+    } else if ((this.objectMediaStore.objectInspectorMediaKind === 'image' || this.objectMediaStore.objectInspectorMediaKind === 'constellation' ||
+
+      this.objectMediaStore.objectInspectorMediaKind === 'model') && this.objectMediaStore.objectInspectorMediaLoadFailed) {
+
+      TabletInspectorNoticeRow({
+
+        iconName: this.objectInspectorIcon(), iconFill: '#8EC9E9',
+
+        title: '本地资源解码失败', subtitle: '资源已找到，但当前设备无法显示此文件',
+
+        cardBackground: 'rgba(91,147,191,0.08)',
+
+        onRetry: () => { this.retryObjectInspectorMedia() }
+
+      })
+
+    } else if (this.objectMediaStore.objectInspectorMediaKind === 'model' &&
+
+      (this.objectInspectorModelReady() || this.objectMediaStore.objectInspectorModelPixelMap !== undefined)) {
+
+      TabletInspectorModelBlock({
+
+        store: this.objectMediaStore,
+
+        inlineModelSize: this.objectInspectorInlineModelSize(),
+
+        modelRendering: this.objectInspectorModelRendering,
+
+        hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+
+        modelNotice: this.objectInspectorModelNotice(),
+
+        onExpand: () => { this.setObjectInspectorModelImmersive(true) },
+
+        onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
+
+      })
+
+    } else if (this.objectMediaStore.objectInspectorMediaDecoding) {
+
+      TabletInspectorProgressRow({ title: '正在解码本地图像', subtitle: '资源已找到，正在交给鸿蒙图像框架处理' })
+
+    } else if (this.objectMediaStore.objectInspectorMediaLoading) {
+
+      TabletInspectorProgressRow({
+
+        title: this.objectMediaStore.objectInspectorMediaKind === 'image' ? '正在优先准备当前天体图像' : '正在准备本地表面纹理',
+
+        subtitle: this.objectMediaStore.objectInspectorMediaKind === 'image'
+
+          ? this.objectInspectorMediaWarmupText() : '资源准备完成后将自动显示'
+
+      })
+
+    } else if (this.objectMediaStore.objectInspectorMediaKind === 'visual') {
+
+      TabletInspectorFallbackVisual({
+
+        store: this.objectMediaStore,
+
+        kind: this.objectInspectorFallbackVisualKind(),
+
+        starColor: this.objectInspectorStarColor(),
+
+        iconName: this.objectInspectorIcon()
+
+      })
+
     } else {
+
       Row({ space: 10 }) {
+
         Image(getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
+
         Text('暂无与当前天体准确匹配的本地资料图像').fontSize(11).fontColor('#9EC8DC').layoutWeight(1).maxLines(2)
+
       }
+
         .width('100%').height(54).padding({ left: 12, right: 12 })
+
         .backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL)
+
     }
+
   }
 
-  @Builder
-  tabletInspectorFallbackVisual() {
-    Stack({ alignContent: Alignment.Center }) {
-      if (this.objectInspectorFallbackVisualKind() !== 'satellite') {
-        Circle().width(182).height(182).fill('rgba(65,130,170,0.10)').stroke('rgba(151,215,248,0.22)').strokeWidth(1)
-      }
-      if (this.objectInspectorFallbackVisualKind() === 'star') {
-        Circle().width(112).height(112).fill(this.objectInspectorStarColor()).opacity(0.10)
-        Circle().width(68).height(68).fill(this.objectInspectorStarColor()).opacity(0.28)
-        Image(getIcon('catalog_star', false)).width(66).height(66).fillColor(this.objectInspectorStarColor())
-      } else if (this.objectInspectorFallbackVisualKind() === 'comet') {
-        Ellipse().width(150).height(35).fill('rgba(133,211,255,0.14)').rotate({ angle: -24 }).translate({ x: -22, y: 10 })
-        Circle().width(44).height(44).fill('rgba(208,244,255,0.76)').translate({ x: 46, y: -14 })
-        Image(getIcon('catalog_comet', false)).width(104).height(104).fillColor('#B7E8FF')
-      } else if (this.objectInspectorFallbackVisualKind() === 'asteroid') {
-        Circle().width(98).height(98).fill('rgba(159,178,191,0.26)').stroke('rgba(222,239,247,0.50)').strokeWidth(1)
-        Circle().width(16).height(16).fill('rgba(7,16,25,0.36)').translate({ x: -18, y: -15 })
-        Circle().width(12).height(12).fill('rgba(7,16,25,0.30)').translate({ x: 20, y: 18 })
-        Image(getIcon('catalog_asteroid', false)).width(72).height(72).fillColor('#D6E5EB')
-      } else if (this.objectInspectorFallbackVisualKind() === 'galaxy') {
-        Ellipse().width(150).height(50).fill('rgba(158,181,255,0.12)').stroke('rgba(171,204,255,0.38)').strokeWidth(2).rotate({ angle: -18 })
-        Ellipse().width(96).height(34).fill('rgba(135,190,255,0.14)').stroke('rgba(188,217,255,0.46)').strokeWidth(2).rotate({ angle: 16 })
-        Circle().width(30).height(30).fill('rgba(240,250,255,0.75)')
-        Image(getIcon('catalog_galaxy', false)).width(90).height(90).fillColor('#C5DEFF')
-      } else if (this.objectInspectorFallbackVisualKind() === 'globular-cluster' || this.objectInspectorFallbackVisualKind() === 'open-cluster') {
-        Circle().width(124).height(124).fill(this.objectInspectorFallbackVisualKind() === 'globular-cluster' ? 'rgba(244,224,177,0.12)' : 'rgba(160,212,255,0.08)')
-        ForEach([[-32, -20], [18, -34], [35, -4], [-5, 12], [-34, 28], [27, 32], [5, -3]], (point: number[], index: number) => {
-          Circle().width(index % 2 === 0 ? 10 : 7).height(index % 2 === 0 ? 10 : 7).fill('#EAF7FF').translate({ x: point[0], y: point[1] })
-        }, (point: number[], index: number) => point[0].toString() + index.toString())
-        Image(getIcon('catalog_cluster', false)).width(78).height(78).fillColor('#D8EEFF')
-      } else if (this.objectInspectorFallbackVisualKind() === 'nebula') {
-        Circle().width(128).height(128).fill('rgba(143,128,210,0.13)')
-        Ellipse().width(146).height(78).fill('rgba(117,190,222,0.16)').rotate({ angle: -22 })
-        Ellipse().width(92).height(116).fill('rgba(222,137,174,0.13)').rotate({ angle: 24 })
-        Image(getIcon('catalog_nebula', false)).width(88).height(88).fillColor('#D7E8FF')
-      } else if (this.objectInspectorFallbackVisualKind() === 'constellation') {
-        ForEach([[-54, 22], [-26, -34], [8, -8], [42, -44], [54, 32]], (point: number[], index: number) => {
-          Circle().width(9).height(9).fill('#DFF5FF').translate({ x: point[0], y: point[1] })
-        }, (point: number[], index: number) => point[0].toString() + index.toString())
-        Image(getIcon('catalog_constellation', false)).width(116).height(116).fillColor('#C5E8FA')
-      } else if (this.objectInspectorFallbackVisualKind() === 'satellite') {
-        Image(getIcon('catalog_satellite', false)).width(72).height(72)
-          .objectFit(ImageFit.Contain).fillColor('#A9DAF3')
-          .hitTestBehavior(HitTestMode.None).id('object-detail-satellite-icon')
-      } else if (this.objectInspectorFallbackVisualKind() === 'moon') {
-        Image(getIcon('catalog_moon', false)).width(76).height(76).fillColor('#D9EAF5')
-      } else {
-        Image(getIcon(this.objectInspectorIcon(), false)).width(92).height(92).fillColor('#C5E8FA')
-      }
-    }
-      .width('100%').height(this.objectInspectorFallbackVisualKind() === 'satellite' ? 104 : 194)
-      .backgroundColor(this.objectInspectorFallbackVisualKind() === 'satellite' ? Color.Transparent : '#07101B')
-      .borderRadius(UI_RADIUS_CONTROL)
-    Text(this.objectInspectorFallbackVisualKind() === 'satellite' ? I18n.t('detail_category_icon_notice') : this.objectInspectorMediaLabel)
-      .fontSize(10).fontColor('#9EC8DC').width('100%').textAlign(TextAlign.Center)
-      .margin({ top: 5, bottom: 3 })
-  }
 
   private selectedDisplayValue(key: string): string {
     switch (key) {

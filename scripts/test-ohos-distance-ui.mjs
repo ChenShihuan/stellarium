@@ -8,16 +8,18 @@ const extract = name => new Function('I18n', `return function() {${source.match(
 test('distance notes distinguish missing data, uncertain parallax and redshift-only catalogues', () => {
   const note = extract('objectDistanceNoticeText');
   for (const status of ['unavailable', 'low_confidence', 'redshift_only', 'invalid_orbit', 'unsupported_unit', 'estimated']) {
-    assert.equal(note.call({ distanceInformationVisible: () => true, selectedDistanceStatus: status }),
+    assert.equal(note.call({ distanceInformationVisible: () => true, objectDetailStore: { selectedDistanceStatus: status } }),
       status === 'invalid_orbit' ? 'satellite_propagation_invalid' : 'distance_' + status);
   }
-  assert.equal(note.call({ distanceInformationVisible: () => true, selectedDistanceStatus: 'computed' }), '');
+  assert.equal(note.call({ distanceInformationVisible: () => true, objectDetailStore: { selectedDistanceStatus: 'computed' } }), '');
 });
 
 test('satellite age is distinct from propagation failure and package freshness', () => {
   const note = extract('objectDistanceNoticeText');
-  assert.equal(note.call({ distanceInformationVisible: () => true, selectedDistanceStatus: 'computed', selectedTleOutdated: true }), 'satellite_tle_stale');
-  assert.equal(note.call({ distanceInformationVisible: () => true, selectedDistanceStatus: 'invalid_orbit', selectedTleOutdated: true }), 'satellite_propagation_invalid');
+  assert.equal(note.call({ distanceInformationVisible: () => true,
+    objectDetailStore: { selectedDistanceStatus: 'computed', selectedTleOutdated: true } }), 'satellite_tle_stale');
+  assert.equal(note.call({ distanceInformationVisible: () => true,
+    objectDetailStore: { selectedDistanceStatus: 'invalid_orbit', selectedTleOutdated: true } }), 'satellite_propagation_invalid');
 });
 
 test('custom mask and brief information modes do not reveal hidden distance data', () => {
@@ -30,8 +32,9 @@ test('custom mask and brief information modes do not reveal hidden distance data
 
 test('summary preserves the distance unit without fitting the uncertainty into the compact tile', () => {
   const summary = extract('objectDistanceSummary');
-  assert.equal(summary.call({ distanceInformationVisible: () => true, selectedDistance: '8.60 ± 0.1 ly', selectedDistanceCompact: '8.60 ly' }), '8.60 ly');
-  assert.equal(summary.call({ distanceInformationVisible: () => true, selectedDistance: '' }), 'distance_missing');
+  assert.equal(summary.call({ distanceInformationVisible: () => true,
+    objectDetailStore: { selectedDistance: '8.60 ± 0.1 ly', selectedDistanceCompact: '8.60 ly' } }), '8.60 ly');
+  assert.equal(summary.call({ distanceInformationVisible: () => true, objectDetailStore: { selectedDistance: '' } }), 'distance_missing');
 });
 
 test('stellar map matches desktop parallax safety and absolute magnitude formula', () => {

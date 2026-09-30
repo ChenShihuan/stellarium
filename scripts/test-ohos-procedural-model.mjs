@@ -28,6 +28,7 @@ test('temperature controls approximate colour; missing values remain neutral', (
 
 test('satellite fallback reuses the catalogue icon without lunar or orbit decorations', () => {
   const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
+  const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/object/TabletInspectorMedia.ets', import.meta.url), 'utf8');
   const start = source.indexOf('  private objectInspectorFallbackVisualKind(');
   const method = source.slice(start, source.indexOf('\n  }', start) + 4);
   const Controller = new Function('proceduralModelKind', stripTypeScriptTypes('class Controller {\n' + method + '\n}') + ';return Controller;')(proceduralModelKind);
@@ -35,18 +36,19 @@ test('satellite fallback reuses the catalogue icon without lunar or orbit decora
     ['人造卫星', 'Satellite', 'satellite'], ['artificial', 'Planet', 'satellite'],
     ['moon', 'Planet', 'moon'], ['卫星', 'Planet moon', 'moon'], ['double star', 'Star', 'star']]) {
     const controller = new Controller();
-    Object.assign(controller, { selectedType: type, selectedObjectType: objectType });
+    Object.assign(controller, { objectDetailStore: { selectedType: type, selectedObjectType: objectType } });
     assert.equal(controller.objectInspectorFallbackVisualKind(), expected);
   }
-  const visual = source.slice(source.indexOf('  tabletInspectorFallbackVisual()'), source.indexOf('  private selectedDisplayValue('));
-  const satellite = visual.slice(visual.indexOf("} else if (this.objectInspectorFallbackVisualKind() === 'satellite')"),
-    visual.indexOf("} else if (this.objectInspectorFallbackVisualKind() === 'moon')"));
+  // 示意图已下沉为 TabletInspectorFallbackVisual 组件，分支判定改用组件的 kind 入参。
+  const visual = mediaComponents.slice(mediaComponents.indexOf('export struct TabletInspectorFallbackVisual {'));
+  const satellite = visual.slice(visual.indexOf("} else if (this.kind === 'satellite')"),
+    visual.indexOf("} else if (this.kind === 'moon')"));
   assert.match(satellite, /getIcon\('catalog_satellite', false\)/);
-  assert.match(satellite, /objectFit\(ImageFit.Contain\)/);
-  assert.match(satellite, /HitTestMode.None/);
+  assert.match(satellite, /objectFit\(ImageFit\.Contain\)/);
+  assert.match(satellite, /HitTestMode\.None/);
   assert.doesNotMatch(satellite, /Circle\(|Ellipse\(|catalog_moon|onTouch|onClick/);
   assert.match(visual, /!== 'satellite'\) \{\s*Circle\(\)/);
-  assert.match(visual, /=== 'satellite' \? Color.Transparent/);
+  assert.match(visual, /=== 'satellite' \? Color\.Transparent/);
   assert.match(visual, /detail_category_icon_notice/);
 });
 
@@ -102,7 +104,10 @@ test('immersive modal blocks underlying sky hit tests without suppressing its co
   assert.match(overlay, /HitTestMode.BLOCK_HIERARCHY/);
   assert.doesNotMatch(overlay, /HitTestMode.Transparent/);
   assert.match(overlay, /id\('object-model-close'\)/);
-  assert.match(source, /id\('object-model-inline-stage'\)\s*\.hitTestBehavior\(HitTestMode.BLOCK_HIERARCHY\)/);
-  assert.match(source, /width\(this.objectInspectorInlineModelSize\(\)\).height\(this.objectInspectorInlineModelSize\(\)\)/);
+  const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/object/TabletInspectorMedia.ets', import.meta.url), 'utf8');
+  assert.match(mediaComponents, /id\('object-model-inline-stage'\)\s*\.hitTestBehavior\(HitTestMode.BLOCK_HIERARCHY\)/);
+  assert.match(mediaComponents, /width\(this\.inlineModelSize\)\.height\(this\.inlineModelSize\)/);
+  assert.match(source, /inlineModelSize: this\.objectInspectorInlineModelSize\(\)/);
+  assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
   assert.doesNotMatch(overlay, /modelNotice\(\).*maxLines/);
 });
