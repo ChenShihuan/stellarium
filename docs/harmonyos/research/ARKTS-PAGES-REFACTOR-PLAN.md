@@ -464,6 +464,13 @@ Phase 3h/3i 做了两轮死代码清理，方法可复现：本 struct 的方法
 
 ### 修订 5：时间轮的"交互控制器"留在宿主是刻意取舍，后续按注入式拆分
 
+> **状态更新（2026-09-30，Phase 3m）：已完成拆分。** 下文描述的方案已落地为 `state/TimeWheelController.ets`
+> （普通类，非 `@Observed`；14 个手势草稿字段 + 1 个惯性定时器 + `start/stop`）。
+> 三个注入点按计划实现：`onSeek(jd)`（宿主 `callNativeFire('setTimeToJD')`）、`onStopSpeed()`（宿主 `stopTimeWheelSpeed()`，写速度域）、
+> `getUtcOffsetHours()`（宿主只读 getter）。宿主只剩 `wheel()` 懒初始化 + 5 处调用转发 + 3 个生命周期 `stop()` 收口。
+> 顺带删除：**从未被启动**的过渡定时器与 `timeWheelTargetMs`、`finishTimeWheelTransition()`（其唯一启动者 `advanceTimeWheel` 已在 Phase 3j 作为死代码删除）。
+> 同批完成的速度域迁移见下方"速度/速率域"。
+
 Phase 3g 把时间转轴/时间轮的**状态与视图**迁出（`TimeWheelStore` + `TimeWheelScrubber`），
 但把**交互逻辑整体留在宿主**，位置与规模（实测）：
 
