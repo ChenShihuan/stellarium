@@ -696,3 +696,75 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
 1. **堆积的成因：** 本项目 UI 迭代极快（7/21–9/06 期间对象详情就换了三代），每次改版只改"接线"，旧的 `@Builder`/方法留在原地并连同其设计注释一起变成"注释还在、代码已死"的僵尸块。
 2. **`nm()` 的教训值得记：** 它在很长一段时间里是**活代码**，是被本方案的迁移抽空了调用者才变成死代码 —— 说明"死代码"是动态状态，**迁移/重构本身也会制造新的死代码**，因此每片迁移后必须复扫（这也是 3j 采用"级联复扫直到收敛"的原因）。
 3. **流程建议（已可落地）：** ① 每个改动面板的功能提交里，顺手删掉被替换的旧 builder（改动者最清楚替代关系）；② 本方案 Phase 4 的"每面板前置死代码自检"（§11 修订 6 的四类判据）正好兜住这类堆积；③ 删除时**连同其设计注释一起删**，需要保留的设计意图应移入文档而不是留在代码里。
+
+---
+
+## 13. 续作操作手册（任何后续会话/Agent 都可照此独立推进）
+
+本节把本轮全部**实测结论**固化为可执行规则，避免续作时重新踩坑。
+
+### 13.1 六条已验证的硬规则（违反其一即产生回归）
+
+| # | 规则 | 依据 |
+|---|---|---|
+| 1 | **`@ObjectLink` 的宿主源必须是 `@State` 持有的实例**；写成普通 `private` 字段会被编译器拒绝 | Phase 3a 报错原文 |
+| 2 | **组件成员名不得与 `CustomComponent` 基类属性方法同名** —— 已踩：`borderColor`、`scale`、`onTouch` | 三次编译失败 |
+| 3 | **迁移后的 UI 不得保留参数化 `@Builder`**（简单类型参数按值捕获 → 子树首帧后冻结，切档/开关不刷新）。改法：内联直接读 store，或改成子组件用 `@Prop` | 真机三版对照实验 |
+| 4 | **宿主改 `@State` 持有的 `@Observed` 实例属性 → 宿主自身也会重绘**（所以让宿主读 store 是安全的） | 夜视模式实测（全应用变红） |
+| 5 | **state 与读取它的 UI 必须同片搬迁**：只搬字段不搬读取方 → 宿主观测不到 store → 退化成不刷新 | 恒星时行的处理 |
+| 6 | **跨域 / 桥 / 定时器依赖用注入解决，不硬搬**（如 `TimeWheelController` 的 `onSeek` / `onStopSpeed` / `getUtcOffsetHours`） | Phase 3m |
+
+### 13.2 每片协议（七步，缺一不可）
+
+1. **量化**：统计该域字段与引用数（`this.<name>`），据此挑最小可自包含的片。
+2. **建 store**（`state/*Store.ets`，`@Observed`，只放数据 + 纯计算，不 import UI/NAPI）。
+3. **建组件**（`panels/...ets` 或 `common/ui/...ets`）：`@ObjectLink` + `@Prop` + 回调；**不用参数化 `@Builder`**。
+4. **单体手术**：字段 → `@State` store 字段；引用改写；UI 区 → 组件调用；删除已搬走的 builder/方法。
+5. **`arkts_check` → `devecocli build`（项目脚本）→ `node scripts/check-ohos-ui-contract.mjs`**。
+6. **真机实测**（`192.168.3.95:40565`，IP 可能变，先用 `hdc list targets`）：安装 → 启动 → **逐项交互验证"点按后是否实时更新"**，不要只看布局是否一致；**测试若改了持久化设置，必须测后恢复**。
+7. **CHANGELOG + 提交**：CHANGELOG 用 **CRLF 安全脚本**追加（见 13.4）；提交后再单独同步 `build/.../MainWindowNativeNode.ets` 这一被跟踪的生成副本。
+
+### 13.3 已知陷阱（都付出过代价）
+
+- **单行方法**：`private f(): T { return x }`。删除脚本若以"下一个 `\n  }\n`"为方法结束标记，会越过其边界并连带删除相邻成员（曾误删 `drawerWidth`/`onRailTap`）→ **必须特判单行方法，并由编译器兜底**。
+- **删字段必须连同其独立装饰器行一起删**（否则留下孤立 `@StorageLink(...)`，报 `cannot have multiple state management decorators`）。
+- **PowerShell here-string 是 LF 而源码是 CRLF**：用于匹配的 here-string 必须先 `-replace "(?<!`r)`n","`r`n"` 归一，否则匹配失败。
+- **超大文档（>100 KB）不要用通用编辑工具插入**：CHANGELOG（687 KB）曾被静默截断到 64 KB 并提交；改用脚本追加并**立即核对字节数/行数/裸 LF 数**。
+- **`deveco ui layout` 是简化树，且 TextInput 值可能不显示**；需要视觉确认时用 `snapshot_display` + 读图。
+- **面板本身可被拖动**：在面板上滑可能移动面板而非滚动内容；滚动要在 `Scroll` 区域内（先 dump 拿到其 bounds）。
+- **列表内滑动**可能被判为点选 → 用 `ui drag`（按压—移动—释放）。
+
+### 13.4 常用命令
+
+```powershell
+# 构建（默认 debug，含 x86_64；-SkipEngine 表示不重编 C++）
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources
+# 契约校验（33 面板 / 22 静态 id / 17 动态前缀 / 41 锚点）
+node scripts\check-ohos-ui-contract.mjs
+# 安装 / 启动
+& $hdc -t 192.168.3.95:40565 install -r build\libstellarium-harmonyos\entry\build\default\outputs\default\entry-default-signed.hap
+& $hdc -t 192.168.3.95:40565 shell aa start -b com.cnchensh.stellarium -a QAbility
+# UI 交互（语义化，优先于坐标点击）
+devecocli ui layout --device 192.168.3.95:40565
+devecocli ui click/drag/text --device 192.168.3.95:40565 ...
+```
+
+**CHANGELOG 追加（CRLF 安全）**：把条目写入临时文件后用脚本前置插入，并核对 `裸LF = 0`（见本轮各次提交的实际命令）。
+
+### 13.5 剩余队列（按体积，供续作选择）
+
+| 序 | 域 | 规模提示 | 备注 |
+|---|---|---|---|
+| 1 | **search** | `searchFilterMenu` 3,441 行 + `search*`/`category*` ≈60 字段 | 最大一片，建议拆 3–5 个提交 |
+| 2 | **object / detail** | `unifiedObjectDetailCard` 185 / `selectedLiveInfoRows` 270 / `structuredObjectDetails` 257 / `tabletInspectorMedia` 181；`object*`/`selected*`/`detail*` ≈93 字段 | 与 tablet/compact 两壳耦合 |
+| 3 | **astro** | `wutTargetCard` 1,003 / `continuationSection` 592 / `astroSelectionGuide` 525 / `phenomenonRelationMark` 715；≈164 字段 | 计算类，多为展示 |
+| 4 | **layers** | `layerPresetBar` 1,331 / `hierColumn` 1,141；图层开关 ≈60 字段 | 含 21 个 switchRow |
+| 5 | **skyCulture** | ≈130 字段 | 编辑器 + 展示 |
+| 6 | **satellite** | ≈40 字段 | |
+| 7 | **sensors/gyro** | 13 字段 + `gyroCalibPanel` 148 行 | 注意：活路径是 `gyroRotationCallback` 等，勿动 |
+| 8 | **script / telescope / session / tools / settings 其余标签页** | 26 / 24 / ~ / 51 / — | |
+| 9 | **Phase 4 面板宿主** | `panelContent`（5,138 行 if/else）→ 表驱动 `PanelHost` | 面板逐个抽组件后收口 |
+| 10 | **Phase 5 overlay / Phase 6 壳层** | 信息窗、详情卡、时间轮、Dock、expanded/compact/hover | 含 `panelHeader` chrome（`observationTimeText`/`timeRateText` 在此收口） |
+| 11 | **Phase 7 收口** | 删除过渡 getter、更新 `UI-ARCHITECTURE.md` 行号、AGENTS.md §2.2 | |
+
+**每个 Phase 4 面板切片前**建议先跑一次第 13.2 步 1 的"零引用扫描"，把死代码清掉再搬迁（§11 修订 6 的四类判据）。
