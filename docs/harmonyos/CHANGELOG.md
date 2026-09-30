@@ -1,3 +1,16 @@
+## [2026-09-30] DevEco Code - Phase 3k：时间设置标签页迁移（修掉两个跨标签页共享的参数化 @Builder）
+
+- **新增文件：** `common/ui/SettingsChoiceButton.ets`（选项按钮组件：`@Prop active/canPick` + `onPick`）、`common/ui/SettingsSwitchRow.ets`（开关行组件：`@Prop isOn/canToggle` + `onToggle`）、`state/TimeSettingsStore.ets`（7 字段：`configDateFormat`/`configTimeFormat`/`startupTimeMode`/`startupTimeStop`/`startupTodayTime`/`startupPresetLocalTime`/`timeSettingsZone`）、`panels/settings/TimeSettingsSection.ets`（日期格式 + 时间格式 + 启动时间三段）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 7 个 `@State` 合并为 `@State private timeSettingsStore`（**`timeSettingsPending` 刻意仍留宿主**，因为它同时被其他面板读取，改以 `@Prop pending` 传入）；21 处引用改写；`configTab === 3` 的上半部分（原 L23504–L23573）替换为 `TimeSettingsSection({ ... })` 调用，`DeltaTSettingsBlock` 仍紧随其后由宿主渲染；**信息标签页**的选择按钮同步换成 `SettingsChoiceButton`（由调用方计算 `active: this.informationMode === mode`）；删除 `settingsChoiceButton`（参数化，跨 4 处共享）与 `timeSettingSwitchRow`（参数化）两个 builder，以及已搬入组件的 `configDateFormatLabel` / `configTimeFormatLabel`；`settingsChoiceSelected` / `selectSettingsChoice` 保留（信息标签页仍在使用）。
+- **修复的既有缺陷（冻结 bug 类的共享面）：** `settingsChoiceButton` 被 **日期 / 时间 / 启动 / 信息** 四个标签页共用，且是参数化 `@Builder`（参数按值捕获、子树首帧后冻结）→ **这四处的选中态此前都不实时**，必须重开面板才更新；现全部实时。同时 `timeSettingSwitchRow` 原先把 `enabled` 形参收下却忽略、且行背景写死读 `startupTimeStop`，现改为显式 `@Prop isOn/canToggle`。
+- **真机验证（`192.168.3.95:40565`，全部通过）：**
+  1. 渲染：时间标签页由新组件正常渲染（实时预览 `2026-09-30 23:38:28`、时区行 `观测地时区：Asia/Shanghai`、三段选项与开关行、保存/立即应用按钮）。
+  2. **选中态实时**：点「月-日-年」后实时预览立刻变 `09-30-2026 23:39:05`（且仍走秒），当前值行同时变「月-日-年」——不再是"要重开面板"。
+  3. **开关行实时**：点「启动时暂停时间流逝」后行背景与旋钮同帧翻转（截图 128,099 → 136,504 字节；视觉确认蓝色开关 + 行底色）。
+  4. 测后已恢复原设置（日期格式点回「年-月-日」；开关点两次回到原值）。
+- **验证结果：** `arkts_check` 五文件无错误；`BUILD SUCCESSFUL`；契约校验通过；真机安装启动成功。
+- **单体行数：** 30,229 → **30,143**（本片 −86；另有 4 个新文件承载原逻辑）。
+
 ## [2026-09-30] DevEco Code - Phase 3j：死代码清扫第二轮（13 个零调用 @Builder + 31 个零引用字段 + 级联 9 方法，−650 行）
 
 - **触发：** 用户反馈"陀螺仪功能正常"，据此把扫描**扩大到 @Builder 与字段**（第一轮只扫 `private` 方法），并加入**级联复扫**（删除后重新扫描，直到收敛）。
