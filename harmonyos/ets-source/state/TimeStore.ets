@@ -2,4 +2,5 @@
 @Observed
 export class TimeStore {
   timeSpeedIndex: number = 7  // 7=1x realtime (default, new index)
+  siderealTimeText: string = '--'
 }
