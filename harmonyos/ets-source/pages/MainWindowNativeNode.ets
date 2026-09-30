@@ -40,6 +40,8 @@ import { JulianDateControls } from '../panels/time/JulianDateControls'
 import { SiderealTimeRow } from '../panels/time/SiderealTimeRow'
 import { EquationOfTimeBlock } from '../panels/time/EquationOfTimeBlock'
 import { EquationOfTimeStore } from '../state/EquationOfTimeStore'
+import { DeltaTStore } from '../state/DeltaTStore'
+import { DeltaTSettingsBlock } from '../panels/time/DeltaTSettingsBlock'
 
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
@@ -488,11 +490,8 @@ export struct WindowNativeNode {
   @State private startupPresetLocalTime: string = ''
   @State private timeSettingsZone: string = ''
   @State private timeSettingsPending: boolean = false
-  @State private timeDeltaTAlgorithms: string[] = []
-  @State private timeDeltaTCustom: string = ''
+  @State private deltaTStore: DeltaTStore = new DeltaTStore()
   @State private presetSkyTime: number = 0
-  @State private deltaTAlgorithm: string = 'EspenakMeeusModified'
-  @State private deltaTDescription: string = ''
   @State private navigationMouseEnabled: boolean = true
   @State private navigationMouseZoomEnabled: boolean = true
   @State private navigationMoveKeysEnabled: boolean = true
@@ -6135,7 +6134,7 @@ export struct WindowNativeNode {
     if (result.ok !== true) return
     this.getUIContext().animateTo({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }, () => {
       this.startupTimeMode = result.startupTimeMode ?? this.startupTimeMode
-      this.deltaTAlgorithm = result.deltaTAlgorithm ?? this.deltaTAlgorithm
+      this.deltaTStore.deltaTAlgorithm = result.deltaTAlgorithm ?? this.deltaTStore.deltaTAlgorithm
     })
     this.startupTimeStop = result.startupTimeStop ?? this.startupTimeStop
     this.startupTodayTime = result.todayTime ?? this.startupTodayTime
@@ -6145,9 +6144,9 @@ export struct WindowNativeNode {
     this.configTimeFormat = result.timeFormat ?? this.configTimeFormat
     this.observationTimeText = result.formattedTime ?? this.observationTimeText
     this.timeSettingsZone = result.timeZone ?? this.timeSettingsZone
-    this.deltaTDescription = result.deltaTDescription ?? this.deltaTDescription
-    this.timeDeltaTAlgorithms = result.deltaTAlgorithms ?? this.timeDeltaTAlgorithms
-    this.timeDeltaTCustom = result.deltaTCustom ?? this.timeDeltaTCustom
+    this.deltaTStore.deltaTDescription = result.deltaTDescription ?? this.deltaTStore.deltaTDescription
+    this.deltaTStore.timeDeltaTAlgorithms = result.deltaTAlgorithms ?? this.deltaTStore.timeDeltaTAlgorithms
+    this.deltaTStore.timeDeltaTCustom = result.deltaTCustom ?? this.deltaTStore.timeDeltaTCustom
   }
 
   private saveTimePreference(command: string, payload: string, message: string): void {
@@ -6173,17 +6172,6 @@ export struct WindowNativeNode {
     if (key === 'startupMode' && value === this.startupTimeMode) return
     this.saveTimePreference('setTimeSetting', key + '|' + value.trim(),
       key === 'applyStartup' || key === 'deltaT' || key === 'deltaCustom' ? 'time_settings_applied' : 'time_settings_saved')
-  }
-
-  private deltaTLabel(key: string): string {
-    switch (key) {
-      case 'EspenakMeeusModified': return '修订的 Espenak-Meeus（推荐）'
-      case 'EspenakMeeus': return 'Espenak-Meeus'
-      case 'JPLHorizons': return 'JPL Horizons'
-      case 'WithoutCorrection': return '不进行修正'
-      case 'Custom': return '自定义公式'
-      default: return key
-    }
   }
 
   private setNavigationBoolean(setting: string, enabled: boolean): void {
@@ -24916,44 +24904,17 @@ private loadPlanetPositions(): void {
               .enabled(!this.timeSettingsPending).fontColor(this.nmText()).backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_CONTROL)
               .onClick(() => { this.setStartupTimeSetting('applyStartup', '1') })
             Text(I18n.t('time_apply_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
-            Text('ΔT 算法').fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ bottom: 4 })
-            Text(I18n.t('time_delta_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
-            Text(this.deltaTLabel(this.deltaTAlgorithm)).fontSize(13).fontColor(this.nmText()).width('100%').padding(8)
-            Scroll() {
-              Column({ space: 3 }) {
-                ForEach(this.timeDeltaTAlgorithms, (key: string) => {
-                  Row() {
-                    Text(this.deltaTLabel(key)).fontSize(10).fontColor(this.deltaTAlgorithm === key ? this.nmText() : this.nmSub()).layoutWeight(1).maxLines(2)
-                    if (this.deltaTAlgorithm === key) Text('✓').fontSize(12).fontColor(this.nmAccent())
-                  }.width('100%').padding({ left: 10, right: 10, top: 6, bottom: 6 })
-                    .backgroundColor(this.deltaTAlgorithm === key ? this.nmBg() : Color.Transparent).borderRadius(UI_RADIUS_CONTROL)
-                    .animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .clickEffect({ level: ClickEffectLevel.LIGHT })
-                    .enabled(!this.timeSettingsPending).onClick(() => { this.setStartupTimeSetting('deltaT', key) })
-                }, (key: string) => key)
-              }.width('100%')
-            }.width('100%').height(170).scrollBar(BarState.Auto).scrollBarWidth(4)
-            if (this.deltaTAlgorithm === 'Custom') {
-              Column({ space: 6 }) {
-              Text(I18n.t('time_delta_custom_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
-              ForEach(['year', 'ndot', 'a', 'b', 'c'], (key: string, index: number) => {
-                Row({ space: 8 }) {
-                  Text(I18n.t('time_delta_' + key)).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-                  TextInput({ text: this.timeDeltaTCustom.split(',')[index] ?? '' }).fontSize(13).height(40).width('50%')
-                    .fontColor(this.nmText()).backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL)
-                    .enabled(!this.timeSettingsPending).onChange((value: string) => {
-                      const parts = this.timeDeltaTCustom.split(',')
-                      parts[index] = value
-                      this.timeDeltaTCustom = parts.join(',')
-                    })
-                }.width('100%').margin({ bottom: 6 })
-              }, (key: string) => key)
-              Button(I18n.t('time_save')).fontSize(12).height(40).enabled(!this.timeSettingsPending)
-                .fontColor(this.nmText()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => { this.setStartupTimeSetting('deltaCustom', this.timeDeltaTCustom) })
-              }.width('100%').transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 6 })))
-            }
-            if (this.deltaTDescription.length > 0) Text(this.deltaTDescription).fontSize(12).fontColor(this.nmSub()).width('100%').padding(10)
+            DeltaTSettingsBlock({
+              store: this.deltaTStore,
+              pending: this.timeSettingsPending,
+              textColor: this.nmText(),
+              subColor: this.nmSub(),
+              panelColor: this.nmBg(),
+              inputColor: this.nmInput(),
+              accentColor: this.nmAccent(),
+              onSelect: (key: string) => { this.setStartupTimeSetting('deltaT', key) },
+              onSaveCustom: (text: string) => { this.setStartupTimeSetting('deltaCustom', text) }
+            })
           } else if (this.configTab === 4) {
             Text(I18n.t('tools_data_hint')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8, right: 8 }).margin({ top: 4, bottom: 8 })
             Button(I18n.t('panel_tools_data')).fontSize(12).fontColor(this.nmText()).backgroundColor(this.nmAccent())
