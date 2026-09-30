@@ -640,3 +640,52 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
 | **合计** | **1,274** | **54** | **13** | **39** |
 
 单体行数 32,705 → 30,229。
+
+### 12.5 附：被移除功能块的来龙去脉（git 考古）
+
+方法：`git log -S <标识符> -- harmonyos/ets-source/pages/MainWindowNativeNode.ets` 会列出**该标识符出现次数发生变化的每一次提交**；
+序列的**最后一个**（我方的删除提交之外）就是它**失去调用点（失活）**的时刻，其提交信息通常说明了替代者。
+
+#### 模式一：出生即死（引入提交本身就没接线）
+
+| 标识符 | 引入 | 引入提交主题 |
+|---|---|---|
+| `updateScrubberLabel` | 2026-07-31 | `aa2b2b384f` refine offline HarmonyOS observation controls |
+| `easeSelectedObjectTo` | 2026-07-31 | 同上 |
+| `syncGyroAnchor` | 2026-07-31 | 同上 |
+| `onRotationVectorData` | 2026-07-31 | 同上 |
+| `detailInfoRow` | 2026-07-28 | `cb7bf253c6` checkpoint offline HarmonyOS candidate |
+| `compactQuickControls` | 2026-07-28 | 同上 |
+| `advanceTimeWheel` | 2026-08-11 | `969cd1b33d` stabilize AstroCalc selection flows（连同 `startTimeWheelTransition` 一起，故"按步进推进时间"整条支路从未可用） |
+
+#### 模式二：短命试验（引入后 1–3 天即被替换）
+
+| 标识符 | 引入 | 失活 | 存活 |
+|---|---|---|---|
+| `objInfoFloat`（选中天体浮动详情窗，93 行） | 2026-07-25 `e1f06f17de` | 2026-07-26 `4d4ae41768` | **1 天** |
+| `infoWinLeft`/`infoWinWidth`（浮窗几何） | 2026-07-25 | 2026-07-27 `ba34693f4e` | 2 天 |
+| `objectActionBar`（19 行） | 2026-08-29 `9ffed5f759` | 2026-08-30 `eabe2f1c5d` | **1 天** |
+| `configurationSkyDisplaySettings`（53 行） | 2026-08-30 `eabe2f1c5d` | 2026-08-31 `626cefea53` | **1 天** |
+| `collapseButton`（29 行） | 2026-07-25 `6733da1103` | 2026-07-27 `ba34693f4e` | 2 天 |
+| `observerBadge` / `smallRoundButton` | 2026-07-21 `947a1892f3` | 2026-07-28 `cb7bf253c6` | ~7 天 |
+| `setTimeNow` / `adjustTime` | 2026-07-22 `0e89bd5ca5` | 2026-07-31 `aa2b2b384f` | ~9 天 |
+| `pauseScript` / `resumeScript` | 2026-07-27 `ba34693f4e` | 2026-08-28 `68f9a05be3`（"compact script controls"） | ~1 月 |
+| `triggerAutoLocate` | 2026-07-25 `b8dc048eff`（本功能提交） | 2026-08-21 `9a8dd78731` | ~1 月 |
+
+#### 模式三：整代 UI 被替换（替代者可在"失活提交"里定位）
+
+| 家族 | 引入 | 失活（=替代者登场） | 替代者 |
+|---|---|---|---|
+| **对象详情**（`tabletObjectInspector` 119 行 / `objInfoFloat` 93 / `compactObjectPeek` 43 / `expandedObjectSummary` 39 / `objectActionBar` 19 / `isTabletObjectInspectorPoint` 7 / `toggleTracking` 4） | 08-27 `8cb728a488`（引入平板检查器 + `structuredObjectDetails`/`tabletInspectorMedia`）→ 08-29 `9ffed5f759`（加 peek/动作条 + `selectedLiveInfoRows`） | **08-30 `eabe2f1c5d`**（complete CLI regression and UX audit） | 同一次提交引入 **`unifiedObjectDetailCard`** —— 四套详情变体一同失去调用者 |
+| **时间控制**（旧滑杆子系统：`applyScrubber`/`beginScrubberInteraction`/`sendScrubberTime`/`syncScrubberToSimulation`/`resetScrubberToRealtime` 等 117 行 + `scrubberReferenceJd` 等 7 字段） | 07-30 `f87310fbc0`（complete time control redesign — Sky Guide style，同批引入 `timeScrubberSlider`） | 08-11 `969cd1b33d` | `timeScrubberSlider`（字段行 + 刻度轮），即今天的 `TimeWheelScrubber` |
+| **左栏 / 抽屉**（`railShell` 36 行） | 07-23 `a9349c9a8e`（星表下载 ArkTS 界面） | 08-22 `ad2a423575` | `expandedShell` 内的常驻侧栏 |
+| 抽屉/卡片几何（`drawerLeft`、`drawerWidth` 旁系等） | 07-28 `cb7bf253c6` | 08-28 `68f9a05be3` | 同上 |
+| **平板探索首页**（`padExploreHome` 39 行） | 08-22 `ad2a423575` | 09-06 `6245c85b07`（offload detail model rendering…） | 统一后的对象详情/检查器路径 |
+| **星空文化筛选索引**（`skyCultureRangeModeIndex`/`ClassificationFilterIndex`/`RegionFilterIndex`） | 08-21 `9a8dd78731`（complete sky culture filtering） | 08-22 `ad2a423575` | 新的筛选状态字段与面板 |
+| **配色助手 `nm()`** | 07-21 `947a1892f3` 起被 84 次提交广泛使用 | **由本方案自己的迁移 3d–3g 逐步抽走调用点**（搬进组件后改用 `nmText()`/`@Prop` 传色），最后由 3j 删除 | `nmText()`/`nmSub()`/`nmAccent()` + 组件 `@Prop` 颜色 |
+
+#### 结论与三条可执行改进
+
+1. **堆积的成因：** 本项目 UI 迭代极快（7/21–9/06 期间对象详情就换了三代），每次改版只改"接线"，旧的 `@Builder`/方法留在原地并连同其设计注释一起变成"注释还在、代码已死"的僵尸块。
+2. **`nm()` 的教训值得记：** 它在很长一段时间里是**活代码**，是被本方案的迁移抽空了调用者才变成死代码 —— 说明"死代码"是动态状态，**迁移/重构本身也会制造新的死代码**，因此每片迁移后必须复扫（这也是 3j 采用"级联复扫直到收敛"的原因）。
+3. **流程建议（已可落地）：** ① 每个改动面板的功能提交里，顺手删掉被替换的旧 builder（改动者最清楚替代关系）；② 本方案 Phase 4 的"每面板前置死代码自检"（§11 修订 6 的四类判据）正好兜住这类堆积；③ 删除时**连同其设计注释一起删**，需要保留的设计意图应移入文档而不是留在代码里。
