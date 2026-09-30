@@ -713,21 +713,24 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
 | # | 规则 | 依据 |
 |---|---|---|
 | 1 | **`@ObjectLink` 的宿主源必须是 `@State` 持有的实例**；写成普通 `private` 字段会被编译器拒绝 | Phase 3a 报错原文 |
-| 2 | **组件成员名不得与 `CustomComponent` 基类属性方法同名** —— 已踩：`borderColor`、`scale`、`onTouch` | 三次编译失败 |
+| 2 | **组件成员名不得与 `CustomComponent` 基类属性方法同名** —— 已踩：`borderColor`、`scale`、`onTouch`、`background`（报 `Property 'background' ... is not assignable to the same property in base type 'CustomComponent'`；`background` 与 `backgroundColor` 都中招，因为基类有 `.background()` 属性方法） | 四次编译失败 |
 | 3 | **迁移后的 UI 不得保留参数化 `@Builder`**（简单类型参数按值捕获 → 子树首帧后冻结，切档/开关不刷新）。改法：内联直接读 store，或改成子组件用 `@Prop` | 真机三版对照实验 |
 | 4 | **宿主改 `@State` 持有的 `@Observed` 实例属性 → 宿主自身也会重绘**（所以让宿主读 store 是安全的） | 夜视模式实测（全应用变红） |
 | 5 | **state 与读取它的 UI 必须同片搬迁**：只搬字段不搬读取方 → 宿主观测不到 store → 退化成不刷新 | 恒星时行的处理 |
 | 6 | **跨域 / 桥 / 定时器依赖用注入解决，不硬搬**（如 `TimeWheelController` 的 `onSeek` / `onStopSpeed` / `getUtcOffsetHours`） | Phase 3m |
+| 7 | **`@Component` 的 `build()` 只能有唯一容器根节点**。原 `@Builder` 允许并列多根（如 `tabletInspectorFallbackVisual` 的 `Stack` + `Text`），下沉成组件后必须包进一个容器：用**与原调用点外层容器相同的 `space`**（该例外层是 `Column({ space: 8 })`），否则间距会变 | Phase 3v 编译报 `build method can have only one root node` |
+| 8 | **搬迁会打断"按文本切片单体"的测试脚本**：仓库里 23 个 `scripts/*.mjs` 用 `source.indexOf(...)`/`slice`/正则读 `MainWindowNativeNode.ets`，字段改 `this.store.X`、UI 改组件后它们会成片失败。每片必须跑一次受影响脚本并同步（切到组件文件、注入 `objectDetailStore` 之类的假宿主）。**存量失败（先于本会话、与本轮无关）见 §13.6** | Phase 3v 一次暴露 20+ 处 |
 
-### 13.2 每片协议（七步，缺一不可）
+### 13.2 每片协议（八步，缺一不可）
 
 1. **量化**：统计该域字段与引用数（`this.<name>`），据此挑最小可自包含的片。
 2. **建 store**（`state/*Store.ets`，`@Observed`，只放数据 + 纯计算，不 import UI/NAPI）。
-3. **建组件**（`panels/...ets` 或 `common/ui/...ets`）：`@ObjectLink` + `@Prop` + 回调；**不用参数化 `@Builder`**。
+3. **建组件**（`panels/...ets` 或 `common/ui/...ets`）：`@ObjectLink` + `@Prop` + 回调；**不用参数化 `@Builder`**。分支多而每支入参少时（如媒体区八分支），**保留宿主的无参 `@Builder` 做分支判定，每支下沉成小组件**（每个 2–7 个入参），比"一个大组件传十几个 `@Prop`"更稳。
 4. **单体手术**：字段 → `@State` store 字段；引用改写；UI 区 → 组件调用；删除已搬走的 builder/方法。
 5. **`arkts_check` → `devecocli build`（项目脚本）→ `node scripts/check-ohos-ui-contract.mjs`**。
-6. **真机实测**（`192.168.3.95:40565`，IP 可能变，先用 `hdc list targets`）：安装 → 启动 → **逐项交互验证"点按后是否实时更新"**，不要只看布局是否一致；**测试若改了持久化设置，必须测后恢复**。
-7. **CHANGELOG + 提交**：CHANGELOG 用 **CRLF 安全脚本**追加（见 13.4）；提交后再单独同步 `build/.../MainWindowNativeNode.ets` 这一被跟踪的生成副本。
+6. **跑受影响的切片测试**（`node scripts/test-ohos-*.mjs` / `verify-ohos-*.mjs`，见 §13.1 规则 8）并同步。
+7. **真机实测**（`192.168.3.95:40565`，IP 可能变，先用 `hdc list targets`）：安装 → 启动 → **逐项交互验证"点按后是否实时更新"**，不要只看布局是否一致；**测试若改了持久化设置，必须测后恢复**。回调链路可用 `hdc shell hilog -x` 过滤日志实证（如点"重试"后应出现 `[detail-media] retry request=...`）。
+8. **CHANGELOG + 提交**：CHANGELOG 用 **CRLF 安全脚本**追加（见 13.4）；提交后再单独同步 `build/.../MainWindowNativeNode.ets` 这一被跟踪的生成副本。
 
 ### 13.3 已知陷阱（都付出过代价）
 
@@ -761,6 +764,17 @@ devecocli ui click/drag/text --device 192.168.3.95:40565 ...
 
 **CHANGELOG 追加（CRLF 安全）**：把条目写入临时文件后用脚本前置插入，并核对 `裸LF = 0`（见本轮各次提交的实际命令）。
 
+### 13.6 存量失败（先于本轮重构，续作不要误判为自己引入）
+
+| 脚本 | 现象 | 性质 |
+|---|---|---|
+| `test-ohos-privacy-startup.mjs` | 11 处 `Cannot use import statement outside a module`，抛自 `new Function(...)`（脚本 L24 夹具 `plain()` 未能剥离 `qability/PrivacyConsent.ets` 的 import） | **夹具缺陷**；`PrivacyConsent.ets` / `QAbility.ets` 最后修改于 `101acf6cd3`，早于本会话 |
+| `test-ohos-satellite-panel.mjs` test 7 | `computeOrbitPoints()` 的 `if (!validSample()) return;` 计数期望 3、实际不符 | **纯 C++ 断言**，与 ArkTS 无关 |
+| `verify-ohos-location-search.mjs` | 直接 `ENOENT`：路径拼成 `E:\E:\code\...` | **脚本自身路径 bug**，断言都未执行到 |
+
+> Phase 3v 已顺带清掉 Phase 3t 遗留的 5 处失败（`test-ohos-detail-live-values.mjs` 的假宿主缺 `objectDetailStore`）。
+> 其余切片测试在 Phase 3v 结束时全绿：`audit-ohos-resource-coverage`、`test-ohos-astro-motion`、`-detail-image-layout`、`-detail-live-values`、`-detail-model-geometry`、`-distance-ui`、`-guide`、`-information-policy`、`-mist-horizon`、`-model-scroll`、`-plugin-panel-state`、`-polar-scope`、`-procedural-model`、`-search-browser`、`-settings-choice-motion`、`-skyculture-text`、`-startup-stars`、`-wut-layout`、`verify-ohos-julian-date`、`verify-ohos-object-details`。
+
 ### 13.5 剩余队列（按体积，供续作选择；**2026-10-01 用实测行数修正**）
 
 > 初版此表沿用 §1.3 的错误测法，行数普遍高估 10–70 倍（如 `searchFilterMenu` 3,441 → 实测 48）。
@@ -771,7 +785,7 @@ devecocli ui click/drag/text --device 192.168.3.95:40565 ...
 |---|---|---|---|
 | 1 | **search 筛选器** | `searchFilterMenu` **48** + `searchFilterChips` **30** + `catalogFilterRow`（参数化 UI 函数，需改子组件）；`searchFilterPage` 15 / `searchCategory` 19 / `searchVisibilityFilter` 5 / `searchInstrumentFilter` 6 | 一片可完成 |
 | 2 | search 分类浏览 | `category*` 10 字段 / 64 处 | |
-| 3 | **object / detail** | `unifiedObjectDetailCard` 183 / `tabletInspectorMedia` 179 / `structuredObjectDetails` 30 / `selectedLiveInfoRows` 19；≈93 字段 | 与 tablet/compact 两壳耦合 |
+| 3 | **object / detail** | ~~`tabletInspectorMedia` 179~~ **已完成（Phase 3v）**；~~`objectDataRow`/`structuredObjectDetailRow`/`tabletInspectorSection`~~ **已完成（Phase 3u）**；下一步 `unifiedObjectDetailCard` 183 / 连接线与模型叠层；`structuredObjectDetails` 30 / `selectedLiveInfoRows` 19；≈93 字段 | 与 tablet/compact 两壳耦合 |
 | 4 | **astro** | `wutTargetCard` 21 / `continuationSection` 31 / `phenomenonRelationMark` 29 / `astroSelectionGuide` 15；≈164 字段 | 多为展示 |
 | 5 | **layers** | `layerPresetBar` 19 / `hierColumn` 75；图层开关 ≈60 字段 | 含 21 个 switchRow |
 | 6 | **tools** | `toolsPanel` **446**（除去 panelContent 外最大） | |
