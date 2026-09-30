@@ -1,3 +1,12 @@
+## [2026-09-30] DevEco Code - Phase 3h：清理旧转轴死子系统（−126 行，并消除高频链上的无效重渲染）
+
+- **调查结论（可证明死代码）：** 旧滑杆入口 `applyScrubber(secondOffset, mode)` **没有任何调用者**（滑杆 UI 早已被 Sky Guide 风格时间轮取代）；顺着它往下，`beginScrubberInteraction` / `sendScrubberTime` / `updateScrubberLabel` 只被彼此调用，而 `syncScrubberToSimulation` / `resetScrubberToRealtime` 虽被活代码调用，但其**写入目标全是只写不读的字段**（`scrubberValue` / `scrubberLabel` / `scrubberReferenceJd` / `scrubberPendingOffset` / `scrubberAnchorPending` / `scrubberLastSendMs` / `scrubberInteracting` 全部无读取点）。因此整条链是死代码。
+- **删除内容：** 7 个字段声明（其中 `scrubberValue` / `scrubberLabel` 是 `@State`）、6 个方法（`updateScrubberLabel` / `beginScrubberInteraction` / `sendScrubberTime` / `applyScrubber` / `syncScrubberToSimulation` / `resetScrubberToRealtime`，原 L11799–L11908 区块）、5 处调用点（`jumpToTimeMark` 内 2 行、`refreshSimTimeLight` 内的 `if (!this.scrubberInteracting)` 整块、`applyJulianDateInput` 1 行、`handleChip('now'/'realtime')` 各 1 行）。
+- **附带修复（性能）：** 被删的两个 `@State` 字段原本由 `syncScrubberToSimulation` 在**每次模拟时间刷新**时写入——每次写都让整个 31k 行 struct 的重渲染范围被打脏。删除后这条高频路径不再产生无效重渲染（符合方案"高频链隔离"的目标）。
+- **另一处收口：** `timeMarkLoading` 只是 `jumpToTimeMark` 的重入守卫、不参与渲染，已由 `@State` 降为普通 `private` 字段（少一个无谓的响应式变量）。
+- **验证结果：** `arkts_check` 无错误；`BUILD SUCCESSFUL`；契约校验通过；真机安装启动成功；回归拖动（小时单位下改时间不改日期，符合预期）与「实时」恢复（`2026-09-30 · 1x`）均正常。
+- **单体行数：** 31,503 → **31,377**（本片 −126）。
+
 ## [2026-09-30] DevEco Code - Phase 3g：时间转轴 + 时间轮整体迁移（真机调试：点字段、拖动、切单位、引擎同步全部通过）
 
 - **新增文件：** `state/TimeWheelStore.ets`（11 个原 `@State` 字段 + `timeWheelTrackBaseMs` + 两个刻度常量 + 纯计算方法：`majorInterval` / `isCalendar` / `shiftDate` / `dateAtOffset` / `dateAtFraction` / `tickValue` / `tickLabel` / `refreshTicks` / `visibleTickOffset` / `isVisibleMajorTick`）、`panels/time/TimeWheelScrubber.ets`（字段行 6 个按钮 + 刻度条 + 触摸层；刻度几何 `tickDistance/visibleTickLabel/tickScale/tickOpacity/tickBlur/tickHeight` 内联为组件私有方法）。

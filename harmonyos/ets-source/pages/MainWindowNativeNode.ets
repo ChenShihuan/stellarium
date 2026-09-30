@@ -304,15 +304,8 @@ export struct WindowNativeNode {
   private pendingTimeRateUntilMs: number = 0
   private lastSyncedTimeRate: number = Number.NaN
   /** 时间轴相对真实当前时刻的偏移秒数（0=此刻，负=过去，正=未来）*/
-  @State private scrubberValue: number = 0
-  @State private scrubberLabel: string = '此刻'
   // 时间轴的中心 JD。它不是系统时间的固定快照：模拟时间接近边界时会
   // 重新定锚到当前模拟时间，避免快进后游标永远卡在两端。
-  private scrubberReferenceJd: number = 0
-  private scrubberPendingOffset: number = 0
-  private scrubberAnchorPending: boolean = false
-  private scrubberLastSendMs: number = 0
-  private scrubberInteracting: boolean = false
   // 时间转轴：顶部选择要调整的字段，底部同一条刻度轴只控制该字段。
   @State private timeWheelStore: TimeWheelStore = new TimeWheelStore()
 
@@ -320,7 +313,7 @@ export struct WindowNativeNode {
   // replace a partially typed number while the user is still entering it.
   @State private julianStore: JulianDateStore = new JulianDateStore()
   private julianDateApplyInFlight: boolean = false
-  @State private timeMarkLoading: boolean = false
+  private timeMarkLoading: boolean = false
   private timeWheelLastInputMs: number = 0
   private timeWheelLastTouchX: number = 0
   private timeWheelLastTouchMs: number = 0
@@ -11796,117 +11789,6 @@ private loadPlanetPositions(): void {
   }
   private _lastNonZeroSpeedIndex: number = 7
 
-  /** 更新时间轴当前位置的自然语言标签。 */
-  private updateScrubberLabel(secondOffset: number): void {
-    const seconds = Math.round(secondOffset)
-    if (seconds === 0) {
-      this.scrubberLabel = '此刻'
-      return
-    }
-    const sign = seconds > 0 ? '+' : '-'
-    const abs = Math.abs(seconds)
-    if (abs < 60) {
-      this.scrubberLabel = sign + abs.toString() + '秒'
-    } else if (abs < 3600) {
-      const minutes = Math.floor(abs / 60)
-      const remainSeconds = abs % 60
-      this.scrubberLabel = sign + minutes.toString() + '分' + (remainSeconds > 0 ? remainSeconds.toString() + '秒' : '')
-    } else {
-      const hours = Math.floor(abs / 3600)
-      const minutes = Math.floor((abs % 3600) / 60)
-      this.scrubberLabel = sign + hours.toString() + '时' + (minutes > 0 ? minutes.toString() + '分' : '')
-    }
-  }
-
-  /** 开始一次时间轴交互，并固定这次交互的时间基准。 */
-  private beginScrubberInteraction(secondOffset: number): void {
-    this.scrubberPendingOffset = Math.round(secondOffset)
-    this.updateScrubberLabel(this.scrubberPendingOffset)
-    if (this.scrubberReferenceJd > 0) {
-      this.sendScrubberTime(true)
-      return
-    }
-    if (this.scrubberAnchorPending) {
-      return
-    }
-    this.scrubberAnchorPending = true
-    this.callInteractive('getSimulationTime', '', (r: StellariumBridgeResponse) => {
-      this.scrubberAnchorPending = false
-      if (r.ok === true && r.jd !== undefined) {
-        // Keep the current slider position stable while establishing its centre.
-        this.scrubberReferenceJd = Number(r.jd) - this.scrubberPendingOffset / 86400.0
-        this.sendScrubberTime(true)
-      }
-    })
-  }
-
-  /** 把当前偏移应用到固定基准；移动中限流，松手时强制发送最终值。 */
-  private sendScrubberTime(force: boolean = false): void {
-    if (this.scrubberReferenceJd <= 0) {
-      return
-    }
-    const now = Date.now()
-    if (!force && now - this.scrubberLastSendMs < 90) {
-      return
-    }
-    this.scrubberLastSendMs = now
-    const targetJd = this.scrubberReferenceJd + this.scrubberPendingOffset / 86400.0
-    // setTimeToJD 会把原生模拟速率设为 0，避免用户拖动时星图仍继续走时。
-    this.callNativeFire('setTimeToJD', targetJd.toFixed(6))
-    this.timeStore.timeSpeedIndex = WindowNativeNode.SPEED_IDX_STOP
-    this.pendingTimeRate = 0
-    this.pendingTimeRateUntilMs = Date.now() + 500
-    this.timeRateText = this.formatRate(0)
-    if (force) {
-      setTimeout(() => { this.refreshSimTimeLight() }, 140)
-    }
-  }
-
-  /** 时间轴值变化：所有值都相对同一个按下瞬间，绝不累加到前一个结果。 */
-  private applyScrubber(secondOffset: number, mode: SliderChangeMode): void {
-    const offset = Math.round(secondOffset)
-    this.scrubberValue = offset
-    this.scrubberPendingOffset = offset
-    this.updateScrubberLabel(offset)
-    if (mode === SliderChangeMode.Begin) {
-      this.scrubberInteracting = true
-    }
-    if (mode === SliderChangeMode.Begin || mode === SliderChangeMode.Click || this.scrubberReferenceJd <= 0) {
-      this.beginScrubberInteraction(offset)
-      return
-    }
-    const finished = mode === SliderChangeMode.End
-    this.sendScrubberTime(finished)
-    if (finished || mode === SliderChangeMode.Click) {
-      this.scrubberInteracting = false
-    }
-  }
-
-  private syncScrubberToSimulation(jd: number): void {
-    if (this.scrubberReferenceJd <= 0) {
-      this.scrubberReferenceJd = Date.now() / 86400000.0 + 2440587.5
-    }
-    let offset = Math.round((jd - this.scrubberReferenceJd) * 86400.0)
-    // A timeline is a local control surface, not a calendar with a hard wall.
-    // Re-centre before the thumb reaches the end so pause and reverse dragging
-    // continue from the visible simulated time instead of snapping back to 12h.
-    if (Math.abs(offset) > 38880) {
-      this.scrubberReferenceJd = jd
-      offset = 0
-    }
-    this.scrubberValue = offset
-    this.updateScrubberLabel(offset)
-  }
-
-  private resetScrubberToRealtime(): void {
-    this.scrubberInteracting = false
-    this.scrubberAnchorPending = false
-    this.scrubberReferenceJd = 0
-    this.scrubberPendingOffset = 0
-    this.scrubberValue = 0
-    this.updateScrubberLabel(0)
-  }
-
   private selectTimeWheelUnit(unit: string): void {
     this.finishTimeWheelTransition()
     this.timeWheelStore.timeWheelUnit = unit
@@ -12187,8 +12069,6 @@ private loadPlanetPositions(): void {
       this.applySpeedStep(WindowNativeNode.SPEED_IDX_STOP)
       this.callInteractive('setJD', targetJD.toFixed(6), () => {
         this.timeMarkLoading = false
-        this.scrubberReferenceJd = targetJD
-        this.syncScrubberToSimulation(targetJD)
         this.syncTimeWheelFromSimulation(targetJD)
         this.refreshTimeNow()
         this.flashHint('已定位到' + label + '。')
@@ -15280,9 +15160,6 @@ private loadPlanetPositions(): void {
       }
       if (r.timeRate !== undefined) {
         this.syncTimeRateState(r.timeRate as number)
-      }
-      if (!this.scrubberInteracting) {
-        this.syncScrubberToSimulation(jd)
       }
       this.syncTimeWheelFromSimulation(jd)
       this.syncJulianDateFields(r, jd)
@@ -29313,7 +29190,6 @@ private loadPlanetPositions(): void {
       }
       this.julianStore.julianDateEditing = false
       this.syncJulianDateFields(r, Number(r.jd))
-      this.syncScrubberToSimulation(Number(r.jd))
       this.syncTimeWheelFromSimulation(Number(r.jd))
       this.refreshSimTimeLight()
     }, (r: StellariumBridgeResponse) => {
@@ -29471,7 +29347,6 @@ private loadPlanetPositions(): void {
       this.triggerAction('actionReturn_To_Current_Time')
       this.applySpeedStep(7) // SPEED_IDX_REALTIME
       this.timeRateText = '1x'
-      this.resetScrubberToRealtime()
       this.refreshTimeNow()
     } else if (id === 'stop') {
       // 停止按钮是可逆状态：运行时停止，停止后恢复到停止前速度。
@@ -29487,7 +29362,6 @@ private loadPlanetPositions(): void {
       this.triggerAction('actionReturn_To_Current_Time')
       this.applySpeedStep(7) // SPEED_IDX_REALTIME
       this.timeRateText = '1x'
-      this.resetScrubberToRealtime()
       this.refreshTimeNow()
     } else if (id === 'rewind') {
       // 倒带：单按钮循环升档 -1x → -2x → -10x → -1分/秒 → -1时/秒 → -1天/秒 → 回到-1x
