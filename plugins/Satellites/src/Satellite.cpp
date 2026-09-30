@@ -215,7 +215,7 @@ Satellite::Satellite(const QString& identifier, const QVariantMap& map)
 
 	orbitValid = true;
 	initialized = true;
-	isISS = (name.compare("25544"));
+	isISS = (id == QStringLiteral("25544"));
 	isStarlink = (name.startsWith("STARLINK"));
 	moon = GETSTELMODULE(SolarSystem)->getMoon();
 	sun = GETSTELMODULE(SolarSystem)->getSun();
@@ -251,6 +251,12 @@ double Satellite::roundToDp(float n, int dp)
 
 QString Satellite::getNameI18n() const
 {
+	if (name.compare(QStringLiteral("CSS (TIANHE)"), Qt::CaseInsensitive) == 0)
+	{
+		const QString translated = q_("TIANGONG (TIANHE)");
+		if (translated != QStringLiteral("TIANGONG (TIANHE)"))
+			return translated;
+	}
 	return q_(name);
 }
 

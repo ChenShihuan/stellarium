@@ -476,8 +476,12 @@ int main(int argc, char **argv)
 	const auto qscreen = qApp->screens().at(screen);
 	const QRect screenGeom = qscreen->geometry();
 
+#if defined(__OHOS__)
+	const auto virtSize = screenGeom.size();
+#else
 	const auto virtSize = QSize(confSettings->value("video/screen_w", screenGeom.width()).toInt(),
 								confSettings->value("video/screen_h", screenGeom.height()).toInt());
+#endif
 #ifdef Q_OS_WIN
 	const auto size = QSize(std::lround(virtSize.width()),
 				    std::lround(virtSize.height()));
@@ -488,7 +492,12 @@ int main(int argc, char **argv)
 #endif
 	mainWin.resize(size);
 
-	const bool fullscreen = confSettings->value("video/fullscreen", true).toBool();
+	const bool fullscreen =
+#if defined(__OHOS__)
+		false;
+#else
+		confSettings->value("video/fullscreen", true).toBool();
+#endif
 	if (fullscreen)
 	{
 		// The "+1" below is to work around Linux/Gnome problem with mouse focus.
@@ -501,6 +510,7 @@ int main(int argc, char **argv)
 	}
 	else
 	{
+	#if !defined(__OHOS__)
 		const int x = confSettings->value("video/screen_x", 0).toInt();
 		const int y = confSettings->value("video/screen_y", 0).toInt();
 #ifdef Q_OS_WIN
@@ -508,8 +518,9 @@ int main(int argc, char **argv)
 			     screenGeom.y() + y);
 #else
 		mainWin.move(screenGeom.x() + x/pixelRatio,
-			     screenGeom.y() + y/pixelRatio);
+				 screenGeom.y() + y/pixelRatio);
 #endif
+	#endif
 	}
 
 	mainWin.show();

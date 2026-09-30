@@ -1,0 +1,27 @@
+[Unit]
+Description=Skyinstrument static website
+After=network.target
+[Service]
+Type=simple
+User=nginx
+Group=nginx
+RuntimeDirectory=skyinstrument-website
+RuntimeDirectoryMode=0750
+LogsDirectory=skyinstrument-website
+LogsDirectoryMode=0750
+ExecStartPre=/usr/sbin/nginx -t -c /etc/skyinstrument-website/nginx.conf
+ExecStart=/usr/sbin/nginx -c /etc/skyinstrument-website/nginx.conf -g "daemon off;"
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/skyinstrument-website /var/log/skyinstrument-website
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+RestrictAddressFamilies=AF_UNIX AF_INET
+UMask=0027
+[Install]
+WantedBy=multi-user.target

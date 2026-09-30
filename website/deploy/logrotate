@@ -1,0 +1,14 @@
+/var/log/skyinstrument-website/access.log {
+    daily
+    rotate 180
+    maxage 180
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 nginx nginx
+    sharedscripts
+    postrotate
+        /usr/bin/systemctl kill -s USR1 --kill-who=main skyinstrument-website.service >/dev/null 2>&1 || true
+    endscript
+}

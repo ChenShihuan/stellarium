@@ -38,8 +38,8 @@ function harness() {
 }
 
 test('every astronomy click site has light press feedback; all 64 selected backgrounds animate', () => {
-  assert.equal((panel.match(/\.onClick\(/g) ?? []).length, 102);
-  assert.equal((panel.match(/\.clickEffect\(/g) ?? []).length, 102);
+  assert.equal((panel.match(/\.onClick\(/g) ?? []).length, 103);
+  assert.equal((panel.match(/\.clickEffect\(/g) ?? []).length, 103);
   assert.equal((panel.match(/duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut/g) ?? []).length, 64);
   assert.doesNotMatch(panel, /springMotion|geometryTransition/);
 });

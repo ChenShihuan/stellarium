@@ -105,11 +105,13 @@ void MeteorShowersMgr::init()
 #ifndef STELLARIUM_OHOS_OFFLINE
 	//m_networkManager = StelApp::getInstance().getNetworkAccessManager();
 	m_networkManager = new QNetworkAccessManager(this);
+#ifndef Q_OS_OHOS
 	m_updateTimer = new QTimer(this);
 	m_updateTimer->setSingleShot(false);   // recurring check for update
 	m_updateTimer->setInterval(300000);    // every 5 min, check if it's time to update
 	connect(m_updateTimer, SIGNAL(timeout()), this, SLOT(checkForUpdates()));
 	m_updateTimer->start();
+#endif
 #else
 	qInfo() << "[MeteorShowersMgr] HarmonyOS offline build: online catalog updates are disabled.";
 #endif
@@ -324,7 +326,7 @@ void MeteorShowersMgr::repaint()
 
 void MeteorShowersMgr::checkForUpdates()
 {
-#ifdef STELLARIUM_OHOS_OFFLINE
+#if defined(STELLARIUM_OHOS_OFFLINE) || defined(Q_OS_OHOS)
 	return;
 #else
 #if (QT_VERSION>=QT_VERSION_CHECK(6,0,0))
@@ -633,7 +635,7 @@ void MeteorShowersMgr::setUpdateFrequencyHours(const int& hours)
 
 void MeteorShowersMgr::setEnableAutoUpdates(const bool& b)
 {
-#ifdef STELLARIUM_OHOS_OFFLINE
+#if defined(STELLARIUM_OHOS_OFFLINE) || defined(Q_OS_OHOS)
 	Q_UNUSED(b)
 	m_enableAutoUpdates = false;
 	m_conf->setValue(MS_CONFIG_PREFIX + "/automatic_updates_enabled", false);

@@ -1,0 +1,11 @@
+[Unit]
+Description=Renew Skyinstrument Let's Encrypt certificate
+After=network-online.target skyinstrument-website.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/skyinstrument-renew-certificate
+TimeoutStartSec=900
+UMask=0077
+PrivateTmp=true
+NoNewPrivileges=true

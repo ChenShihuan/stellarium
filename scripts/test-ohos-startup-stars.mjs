@@ -51,6 +51,36 @@ test('slow loading keeps the swarm moving until native readiness, then settles e
   assert.match(read('pages/StartupSky.ets'), /this.skyPrepared && this.assemblyElapsed >= STARTUP_REVEAL_AT_MS/);
 });
 
+test('title formation overlaps consented core loading without revealing an unready sky', () => {
+  const source = read('pages/StartupSky.ets');
+  const method = source.match(/  private updateMotion\(\): void \{[\s\S]*?\n  \}/)[0];
+  let tick;
+  let now = 0;
+  const published = [];
+  const Motion = new Function('setInterval', 'Date', 'STARTUP_REVEAL_AT_MS', 'AppStorage', 'hilog',
+    stripTypeScriptTypes(`class Motion { ${method} };`) + 'return Motion;')(
+    callback => { tick = callback; return 1; }, { now: () => now }, geometry.STARTUP_REVEAL_AT_MS,
+    { setOrCreate: (key, value) => published.push([key, value]) }, { info() {} });
+  const motion = Object.assign(new Motion(), { ready: true, foreground: true, nativeStartupAllowed: false,
+    skyPrepared: false, assemblyElapsed: 0, elapsed: 0, artComplete: false, stopMotion() {}, draw() {} });
+  motion.updateMotion();
+  const advance = () => { now += 100; tick(); };
+  advance();
+  assert.equal(motion.assemblyElapsed, 0);
+  motion.nativeStartupAllowed = true;
+  for (let frame = 0; frame < 100; frame++) advance();
+  assert.equal(motion.assemblyElapsed, geometry.STARTUP_REVEAL_AT_MS);
+  assert.equal(motion.artComplete, false);
+  assert.deepEqual(published, []);
+  motion.skyPrepared = true;
+  advance();
+  assert.equal(motion.artComplete, true);
+  assert.deepEqual(published, [['stellariumStartupArtComplete', true]]);
+  advance();
+  assert.equal(published.length, 1);
+  assert.match(source, /const reveal = this.skyPrepared \? startupReveal\(this.assemblyElapsed\) : 0/);
+});
+
 test('independent drift fills the centre, varies direction and never jumps between frames', () => {
   const target = { x: 500, y: 300 };
   let central = 0;
@@ -126,7 +156,7 @@ test('quiet localized loading caption replaces ellipsis with a small trailing of
   assert.match(root, /translate\(\{ y: 88 \}\)/);
   assert.match(root, /startupLoadingLabel\(I18n.t\('msg_loading'\)\)/);
   assert.match(root, /Watch\('onLanguageChanged'\)/);
-  assert.match(root, /if \(this.nativeAllowed\)/);
+  assert.match(root, /if \(this.nativeAllowed \|\| this.consentVerifiedUi\)/);
 });
 
 test('loading punctuation is removed locally without changing translated words', () => {

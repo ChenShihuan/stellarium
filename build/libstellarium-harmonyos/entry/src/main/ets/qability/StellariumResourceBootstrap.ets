@@ -200,7 +200,14 @@ async function writeRawFileAsync(appContext: common.ApplicationContext, rawPath:
     const content = await appContext.resourceManager.getRawFileContent(rawPath);
     file = await fs.open(temporaryPath, fs.OpenMode.CREATE | fs.OpenMode.TRUNC | fs.OpenMode.WRITE_ONLY);
     const data = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) as ArrayBuffer;
-    await fs.write(file.fd, data);
+    let written = 0;
+    while (written < data.byteLength) {
+      const count = await fs.write(file.fd, data.slice(written));
+      if (count <= 0 || count > data.byteLength - written) {
+        throw new Error('Resource write did not complete');
+      }
+      written += count;
+    }
     await fs.close(file);
     file = undefined;
     await fs.rename(temporaryPath, outputPath);
@@ -244,10 +251,10 @@ function writeMarker(path: string): void {
   }
 }
 
-function refreshTextureCompatibility(
+async function refreshTextureCompatibility(
   appContext: common.ApplicationContext,
   installRoot: string,
-): void {
+): Promise<void> {
   const textureRoot = `${installRoot}/textures`;
   const markerPath = `${textureRoot}/${TEXTURE_COMPAT_MARKER}`;
   if (exists(markerPath)) {
@@ -256,14 +263,14 @@ function refreshTextureCompatibility(
   const startedAt = Date.now();
   hilog.info(LOG_DOMAIN, LOG_TAG, `[startup] refreshing ${TEXTURE_COMPAT_FILES.length} normalized planet textures`);
   for (const name of TEXTURE_COMPAT_FILES) {
-    writeRawFile(appContext, `${RAW_ROOT}/textures/${name}`, `${textureRoot}/${name}`);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/textures/${name}`, `${textureRoot}/${name}`);
   }
   writeMarker(markerPath);
   hilog.info(LOG_DOMAIN, LOG_TAG,
     `[startup] normalized planet textures ready in ${Date.now() - startedAt} ms`);
 }
 
-function refreshObjectTypeTranslations(appContext: common.ApplicationContext, installRoot: string): void {
+async function refreshObjectTypeTranslations(appContext: common.ApplicationContext, installRoot: string): Promise<void> {
   const markerPath = `${installRoot}/data/ohos/.object_type_translations_20260906_v1`;
   const languages: string[] = ['zh_CN', 'zh_HK', 'zh_TW'];
   const paths = languages.map((language: string) => `translations/stellarium/${language}.qm`);
@@ -271,28 +278,28 @@ function refreshObjectTypeTranslations(appContext: common.ApplicationContext, in
     return;
   }
   for (const path of paths) {
-    writeRawFile(appContext, `${RAW_ROOT}/${path}`, `${installRoot}/${path}`);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/${path}`, `${installRoot}/${path}`);
   }
   writeMarker(markerPath);
   hilog.info(LOG_DOMAIN, LOG_TAG, `[startup] object type translations refreshed: ${paths.length}`);
 }
 
-function refreshSkyCultureEditorialResources(appContext: common.ApplicationContext, installRoot: string): void {
+async function refreshSkyCultureEditorialResources(appContext: common.ApplicationContext, installRoot: string): Promise<void> {
   const descriptionDomain = 'translations/stellarium-skycultures-descriptions';
   const paths: Array<string> = [
     'data/skyculture_editorial_context.json',
   ];
-  const cultures = appContext.resourceManager.getRawFileListSync(`${RAW_ROOT}/skycultures`);
+  const cultures = await appContext.resourceManager.getRawFileList(`${RAW_ROOT}/skycultures`);
   for (const culture of cultures) {
     if (!/^[A-Za-z0-9_-]+$/.test(culture)) {
       continue;
     }
-    const files = appContext.resourceManager.getRawFileListSync(`${RAW_ROOT}/skycultures/${culture}`);
+    const files = await appContext.resourceManager.getRawFileList(`${RAW_ROOT}/skycultures/${culture}`);
     if (files.includes('description.md')) {
       paths.push(`skycultures/${culture}/description.md`);
     }
   }
-  const catalogs = appContext.resourceManager.getRawFileListSync(`${RAW_ROOT}/${descriptionDomain}`);
+  const catalogs = await appContext.resourceManager.getRawFileList(`${RAW_ROOT}/${descriptionDomain}`);
   for (const name of catalogs) {
     if (/^[A-Za-z0-9_@-]+\.qm$/.test(name)) {
       paths.push(`${descriptionDomain}/${name}`);
@@ -303,16 +310,16 @@ function refreshSkyCultureEditorialResources(appContext: common.ApplicationConte
     return;
   }
   for (const path of paths) {
-    writeRawFile(appContext, `${RAW_ROOT}/${path}`, `${installRoot}/${path}`);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/${path}`, `${installRoot}/${path}`);
   }
   writeMarker(markerPath);
   hilog.info(LOG_DOMAIN, LOG_TAG, `[startup] sky-culture editorial resources refreshed: ${paths.length}`);
 }
 
-function refreshDetailModelTextures(
+async function refreshDetailModelTextures(
   appContext: common.ApplicationContext,
   installRoot: string,
-): void {
+): Promise<void> {
   const textureRoot = `${installRoot}/textures`;
   const markerPath = `${textureRoot}/${DETAIL_MODEL_TEXTURE_MARKER}`;
   if (exists(markerPath)) {
@@ -322,10 +329,10 @@ function refreshDetailModelTextures(
   hilog.info(LOG_DOMAIN, LOG_TAG,
     `[startup] installing ${DETAIL_MODEL_TEXTURE_FILES.length} CPU-readable detail-model textures`);
   for (const name of DETAIL_MODEL_TEXTURE_FILES) {
-    writeRawFile(appContext, `${RAW_ROOT}/textures/${name}.model.rgba`, `${textureRoot}/${name}.model.rgba`);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/textures/${name}.model.rgba`, `${textureRoot}/${name}.model.rgba`);
   }
   for (const name of DETAIL_MODEL_RING_TEXTURE_FILES) {
-    writeRawFile(appContext, `${RAW_ROOT}/textures/${name}.model.rgba`, `${textureRoot}/${name}.model.rgba`);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/textures/${name}.model.rgba`, `${textureRoot}/${name}.model.rgba`);
   }
   writeMarker(markerPath);
   hilog.info(LOG_DOMAIN, LOG_TAG,
@@ -442,9 +449,9 @@ export async function prepareStellariumResourcesAsync(appContext: common.Applica
     `[startup] asynchronous Stellarium resource extraction completed in ${Date.now() - startedAt} ms`);
 }
 
-function copyDeepSkyIndexes(appContext: common.ApplicationContext, installRoot: string): void {
+async function copyDeepSkyIndexes(appContext: common.ApplicationContext, installRoot: string): Promise<void> {
   for (const name of DEEP_SKY_INDEX_FILES) {
-    writeRawFile(appContext, `${RAW_NEBULAE_ROOT}/${name}`, `${installRoot}/nebulae/default/${name}`);
+    await writeRawFileAsync(appContext, `${RAW_NEBULAE_ROOT}/${name}`, `${installRoot}/nebulae/default/${name}`);
   }
 }
 
@@ -773,7 +780,7 @@ export function scheduleDeepSkyImageExtraction(
   setTimeout(() => { void copyNext(); }, 250);
 }
 
-export function prepareStellariumResources(appContext: common.ApplicationContext): string {
+export async function prepareStellariumResources(appContext: common.ApplicationContext): Promise<string> {
   const installRoot = `${appContext.filesDir}/stellarium`;
   const markerPath = `${installRoot}/${MARKER}`;
   const userDir = `${appContext.filesDir}/stellarium_userdir`;
@@ -849,14 +856,14 @@ export function prepareStellariumResources(appContext: common.ApplicationContext
     throw new Error('Startup resources require asynchronous repair before Qt initialization');
   }
 
-  refreshSkyCultureEditorialResources(appContext, installRoot);
-  refreshObjectTypeTranslations(appContext, installRoot);
+  await refreshSkyCultureEditorialResources(appContext, installRoot);
+  await refreshObjectTypeTranslations(appContext, installRoot);
 
   // HAP updates preserve filesDir. Refresh these small, mandatory records on
   // every start so upgraded installs can browse the restored categories even
   // while the optional image collection is still being installed.
   try {
-    copyDeepSkyIndexes(appContext, installRoot);
+    await copyDeepSkyIndexes(appContext, installRoot);
   } catch (err) {
     hilog.error(LOG_DOMAIN, LOG_TAG, `Failed to refresh deep-sky indexes: ${JSON.stringify(err)}`);
   }
@@ -867,24 +874,24 @@ export function prepareStellariumResources(appContext: common.ApplicationContext
   // an older install passes the extraction marker. In particular Qt aborts if
   // default_cfg.ini is absent when it first creates the user configuration.
   try {
-    writeRawFile(appContext, `${RAW_ROOT}/data/default_cfg.ini`, defaultConfigPath);
-    writeRawFile(appContext, `${RAW_ROOT}/data/ssystem_major.ini`, `${installRoot}/data/ssystem_major.ini`);
-    writeRawFile(appContext, `${RAW_ROOT}/textures/moon.png`, `${installRoot}/textures/moon.png`);
-    writeRawFile(appContext, `${RAW_ROOT}/textures/moon_normals.png`, `${installRoot}/textures/moon_normals.png`);
-    writeRawFile(appContext, `${RAW_ROOT}/textures/moon_horizon.png`, `${installRoot}/textures/moon_horizon.png`);
-    writeRawFile(appContext, `${RAW_ROOT}/translations/stellarium-scripts/zh_CN.qm`, keyQmScripts);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/data/default_cfg.ini`, defaultConfigPath);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/data/ssystem_major.ini`, `${installRoot}/data/ssystem_major.ini`);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/textures/moon.png`, `${installRoot}/textures/moon.png`);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/textures/moon_normals.png`, `${installRoot}/textures/moon_normals.png`);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/textures/moon_horizon.png`, `${installRoot}/textures/moon_horizon.png`);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/translations/stellarium-scripts/zh_CN.qm`, keyQmScripts);
   } catch (err) {
     hilog.error(LOG_DOMAIN, LOG_TAG, `Failed to refresh Moon resources: ${JSON.stringify(err)}`);
   }
 
   try {
-    refreshTextureCompatibility(appContext, installRoot);
+    await refreshTextureCompatibility(appContext, installRoot);
   } catch (err) {
     hilog.error(LOG_DOMAIN, LOG_TAG, `Failed to refresh normalized planet textures: ${JSON.stringify(err)}`);
   }
 
   try {
-    refreshDetailModelTextures(appContext, installRoot);
+    await refreshDetailModelTextures(appContext, installRoot);
   } catch (err) {
     hilog.error(LOG_DOMAIN, LOG_TAG, `Failed to refresh detail-model textures: ${JSON.stringify(err)}`);
   }
@@ -894,7 +901,7 @@ export function prepareStellariumResources(appContext: common.ApplicationContext
   // the one-time copy through ArkUI's file API before Qt starts instead.
   ensureDir(userDir);
   if (!exists(userConfigPath)) {
-    writeRawFile(appContext, `${RAW_ROOT}/data/default_cfg.ini`, userConfigPath);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/data/default_cfg.ini`, userConfigPath);
     hilog.info(LOG_DOMAIN, LOG_TAG, `Created initial user configuration at ${userConfigPath}`);
   }
 
@@ -903,7 +910,7 @@ export function prepareStellariumResources(appContext: common.ApplicationContext
   // primary star catalog empty and consequently disabling constellation and
   // named-star lookup. Create it through ArkUI before Qt initializes.
   if (!exists(userStarsConfigPath)) {
-    writeRawFile(appContext, `${RAW_ROOT}/stars/hip_gaia3/defaultStarsConfig.json`, userStarsConfigPath);
+    await writeRawFileAsync(appContext, `${RAW_ROOT}/stars/hip_gaia3/defaultStarsConfig.json`, userStarsConfigPath);
     hilog.info(LOG_DOMAIN, LOG_TAG, `Created initial star catalog configuration at ${userStarsConfigPath}`);
   }
 

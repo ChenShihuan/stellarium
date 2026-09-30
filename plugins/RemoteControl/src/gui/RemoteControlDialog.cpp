@@ -90,6 +90,9 @@ void RemoteControlDialog::createDialogContent()
 	connect(rc,SIGNAL(flagUsePasswordChanged(bool)),ui->passwordEdit,SLOT(setEnabled(bool)));
 	connect(ui->passwordEdit, SIGNAL(textChanged(QString)), rc, SLOT(setPassword(QString)));
 
+	ui->hostEdit->setText(rc->getHost());
+	connect(ui->hostEdit, SIGNAL(textChanged(QString)), rc, SLOT(setHost(QString)));
+
 	ui->portNumberSpinBox->setValue(rc->getPort());
 	connect(ui->portNumberSpinBox, SIGNAL(valueChanged(int)), rc, SLOT(setPort(int)));
 
@@ -106,6 +109,7 @@ void RemoteControlDialog::createDialogContent()
 	ui->restartPanel->setVisible(false);
 	connect(rc, SIGNAL(flagUsePasswordChanged(bool)), this, SLOT(requiresRestart()));
 	connect(rc, SIGNAL(passwordChanged(QString)), this, SLOT(requiresRestart()));
+	connect(rc, SIGNAL(hostChanged(QString)), this, SLOT(requiresRestart()));
 	connect(rc, SIGNAL(flagEnableCorsChanged(bool)), this, SLOT(requiresRestart()));
 	connect(rc, SIGNAL(corsOriginChanged(QString)), this, SLOT(requiresRestart()));
 	connect(rc, SIGNAL(portChanged(int)), this, SLOT(requiresRestart()));
