@@ -430,6 +430,29 @@ x86_64 模拟器的 UI-only 通道（见 CHANGELOG 2026-09-30 条目）能验证
 但**星图与引擎相关状态全部不可验**（`libstellarium.so`/`libQt6*.so` 无 x86_64 构建，时间面板显示 `--`）。
 因此 store 与面板阶段的验收矩阵必须包含**真机（Mate 80 Pro）复验**，模拟器只作为快速结构回归。
 
+### 修订 6：系统性死代码普查（39 个不可达方法，约 469 行）与"疑似漏接线"清单
+
+Phase 3h/3i 做了两轮死代码清理，方法可复现：本 struct 的方法**全为 `private`**，因此"文件内零引用 = 不可达"。
+对 1,090 个 `private` 方法统计 `this.<name>(`、裸引用 `this.<name>`、字符串 `'<name>'` 三种形式，
+排除框架生命周期方法与两个 `@Watch` 按名调用的方法后，**39 个方法三种引用全为 0**（删除后 −498 行，含空行）。
+可复现命令见 CHANGELOG 2026-09-30 的 Phase 3h/3i 条目。
+
+**需要产品复核的"疑似漏接线"项**（删除不改变行为，但可能掩盖了未接的意图——若本应接线，应作为**功能缺陷**单独处理）：
+
+| 组 | 方法 | 推测的原意 |
+|---|---|---|
+| 陀螺仪（7 个，约 197 行） | `onRotationVectorData`(119) / `gyroForwardFromGravityAndMagnetic` / `gyroSlerpUnitVector` / `alignGyroToMagneticNorth` / `gyroParallelTransportUp` / `calibrateGyroscopeQuaternionUnused` / `gyroEffectiveAzOffset` | 传感器回调未注册 |
+| 对象卡片定位（4 个，约 103 行） | `placeObjectCardAwayFromTarget`(53) / `easeSelectedObjectTo`(36) / `placeSelectedObjectInCompactSafeArea` / `placeSelectedObjectInExpandedSafeArea` | 卡片避让/缓动未接 |
+| 功能入口（4 个） | `pauseScript` / `resumeScript` / `toggleTracking` / `triggerAutoLocate` | 入口未接 |
+| 时间相关（3 个） | `advanceTimeWheel` / `setTimeNow` / `adjustTime` | 被时间轮/快捷行取代 |
+| 其余（21 个） | 抽屉/信息窗几何、`nm`、`tickPercent`、`skyCulture*FilterIndex`、`defaultSkyCultureMakerDraft` 等 | 多为被后续实现取代的旧版本 |
+
+**探查工具（可复用）：** 本轮的"零引用即不可达"判据 + 三形式引用统计，可作为**每个 Phase 4 面板切片的前置自检**，
+先把该面板区域内的死方法清掉，再搬迁，避免把死代码带进新结构。
+
+**教训（已记 CHANGELOG）：** 删除脚本必须特判**单行方法**（`private f(): T { return x }`），
+否则以"下一个 `\n  }\n`"为结束标记会越过边界、连带删除相邻成员；必须由编译器（`arkts_check` + 构建）兜底。
+
 ### 修订 5：时间轮的"交互控制器"留在宿主是刻意取舍，后续按注入式拆分
 
 Phase 3g 把时间转轴/时间轮的**状态与视图**迁出（`TimeWheelStore` + `TimeWheelScrubber`），
