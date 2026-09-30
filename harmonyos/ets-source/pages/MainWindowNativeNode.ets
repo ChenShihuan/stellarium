@@ -49,6 +49,8 @@ import { NightModeStore } from '../state/NightModeStore'
 import { TimeWheelController } from '../state/TimeWheelController'
 import { BookmarkStore } from '../state/BookmarkStore'
 import { BookmarkPanel } from '../panels/BookmarkPanel'
+import { SearchStore } from '../state/SearchStore'
+import { SearchBar } from '../panels/search/SearchBar'
 import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
 import { QuickChipRow } from '../panels/QuickChipRow'
 import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
@@ -106,7 +108,7 @@ export struct WindowNativeNode {
   @State private panelNavigationDepth: number = 0
   private panelNavigationStack: string[] = []
   private lastPanelBackAt: number = 0
-  @State private searchText: string = ''
+  @State private searchStore: SearchStore = new SearchStore()
   @State private selectedName: string = ''
   @State private selectedEnglishName: string = ''
   @State private selectedCatalogId: string = ''
@@ -122,8 +124,7 @@ export struct WindowNativeNode {
   @State private selectedConstellationCultureDescriptionExpanded: boolean = false
   @State private selectedObjectType: string = ''
   @State private selectedTemperatureK: number = 0
-  @State private searchSuggestions: SearchSug[] = []
-  @State private searchHistory: string[] = []
+  private searchHistory: string[] = []
   @State private searchCategory: string = 'planet'
   @State private pendingPluginCatalogId: string = ''
   @State private categoryObjects: NameItem[] = []
@@ -1920,7 +1921,7 @@ export struct WindowNativeNode {
       }
       if (commandName === 'setSearchBrowserPage' || commandName === 'selectSearchCategory') {
         if (!this.panelVisible || this.activePanel !== 'search') this.openPanelFromCli('search')
-        this.searchText = ''
+        this.searchStore.searchText = ''
         const value = String(event['payload'] ?? '').trim()
         if (commandName === 'selectSearchCategory') this.selectSearchFilterCategory(value)
         else this.setSearchFilterPage(value === 'browse' ? '' : value)
@@ -7033,24 +7034,24 @@ export struct WindowNativeNode {
 
   private openGraphTargetPicker(): void {
     this.graphTargetPickerActive = true
-    this.searchText = ''
-    this.searchSuggestions = []
+    this.searchStore.searchText = ''
+    this.searchStore.searchSuggestions = []
     this.loadCategoryObjects('planet')
     this.setPanel('search')
   }
 
   private openRtsTargetPicker(): void {
     this.rtsTargetPickerActive = true
-    this.searchText = ''
-    this.searchSuggestions = []
+    this.searchStore.searchText = ''
+    this.searchStore.searchSuggestions = []
     this.loadCategoryObjects('planet')
     this.setPanel('search')
   }
 
   private openEphemerisTargetPicker(): void {
     this.ephemerisTargetPickerActive = true
-    this.searchText = ''
-    this.searchSuggestions = []
+    this.searchStore.searchText = ''
+    this.searchStore.searchSuggestions = []
     this.loadCategoryObjects('planet')
     this.setPanel('search')
   }
@@ -10683,7 +10684,7 @@ export struct WindowNativeNode {
     if (route.graphMode !== undefined) this.graphMode = route.graphMode
     if (route.layerTab !== undefined) this.viewTab = route.layerTab
     if (route.catalogModuleId !== undefined) {
-      this.searchText = ''
+      this.searchStore.searchText = ''
       this.searchCategory = 'module:' + route.catalogModuleId
       this.loadCategoryObjects(this.searchCategory, route.catalogModuleId)
       this.pendingPluginCatalogId = route.catalogModuleId
@@ -10988,22 +10989,22 @@ private loadPlanetPositions(): void {
       this.searchSuggestionTimer = -1
     }
     if (prefix.length < 1) {
-      this.searchSuggestions = []
+      this.searchStore.searchSuggestions = []
       return
     }
     this.searchSuggestionTimer = setTimeout(() => {
       this.searchSuggestionTimer = -1
-      if (this.searchText.trim() === prefix) this.fetchSuggestions(prefix)
+      if (this.searchStore.searchText.trim() === prefix) this.fetchSuggestions(prefix)
     }, 140)
   }
 
   private fetchSuggestions(prefix: string, languageSerial: number = this.languageRefreshSerial): void {
-    if (prefix.length < 1) { this.searchSuggestions = []; return }
+    if (prefix.length < 1) { this.searchStore.searchSuggestions = []; return }
     // Native matching covers localized names, English names, catalog IDs, and
     // spacing/hyphen variants across every currently loaded object module.
     this.callInteractive('listMatchingObjects', prefix + '|30', (result) => {
       // Only apply if the query prefix is still current (user may have typed more).
-      if (this.searchText.trim() !== prefix || this.languageRefreshSerial !== languageSerial) { return }
+      if (this.searchStore.searchText.trim() !== prefix || this.languageRefreshSerial !== languageSerial) { return }
       const suggestions: SearchSug[] = []
       const seen: Record<string, boolean> = {}
       if (Array.isArray(result.items)) {
@@ -11036,7 +11037,7 @@ private loadPlanetPositions(): void {
       }
       // C++ ranks exact, prefix, and substring matches. Keep that order instead
       // of re-sorting localized display labels in ArkUI.
-      this.searchSuggestions = suggestions.slice(0, 30)
+      this.searchStore.searchSuggestions = suggestions.slice(0, 30)
     })
   }
 
@@ -11769,12 +11770,12 @@ private loadPlanetPositions(): void {
         const selectedCategoryModuleId = this.categoryModuleId
         this.objectCatalogCategories = []
         this.categoryObjects = []
-        this.searchSuggestions = []
+        this.searchStore.searchSuggestions = []
         this.constellationNavigationItems = []
         this.loadObjectCatalogCategories(languageSerial)
         this.loadConstellationNavigation(languageSerial)
         this.loadCategoryObjects(this.searchCategory, selectedCategoryModuleId)
-        const query = this.searchText.trim()
+        const query = this.searchStore.searchText.trim()
         if (query.length > 0) this.fetchSuggestions(query, languageSerial)
       }, 0, 300, 3)
     }, 50)
@@ -18002,57 +18003,6 @@ private loadPlanetPositions(): void {
 
 
   // ── 顶部搜索栏（中等宽度，点击打开搜索面板） ──
-  @Builder
-  centerSearchBar() {
-    Row({ space: 8 }) {
-      Image(getIcon('search', false))
-        .width(18).height(18).fillColor('#7FB3DC')
-      TextInput({ text: this.searchText, placeholder: I18n.t('i0063') })
-        .fontSize(14)
-        .fontColor('#E5FFFFFF')
-        .placeholderColor('#8099BBCC')
-        .placeholderFont({ size: 14 })
-        .layoutWeight(1)
-        .maxLines(1)
-        .caretStyle({ color: '#5B93BF' })
-        .borderColor(Color.Transparent)
-        .backgroundColor(Color.Transparent)
-        .onChange((value: string) => {
-          this.searchText = value
-          this.scheduleSuggestions(value.trim())
-        })
-        .onFocus(() => {
-          // Keep result candidates above the software keyboard on phones.
-          // The user can still drag the sheet back to the 6/10 snap point.
-          if (!this.isExpandedLayout && !this.isFoldHoverLayout && this.compactPanelSnapRatio < 0.9) {
-            this.getUIContext().animateTo({ duration: 260, curve: curves.springMotion(0.48, 0.90) }, () => {
-              this.compactPanelSnapRatio = 0.9
-              this.compactPanelDragOffsetY = 0
-            })
-            this.scheduleSelectedObjectForUiChange(300)
-          }
-        })
-        .onSubmit(() => {
-          if (this.searchText.length > 0) {
-            if (this.searchSuggestionTimer >= 0) {
-              clearTimeout(this.searchSuggestionTimer)
-              this.searchSuggestionTimer = -1
-            }
-            this.searchObject(this.searchText)
-            this.searchSuggestions = []
-          }
-        })
-    }
-    .width('100%')
-    .height(44)
-    .padding({ left: 16, right: 16 })
-    .backgroundColor('rgba(12, 16, 28, 0.72)')
-    .backdropBlur(35)
-    .border({ width: 0.5, color: 'rgba(91, 147, 191, 0.18)' })
-    .borderRadius(UI_RADIUS_PANEL)
-      .shadow({ radius: 16, color: 'rgba(0,0,0,0.25)', offsetX: 0, offsetY: 6 })
-  }
-
   private bottomCardX(): number {
     const base = this.baseBottomCardX()
     return base + this.clampedObjectCardOffsetX(base, this.bottomCardWidth())
@@ -22716,22 +22666,45 @@ private loadPlanetPositions(): void {
     } else if (this.activePanel === 'search') {
       Scroll(this.searchPanelScroller) {
         Column({ space: 0 }) {
-      Column() { this.centerSearchBar() }
+      Column() {
+        SearchBar({
+          store: this.searchStore,
+          onInput: (value: string) => { this.scheduleSuggestions(value.trim()) },
+          onSubmit: (text: string) => {
+            if (this.searchSuggestionTimer >= 0) {
+              clearTimeout(this.searchSuggestionTimer)
+              this.searchSuggestionTimer = -1
+            }
+            this.searchObject(text)
+            this.searchStore.searchSuggestions = []
+          },
+          onInputFocus: () => {
+            // 手机上把候选结果留在软键盘之上；用户仍可把面板拖回 6/10 吸附点。
+            if (!this.isExpandedLayout && !this.isFoldHoverLayout && this.compactPanelSnapRatio < 0.9) {
+              this.getUIContext().animateTo({ duration: 260, curve: curves.springMotion(0.48, 0.90) }, () => {
+                this.compactPanelSnapRatio = 0.9
+                this.compactPanelDragOffsetY = 0
+              })
+              this.scheduleSelectedObjectForUiChange(300)
+            }
+          }
+        })
+      }
         .width('100%')
         .padding({ left: 2, right: 2 })
         .margin({ top: 2, bottom: 12 })
       if (this.searchFilterPage.length > 0) {
         this.searchFilterMenu()
-      } else if (this.searchText.trim().length > 0) {
+      } else if (this.searchStore.searchText.trim().length > 0) {
         Column({ space: 4 }) {
           Row() {
             Text(I18n.t('loc_search_results')).fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
-            Text(this.searchSuggestions.length > 0 ? I18n.format('search_candidate_count', [this.searchSuggestions.length.toString()]) : I18n.t('search_no_candidates'))
+            Text(this.searchStore.searchSuggestions.length > 0 ? I18n.format('search_candidate_count', [this.searchStore.searchSuggestions.length.toString()]) : I18n.t('search_no_candidates'))
               .fontSize(10).fontColor(this.nmSub())
           }.width('100%').padding({ left: 4, right: 4 })
           Scroll() {
             Column({ space: 4 }) {
-              ForEach(this.searchSuggestions, (item: SearchSug) => {
+              ForEach(this.searchStore.searchSuggestions, (item: SearchSug) => {
                 Row() {
                   Image(getIcon('search', false)).width(16).height(16).fillColor('#7FB3DC').margin({ right: 10 })
                   Column({ space: 1 }) {
@@ -22746,11 +22719,11 @@ private loadPlanetPositions(): void {
                   .clickEffect({ level: ClickEffectLevel.LIGHT })
                   .onClick(() => this.selectSearchSuggestion(item))
               }, (item: SearchSug) => item.selection ?? item.en)
-              if (this.searchSuggestions.length === 0) {
+              if (this.searchStore.searchSuggestions.length === 0) {
                 Text(I18n.t('search_no_match_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 4, top: 8, bottom: 8 })
               }
             }.width('100%')
-          }.width('100%').height(this.searchSuggestions.length > 0 ? 216 : 48).scrollable(ScrollDirection.Vertical).scrollBar(BarState.Auto)
+          }.width('100%').height(this.searchStore.searchSuggestions.length > 0 ? 216 : 48).scrollable(ScrollDirection.Vertical).scrollBar(BarState.Auto)
         }
           .width('100%').padding(8).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
       } else {
