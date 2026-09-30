@@ -2,7 +2,7 @@
 
 - **新增文件：** `state/TimeWheelStore.ets`（11 个原 `@State` 字段 + `timeWheelTrackBaseMs` + 两个刻度常量 + 纯计算方法：`majorInterval` / `isCalendar` / `shiftDate` / `dateAtOffset` / `dateAtFraction` / `tickValue` / `tickLabel` / `refreshTicks` / `visibleTickOffset` / `isVisibleMajorTick`）、`panels/time/TimeWheelScrubber.ets`（字段行 6 个按钮 + 刻度条 + 触摸层；刻度几何 `tickDistance/visibleTickLabel/tickScale/tickOpacity/tickBlur/tickHeight` 内联为组件私有方法）。
 - **修改文件：** `pages/MainWindowNativeNode.ets` —— 11 个 `@State` 合并为 `@State private timeWheelStore`；两个 `readonly` 刻度常量与 `timeWheelTrackBaseMs` 字段移入 store；**88 处引用**改写为 `this.timeWheelStore.*`（含 `tickSpacing` / `centerTick`）；搬出 9 个纯计算方法与 7 个 builder（`timeScrubberSlider` + 6 个字段 builder）；调用点换成 `TimeWheelScrubber({ store, onSelectUnit, onWheelTouch })`；顺带删除**无调用者**的 `timeWheelCurrentLabel()`。
-- **边界取舍（关键，保证行为路径零改写）：** store 只放"数据 + 纯计算"；**手势拖动、惯性、过渡、轨道重基准、引擎推送（`handleTimeWheelTouch` / `startTimeWheelInertia` / `startTimeWheelTransition` / `rebaseTimeWheelTrack*` / `applyTimeWheelDate` / `syncTimeWheelFromSimulation` / `selectTimeWheelUnit` 等约 400 行逻辑与它们的定时器/普通字段）全部留在宿主**，只把字段引用改为 store。这样这次迁移**没有重写任何一条交互逻辑**，只是状态归属与视图位置改变。
+- **边界取舍（关键，保证行为路径零改写）：** store 只放"数据 + 纯计算"；**手势拖动、惯性、过渡、轨道重基准、引擎推送共 13 个方法（约 228 行，位置 `pages/MainWindowNativeNode.ets` L11910–L12149）+ 16 个手势草稿字段与 2 个定时器（L324–L339）全部留在宿主**，只把字段引用改为 store。这样这次迁移**没有重写任何一条交互逻辑**，只是状态归属与视图位置改变。（初版本条写为"约 400 行"，实测为 228 行方法体 + 字段，已更正。）
 - **第四次命中同名冲突：** `onTouch` 与 `CustomComponent` 内置属性方法冲突（编译报 `Property 'onTouch' ... is not assignable to the same property in base type 'CustomComponent'`），改名 `onWheelTouch`。累记：`borderColor`、`scale`、`onTouch` 均不可作组件成员名。
 - **真机调试（`192.168.3.95:40565`，全部通过）：**
   1. 渲染：字段行与刻度条节点坐标与迁移前**逐像素一致**（`2026 / 09月 / 30日 / 22: / 53: / 03`，刻度 `19时…01时`）。
