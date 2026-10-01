@@ -3,7 +3,7 @@
 - **新增 `panels/astro/WutTargetCard.ets`**：`wutTargetCard(target)`（21 行）+ 它依赖的参数化 `wutMetric(label, value)`（6 行）→ `WutTargetCard` 与 `WutMetric` 两个组件。卡片只收 `@Prop target: WutTarget`，标题/副标题/类型名/数值/时刻文本仍由宿主格式化并以回调注入（`titleOf` / `subtitleOf` / `typeOf` / `numberText` / `clockText`），另有夜视三色与 `onJump`，共 9 个入参；贴片组件 4 个入参。
 - **已知的微小显示差异（如实记录）：** 类型缺失时不再补破折号（改走 `zhType('')`），其余布局/文案逐字保留。
 - **单体行数：** 28,262 → **28,239**（−23）。
-- **验证：** 构建 / 契约校验（86 个 .ets）/ 全量切片脚本（仅剩 §13.6 的 6 个环境类）。
+- **验证：** 构建 / 契约校验（86 个 .ets）/ 全量切片脚本（仅剩 §13.6 的 6 个环境类）。**（补记）** 该片的 store 迁移由 `test-ohos-astro-motion`（9 条，含以假宿主驱动 `selectAstroFilter` 校验 wut 字段读写路径）覆盖；真机侧只做了启动与面板导航冒烟，未触发 WUT 计算。
 - **踩坑（第三次同类）：** 用 `@(-1, )` 组装"删除区间"在 PowerShell 里**间歇性失败**（`` 被提升为数组 → 区间为空 → 旧 builder 未删成死代码，而构建仍成功、不报错）。**硬做法：删除永远走"`[regex]::Escape(签名)` + `@Builder` 前缀 + 非贪婪到 `\\n  }`"的正则**，不要用行号算术。
 ## [2026-10-01] DevEco Code - Phase 3ag：会话延续块组件化（ContinuationSection）
 
