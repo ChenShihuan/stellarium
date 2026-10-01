@@ -75,14 +75,15 @@ import { WutTargetCard } from '../panels/astro/WutTargetCard'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
-import { ObjectDetailActionsTab } from '../panels/object/ObjectDetailActionsTab'
+import { UnifiedObjectDetailCard } from '../panels/object/UnifiedObjectDetailCard'
 import { ObjectDataTile, ObjectMetric, ObjectScheduleTile, ObjectDetailTab, ObjectCompactMetric } from '../panels/object/DetailTiles'
 import { ObjectDistanceNotice, SelectedLiveInfoRows, SelectedCoordinateRow, SelectedCoordinateRows } from '../panels/object/DetailLiveRows'
 import { StructuredDetailRows } from '../panels/object/StructuredDetailRows'
 import { SatellitePassDetails } from '../panels/object/SatellitePassDetails'
-import { ObjectDetailObserveTab, ObjectDetailCoordinateTab, ObjectDetailDataTab } from '../panels/object/ObjectDetailTabs'
 import { TabletInspectorMediaGroup } from '../panels/object/TabletInspectorMediaGroup'
-import { ObjectDetailCardHeader, ObjectDetailCardTabs } from '../panels/object/ObjectDetailCardChrome'
+import { PanelHeader } from '../panels/shell/PanelHeader'
+import { DockButton } from '../panels/shell/DockButton'
+import { HubActionList } from '../panels/shell/HubActionList'
 import { ConstellationCultureView } from '../panels/object/ConstellationCultureView'
 import { SkyCultureDescriptionBlockView } from '../panels/skyculture/SkyCultureDescriptionBlockView'
 import { SkyCultureMakerTabs } from '../panels/skyculture/SkyCultureMakerTabs'
@@ -16322,7 +16323,41 @@ private loadPlanetPositions(): void {
           endY: this.objectDetailConnectorEndY,
           markerSize: this.objectDetailMarkerSize()
         })
-        Stack() { this.unifiedObjectDetailCard() }
+        Stack() {
+          UnifiedObjectDetailCard({
+            store: this.objectDetailStore, mediaStore: this.objectMediaStore, scroller: this.objectDetailScroller,
+            activeIndex: this.bottomCardIndex, liveInfoVisible: this.selectedLiveInfoVisible(),
+            contentOpacity: this.objectDetailContentOpacity, contentTranslateX: this.objectDetailContentTranslateX,
+            cardWidth: this.bottomCardWidth(), cardHeight: this.bottomCardHeight(),
+            viewLock: this.viewLock, speechStatus: this.speechStatus,
+            inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+            iconName: this.objectInspectorIcon(), distanceText: this.objectDistanceNoticeText(),
+            distanceSummaryText: this.objectDistanceSummary(),
+            imageHeight: this.objectInspectorImageHeight(), inlineModelSize: this.objectInspectorInlineModelSize(),
+            modelReady: this.objectInspectorModelReady(), modelRendering: this.objectInspectorModelRendering,
+            hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+            modelNotice: this.objectInspectorModelNotice(), warmupText: this.objectInspectorMediaWarmupText(),
+            fallbackKind: this.objectInspectorFallbackVisualKind(), starColor: this.objectInspectorStarColor(),
+            satelliteVisible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(),
+            accent: this.nmAccent(), cultureVisible: this.selectedObjectIsConstellation(), textColor: this.nmText(),
+            resolve: (key: string) => this.selectedDisplayValue(key),
+            nameOf: (name: string) => this.zhNameOf(name), typeOf: (type: string) => this.zhType(type),
+            onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
+            onDismiss: () => { this.dismissObjectInspector() },
+            onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
+            onLoadPasses: () => { this.loadSelectedSatellitePasses() },
+            onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
+            onMediaRetry: () => { this.retryObjectInspectorMedia() },
+            onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+            onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+            onCenter: () => { this.moveToSelectedObject() },
+            onToggleLock: () => { this.toggleViewLock() },
+            onToggleObserving: () => { this.toggleSelectedObservingList() },
+            onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
+            onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
+            onSpeak: () => { this.speakSelectedObject() }
+          })
+        }
           .position({ x: this.detailCardX(), y: this.detailCardY() })
           .width(this.detailCardWidth())
           .height(this.detailCardHeight())
@@ -16424,7 +16459,41 @@ private loadPlanetPositions(): void {
           endY: this.objectDetailConnectorEndY,
           markerSize: this.objectDetailMarkerSize()
         })
-        Stack() { this.unifiedObjectDetailCard() }
+        Stack() {
+          UnifiedObjectDetailCard({
+            store: this.objectDetailStore, mediaStore: this.objectMediaStore, scroller: this.objectDetailScroller,
+            activeIndex: this.bottomCardIndex, liveInfoVisible: this.selectedLiveInfoVisible(),
+            contentOpacity: this.objectDetailContentOpacity, contentTranslateX: this.objectDetailContentTranslateX,
+            cardWidth: this.bottomCardWidth(), cardHeight: this.bottomCardHeight(),
+            viewLock: this.viewLock, speechStatus: this.speechStatus,
+            inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+            iconName: this.objectInspectorIcon(), distanceText: this.objectDistanceNoticeText(),
+            distanceSummaryText: this.objectDistanceSummary(),
+            imageHeight: this.objectInspectorImageHeight(), inlineModelSize: this.objectInspectorInlineModelSize(),
+            modelReady: this.objectInspectorModelReady(), modelRendering: this.objectInspectorModelRendering,
+            hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+            modelNotice: this.objectInspectorModelNotice(), warmupText: this.objectInspectorMediaWarmupText(),
+            fallbackKind: this.objectInspectorFallbackVisualKind(), starColor: this.objectInspectorStarColor(),
+            satelliteVisible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(),
+            accent: this.nmAccent(), cultureVisible: this.selectedObjectIsConstellation(), textColor: this.nmText(),
+            resolve: (key: string) => this.selectedDisplayValue(key),
+            nameOf: (name: string) => this.zhNameOf(name), typeOf: (type: string) => this.zhType(type),
+            onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
+            onDismiss: () => { this.dismissObjectInspector() },
+            onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
+            onLoadPasses: () => { this.loadSelectedSatellitePasses() },
+            onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
+            onMediaRetry: () => { this.retryObjectInspectorMedia() },
+            onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+            onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+            onCenter: () => { this.moveToSelectedObject() },
+            onToggleLock: () => { this.toggleViewLock() },
+            onToggleObserving: () => { this.toggleSelectedObservingList() },
+            onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
+            onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
+            onSpeak: () => { this.speakSelectedObject() }
+          })
+        }
           .position({ x: this.detailCardX(), y: this.detailCardY() })
           .width(this.detailCardWidth())
           .height(this.detailCardHeight())
@@ -16520,7 +16589,41 @@ private loadPlanetPositions(): void {
           endY: this.objectDetailConnectorEndY,
           markerSize: this.objectDetailMarkerSize()
         })
-        Stack() { this.unifiedObjectDetailCard() }
+        Stack() {
+          UnifiedObjectDetailCard({
+            store: this.objectDetailStore, mediaStore: this.objectMediaStore, scroller: this.objectDetailScroller,
+            activeIndex: this.bottomCardIndex, liveInfoVisible: this.selectedLiveInfoVisible(),
+            contentOpacity: this.objectDetailContentOpacity, contentTranslateX: this.objectDetailContentTranslateX,
+            cardWidth: this.bottomCardWidth(), cardHeight: this.bottomCardHeight(),
+            viewLock: this.viewLock, speechStatus: this.speechStatus,
+            inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+            iconName: this.objectInspectorIcon(), distanceText: this.objectDistanceNoticeText(),
+            distanceSummaryText: this.objectDistanceSummary(),
+            imageHeight: this.objectInspectorImageHeight(), inlineModelSize: this.objectInspectorInlineModelSize(),
+            modelReady: this.objectInspectorModelReady(), modelRendering: this.objectInspectorModelRendering,
+            hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+            modelNotice: this.objectInspectorModelNotice(), warmupText: this.objectInspectorMediaWarmupText(),
+            fallbackKind: this.objectInspectorFallbackVisualKind(), starColor: this.objectInspectorStarColor(),
+            satelliteVisible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(),
+            accent: this.nmAccent(), cultureVisible: this.selectedObjectIsConstellation(), textColor: this.nmText(),
+            resolve: (key: string) => this.selectedDisplayValue(key),
+            nameOf: (name: string) => this.zhNameOf(name), typeOf: (type: string) => this.zhType(type),
+            onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
+            onDismiss: () => { this.dismissObjectInspector() },
+            onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
+            onLoadPasses: () => { this.loadSelectedSatellitePasses() },
+            onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
+            onMediaRetry: () => { this.retryObjectInspectorMedia() },
+            onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+            onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+            onCenter: () => { this.moveToSelectedObject() },
+            onToggleLock: () => { this.toggleViewLock() },
+            onToggleObserving: () => { this.toggleSelectedObservingList() },
+            onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
+            onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
+            onSpeak: () => { this.speakSelectedObject() }
+          })
+        }
           .position({ x: this.detailCardX(), y: this.detailCardY() })
           .width(this.detailCardWidth())
           .height(this.detailCardHeight())
@@ -17238,83 +17341,6 @@ private loadPlanetPositions(): void {
 
   private morePanelActive(): boolean {
     return this.activePanel === 'more' && this.panelVisible
-  }
-
-  // ── 天体检查器：把实时观测、坐标和完整资料分开呈现，避免字段堆成数据清单。 ──
-  @Builder
-  unifiedObjectDetailCard() {
-    Column() {
-ObjectDetailCardHeader({
-  store: this.objectDetailStore, iconName: this.objectInspectorIcon(), liveInfoVisible: this.selectedLiveInfoVisible(),
-  resolve: (key: string) => this.selectedDisplayValue(key), distanceSummary: () => this.objectDistanceSummary(),
-  nameOf: (name: string) => this.zhNameOf(name), typeOf: (type: string) => this.zhType(type),
-  onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) }, onDismiss: () => { this.dismissObjectInspector() }
-})
-
-ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: number) => { this.selectObjectDetailTab(index) } })
-
-      Divider().color('rgba(91,147,191,0.16)').margin({ left: 16, right: 16 })
-
-      Scroll(this.objectDetailScroller) {
-        Column({ space: 8 }) {
-          if (this.bottomCardIndex === 0) {
-            ObjectDetailObserveTab({ store: this.objectDetailStore, distanceText: this.objectDistanceNoticeText(), resolve: (key: string) => this.selectedDisplayValue(key) })
-          } else if (this.bottomCardIndex === 1) {
-            ObjectDetailCoordinateTab({ store: this.objectDetailStore, distanceText: this.objectDistanceNoticeText(), resolve: (key: string) => this.selectedDisplayValue(key) })
-          } else if (this.bottomCardIndex === 2) {
-            ObjectDetailDataTab({
-              store: this.objectDetailStore, mediaStore: this.objectMediaStore, tablet: false, distanceText: this.objectDistanceNoticeText(),
-              iconName: this.objectInspectorIcon(), imageHeight: this.objectInspectorImageHeight(), inlineModelSize: this.objectInspectorInlineModelSize(),
-              modelReady: this.objectInspectorModelReady(), modelRendering: this.objectInspectorModelRendering, hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-              modelNotice: this.objectInspectorModelNotice(), warmupText: this.objectInspectorMediaWarmupText(), fallbackKind: this.objectInspectorFallbackVisualKind(), starColor: this.objectInspectorStarColor(),
-              satelliteVisible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(),
-              cultureVisible: this.selectedObjectIsConstellation(), textColor: this.nmText(),
-              resolve: (key: string) => this.selectedDisplayValue(key),
-              onLoadPasses: () => { this.loadSelectedSatellitePasses() }, onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
-              onMediaRetry: () => { this.retryObjectInspectorMedia() }, onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-              onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
-            })
-          } else {
-            ObjectDetailActionsTab({
-              viewLock: this.viewLock,
-              speechStatus: this.speechStatus,
-              inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
-              onCenter: () => { this.moveToSelectedObject() },
-              onToggleLock: () => { this.toggleViewLock() },
-              onToggleObserving: () => { this.toggleSelectedObservingList() },
-              onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
-              onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
-              onSpeak: () => { this.speakSelectedObject() }
-            })
-          }
-        }
-          .width('100%').padding({ left: 16, right: 16, top: 10, bottom: 10 })
-      }
-        .scrollable(ScrollDirection.Vertical)
-        .scrollBar(BarState.Auto)
-        .width('100%')
-        .layoutWeight(1)
-        .opacity(this.objectDetailContentOpacity)
-        .translate({ x: this.objectDetailContentTranslateX, y: 0 })
-        .id('object-detail-content-scroll')
-        .onScroll(() => {
-          AppStorage.setOrCreate('stellariumObjectDetailScrollY', this.objectDetailScroller.currentOffset()?.yOffset ?? 0)
-        })
-        .onAreaChange((_oldArea: Area, newArea: Area) => {
-          const height = Number(newArea.height)
-          if (Number.isFinite(height) && height > 0 && Math.abs(height - this.objectMediaStore.objectInspectorMediaViewportHeight) > 1) {
-            this.objectMediaStore.objectInspectorMediaViewportHeight = height
-          }
-        })
-
-    }
-    .width(this.bottomCardWidth())
-    .height(this.bottomCardHeight())
-    .backgroundColor('rgba(12, 16, 28, 0.72)')
-    .backdropBlur(28)
-    .border({ width: 0.5, color: 'rgba(91, 147, 191, 0.18)' })
-    .borderRadius(UI_RADIUS_PANEL)
-    .shadow({ radius: 20, color: 'rgba(0,0,0,0.30)', offsetX: 0, offsetY: 8 })
   }
 
   // Pad 端的详情保持为左侧检查器。它不接管星图，也不会随着实时数据刷新
@@ -18470,7 +18496,14 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
     Row() {
       // 所有屏幕统一使用五个入口；手机仅改变面板的呈现方式，不改变动作集合。
       ForEach(this.canonicalDockActions(), (item: ShellAction) => {
-        this.dockButton(item)
+        DockButton({
+          icon: item.icon, label: item.label, active: this.dockActionActive(item),
+          iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
+          labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
+          itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
+          onTouchEvent: (event: TouchEvent) => { this.handleDockTouch(event) },
+          onTap: () => { this.activateDockAction(item) }
+        })
       }, (item: ShellAction) => item.panel + '/' + this.languageRevision.toString())
     }
       .height(this.isExpandedLayout ? 48 : 66)
@@ -19143,46 +19176,17 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
     }
 
   @Builder
-  dockButton(item: ShellAction) {
-    Column() {
-      Image(getIcon(item.icon, this.dockActionActive(item)))
-        .width(this.isExpandedLayout ? 22 : this.compactDockIconSize())
-        .height(this.isExpandedLayout ? 22 : this.compactDockIconSize())
-        .objectFit(ImageFit.Contain)
-        .fillColor(this.dockActionActive(item) ? '#70C8FF' : '#E5FFFFFF')
-        .opacity(this.dockActionActive(item) ? 1 : 0.78)
-      Text(item.label)
-        .fontSize(this.isExpandedLayout ? 10 : this.compactDockLabelFontSize())
-        .fontColor(this.dockActionActive(item) ? '#70C8FF' : '#99FFFFFF')
-        .margin({ top: 2 })
-    }
-      .layoutWeight(1)
-      .height(this.isExpandedLayout ? 44 : this.compactDockItemHeight())
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
-      .backgroundColor(Color.Transparent)
-      .borderRadius(UI_RADIUS_CONTROL)
-      .scale({ x: 1.0, y: 1.0 })
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .onTouch((event: TouchEvent) => { this.handleDockTouch(event) })
-      .stateStyles({
-        pressed: {
-          .scale({ x: 0.92, y: 0.92 })
-          .backgroundColor('rgba(255, 255, 255, 0.10)')
-        }
-      })
-      .animation({ duration: 300, curve: curves.springMotion(0.46, 0.86) })
-      .onClick(() => { this.activateDockAction(item) })
-      // 手势由原生组件处理，避免与天空触摸层冲突
-  }
-
-  @Builder
   floatingPanel() {
     Column() {
       if (this.isExpandedLayout) {
         this.padPanelHandle()
       }
-      this.panelHeader()
+      PanelHeader({
+        title: this.panelTitle(), subtitle: this.panelSubtitle(), canGoBack: this.canGoBackPanel(),
+        routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
+        onBack: () => { this.handlePanelBackTap() },
+        onClose: () => { this.closePanel(true); this.resetPanelIdle() }
+      })
       Scroll(this.widePanelScroller) {
         Column() {
           Column() {
@@ -19273,7 +19277,12 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   compactPanel() {
     Column() {
       this.panelHandle()
-      this.panelHeader()
+      PanelHeader({
+        title: this.panelTitle(), subtitle: this.panelSubtitle(), canGoBack: this.canGoBackPanel(),
+        routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
+        onBack: () => { this.handlePanelBackTap() },
+        onClose: () => { this.closePanel(true); this.resetPanelIdle() }
+      })
       Scroll(this.compactPanelScroller) {
         Column() {
           Column() {
@@ -19334,77 +19343,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             this.settleCompactPanelDrag()
           })
       )
-  }
-
-  @Builder
-  panelHeader() {
-    Row() {
-      if (this.canGoBackPanel()) {
-        Button() {
-          Image(getIcon('back', false)).width(17).height(17).fillColor('#D9F1FF')
-        }
-          .id('panel-back')
-          .width(44)
-          .height(44)
-          .padding(0)
-          .borderRadius(0)
-          .backgroundColor(Color.Transparent)
-          .clickEffect({ level: ClickEffectLevel.LIGHT })
-          .zIndex(3)
-          .stateStyles({ pressed: { .opacity(0.62) } })
-          .transition(TransitionEffect.asymmetric(
-            TransitionEffect.OPACITY.animation({ duration: 130, curve: Curve.EaseOut })
-              .combine(TransitionEffect.translate({ x: -10, y: 0 }).animation({ duration: 180, curve: curves.springMotion(0.42, 0.86) })),
-            TransitionEffect.OPACITY.animation({ duration: 100, curve: Curve.EaseIn })
-          ))
-          .onClick(() => { this.handlePanelBackTap() })
-          .margin({ right: 8 })
-      }
-      Column() {
-        Text(this.panelTitle())
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#E5FFFFFF')
-        if (this.panelSubtitle().length > 0) {
-          Text(this.panelSubtitle())
-            .fontSize(14)
-            .fontColor('#99FFFFFF')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ top: 4 })
-        }
-      }
-        .height(this.panelSubtitle().length > 0 ? 56 : 44)
-        .justifyContent(FlexAlign.Center)
-        .opacity(this.panelRouteOpacity)
-        .translate({ x: this.panelRouteOffsetX, y: 0 })
-      Blank()
-      Button() {
-        Image($r('app.media.ic_close'))
-          .width(18)
-          .height(18)
-          .fillColor('#E5FFFFFF')
-      }
-      .id('panel-close')
-      .width(36)
-      .height(36)
-      .padding(0)
-      .borderRadius(UI_RADIUS_PILL)
-      .backgroundColor('rgba(255, 255, 255, 0.06)')
-      .zIndex(10)
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .onClick(() => {
-        this.closePanel(true)
-        this.resetPanelIdle()
-      })
-      .margin({ right: 6 })
-    }
-      .width('100%')
-      .height(this.panelSubtitle().length > 0 ? 56 : 44)
-      .alignItems(VerticalAlign.Center)
-      .margin({ bottom: 14 })
-      .zIndex(4)
-      .animation({ duration: 180, curve: curves.springMotion(0.42, 0.86) })
   }
 
   @Builder
@@ -19478,45 +19416,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   }
 
   @Builder
-  hubActionList(actions: ShellAction[], description: ResourceStr) {
-    Column({ space: 7 }) {
-      Text(description)
-        .fontSize(11)
-        .lineHeight(16)
-        .fontColor(this.nmSub())
-        .width('100%')
-        .padding({ left: 4, right: 4, bottom: 4 })
-      ForEach(actions, (item: ShellAction) => {
-        Button() {
-          Row({ space: 12 }) {
-            Stack() {
-              Circle().width(38).height(38).fill('rgba(91, 147, 191, 0.20)')
-              Image(getIcon(item.icon, false)).width(21).height(21).fillColor('#B8E4FF')
-            }.width(38).height(38)
-            Text(item.label)
-              .fontSize(15).fontWeight(FontWeight.Medium).fontColor('#EAF7FF')
-              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-            Image(getIcon('chevron_right', false)).width(19).height(19).fillColor('rgba(184, 228, 255, 0.72)')
-          }
-            .width('100%').height('100%').padding({ left: 12, right: 12 })
-        }
-          .id('hub-action-' + item.panel)
-          .width('100%').height(58).padding(0)
-          .backgroundColor('rgba(255, 255, 255, 0.045)')
-          .border({ width: 0.5, color: 'rgba(147, 215, 255, 0.10)' })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .clickEffect({ level: ClickEffectLevel.LIGHT })
-          .stateStyles({ pressed: { .scale({ x: 0.98, y: 0.98 }).backgroundColor('rgba(91, 147, 191, 0.20)') } })
-          .animation({ duration: 180, curve: Curve.EaseOut })
-          .onClick(() => { this.openSubPanel(item.panel) })
-      }, (item: ShellAction) => item.icon + '/' + item.panel + '/' + this.languageRevision.toString())
-    }
-      .width('100%')
-      .padding({ bottom: 12 })
-      .hitTestBehavior(HitTestMode.Default)
-  }
-
-  @Builder
   panelContent() {
     if (this.activePanel === 'more') {
       Column({ space: 6 }) {
@@ -19582,11 +19481,23 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         .width('100%')
         .padding({ bottom: 12 })
     } else if (this.activePanel === 'observeHub') {
-      this.hubActionList(this.observingHubActions(), I18n.t('more_workspace_observing_desc'))
+      HubActionList({
+        actions: this.observingHubActions(), description: I18n.t('more_workspace_observing_desc'),
+        subColor: this.nmSub(), languageRevision: this.languageRevision,
+        onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
+      })
     } else if (this.activePanel === 'dataHub') {
-      this.hubActionList(this.skyDataHubActions(), I18n.t('more_sky_data_desc'))
+      HubActionList({
+        actions: this.skyDataHubActions(), description: I18n.t('more_sky_data_desc'),
+        subColor: this.nmSub(), languageRevision: this.languageRevision,
+        onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
+      })
     } else if (this.activePanel === 'automationHub') {
-      this.hubActionList(this.automationHubActions(), I18n.t('more_automation_desc'))
+      HubActionList({
+        actions: this.automationHubActions(), description: I18n.t('more_automation_desc'),
+        subColor: this.nmSub(), languageRevision: this.languageRevision,
+        onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
+      })
     } else if (this.activePanel === 'object') {
       if (this.objectDetailStore.selectedName.length === 0) {
         Column() {
