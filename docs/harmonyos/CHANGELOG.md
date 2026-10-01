@@ -1,3 +1,9 @@
+## [2026-10-01] DevEco Code - Phase 3af：astro 域起步 —— 选择提示与现象关系标记组件化
+
+- **新增 `panels/astro/AstroGuides.ets`**：`astroSelectionGuide()`（15 行）→ `AstroSelectionGuide`（入参 `visible` + 夜视三色 + `onOpenPicker` 回调），参数化 `phenomenonRelationMark(type)`（29 行）→ `PhenomenonRelationMark`（**纯映射**，只收 `@Prop type`，不依赖 store/回调）。
+- **单体行数：** 28,338 → **28,293**（−45）。
+- **验证：** 构建 / 契约校验 / 全量切片脚本（仅剩 §13.6 的 6 个环境类）。
+- **踩坑（新增，已加硬做法）：** ①**命令行内联中文会被代码页改写** —— 用它生成的新文件注释会变成乱码（本轮 `AstroGuides` 因此曾报 `Declaration or statement expected`）；新建文件的中文表头**必须用 write 工具写成临时文件再拼入**。②脚本拼装 `build()` 包装时**必须核对容器开括号** —— 本轮 `PhenomenonRelationMark` 的 `Column({ space: 0 })` 漏了 ` {`，造成文件尾 `声明或语句缺失`（行号指向文件末而非出事行，需按"结尾报错=括号不平衡"定位）。③改参数化 builder 为组件时，**裸标识符（如 `type`）也要改写成 `this.type`**，只改 `this.xxx` 会漏。
 ## [2026-10-01] DevEco Code - Phase 3ae：sensor 域起步 —— GyroStore + 陀螺仪校准面板组件化
 
 - **新增 `state/GyroStore.ets`**：13 个 gyro/gyroscope 字段（`gyroGuideVisible/Angle/X/Y`、`gyroscopeEnabled/Status/SensitivityText`、`gyroCalibPanelOpen`、`gyroCompassText/Angle`、`gyroOffsetAz/Alt`、`gyroCompassAzAlignment`）整体迁入（123 处引用改写；宿主字段声明合并为 `@State private gyroStore`）。**迁入不改变刷新语义**：这些字段本就以宿主 `@State` 承载（含传感器事件逐次更新 `gyroGuideX/Y/Angle`），宿主照旧重绘（§13.1 规则 4）。
