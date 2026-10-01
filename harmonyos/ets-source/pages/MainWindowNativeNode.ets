@@ -60,6 +60,7 @@ import { ObjectDistanceNotice, SelectedLiveInfoRows, SelectedCoordinateRow, Sele
 import { StructuredDetailRows } from '../panels/object/StructuredDetailRows'
 import { SatellitePassDetails } from '../panels/object/SatellitePassDetails'
 import { ObjectDetailObserveTab, ObjectDetailCoordinateTab } from '../panels/object/ObjectDetailTabs'
+import { TabletInspectorMediaGroup } from '../panels/object/TabletInspectorMediaGroup'
 import { ConstellationCultureView } from '../panels/object/ConstellationCultureView'
 import { SkyCultureDescriptionBlockView } from '../panels/skyculture/SkyCultureDescriptionBlockView'
 import { SearchBar } from '../panels/search/SearchBar'
@@ -18443,7 +18444,25 @@ private loadPlanetPositions(): void {
           } else if (this.bottomCardIndex === 2) {
             Text('完整资料').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
             ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })
-            this.tabletInspectorMedia()
+            TabletInspectorMediaGroup({
+  store: this.objectMediaStore,
+  detailStore: this.objectDetailStore,
+  isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
+  imageHeight: this.objectInspectorImageHeight(),
+  iconName: this.objectInspectorIcon(),
+  inlineModelSize: this.objectInspectorInlineModelSize(),
+  modelReady: this.objectInspectorModelReady(),
+  modelRendering: this.objectInspectorModelRendering,
+  hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+  modelNotice: this.objectInspectorModelNotice(),
+  warmupText: this.objectInspectorMediaWarmupText(),
+  fallbackKind: this.objectInspectorFallbackVisualKind(),
+  starColor: this.objectInspectorStarColor(),
+  onOpen: () => { this.openObjectInspectorMediaPreview() },
+  onRetry: () => { this.retryObjectInspectorMedia() },
+  onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+  onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
+})
             SatellitePassDetails({ store: this.objectDetailStore, tablet: false, visible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(), onLoad: () => { this.loadSelectedSatellitePasses() } })
             ConstellationCultureView({ store: this.objectDetailStore, tablet: false, visible: this.selectedObjectIsConstellation(), textColor: this.nmText() })
             Row({ space: 8 }) {
@@ -19397,140 +19416,6 @@ private loadPlanetPositions(): void {
       ? Math.max(72, Math.min(210, this.objectMediaStore.objectInspectorMediaViewportHeight - 88)) : 210
   }
 
-  @Builder
-  tabletInspectorMedia() {
-
-    if ((this.objectMediaStore.objectInspectorMediaKind === 'image' || this.objectMediaStore.objectInspectorMediaKind === 'constellation') &&
-
-      this.objectMediaStore.objectInspectorMediaPixelMap !== undefined && !this.objectMediaStore.objectInspectorMediaLoadFailed) {
-
-      TabletInspectorMediaCard({
-
-        store: this.objectMediaStore,
-
-        imageHeight: this.objectInspectorImageHeight(),
-
-        isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined &&
-
-          this.objectDetailStore.selectedDetailModel.state === 'planned',
-
-        onOpen: () => { this.openObjectInspectorMediaPreview() }
-
-      })
-
-    } else if (this.objectMediaStore.objectInspectorMediaNoMatch) {
-
-      TabletInspectorNoticeRow({
-
-        iconName: this.objectInspectorIcon(), iconFill: '#8EC9E9',
-
-        title: '没有匹配的离线资源', subtitle: '当前天体没有随应用分发的对应图像或纹理',
-
-        cardBackground: 'rgba(91,147,191,0.08)',
-
-        onRetry: () => { this.retryObjectInspectorMedia() }
-
-      })
-
-    } else if (this.objectMediaStore.objectInspectorMediaPreparationFailed) {
-
-      TabletInspectorNoticeRow({
-
-        iconName: this.objectInspectorIcon(), iconFill: '#F1C27D',
-
-        title: '离线资源准备失败', subtitle: '文件未能完整复制到本地缓存，请重试',
-
-        cardBackground: 'rgba(241,194,125,0.08)',
-
-        onRetry: () => { this.retryObjectInspectorMedia() }
-
-      })
-
-    } else if ((this.objectMediaStore.objectInspectorMediaKind === 'image' || this.objectMediaStore.objectInspectorMediaKind === 'constellation' ||
-
-      this.objectMediaStore.objectInspectorMediaKind === 'model') && this.objectMediaStore.objectInspectorMediaLoadFailed) {
-
-      TabletInspectorNoticeRow({
-
-        iconName: this.objectInspectorIcon(), iconFill: '#8EC9E9',
-
-        title: '本地资源解码失败', subtitle: '资源已找到，但当前设备无法显示此文件',
-
-        cardBackground: 'rgba(91,147,191,0.08)',
-
-        onRetry: () => { this.retryObjectInspectorMedia() }
-
-      })
-
-    } else if (this.objectMediaStore.objectInspectorMediaKind === 'model' &&
-
-      (this.objectInspectorModelReady() || this.objectMediaStore.objectInspectorModelPixelMap !== undefined)) {
-
-      TabletInspectorModelBlock({
-
-        store: this.objectMediaStore,
-
-        inlineModelSize: this.objectInspectorInlineModelSize(),
-
-        modelRendering: this.objectInspectorModelRendering,
-
-        hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-
-        modelNotice: this.objectInspectorModelNotice(),
-
-        onExpand: () => { this.setObjectInspectorModelImmersive(true) },
-
-        onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
-
-      })
-
-    } else if (this.objectMediaStore.objectInspectorMediaDecoding) {
-
-      TabletInspectorProgressRow({ title: '正在解码本地图像', subtitle: '资源已找到，正在交给鸿蒙图像框架处理' })
-
-    } else if (this.objectMediaStore.objectInspectorMediaLoading) {
-
-      TabletInspectorProgressRow({
-
-        title: this.objectMediaStore.objectInspectorMediaKind === 'image' ? '正在优先准备当前天体图像' : '正在准备本地表面纹理',
-
-        subtitle: this.objectMediaStore.objectInspectorMediaKind === 'image'
-
-          ? this.objectInspectorMediaWarmupText() : '资源准备完成后将自动显示'
-
-      })
-
-    } else if (this.objectMediaStore.objectInspectorMediaKind === 'visual') {
-
-      TabletInspectorFallbackVisual({
-
-        store: this.objectMediaStore,
-
-        kind: this.objectInspectorFallbackVisualKind(),
-
-        starColor: this.objectInspectorStarColor(),
-
-        iconName: this.objectInspectorIcon()
-
-      })
-
-    } else {
-
-      Row({ space: 10 }) {
-
-        Image(getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
-
-        Text('暂无与当前天体准确匹配的本地资料图像').fontSize(11).fontColor('#9EC8DC').layoutWeight(1).maxLines(2)
-
-      }
-
-        .width('100%').height(54).padding({ left: 12, right: 12 })
-
-        .backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL)
-
-    }
-
-  }
 
 
   private selectedDisplayValue(key: string): string {
@@ -21384,7 +21269,25 @@ private loadPlanetPositions(): void {
       }
       if (this.fullInspectorRequested) {
         Divider().color(this.nmBorder()).margin({ top: 8, bottom: 8 })
-        this.tabletInspectorMedia()
+        TabletInspectorMediaGroup({
+  store: this.objectMediaStore,
+  detailStore: this.objectDetailStore,
+  isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
+  imageHeight: this.objectInspectorImageHeight(),
+  iconName: this.objectInspectorIcon(),
+  inlineModelSize: this.objectInspectorInlineModelSize(),
+  modelReady: this.objectInspectorModelReady(),
+  modelRendering: this.objectInspectorModelRendering,
+  hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+  modelNotice: this.objectInspectorModelNotice(),
+  warmupText: this.objectInspectorMediaWarmupText(),
+  fallbackKind: this.objectInspectorFallbackVisualKind(),
+  starColor: this.objectInspectorStarColor(),
+  onOpen: () => { this.openObjectInspectorMediaPreview() },
+  onRetry: () => { this.retryObjectInspectorMedia() },
+  onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+  onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
+})
         SatellitePassDetails({ store: this.objectDetailStore, tablet: true, visible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(), onLoad: () => { this.loadSelectedSatellitePasses() } })
         DetailSectionTitle({ title: '坐标参考', tablet: true })
         SelectedCoordinateRows({ store: this.objectDetailStore, tablet: true })
