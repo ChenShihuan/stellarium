@@ -136,6 +136,11 @@ import { CommandsPanel } from '../panels/panels/CommandsPanel'
 import { NavStarsPanel } from '../panels/panels/NavStarsPanel'
 import { ArchaeoLinesPanel } from '../panels/panels/ArchaeoLinesPanel'
 import { MosaicCameraPanel } from '../panels/panels/MosaicCameraPanel'
+import { MorePanel } from '../panels/panels/MorePanel'
+import { TimePanel } from '../panels/panels/TimePanel'
+import { HelpPanel } from '../panels/panels/HelpPanel'
+import { MeteorShowersPanel } from '../panels/panels/MeteorShowersPanel'
+import { NebulaTexturesPanel } from '../panels/panels/NebulaTexturesPanel'
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
   NebulaTextureItem, NebulaTextureStatus, NebulaTextureRefreshResponse, SkyCultureMakerArtworkAnchor, SkyCultureMakerArtwork, SkyCultureMakerConstellation,
@@ -9951,16 +9956,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private nebulaTextureStatusLabel(status: string | undefined): string {
-    if (status === 'ready') return I18n.t('nebula_texture_ready')
-    if (status === 'missing_file') return I18n.t('nebula_texture_missing_file')
-    if (status === 'decode_failed') return I18n.t('nebula_texture_decode_failed')
-    if (status === 'invalid_mapping' || status === 'invalid_world_coords' || status === 'invalid_corner_count' || status === 'corner_out_of_range') return I18n.t('nebula_texture_invalid_mapping')
-    if (status === 'remote_blocked') return I18n.t('nebula_texture_remote_blocked')
-    if (status === 'config_invalid') return I18n.t('nebula_texture_config_invalid')
-    return status ?? I18n.t('nebula_texture_unknown')
-  }
-
   private setNebulaTextureVisible(enabled: boolean): void {
     this.setNebulaTextureFlag('setNebulaTexturesVisible', enabled, this.nebulaTextureStatus?.enabled === true)
   }
@@ -18524,68 +18519,12 @@ private loadPlanetPositions(): void {
   @Builder
   panelContent() {
     if (this.activePanel === 'more') {
-      Column({ space: 6 }) {
-        ForEach(this.moreActions(), (item: ShellAction, index: number) => {
-          if (this.moreActionStartsSection(item, index)) {
-            Text(item.section === undefined ? '' : item.section)
-              .fontSize(11)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#8FBBD6')
-              .width('100%')
-              .margin({ top: index === 0 ? 0 : 10, bottom: 1 })
-          }
-          Button() {
-            Row({ space: 12 }) {
-              Stack() {
-                Circle()
-                  .width(38)
-                  .height(38)
-                  .fill('rgba(91, 147, 191, 0.20)')
-                Image(getIcon(item.icon, false))
-                  .width(21)
-                  .height(21)
-                  .fillColor('#B8E4FF')
-              }
-                .width(38)
-                .height(38)
-              Text(item.label)
-                .fontSize(15)
-                .fontWeight(FontWeight.Medium)
-                .fontColor('#EAF7FF')
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .layoutWeight(1)
-              Image(getIcon('chevron_right', false))
-                .width(19)
-                .height(19)
-                .fillColor('rgba(184, 228, 255, 0.72)')
-            }
-              .width('100%')
-              .height('100%')
-              .padding({ left: 12, right: 12 })
-          }
-            .id('more-action-' + item.panel)
-            .width('100%')
-            .height(58)
-            .padding(0)
-            .backgroundColor('rgba(255, 255, 255, 0.045)')
-            .border({ width: 0.5, color: 'rgba(147, 215, 255, 0.10)' })
-            .borderRadius(UI_RADIUS_CONTROL)
-            .clickEffect({ level: ClickEffectLevel.LIGHT })
-            .stateStyles({
-              pressed: {
-                .scale({ x: 0.98, y: 0.98 })
-                .backgroundColor('rgba(91, 147, 191, 0.20)')
-              }
-            })
-            .animation({ duration: 220, curve: curves.springMotion(0.42, 0.86) })
-            .onClick(() => {
-              this.openSubPanel(item.panel)
-            })
-            }, (item: ShellAction) => item.icon + '/' + item.panel + '/' + this.languageRevision.toString())
-      }
-        .width('100%')
-        .padding({ bottom: 12 })
+      MorePanel({
+        actions: this.moreActions(),
+        languageRevision: this.languageRevision,
+        startsSection: (item: ShellAction, index: number) => this.moreActionStartsSection(item, index),
+        onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
+      })
     } else if (this.activePanel === 'observeHub') {
       HubActionList({
         actions: this.observingHubActions(), description: I18n.t('more_workspace_observing_desc'),
@@ -18753,57 +18692,16 @@ private loadPlanetPositions(): void {
       // 观测时间/速率已移入面板标题栏副标题（panelSubtitle() 在 Builder 内直接读 @State，
       // 不经参数传递，变化可正常触发重建）；面板首屏直接给时间转轴与时间控制按钮
       // Sky Guide 风格时间拖动滑块（-365天 ~ +365天）：置于面板最前，手机端打开即可直接拖动
-      TimeWheelScrubber({
-        store: this.timeWheelStore,
-        onSelectUnit: (unit: string) => { this.wheel().selectUnit(unit) },
-        onWheelTouch: (event: TouchEvent) => { this.wheel().handleTouch(event) }
-      })
-      // 时间控制按钮：[倒带][现在][停止][实时][快进][超快]
-      TimeSpeedChips({ store: this.timeStore, onChip: (id: string) => { this.handleChip(id) } })
-      QuickChipRow({ items: [
-        { id: '-12h', label: '-12h' }, { id: '+12h', label: '+12h' },
-        { id: 'sunRise', label: '日出' }, { id: 'sunTransit', label: '中天' },
-        { id: 'sunSet', label: '日落' }, { id: 'astronomicalSet', label: '天文昏' }
-      ], onChip: (id: string) => { this.handleChip(id) } })
-      SiderealTimeRow({
-        store: this.timeStore,
-        subColor: this.nmSub()
-      })
-      EquationOfTimeBlock({
-        store: this.equationOfTimeStore,
-        textColor: this.nmText(),
-        subColor: this.nmSub(),
-        accentColor: this.nmAccent(),
-        panelColor: this.nmBg(),
-        onToggle: (setting: string, enabled: boolean) => { this.setEquationOfTime(setting, enabled) }
-      })
-      JulianDateControls({
-        store: this.julianStore,
-        textColor: this.nmText(),
-        subColor: this.nmSub(),
-        inputColor: this.nmInput(),
-        onAdjust: (scale: string, direction: number) => { this.adjustJulianDate(scale, direction) },
-        onApply: (scale: string) => { this.applyJulianDateInput(scale) }
-      })
-      // 观测辅助：夜视模式（独立模块，后续主界面按钮共用同一 store）/ 大气折射
-      NightModeToggleRow({
-        store: this.nightModeStore,
-        textColor: this.nmText(),
-        subColor: this.nmSub(),
-        onToggle: (enabled: boolean) => { this.applyNightMode(enabled, true) }
-      })
-      ObservationAidBlock({
+      TimePanel({
+        timeWheelStore: this.timeWheelStore,
+        timeStore: this.timeStore,
+        equationOfTimeStore: this.equationOfTimeStore,
+        julianStore: this.julianStore,
+        nightModeStore: this.nightModeStore,
         refractionOn: this.refractionOn,
         atmoPressure: this.atmoPressure,
         atmoTemperature: this.atmoTemperature,
         atmoExtinction: this.atmoExtinction,
-        textColor: this.nmText(),
-        subColor: this.nmSub(),
-        borderColorValue: this.nmBorder(),
-        onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.applyAtmosphere(pressure, temperature, extinction) }
-      })
-      // 手动指定时间
-      ManualTimeBlock({
         manualYear: this.manualYear,
         manualMonth: this.manualMonth,
         manualDay: this.manualDay,
@@ -18811,15 +18709,24 @@ private loadPlanetPositions(): void {
         manualMinute: this.manualMinute,
         textColor: this.nmText(),
         subColor: this.nmSub(),
-        inputColor: this.nmInput(),
+        accentColor: this.nmAccent(),
         panelColor: this.nmBg(),
-        borderColorValue: this.nmBorder(),
+        inputColor: this.nmInput(),
+        borderTint: this.nmBorder(),
+        onSelectUnit: (unit: string) => { this.wheel().selectUnit(unit) },
+        onWheelTouch: (event: TouchEvent) => { this.wheel().handleTouch(event) },
+        onChip: (id: string) => { this.handleChip(id) },
+        onEquationToggle: (setting: string, enabled: boolean) => { this.setEquationOfTime(setting, enabled) },
+        onAdjustJulian: (scale: string, direction: number) => { this.adjustJulianDate(scale, direction) },
+        onApplyJulian: (scale: string) => { this.applyJulianDateInput(scale) },
+        onNightMode: (enabled: boolean) => { this.applyNightMode(enabled, true) },
+        onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.applyAtmosphere(pressure, temperature, extinction) },
         onPickDate: (year: number, monthIndex: number, day: number) => {
           this.manualYear = year; this.manualMonth = monthIndex + 1; this.manualDay = day
         },
         onPickTime: (hour: number, minute: number) => { this.manualHour = hour; this.manualMinute = minute },
-        onApply: () => { this.applyManualTime() },
-        onReset: () => { this.syncManualTimeFromState(); this.flashHint(I18n.t('i0081')) }
+        onApplyManual: () => { this.applyManualTime() },
+        onResetManual: () => { this.syncManualTimeFromState(); this.flashHint(I18n.t('i0081')) }
       })
     } else if (this.activePanel === 'place') {
       PlacePanel({
@@ -21601,102 +21508,16 @@ private loadPlanetPositions(): void {
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
         .id('astro-content').opacity(this.astroContentOpacity).translate({ x: this.astroContentOffsetX })
         .onScroll(() => { this.publishAstroPanelState() })
-    } else if (this.activePanel === 'help') {
-      // Help 面板
-      Scroll() {
-        Column({ space: 8 }) {
-          Text(I18n.t('i0216')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4 })
-          Text(I18n.t('i0261')).fontSize(11).fontColor(this.nmSub()).width('100%')
-          Text(I18n.t('i0262')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0263')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0264')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          // ===== 手势指南 =====
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 8, bottom: 4 })
-          Text(I18n.t('i0310')).fontSize(13).fontColor(this.nmText()).width('100%')
-          Row({ space: 10 }) {
-            Text('DRAG').fontSize(8).fontColor(this.nmAccent()).fontWeight(FontWeight.Bold).width(36).height(20)
-              .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.nmBg())
-            Text(I18n.t('i0311')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
-          }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
-          Row({ space: 10 }) {
-            Text('PINCH').fontSize(8).fontColor(this.nmAccent()).fontWeight(FontWeight.Bold).width(36).height(20)
-              .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.nmBg())
-            Text(I18n.t('i0312')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
-          }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
-          Row({ space: 10 }) {
-            Text('TAP').fontSize(8).fontColor(this.nmAccent()).fontWeight(FontWeight.Bold).width(36).height(20)
-              .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.nmBg())
-            Text(I18n.t('i0313')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
-          }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
-          Row({ space: 10 }) {
-            Text('2FD').fontSize(8).fontColor(this.nmAccent()).fontWeight(FontWeight.Bold).width(36).height(20)
-              .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.nmBg())
-            Text(I18n.t('i0314')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
-          }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
-          Row({ space: 10 }) {
-            Text('HOLD').fontSize(8).fontColor(this.nmAccent()).fontWeight(FontWeight.Bold).width(36).height(20)
-              .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.nmBg())
-            Text(I18n.t('i0315')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
-          }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 8, bottom: 4 })
-          Text('键盘、鼠标与触摸板').fontSize(13).fontColor(this.nmText()).width('100%')
-          Text('鼠标左键点击选中天体，按住左键拖动星图，滚轮缩放视场。').fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text('触摸板双指滚动平移星图，双指捏合缩放视场。').fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text('方向键平移，+ / - 缩放，空格或回车定位已选天体，F 打开搜索，N 切换夜视，Esc 关闭面板。')
-            .fontSize(10).fontColor('#99FFFFFF').width('100%')
-          // ===== 快捷操作 =====
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 8, bottom: 4 })
-          Text(I18n.t('i0217')).fontSize(13).fontColor(this.nmText()).width('100%')
-          Text(I18n.t('i0265')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0266')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0267')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0268')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 8, bottom: 4 })
-          Text(I18n.t('i0218')).fontSize(13).fontColor(this.nmText()).width('100%')
-          Text(I18n.t('i0269')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0270')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0271')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0272')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0273')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('i0274')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          // ===== 关于 =====
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 8, bottom: 4 })
-          Text(I18n.t('c_about')).fontSize(13).fontColor(this.nmText()).width('100%')
-          if (this.tools.aboutVersion.length > 0) {
-            Text('Stellarium ' + this.tools.aboutVersion + ' · Qt ' + this.tools.aboutQt).fontSize(10).fontColor('#99FFFFFF').width('100%')
-            Text(I18n.t('c_user_dir') + ': ' + this.tools.aboutUserDir).fontSize(9).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(I18n.t('c_config_file') + ': ' + this.tools.aboutConfigFile).fontSize(9).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-          } else {
-            Text(I18n.t('c_loading')).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          }
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 8, bottom: 4 })
-          Text(I18n.t('tools_data_hint')).fontSize(10).fontColor(this.nmSub()).width('100%')
-          Button(I18n.t('panel_tools_data'))
-            .fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-            .borderRadius(UI_RADIUS_CONTROL).height(30).width('100%')
-            .onClick(() => { this.openSubPanel('tools') })
-        }
-        .width('100%')
-        .padding({ left: 4, right: 4 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+        } else if (this.activePanel === 'help') {
+      HelpPanel({
+        tools: this.tools,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        lineColor: this.nmBorder(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        onOpenTools: () => { this.openSubPanel('tools') }
+      })
 	    } else if (this.activePanel === 'catalogs') {
       CatalogsPanel({
         loading: this.catalogLoading,
@@ -22241,94 +22062,20 @@ private loadPlanetPositions(): void {
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
         .onScroll(() => { this.publishSatellitePanelState() })
-    } else if (this.activePanel === 'meteorshowers') {
-      // 流星雨：插件总开关 + 标签/仅活跃/标记开关 + 活跃流星雨列表
-      Scroll() {
-        Column({ space: 10 }) {
-          Row() {
-            Text(I18n.t('c_enable_meteor_plugin')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.msEnabled })
-              .onChange((isOn: boolean) => { this.setMeteorShowersFlag('enabled', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_show_radiant_labels')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.msLabels })
-              .onChange((isOn: boolean) => { this.setMeteorShowersFlag('labels', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_active_only')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.msActiveOnly })
-              .onChange((isOn: boolean) => { this.setMeteorShowersFlag('activeOnly', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_show_radiant_markers')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.msMarker })
-              .onChange((isOn: boolean) => { this.setMeteorShowersFlag('marker', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.msCatalogName.length > 0 || this.msCatalogVersion.length > 0 || this.msCatalogSource.length > 0) {
-            Column({ space: 2 }) {
-              Text('原版流星雨目录' + (this.msCatalogVersion.length > 0 ? ' · v' + this.msCatalogVersion : '')).fontSize(10).fontColor('#88FFFFFF').width('100%')
-              if (this.msCatalogSource.length > 0) Text(I18n.t('resource_source') + ': ' + this.msCatalogSource).fontSize(9).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor('rgba(111, 168, 207, 0.08)').borderRadius(UI_RADIUS_CONTROL)
-          }
-          Text(I18n.t('meteor_radiant_desc'))
-            .fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 4, right: 4 }).margin({ top: 4 })
-          // 活跃流星雨列表
-          Text(I18n.t('meteor_active_showers'))
-            .fontSize(13).fontColor('#FFE9B0').width('100%').margin({ top: 8, bottom: 2 })
-          if (this.msShowerList.length > 0) {
-            ForEach(this.msShowerList, (s: MeteorShowerItem) => {
-              Column({ space: 3 }) {
-                Row({ space: 6 }) {
-                  Text(s.name).fontSize(14).fontColor('#FFD54F').layoutWeight(1)
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(s.zhr > 0 ? (I18n.t('meteor_zhr_label') + ' ' + s.zhr) : '').fontSize(12)
-                    .fontColor('#BBDEFB').padding({ left: 6, right: 6 })
-                    .backgroundColor('rgba(30, 60, 100, 0.5)').borderRadius(UI_RADIUS_CONTROL)
-                  Text(s.status === 'confirmed' ? 'Confirmed' : 'Generic').fontSize(10)
-                    .fontColor(s.status === 'confirmed' ? '#81C784' : '#FFB74D')
-                    .padding({ left: 4, right: 4 }).backgroundColor('rgba(255, 255, 255, 0.08)').borderRadius(UI_RADIUS_CONTROL)
-                }.width('100%')
-                if (s.peakDate.length > 0) {
-                  Row({ space: 8 }) {
-                    Text(I18n.t('meteor_peak') + ': ' + this.fmtIso(s.peakDate)).fontSize(11).fontColor('#DDDDDD').layoutWeight(1)
-                  }.width('100%')
-                }
-                if (s.activeStart.length > 0 && s.activeEnd.length > 0) {
-                  Row({ space: 8 }) {
-                    Text(I18n.t('meteor_active_range') + ': ' + this.fmtIso(s.activeStart) + ' ~ ' + this.fmtIso(s.activeEnd)).fontSize(11)
-                      .fontColor('#AAAAAA').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }.width('100%')
-                }
-                Row({ space: 12 }) {
-                  if (s.speed > 0) {
-                    Text(I18n.t('meteor_speed') + ': ' + s.speed + ' km/s').fontSize(11).fontColor('#999999')
-                  }
-                  if (s.parent.length > 0) {
-                    Text(I18n.t('meteor_parent') + ': ' + s.parent).fontSize(11).fontColor('#999999')
-                      .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-                  }
-                }.width('100%')
-              }.width('100%').padding(10).backgroundColor('#1A2330').borderRadius(UI_RADIUS_CONTROL).margin({ top: 2 })
-                .stateStyles({ pressed: { backgroundColor: '#27384A' } })
-                .onClick(() => {
-                  if (s.englishName.length > 0) {
-                    this.searchObject(s.englishName, '', '', 'center')
-                  }
-                })
-                .transition(TransitionEffect.asymmetric(
-                  TransitionEffect.OPACITY.animation({ duration: 300, curve: curves.springMotion(0.5, 1.0) })
-                    .combine(TransitionEffect.translate({ y: 10 }).animation({ duration: 320, curve: curves.springMotion(0.5, 1.0) })),
-                  TransitionEffect.OPACITY.animation({ duration: 200, curve: Curve.EaseIn })
-                    .combine(TransitionEffect.translate({ y: 8 }).animation({ duration: 200, curve: Curve.EaseIn }))
-                ))
-            }, (s: MeteorShowerItem) => s.englishName)
-          } else {
-            Text(I18n.t('meteor_no_active'))
-              .fontSize(12).fontColor('#666666').width('100%').textAlign(TextAlign.Center).padding({ top: 16, bottom: 16 })
-          }
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+        } else if (this.activePanel === 'meteorshowers') {
+      MeteorShowersPanel({
+        msEnabled: this.msEnabled,
+        msLabels: this.msLabels,
+        msActiveOnly: this.msActiveOnly,
+        msMarker: this.msMarker,
+        msCatalogName: this.msCatalogName,
+        msCatalogVersion: this.msCatalogVersion,
+        msCatalogSource: this.msCatalogSource,
+        msShowerList: this.msShowerList,
+        panelColor: this.nmBg(),
+        onSetFlag: (flag: string, value: boolean) => { this.setMeteorShowersFlag(flag, value) },
+        onSearch: (name: string) => { this.searchObject(name, '', '', 'center') }
+      })
     } else if (this.activePanel === 'scenery3d') {
       Scenery3dPanel({
         pluginEnabled: this.scenery3dEnabled,
@@ -22369,76 +22116,30 @@ private loadPlanetPositions(): void {
         onUndo: () => { this.undoSkyCultureMaker() },
         onReset: () => { this.resetSkyCultureMaker() }
       })
-    } else if (this.activePanel === 'nebulaTextures') {
-      Scroll() {
-        Column({ space: 8 }) {
-          Row({ space: 8 }) {
-            Column({ space: 2 }) {
-              Text(I18n.t('nebula_texture_title')).fontSize(14).fontColor(this.nmText()).fontWeight(FontWeight.Medium)
-              Text(I18n.t('nebula_texture_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(3)
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            Toggle({ type: ToggleType.Switch, isOn: this.nebulaTextureStatus?.enabled === true })
-              .width(42).height(24).selectedColor(this.nmAccent())
-              .enabled(this.nebulaTextureStatus !== undefined && !this.nebulaTexturePending && !this.nebulaTextureLoading && !this.nebulaTextureImporting)
-              .onChange((enabled: boolean) => { this.setNebulaTextureVisible(enabled) })
-          }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 })
-            .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row({ space: 8 }) {
-            Button(I18n.t('act_refresh')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(30).layoutWeight(1).enabled(!this.nebulaTextureLoading)
-              .onClick(() => { this.refreshNebulaTextures() })
-            Button(I18n.t('nebula_texture_import')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-              .borderRadius(UI_RADIUS_CONTROL).height(30).layoutWeight(1).enabled(!this.nebulaTextureImporting)
-              .onClick(() => { this.importNebulaTextureFile() })
-            if (this.nebulaTextureLoading || this.nebulaTextureImporting) LoadingProgress().width(18).height(18).color(this.nmAccent())
-          }.width('100%')
-          if (this.nebulaTextureActionStatus.length > 0) {
-            Text(this.nebulaTextureActionStatus).fontSize(10).fontColor('#FFD59A').width('100%').maxLines(2)
-              .padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor('rgba(194,128,36,0.14)').borderRadius(UI_RADIUS_CONTROL)
-          }
-          if (this.nebulaTextureStatus !== undefined) {
-            Text(I18n.t('nebula_texture_library_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
-            Row() {
-              Text(I18n.t('nebula_texture_conflict')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.nebulaTextureStatus?.avoidAreaConflict === true })
-                .width(42).height(24).selectedColor(this.nmAccent())
-                .enabled(!this.nebulaTexturePending && !this.nebulaTextureLoading && !this.nebulaTextureImporting)
-                .onChange((value: boolean) => { this.setNebulaTextureFlag('setNebulaTextureConflictAvoidance', value, this.nebulaTextureStatus?.avoidAreaConflict === true) })
-            }.width('100%').padding(8)
-            Column({ space: 3 }) {
-              Text(I18n.format('nebula_texture_summary', [String(this.nebulaTextureStatus.readyCount ?? 0), String(this.nebulaTextureStatus.count ?? 0)]))
-                .fontSize(11).fontColor(this.nmText()).width('100%')
-              Text(this.nebulaTextureStatus.configLoaded === true ? I18n.t('nebula_texture_config_ok') : I18n.t('nebula_texture_config_invalid'))
-                .fontSize(9).fontColor(this.nmSub()).width('100%')
-              Text(I18n.t('nebula_texture_offline_solver')).fontSize(9).fontColor('#FFD59A').width('100%').maxLines(2)
-            }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor('rgba(111,168,207,0.08)').borderRadius(UI_RADIUS_CONTROL)
-          }
-          if (this.nebulaTextureStatus?.items !== undefined && this.nebulaTextureStatus.items.length > 0) {
-            ForEach(this.nebulaTextureStatus.items, (item: NebulaTextureItem) => {
-              Column({ space: 4 }) {
-                Row() {
-                  Text(item.imageUrl).fontSize(11).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(this.nebulaTextureStatusLabel(item.status)).fontSize(9).fontColor(item.ready === true ? '#B9E6C4' : '#FFD59A')
-                    .padding({ left: 6, right: 6, top: 3, bottom: 3 }).backgroundColor('rgba(255,255,255,0.06)').borderRadius(UI_RADIUS_PILL)
-                }.width('100%')
-                if (item.width !== undefined && item.height !== undefined) {
-                  Text(item.width.toString() + ' × ' + item.height.toString() + ' · RA ' + (item.centerRaDeg ?? 0).toFixed(2) + '° · Dec ' + (item.centerDecDeg ?? 0).toFixed(2) + '°')
-                    .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                }
-                if (item.decodeError !== undefined) Text(item.decodeError).fontSize(9).fontColor('#FFD59A').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                Row({ space: 6 }) {
-                  Button(I18n.t('btn_center')).fontSize(9).fontColor(this.nmText()).backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_CONTROL).height(26).layoutWeight(1)
-                    .enabled(item.ready === true).onClick(() => { this.gotoNebulaTexture(item.imageUrl) })
-                  Button(I18n.t('nebula_texture_remove')).fontSize(9).fontColor(this.nmText()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(26).layoutWeight(1)
-                    .onClick(() => { this.removeNebulaTexture(item.imageUrl) })
-                }.width('100%')
-              }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-            }, (item: NebulaTextureItem) => item.imageUrl)
-          } else if (!this.nebulaTextureLoading) {
-            Text(I18n.t('nebula_texture_empty')).fontSize(11).fontColor(this.nmSub()).width('100%').textAlign(TextAlign.Center).padding(18)
-          }
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+        } else if (this.activePanel === 'nebulaTextures') {
+      NebulaTexturesPanel({
+        statusPresent: this.nebulaTextureStatus !== undefined,
+        statusEnabled: this.nebulaTextureStatus?.enabled === true,
+        statusAvoidConflict: this.nebulaTextureStatus?.avoidAreaConflict === true,
+        statusReadyCount: this.nebulaTextureStatus?.readyCount ?? 0,
+        statusCount: this.nebulaTextureStatus?.count ?? 0,
+        statusConfigLoaded: this.nebulaTextureStatus?.configLoaded === true,
+        statusItems: this.nebulaTextureStatus?.items ?? [],
+        pending: this.nebulaTexturePending,
+        loading: this.nebulaTextureLoading,
+        importing: this.nebulaTextureImporting,
+        actionStatus: this.nebulaTextureActionStatus,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        onSetVisible: (enabled: boolean) => { this.setNebulaTextureVisible(enabled) },
+        onRefresh: () => { this.refreshNebulaTextures() },
+        onImport: () => { this.importNebulaTextureFile() },
+        onSetConflictAvoidance: (value: boolean) => { this.setNebulaTextureFlag('setNebulaTextureConflictAvoidance', value, this.nebulaTextureStatus?.avoidAreaConflict === true) },
+        onGoto: (imageUrl: string) => { this.gotoNebulaTexture(imageUrl) },
+        onRemove: (imageUrl: string) => { this.removeNebulaTexture(imageUrl) }
+      })
     } else if (this.activePanel === 'scripts') {
       // 脚本面板：脚本列表 + 录制 / 回放（#39）
       Scroll() {
