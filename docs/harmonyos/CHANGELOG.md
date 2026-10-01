@@ -1,3 +1,11 @@
+## [2026-10-01] DevEco Code - Phase 3ac：详情卡"资料"页组件化 —— 四页全部组件化达成
+
+- **`ObjectDetailTabs.ets` 新增 `ObjectDetailDataTab`**：`unifiedObjectDetailCard()` 里 `bottomCardIndex === 2` 的分支（42 行）搬出，内含 `ObjectDistanceNotice` / `TabletInspectorMediaGroup` / `SatellitePassDetails` / `ConstellationCultureView` / 12 个 `ObjectDataTile` / `StructuredDetailRows`。至此**卡片四页（观测 / 坐标 / 资料 / 操作）全部为组件**，宿主的 `Scroll` 内只剩四个分支调用。
+- **入参（24 个）**：`@ObjectLink store` + `@ObjectLink mediaStore` + 15 个 `@Prop`（tablet / distanceText / iconName / imageHeight / inlineModelSize / modelReady / modelRendering / hasModelTexture / modelNotice / warmupText / fallbackKind / starColor / satelliteVisible / tleEpoch / accent / cultureVisible / textColor）+ `resolve` 与 5 个回调（`onLoadPasses` / `onMediaOpen` / `onMediaRetry` / `onModelExpand` / `onModelTouch`）。**媒体区的两个管线字段仍以 `@Prop` 传入**（不并入被观察 store 的理由见 §13.5）。
+- **单体行数：** 28,478 → **28,448**（−30）；`ObjectDetailTabs.ets` 150 行（3 个 struct）。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验（82 个 .ets）/ 安装启动通过；搜 `Mars` 选中后应用存活（`pidof` 有值），"资料"页（默认页）由新组件渲染 —— `完整资料` + 媒体区 `本地资源解码失败`/`重试` + 贴片 `实时高度 / 方位`；切"观测"页后 `今晚观测窗口`/`大气影响` 正常。
+- **踩坑：** 脚本化提取分支体时**必须把`所有`宿主方法的引用都列入改写表** —— 本轮漏了 `objectInspectorIcon()` / `InlineModelSize()` / `ModelReady()` / `ModelRendering` / `ModelTexturePixels` 五处，导致连续三轮构建失败（报错信息已直接指出缺失成员，属可快速收敛的一类）。提取后应先 grep 新文件里残留的 `this\.object` 引用再构建。
+- **测试同步：** 无（`test-ohos-detail-live-values` / `verify-ohos-object-details` / `test-ohos-detail-image-layout` 复跑通过，组合断言已覆盖 tabs 文件）。
 ## [2026-10-01] DevEco Code - Phase 3ad：详情卡外壳的页头与页签栏组件化（ObjectDetailCardChrome）
 
 - **新增 `panels/object/ObjectDetailCardChrome.ets`**：`unifiedObjectDetailCard()` 前半段拆成两个小组件 —— `ObjectDetailCardHeader`（拖拽柄 + 标题行〔图标/名/类型/关闭〕+ 三个紧凑指标 + 实时高度方位行 + 时角行，外层 `Column()` 与卡片根容器一致）与 `ObjectDetailCardTabs`（四个 `ObjectDetailTab`，`@Prop activeIndex` + `onSelect(index)`）。
