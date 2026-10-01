@@ -55,6 +55,7 @@ import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
 import { ObjectDetailActionsTab } from '../panels/object/ObjectDetailActionsTab'
+import { ObjectDataTile, ObjectMetric, ObjectScheduleTile, ObjectDetailTab, ObjectCompactMetric } from '../panels/object/DetailTiles'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
@@ -18436,9 +18437,9 @@ private loadPlanetPositions(): void {
       .width('100%').padding({ left: 16, right: 14, top: 10, bottom: 6 })
 
       Row({ space: 4 }) {
-        this.objectCompactMetric('magnitude')
-        this.objectCompactMetric('constellation')
-        this.objectCompactMetric('distance')
+        ObjectCompactMetric({ label: I18n.t('i0007'), value: this.selectedDisplayValue('selectedMagnitude') })
+        ObjectCompactMetric({ label: I18n.t('i0010'), value: this.selectedDisplayValue('selectedConstellation') })
+        ObjectCompactMetric({ label: I18n.t('i0011'), value: this.objectDistanceSummary() })
       }
         .width('100%').padding({ left: 16, right: 16, top: 3, bottom: 7 })
 
@@ -18454,10 +18455,10 @@ private loadPlanetPositions(): void {
       this.selectedLiveInfoRows(true)
 
       Row({ space: 4 }) {
-        this.objectDetailTab('观测', 0)
-        this.objectDetailTab('坐标', 1)
-        this.objectDetailTab('资料', 2)
-        this.objectDetailTab('操作', 3)
+        ObjectDetailTab({ label: '观测', active: this.bottomCardIndex === 0, onSelect: () => { this.selectObjectDetailTab(0) } })
+        ObjectDetailTab({ label: '坐标', active: this.bottomCardIndex === 1, onSelect: () => { this.selectObjectDetailTab(1) } })
+        ObjectDetailTab({ label: '资料', active: this.bottomCardIndex === 2, onSelect: () => { this.selectObjectDetailTab(2) } })
+        ObjectDetailTab({ label: '操作', active: this.bottomCardIndex === 3, onSelect: () => { this.selectObjectDetailTab(3) } })
       }
         .width('100%').padding({ left: 16, right: 16, bottom: 8 })
 
@@ -18468,23 +18469,23 @@ private loadPlanetPositions(): void {
           if (this.bottomCardIndex === 0) {
             Text('今晚观测窗口').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
             Row({ space: 6 }) {
-              this.objectScheduleTile(I18n.t('s0700'), 'selectedRise')
-              this.objectScheduleTile(I18n.t('s0701'), 'selectedTransit')
-              this.objectScheduleTile(I18n.t('s0702'), 'selectedSet')
+              ObjectScheduleTile({ label: I18n.t('s0700'), value: this.selectedDisplayValue('selectedRise') })
+              ObjectScheduleTile({ label: I18n.t('s0701'), value: this.selectedDisplayValue('selectedTransit') })
+              ObjectScheduleTile({ label: I18n.t('s0702'), value: this.selectedDisplayValue('selectedSet') })
             }.width('100%')
             if (this.objectDetailStore.selectedApparentMagnitude.length > 0 || this.objectDetailStore.selectedAirmass.length > 0 || this.objectDetailStore.selectedExtinction.length > 0) {
               Text('大气影响').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%').margin({ top: 3 })
               Row({ space: 8 }) {
-                if (this.objectDetailStore.selectedApparentMagnitude.length > 0) { this.objectMetric('大气后星等', 'selectedApparentMagnitude') }
-                if (this.objectDetailStore.selectedExtinction.length > 0) { this.objectMetric('大气衰减', 'extinctionUnits') }
-                if (this.objectDetailStore.selectedAirmass.length > 0) { this.objectMetric('气团质量', 'selectedAirmass') }
+                if (this.objectDetailStore.selectedApparentMagnitude.length > 0) { ObjectMetric({ label: '大气后星等', value: this.selectedDisplayValue('selectedApparentMagnitude') }) }
+                if (this.objectDetailStore.selectedExtinction.length > 0) { ObjectMetric({ label: '大气衰减', value: this.selectedDisplayValue('extinctionUnits') }) }
+                if (this.objectDetailStore.selectedAirmass.length > 0) { ObjectMetric({ label: '气团质量', value: this.selectedDisplayValue('selectedAirmass') }) }
               }.width('100%')
             }
             if (this.objectDetailStore.selectedPhase.length > 0 || this.objectDetailStore.selectedElongation.length > 0 || this.objectDetailStore.selectedSize.length > 0) {
               Row({ space: 8 }) {
-                if (this.objectDetailStore.selectedPhase.length > 0) { this.objectMetric(I18n.t('i0291'), 'selectedPhase') }
-                if (this.objectDetailStore.selectedElongation.length > 0) { this.objectMetric(I18n.t('i0255'), 'selectedElongation') }
-                if (this.objectDetailStore.selectedSize.length > 0) { this.objectMetric(I18n.t('i0290'), 'selectedSize') }
+                if (this.objectDetailStore.selectedPhase.length > 0) { ObjectMetric({ label: I18n.t('i0291'), value: this.selectedDisplayValue('selectedPhase') }) }
+                if (this.objectDetailStore.selectedElongation.length > 0) { ObjectMetric({ label: I18n.t('i0255'), value: this.selectedDisplayValue('selectedElongation') }) }
+                if (this.objectDetailStore.selectedSize.length > 0) { ObjectMetric({ label: I18n.t('i0290'), value: this.selectedDisplayValue('selectedSize') }) }
               }.width('100%').margin({ top: 2 })
             }
             if (this.objectDetailStore.selectedDistanceStatus === 'invalid_orbit' || this.objectDetailStore.selectedTleOutdated) {
@@ -18508,20 +18509,20 @@ private loadPlanetPositions(): void {
             this.selectedConstellationCultureDescriptionView(false)
             Row({ space: 8 }) {
               Column({ space: 7 }) {
-                if (this.objectDetailStore.selectedCoordAlt.length > 0) { this.objectDataTile('实时高度 / 方位', 'selectedCoordAlt') }
-                if (this.objectDetailStore.selectedMagnitude.length > 0) { this.objectDataTile(I18n.t('i0007'), 'selectedMagnitude') }
-                if (this.objectDetailStore.selectedSize.length > 0) { this.objectDataTile(I18n.t('i0290'), 'selectedSize') }
-                if (this.objectDetailStore.selectedApparentMagnitude.length > 0) { this.objectDataTile('大气后星等', 'selectedApparentMagnitude') }
-                if (this.objectDetailStore.selectedRise.length > 0) { this.objectDataTile(I18n.t('s0700'), 'selectedRise') }
-                if (this.objectDetailStore.selectedSet.length > 0) { this.objectDataTile(I18n.t('s0702'), 'selectedSet') }
+                if (this.objectDetailStore.selectedCoordAlt.length > 0) { ObjectDataTile({ label: '实时高度 / 方位', value: this.selectedDisplayValue('selectedCoordAlt') }) }
+                if (this.objectDetailStore.selectedMagnitude.length > 0) { ObjectDataTile({ label: I18n.t('i0007'), value: this.selectedDisplayValue('selectedMagnitude') }) }
+                if (this.objectDetailStore.selectedSize.length > 0) { ObjectDataTile({ label: I18n.t('i0290'), value: this.selectedDisplayValue('selectedSize') }) }
+                if (this.objectDetailStore.selectedApparentMagnitude.length > 0) { ObjectDataTile({ label: '大气后星等', value: this.selectedDisplayValue('selectedApparentMagnitude') }) }
+                if (this.objectDetailStore.selectedRise.length > 0) { ObjectDataTile({ label: I18n.t('s0700'), value: this.selectedDisplayValue('selectedRise') }) }
+                if (this.objectDetailStore.selectedSet.length > 0) { ObjectDataTile({ label: I18n.t('s0702'), value: this.selectedDisplayValue('selectedSet') }) }
               }.layoutWeight(1)
               Column({ space: 7 }) {
-                if (this.objectDetailStore.selectedCoordEq.length > 0) { this.objectDataTile('赤经 / 赤纬', 'selectedCoordEq') }
-                if (this.objectDetailStore.selectedDistance.length > 0) { this.objectDataTile(I18n.t('i0011'), 'selectedDistance') }
-                if (this.objectDetailStore.selectedExtinction.length > 0) { this.objectDataTile('大气衰减', 'extinctionUnits') }
-                if (this.objectDetailStore.selectedAirmass.length > 0) { this.objectDataTile('气团质量', 'selectedAirmass') }
-                if (this.objectDetailStore.selectedTransit.length > 0) { this.objectDataTile(I18n.t('s0701'), 'selectedTransit') }
-                if (this.objectDetailStore.selectedConstellation.length > 0) { this.objectDataTile(I18n.t('i0010'), 'selectedConstellation') }
+                if (this.objectDetailStore.selectedCoordEq.length > 0) { ObjectDataTile({ label: '赤经 / 赤纬', value: this.selectedDisplayValue('selectedCoordEq') }) }
+                if (this.objectDetailStore.selectedDistance.length > 0) { ObjectDataTile({ label: I18n.t('i0011'), value: this.selectedDisplayValue('selectedDistance') }) }
+                if (this.objectDetailStore.selectedExtinction.length > 0) { ObjectDataTile({ label: '大气衰减', value: this.selectedDisplayValue('extinctionUnits') }) }
+                if (this.objectDetailStore.selectedAirmass.length > 0) { ObjectDataTile({ label: '气团质量', value: this.selectedDisplayValue('selectedAirmass') }) }
+                if (this.objectDetailStore.selectedTransit.length > 0) { ObjectDataTile({ label: I18n.t('s0701'), value: this.selectedDisplayValue('selectedTransit') }) }
+                if (this.objectDetailStore.selectedConstellation.length > 0) { ObjectDataTile({ label: I18n.t('i0010'), value: this.selectedDisplayValue('selectedConstellation') }) }
               }.layoutWeight(1)
             }.width('100%').alignItems(VerticalAlign.Top)
             this.structuredObjectDetails(false)
@@ -19664,28 +19665,7 @@ private loadPlanetPositions(): void {
     return (apparent + '  ' + airmass).trim()
   }
 
-  @Builder
-  objectMetric(label: string, key: string) {
-    Column() {
-      Text(label).fontSize(10).fontColor('#8FBBD6').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text(this.selectedDisplayValue(key) || '--').fontSize(14).fontWeight(FontWeight.Medium).fontColor('#E7F7FF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ top: 3 })
-    }
-      .height(58).padding({ left: 10, right: 10, top: 8, bottom: 8 }).layoutWeight(1)
-      .backgroundColor('rgba(91,147,191,0.10)').border({ width: 0.5, color: 'rgba(147,215,255,0.10)' }).borderRadius(UI_RADIUS_CONTROL)
-  }
 
-  @Builder
-  objectCompactMetric(metric: string) {
-    Column() {
-      Text(I18n.t(metric === 'magnitude' ? 'i0007' : (metric === 'constellation' ? 'i0010' : 'i0011')))
-        .fontSize(9).fontColor('#8FBBD6').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text(metric === 'magnitude' ? (this.objectDetailStore.selectedMagnitude || '--') :
-        (metric === 'constellation' ? (this.zhNameOf(this.objectDetailStore.selectedConstellation) || '--') : this.objectDistanceSummary()))
-        .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#E7F7FF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ top: 1 })
-    }
-      .height(46).padding({ left: 8, right: 8, top: 6, bottom: 6 }).layoutWeight(1)
-      .backgroundColor('rgba(91,147,191,0.10)').border({ width: 0.5, color: 'rgba(147,215,255,0.10)' }).borderRadius(UI_RADIUS_CONTROL)
-  }
 
   private distanceInformationVisible(): boolean {
     return this.infoLevel <= 1 && (this.informationMode !== 'custom' || this.informationMaskHas('distance'))
@@ -19715,15 +19695,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-  @Builder
-  objectScheduleTile(label: string, key: string) {
-    Column() {
-      Text(label).fontSize(10).fontColor('#8FBBD6')
-      Text(this.selectedDisplayValue(key) || '--').fontSize(15).fontWeight(FontWeight.Medium).fontColor('#E7F7FF').margin({ top: 4 })
-    }
-      .height(62).layoutWeight(1).alignItems(HorizontalAlign.Center).justifyContent(FlexAlign.Center)
-      .backgroundColor('rgba(91,147,191,0.12)').borderRadius(UI_RADIUS_CONTROL)
-  }
 
   private selectObjectDetailTab(index: number): void {
     if (index === this.bottomCardIndex) return
@@ -19743,19 +19714,6 @@ private loadPlanetPositions(): void {
     })
   }
 
-  @Builder
-  objectDetailTab(label: string, index: number) {
-    Text(label)
-      .fontSize(12).fontWeight(this.bottomCardIndex === index ? FontWeight.Medium : FontWeight.Regular)
-      .fontColor(this.bottomCardIndex === index ? '#E8F8FF' : '#8FBBD6')
-      .height(32).layoutWeight(1).textAlign(TextAlign.Center).padding({ top: 8, bottom: 8 })
-      .backgroundColor(this.bottomCardIndex === index ? 'rgba(91,147,191,0.30)' : 'rgba(255,255,255,0.03)')
-      .borderRadius(UI_RADIUS_CONTROL)
-      .scale({ x: this.bottomCardIndex === index ? 1.02 : 1, y: this.bottomCardIndex === index ? 1.02 : 1 })
-      .animation({ duration: 180, curve: Curve.EaseInOut })
-      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-      .onClick(() => { this.selectObjectDetailTab(index) })
-  }
 
   @Builder
   selectedCoordinateRow(label: string, key: string, tablet: boolean) {
@@ -19784,15 +19742,6 @@ private loadPlanetPositions(): void {
     }.width('100%')
   }
 
-  @Builder
-  objectDataTile(label: string, key: string) {
-    Column({ space: 3 }) {
-      Text(label).fontSize(9).fontColor('#8FBBD6').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text(this.selectedDisplayValue(key) || '--').fontSize(11).fontColor('#E0F1F8').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-    }
-      .width('100%').height(48).padding({ left: 9, right: 9, top: 6, bottom: 6 })
-      .backgroundColor('rgba(255,255,255,0.045)').border({ width: 0.5, color: 'rgba(147,215,255,0.08)' }).borderRadius(UI_RADIUS_CONTROL)
-  }
 
   private toggleSelectedObservingList(): void {
     const idx = this.observingList.indexOf(this.objectDetailStore.selectedName)
