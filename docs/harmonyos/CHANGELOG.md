@@ -9,6 +9,7 @@
 - **单体行数：** 27,436 → **27,273**（−163）；本片 diff 287 增 / 451 删。
 - **验证：** 预检通过；`arkts_check` 5 文件 0 错；构建成功；契约校验 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点 / >98 文件；全量切片脚本仅剩环境类（4 个 `-pad` + `mist-performance` + `verify-ohos-search` + `verify-ohos-location-search` 的路径 bug）。**同步测试**：`test-ohos-mist-horizon.mjs` 第 5 条按新架构改写（`this.layerStore.mistHorizon = …`、组件内 `if (value === this.isOn) return`、调用点 `LayerSwitchRow({ label: I18n.t('mist_horizon'), … })`），5 条全绿。
 - **真机（`192.168.3.95:40565`，`pidof`=33749 全程存活；hilog 无 ArkTS 报错）**：底部「图层」→ 面板渲染（`LayerPresetBar` 四键 / `LayerTabs` 六标签 / `LayerSwitchRow` 列表）；**开关实测 2 个**：点「恒星」立刻由蓝变灰、行底色由蓝调变中性，滑到「银河」点一下同样立即翻转 —— 二者正是参数化 @Builder 会冻结的场景。顺带点「标记」标签，内容切到「方位与罗盘」再切回「天空」。**已恢复**：「恒星」「银河」都点回 ON（与初始一致）；未动其它持久化开关（「星标签」为本次会话前即存在的持久化 ON 态，未触碰）。
+- **提交：** `7a45ae35ab`（refactor：LayerStore + 三个 layers 组件 + 宿主手术）、`dbadb6489f`（test：mist-horizon 夹具）、`60d02b0df1`（docs：CHANGELOG + §13.5）。
 - **本片新踩的坑：** ① 删 builder 的脚本把 marker 归一到「`@Builder` 所在行行首」时，必须**先按 `lastIndexOf(NL, i-1)` 归一**，再向上找注释行/空行 —— 因为本仓有两种写法：`@Builder viewTabs() {`（签名同行）与 `@Builder` + 下一行 `switchRow(...)`（签名另起一行），否则会把 `  @Builder` 的缩进误当注释行而断言失败。② 删除接缝的空行收敛要做**「前导空行并入删除区间」**（判据 `prevStart === i - NL.length`），只处理接缝、不对全文做 `(\r\n){3,}` 替换。
 ## [2026-10-01] DevEco Code - Phase 3aj：位置选择器与层级列组件化（LocationPickerStore + HierColumn + LocationPickerPanel）
 
