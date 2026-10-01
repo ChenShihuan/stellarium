@@ -108,6 +108,10 @@ import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCoordinateSettings } from '../panels/view/ViewCoordinateSettings'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
 import { ObjectDetailConnectorLayer } from '../panels/overlay/ObjectDetailConnectorLayer'
+import { ToolsStore } from '../state/ToolsStore'
+import { ToolsPanel } from '../panels/tools/ToolsPanel'
+import { RecordingControlBar } from '../panels/tools/RecordingControlBar'
+import { RecordingFocusShell } from '../panels/tools/RecordingFocusShell'
 
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
@@ -163,6 +167,7 @@ export struct WindowNativeNode {
   @State private gyroStore: GyroStore = new GyroStore()
   @State private wutStore: WutStore = new WutStore()
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
+  @State private tools: ToolsStore = new ToolsStore()
   private searchHistory: string[] = []
   @State private objectCatalogCategories: CatOption[] = []
   private searchPanelScroller: Scroller = new Scroller()
@@ -209,9 +214,6 @@ export struct WindowNativeNode {
   private objectInspectorMediaResolutionComplete: boolean = false
   private objectInspectorMediaWarmupTimer: number = 0
   private objectInspectorMediaDecodeGeneration: number = 0
-  @State private skyTextureStatusVisible: boolean = false
-  @State private skyTextureStatusText: string = ''
-  @State private skyTextureStatusError: boolean = false
   private skyTextureStatusTimer: number = 0
   private skyTextureStatusDelayTimer: number = 0
   private skyTextureStatusPolls: number = 0
@@ -241,9 +243,6 @@ export struct WindowNativeNode {
   private objectInspectorModelRenderHighQuality: boolean = false
   private objectInspectorModelRenderTimer: number = 0
   @State private audioVolume: number = 0.7
-  @State private sessionExportText: string = ''
-  @State private sessionImportText: string = ''
-  @State private sessionImportMsg: string = ''
   // 程序化音乐：默认开（打开应用即播放），可静音并持久化
   @State private musicEnabled: boolean = false
   private fpsTimer: number = 0
@@ -715,11 +714,6 @@ export struct WindowNativeNode {
   @State private commandResultText: string = ''
   @State private commandPendingConfirmation: string = ''
   @State private commandBusy: boolean = false
-  @State private angleMeasureEnabled: boolean = false
-  @State private angleMeasureHasStart: boolean = false
-  @State private angleMeasureHasEnd: boolean = false
-  @State private angleMeasureText: string = ''
-  @State private angleMeasurePending: boolean = false
   private angleMeasureRequestId: number = 0
   @State private navStarsLoading: boolean = false
   @State private navStarsStatus: string = ''
@@ -891,18 +885,6 @@ export struct WindowNativeNode {
   @State private scenery3dEnabled: boolean = false
   @State private scenery3dCurrentId: string = ''
   @State private scenery3dLoadingId: string = ''
-  // 帮助面板：关于/日志/配置导入导出
-  @State private aboutVersion: string = ''
-  @State private aboutQt: string = ''
-  @State private aboutUserDir: string = ''
-  @State private aboutConfigFile: string = ''
-  @State private logText: string = ''
-  @State private logVisible: boolean = false
-  @State private configExportText: string = ''
-  @State private configExportVisible: boolean = false
-  @State private configImportText: string = ''
-  @State private configImportMsg: string = ''
-  @State private screenshotSaving: boolean = false
   @State private skyTouchFeedback: boolean = false
   @State private skyTouchX: number = 0   // 触摸点窗口坐标(px)，供反馈圈跟随手指
   @State private skyTouchY: number = 0
@@ -915,7 +897,6 @@ export struct WindowNativeNode {
   @State private actionHint: ResourceStr = ''
   @State private speechStatus: string = ''
   // ===== 脚本录制 / 回放（#39）=====
-  @State private recording: boolean = false
   @State private recordBuffer: Array<RecordCmd> = []
   @State private recordCount: number = 0
   @State private recordName: string = ''
@@ -944,8 +925,6 @@ export struct WindowNativeNode {
   @State private scriptRate: number = 1
   @State private scriptControlOffsetX: number = 0
   @State private scriptControlOffsetY: number = 0
-  @State private recordingPaused: boolean = false
-  @State private recordingUiExpanded: boolean = true
   // ===== 视频帧序列录制（#40）=====
   @State private videoRecording: boolean = false
   @State private videoDir: string = ''
@@ -2077,8 +2056,8 @@ export struct WindowNativeNode {
     if (this.replaying) {
       this.finishRecordingReplay('回放已结束')
     }
-    this.recording = false
-    this.recordingPaused = false
+    this.tools.recording = false
+    this.tools.recordingPaused = false
     this.unregisterFoldListeners()
     this.unsubscribeApplicationLifecycle()
   }
@@ -2844,7 +2823,7 @@ export struct WindowNativeNode {
   private callNativeFire(name: string, payload: string = ''): void {
     const raw = BridgeClient.send(name, payload)
     if (raw.length === 0) { return }
-    if (this.recording && !this.recordingPaused && !this.replaying && this.isRecordable(name)) {
+    if (this.tools.recording && !this.tools.recordingPaused && !this.replaying && this.isRecordable(name)) {
       let accepted = false
       try {
         accepted = (JSON.parse(raw) as StellariumBridgeResponse).ok === true
@@ -2856,7 +2835,7 @@ export struct WindowNativeNode {
   }
 
   private recordAcceptedCommand(name: string, payload: string): void {
-    if (!this.recording || this.recordingPaused || this.replaying || !this.isRecordable(name)) { return }
+    if (!this.tools.recording || this.tools.recordingPaused || this.replaying || !this.isRecordable(name)) { return }
     const key = name + '|' + payload
     const now = Date.now()
     if (key === this.lastRecordKey && now - this.lastRecordTime <= 400) { return }
@@ -2886,11 +2865,11 @@ export struct WindowNativeNode {
 
   private scheduleRecordingViewCheckpoint(delayMs: number = 900, fullSession: boolean = false): void {
     this.cancelRecordingViewCheckpoint()
-    if (!this.recording || this.recordingPaused || this.replaying) { return }
+    if (!this.tools.recording || this.tools.recordingPaused || this.replaying) { return }
     this.recordViewCheckpointTimer = setTimeout(() => {
       this.recordViewCheckpointTimer = -1
       this.callInteractive('getSessionState', '', (response: StellariumBridgeResponse) => {
-        if (!this.recording || this.recordingPaused || this.replaying || response.ok !== true) { return }
+        if (!this.tools.recording || this.tools.recordingPaused || this.replaying || response.ok !== true) { return }
         const state = response as SessionSnapshot
         const checkpoint: SessionSnapshot = fullSession ? {
           schemaVersion: 1,
@@ -3342,8 +3321,8 @@ export struct WindowNativeNode {
       this.flashHint('脚本或回放进行中，结束后再开始录制')
       return
     }
-    this.recording = true
-    this.recordingPaused = false
+    this.tools.recording = true
+    this.tools.recordingPaused = false
     this.recordBuffer = []
     this.recordCount = 0
     this.recordMsg = '录制中…'
@@ -3352,7 +3331,7 @@ export struct WindowNativeNode {
     this.recordStartedAt = Date.now()
     this.recordPausedAt = 0
     this.recordPausedTotal = 0
-    this.recordingUiExpanded = false
+    this.tools.recordingUiExpanded = false
     this.panelVisible = false
     this.infoWinVisible = false
     this.scheduleRecordingViewCheckpoint(80, true)
@@ -3360,31 +3339,31 @@ export struct WindowNativeNode {
   }
 
   private toggleRecordingPause(): void {
-    if (!this.recording) { return }
+    if (!this.tools.recording) { return }
     const now = Date.now()
-    this.recordingPaused = !this.recordingPaused
-    if (this.recordingPaused) {
+    this.tools.recordingPaused = !this.tools.recordingPaused
+    if (this.tools.recordingPaused) {
       this.cancelRecordingViewCheckpoint()
       this.recordPausedAt = now
     } else if (this.recordPausedAt > 0) {
       this.recordPausedTotal += now - this.recordPausedAt
       this.recordPausedAt = 0
     }
-    this.recordMsg = this.recordingPaused ? '已暂停录制' : '录制中…'
+    this.recordMsg = this.tools.recordingPaused ? '已暂停录制' : '录制中…'
     this.lastRecordKey = ''
     this.lastRecordTime = 0
     this.flashHint(this.recordMsg)
   }
 
   private stopRecording(): void {
-    if (this.recordingPaused && this.recordPausedAt > 0) {
+    if (this.tools.recordingPaused && this.recordPausedAt > 0) {
       this.recordPausedTotal += Date.now() - this.recordPausedAt
       this.recordPausedAt = 0
     }
-    this.recording = false
+    this.tools.recording = false
     this.cancelRecordingViewCheckpoint()
-    this.recordingPaused = false
-    this.recordingUiExpanded = true
+    this.tools.recordingPaused = false
+    this.tools.recordingUiExpanded = true
     this.recordCount = this.recordBuffer.length
     this.recordMsg = this.recordCount > 0 ? '已停止，可保存' : '已停止（没有可保存的操作）'
     this.flashHint(this.recordMsg)
@@ -3532,8 +3511,8 @@ export struct WindowNativeNode {
   }
 
   private toggleRecordingUi(): void {
-    this.recordingUiExpanded = !this.recordingUiExpanded
-    if (!this.recordingUiExpanded) {
+    this.tools.recordingUiExpanded = !this.tools.recordingUiExpanded
+    if (!this.tools.recordingUiExpanded) {
       this.panelVisible = false
       this.infoWinVisible = false
       this.gyroStore.gyroCalibPanelOpen = false
@@ -3545,7 +3524,7 @@ export struct WindowNativeNode {
   }
 
   private scriptSessionActive(): boolean {
-    return this.recording || this.scriptPlaybackVisible()
+    return this.tools.recording || this.scriptPlaybackVisible()
   }
 
   private scriptControlWidth(): number {
@@ -3630,7 +3609,7 @@ export struct WindowNativeNode {
     this.scriptLaunching = false
     this.scriptLaunchingName = ''
     this.scriptStartGraceUntil = 0
-    this.recordingUiExpanded = true
+    this.tools.recordingUiExpanded = true
     this.stopScriptStatusPolling()
     this.flashHint(message)
     // Native restoration is applied immediately and again after the nested
@@ -4459,10 +4438,10 @@ export struct WindowNativeNode {
     this.callNativeWhenReady('getAngleMeasure', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.angleMeasureRequestId) return
       if (r.ok !== true) return
-      this.angleMeasureEnabled = r.enabled === true
-      this.angleMeasureHasStart = r.hasStart === true
-      this.angleMeasureHasEnd = r.hasEnd === true
-      this.angleMeasureText = r.angleText ?? ''
+      this.tools.angleMeasureEnabled = r.enabled === true
+      this.tools.angleMeasureHasStart = r.hasStart === true
+      this.tools.angleMeasureHasEnd = r.hasEnd === true
+      this.tools.angleMeasureText = r.angleText ?? ''
     })
   }
 
@@ -5014,18 +4993,18 @@ export struct WindowNativeNode {
   private loadAboutInfo(): void {
     this.callNativeWhenReady('getAboutInfo', '', (r: StellariumBridgeResponse) => {
       const resp = r as AboutResponse
-      this.aboutVersion = resp.version ?? ''
-      this.aboutQt = resp.qtVersion ?? ''
-      this.aboutUserDir = resp.userDir ?? ''
-      this.aboutConfigFile = resp.configFile ?? ''
+      this.tools.aboutVersion = resp.version ?? ''
+      this.tools.aboutQt = resp.qtVersion ?? ''
+      this.tools.aboutUserDir = resp.userDir ?? ''
+      this.tools.aboutConfigFile = resp.configFile ?? ''
     })
   }
 
   private loadLog(): void {
     this.callNativeWhenReady('getLog', '6000', (r: StellariumBridgeResponse) => {
       const resp = r as LogResponse
-      this.logText = resp.log ?? ''
-      this.logVisible = true
+      this.tools.logText = resp.log ?? ''
+      this.tools.logVisible = true
     })
   }
 
@@ -5036,9 +5015,9 @@ export struct WindowNativeNode {
         this.flashHint(I18n.t('config_export_failed'))
         return
       }
-      this.configExportText = resp.content ?? ''
-      this.configExportVisible = true
-      this.copyTextToClipboard(this.configExportText, I18n.t('config_export_copied'))
+      this.tools.configExportText = resp.content ?? ''
+      this.tools.configExportVisible = true
+      this.copyTextToClipboard(this.tools.configExportText, I18n.t('config_export_copied'))
     })
   }
 
@@ -5057,20 +5036,20 @@ export struct WindowNativeNode {
   }
 
   private importConfig(): void {
-    const text = this.configImportText.trim()
+    const text = this.tools.configImportText.trim()
     if (text.length === 0) {
       this.flashHint(I18n.t('msg_paste_config_first'))
       return
     }
-    this.configImportMsg = '正在导入…'
+    this.tools.configImportMsg = '正在导入…'
     this.callNativeWhenReady('importConfig', text, (r: StellariumBridgeResponse) => {
       const resp = r as ImportConfigResponse
       if (resp.ok === true) {
-        this.configImportText = ''
-        this.configImportMsg = '已导入 ' + (resp.applied ?? 0) + ' 项配置'
-        this.flashHint(this.configImportMsg)
+        this.tools.configImportText = ''
+        this.tools.configImportMsg = '已导入 ' + (resp.applied ?? 0) + ' 项配置'
+        this.flashHint(this.tools.configImportMsg)
       } else {
-        this.configImportMsg = '导入失败：' + (resp.error ?? '未知错误')
+        this.tools.configImportMsg = '导入失败：' + (resp.error ?? '未知错误')
       }
     })
   }
@@ -5784,44 +5763,44 @@ export struct WindowNativeNode {
   }
 
   private toggleAngleMeasure(targetEnabled?: boolean): void {
-    const enabled = targetEnabled === undefined ? !this.angleMeasureEnabled : targetEnabled
-    const previousEnabled = this.angleMeasureEnabled
-    const previousHasStart = this.angleMeasureHasStart
-    const previousHasEnd = this.angleMeasureHasEnd
-    const previousText = this.angleMeasureText
+    const enabled = targetEnabled === undefined ? !this.tools.angleMeasureEnabled : targetEnabled
+    const previousEnabled = this.tools.angleMeasureEnabled
+    const previousHasStart = this.tools.angleMeasureHasStart
+    const previousHasEnd = this.tools.angleMeasureHasEnd
+    const previousText = this.tools.angleMeasureText
     const requestId = ++this.angleMeasureRequestId
-    this.angleMeasurePending = true
-    this.angleMeasureEnabled = enabled
+    this.tools.angleMeasurePending = true
+    this.tools.angleMeasureEnabled = enabled
     if (!enabled) {
-      this.angleMeasureHasStart = false
-      this.angleMeasureHasEnd = false
-      this.angleMeasureText = ''
+      this.tools.angleMeasureHasStart = false
+      this.tools.angleMeasureHasEnd = false
+      this.tools.angleMeasureText = ''
     }
     this.callInteractive('setActionChecked', 'actionShow_Angle_Measure|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (requestId !== this.angleMeasureRequestId) return
-      this.angleMeasurePending = false
+      this.tools.angleMeasurePending = false
       if (r.ok !== true) {
-        this.angleMeasureEnabled = previousEnabled
-        this.angleMeasureHasStart = previousHasStart
-        this.angleMeasureHasEnd = previousHasEnd
-        this.angleMeasureText = previousText
+        this.tools.angleMeasureEnabled = previousEnabled
+        this.tools.angleMeasureHasStart = previousHasStart
+        this.tools.angleMeasureHasEnd = previousHasEnd
+        this.tools.angleMeasureText = previousText
         this.flashHint('角度测量插件不可用')
         return
       }
-      this.angleMeasureEnabled = r.checked === true
-      if (!this.angleMeasureEnabled) {
-        this.angleMeasureHasStart = false
-        this.angleMeasureHasEnd = false
-        this.angleMeasureText = ''
+      this.tools.angleMeasureEnabled = r.checked === true
+      if (!this.tools.angleMeasureEnabled) {
+        this.tools.angleMeasureHasStart = false
+        this.tools.angleMeasureHasEnd = false
+        this.tools.angleMeasureText = ''
       }
-      this.flashHint(this.angleMeasureEnabled ? '角度测量已开启，请点击两个位置' : '角度测量已关闭')
+      this.flashHint(this.tools.angleMeasureEnabled ? '角度测量已开启，请点击两个位置' : '角度测量已关闭')
     }, () => {
       if (requestId !== this.angleMeasureRequestId) return
-      this.angleMeasurePending = false
-      this.angleMeasureEnabled = previousEnabled
-      this.angleMeasureHasStart = previousHasStart
-      this.angleMeasureHasEnd = previousHasEnd
-      this.angleMeasureText = previousText
+      this.tools.angleMeasurePending = false
+      this.tools.angleMeasureEnabled = previousEnabled
+      this.tools.angleMeasureHasStart = previousHasStart
+      this.tools.angleMeasureHasEnd = previousHasEnd
+      this.tools.angleMeasureText = previousText
       this.flashHint('角度测量插件不可用')
     })
   }
@@ -5829,9 +5808,9 @@ export struct WindowNativeNode {
   private resetAngleMeasure(): void {
     this.callInteractive('resetAngleMeasure', '', (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.angleMeasureHasStart = false
-        this.angleMeasureHasEnd = false
-        this.angleMeasureText = ''
+        this.tools.angleMeasureHasStart = false
+        this.tools.angleMeasureHasEnd = false
+        this.tools.angleMeasureText = ''
       }
     })
   }
@@ -5844,27 +5823,27 @@ export struct WindowNativeNode {
         this.flashHint('测量点无效，请重新点击')
         return
       }
-      this.angleMeasureHasStart = r.hasStart === true
-      this.angleMeasureHasEnd = r.hasEnd === true
-      this.angleMeasureText = r.angleText ?? ''
-      this.flashHint(this.angleMeasureHasEnd ? '角距离：' + this.angleMeasureText : '已记录第一个位置，请点击第二个位置')
+      this.tools.angleMeasureHasStart = r.hasStart === true
+      this.tools.angleMeasureHasEnd = r.hasEnd === true
+      this.tools.angleMeasureText = r.angleText ?? ''
+      this.flashHint(this.tools.angleMeasureHasEnd ? '角距离：' + this.tools.angleMeasureText : '已记录第一个位置，请点击第二个位置')
     })
   }
 
   private saveScreenshot(): void {
-    if (this.screenshotSaving) return
-    this.screenshotSaving = true
+    if (this.tools.screenshotSaving) return
+    this.tools.screenshotSaving = true
     this.flashHint(I18n.t('screenshot_preparing'))
     this.callInteractive('saveScreenShot', '', (r: StellariumBridgeResponse) => {
       const response = r as ScreenshotResponse
       if (response.ok !== true || !response.path || !response.fileName) {
-        this.screenshotSaving = false
+        this.tools.screenshotSaving = false
         this.flashHint(I18n.t('screenshot_failed'))
         return
       }
       this.exportScreenshotToUserStorage(response)
     }, () => {
-      this.screenshotSaving = false
+      this.tools.screenshotSaving = false
       this.flashHint(I18n.t('screenshot_failed'))
     })
   }
@@ -5891,7 +5870,7 @@ export struct WindowNativeNode {
       if (sourcePath.length > 0) {
         try { fileIo.unlinkSync(sourcePath) } catch (error) {}
       }
-      this.screenshotSaving = false
+      this.tools.screenshotSaving = false
     }
   }
 
@@ -11237,9 +11216,9 @@ private loadPlanetPositions(): void {
 
   private hideSkyTextureStatus(): void {
     this.stopSkyTextureStatusObserver()
-    this.skyTextureStatusVisible = false
-    this.skyTextureStatusText = ''
-    this.skyTextureStatusError = false
+    this.tools.skyTextureStatusVisible = false
+    this.tools.skyTextureStatusText = ''
+    this.tools.skyTextureStatusError = false
   }
 
   private updateSkyTextureStatus(result: StellariumBridgeResponse): void {
@@ -11253,15 +11232,15 @@ private loadPlanetPositions(): void {
       ? result.activeTextureErrorCount as number : 0
     const status = result.activeTextureStatus ?? ''
     if (errors > 0 || status === 'error' || status === 'partial-error') {
-      this.skyTextureStatusVisible = true
-      this.skyTextureStatusError = true
-      this.skyTextureStatusText = '当前视野有 ' + errors.toString() + ' 项资料图加载失败'
+      this.tools.skyTextureStatusVisible = true
+      this.tools.skyTextureStatusError = true
+      this.tools.skyTextureStatusText = '当前视野有 ' + errors.toString() + ' 项资料图加载失败'
       return
     }
     if (pending > 0 || status === 'loading') {
-      this.skyTextureStatusVisible = true
-      this.skyTextureStatusError = false
-      this.skyTextureStatusText = '正在载入当前视野资料图 · ' + pending.toString() + ' 项待完成'
+      this.tools.skyTextureStatusVisible = true
+      this.tools.skyTextureStatusError = false
+      this.tools.skyTextureStatusText = '正在载入当前视野资料图 · ' + pending.toString() + ' 项待完成'
       return
     }
     this.hideSkyTextureStatus()
@@ -11269,8 +11248,8 @@ private loadPlanetPositions(): void {
 
   private pollSkyTextureStatus(): void {
     if (this.skyTextureStatusPolls >= 24) {
-      if (this.skyTextureStatusVisible && !this.skyTextureStatusError) {
-        this.skyTextureStatusText = '仍在后台准备当前视野资料图，完成后会自动显示'
+      if (this.tools.skyTextureStatusVisible && !this.tools.skyTextureStatusError) {
+        this.tools.skyTextureStatusText = '仍在后台准备当前视野资料图，完成后会自动显示'
       }
       this.stopSkyTextureStatusObserver()
       return
@@ -11309,12 +11288,12 @@ private loadPlanetPositions(): void {
   }
 
   private retrySkyTextureStatus(): void {
-    this.skyTextureStatusError = false
-    this.skyTextureStatusVisible = true
-    this.skyTextureStatusText = '正在重新载入当前视野资料图'
+    this.tools.skyTextureStatusError = false
+    this.tools.skyTextureStatusVisible = true
+    this.tools.skyTextureStatusText = '正在重新载入当前视野资料图'
     this.callInteractive('retryDeepSkyImages', '', () => {
       this.scheduleSkyTextureStatusCheck()
-    }, () => { this.skyTextureStatusError = true })
+    }, () => { this.tools.skyTextureStatusError = true })
   }
 
   private lx200Payload(): string {
@@ -14713,7 +14692,7 @@ private loadPlanetPositions(): void {
         flags: r.flags
       }
       this.sessionJson = JSON.stringify(snap, null, '  ')
-      this.sessionExportText = this.sessionJson
+      this.tools.sessionExportText = this.sessionJson
       this.sessionExportSig = this.sessionSignature(r)
       this.sessionHint = I18n.t('m_session_exported') + ': ' + this.sessionSummary(r)
       this.copyTextToClipboard(this.sessionJson, I18n.t('session_export_copied'))
@@ -14721,7 +14700,7 @@ private loadPlanetPositions(): void {
   }
 
   private sessionApply(): void {
-    const importedJson = this.sessionImportText.trim()
+    const importedJson = this.tools.sessionImportText.trim()
     const json = importedJson.length > 0 ? importedJson : this.sessionJson.trim()
     if (!json) { this.sessionHint = I18n.t('m_session_export_first'); return }
     this.callNativeWhenReady('applySessionState', json, (r2: StellariumBridgeResponse) => {
@@ -14820,7 +14799,7 @@ private loadPlanetPositions(): void {
       }
       return false
     }
-    if (this.recording && !this.scriptPlaybackVisible() &&
+    if (this.tools.recording && !this.scriptPlaybackVisible() &&
       x >= 16 && x <= Math.max(266, this.skyWidth - 16) &&
       y >= this.EDGE_MARGIN - 8 && y <= this.EDGE_MARGIN + 58) {
       return true
@@ -15080,7 +15059,7 @@ private loadPlanetPositions(): void {
   }
 
   private handleSkyTap(x: number, y: number): void {
-    if (this.angleMeasureEnabled) {
+    if (this.tools.angleMeasureEnabled) {
       this.measureAngleAt(x, y)
       return
     }
@@ -15657,31 +15636,36 @@ private loadPlanetPositions(): void {
       if (this.scriptPlaybackVisible()) {
         this.scriptFocusShell()
       }
-      if (!this.scriptPlaybackVisible() && this.recording && !this.recordingUiExpanded) {
-        this.recordingFocusShell()
+      if (!this.scriptPlaybackVisible() && this.tools.recording && !this.tools.recordingUiExpanded) {
+        RecordingFocusShell({ onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) } })
       }
-      if (!this.scriptPlaybackVisible() && !(this.recording && !this.recordingUiExpanded) && !this.polarScopeVisible) {
+      if (!this.scriptPlaybackVisible() && !(this.tools.recording && !this.tools.recordingUiExpanded) && !this.polarScopeVisible) {
         this.harmonyShell()
       }
-      if (!this.scriptPlaybackVisible() && this.recording) {
-        this.recordingControlBar()
+      if (!this.scriptPlaybackVisible() && this.tools.recording) {
+        RecordingControlBar({
+          store: this.tools, recordCount: this.recordCount, skyWidth: this.skyWidth, safeTop: this.scriptControlSafeTop(),
+          onToggleUi: () => { this.toggleRecordingUi() },
+          onTogglePause: () => { this.toggleRecordingPause() },
+          onStop: () => { this.stopRecording() }
+        })
       }
-      if (!this.scriptPlaybackVisible() && (!this.recording || this.recordingUiExpanded)) {
+      if (!this.scriptPlaybackVisible() && (!this.tools.recording || this.tools.recordingUiExpanded)) {
         this.polarScopeOverlay()
         this.skyCultureArtPreviewOverlay()
         this.objectInspectorMediaPreviewOverlay()
         this.objectInspectorModelOverlay()
       }
 
-      if (this.skyTextureStatusVisible) {
+      if (this.tools.skyTextureStatusVisible) {
         Row({ space: 8 }) {
-          if (!this.skyTextureStatusError) {
+          if (!this.tools.skyTextureStatusError) {
             LoadingProgress().width(16).height(16).color('#9EDCFA')
           }
-          Text(this.skyTextureStatusText)
+          Text(this.tools.skyTextureStatusText)
             .fontSize(11).fontColor('#EDF9FF').maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-          if (this.skyTextureStatusError) {
+          if (this.tools.skyTextureStatusError) {
             Button('重试')
               .height(28).fontSize(10).fontColor('#F4FBFF')
               .backgroundColor('rgba(255,255,255,0.12)').borderRadius(UI_RADIUS_PILL)
@@ -15689,7 +15673,7 @@ private loadPlanetPositions(): void {
           }
         }
           .height(38).padding({ left: 12, right: 10 })
-          .backgroundColor(this.skyTextureStatusError ? 'rgba(111,50,42,0.92)' : 'rgba(16,31,46,0.90)')
+          .backgroundColor(this.tools.skyTextureStatusError ? 'rgba(111,50,42,0.92)' : 'rgba(16,31,46,0.90)')
           .backdropBlur(18).borderRadius(UI_RADIUS_PILL)
           .position({ x: 16, y: (this.isExpandedLayout || this.isFoldHoverLayout) ? 58 : 98 })
           .constraintSize({ maxWidth: Math.max(220, this.skyWidth - 32) })
@@ -16161,72 +16145,6 @@ private loadPlanetPositions(): void {
   }
   }
 
-  }
-
-  @Builder
-  recordingFocusShell() {
-    Stack() { }
-      .width('100%')
-      .height('100%')
-      .hitTestBehavior(HitTestMode.Default)
-      .onTouch((event: TouchEvent) => { this.handleSkyTouch(event) })
-  }
-
-  @Builder
-  recordingControlBar() {
-    Row({ space: 6 }) {
-      Circle({ width: 8, height: 8 })
-        .fill(this.recordingPaused ? '#F0B44D' : '#FF5E5E')
-      Text(this.recordingPaused ? I18n.t('script_recording_paused') : I18n.t('script_recording'))
-        .fontSize(12)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#F1FAFF')
-      if (this.skyWidth >= 410) {
-        Text(this.recordCount.toString() + ' ' + I18n.t('script_recording_count'))
-          .fontSize(10)
-          .fontColor('rgba(205, 228, 244, 0.70)')
-          .layoutWeight(1)
-      } else {
-        Text(this.recordCount.toString()).fontSize(10).fontColor('rgba(205, 228, 244, 0.70)').layoutWeight(1)
-      }
-      Button(this.recordingUiExpanded ? I18n.t('script_focus_controls') : I18n.t('script_open_controls'))
-        .fontSize(10)
-        .fontColor('#E8F8FF')
-        .backgroundColor('rgba(255,255,255,0.10)')
-        .borderRadius(UI_RADIUS_CONTROL)
-        .height(34)
-        .width(46)
-        .onClick(() => { this.toggleRecordingUi() })
-      Button(this.recordingPaused ? I18n.t('btn_resume') : I18n.t('script_pause'))
-        .fontSize(10)
-        .fontColor('#E8F8FF')
-        .backgroundColor('rgba(255,255,255,0.10)')
-        .borderRadius(UI_RADIUS_CONTROL)
-        .height(34)
-        .width(48)
-        .onClick(() => { this.toggleRecordingPause() })
-      Button(I18n.t('script_stop'))
-        .fontSize(10)
-        .fontColor('#FFFFFF')
-        .backgroundColor('rgba(192,57,43,0.82)')
-        .borderRadius(UI_RADIUS_CONTROL)
-        .height(34)
-        .width(48)
-        .onClick(() => { this.stopRecording() })
-    }
-      .width(Math.min(560, Math.max(260, this.skyWidth - 24)))
-      .height(54)
-      .padding({ left: 12, right: 10 })
-      .position({ x: Math.max(12, (this.skyWidth - Math.min(560, Math.max(260, this.skyWidth - 24))) / 2), y: this.scriptControlSafeTop() })
-      .backgroundColor('rgba(10,18,30,0.84)')
-      .backdropBlur(28)
-      .border({ width: 1, color: 'rgba(255,94,94,0.24)' })
-      .borderRadius(UI_RADIUS_PANEL)
-      .shadow({ radius: 18, color: 'rgba(0,0,0,0.30)', offsetX: 0, offsetY: 8 })
-      .zIndex(130)
-      .hitTestBehavior(HitTestMode.Default)
-      .transition(TransitionEffect.OPACITY.animation({ duration: 160, curve: Curve.EaseOut })
-        .combine(TransitionEffect.translate({ x: 0, y: -10 }).animation({ duration: 220, curve: curves.springMotion(0.52, 0.88) })))
   }
 
   @Builder
@@ -22779,10 +22697,10 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             .backgroundColor(this.nmBorder())
             .margin({ top: 8, bottom: 4 })
           Text(I18n.t('c_about')).fontSize(13).fontColor(this.nmText()).width('100%')
-          if (this.aboutVersion.length > 0) {
-            Text('Stellarium ' + this.aboutVersion + ' · Qt ' + this.aboutQt).fontSize(10).fontColor('#99FFFFFF').width('100%')
-            Text(I18n.t('c_user_dir') + ': ' + this.aboutUserDir).fontSize(9).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(I18n.t('c_config_file') + ': ' + this.aboutConfigFile).fontSize(9).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (this.tools.aboutVersion.length > 0) {
+            Text('Stellarium ' + this.tools.aboutVersion + ' · Qt ' + this.tools.aboutQt).fontSize(10).fontColor('#99FFFFFF').width('100%')
+            Text(I18n.t('c_user_dir') + ': ' + this.tools.aboutUserDir).fontSize(9).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(I18n.t('c_config_file') + ': ' + this.tools.aboutConfigFile).fontSize(9).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           } else {
             Text(I18n.t('c_loading')).fontSize(10).fontColor('#99FFFFFF').width('100%')
           }
@@ -23260,31 +23178,31 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
               Text(I18n.t('panel_angle_measure')).fontSize(15).fontColor(this.nmText()).width('100%')
               Text(I18n.t('angle_measure_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2)
             }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            Toggle({ type: ToggleType.Switch, isOn: this.angleMeasureEnabled })
-              .enabled(!this.angleMeasurePending)
+            Toggle({ type: ToggleType.Switch, isOn: this.tools.angleMeasureEnabled })
+              .enabled(!this.tools.angleMeasurePending)
               .onChange((isOn: boolean) => { this.toggleAngleMeasure(isOn) })
           }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 })
             .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.angleMeasureEnabled) {
+          if (this.tools.angleMeasureEnabled) {
             Row({ space: 8 }) {
               Button(I18n.t('angle_measure_reset')).fontSize(11).fontColor(this.nmText())
                 .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1)
                 .onClick(() => { this.resetAngleMeasure() })
               Button(I18n.t('angle_measure_finish')).fontSize(11).fontColor('#FFFFFF')
                 .backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1)
-                .enabled(!this.angleMeasurePending)
+                .enabled(!this.tools.angleMeasurePending)
                 .onClick(() => { this.toggleAngleMeasure(false) })
             }.width('100%')
           }
-          if (this.angleMeasureHasStart && !this.angleMeasureHasEnd) {
+          if (this.tools.angleMeasureHasStart && !this.tools.angleMeasureHasEnd) {
             Text(I18n.t('angle_measure_second_point')).fontSize(12).fontColor('#FFD59A').width('100%')
               .padding({ left: 10, right: 10, top: 10, bottom: 10 })
               .backgroundColor('rgba(194, 128, 36, 0.14)').borderRadius(UI_RADIUS_CONTROL)
           }
-          if (this.angleMeasureHasEnd && this.angleMeasureText.length > 0) {
+          if (this.tools.angleMeasureHasEnd && this.tools.angleMeasureText.length > 0) {
             Column({ space: 4 }) {
               Text(I18n.t('angle_measure_result')).fontSize(11).fontColor(this.nmSub()).width('100%')
-              Text(this.angleMeasureText).fontSize(24).fontColor(this.nmAccent()).width('100%')
+              Text(this.tools.angleMeasureText).fontSize(24).fontColor(this.nmAccent()).width('100%')
             }.width('100%').padding(12).backgroundColor('rgba(91,147,191,0.12)').borderRadius(UI_RADIUS_CONTROL)
           }
           Text(I18n.t('angle_measure_touch_hint')).fontSize(11).fontColor(this.nmSub()).width('100%').maxLines(3)
@@ -23777,11 +23695,11 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             .fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 4, right: 4 })
 
           Row({ space: 10 }) {
-            Button(this.recording ? I18n.t('btn_stop_recording') : I18n.t('btn_start_recording'))
-              .fontSize(13).fontColor('#FFFFFF').backgroundColor(this.recording ? '#C0392B' : '#2E7D32')
+            Button(this.tools.recording ? I18n.t('btn_stop_recording') : I18n.t('btn_start_recording'))
+              .fontSize(13).fontColor('#FFFFFF').backgroundColor(this.tools.recording ? '#C0392B' : '#2E7D32')
               .borderRadius(UI_RADIUS_CONTROL).height(36).padding({ left: 16, right: 16 })
-              .onClick(() => { this.recording ? this.stopRecording() : this.startRecording() })
-            if (this.recording) {
+              .onClick(() => { this.tools.recording ? this.stopRecording() : this.startRecording() })
+            if (this.tools.recording) {
               Text(I18n.t('c_recording')).fontSize(12).fontColor('#FF6B6B')
             }
           }.width('100%').padding({ left: 6, right: 6 })
@@ -24083,7 +24001,21 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else if (this.activePanel === 'tools') {
-      this.toolsPanel()
+      ToolsPanel({
+        store: this.tools,
+        textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), inputColor: this.nmInput(),
+        configImportText: this.tools.configImportText,
+        sessionImportText: this.tools.sessionImportText,
+        onScreenshot: () => { this.saveScreenshot() },
+        onExportConfig: () => { this.exportConfig() },
+        onImportConfig: () => { this.importConfig() },
+        onConfigImportText: (value: string) => { this.tools.configImportText = value },
+        onSessionExport: () => { this.sessionExport() },
+        onSessionApply: () => { this.sessionApply() },
+        onSessionImportText: (value: string) => { this.tools.sessionImportText = value },
+        onLoadLog: () => { this.loadLog() },
+        onCollapseLog: () => { this.tools.logVisible = false }
+      })
     } else if (this.activePanel === 'audio') {
       // 音频控制面板
       Scroll() {
@@ -24337,86 +24269,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       }
     }
   }
-
-  @Builder
-	toolsPanel() {
-	  Scroll() {
-	    Column({ space: 10 }) {
-	      Text(I18n.t('panel_tools_data')).fontSize(15).fontColor(this.nmText()).width('100%').margin({ top: 4 })
-	      Text(I18n.t('tools_data_hint')).fontSize(10).fontColor(this.nmSub()).width('100%')
-
-	      Row({ space: 8 }) {
-	        Text(I18n.t('tools_screenshot')).fontSize(13).fontColor(this.nmText()).layoutWeight(1)
-	        Button(this.screenshotSaving ? I18n.t('screenshot_preparing') : I18n.t('i0251')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-	          .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-	          .enabled(!this.screenshotSaving)
-	          .onClick(() => { this.saveScreenshot() })
-	      }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-
-	      Column({ space: 6 }) {
-	        Row({ space: 8 }) {
-	          Text(I18n.t('tools_config_backup')).fontSize(13).fontColor(this.nmText()).layoutWeight(1)
-	          Button(I18n.t('btn_export_view')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-	            .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.exportConfig() })
-	          Button(I18n.t('btn_import_config')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-	            .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.importConfig() })
-	        }.width('100%')
-	        if (this.configExportVisible) {
-	          Scroll() {
-	            Text(this.configExportText.length > 0 ? this.configExportText : '（配置为空）').fontSize(9).fontColor(this.nmSub()).width('100%').fontFamily('monospace')
-	          }.width('100%').height(120).backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).padding(8)
-	        }
-	        TextArea({ placeholder: I18n.t('c_config_import_hint'), text: this.configImportText })
-	          .fontSize(10).fontColor(this.nmText()).placeholderFont({ size: 10 }).placeholderColor(this.nmSub())
-	          .backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).width('100%').height(76)
-	          .onChange((value: string) => { this.configImportText = value })
-	        Text(this.configImportMsg.length > 0 ? this.configImportMsg : ' ').fontSize(10).fontColor('#FFAA00').width('100%').height(16)
-	      }.width('100%').padding(10).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-
-	      Column({ space: 6 }) {
-	        Row({ space: 8 }) {
-	          Text(I18n.t('tools_session')).fontSize(13).fontColor(this.nmText()).layoutWeight(1)
-	          Button(I18n.t('session_export')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-	            .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.sessionExport() })
-	          Button(I18n.t('session_import')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-	            .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.sessionApply() })
-	        }.width('100%')
-	        Text(I18n.t('session_hint')).fontSize(10).fontColor(this.nmSub()).width('100%')
-	        if (this.sessionExportText.length > 0) {
-	          Scroll() {
-	            Text(this.sessionExportText).fontSize(9).fontColor(this.nmSub()).width('100%').fontFamily('monospace')
-	          }.width('100%').height(100).backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).padding(8)
-	        }
-	        TextArea({ placeholder: I18n.t('session_import_hint'), text: this.sessionImportText })
-	          .fontSize(10).fontColor(this.nmText()).placeholderColor(this.nmSub())
-	          .backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).width('100%').height(72)
-	          .onChange((value: string) => { this.sessionImportText = value })
-	        if (this.sessionImportMsg.length > 0) {
-	          Text(this.sessionImportMsg).fontSize(10).fontColor('#FFAA00').width('100%')
-	        }
-	      }.width('100%').padding(10).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-
-	      Column({ space: 6 }) {
-	        Row({ space: 8 }) {
-	          Text(I18n.t('tools_logs')).fontSize(13).fontColor(this.nmText()).layoutWeight(1)
-	          Button(this.logVisible ? I18n.t('btn_refresh') : I18n.t('btn_view_logs')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-	            .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.loadLog() })
-	          if (this.logVisible) {
-	            Button(I18n.t('btn_collapse')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-	              .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.logVisible = false })
-	          }
-	        }.width('100%')
-	        if (this.logVisible) {
-	          Scroll() {
-	            Text(this.logText.length > 0 ? this.logText : '（日志为空）').fontSize(9).fontColor(this.nmSub()).width('100%').fontFamily('monospace')
-	          }.width('100%').height(180).backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).padding(8)
-	        }
-	      }.width('100%').padding(10).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-	    }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
-	  }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-	}
-
-
 
 	  @Builder
   lockRow() {
