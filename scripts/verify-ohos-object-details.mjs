@@ -10,6 +10,8 @@ const cppPath = path.join(root, 'src/StelMainView.cpp')
 const etsPath = path.join(root, 'harmonyos/ets-source/pages/MainWindowNativeNode.ets')
 const mirrorPath = path.join(root, 'build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets')
 const typesPath = path.join(root, 'harmonyos/ets-source/pages/StellariumTypes.ets')
+// 段落助手已随界面搬进 StructuredDetailRows.ets（改为文件作用域函数）。
+const detailPath = path.join(root, 'harmonyos/ets-source/panels/object/StructuredDetailRows.ets')
 
 const cpp = fs.readFileSync(cppPath, 'utf8')
 const ets = fs.readFileSync(etsPath, 'utf8')
@@ -20,15 +22,16 @@ const fieldPattern = /append(?:LocalizedText|ScaledPositiveNumber|NonZeroNumber|
 const emitted = [...cpp.matchAll(fieldPattern)].map(match => ({ key: match[1], section: match[2] }))
 const uniqueKeys = new Set(emitted.map(field => field.key))
 
-const labelsStart = ets.indexOf('private detailFieldLabel')
-const labelsEnd = ets.indexOf('private detailFieldValue')
-const labelsBlock = ets.slice(labelsStart, labelsEnd)
+const detail = fs.readFileSync(detailPath, 'utf8')
+const labelsStart = detail.indexOf('function detailFieldLabel')
+const labelsEnd = detail.indexOf('function detailFieldValue')
+const labelsBlock = detail.slice(labelsStart, labelsEnd)
 const labels = new Set([...labelsBlock.matchAll(/case '([^']+)'/g)].map(match => match[1]))
 
-const sectionsStart = ets.indexOf('private detailSectionIds')
-const sectionsEnd = ets.indexOf('private detailFieldLabel')
-const sectionsBlock = ets.slice(sectionsStart, sectionsEnd)
-const sectionIdsBlock = sectionsBlock.slice(0, sectionsBlock.indexOf('private detailSectionTitle'))
+const sectionsStart = detail.indexOf('function detailSectionIds')
+const sectionsEnd = detail.indexOf('function detailFieldLabel')
+const sectionsBlock = detail.slice(sectionsStart, sectionsEnd)
+const sectionIdsBlock = sectionsBlock.slice(0, sectionsBlock.indexOf('function detailSectionTitle'))
 const sectionIds = new Set([...sectionIdsBlock.matchAll(/'([^']+)'/g)].map(match => match[1]))
 const sectionTitles = new Set([...sectionsBlock.matchAll(/case '([^']+)'/g)].map(match => match[1]))
 
@@ -42,9 +45,9 @@ if (missingSections.length > 0) failures.push(`missing sections: ${missingSectio
 if (!types.includes('detailFields?: Array<ObjectDetailField>')) failures.push('detailFields bridge contract is missing')
 if (!ets.includes('LoadingProgress()')) failures.push('native detail loading indicator is missing')
 // 共享 builder 需覆盖现存的全部详情面板（死代码清理后剩两处调用），且它必须委托给共享的行组件。
-if ((ets.match(/this\.structuredObjectDetails\(/g) ?? []).length < 2) failures.push('not all object detail surfaces use the shared builder')
-if (!ets.includes('StructuredDetailRow({ label: this.detailFieldLabel(field.key)')
-  || !ets.includes('DetailSectionTitle({ title: this.detailSectionTitle(section)')) {
+if ((ets.match(/StructuredDetailRows\(\{ store: this\.objectDetailStore/g) ?? []).length < 2) failures.push('not all object detail surfaces use the shared builder')
+if (!detail.includes('StructuredDetailRow({ label: detailFieldLabel(field.key)')
+  || !detail.includes('DetailSectionTitle({ title: detailSectionTitle(section)')) {
   failures.push('the shared detail builder no longer delegates to the shared row components')
 }
 
