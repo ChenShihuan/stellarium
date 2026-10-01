@@ -58,6 +58,7 @@ import { ObjectDetailActionsTab } from '../panels/object/ObjectDetailActionsTab'
 import { ObjectDataTile, ObjectMetric, ObjectScheduleTile, ObjectDetailTab, ObjectCompactMetric } from '../panels/object/DetailTiles'
 import { ObjectDistanceNotice, SelectedLiveInfoRows, SelectedCoordinateRow, SelectedCoordinateRows } from '../panels/object/DetailLiveRows'
 import { StructuredDetailRows } from '../panels/object/StructuredDetailRows'
+import { SatellitePassDetails } from '../panels/object/SatellitePassDetails'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
@@ -18487,7 +18488,7 @@ private loadPlanetPositions(): void {
             Text('完整资料').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
             ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })
             this.tabletInspectorMedia()
-            this.satellitePassesDetails(false)
+            SatellitePassDetails({ store: this.objectDetailStore, tablet: false, visible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(), onLoad: () => { this.loadSelectedSatellitePasses() } })
             this.selectedConstellationCultureDescriptionView(false)
             Row({ space: 8 }) {
               Column({ space: 7 }) {
@@ -19951,135 +19952,17 @@ private loadPlanetPositions(): void {
     return type.indexOf('artificial satellite') >= 0 || type.indexOf('人造卫星') >= 0
   }
 
-  private satellitePassTime(value: string | undefined): string {
-    if (value === undefined || value.length === 0) return '--'
-    return value.replace('T', ' ').replace(/\.000Z$/, ' UTC').replace(/Z$/, ' UTC')
-  }
 
   private selectedSatelliteTleEpoch(): string {
     if (this.objectDetailStore.selectedSatellitePasses.length === 0) return ''
     return this.objectDetailStore.selectedSatellitePasses[0].tleEpoch ?? ''
   }
 
-  private satellitePassAngle(value: number | undefined): string {
-    return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(1) + '°' : '--'
-  }
 
-  private satellitePassAltitude(value: number | undefined): string {
-    return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(1) + '°' : '--'
-  }
 
-  private satellitePassVisibility(pass: SatellitePass): string {
-    if (pass.visible === true || pass.peakVisible === true) return I18n.t('satellite_pass_visible')
-    switch (pass.visibilityReason) {
-      case 'observer_in_daylight': return I18n.t('satellite_pass_daylight')
-      case 'satellite_in_earth_shadow': return I18n.t('satellite_pass_shadow')
-      case 'below_horizon': return I18n.t('satellite_pass_below_horizon')
-      case 'satellite_eclipsed': return I18n.t('satellite_pass_eclipsed')
-      default: return I18n.t('satellite_pass_not_visible')
-    }
-  }
 
-  @Builder
-  satellitePassTimelineRow(label: ResourceStr, time: string, tablet: boolean) {
-    Row({ space: 7 }) {
-      Column() {
-        Circle({ width: tablet ? 8 : 7, height: tablet ? 8 : 7 })
-          .fill(this.nmAccent())
-        Divider().vertical(true).height(18).color('rgba(143,211,255,0.28)')
-      }.width(10).height(30).justifyContent(FlexAlign.Center)
-      Column({ space: 1 }) {
-        Text(label).fontSize(tablet ? 10 : 9).fontColor('#8FBBD6')
-        Text(this.satellitePassTime(time)).fontSize(tablet ? 12 : 11).fontColor('#E1F2FA')
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.layoutWeight(1)
-    }.width('100%').height(36)
-  }
 
-  @Builder
-  satellitePassCard(pass: SatellitePass, tablet: boolean) {
-    Column({ space: 5 }) {
-      Row() {
-        Text(this.satellitePassVisibility(pass)).fontSize(tablet ? 11 : 10).fontWeight(FontWeight.Medium)
-          .fontColor(pass.visible === true || pass.peakVisible === true ? '#A8F0C2' : '#D9C28F')
-        Text(pass.ongoing === true ? ' · ' + I18n.t('satellite_pass_peak') : '')
-          .fontSize(10).fontColor('#8FBBD6').layoutWeight(1)
-        Text(typeof pass.maxMagnitude === 'number' && Number.isFinite(pass.maxMagnitude) ? 'm ' + pass.maxMagnitude.toFixed(1) : '')
-          .fontSize(10).fontColor('#B9D9E9')
-      }.width('100%')
-      Column({ space: 1 }) {
-        this.satellitePassTimelineRow(I18n.t('satellite_pass_appearance'), pass.start ?? pass.appearance ?? '', tablet)
-        this.satellitePassTimelineRow(I18n.t('satellite_pass_peak'), pass.peak ?? '', tablet)
-        this.satellitePassTimelineRow(I18n.t('satellite_pass_disappearance'), pass.end ?? pass.disappearance ?? '', tablet)
-      }.width('100%')
-      Row({ space: 10 }) {
-        Column({ space: 1 }) {
-          Text(I18n.t('satellite_pass_max_altitude')).fontSize(9).fontColor('#8FBBD6')
-          Text(this.satellitePassAltitude(pass.maxAltitude)).fontSize(tablet ? 12 : 11).fontColor('#E1F2FA')
-        }.layoutWeight(1)
-        Column({ space: 1 }) {
-          Text(I18n.t('satellite_pass_peak')).fontSize(9).fontColor('#8FBBD6')
-          Text(this.satellitePassAngle(pass.peakAzimuth)).fontSize(tablet ? 12 : 11).fontColor('#E1F2FA')
-        }.layoutWeight(1)
-        Column({ space: 1 }) {
-          Text(I18n.t('satellite_pass_visibility')).fontSize(9).fontColor('#8FBBD6')
-          Text(this.satellitePassVisibility(pass)).fontSize(tablet ? 11 : 10).fontColor('#E1F2FA')
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.layoutWeight(1)
-      }.width('100%')
-    }
-      .width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 })
-      .backgroundColor('rgba(91,147,191,0.09)')
-      .border({ width: 0.5, color: 'rgba(143,211,255,0.18)' })
-      .borderRadius(UI_RADIUS_CONTROL)
-  }
 
-  @Builder
-  satellitePassesDetails(tablet: boolean) {
-    if (this.selectedObjectIsArtificialSatellite()) {
-      Column({ space: 7 }) {
-        Row() {
-          Text(I18n.t('satellite_passes_title')).fontSize(tablet ? 13 : 12).fontWeight(FontWeight.Medium)
-            .fontColor('#D9F2FF').layoutWeight(1)
-          Text(this.objectDetailStore.selectedSatellitePassesLoaded ? this.objectDetailStore.selectedSatellitePasses.length.toString() : '')
-            .fontSize(10).fontColor('#8FBBD6')
-        }.width('100%')
-        if (!this.objectDetailStore.selectedSatellitePassesRequested) {
-          Row({ space: 8 }) {
-            Text(I18n.t('satellite_passes_lazy_hint')).fontSize(11).fontColor('#8FBBD6')
-              .layoutWeight(1).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Button(I18n.t('satellite_passes_load'))
-              .fontSize(11).fontColor('#E1F2FA')
-              .backgroundColor('rgba(91,147,191,0.28)')
-              .borderRadius(UI_RADIUS_CONTROL)
-              .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-              .onClick(() => { this.loadSelectedSatellitePasses() })
-          }.width('100%').alignItems(VerticalAlign.Center).padding({ top: 6, bottom: 6 })
-        } else if (!this.objectDetailStore.selectedSatellitePassesLoaded) {
-          Row({ space: 7 }) {
-            LoadingProgress().width(16).height(16).color('#8FD3FF')
-            Text(I18n.t('satellite_pass_preparing')).fontSize(11).fontColor('#8FBBD6')
-          }.width('100%').justifyContent(FlexAlign.Center).padding({ top: 8, bottom: 8 })
-        } else if (this.objectDetailStore.selectedSatellitePasses.length === 0) {
-          Text(I18n.t('satellite_pass_no_data')).fontSize(11).fontColor('#8FBBD6')
-            .lineHeight(17).width('100%').padding({ top: 6, bottom: 6 })
-        } else {
-          Text(I18n.t('satellite_next_pass')).fontSize(10).fontColor('#8FBBD6').width('100%')
-          ForEach(this.objectDetailStore.selectedSatellitePasses.slice(0, 3), (pass: SatellitePass) => {
-            this.satellitePassCard(pass, tablet)
-          }, (pass: SatellitePass, index: number) => 'satellite-pass-' + index.toString() + '-' + this.satellitePassTime(pass.start))
-        }
-        if (this.objectDetailStore.selectedSatellitePassesLoaded && this.selectedSatelliteTleEpoch().length > 0) {
-          Text(I18n.format('satellite_pass_offline_source', [this.selectedSatelliteTleEpoch()])).fontSize(9).fontColor('#7599AD')
-            .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-      }
-        .width('100%').padding({ left: 10, right: 10, top: 10, bottom: 10 })
-        .backgroundColor('rgba(91,147,191,0.08)')
-        .border({ width: 0.5, color: 'rgba(143,211,255,0.18)' })
-        .borderRadius(UI_RADIUS_CONTROL)
-    }
-  }
 
   @Builder
   selectedConstellationCultureDescriptionView(tablet: boolean) {
@@ -21601,7 +21484,7 @@ private loadPlanetPositions(): void {
       if (this.fullInspectorRequested) {
         Divider().color(this.nmBorder()).margin({ top: 8, bottom: 8 })
         this.tabletInspectorMedia()
-        this.satellitePassesDetails(true)
+        SatellitePassDetails({ store: this.objectDetailStore, tablet: true, visible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(), onLoad: () => { this.loadSelectedSatellitePasses() } })
         DetailSectionTitle({ title: '坐标参考', tablet: true })
         SelectedCoordinateRows({ store: this.objectDetailStore, tablet: true })
         DetailSectionTitle({ title: '实时观测', tablet: true })
