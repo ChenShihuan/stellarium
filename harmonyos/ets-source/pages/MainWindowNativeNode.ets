@@ -54,6 +54,7 @@ import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
+import { ObjectDetailActionsTab } from '../panels/object/ObjectDetailActionsTab'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
@@ -18525,41 +18526,17 @@ private loadPlanetPositions(): void {
             }.width('100%').alignItems(VerticalAlign.Top)
             this.structuredObjectDetails(false)
           } else {
-            Text('目标操作').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
-            Row({ space: 8 }) {
-              Button(I18n.t('btn_center'))
-                .fontSize(12).fontColor('#E8F8FF').backgroundColor('rgba(91,147,191,0.34)').borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
-                .onClick(() => { this.moveToSelectedObject() })
-              Button(this.viewLock ? I18n.t('btn_unlock_view') : I18n.t('btn_lock_view'))
-                .fontSize(12).fontColor('#E8F8FF')
-                .backgroundColor(this.viewLock ? 'rgba(91,147,191,0.50)' : 'rgba(255,255,255,0.08)')
-                .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
-                .onClick(() => { this.toggleViewLock() })
-            }.width('100%')
-            Button(this.observingList.includes(this.objectDetailStore.selectedName) ? I18n.t('s0739') : I18n.t('s0738'))
-              .fontSize(12).fontColor('#E8F8FF').backgroundColor('rgba(91,147,191,0.28)').borderRadius(UI_RADIUS_CONTROL).height(34).width('100%')
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { this.toggleSelectedObservingList() })
-            Row({ space: 8 }) {
-              Button(I18n.t('s0721'))
-                .fontSize(12).fontColor('#DDF4FF').backgroundColor('rgba(255,255,255,0.07)').borderRadius(UI_RADIUS_CONTROL).height(34).layoutWeight(1)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
-                .onClick(() => { this.refreshSelectedObject(); this.refreshState() })
-              Button(I18n.t('i0134'))
-                .fontSize(12).fontColor('#DDF4FF').backgroundColor('rgba(255,255,255,0.07)').borderRadius(UI_RADIUS_CONTROL).height(34).layoutWeight(1)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
-                .onClick(() => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() })
-            }.width('100%')
-            Button(I18n.t('s0760'))
-              .fontSize(12).fontColor('#DDF4FF').backgroundColor('rgba(255,255,255,0.07)').borderRadius(UI_RADIUS_CONTROL).height(34).width('100%')
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { this.speakSelectedObject() })
-            if (this.speechStatus.length > 0) {
-              Text(this.speechStatus).fontSize(11).fontColor('#B9DBEB').lineHeight(16).width('100%').maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis })
-                .padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL)
-            }
+            ObjectDetailActionsTab({
+              viewLock: this.viewLock,
+              speechStatus: this.speechStatus,
+              inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+              onCenter: () => { this.moveToSelectedObject() },
+              onToggleLock: () => { this.toggleViewLock() },
+              onToggleObserving: () => { this.toggleSelectedObservingList() },
+              onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
+              onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
+              onSpeak: () => { this.speakSelectedObject() }
+            })
           }
         }
           .width('100%').padding({ left: 16, right: 16, top: 10, bottom: 10 })
