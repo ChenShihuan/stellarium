@@ -52,6 +52,7 @@ import { BookmarkPanel } from '../panels/BookmarkPanel'
 import { SearchStore } from '../state/SearchStore'
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { GyroStore } from '../state/GyroStore'
+import { WutStore } from '../state/WutStore'
 import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
@@ -136,6 +137,7 @@ export struct WindowNativeNode {
   @State private searchStore: SearchStore = new SearchStore()
   @State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()
   @State private gyroStore: GyroStore = new GyroStore()
+  @State private wutStore: WutStore = new WutStore()
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
   private searchHistory: string[] = []
   @State private objectCatalogCategories: CatOption[] = []
@@ -638,23 +640,7 @@ export struct WindowNativeNode {
   private astroContextRequestId: number = 0
   private astroContextRequestPending: boolean = false
   @State private tonightAstro: TonightEvents | null = null
-  @State private wutTargets: Array<WutTarget> = []
-  @State private wutLoading: boolean = false
-  @State private wutProgress: string = ''
-  @State private wutCategory: string = 'planets'
-  @State private wutCategoriesExpanded: boolean = false
-  @State private wutPeriod: string = 'midnight'
-  @State private wutMinAltitude: number = 20
-  @State private wutMaxMagnitude: number = 6
-  @State private wutDirection: string = 'all'
-  @State private wutLimitAngularSize: boolean = false
-  @State private wutMinAngularSizeArcmin: number = 10
-  @State private wutMaxAngularSizeArcmin: number = 600
-  @State private wutAngularSizeAvailable: boolean = true
-  @State private wutObservationTime: string = ''
-  @State private wutHint: string = ''
   private wutRequestSequence: number = 0
-  @State private wutHasResult: boolean = false
   @State private atmoPressure: number = 1013
   @State private atmoTemperature: number = 10
   @State private atmoExtinction: number = 0.13
@@ -2860,7 +2846,7 @@ export struct WindowNativeNode {
       if (panel === 'place') {
         this.refreshTonight()
       }
-      if (panel === 'observing' && !this.wutHasResult && !this.wutLoading) {
+      if (panel === 'observing' && !this.wutStore.wutHasResult && !this.wutStore.wutLoading) {
         this.loadWutTargets()
       }
       if (panel === 'search') {
@@ -6344,9 +6330,9 @@ export struct WindowNativeNode {
         return { title: this.planetTimeSeriesName + '双变量时间曲线', headers: ['日期时间', '儒略日', '距起点(小时)', this.planetMetricLabel(this.planetTimeSeriesLeftMetric), this.planetMetricLabel(this.planetTimeSeriesRightMetric)],
           rows: this.planetTimeSeriesData.map((item: PlanetTimeSeriesPoint) => [item.date, item.jd, item.t, item.left, item.right]) }
       }
-    } else if (this.astroTab === 5 && this.wutTargets.length > 0) {
+    } else if (this.astroTab === 5 && this.wutStore.wutTargets.length > 0) {
       return { title: '今晚可观测天体', headers: ['天体', '英文名', '类型', '观测时刻', '高度(度)', '方位(度)', '星等', '角尺寸(角分)', '升起', '中天', '落下'],
-        rows: this.wutTargets.map((item: WutTarget) => [this.zhNameOf(item.name ?? ''), item.englishName, item.type, this.wutObservationTime, item.altitude, item.azimuth, item.magnitude, item.angularSizeArcmin, item.rise, item.transit, item.set]) }
+        rows: this.wutStore.wutTargets.map((item: WutTarget) => [this.zhNameOf(item.name ?? ''), item.englishName, item.type, this.wutStore.wutObservationTime, item.altitude, item.azimuth, item.magnitude, item.angularSizeArcmin, item.rise, item.transit, item.set]) }
     } else if (this.astroTab === 6) {
       if (this.planetCalcMode === 0 && this.planetCalcData.length > 0) {
         return { title: '行星计算', headers: ['天体', '英文名', '赤经', '赤纬', '高度(度)', '方位(度)', '星等', '距离(AU)', '距日(度)', '相位(%)', '升起', '中天', '落下'],
@@ -7242,52 +7228,52 @@ export struct WindowNativeNode {
 
   private loadWutTargets(): void {
     const requestId = ++this.wutRequestSequence
-    this.wutLoading = true
-    this.wutHasResult = false
-    this.wutProgress = I18n.t('observing_loading') as string
-    this.wutHint = ''
+    this.wutStore.wutLoading = true
+    this.wutStore.wutHasResult = false
+    this.wutStore.wutProgress = I18n.t('observing_loading') as string
+    this.wutStore.wutHint = ''
     this.publishAstroPanelState()
     const options = JSON.stringify({
-      category: this.wutCategory,
-      period: this.wutPeriod,
-      minAltitude: this.wutMinAltitude,
-      maxMagnitude: this.wutMaxMagnitude,
-      limitAngularSize: this.wutLimitAngularSize,
-      minAngularSizeArcmin: this.wutMinAngularSizeArcmin,
-      maxAngularSizeArcmin: this.wutMaxAngularSizeArcmin,
-      direction: this.wutDirection
+      category: this.wutStore.wutCategory,
+      period: this.wutStore.wutPeriod,
+      minAltitude: this.wutStore.wutMinAltitude,
+      maxMagnitude: this.wutStore.wutMaxMagnitude,
+      limitAngularSize: this.wutStore.wutLimitAngularSize,
+      minAngularSizeArcmin: this.wutStore.wutMinAngularSizeArcmin,
+      maxAngularSizeArcmin: this.wutStore.wutMaxAngularSizeArcmin,
+      direction: this.wutStore.wutDirection
     })
     this.callLongRunningInteractive('getWutTargets', options, (r: StellariumBridgeResponse) => {
       if (requestId !== this.wutRequestSequence) return
-      this.wutLoading = false
-      this.wutProgress = ''
-      this.wutHasResult = true
+      this.wutStore.wutLoading = false
+      this.wutStore.wutProgress = ''
+      this.wutStore.wutHasResult = true
       if (r.ok === true && r.wutTargets !== undefined) {
-        this.wutTargets = r.wutTargets as Array<WutTarget>
-        this.wutObservationTime = r.observationTime ?? ''
-        this.wutAngularSizeAvailable = r.angularSizeAvailable !== false
-        if (!this.wutAngularSizeAvailable) this.wutLimitAngularSize = false
-        if (this.wutTargets.length === 0) this.wutHint = I18n.t('observing_no_matches') + this.wutCategoryTitle() + '。'
+        this.wutStore.wutTargets = r.wutTargets as Array<WutTarget>
+        this.wutStore.wutObservationTime = r.observationTime ?? ''
+        this.wutStore.wutAngularSizeAvailable = r.angularSizeAvailable !== false
+        if (!this.wutStore.wutAngularSizeAvailable) this.wutStore.wutLimitAngularSize = false
+        if (this.wutStore.wutTargets.length === 0) this.wutStore.wutHint = I18n.t('observing_no_matches') + this.wutCategoryTitle() + '。'
       } else {
-        this.wutTargets = []
-        this.wutHint = (r.error ?? '').toString().includes('twilight')
+        this.wutStore.wutTargets = []
+        this.wutStore.wutHint = (r.error ?? '').toString().includes('twilight')
           ? I18n.t('observing_no_twilight')
           : I18n.t('observing_compute_failed')
       }
       this.publishAstroPanelState()
     }, () => {
       if (requestId !== this.wutRequestSequence) return
-      this.wutLoading = false
-      this.wutProgress = ''
-      this.wutHasResult = true
-      this.wutTargets = []
-      this.wutHint = I18n.t('observing_compute_unavailable')
+      this.wutStore.wutLoading = false
+      this.wutStore.wutProgress = ''
+      this.wutStore.wutHasResult = true
+      this.wutStore.wutTargets = []
+      this.wutStore.wutHint = I18n.t('observing_compute_unavailable')
       this.publishAstroPanelState()
     }, (progress: StellariumBridgeResponse) => {
       if (requestId !== this.wutRequestSequence) return
       const completed = Number(progress.progress ?? 0)
       const total = Number(progress.totalCandidates ?? 0)
-      this.wutProgress = total > 0
+      this.wutStore.wutProgress = total > 0
         ? I18n.t('observing_filtering') + ' ' + completed.toFixed(0) + ' / ' + total.toFixed(0)
         : I18n.t('observing_filtering')
     }, 900)
@@ -7821,26 +7807,26 @@ export struct WindowNativeNode {
       ok: true, group: this.astroGroup, tab: this.astroTab,
       requestedTab: this.astroRequestedTab, transitionId: this.astroTransitionId,
       transitioning: this.astroRequestedTab >= 0,
-      loading: this.wutLoading,
-      period: this.wutPeriod, altitude: this.wutMinAltitude,
-      magnitude: this.wutMaxMagnitude, direction: this.wutDirection,
+      loading: this.wutStore.wutLoading,
+      period: this.wutStore.wutPeriod, altitude: this.wutStore.wutMinAltitude,
+      magnitude: this.wutStore.wutMaxMagnitude, direction: this.wutStore.wutDirection,
       scrollY: this.activePanel === 'astro' && this.panelVisible ? this.astroPanelScroller.currentOffset().yOffset : 0
     }))
   }
 
   private selectAstroFilter(key: string, value: string): void {
     if (key === 'period' && ['evening', 'midnight', 'morning', 'night'].includes(value)) {
-      if (this.wutPeriod === value) return
-      this.wutPeriod = value
+      if (this.wutStore.wutPeriod === value) return
+      this.wutStore.wutPeriod = value
     } else if (key === 'altitude' && ['0', '10', '20', '30', '45'].includes(value)) {
-      if (this.wutMinAltitude === Number(value)) return
-      this.wutMinAltitude = Number(value)
+      if (this.wutStore.wutMinAltitude === Number(value)) return
+      this.wutStore.wutMinAltitude = Number(value)
     } else if (key === 'magnitude' && ['4', '6', '8', '10'].includes(value)) {
-      if (this.wutMaxMagnitude === Number(value)) return
-      this.wutMaxMagnitude = Number(value)
+      if (this.wutStore.wutMaxMagnitude === Number(value)) return
+      this.wutStore.wutMaxMagnitude = Number(value)
     } else if (key === 'direction' && ['all', 'north', 'east', 'south', 'west'].includes(value)) {
-      if (this.wutDirection === value) return
-      this.wutDirection = value
+      if (this.wutStore.wutDirection === value) return
+      this.wutStore.wutDirection = value
     } else return
     this.publishAstroPanelState()
     this.loadWutTargets()
@@ -7946,7 +7932,7 @@ export struct WindowNativeNode {
       return
     }
     if (this.astroTab === 5) {
-      this.astroCalcSnapshot = '今晚可观测 · ' + this.wutCategory + ' · ' + this.wutObservationTime
+      this.astroCalcSnapshot = '今晚可观测 · ' + this.wutStore.wutCategory + ' · ' + this.wutStore.wutObservationTime
       return
     }
     if (this.astroTab === 6) {
@@ -13678,7 +13664,7 @@ private loadPlanetPositions(): void {
   }
 
   private observingDisplayName(englishName: string): string {
-    const target = this.wutTargets.find((item: WutTarget) => item.englishName === englishName)
+    const target = this.wutStore.wutTargets.find((item: WutTarget) => item.englishName === englishName)
     if (target !== undefined) return this.wutTargetTitle(target)
     return this.planetZh(englishName) !== englishName ? this.planetZh(englishName) : this.zhNameOf(englishName)
   }
@@ -13721,7 +13707,7 @@ private loadPlanetPositions(): void {
   private wutCategoryTitle(): string {
     const options = this.wutCategoryOptions()
     for (const option of options) {
-      if (this.wutCategoryKey(option.id) === this.wutCategory) return String(option.label)
+      if (this.wutCategoryKey(option.id) === this.wutStore.wutCategory) return String(option.label)
     }
     return '天体'
   }
@@ -23211,32 +23197,32 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
                     Text(this.wutCategoryTitle()).fontSize(14).fontColor(this.nmText()).width('100%')
                   }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                   Image(getIcon('chevron_right', false)).width(18).height(18).fillColor(this.nmSub())
-                    .rotate({ angle: this.wutCategoriesExpanded ? 90 : 0 })
+                    .rotate({ angle: this.wutStore.wutCategoriesExpanded ? 90 : 0 })
                 }.width('100%')
               }.width('100%').padding(12).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
                 .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                 .onClick(() => {
                   this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseInOut }, () => {
-                    this.wutCategoriesExpanded = !this.wutCategoriesExpanded
+                    this.wutStore.wutCategoriesExpanded = !this.wutStore.wutCategoriesExpanded
                   })
                 })
-              if (this.wutCategoriesExpanded) {
+              if (this.wutStore.wutCategoriesExpanded) {
                 Flex({ wrap: FlexWrap.Wrap }) {
                   ForEach(this.wutCategoryOptions(), (option: TabItem) => {
                     Text(option.label).fontSize(12).width('48%')
-                      .fontColor(this.wutCategory === this.wutCategoryKey(option.id) ? this.nmText() : this.nmSub())
+                      .fontColor(this.wutStore.wutCategory === this.wutCategoryKey(option.id) ? this.nmText() : this.nmSub())
                       .padding(10).margin({ right: '2%', bottom: 6 })
-                      .backgroundColor(this.wutCategory === this.wutCategoryKey(option.id) ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
+                      .backgroundColor(this.wutStore.wutCategory === this.wutCategoryKey(option.id) ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
                       .borderRadius(UI_RADIUS_CONTROL)
                       .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                       .onClick(() => {
                         const category = this.wutCategoryKey(option.id)
                         this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseInOut }, () => {
-                          this.wutCategoriesExpanded = false
+                          this.wutStore.wutCategoriesExpanded = false
                         })
-                        if (this.wutCategory !== category) {
-                          this.wutCategory = category
-                          this.wutAngularSizeAvailable = !['stars', 'variableStars', 'highProperMotion', 'carbonStars', 'bariumStars'].includes(category)
+                        if (this.wutStore.wutCategory !== category) {
+                          this.wutStore.wutCategory = category
+                          this.wutStore.wutAngularSizeAvailable = !['stars', 'variableStars', 'highProperMotion', 'carbonStars', 'bariumStars'].includes(category)
                           this.loadWutTargets()
                         }
                       })
@@ -23248,9 +23234,9 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
                     Text('观测时段').fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 })
                     ForEach(['evening', 'midnight', 'morning', 'night'], (period: string) => {
                       Text(period === 'evening' ? '傍晚' : (period === 'morning' ? '清晨' : (period === 'night' ? '整夜' : '午夜')))
-                        .fontSize(12).fontColor(this.wutPeriod === period ? this.nmText() : this.nmSub())
+                        .fontSize(12).fontColor(this.wutStore.wutPeriod === period ? this.nmText() : this.nmSub())
                         .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                        .backgroundColor(this.wutPeriod === period ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
+                        .backgroundColor(this.wutStore.wutPeriod === period ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
                         .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                         .id('astro-filter-period-' + period)
                         .onClick(() => { this.selectAstroFilter('period', period) })
@@ -23260,9 +23246,9 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
                     Text('地平高度高于').fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 })
                     ForEach([0, 10, 20, 30, 45], (altitude: number) => {
                       Text(altitude.toString() + '°').fontSize(12)
-                        .fontColor(this.wutMinAltitude === altitude ? this.nmText() : this.nmSub())
+                        .fontColor(this.wutStore.wutMinAltitude === altitude ? this.nmText() : this.nmSub())
                         .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                        .backgroundColor(this.wutMinAltitude === altitude ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
+                        .backgroundColor(this.wutStore.wutMinAltitude === altitude ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
                         .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                         .id('astro-filter-altitude-' + altitude.toString())
                         .onClick(() => { this.selectAstroFilter('altitude', altitude.toString()) })
@@ -23272,9 +23258,9 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
                     Text('星等不超过').fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 })
                     ForEach([4, 6, 8, 10], (magnitude: number) => {
                       Text(magnitude.toString()).fontSize(12)
-                        .fontColor(this.wutMaxMagnitude === magnitude ? this.nmText() : this.nmSub())
+                        .fontColor(this.wutStore.wutMaxMagnitude === magnitude ? this.nmText() : this.nmSub())
                         .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                        .backgroundColor(this.wutMaxMagnitude === magnitude ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
+                        .backgroundColor(this.wutStore.wutMaxMagnitude === magnitude ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
                         .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                         .id('astro-filter-magnitude-' + magnitude.toString())
                         .onClick(() => { this.selectAstroFilter('magnitude', magnitude.toString()) })
@@ -23283,9 +23269,9 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
                   Flex({ wrap: FlexWrap.Wrap }) {
                     Text('方向').fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 })
                     ForEach(['all', 'north', 'east', 'south', 'west'], (direction: string) => {
-                      Text(this.wutDirectionLabel(direction)).fontSize(12).fontColor(this.wutDirection === direction ? this.nmText() : this.nmSub())
+                      Text(this.wutDirectionLabel(direction)).fontSize(12).fontColor(this.wutStore.wutDirection === direction ? this.nmText() : this.nmSub())
                         .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                        .backgroundColor(this.wutDirection === direction ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
+                        .backgroundColor(this.wutStore.wutDirection === direction ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
                         .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                         .id('astro-filter-direction-' + direction)
                         .onClick(() => { this.selectAstroFilter('direction', direction) })
@@ -23293,37 +23279,37 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
                   }.width('100%')
                   Row({ space: 8 }) {
                     Text('限制角大小').fontSize(12).fontColor(this.nmSub()).layoutWeight(1)
-                    Toggle({ type: ToggleType.Switch, isOn: this.wutLimitAngularSize }).width(44).height(28)
-                      .enabled(this.wutAngularSizeAvailable)
-                      .onChange((value: boolean) => { this.wutLimitAngularSize = value; this.loadWutTargets() })
+                    Toggle({ type: ToggleType.Switch, isOn: this.wutStore.wutLimitAngularSize }).width(44).height(28)
+                      .enabled(this.wutStore.wutAngularSizeAvailable)
+                      .onChange((value: boolean) => { this.wutStore.wutLimitAngularSize = value; this.loadWutTargets() })
                   }.width('100%')
-                  if (this.wutLimitAngularSize && this.wutAngularSizeAvailable) {
+                  if (this.wutStore.wutLimitAngularSize && this.wutStore.wutAngularSizeAvailable) {
                     Flex({ wrap: FlexWrap.Wrap }) {
                       ForEach(['10角分–1度', '1度–10度'], (label: string, index: number) => {
-                        Text(label).fontSize(12).fontColor((index === 0 ? this.wutMinAngularSizeArcmin === 10 : this.wutMinAngularSizeArcmin === 60) ? this.nmText() : this.nmSub())
+                        Text(label).fontSize(12).fontColor((index === 0 ? this.wutStore.wutMinAngularSizeArcmin === 10 : this.wutStore.wutMinAngularSizeArcmin === 60) ? this.nmText() : this.nmSub())
                           .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                          .backgroundColor((index === 0 ? this.wutMinAngularSizeArcmin === 10 : this.wutMinAngularSizeArcmin === 60) ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
+                          .backgroundColor((index === 0 ? this.wutStore.wutMinAngularSizeArcmin === 10 : this.wutStore.wutMinAngularSizeArcmin === 60) ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
                           .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                          .onClick(() => { this.wutMinAngularSizeArcmin = index === 0 ? 10 : 60; this.wutMaxAngularSizeArcmin = index === 0 ? 60 : 600; this.loadWutTargets() })
+                          .onClick(() => { this.wutStore.wutMinAngularSizeArcmin = index === 0 ? 10 : 60; this.wutStore.wutMaxAngularSizeArcmin = index === 0 ? 60 : 600; this.loadWutTargets() })
                       }, (label: string) => label)
                     }.width('100%')
                   }
 
               }.width('100%').padding(12).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ top: 8, bottom: 12 })
-              if (this.wutLoading) {
+              if (this.wutStore.wutLoading) {
                 Row({ space: 8 }) {
                   LoadingProgress().width(20).height(20).color(this.nmAccent())
-                  Text(this.wutProgress.length > 0 ? this.wutProgress : '正在筛选可观测目标…').fontSize(11).fontColor(this.nmSub())
+                  Text(this.wutStore.wutProgress.length > 0 ? this.wutStore.wutProgress : '正在筛选可观测目标…').fontSize(11).fontColor(this.nmSub())
                 }.width('100%').padding({ left: 8, top: 5, bottom: 7 })
               }
-              if (this.wutHint.length > 0) {
-                Text(this.wutHint).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 8 })
+              if (this.wutStore.wutHint.length > 0) {
+                Text(this.wutStore.wutHint).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 8 })
               } else {
-                Text('筛选结果 ' + this.wutTargets.length.toString() + ' 个 · ' + this.fmtClock(this.wutObservationTime))
+                Text('筛选结果 ' + this.wutStore.wutTargets.length.toString() + ' 个 · ' + this.fmtClock(this.wutStore.wutObservationTime))
                   .fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 8 })
               }
               Text(I18n.t('wut_card_action_hint')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ bottom: 8 })
-              ForEach(this.wutTargets, (target: WutTarget, index: number) => {
+              ForEach(this.wutStore.wutTargets, (target: WutTarget, index: number) => {
                 WutTargetCard({
               target: target, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(),
               titleOf: (item: WutTarget) => this.wutTargetTitle(item), subtitleOf: (item: WutTarget) => this.wutTargetSubtitle(item),
@@ -25155,13 +25141,13 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           Row({ space: 6 }) {
             ForEach(['planets', 'stars', 'messier'], (category: string) => {
               Text(category === 'planets' ? I18n.t('s0743') : (category === 'stars' ? I18n.t('s0744') : '梅西耶'))
-                .fontSize(10).fontColor(this.wutCategory === category ? this.nmText() : this.nmSub())
+                .fontSize(10).fontColor(this.wutStore.wutCategory === category ? this.nmText() : this.nmSub())
                 .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-                .backgroundColor(this.wutCategory === category ? this.nmAccent() : this.nmBg())
+                .backgroundColor(this.wutStore.wutCategory === category ? this.nmAccent() : this.nmBg())
                 .borderRadius(UI_RADIUS_CONTROL)
                 .onClick(() => {
-                  if (this.wutCategory !== category) {
-                    this.wutCategory = category
+                  if (this.wutStore.wutCategory !== category) {
+                    this.wutStore.wutCategory = category
                     this.loadWutTargets()
                   }
                 })
@@ -25171,13 +25157,13 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
               .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
               .onClick(() => { this.loadWutTargets() })
           }.width('100%').padding({ left: 4, right: 4 })
-          if (this.wutLoading) {
+          if (this.wutStore.wutLoading) {
             Row({ space: 8 }) {
               LoadingProgress().width(20).height(20).color(this.nmAccent())
-              Text(this.wutProgress.length > 0 ? this.wutProgress : I18n.t('observing_loading')).fontSize(11).fontColor(this.nmSub())
+              Text(this.wutStore.wutProgress.length > 0 ? this.wutStore.wutProgress : I18n.t('observing_loading')).fontSize(11).fontColor(this.nmSub())
             }.width('100%').padding({ left: 8, top: 7, bottom: 7 })
-          } else if (this.wutTargets.length > 0) {
-            ForEach(this.wutTargets.slice(0, 5), (target: WutTarget) => {
+          } else if (this.wutStore.wutTargets.length > 0) {
+            ForEach(this.wutStore.wutTargets.slice(0, 5), (target: WutTarget) => {
               Row({ space: 9 }) {
                 Column({ space: 2 }) {
                   Row({ space: 6 }) {
@@ -25203,8 +25189,8 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
               }.width('100%').padding({ left: 10, right: 8, top: 8, bottom: 8 })
                 .backgroundColor(this.nmBg()).border({ width: 1, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL)
             }, (target: WutTarget, index: number) => target.englishName ?? index.toString())
-          } else if (this.wutHint.length > 0) {
-            Text(this.wutHint).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8, top: 8, bottom: 8 })
+          } else if (this.wutStore.wutHint.length > 0) {
+            Text(this.wutStore.wutHint).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8, top: 8, bottom: 8 })
           }
           Text(I18n.t('panel_observing_list') + ' (' + this.observingList.length.toString() + ')')
             .fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 4 }).margin({ top: 8 })

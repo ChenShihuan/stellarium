@@ -23,7 +23,7 @@ function harness() {
   Object.assign(controller, {
     astroTab: 5, astroGroup: 0, astroRequestedTab: -1, astroTransitionId: 0,
     astroContentOpacity: 1, astroContentOffsetX: 0, panelVisible: true, activePanel: 'astro',
-    wutPeriod: 'evening', wutMinAltitude: 0, wutMaxMagnitude: 6, wutDirection: 'all',
+    wutStore: { wutPeriod: 'evening', wutMinAltitude: 0, wutMaxMagnitude: 6, wutDirection: 'all' },
     astroPanelScroller: { scrollTo: () => {} },
     publishAstroPanelState: () => {}, saveAppSettings: () => {},
     loadAstroTab: tab => loads.push(tab), loadWutTargets: () => loads.push('wut'),
@@ -52,8 +52,8 @@ test('the scroll itself only translates/fades; no animated sizing or conditional
 
 test('tonight loading feedback follows filters so starting a calculation cannot push the controls', () => {
   const tonight = panel.slice(panel.indexOf('} else if (this.astroTab === 5)'), panel.indexOf('} else if (this.astroTab === 6)'));
-  assert.ok(tonight.indexOf('if (this.wutLoading)') > tonight.indexOf("this.selectAstroFilter('direction',"));
-  assert.ok(tonight.indexOf('if (this.wutLoading)') < tonight.indexOf('if (this.wutHint.length'));
+  assert.ok(tonight.indexOf('if (this.wutStore.wutLoading)') > tonight.indexOf("this.selectAstroFilter('direction',"));
+  assert.ok(tonight.indexOf('if (this.wutStore.wutLoading)') < tonight.indexOf('if (this.wutStore.wutHint.length'));
 });
 
 test('switching follows displayed tab order rather than numeric IDs and uses detail timing', () => {
@@ -122,7 +122,7 @@ test('filter commands and touch use one validated state path; repeated values do
   state.controller.selectAstroFilter('period', 'nonsense');
   state.controller.selectAstroFilter('altitude', '-90');
   assert.equal(state.loads.length, 4);
-  assert.equal(state.controller.wutPeriod, 'morning');
+  assert.equal(state.controller.wutStore.wutPeriod, 'morning');
   for (const command of ['setAstroTab', 'setAstroGroup', 'setAstroFilter', 'getAstroPanelState']) {
     assert.ok(ability.includes("'" + command + "'"));
   }

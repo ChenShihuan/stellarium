@@ -14,8 +14,8 @@ test('tonight targets use the parent vertical scroll, not a fixed-width table', 
 });
 
 test('category selection can collapse and filter choices wrap within the panel', () => {
-  assert.match(panel, /if \(this\.wutCategoriesExpanded\)/);
-  assert.match(panel, /wutCategoriesExpanded = !this\.wutCategoriesExpanded/);
+  assert.match(panel, /if \(this\.wutStore\.wutCategoriesExpanded\)/);
+  assert.match(panel, /wutStore\.wutCategoriesExpanded = !this\.wutStore\.wutCategoriesExpanded/);
   assert.match(panel, /wutCategoriesExpanded = false/);
   assert.equal(((panel + card).match(/Flex\(\{ wrap: FlexWrap.Wrap \}\)/g) ?? []).length, 6);
   assert.doesNotMatch(panel, /\.layoutWeight\(1\)[\s\S]*?Text\('观测时段'\)\.fontSize\(10\)/);
