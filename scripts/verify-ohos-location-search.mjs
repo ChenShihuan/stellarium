@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const root = path.resolve(new URL('..', import.meta.url).pathname)
+const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const hierarchySource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/pages/location_hierarchy.ts'), 'utf8')
 const nameSource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/pages/location_names_zh.ts'), 'utf8')
 const mainSource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/pages/MainWindowNativeNode.ets'), 'utf8')
