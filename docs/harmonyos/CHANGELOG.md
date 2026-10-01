@@ -1,3 +1,10 @@
+## [2026-10-01] DevEco Code - 取消跟踪 `build/` 下的 11 个生成副本
+
+- **现象：** 每改一次 ArkTS 源码，`build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets` 等副本就变脏，导致每片都要额外做一次"同步生成副本"提交（本会话此前已因此产生 20+ 次提交）。
+- **根因：** git 的 `.gitignore` **只对未跟踪文件生效**。根 `.gitignore` 里早就有 `build` 一行，但这 11 个文件在规则生效前（2026-07-26 的 `3a1bad1e3a` / `0566439884` 等提交）已被 `git add`，于是一直被跟踪；而 `scripts/sync-ohos-build-sources.sh`（由 `build-ohos-hap-windows.ps1` 调用）会把 `harmonyos/ets-source/**` 复制进生成工程，源码一动副本就脏。
+- **取消跟踪前的核查（确认不丢内容）：** 4 个 ArkTS 页面与 `harmonyos/ets-source/**` **byte 完全一致**（纯拷贝）；5 个资源在 `harmonyos/{AppScope,resources,ets-source}/resources/**` 均有源；2 个数据文件在 `stars/hip_gaia3/**` 有源（含 53.2 MB 星表，均已跟踪）。
+- **处理：** `git rm --cached` 上述 11 个（磁盘文件保留），`build` 继续被忽略；新克隆需先跑一次构建（脚本编译前会自行同步）。`verify-ohos-object-details.mjs` 的"生成镜像是否过期"检查仍有效（只要求文件在磁盘上存在）。方案文档新增 §13.7 记录该决定，§13.2 第 8 步不再要求"同步生成副本"。
+- **未处理（不同类别）：** 仓内另有约 20 个"被忽略但被跟踪"的**上游素材**（`textures/*.tif`、`guide/*.pdf`、`data/*.dat`、`scripts/tests/media/*.mp4`），系被 `*.tif`/`*.pdf` 等宽泛规则误伤的真实内容且无其他副本，**不删除**。
 ## [2026-10-01] DevEco Code - Phase 3y：详情"活数据行"组件化（DetailLiveRows）
 
 - **新增 `panels/object/DetailLiveRows.ets`**：四个参数化 UI 函数改为组件 —— `objectDistanceNotice`（6 行）→ `ObjectDistanceNotice`、`selectedLiveInfoRows(compact)`（19）→ `SelectedLiveInfoRows`、`selectedCoordinateRow(label,key,tablet)`（10）→ `SelectedCoordinateRow`、`selectedCoordinateRows(tablet)`（13）→ `SelectedCoordinateRows`。
