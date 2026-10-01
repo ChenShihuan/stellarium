@@ -813,7 +813,7 @@ devecocli ui click/drag/text --device 192.168.3.95:40565 ...
 | 6 | **tools** | `toolsPanel` **446**（除去 panelContent 外最大） | |
 | 7 | **skyCulture** | `skyCultureMakerConstellationEditor` 93；≈130 字段 | |
 | 8 | **sensors/gyro** | `gyroCalibPanel` 99；13 字段 | 活路径是 `gyroRotationCallback` 等，勿动 |
-| 9 | satellite / script / telescope / session / 其余设置标签页 | `scriptFocusShell` 209 / `compactMoreDrawer` 130 / `cityChipsRow` 109 | |
+| 9 | satellite / script / telescope / session / 其余设置标签页 | `scriptFocusShell` 209 / `compactMoreDrawer` 130 / ~~`cityChipsRow` 109~~ **已完成（Phase 3ai）** / ~~`locationSearchPanel` 77~~ **已完成（Phase 3ai）**；**剩余** `locationPickerPanel` 153（含参数化 `@Builder hierColumn` 75 与方法/字段簇，须同片）| |
 | 10 | **Phase 4 面板宿主** | `panelContent` **4,707** → 表驱动 `PanelHost` | 主线；逐分支抽组件 |
 | 11 | **Phase 5 overlay / Phase 6 壳层** | `expandedShell` 150 / `compactShell` 87 / `scriptFocusShell` 209 | 含 `panelHeader` chrome（`observationTimeText`/`timeRateText` 在此收口） |
 | 12 | **Phase 7 收口** | 删过渡 getter、校正 `UI-ARCHITECTURE.md` 行号、AGENTS.md §2.2 | |
