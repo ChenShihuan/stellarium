@@ -48,7 +48,10 @@ if (!ets.includes('LoadingProgress()')) failures.push('native detail loading ind
 // 前者已随三页搬进 ObjectDetailTabs），且它必须委托给共享的行组件。
 const tabsPath = path.join(root, 'harmonyos/ets-source/panels/object/ObjectDetailTabs.ets')
 const tabsSource = fs.existsSync(tabsPath) ? fs.readFileSync(tabsPath, 'utf8') : ''
-if (((ets + tabsSource).match(/StructuredDetailRows\(\{ store: this\.(objectDetailStore|store)/g) ?? []).length < 2) failures.push('not all object detail surfaces use the shared builder')
+// 手机端天体详情分支已下沉为 ObjectPanel 组件（Phase 4e），其资料页仍委托共享行组件。
+const objectPanelPath = path.join(root, 'harmonyos/ets-source/panels/panels/ObjectPanel.ets')
+const objectPanelSource = fs.existsSync(objectPanelPath) ? fs.readFileSync(objectPanelPath, 'utf8') : ''
+if (((ets + tabsSource + objectPanelSource).match(/StructuredDetailRows\(\{ store: this\.(objectDetailStore|store)/g) ?? []).length < 2) failures.push('not all object detail surfaces use the shared builder')
 if (!detail.includes('StructuredDetailRow({ label: detailFieldLabel(field.key)')
   || !detail.includes('DetailSectionTitle({ title: detailSectionTitle(section)')) {
   failures.push('the shared detail builder no longer delegates to the shared row components')
