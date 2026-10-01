@@ -1,3 +1,9 @@
+## [2026-10-01] DevEco Code - Phase 3ag：会话延续块组件化（ContinuationSection）
+
+- **新增 `panels/astro/ContinuationSection.ets`**：`continuationSection()`（31 行）→ 组件，入参 `hint` / `json` / `textColor` / `panelColor` + 三个回调（`onExport` / `onApply` / `onHandoff`），原生根容器 `Column({ space: 8 })` 原样保留（单根，无需包裹）。
+- **单体行数：** 28,293 → **28,262**（−31）。
+- **验证：** 构建 / 契约校验（86 个 .ets）/ 全量切片脚本（仅剩 §13.6 的 6 个环境类）。
+- **踩坑（规则 2 第 5 次）：** 属性名 `borderColor` 与 `CustomComponent` 基类属性方法同名，编译报 `not assignable to the same property in base type`；改名 `panelColor` 后通过。**已知同名雷区累计：** `borderColor` / `scale` / `onTouch` / `background` / `borderColor`。新增组件前先对照基类属性方法命名。
 ## [2026-10-01] DevEco Code - Phase 3af：astro 域起步 —— 选择提示与现象关系标记组件化
 
 - **新增 `panels/astro/AstroGuides.ets`**：`astroSelectionGuide()`（15 行）→ `AstroSelectionGuide`（入参 `visible` + 夜视三色 + `onOpenPicker` 回调），参数化 `phenomenonRelationMark(type)`（29 行）→ `PhenomenonRelationMark`（**纯映射**，只收 `@Prop type`，不依赖 store/回调）。
