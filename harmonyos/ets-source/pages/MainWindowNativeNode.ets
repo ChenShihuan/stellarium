@@ -85,6 +85,10 @@ import { TabletInspectorMediaGroup } from '../panels/object/TabletInspectorMedia
 import { ObjectDetailCardHeader, ObjectDetailCardTabs } from '../panels/object/ObjectDetailCardChrome'
 import { ConstellationCultureView } from '../panels/object/ConstellationCultureView'
 import { SkyCultureDescriptionBlockView } from '../panels/skyculture/SkyCultureDescriptionBlockView'
+import { SkyCultureMakerTabs } from '../panels/skyculture/SkyCultureMakerTabs'
+import { SkyCultureMakerOverview } from '../panels/skyculture/SkyCultureMakerOverview'
+import { SkyCultureMakerConstellationEditor } from '../panels/skyculture/SkyCultureMakerConstellationEditor'
+import { SkyCultureMakerValidationPanel } from '../panels/skyculture/SkyCultureMakerValidationPanel'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
@@ -9843,38 +9847,6 @@ export struct WindowNativeNode {
     this.refreshSkyCultureMakerArtworkPreview()
   }
 
-  private skyCultureMakerArtworkPreviewHeight(): number {
-    const image = this.selectedSkyCultureMakerConstellation()?.image
-    const width = image?.size?.[0] ?? 1
-    const height = image?.size?.[1] ?? 1
-    const availableWidth = Math.max(220, this.panelWidth - 48)
-    return this.clamp(availableWidth * height / Math.max(1, width), 128, 228)
-  }
-
-  private skyCultureMakerArtworkAnchor(index: number): SkyCultureMakerArtworkAnchor | undefined {
-    const anchors = this.selectedSkyCultureMakerConstellation()?.image?.anchors ?? []
-    return index >= 0 && index < anchors.length ? anchors[index] : undefined
-  }
-
-  private skyCultureMakerArtworkAnchorHipText(index: number): string {
-    const hip = this.skyCultureMakerArtworkAnchor(index)?.hip ?? 0
-    return hip > 0 ? hip.toString() : '--'
-  }
-
-  private skyCultureMakerArtworkAnchorX(index: number): number {
-    const image = this.selectedSkyCultureMakerConstellation()?.image
-    const anchor = this.skyCultureMakerArtworkAnchor(index)
-    if (image === undefined || anchor === undefined || image.size.length !== 2 || anchor.pos.length !== 2) return -20
-    return anchor.pos[0] / Math.max(1, image.size[0]) * this.skyCultureMakerStore.artworkRenderWidth - 12
-  }
-
-  private skyCultureMakerArtworkAnchorY(index: number): number {
-    const image = this.selectedSkyCultureMakerConstellation()?.image
-    const anchor = this.skyCultureMakerArtworkAnchor(index)
-    if (image === undefined || anchor === undefined || image.size.length !== 2 || anchor.pos.length !== 2) return -20
-    return anchor.pos[1] / Math.max(1, image.size[1]) * this.skyCultureMakerStore.artworkRenderHeight - 12
-  }
-
   private applySkyCultureMakerArtworkResponse(response: StellariumBridgeResponse, successText: string): void {
     const draft = this.skyCultureMakerDraftFromResponse(response)
     if (response.ok === true && draft !== undefined) {
@@ -19631,293 +19603,12 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   }
 
   @Builder
-  skyCultureMakerField(label: ResourceStr, value: string, placeholder: ResourceStr, onChange: (value: string) => void) {
-    Column({ space: 5 }) {
-      Text(label).fontSize(10).fontColor(this.nmSub()).width('100%')
-      TextInput({ text: value, placeholder: placeholder })
-        .height(38).width('100%').fontSize(12).fontColor(this.nmText()).placeholderColor(this.nmSub())
-        .backgroundColor(this.nmInput()).border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
-        .onChange((text: string) => { onChange(text); this.scheduleSkyCultureMakerSave() })
-    }.width('100%')
-  }
-
-  @Builder
-  skyCultureMakerLongField(label: ResourceStr, value: string, placeholder: ResourceStr, onChange: (value: string) => void) {
-    Column({ space: 5 }) {
-      Text(label).fontSize(10).fontColor(this.nmSub()).width('100%')
-      TextArea({ text: value, placeholder: placeholder })
-        .height(94).width('100%').fontSize(12).fontColor(this.nmText()).placeholderColor(this.nmSub())
-        .backgroundColor(this.nmInput()).border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
-        .onChange((text: string) => { onChange(text); this.scheduleSkyCultureMakerSave() })
-    }.width('100%')
-  }
-
-  @Builder
-  skyCultureMakerTabs() {
-    Row({ space: 6 }) {
-      ForEach([I18n.t('sky_culture_maker_overview'), I18n.t('sky_culture_maker_constellations'), I18n.t('sky_culture_maker_validate_export')], (label: ResourceStr, index: number) => {
-        Text(label).fontSize(11).fontColor(this.skyCultureMakerStore.tab === index ? '#FFFFFFFF' : this.nmSub())
-          .fontWeight(this.skyCultureMakerStore.tab === index ? FontWeight.Medium : FontWeight.Normal)
-          .textAlign(TextAlign.Center).layoutWeight(1).height(34).padding({ top: 8 })
-          .backgroundColor(this.skyCultureMakerStore.tab === index ? this.nmAccent() : this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL)
-          .animation({ duration: 180, curve: curves.springMotion(0.42, 0.86) })
-          .onClick(() => { this.skyCultureMakerStore.tab = index })
-      }, (_label: ResourceStr, index: number) => index.toString())
-    }.width('100%').margin({ bottom: 10 })
-  }
-
-  @Builder
-  skyCultureMakerOverview() {
-    Column({ space: 10 }) {
-      Text(I18n.t('sky_culture_maker_offline_hint')).fontSize(10).lineHeight(15).fontColor(this.nmSub()).width('100%')
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_id'), this.skyCultureMakerStore.id, 'custom_culture', (value: string) => { this.skyCultureMakerStore.id = value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_name'), this.skyCultureMakerStore.name, I18n.t('sky_culture_maker_name_hint'), (value: string) => { this.skyCultureMakerStore.name = value })
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_author'), this.skyCultureMakerStore.author, I18n.t('sky_culture_maker_author_hint'), (value: string) => { this.skyCultureMakerStore.author = value })
-      Row({ space: 8 }) {
-        Column({ space: 5 }) {
-          Text(I18n.t('sky_culture_maker_license')).fontSize(10).fontColor(this.nmSub()).width('100%')
-          Select([{ value: 'CC0 1.0' }, { value: 'CC BY 4.0' }, { value: 'CC BY-NC 4.0' }, { value: 'CC BY-ND 4.0' }, { value: 'CC BY-NC-ND 4.0' }])
-            .selected(Math.max(0, ['CC0 1.0', 'CC BY 4.0', 'CC BY-NC 4.0', 'CC BY-ND 4.0', 'CC BY-NC-ND 4.0'].indexOf(this.skyCultureMakerStore.license)))
-            .value(this.skyCultureMakerStore.license).backgroundColor(this.nmInput())
-            .borderRadius(UI_RADIUS_CONTROL).height(38).width('100%')
-            .onSelect((_index: number, value: string) => { this.skyCultureMakerStore.license = value; this.scheduleSkyCultureMakerSave() })
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Column({ space: 5 }) {
-          Text(I18n.t('sky_culture_maker_classification')).fontSize(10).fontColor(this.nmSub()).width('100%')
-          Select([{ value: 'traditional' }, { value: 'ethnographic' }, { value: 'historical' }, { value: 'single' }, { value: 'comparative' }, { value: 'personal' }])
-            .selected(Math.max(0, ['traditional', 'ethnographic', 'historical', 'single', 'comparative', 'personal'].indexOf(this.skyCultureMakerStore.classification)))
-            .value(this.skyCultureMakerStore.classification).backgroundColor(this.nmInput())
-            .borderRadius(UI_RADIUS_CONTROL).height(38).width('100%')
-            .onSelect((_index: number, value: string) => { this.skyCultureMakerStore.classification = value; this.scheduleSkyCultureMakerSave() })
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-      }.width('100%')
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_region'), this.skyCultureMakerStore.region, 'Eastern Asia', (value: string) => { this.skyCultureMakerStore.region = value })
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_native_language'), this.skyCultureMakerStore.nativeLang, 'zh_CN', (value: string) => { this.skyCultureMakerStore.nativeLang = value })
-      Row({ space: 8 }) {
-        Column() {
-          this.skyCultureMakerField(I18n.t('sky_culture_maker_begin_year'), this.skyCultureMakerStore.beginTime, '0', (value: string) => { this.skyCultureMakerStore.beginTime = value.replace(/[^0-9-]/g, '') })
-        }.layoutWeight(1)
-        Column() {
-          this.skyCultureMakerField(I18n.t('sky_culture_maker_end_year'), this.skyCultureMakerStore.endTime, '0', (value: string) => { this.skyCultureMakerStore.endTime = value.replace(/[^0-9-]/g, '') })
-        }.layoutWeight(1)
-      }.width('100%')
-      this.skyCultureMakerLongField(I18n.t('sky_culture_maker_introduction'), this.skyCultureMakerStore.introduction, I18n.t('sky_culture_maker_introduction_hint'), (value: string) => { this.skyCultureMakerStore.introduction = value })
-      this.skyCultureMakerLongField(I18n.t('sky_culture_maker_description'), this.skyCultureMakerStore.description, I18n.t('sky_culture_maker_description_hint'), (value: string) => { this.skyCultureMakerStore.description = value })
-    }.width('100%')
-  }
-
-  @Builder
-  skyCultureMakerArtworkEditor() {
-    Column({ space: 8 }) {
-      Row({ space: 8 }) {
-        Column({ space: 2 }) {
-          Text(I18n.t('sky_culture_maker_artwork')).fontSize(11).fontColor(this.nmText()).width('100%')
-          Text(I18n.t('sky_culture_maker_artwork_hint')).fontSize(9).lineHeight(14).fontColor(this.nmSub()).width('100%')
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Button(this.skyCultureMakerStore.artworkImporting ? I18n.t('sky_culture_maker_artwork_importing') : I18n.t('sky_culture_maker_artwork_choose'))
-          .fontSize(9).fontColor(this.nmText()).backgroundColor(this.nmBg()).height(30).borderRadius(UI_RADIUS_CONTROL)
-          .enabled(!this.skyCultureMakerStore.artworkImporting).onClick(() => { this.importSkyCultureMakerArtworkFile() })
-      }.width('100%')
-      if (this.selectedSkyCultureMakerConstellation()?.image !== undefined) {
-        Stack() {
-          if (this.skyCultureMakerStore.artworkPixelMap !== undefined) {
-            Image(this.skyCultureMakerStore.artworkPixelMap as image.PixelMap)
-              .width('100%').height('100%').objectFit(ImageFit.Fill)
-          } else if (this.skyCultureMakerStore.artworkPreviewState === 'preparing') {
-            Column({ space: 7 }) {
-              LoadingProgress().width(20).height(20).color(this.nmAccent())
-              Text(I18n.t('sky_culture_maker_artwork_preparing')).fontSize(9).fontColor(this.nmSub())
-            }
-          } else {
-            Text(I18n.t(this.skyCultureMakerStore.artworkPreviewState === 'decodeFailed'
-              ? 'sky_culture_maker_artwork_decode_failed' : 'sky_culture_maker_artwork_missing'))
-              .fontSize(9).fontColor('#FFB7B7').textAlign(TextAlign.Center).padding({ left: 16, right: 16 })
-          }
-          ForEach([0, 1, 2], (anchorIndex: number) => {
-            if ((this.skyCultureMakerArtworkAnchor(anchorIndex)?.hip ?? 0) > 0) {
-              Stack({ alignContent: Alignment.Center }) {
-                Circle().width(24).height(24)
-                  .fill(anchorIndex === this.skyCultureMakerStore.artworkAnchorIndex ? '#E6A85B' : '#5B93BF')
-                  .stroke('#FFFFFFFF').strokeWidth(1)
-                Text((anchorIndex + 1).toString()).fontSize(10).fontWeight(FontWeight.Bold).fontColor('#FFFFFFFF')
-              }.width(24).height(24).position({
-                x: this.skyCultureMakerArtworkAnchorX(anchorIndex),
-                y: this.skyCultureMakerArtworkAnchorY(anchorIndex)
-              })
-            }
-          }, (anchorIndex: number) => anchorIndex.toString())
-        }
-          .width('100%').height(this.skyCultureMakerArtworkPreviewHeight()).clip(true)
-          .backgroundColor('#16000000').border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
-          .onAreaChange((_oldArea: Area, newArea: Area) => {
-            this.skyCultureMakerStore.artworkRenderWidth = Math.max(1, Number(newArea.width))
-            this.skyCultureMakerStore.artworkRenderHeight = Math.max(1, Number(newArea.height))
-          })
-          .onTouch((event: TouchEvent) => this.handleSkyCultureMakerArtworkTouch(event))
-        Row({ space: 6 }) {
-          ForEach([0, 1, 2], (anchorIndex: number) => {
-            Button(I18n.format('sky_culture_maker_anchor', [(anchorIndex + 1).toString(), this.skyCultureMakerArtworkAnchorHipText(anchorIndex)]))
-              .fontSize(9).fontColor(anchorIndex === this.skyCultureMakerStore.artworkAnchorIndex ? '#FFFFFFFF' : this.nmSub())
-              .backgroundColor(anchorIndex === this.skyCultureMakerStore.artworkAnchorIndex ? this.nmAccent() : this.nmBg())
-              .height(30).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.skyCultureMakerStore.artworkAnchorIndex = anchorIndex })
-          }, (anchorIndex: number) => anchorIndex.toString())
-        }.width('100%')
-        Text(I18n.t('sky_culture_maker_anchor_instruction')).fontSize(9).lineHeight(14).fontColor(this.nmSub()).width('100%')
-        Button(I18n.t('sky_culture_maker_artwork_remove')).fontSize(9).fontColor('#FFB7B7')
-          .backgroundColor('rgba(255,107,107,0.12)').height(30).width('100%').borderRadius(UI_RADIUS_CONTROL)
-          .onClick(() => { this.removeSkyCultureMakerArtwork() })
-      }
-    }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-  }
-
-  @Builder
-  skyCultureMakerConstellationEditor() {
-    Column({ space: 9 }) {
-      Row({ space: 8 }) {
-        Text(I18n.format('sky_culture_maker_constellation_count', [this.skyCultureMakerStore.constellations.length.toString()]))
-          .fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
-        Button(I18n.t('sky_culture_maker_add_constellation')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-          .height(30).borderRadius(UI_RADIUS_CONTROL).padding({ left: 10, right: 10 }).onClick(() => { this.addSkyCultureMakerConstellation() })
-      }.width('100%')
-      if (this.skyCultureMakerStore.constellations.length > 0) {
-        Scroll() {
-          Row({ space: 6 }) {
-            ForEach(this.skyCultureMakerStore.constellations, (item: SkyCultureMakerConstellation, index: number) => {
-              Text(item.native.length > 0 ? item.native : item.id).fontSize(10)
-                .fontColor(this.skyCultureMakerStore.selectedConstellation === index ? '#FFFFFFFF' : this.nmSub())
-                .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-                .backgroundColor(this.skyCultureMakerStore.selectedConstellation === index ? this.nmAccent() : this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectSkyCultureMakerConstellation(index) })
-            }, (item: SkyCultureMakerConstellation, index: number) => item.id + '/' + index.toString())
-          }.padding({ right: 8 })
-        }.width('100%').height(34).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-      }
-      if (this.skyCultureMakerStore.selectedConstellation >= 0 && this.skyCultureMakerStore.selectedConstellation < this.skyCultureMakerStore.constellations.length) {
-        this.skyCultureMakerField(I18n.t('sky_culture_maker_constellation_id'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].id, 'example', (value: string) => {
-          const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
-          this.updateSkyCultureMakerConstellation({ id: value.toLowerCase().replace(/[^a-z0-9_]/g, '_'), english: item.english, native: item.native, pronounce: item.pronounce, transliteration: item.transliteration, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
-        })
-        Row({ space: 8 }) {
-          Column() {
-            this.skyCultureMakerField(I18n.t('sky_culture_maker_english_name'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].english, 'Example', (value: string) => {
-              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
-              this.updateSkyCultureMakerConstellation({ id: item.id, english: value, native: item.native, pronounce: item.pronounce, transliteration: item.transliteration, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
-            })
-          }.layoutWeight(1)
-          Column() {
-            this.skyCultureMakerField(I18n.t('sky_culture_maker_native_name'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].native, I18n.t('sky_culture_maker_native_name_hint'), (value: string) => {
-              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
-              this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: value, pronounce: item.pronounce, transliteration: item.transliteration, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
-            })
-          }.layoutWeight(1)
-        }.width('100%')
-        Row({ space: 8 }) {
-          Column() {
-            this.skyCultureMakerField(I18n.t('sky_culture_maker_pronunciation'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].pronounce, '', (value: string) => {
-              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
-              this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: item.native, pronounce: value, transliteration: item.transliteration, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
-            })
-          }.layoutWeight(1)
-          Column() {
-            this.skyCultureMakerField(I18n.t('sky_culture_maker_transliteration'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].transliteration, '', (value: string) => {
-              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
-              this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: item.native, pronounce: item.pronounce, transliteration: value, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
-            })
-          }.layoutWeight(1)
-        }.width('100%')
-        this.skyCultureMakerField('IPA', this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].IPA, '', (value: string) => {
-          const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
-          this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: item.native, pronounce: item.pronounce, transliteration: item.transliteration, IPA: value, dark: item.dark, lines: item.lines, image: item.image })
-        })
-        Row({ space: 8 }) {
-          Text(I18n.t('sky_culture_maker_dark_constellation')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].dark })
-            .width(42).height(24).selectedColor(this.nmAccent()).onChange((enabled: boolean) => {
-              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
-              this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: item.native, pronounce: item.pronounce, transliteration: item.transliteration, IPA: item.IPA, dark: enabled, lines: item.lines, image: item.image })
-            })
-        }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        Text(I18n.t('sky_culture_maker_lines')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 4 })
-        ForEach(this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].lines, (line: number[], lineIndex: number) => {
-          Row({ space: 8 }) {
-            Text('HIP ' + line.join('  ·  ')).fontSize(10).fontColor(this.nmText()).layoutWeight(1).maxLines(2)
-            Button(I18n.t('nebula_texture_remove')).fontSize(9).fontColor('#FFB7B7').backgroundColor('rgba(255,107,107,0.12)')
-              .height(28).borderRadius(UI_RADIUS_CONTROL).padding({ left: 8, right: 8 }).onClick(() => { this.removeSkyCultureMakerLine(lineIndex) })
-          }.width('100%').padding({ left: 10, right: 8, top: 6, bottom: 6 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        }, (line: number[], lineIndex: number) => line.join('-') + '/' + lineIndex.toString())
-        TextInput({ text: this.skyCultureMakerStore.hipLine, placeholder: I18n.t('sky_culture_maker_hip_hint') })
-          .height(38).width('100%').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmInput())
-          .border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
-          .onChange((value: string) => { this.skyCultureMakerStore.hipLine = value })
-        Row({ space: 8 }) {
-          Button(I18n.t('sky_culture_maker_add_line')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-            .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.addSkyCultureMakerHipLine() })
-          Button(I18n.t('sky_culture_maker_add_selected_star')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-            .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.addSelectedStarToSkyCultureMaker() })
-        }.width('100%')
-        this.skyCultureMakerArtworkEditor()
-        Button(I18n.t('sky_culture_maker_delete_constellation')).fontSize(10).fontColor('#FFB7B7').backgroundColor('rgba(255,107,107,0.12)')
-          .height(32).width('100%').borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.removeSelectedSkyCultureMakerConstellation() })
-      } else {
-        Text(I18n.t('sky_culture_maker_no_constellations')).fontSize(11).fontColor(this.nmSub()).width('100%')
-          .textAlign(TextAlign.Center).padding({ top: 24, bottom: 24 })
-      }
-    }.width('100%')
-  }
-
-  @Builder
-  skyCultureMakerValidationPanel() {
-    Column({ space: 9 }) {
-      Text(I18n.t('sky_culture_maker_validate_hint')).fontSize(10).lineHeight(15).fontColor(this.nmSub()).width('100%')
-      Button(I18n.t('sky_culture_maker_validate')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-        .height(34).width('100%').borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.validateSkyCultureMaker() })
-      if (this.skyCultureMakerStore.validation !== undefined) {
-        Row({ space: 8 }) {
-          Text(I18n.format('sky_culture_maker_error_count', [this.skyCultureMakerStore.validation.errorCount.toString()]))
-            .fontSize(11).fontColor(this.skyCultureMakerStore.validation.errorCount > 0 ? '#FFB7B7' : '#B9E6C4').layoutWeight(1)
-          Text(I18n.format('sky_culture_maker_warning_count', [this.skyCultureMakerStore.validation.warningCount.toString()]))
-            .fontSize(11).fontColor('#FFD49A')
-        }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        ForEach(this.skyCultureMakerStore.validation.errors.concat(this.skyCultureMakerStore.validation.warnings), (issue: SkyCultureMakerIssue, index: number) => {
-          Column({ space: 3 }) {
-            Text(issue.field).fontSize(10).fontWeight(FontWeight.Medium).fontColor(issue.severity === 'error' ? '#FFB7B7' : '#FFD49A').width('100%')
-            Text(this.skyCultureMakerIssueText(issue.code, issue.message)).fontSize(9).lineHeight(14).fontColor(this.nmSub()).width('100%')
-          }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        }, (issue: SkyCultureMakerIssue, index: number) => issue.field + '/' + issue.code + '/' + index.toString())
-      }
-      Row({ space: 8 }) {
-        Button(I18n.t('sky_culture_maker_import')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .height(34).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.importSkyCultureMakerFile() })
-        Button(I18n.t('sky_culture_maker_export')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-          .height(34).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.exportSkyCultureMaker() })
-      }.width('100%')
-      if (this.skyCultureMakerStore.exportPath.length > 0) {
-        Row({ space: 8 }) {
-          Button(I18n.t('sky_culture_maker_share')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-            .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => {
-              this.shareFile(this.skyCultureMakerStore.exportPath, utd.UniformDataType.ZIP_ARCHIVE, this.skyCultureMakerStore.exportFileName, I18n.t('sky_culture_maker_share_description'), 'sky-culture-maker-share')
-            })
-          Button(I18n.t('sky_culture_maker_save_as')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-            .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => {
-              this.saveFileAs(this.skyCultureMakerStore.exportPath, this.skyCultureMakerStore.exportFileName, 'ZIP 压缩包|.zip')
-            })
-        }.width('100%')
-      }
-    }.width('100%')
-  }
-
-  private skyCultureMakerIssueText(code: string, fallback: string): string {
-    const key = 'sky_culture_maker_issue_' + code
-    const localized = I18n.t(key)
-    return localized === key ? fallback : localized
-  }
-
-  @Builder
   skyCultureMakerPanel() {
     Column({ space: 8 }) {
-      this.skyCultureMakerTabs()
+      SkyCultureMakerTabs({
+        store: this.skyCultureMakerStore,
+        subColor: this.nmSub(), accentColor: this.nmAccent(), bgColor: this.nmBg()
+      })
       if (this.skyCultureMakerStore.loading) {
         Row({ space: 8 }) {
           LoadingProgress().width(18).height(18).color(this.nmAccent())
@@ -19925,11 +19616,43 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         }.width('100%').height(80).justifyContent(FlexAlign.Center)
       } else {
         if (this.skyCultureMakerStore.tab === 0) {
-          this.skyCultureMakerOverview()
+          SkyCultureMakerOverview({
+            store: this.skyCultureMakerStore,
+            subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(),
+            inputColor: this.nmInput(), inputBorderColor: this.nmInputBorder(),
+            onEdited: () => { this.scheduleSkyCultureMakerSave() }
+          })
         } else if (this.skyCultureMakerStore.tab === 1) {
-          this.skyCultureMakerConstellationEditor()
+          SkyCultureMakerConstellationEditor({
+            store: this.skyCultureMakerStore, panelWidth: this.panelWidth,
+            subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(),
+            inputColor: this.nmInput(), inputBorderColor: this.nmInputBorder(),
+            onAdd: () => { this.addSkyCultureMakerConstellation() },
+            onSelect: (index: number) => { this.selectSkyCultureMakerConstellation(index) },
+            onUpdate: (updated: SkyCultureMakerConstellation) => { this.updateSkyCultureMakerConstellation(updated) },
+            onRemoveSelected: () => { this.removeSelectedSkyCultureMakerConstellation() },
+            onRemoveLine: (lineIndex: number) => { this.removeSkyCultureMakerLine(lineIndex) },
+            onAddHipLine: () => { this.addSkyCultureMakerHipLine() },
+            onAddSelectedStar: () => { this.addSelectedStarToSkyCultureMaker() },
+            onEdited: () => { this.scheduleSkyCultureMakerSave() },
+            onImportArtwork: () => { this.importSkyCultureMakerArtworkFile() },
+            onRemoveArtwork: () => { this.removeSkyCultureMakerArtwork() },
+            onArtworkTouch: (event: TouchEvent) => { this.handleSkyCultureMakerArtworkTouch(event) }
+          })
         } else {
-          this.skyCultureMakerValidationPanel()
+          SkyCultureMakerValidationPanel({
+            store: this.skyCultureMakerStore,
+            subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(),
+            onValidate: () => { this.validateSkyCultureMaker() },
+            onImport: () => { this.importSkyCultureMakerFile() },
+            onExport: () => { this.exportSkyCultureMaker() },
+            onShare: () => {
+              this.shareFile(this.skyCultureMakerStore.exportPath, utd.UniformDataType.ZIP_ARCHIVE, this.skyCultureMakerStore.exportFileName, I18n.t('sky_culture_maker_share_description'), 'sky-culture-maker-share')
+            },
+            onSaveAs: () => {
+              this.saveFileAs(this.skyCultureMakerStore.exportPath, this.skyCultureMakerStore.exportFileName, 'ZIP 压缩包|.zip')
+            }
+          })
         }
       }
       if (this.skyCultureMakerStore.status.length > 0) {
