@@ -1,10 +1,10 @@
 ## [2026-10-01] DevEco Code - Phase 3aq：小 builder 批处理（第一批：设置行 / 图表引导）
 
-- **新增 4 个组件文件（共 348 行）**：
-  - `common/ui/InfoRow.ets`（28）：原参数化 `@Builder infoRow(label, value)` → 纯展示组件（2 个 `@Prop`），**55 处调用点**改写。
-  - `panels/settings/SettingsRows.ets`（168）：7 个设置行组件 —— `EphemerisToggleRow`（原 `ephemerisRow`，4 调用点）/ `InformationModeButton`（原 `informationModeButton`，5）/ `InformationSwitchRow`（原 `informationSwitchRow`，15）/ `NavigationSwitchRow`（原 `navigationSwitchRow`，6）/ `NavStarsToggleRow`（原 `navStarsToggle`，7）/ `ArchaeoToggleRow`（原 `archaeoToggleRow`，13）/ `MosaicCameraMetric`（原 `mosaicCameraMetric`，3）。
-  - `panels/settings/DeviceAndLanguageRows.ets`（97）：`LanguageRow`（原 `languageRow`，2）/ `GyroscopeRow`（原 `gyroscopeRow`，2）/ `DevicePrivacySection`（原 `deviceAndPrivacySettings`，2；内部直接渲染 `GyroscopeRow`）。
-  - `panels/astro/GraphGuides.ets`（55）：`GraphLoadingRow`（原 `graphLoadingRow`，8）/ `RtsSelectionGuide`（原 `rtsSelectionGuide`，1）/ `GraphSelectionGuide`（原 `graphSelectionGuide`，5）。
+- **新增 4 个组件文件（共 374 行）**：
+  - `common/ui/InfoRow.ets`（32）：原参数化 `@Builder infoRow(label, value)` → 纯展示组件（2 个 `@Prop`），**55 处调用点**改写。
+  - `panels/settings/SettingsRows.ets`（179）：7 个设置行组件 —— `EphemerisToggleRow`（原 `ephemerisRow`，4 调用点）/ `InformationModeButton`（原 `informationModeButton`，5）/ `InformationSwitchRow`（原 `informationSwitchRow`，15）/ `NavigationSwitchRow`（原 `navigationSwitchRow`，6）/ `NavStarsToggleRow`（原 `navStarsToggle`，7）/ `ArchaeoToggleRow`（原 `archaeoToggleRow`，13）/ `MosaicCameraMetric`（原 `mosaicCameraMetric`，3）。
+  - `panels/settings/DeviceAndLanguageRows.ets`（102）：`LanguageRow`（原 `languageRow`，2）/ `GyroscopeRow`（原 `gyroscopeRow`，2）/ `DevicePrivacySection`（原 `deviceAndPrivacySettings`，2；内部直接渲染 `GyroscopeRow`）。
+  - `panels/astro/GraphGuides.ets`（61）：`GraphLoadingRow`（原 `graphLoadingRow`，8）/ `RtsSelectionGuide`（原 `rtsSelectionGuide`，1）/ `GraphSelectionGuide`（原 `graphSelectionGuide`，5）。
 - **共迁移 14 个 `@Builder`**、改写 **128 处调用点**（另把 `timeSpeedChips()` 薄包装的 1 处调用点内联为已存在的 `TimeSpeedChips` 组件调用）。宿主保留状态与桥调用，组件只收「宿主算好的值 + 夜视三色 + 回调」；`InformationSwitchRow` 另收 `inCustomMode`，`EphemerisToggleRow` 的 `enabled` 改名 `isEnabled`（见下）。
 - **零引用扫描删死代码（13 个 `@Builder`，约 400 行）**：`verticalRail`(66) 与其唯一引用者 `iconButton`(31) / `moreButton`(32) / `musicButton`(25) / `gyroButton`(28)；两条 `@deprecated` 旧抽屉 `actionDrawer`(70) / `compactMoreDrawer`(96)；详情卡旧行 `tabletInspectorAction`(8) / `tabletInspectorRow`(9) / `expandedSummaryMetric`(8) / `expandedSummaryLine`(8)；`lockRow`(18)；`timeSpeedChips`(6)。四类判据（`this.<name>(` / 裸 `this.<name>` / `'<name>'` 字符串 / `scripts/*.mjs` 与 `docs`）全部为 0。
 - **级联清理（删除后重扫）**：`pinnedActions` / `drawerActions` / `compactDrawerActions` / `railHeight` / `drawerWidth` / `onRailTap` 六个方法、`RAIL_TOP_PAD` / `RAIL_ITEM_STEP` / `RAIL_MORE_OFFSET` / `RAIL_MUSIC_OFFSET` / `RAIL_GYRO_OFFSET` 五个常量、`@State railPinned` 与 `@State drawerOpen` 两个零读字段（`toggleDrawer()` 内同步去掉对其赋值）——全部随 rail/drawer 死路径消失。
