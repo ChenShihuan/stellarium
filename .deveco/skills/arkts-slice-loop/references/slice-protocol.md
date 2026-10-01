@@ -97,3 +97,36 @@ $cur=[System.IO.File]::ReadAllText($p,[System.Text.Encoding]::UTF8)
 - 因此：**按面板/域合片**，一片收 2–4 个 builder（**300–350 行**），并**强制先跑 `check-ohos-refactor-slice.mjs`**（把"漏改引用/括号失衡"从构建期提前到秒级）。
 - 保持单片的三类：① 渲染管线/高频写入状态；② 跨原生桥/`.so`；③ 布局变化明显（视觉回归需可二分）。
 - 估算换算：69 个剩余 builder / 约 2,400 行 ≈ **9–10 片**（而非按单个 builder 的 15–25 片）。
+
+## 六、Phase 4/5/6 工作口径（Phase 3 收尾后新增，2026-10-02）
+
+### 6.1 目标澄清：`PanelHost` 不是"表驱动"
+
+ArkUI **没有**"按名字动态实例化组件"的能力（不能用 `Record<string, ...>` 存 builder 再调用）。因此 Phase 4 的终态不是"表驱动宿主"，而是：**`panelContent` 的 `if / else if` 链退化为纯分发**——每个分支只剩**一行组件调用**（判定条件 `this.activePanel === 'xxx'` 留在宿主），全部 UI 都在组件里。判定"某分支是否已达标"的口径：分支体 ≤ 8 行且只含一次组件调用。
+
+### 6.2 三类分支的处理方式
+
+| 类 | 特征 | 处理 |
+|---|---|---|
+| 薄调用 | 体内只是 1 行调用既有组件（`observeHub`/`dataHub`/`automationHub`/`bookmarks`/`pointerCoordinates`/`tools`/`telescope`/`skyCultureMaker`） | **不要再包一层**，保持原样 |
+| 实分支（10–30 行） | 体内有真实 UI（开关行、滑块、列表、按钮） | 抽成 `panels/panels/<Name>Panel.ets`：`@ObjectLink store` + `@Prop` + 回调；随 UI 下沉的**纯助手函数一并迁走**；参数化 `@Builder` 不得保留（**禁止** `@BuilderParam`，§13.1 规则 9） |
+| 大分支（>100 行） | `settings` / `scripts` / `oculars` / `astro` / `audio` / `settings_quick_legacy` 等 | 单独一片，允许**片内分多个提交**，每个提交点都要预检/`arkts_check`/构建/契约全绿 |
+
+**注意**：`layers`、`skyCultureMaker` 等分支体内还调用未迁的 `private @Builder`（如 `satelliteGroupSelector`、`skyCultureLabelModePicker`、`skyCultureFilterPicker`、`skyCultureFilterOption`、`skyCultureSectionHeader`、`skyCultureMetaItem`、`skyCultureLabelSettingCard`，共约 200 行）→ 先搬这些**叶件**，再搬宿主分支；`floatingPanel` / `compactPanel` 因体内是 `this.panelContent()`，必须与分支收尾同片。
+
+**分支体量口径警告**：用"到下一个 `} else if (this.activePanel === ...)` 头的距离"做体量排序**不可靠**——`settings_quick_legacy` 内含同形旧链，会出现重名与虚高（曾测得 `audio 1954` / `place 3819`）。正确做法：按 `panelContent` 起点逐分支**显式步进到该链的 `} else {` 尾巴**再落数，或直接用 `git diff --stat` 复核每片净减行数。
+
+### 6.3 阶段归属
+
+- **Phase 4（进行中）**：`panelContent` 剩余实分支 + 7 个 skyCulture 叶件 + `floatingPanel`/`compactPanel`。
+- **Phase 5（overlay）**：`polarScopeOverlay` 126 / `objectInspectorMediaPreviewOverlay` 66 / `skyCultureArtPreviewOverlay` 60 / `objectInspectorModelOverlay` 45 —— 均为 `Stack` 叠层且涉媒体/模型/渲染，**每片只做一个**，真机走查要求最高。
+- **Phase 6（壳层）**：`scriptFocusShell` 212 / `compactShell` 165 / `hoverObservatoryShell` 142 / `expandedShell` 128 / `harmonyShell` 90 / `interactiveGuideShell` 78 —— 每片 1–2 个壳；`panelHeader` chrome 已抽（3ap），`observationTimeText` / `timeRateText` 仍由宿主算好以 `@Prop` 传入。
+- **Phase 7（收口）**：删过渡 getter、校正 `UI-ARCHITECTURE.md` 行号与 `AGENTS.md §2.2`。
+
+### 6.4 设备与验证纪律（2026-10-02 更新）
+
+- **优先真机**（`hdc list targets` 取当前设备号，IP 会变）：用户已在 DevEco 侧开启**屏幕常亮**，长片不再因锁屏中断。
+- 真机不可用时用模拟器 `127.0.0.1:5555`（`devecocli emulator start "Pura 90 Pro"`），按"三·补"的范围记录「模拟器无法覆盖（待真机）」。
+- **两个同名 App 陷阱**：本仓库产物是 `com.cnchensh.stellarium`，真机上另有 `com.joinother.skyinstrument`；`devecocli ui` 跟随前台窗口，而 `stellarium-cli.mjs` 默认可能连到另一个包 → **CLI 一律显式 `--bundle com.cnchensh.stellarium`**，并先 `aa dump -l` 确认前台。
+- 每片真机实测至少给一处**点按后实时刷新**的证据（坐标/采样值/hilog/CLI 回读）；测后恢复改过的持久化设置。
+- 工具链故障（同步失败、hvigor 缓存损坏）**不属于切片回归**：`C:\Users\<user>\.hvigor\project_caches\<hash>\workspace` 缺 `@ohos/hvigor` 会让 IDE 同步报 `00308003`，脚本构建不受影响 —— 记录并请用户在 IDE 侧 `Invalidate Caches` / 修 hvigor 组件，不要试图用 junction 从安装目录链过去（按 realpath 判定无效）。
