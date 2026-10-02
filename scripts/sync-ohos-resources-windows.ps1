@@ -15,6 +15,11 @@
         (textures/<name>.png.model.rgba — 512x256 planets, 512x2 ring bands)
       * grayscale / indexed sky-culture illustrations are re-encoded to RGBA
 
+    The detail-model sidecars prefer ffmpeg when it can be found (matching the
+    bash syncer byte for byte, including the Lanczos scaler); System.Drawing is
+    only the fallback when ffmpeg is unavailable. ffmpeg is resolved as
+    $env:FFMPEG -> ffmpeg on PATH -> the WinGet (Gyan.FFmpeg) package layout.
+
     ArkUI ImageKit on HarmonyOS 7.0 rejects the encodings those files use
     upstream, so the normalisation is mandatory and not merely cosmetic.
 
@@ -52,6 +57,33 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
+
+# Locates an ffmpeg binary the same way the bash syncer does, plus one Windows
+# convenience step:
+#   1. $env:FFMPEG — an explicit path or command name (the bash `FFMPEG` var)
+#   2. ffmpeg on PATH
+#   3. the WinGet Gyan.FFmpeg package layout, which is not always on PATH
+# Returns $null when none is usable; the caller then falls back to System.Drawing.
+function Resolve-FFmpeg {
+    if ($env:FFMPEG) {
+        $explicit = Get-Command $env:FFMPEG -ErrorAction SilentlyContinue
+        if ($explicit) { return $explicit.Source }
+        if (Test-Path -LiteralPath $env:FFMPEG -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $env:FFMPEG).Path
+        }
+        Write-Warning "FFMPEG=$($env:FFMPEG) could not be resolved; continuing the search"
+    }
+    $onPath = Get-Command ffmpeg -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+    $wingetPackages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    if (Test-Path -LiteralPath $wingetPackages) {
+        $candidates = Get-ChildItem -LiteralPath $wingetPackages -Directory -Filter 'Gyan.FFmpeg*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Filter 'ffmpeg.exe' -ErrorAction SilentlyContinue } |
+            Select-Object -First 1
+        if ($candidates) { return $candidates.FullName }
+    }
+    return $null
+}
 
 if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot 'data'))) {
     throw "cannot find Stellarium source data at $RepoRoot\data"
@@ -145,10 +177,31 @@ function Convert-PngToRgba {
     Move-Item -LiteralPath $temporary -Destination $Path -Force
 }
 
-# Writes "<png>.model.rgba": a headerless raw RGBA buffer at $Width x $Height.
-# This is the Windows equivalent of the bash syncer's
+# Preferred sidecar writer: calls ffmpeg with the exact bash-syncer argument
+# vector, so the bytes match upstream bit for bit (Lanczos scaler included).
+#   ffmpeg -hide_banner -loglevel error -y -i <png> \
+#     -vf 'scale=<w>:<h>:flags=lanczos,format=rgba' -frames:v 1 -pix_fmt rgba \
+#     -f rawvideo <png>.model.rgba
+# The output path has no ffmpeg-recognised extension, hence the explicit
+# `-f rawvideo`. Written through "<sidecar>.tmp" so a crash cannot leave a
+# truncated sidecar behind.
+function Export-RgbaSidecarWithFfmpeg {
+    param([string]$Ffmpeg, [string]$SourcePng, [int]$Width, [int]$Height)
+    $sidecar = "$SourcePng.model.rgba"
+    $temporary = "$sidecar.tmp"
+    $filter = "scale=${Width}:${Height}:flags=lanczos,format=rgba"
+    & $Ffmpeg -hide_banner -loglevel error -y -i $SourcePng -vf $filter -frames:v 1 -pix_fmt rgba -f rawvideo $temporary
+    if ($LASTEXITCODE -ne 0) { throw "ffmpeg failed (exit $LASTEXITCODE) for $SourcePng" }
+    if (-not (Test-Path -LiteralPath $temporary -PathType Leaf)) { throw "ffmpeg produced no output for $SourcePng" }
+    Move-Item -LiteralPath $temporary -Destination $sidecar -Force
+}
+
+# Fallback sidecar writer, used only when ffmpeg is unavailable. Writes
+# "<png>.model.rgba": a headerless raw RGBA buffer at $Width x $Height.
+# This mirrors the bash syncer's
 #   ffmpeg -vf 'scale=<w>:<h>:flags=lanczos,format=rgba' -pix_fmt rgba -f rawvideo
-# The consumer (DetailModelRasterizer.ets) reads byte 0 as red, so the GDI+
+# as closely as GDI+ allows (HighQualityBicubic + TileFlipXY). The consumer
+# (DetailModelRasterizer.ets) reads byte 0 as red, so the GDI+
 # Format32bppArgb BGRA memory layout is swizzled into R,G,B,A on the way out.
 function Export-RgbaSidecar {
     param([string]$SourcePng, [int]$Width, [int]$Height)
@@ -213,8 +266,9 @@ function Export-RgbaSidecar {
 
 # Generates detail-model sidecars for the given PNG names. Idempotent: a sidecar
 # that already has the expected size and is at least as new as its PNG is kept.
+# Uses ffmpeg ($FfmpegBin) when available, otherwise the System.Drawing writer.
 function Invoke-DetailModelSidecarBatch {
-    param([string[]]$Names, [int]$Width, [int]$Height)
+    param([string[]]$Names, [int]$Width, [int]$Height, [string]$FfmpegBin)
     $texturesRoot = Join-Path $Out 'textures'
     $expectedBytes = $Width * $Height * 4
     $generated = 0
@@ -233,7 +287,11 @@ function Invoke-DetailModelSidecarBatch {
             }
         }
         try {
-            Export-RgbaSidecar -SourcePng $source -Width $Width -Height $Height
+            if ($FfmpegBin) {
+                Export-RgbaSidecarWithFfmpeg -Ffmpeg $FfmpegBin -SourcePng $source -Width $Width -Height $Height
+            } else {
+                Export-RgbaSidecar -SourcePng $source -Width $Width -Height $Height
+            }
             $generated++
         } catch {
             $failed++
@@ -267,9 +325,15 @@ $detailModelTextures = @(
 $detailRingTextures = @('saturn_rings_radial.png', 'uranus_rings.png', 'neptune_rings.png')
 
 Write-Host '==> generating detail-model CPU texture sidecars'
-$modelSidecars = Invoke-DetailModelSidecarBatch -Names $detailModelTextures -Width 512 -Height 256
+$ffmpegBin = Resolve-FFmpeg
+if ($ffmpegBin) {
+    Write-Host "    binary: ffmpeg ($ffmpegBin)"
+} else {
+    Write-Host '    binary: System.Drawing (ffmpeg not found)'
+}
+$modelSidecars = Invoke-DetailModelSidecarBatch -Names $detailModelTextures -Width 512 -Height 256 -FfmpegBin $ffmpegBin
 Write-Host "    planets: generated $($modelSidecars.Generated), reused $($modelSidecars.Reused), failed $($modelSidecars.Failed)"
-$ringSidecars = Invoke-DetailModelSidecarBatch -Names $detailRingTextures -Width 512 -Height 2
+$ringSidecars = Invoke-DetailModelSidecarBatch -Names $detailRingTextures -Width 512 -Height 2 -FfmpegBin $ffmpegBin
 Write-Host "    rings  : generated $($ringSidecars.Generated), reused $($ringSidecars.Reused), failed $($ringSidecars.Failed)"
 if (($modelSidecars.Failed + $ringSidecars.Failed) -gt 0) {
     Write-Warning "$($modelSidecars.Failed + $ringSidecars.Failed) detail-model sidecar(s) could not be written; the app will fall back to decoding the PNG at selection time."
