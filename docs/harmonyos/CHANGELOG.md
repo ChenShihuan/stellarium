@@ -1,3 +1,33 @@
+## [2026-10-02] DevEco Code - 审计：HAP 资源缺失清单（Phase RA）——FOV 横幅的 N 是加载中而非缺失
+
+- **任务与结论**：排查"当前 HAP 到底缺哪些资源"，逐族给出"应有/实有/缺失/原因"清单。结论：**所有应随包的运行时资源都已进包**；此前用户看到的「当前视野资料图 · N 项待完成」中的 N 是原生 `getDeepSkyImageStatus.activeTexturePendingCount`（当前视口内**尚未上传**的纹理数），不是资源缺失。
+- **问应用自己（原生完成判定）**：`src/StelMainView.cpp` 的 `getDeepSkyImageStatus` 由 `nebulae/default/textures.json` 收集 `imageUrl` 引用名，与 `nebulae/default/*.png` 实有文件对比；`activeTexture*` 来自 `StelSkyImageTile::collectTextureStatus(..., viewportOnly=true)`。真机实测：`referenced=674 onDisk=674 missingCount=0 activeTextureErrorCount=0`；改变视野后 `pending=111 / loading=111 / notStarted=0 / ready=2 / err=0 / missing=0` —— 全部为"加载中"，无缺失。`getCatalogHealth` 亦报 `stars.files=5 missingFiles=[]`。
+- **逐族对照（签名 HAP `entry-default-signed.hap` 708.8 MB，按 zip 条目计数）**：
+
+  | 家族 | 应有 | 实有（HAP rawfile） | 缺失 | 类别/原因 |
+  |---|---:|---:|---:|---|
+  | `nebulae/default/*.png` | 674 | 674 | 0 | 覆盖 |
+  | `textures/*.model.rgba`（细节模型侧车） | 53 | 53 | 0 | ① 已于 `e92ac23726`/`c2187a192c` 补齐；真机 `source=sidecar` |
+  | `scenery3d/` | 135 | 135 | 0 | 覆盖（旧报告"未打包"已更正） |
+  | `data`/`landscapes`/`stars`/`translations`/`skycultures` | 见审计表 | 镜像一致 | 0 | 覆盖；差异仅为 CMake/TODO/`.py` 等构建脚手架（②） |
+  | `scripts/*.ssc` | 52（顶层） | 90（含 `tests/*` 38） | 0 | Windows 用 `-Recurse` 多于 bash 顶层白名单（多余包含，非缺失） |
+  | `models/`（OBJ 网格 + `moon-vertices-indices.bin`） | 45 | 0 | 45 | **②/④ 待决策**：引擎按 `Planet.cpp` 读取，但 `astro/flag_use_obj_models` 默认 false、App 未暴露开关（约 17.8 MiB） |
+  | `atmosphere/` | 313 | 0 | 313 | ②：仅 `AtmosphereLightweight` 用 `lightweight.amsh`，`landscape/atmosphere_model` 默认 `preetham`，OHOS GLES2 已编译掉 ShowMySky（约 58.7 MiB） |
+
+- **改动（本片只动审计工具与报告，不改打包范围）**：
+  - `scripts/audit-ohos-resource-coverage.mjs`（234 → 279 行）：`expectedFiles('skycultures')` 改为按**basename**排除 `CMakeLists.txt`/`.template`/`TODO.txt`/`*.py`（原按整路径比较，导致 63 个嵌套 CMakeLists 被误报为"未同步"）；顶层对照表纳入 `scenery3d`；删除写死的"scenery3d 未打包"结论，改为按 rawfile 实测判定；新增"未随包家族与原因"表（`po`/`atmosphere`/`guide`/`models`/`src`/`util`/`releases`/`cmake`/`doc`/`android`）与平台差异说明。
+  - `docs/harmonyos/archive/audits/RESOURCE-COVERAGE-AUDIT-2026-08-24.md`（重新生成、本次**不还原**，作为本片结论一部分）：`skycultures` 由"未同步 63"更正为 0；`scenery3d` 135/135 覆盖；未随包家族逐项标注原因。
+- **真机验收**（Mate 80 Pro `192.168.50.108:40565`，签名 HAP 重装 `install -r` 后 `aa start`）：
+  1. `pidof com.cnchensh.stellarium` = 16764 存活；`aa dump -l` 为 `state #FOREGROUND`。
+  2. 选中「仙女座星系（M31）」后改变视野：`[dso-probe] referenced=674 onDisk=674 missing=0 activeLoading=111 activeNotStarted=0 activeErrors=0`；横幅的 N 即该 `activeTexturePendingCount`（`MainWindowNativeNode.ets:10095` `'正在载入当前视野资料图 · ' + pending + ' 项待完成'`）。
+  3. 选中 Mars：`[detail-model] CPU texture ready ... bytes=524288 source=sidecar`（无 PNG 回退），证明侧车族已随包并落盘。
+  4. **横幅本体未走查**：本机 CLI 无法注入双击/多点触控（`devecocli ui` 无 pinch、`uitest uiInput keyEvent 2058`/`uinput -K` 均未送达 ArkTS 根 `onKeyEvent`），而 `scheduleSkyTextureStatusCheck()` 仅由 `zoomStep`/捏合结束/详情卡拖动三条路径触发；其收敛文案与时机（快→慢→「当前视野资料图暂未就绪，稍后自动重试」→隐藏）由 `test-ohos-startup-stars.mjs` 锁定且本片未改，故沿用上一片已验证行为。
+- **验证链**：`check-ohos-ui-contract.mjs` 全绿（33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点 / 184 文件）→ `test-ohos-startup-stars.mjs` **17/17** → 构建 **BUILD SUCCESSFUL**（签名 HAP 708.8 MB，未带 `-SkipResources`，侧车 `generated 50 + 3`）→ `audit-ohos-resource-coverage.mjs` 重生成报告（本次保留）。
+- **测试同步**：无 `.ets`/断言改动；审计脚本为唯一代码改动，其输出即为测试基线。
+- **本片新踩的坑**：
+  1. **`devecocli ui layout` 是简化树**，`skyTextureStatus` 这类非点击覆盖层**不出现在节点树里**（必须用截图）；且 `uitest uiInput keyEvent`/`uinput -K` 注入的按键**不会路由到 ArkTS 根的 `onKeyEvent`**（原生 Qt XComponent 持有输入焦点），`devecocli ui` 也无多点触控 —— 需要"捏合"的 UI 入口在 CLI 侧不可达。
+  2. **PowerShell 双引号里的 `"$var:"` 会被当作盘符限定符**（`InvalidVariableReferenceWithDrive`）→ 一律写 `${var}`。
+  3. **`git -C ..` 取决于 cwd**：在 harmonyos 子目录下 `..` 是仓库根，在仓库根下 `..` 是仓库父目录（报 "not a git repository"）——脚本里改用显式路径。
 ## [2026-10-02] DevEco Code - 修复：启动「星象仪」标题过早被门控隐藏 + 视野资料图加载横幅永久停留
 
 - **现象（用户报告）**：
