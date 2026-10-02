@@ -100,14 +100,15 @@ test('missing local media follows resolution instead of attempting to decode a n
 
 test('immersive modal blocks underlying sky hit tests without suppressing its controls', () => {
   const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
-  const overlay = source.split('private objectInspectorModelOverlay()')[1].split('private handleObjectInspectorModelTouch')[0];
-  assert.match(overlay, /HitTestMode.BLOCK_HIERARCHY/);
-  assert.doesNotMatch(overlay, /HitTestMode.Transparent/);
-  assert.match(overlay, /id\('object-model-close'\)/);
+  // 全屏三维模型叠层已下沉为 ObjectInspectorModelOverlay 组件（Phase 5d），断言改读组件文件。
+  const modelOverlay = readFileSync(new URL('../harmonyos/ets-source/panels/overlay/ObjectInspectorModelOverlay.ets', import.meta.url), 'utf8');
+  assert.match(modelOverlay, /HitTestMode.BLOCK_HIERARCHY/);
+  assert.doesNotMatch(modelOverlay, /HitTestMode.Transparent/);
+  assert.match(modelOverlay, /id\('object-model-close'\)/);
   const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/object/TabletInspectorMedia.ets', import.meta.url), 'utf8');
   assert.match(mediaComponents, /id\('object-model-inline-stage'\)\s*\.hitTestBehavior\(HitTestMode.BLOCK_HIERARCHY\)/);
   assert.match(mediaComponents, /width\(this\.inlineModelSize\)\.height\(this\.inlineModelSize\)/);
   assert.match(source, /inlineModelSize: this\.objectInspectorInlineModelSize\(\)/);
   assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
-  assert.doesNotMatch(overlay, /modelNotice\(\).*maxLines/);
+  assert.doesNotMatch(modelOverlay, /modelNotice\(\).*maxLines/);
 });

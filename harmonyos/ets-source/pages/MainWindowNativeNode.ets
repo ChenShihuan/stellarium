@@ -117,6 +117,7 @@ import { ObjectDetailConnectorLayer } from '../panels/overlay/ObjectDetailConnec
 import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
 import { ObjectInspectorMediaPreviewOverlay } from '../panels/overlay/ObjectInspectorMediaPreviewOverlay'
 import { SkyCultureArtPreviewOverlay } from '../panels/overlay/SkyCultureArtPreviewOverlay'
+import { ObjectInspectorModelOverlay } from '../panels/overlay/ObjectInspectorModelOverlay'
 import { ToolsStore } from '../state/ToolsStore'
 import { ToolsPanel } from '../panels/tools/ToolsPanel'
 import { RecordingControlBar } from '../panels/tools/RecordingControlBar'
@@ -14483,7 +14484,17 @@ private loadPlanetPositions(): void {
             retryObjectInspectorMediaPreview: () => { this.retryObjectInspectorMediaPreview() }
           })
         }
-        this.objectInspectorModelOverlay()
+        if (this.objectMediaStore.objectInspectorModelImmersive) {
+          ObjectInspectorModelOverlay({
+            objectMediaStore: this.objectMediaStore,
+            titleText: this.objectDetailStore.selectedName,
+            noticeText: this.objectInspectorModelNotice(),
+            topInset: this.mediaPreviewTopInset(),
+            onCloseOverlay: () => { this.setObjectInspectorModelImmersive(false) },
+            onResetView: () => { this.resetObjectInspectorModelView() },
+            onStageTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
+          })
+        }
       }
 
       if (this.tools.skyTextureStatusVisible) {
@@ -16890,53 +16901,6 @@ private loadPlanetPositions(): void {
         this.objectMediaStore.objectInspectorModelImmersive = false
         this.requestObjectInspectorModelRender(true)
       } }, () => { this.objectMediaStore.objectInspectorModelOverlayOpacity = 0 })
-    }
-  }
-
-  @Builder
-  private objectInspectorModelOverlay() {
-    if (this.objectMediaStore.objectInspectorModelImmersive) {
-      Stack({ alignContent: Alignment.Center }) {
-        Stack() { }.width('100%').height('100%').backgroundColor('#020408')
-          .hitTestBehavior(HitTestMode.Block)
-        Column({ space: 12 }) {
-          Row({ space: 12 }) {
-            Column({ space: 4 }) {
-              Text(this.objectDetailStore.selectedName).fontSize(20).fontColor('#F2F4F8').maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-              Text(this.objectMediaStore.objectInspectorProceduralKind.length > 0 ? I18n.t('model_schematic') : I18n.t('model_offline'))
-                .fontSize(12).fontColor('#B8BDC8').width('100%')
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            Button() {
-              Image(getIcon('close', false)).width(20).height(20).fillColor('#F2F4F8')
-            }.width(44).height(44).padding(0).borderRadius(UI_RADIUS_PILL)
-              .backgroundColor('rgba(255,255,255,0.10)').zIndex(2)
-              .accessibilityText(I18n.t('model_close'))
-              .id('object-model-close')
-              .onClick(() => { this.setObjectInspectorModelImmersive(false) })
-          }.width('100%')
-          Stack({ alignContent: Alignment.Center }) {
-            if (this.objectMediaStore.objectInspectorModelPixelMap !== undefined) {
-              Image(this.objectMediaStore.objectInspectorModelPixelMap).width('100%').height('100%').objectFit(ImageFit.Contain)
-                .hitTestBehavior(HitTestMode.None)
-            }
-          }.width('100%').layoutWeight(1).clip(true)
-            .id('object-model-stage')
-            .hitTestBehavior(HitTestMode.Block)
-            .onTouch((event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) })
-          Text(this.objectInspectorModelNotice()).fontSize(12).fontColor('#B8BDC8').lineHeight(19)
-            .width('100%').textAlign(TextAlign.Center)
-          Row({ space: 12 }) {
-            Text(I18n.t('model_gesture_hint')).fontSize(12).fontColor('#B8BDC8').layoutWeight(1).maxLines(2)
-            Button(I18n.t('model_reset')).height(44).fontSize(13).fontColor('#F2F4F8')
-              .padding({ left: 18, right: 18 }).backgroundColor('rgba(255,255,255,0.10)').borderRadius(UI_RADIUS_PILL)
-              .onClick(() => { this.resetObjectInspectorModelView() })
-          }.width('100%')
-        }.width('100%').height('100%')
-          .padding({ left: 24, right: 24, top: this.mediaPreviewTopInset(), bottom: 32 })
-      }.width('100%').height('100%').zIndex(1100)
-        .opacity(this.objectMediaStore.objectInspectorModelOverlayOpacity)
-        .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
     }
   }
 
