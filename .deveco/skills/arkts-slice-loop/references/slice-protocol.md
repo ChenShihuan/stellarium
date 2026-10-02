@@ -120,7 +120,7 @@ ArkUI **没有**"按名字动态实例化组件"的能力（不能用 `Record<st
 
 - **Phase 4（进行中）**：`panelContent` 剩余实分支 + 7 个 skyCulture 叶件 + `floatingPanel`/`compactPanel`。
 - **Phase 5（overlay）**：`polarScopeOverlay` 126 / `objectInspectorMediaPreviewOverlay` 66 / `skyCultureArtPreviewOverlay` 60 / `objectInspectorModelOverlay` 45 —— 均为 `Stack` 叠层且涉媒体/模型/渲染，**每片只做一个**，真机走查要求最高。
-- **Phase 6（壳层）**：`scriptFocusShell` 212 / `compactShell` 165 / `hoverObservatoryShell` 142 / `expandedShell` 128 / `harmonyShell` 90 / `interactiveGuideShell` 78 —— 每片 1–2 个壳；`panelHeader` chrome 已抽（3ap），`observationTimeText` / `timeRateText` 仍由宿主算好以 `@Prop` 传入。
+- **Phase 6（壳层）**：~~`scriptFocusShell`~~（6a）/ ~~`compactShell`~~ / ~~`harmonyShell`~~（6b）已完成；剩余 `hoverObservatoryShell` 142 / `expandedShell` 128 / `interactiveGuideShell` 78 —— 每片 1–2 个壳；`panelHeader` chrome 已抽（3ap），`observationTimeText` / `timeRateText` 仍由宿主算好以 `@Prop` 传入。
 - **Phase 7（收口）**：删过渡 getter、校正 `UI-ARCHITECTURE.md` 行号与 `AGENTS.md §2.2`。
 
 ### 6.4 设备与验证纪律（2026-10-02 更新）
