@@ -48,7 +48,13 @@ test('slow loading keeps the swarm moving until native readiness, then settles e
   assert.notDeepEqual(earlier, later);
   assert.notDeepEqual(later, target);
   assert.deepEqual(geometry.startupParticle(50, target, 1000, 600, 15000, 1500), target);
-  assert.match(read('pages/StartupSky.ets'), /this.skyPrepared && this.assemblyElapsed >= STARTUP_REVEAL_AT_MS/);
+  // The wordmark assembles from the first frame (during resource loading); only
+  // the scatter/reveal waits for the sky gate AND a finished gather.
+  const sky = read('pages/StartupSky.ets');
+  assert.match(sky, /this\.assemblyElapsed \+= step/);
+  assert.match(sky, /this\.skyPrepared && !this\.releaseStarted && this\.assemblyElapsed >= STARTUP_GATHER_MS/);
+  assert.match(sky, /startupEase\(this\.releaseElapsed \/ STARTUP_REVEAL_MS\)/);
+  assert.doesNotMatch(sky, /this\.skyPrepared \? this\.assemblyElapsed : -1/);
 });
 
 test('independent drift fills the centre, varies direction and never jumps between frames', () => {
@@ -185,6 +191,22 @@ test('only a ready actually presented frame with matching aspect reveals the cha
   fixture.dismissSplash();
   assert.equal(fixture.splashGone, true);
   assert.equal(published.get('stellariumStartupSkyReady'), true);
+});
+
+test('sky-texture loading banner converges instead of sticking at N pending forever', () => {
+  const page = read('pages/MainWindowNativeNode.ets');
+  assert.match(page, /const SKY_TEXTURE_STATUS_FAST_POLLS: number = 24/);
+  assert.match(page, /const SKY_TEXTURE_STATUS_SETTLE_POLLS: number = \d+/);
+  assert.match(page, /const SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS: number = \d+/);
+  assert.match(page, /const SKY_TEXTURE_STATUS_FINAL_HIDE_MS: number = \d+/);
+  assert.match(page, /仍在后台准备当前视野资料图，完成后会自动显示/);
+  assert.match(page, /当前视野资料图暂未就绪，稍后自动重试/);
+  const poll = page.match(/  private pollSkyTextureStatus\(\): void \{[\s\S]*?\n  \}/)[0];
+  // The slow phase keeps polling so a late-ready view still retracts the banner ...
+  assert.match(poll, /this\.skyTextureStatusSlow \? SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS/);
+  // ... and the settle branch takes it down rather than leaving a stale loading note.
+  assert.match(poll, /this\.tools\.skyTextureStatusVisible = false/);
+  assert.doesNotMatch(poll, /skyTextureStatusPolls < 24/);
 });
 
 test('withdrawing privacy stops the host before removing native content', () => {
