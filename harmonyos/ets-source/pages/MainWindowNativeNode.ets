@@ -52,7 +52,6 @@ import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { GyroStore } from '../state/GyroStore'
 import { WutStore } from '../state/WutStore'
 import { AstroStore } from '../state/AstroStore'
-import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
 import { LocationStore } from '../state/LocationStore'
 import { CityChipsRow } from '../panels/location/CityChipsRow'
 import { LocationPickerPanel } from '../panels/location/LocationPickerPanel'
@@ -80,7 +79,6 @@ import { InfoRow } from '../common/ui/InfoRow'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
-import { UnifiedObjectDetailCard } from '../panels/object/UnifiedObjectDetailCard'
 import { ObjectDataTile, ObjectMetric, ObjectScheduleTile, ObjectDetailTab, ObjectCompactMetric } from '../panels/object/DetailTiles'
 import { ObjectDistanceNotice, SelectedLiveInfoRows, SelectedCoordinateRow, SelectedCoordinateRows } from '../panels/object/DetailLiveRows'
 import { StructuredDetailRows } from '../panels/object/StructuredDetailRows'
@@ -88,7 +86,6 @@ import { SatellitePassDetails } from '../panels/object/SatellitePassDetails'
 import { TabletInspectorMediaGroup } from '../panels/object/TabletInspectorMediaGroup'
 import { PanelHeader } from '../panels/shell/PanelHeader'
 import { DockButton } from '../panels/shell/DockButton'
-import { BottomDock } from '../panels/shell/BottomDock'
 import { CompactTopQuickControls } from '../panels/shell/CompactTopQuickControls'
 import { HubActionList } from '../panels/shell/HubActionList'
 import { ConstellationCultureView } from '../panels/object/ConstellationCultureView'
@@ -113,7 +110,6 @@ import { TimeWheelScrubber } from '../panels/time/TimeWheelScrubber'
 import { OverlayStore } from '../state/OverlayStore'
 import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
-import { ObjectDetailConnectorLayer } from '../panels/overlay/ObjectDetailConnectorLayer'
 import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
 import { ObjectInspectorMediaPreviewOverlay } from '../panels/overlay/ObjectInspectorMediaPreviewOverlay'
 import { SkyCultureArtPreviewOverlay } from '../panels/overlay/SkyCultureArtPreviewOverlay'
@@ -127,10 +123,12 @@ import { ObserverPlanetSection, PointingTestSection, WatchGyroSection, TonightEv
 import { GyroTargetGuide } from '../panels/astro/GyroTargetGuide'
 import { SkyCultureMakerPanel } from '../panels/skyculture/SkyCultureMakerPanel'
 import { SkyCultureViewTab } from '../panels/skyculture/SkyCultureViewTab'
-import { DockClockLayer, PadPanelHandle, PanelHandle } from '../panels/shell/PanelChromeExtras'
+import { PadPanelHandle, PanelHandle } from '../panels/shell/PanelChromeExtras'
 import { ScriptFocusShell } from '../panels/shell/ScriptFocusShell'
 import { CompactShell } from '../panels/shell/CompactShell'
 import { HarmonyShell } from '../panels/shell/HarmonyShell'
+import { HoverObservatoryShell } from '../panels/shell/HoverObservatoryShell'
+import { ExpandedShell } from '../panels/shell/ExpandedShell'
 import { ScriptKeyButton } from '../panels/tools/ScriptKeyButton'
 import { GuideButton } from '../panels/guide/GuideButton'
 import { GuideLibrary } from '../panels/guide/GuideLibrary'
@@ -14459,11 +14457,215 @@ private loadPlanetPositions(): void {
       if (!this.scriptPlaybackVisible() && !(this.tools.recording && !this.tools.recordingUiExpanded) && !this.polarScopeVisible) {
         Stack() {
           if (this.isFoldHoverLayout) {
-            Stack() { this.hoverObservatoryShell() }
+            Stack() {
+              HoverObservatoryShell({
+                objectDetailStore: this.objectDetailStore,
+                objectMediaStore: this.objectMediaStore,
+                overlayStore: this.overlayStore,
+                observationTimeText: this.observationTimeText,
+                currentFovText: this.currentFovText,
+                skyWidth: this.skyWidth,
+                skyHeight: this.skyHeight,
+                hoverSkyPaneHeight: this.hoverSkyPaneHeight(),
+                panelIdleGlass: this.panelIdleGlass,
+                panelVisible: this.panelVisible,
+                isExpandedLayout: this.isExpandedLayout,
+                activePanel: this.activePanel,
+                languageRevision: this.languageRevision,
+                actions: this.canonicalDockActions(),
+                chromeOpacity: this.phoneChromeOpacity(),
+                chromeIsGlass: this.phoneChromeIsGlass(),
+                dockWidthPercent: this.compactDockWidthPercent(),
+                dockIconSize: this.compactDockIconSize(),
+                dockLabelFontSize: this.compactDockLabelFontSize(),
+                dockItemHeight: this.compactDockItemHeight(),
+                infoWinVisible: this.infoWinVisible,
+                bottomCardIndex: this.bottomCardIndex,
+                liveInfoVisible: this.selectedLiveInfoVisible(),
+                contentOpacity: this.objectDetailContentOpacity,
+                contentTranslateX: this.objectDetailContentTranslateX,
+                cardWidth: this.bottomCardWidth(),
+                cardHeight: this.bottomCardHeight(),
+                viewLock: this.viewLock,
+                speechStatus: this.speechStatus,
+                inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+                iconName: this.objectInspectorIcon(),
+                distanceText: this.objectDistanceNoticeText(),
+                distanceSummaryText: this.objectDistanceSummary(),
+                imageHeight: this.objectInspectorImageHeight(),
+                inlineModelSize: this.objectInspectorInlineModelSize(),
+                modelReady: this.objectInspectorModelReady(),
+                modelRendering: this.objectInspectorModelRendering,
+                hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+                modelNotice: this.objectInspectorModelNotice(),
+                warmupText: this.objectInspectorMediaWarmupText(),
+                fallbackKind: this.objectInspectorFallbackVisualKind(),
+                starColor: this.objectInspectorStarColor(),
+                satelliteVisible: this.selectedObjectIsArtificialSatellite(),
+                tleEpoch: this.selectedSatelliteTleEpoch(),
+                accent: this.nmAccent(),
+                cultureVisible: this.selectedObjectIsConstellation(),
+                textColor: this.nmText(),
+                connectorVisible: this.overlayStore.objectDetailConnectorVisible,
+                connectorLength: this.objectDetailConnectorLength,
+                connectorX: this.objectDetailConnectorX,
+                connectorY: this.objectDetailConnectorY,
+                connectorAngle: this.objectDetailConnectorAngle,
+                connectorAnimateGeometry: this.objectDetailConnectorAnimateGeometry,
+                connectorTargetOnScreen: this.objectDetailConnectorTargetOnScreen,
+                connectorTargetX: this.objectDetailConnectorTargetX,
+                connectorTargetY: this.objectDetailConnectorTargetY,
+                connectorEndX: this.objectDetailConnectorEndX,
+                connectorEndY: this.objectDetailConnectorEndY,
+                markerSize: this.objectDetailMarkerSize(),
+                detailX: this.detailCardX(),
+                detailY: this.detailCardY(),
+                detailWidth: this.detailCardWidth(),
+                detailHeight: this.detailCardHeight(),
+                scroller: this.objectDetailScroller,
+                onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+                onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
+                onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
+                onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) },
+                resolve: (key: string) => this.selectedDisplayValue(key),
+                nameOf: (name: string) => this.zhNameOf(name),
+                typeOf: (type: string) => this.zhType(type),
+                onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
+                onDismiss: () => { this.dismissObjectInspector() },
+                onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
+                onLoadPasses: () => { this.loadSelectedSatellitePasses() },
+                onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
+                onMediaRetry: () => { this.retryObjectInspectorMedia() },
+                onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+                onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+                onCenter: () => { this.moveToSelectedObject() },
+                onToggleLock: () => { this.toggleViewLock() },
+                onToggleObserving: () => { this.toggleSelectedObservingList() },
+                onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
+                onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
+                onSpeak: () => { this.speakSelectedObject() }
+              })
+              if (this.panelVisible) {
+                Stack() { this.compactPanel() }
+                  .position({ x: 0, y: this.hoverPanelTop() })
+                  .width('100%')
+                  .hitTestBehavior(HitTestMode.Default)
+                  .zIndex(30)
+              }
+            }
               .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
                 .combine(TransitionEffect.scale({ x: 0.985, y: 0.985 }).animation({ duration: 220, curve: curves.springMotion(0.55, 0.88) })))
           } else if (this.isExpandedLayout) {
-            Stack() { this.expandedShell() }
+            Stack() {
+              ExpandedShell({
+                objectDetailStore: this.objectDetailStore,
+                objectMediaStore: this.objectMediaStore,
+                overlayStore: this.overlayStore,
+                gyroStore: this.gyroStore,
+                expandedUiAllowed: this.expandedUiAllowed(),
+                panelVisible: this.panelVisible,
+                isExpandedLayout: this.isExpandedLayout,
+                activePanel: this.activePanel,
+                languageRevision: this.languageRevision,
+                actions: this.canonicalDockActions(),
+                chromeOpacity: this.phoneChromeOpacity(),
+                chromeIsGlass: this.phoneChromeIsGlass(),
+                dockWidthPercent: this.compactDockWidthPercent(),
+                dockIconSize: this.compactDockIconSize(),
+                dockLabelFontSize: this.compactDockLabelFontSize(),
+                dockItemHeight: this.compactDockItemHeight(),
+                skyHeight: this.skyHeight,
+                polarScopeVisible: this.polarScopeVisible,
+                dockClockText: this.dockClockText,
+                dockWidth: this.dockWidthPixels(),
+                dockLeft: this.dockLeft(),
+                dockTop: this.dockTop(),
+                expandedDockWidth: this.expandedDockWidth(),
+                expandedDockLeft: this.expandedDockLeft(),
+                gyroPanelLeft: this.EDGE_MARGIN + 64,
+                gyroPanelTop: this.railTop() + 120,
+                infoWinVisible: this.infoWinVisible,
+                bottomCardIndex: this.bottomCardIndex,
+                liveInfoVisible: this.selectedLiveInfoVisible(),
+                contentOpacity: this.objectDetailContentOpacity,
+                contentTranslateX: this.objectDetailContentTranslateX,
+                cardWidth: this.bottomCardWidth(),
+                cardHeight: this.bottomCardHeight(),
+                viewLock: this.viewLock,
+                speechStatus: this.speechStatus,
+                inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+                iconName: this.objectInspectorIcon(),
+                distanceText: this.objectDistanceNoticeText(),
+                distanceSummaryText: this.objectDistanceSummary(),
+                imageHeight: this.objectInspectorImageHeight(),
+                inlineModelSize: this.objectInspectorInlineModelSize(),
+                modelReady: this.objectInspectorModelReady(),
+                modelRendering: this.objectInspectorModelRendering,
+                hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+                modelNotice: this.objectInspectorModelNotice(),
+                warmupText: this.objectInspectorMediaWarmupText(),
+                fallbackKind: this.objectInspectorFallbackVisualKind(),
+                starColor: this.objectInspectorStarColor(),
+                satelliteVisible: this.selectedObjectIsArtificialSatellite(),
+                tleEpoch: this.selectedSatelliteTleEpoch(),
+                accent: this.nmAccent(),
+                cultureVisible: this.selectedObjectIsConstellation(),
+                textColor: this.nmText(),
+                connectorVisible: this.overlayStore.objectDetailConnectorVisible,
+                connectorLength: this.objectDetailConnectorLength,
+                connectorX: this.objectDetailConnectorX,
+                connectorY: this.objectDetailConnectorY,
+                connectorAngle: this.objectDetailConnectorAngle,
+                connectorAnimateGeometry: this.objectDetailConnectorAnimateGeometry,
+                connectorTargetOnScreen: this.objectDetailConnectorTargetOnScreen,
+                connectorTargetX: this.objectDetailConnectorTargetX,
+                connectorTargetY: this.objectDetailConnectorTargetY,
+                connectorEndX: this.objectDetailConnectorEndX,
+                connectorEndY: this.objectDetailConnectorEndY,
+                markerSize: this.objectDetailMarkerSize(),
+                detailX: this.detailCardX(),
+                detailY: this.detailCardY(),
+                detailWidth: this.detailCardWidth(),
+                detailHeight: this.detailCardHeight(),
+                scroller: this.objectDetailScroller,
+                onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+                onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
+                onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
+                onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) },
+                onOpenTime: () => { this.setPanel('time') },
+                onFlashHint: (text: string) => { this.flashHint(text) },
+                onCalibrate: () => { this.calibrateGyroscope() },
+                onToggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
+                resolve: (key: string) => this.selectedDisplayValue(key),
+                nameOf: (name: string) => this.zhNameOf(name),
+                typeOf: (type: string) => this.zhType(type),
+                onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
+                onDismiss: () => { this.dismissObjectInspector() },
+                onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
+                onLoadPasses: () => { this.loadSelectedSatellitePasses() },
+                onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
+                onMediaRetry: () => { this.retryObjectInspectorMedia() },
+                onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+                onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+                onCenter: () => { this.moveToSelectedObject() },
+                onToggleLock: () => { this.toggleViewLock() },
+                onToggleObserving: () => { this.toggleSelectedObservingList() },
+                onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
+                onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
+                onSpeak: () => { this.speakSelectedObject() }
+              })
+              if (this.panelVisible) {
+                Stack({ alignContent: Alignment.TopStart }) { this.floatingPanel() }
+                  .width(this.panelWidth)
+                  .height(this.panelMaxHeight)
+                  .position({ x: this.expandedMainPanelLeft(), y: this.panelTop() })
+                  // Default keeps the panel above the sibling sky surface while still
+                  // letting its deepest child (Button, Slider, Scroll, TextInput) own
+                  // the gesture. Block would stop those controls at this outer shell.
+                  .hitTestBehavior(HitTestMode.Default)
+                  .zIndex(30)
+              }
+            }
               .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
                 .combine(TransitionEffect.scale({ x: 1.015, y: 1.015 }).animation({ duration: 220, curve: curves.springMotion(0.55, 0.88) })))
           } else {
@@ -14941,280 +15143,6 @@ private loadPlanetPositions(): void {
         .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
         .transition(TransitionEffect.OPACITY.animation({ duration: 220, curve: Curve.EaseOut }))
     }.width('100%').height('100%').hitTestBehavior(HitTestMode.Transparent)
-  }
-
-  @Builder
-  expandedShell() {
-    Stack() {
-      Stack() { }
-        .width('100%')
-        .height('100%')
-        .hitTestBehavior(HitTestMode.Block)
-        .onTouch((event: TouchEvent) => {
-          this.handleSkyTouch(event)
-        })
-      // Pad 横屏把入口统一放到底部 Dock，避免左侧竖轨侵占观测区。
-      if (this.panelVisible) {
-        Stack({ alignContent: Alignment.TopStart }) { this.floatingPanel() }
-          .width(this.panelWidth)
-          .height(this.panelMaxHeight)
-          .position({ x: this.expandedMainPanelLeft(), y: this.panelTop() })
-          // Default keeps the panel above the sibling sky surface while still
-          // letting its deepest child (Button, Slider, Scroll, TextInput) own
-          // the gesture. Block would stop those controls at this outer shell.
-          .hitTestBehavior(HitTestMode.Default)
-          .zIndex(30)
-      }
-      if (this.expandedUiAllowed()) {
-        Row() {
-          BottomDock({
-            actions: this.canonicalDockActions(), isExpanded: this.isExpandedLayout,
-            panelVisible: this.panelVisible, chromeOpacity: this.phoneChromeOpacity(),
-            isGlass: this.phoneChromeIsGlass(), widthPercent: this.compactDockWidthPercent(),
-            languageRevision: this.languageRevision,
-            iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
-            labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
-            itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
-            activePanel: this.activePanel,
-            onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
-            onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
-            onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) }
-          })
-        }
-          .width(this.expandedDockWidth())
-          .height(54)
-          .justifyContent(FlexAlign.Center)
-          .position({ x: this.expandedDockLeft(), y: this.skyHeight - 62 })
-          .hitTestBehavior(HitTestMode.Block)
-          .zIndex(40)
-          .animation({ duration: 300, curve: curves.springMotion(0.46, 0.86) })
-        if (!this.panelVisible && !this.polarScopeVisible && this.dockClockText.length > 0) {
-          DockClockLayer({ clockText: this.dockClockText, layerWidth: this.dockWidthPixels(), posX: this.dockLeft(), posY: this.dockTop() - 48, onOpenTime: () => { this.setPanel('time') } })
-        }
-      }
-      // 陀螺仪校准面板（开启陀螺仪时显示在侧栏右侧）
-      if (this.gyroStore.gyroscopeEnabled && this.gyroStore.gyroCalibPanelOpen) {
-        Stack() { GyroCalibPanel({ store: this.gyroStore, onFlashHint: (text: string) => { this.flashHint(text) }, onCalibrate: () => { this.calibrateGyroscope() }, onToggle: (enabled: boolean) => { this.toggleGyroscope(enabled) } }) }
-          .position({ x: this.EDGE_MARGIN + 64, y: this.railTop() + 120 })
-          .hitTestBehavior(HitTestMode.Block)
-          .zIndex(60)
-          .transition(TransitionEffect.asymmetric(
-            TransitionEffect.OPACITY.animation({ duration: 220, curve: Curve.EaseOut })
-              .combine(TransitionEffect.translate({ x: -20, y: 0 }).animation({ duration: 300, curve: curves.springMotion(0.5, 0.85) })),
-            TransitionEffect.OPACITY.animation({ duration: 160, curve: Curve.EaseIn })
-          ))
-      }
-      if (this.infoWinVisible && this.objectDetailStore.selectedName.length > 0) {
-        ObjectDetailConnectorLayer({
-          visible: this.overlayStore.objectDetailConnectorVisible,
-          beamLength: this.objectDetailConnectorLength,
-          beamX: this.objectDetailConnectorX,
-          beamY: this.objectDetailConnectorY,
-          beamAngle: this.objectDetailConnectorAngle,
-          animateGeometry: this.objectDetailConnectorAnimateGeometry,
-          targetOnScreen: this.objectDetailConnectorTargetOnScreen,
-          targetX: this.objectDetailConnectorTargetX,
-          targetY: this.objectDetailConnectorTargetY,
-          endX: this.objectDetailConnectorEndX,
-          endY: this.objectDetailConnectorEndY,
-          markerSize: this.objectDetailMarkerSize()
-        })
-        Stack() {
-          UnifiedObjectDetailCard({
-            store: this.objectDetailStore, mediaStore: this.objectMediaStore, scroller: this.objectDetailScroller,
-            activeIndex: this.bottomCardIndex, liveInfoVisible: this.selectedLiveInfoVisible(),
-            contentOpacity: this.objectDetailContentOpacity, contentTranslateX: this.objectDetailContentTranslateX,
-            cardWidth: this.bottomCardWidth(), cardHeight: this.bottomCardHeight(),
-            viewLock: this.viewLock, speechStatus: this.speechStatus,
-            inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
-            iconName: this.objectInspectorIcon(), distanceText: this.objectDistanceNoticeText(),
-            distanceSummaryText: this.objectDistanceSummary(),
-            imageHeight: this.objectInspectorImageHeight(), inlineModelSize: this.objectInspectorInlineModelSize(),
-            modelReady: this.objectInspectorModelReady(), modelRendering: this.objectInspectorModelRendering,
-            hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-            modelNotice: this.objectInspectorModelNotice(), warmupText: this.objectInspectorMediaWarmupText(),
-            fallbackKind: this.objectInspectorFallbackVisualKind(), starColor: this.objectInspectorStarColor(),
-            satelliteVisible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(),
-            accent: this.nmAccent(), cultureVisible: this.selectedObjectIsConstellation(), textColor: this.nmText(),
-            resolve: (key: string) => this.selectedDisplayValue(key),
-            nameOf: (name: string) => this.zhNameOf(name), typeOf: (type: string) => this.zhType(type),
-            onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
-            onDismiss: () => { this.dismissObjectInspector() },
-            onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
-            onLoadPasses: () => { this.loadSelectedSatellitePasses() },
-            onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
-            onMediaRetry: () => { this.retryObjectInspectorMedia() },
-            onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-            onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
-            onCenter: () => { this.moveToSelectedObject() },
-            onToggleLock: () => { this.toggleViewLock() },
-            onToggleObserving: () => { this.toggleSelectedObservingList() },
-            onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
-            onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
-            onSpeak: () => { this.speakSelectedObject() }
-          })
-        }
-          .position({ x: this.detailCardX(), y: this.detailCardY() })
-          .width(this.detailCardWidth())
-          .height(this.detailCardHeight())
-          .zIndex(50)
-          .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
-          .transition(TransitionEffect.asymmetric(
-            TransitionEffect.OPACITY.animation({ duration: 260, curve: Curve.EaseOut })
-              .combine(TransitionEffect.translate({ x: 0, y: 40 }).animation({ duration: 420, curve: curves.springMotion(0.55, 0.85) })),
-            TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseIn })
-              .combine(TransitionEffect.translate({ x: 0, y: 20 }).animation({ duration: 200, curve: Curve.EaseIn }))
-          ))
-      }
-    }
-      .width('100%')
-      .height('100%')
-      .zIndex(1)
-      .hitTestBehavior(HitTestMode.Transparent)
-    }
-
-  @Builder
-  hoverObservatoryShell() {
-    Stack() {
-      Stack()
-        .width('100%')
-        .height(this.hoverSkyPaneHeight())
-        .position({ x: 0, y: 0 })
-        .hitTestBehavior(HitTestMode.Block)
-        .onTouch((event: TouchEvent) => {
-          this.handleSkyTouch(event)
-        })
-
-      Row() {
-        Text(this.observationTimeText)
-          .fontSize(11)
-          .fontColor('rgba(229,255,255,0.78)')
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .layoutWeight(1)
-        Text(this.currentFovText)
-          .fontSize(11)
-          .fontColor('rgba(229,255,255,0.78)')
-          .margin({ left: 10 })
-      }
-        .height(34)
-        .padding({ left: 16, right: 16 })
-        .backgroundColor('rgba(10, 14, 26, 0.42)')
-        .backdropBlur(22)
-        .borderRadius(UI_RADIUS_PILL)
-        .position({ x: 16, y: 12 })
-        .width(Math.max(220, this.skyWidth - 32))
-        .hitTestBehavior(HitTestMode.None)
-
-      Row()
-        .width(Math.max(120, this.skyWidth - 72))
-        .height(2)
-        .backgroundColor('rgba(147, 215, 255, 0.20)')
-        .borderRadius(1)
-        .position({ x: 36, y: this.hoverSkyPaneHeight() + 1 })
-        .hitTestBehavior(HitTestMode.None)
-
-      Column()
-        .width(Math.max(240, this.skyWidth - 24))
-        .height(Math.max(220, this.skyHeight - this.hoverConsoleTop() - 14))
-        .backgroundColor(this.panelIdleGlass ? 'rgba(10, 14, 26, 0.46)' : 'rgba(14, 18, 32, 0.66)')
-        .backdropBlur(this.panelIdleGlass ? 42 : 30)
-        .border({ width: 0.5, color: 'rgba(147, 215, 255, 0.12)' })
-        .borderRadius(UI_RADIUS_SHEET)
-        .position({ x: 12, y: this.hoverConsoleTop() })
-        .hitTestBehavior(HitTestMode.None)
-
-      if (this.panelVisible) {
-        Stack() { this.compactPanel() }
-          .position({ x: 0, y: this.hoverPanelTop() })
-          .width('100%')
-          .hitTestBehavior(HitTestMode.Default)
-          .zIndex(30)
-      }
-
-      Row() {
-        BottomDock({
-          actions: this.canonicalDockActions(), isExpanded: this.isExpandedLayout,
-          panelVisible: this.panelVisible, chromeOpacity: this.phoneChromeOpacity(),
-          isGlass: this.phoneChromeIsGlass(), widthPercent: this.compactDockWidthPercent(),
-          languageRevision: this.languageRevision,
-          iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
-          labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
-          itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
-          activePanel: this.activePanel,
-          onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
-          onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
-          onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) }
-        })
-      }
-        .width('100%')
-        .height(54)
-        .justifyContent(FlexAlign.Center)
-        .position({ x: 0, y: this.skyHeight - 62 })
-        .hitTestBehavior(HitTestMode.Block)
-        .zIndex(40)
-
-      if (this.infoWinVisible && this.objectDetailStore.selectedName.length > 0) {
-        ObjectDetailConnectorLayer({
-          visible: this.overlayStore.objectDetailConnectorVisible,
-          beamLength: this.objectDetailConnectorLength,
-          beamX: this.objectDetailConnectorX,
-          beamY: this.objectDetailConnectorY,
-          beamAngle: this.objectDetailConnectorAngle,
-          animateGeometry: this.objectDetailConnectorAnimateGeometry,
-          targetOnScreen: this.objectDetailConnectorTargetOnScreen,
-          targetX: this.objectDetailConnectorTargetX,
-          targetY: this.objectDetailConnectorTargetY,
-          endX: this.objectDetailConnectorEndX,
-          endY: this.objectDetailConnectorEndY,
-          markerSize: this.objectDetailMarkerSize()
-        })
-        Stack() {
-          UnifiedObjectDetailCard({
-            store: this.objectDetailStore, mediaStore: this.objectMediaStore, scroller: this.objectDetailScroller,
-            activeIndex: this.bottomCardIndex, liveInfoVisible: this.selectedLiveInfoVisible(),
-            contentOpacity: this.objectDetailContentOpacity, contentTranslateX: this.objectDetailContentTranslateX,
-            cardWidth: this.bottomCardWidth(), cardHeight: this.bottomCardHeight(),
-            viewLock: this.viewLock, speechStatus: this.speechStatus,
-            inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
-            iconName: this.objectInspectorIcon(), distanceText: this.objectDistanceNoticeText(),
-            distanceSummaryText: this.objectDistanceSummary(),
-            imageHeight: this.objectInspectorImageHeight(), inlineModelSize: this.objectInspectorInlineModelSize(),
-            modelReady: this.objectInspectorModelReady(), modelRendering: this.objectInspectorModelRendering,
-            hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-            modelNotice: this.objectInspectorModelNotice(), warmupText: this.objectInspectorMediaWarmupText(),
-            fallbackKind: this.objectInspectorFallbackVisualKind(), starColor: this.objectInspectorStarColor(),
-            satelliteVisible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(),
-            accent: this.nmAccent(), cultureVisible: this.selectedObjectIsConstellation(), textColor: this.nmText(),
-            resolve: (key: string) => this.selectedDisplayValue(key),
-            nameOf: (name: string) => this.zhNameOf(name), typeOf: (type: string) => this.zhType(type),
-            onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
-            onDismiss: () => { this.dismissObjectInspector() },
-            onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
-            onLoadPasses: () => { this.loadSelectedSatellitePasses() },
-            onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
-            onMediaRetry: () => { this.retryObjectInspectorMedia() },
-            onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-            onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
-            onCenter: () => { this.moveToSelectedObject() },
-            onToggleLock: () => { this.toggleViewLock() },
-            onToggleObserving: () => { this.toggleSelectedObservingList() },
-            onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
-            onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
-            onSpeak: () => { this.speakSelectedObject() }
-          })
-        }
-          .position({ x: this.detailCardX(), y: this.detailCardY() })
-          .width(this.detailCardWidth())
-          .height(this.detailCardHeight())
-          .zIndex(35)
-          .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
-      }
-    }
-      .width('100%')
-      .height('100%')
-      .zIndex(1)
-      .hitTestBehavior(HitTestMode.Transparent)
   }
 
   /**

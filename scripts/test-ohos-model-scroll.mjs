@@ -15,6 +15,9 @@ const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/obj
 const detailCard = readFileSync(new URL('../harmonyos/ets-source/panels/object/UnifiedObjectDetailCard.ets', import.meta.url), 'utf8');
 // 手机/折叠半折壳已下沉为 CompactShell 组件（Phase 6b）：详情卡第三处调用点随之搬到该文件。
 const compactShell = readFileSync(new URL('../harmonyos/ets-source/panels/shell/CompactShell.ets', import.meta.url), 'utf8');
+// Phase 6c：hover/expanded 两壳也下沉为组件，详情卡的其余两处调用点随之搬到对应文件。
+const hoverShell = readFileSync(new URL('../harmonyos/ets-source/panels/shell/HoverObservatoryShell.ets', import.meta.url), 'utf8');
+const expandedShell = readFileSync(new URL('../harmonyos/ets-source/panels/shell/ExpandedShell.ets', import.meta.url), 'utf8');
 const stageStart = mediaComponents.indexOf(".id('object-model-inline-stage')");
 const stage = mediaComponents.slice(stageStart, mediaComponents.indexOf('Text(this.modelNotice)', stageStart));
 
@@ -24,7 +27,7 @@ test('only the bounded model captures touch; the outer card isolates the sky', (
   assert.doesNotMatch(stage, /PanDirection|onGestureJudgeBegin|parallelGesture/);
   assert.match(mediaComponents.slice(stageStart - 230, stageStart), /width\(this\.inlineModelSize\)\.height\(this\.inlineModelSize\)/);
   assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
-  assert.equal(((source + compactShell).match(/height\(this\.(?:detailCardHeight\(\)|detailHeight)\)\s*\.zIndex\(\d+\)\s*\.hitTestBehavior\(HitTestMode\.BLOCK_HIERARCHY\)/g) ?? []).length, 3);
+  assert.equal(((source + compactShell + hoverShell + expandedShell).match(/height\(this\.(?:detailCardHeight\(\)|detailHeight)\)\s*\.zIndex\(\d+\)\s*\.hitTestBehavior\(HitTestMode\.BLOCK_HIERARCHY\)/g) ?? []).length, 3);
   assert.match(source, /scroller: this\.objectDetailScroller/);
   assert.match(detailCard, /Scroll\(this\.scroller\)/);
   assert.match(detailCard, /stellariumObjectDetailScrollY.*currentOffset\(\)\?\.yOffset/);
