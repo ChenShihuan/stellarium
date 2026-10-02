@@ -1,3 +1,13 @@
+## [2026-10-02] DevEco Code - Phase 5d-诊断：行星三维模型“本地资源解码失败”（缺 .model.rgba 侧车）修复 + 真机走查
+
+- **现象/复现**：详情卡“资料”页媒体区对 `kind=model` 天体（火星/土星）显示「本地资源解码失败 / 资源已找到，但当前设备无法显示此文件」（`ObjectMediaStore.objectInspectorMediaLoadFailed=true`）；`kind=image`（M31）正常。真机 `192.168.50.108:40565`（Mate 80 Pro）用 `searchObject Mars` 复现。
+- **根因**：model 走 `loadObjectInspectorModelRawTexture()` 读 `textures/<name>.png.model.rgba`（512×256×4=524288B CPU 侧车，由 bash 版 `sync-ohos-resources.sh` 用 `ffmpeg -vf scale=512:256,format=rgba -f rawvideo` 生成）；Windows 版 `sync-ohos-resources-windows.ps1` 未实现该步，侧车从未进入 HAP（设备与构建 rawfile 均为 0 个）。旧诊断 `JSON.stringify(Error)` 只输出 `{}`，掩盖了 `CPU texture sidecar is missing`。
+- **改动**：`pages/MainWindowNativeNode.ets` +93 行（18595 → 18688）—— 侧车缺失/读取失败时**回退解码 PNG**（`decodeLocalImage('model', desiredSize 512×256, RGBA_8888)` → `readPixelsToBufferSync` → 复用同一提交路径），环形纹理按 512×2 同法回退；新增 `describeDecodeError()`（输出 `name: message`）；`panels/object/TabletInspectorMedia.ets` 247 → 250 行，两个 `Image.onError` 改 `(err: ImageError)` 并打印 `err.error.code`/`err.message`。
+- **真机验证**：重建 HAP（39s）安装后 `searchObject Mars` → 日志 `[detail-model] sidecar missing, decoding PNG fallback` → `[detail-model] CPU texture ready bytes=524288 source=png` → `[detail-media-card] sphere loaded`；截图确认带地表的火星球体（非失败提示）。土星环 PNG（`saturn_rings_radial.png`）回退解码 + 含环渲染成功（`released pixel map kind=model-ring-texture-fallback`）。Phase 5d 沉浸叠层补走查：`devecocli ui click` 打开 `object-model-stage` → `drag` 旋转（前后截图表征位移）→ 关闭回 `object-model-inline-stage`，`pidof` 全程存活；**双指缩放未走查（`devecocli ui` 无多点触控）**。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（2 文件 0 错）→ 构建 **BUILD SUCCESSFUL**（39s）→ `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点全绿 → 受影响 7 个详情/model 脚本全绿（`audit-ohos-resource-coverage` 重写的审计文档已 `git checkout` 还原）。
+- **文档**：`KNOWN-ISSUES.md` 新增第 22 条；`ARKTS-PAGES-REFACTOR-PLAN.md` §13.5 Phase 5d 行补真机走查结论。
+- **仍待构建侧处理**：Windows 资源同步脚本仍不生成 `.model.rgba`（本回退已让功能可用，侧车补齐后可恢复“侧车优先”的快速路径，应用逻辑已兼容两者）。
+
 ## [2026-10-02] DevEco Code - Phase 7：收口（队列最后一片）
 
 - **背景/范围**：队列收尾。删死代码、复核宿主转发层、把 `observationTimeText` 收入 store、校正 `UI-ARCHITECTURE.md` 与根 `AGENTS.md`，并给出终态指标与剩余问题清单。行为零变更（纯搬移 + 删死代码 + 文档）。
