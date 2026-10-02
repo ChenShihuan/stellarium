@@ -27,9 +27,11 @@ test('group selection uses a local non-linear animation and preserves same-value
 });
 
 test('filter rows precede variable results and retain their own bounded scroll container', () => {
-  const panel = page.slice(page.indexOf("} else if (this.activePanel === 'satellites')"), page.indexOf("} else if (this.activePanel === 'meteorshowers')"));
+  // Phase 4j 复核：`satellites` 分支已在更早的切片下沉为 panels/panels/SatellitesPanel.ets，
+  // 因此原按宿主文本切片的断言改读该组件文件（预存失配，本片顺带同步）。
+  const panel = readFileSync(new URL('../harmonyos/ets-source/panels/panels/SatellitesPanel.ets', import.meta.url), 'utf8');
   assert.ok(panel.indexOf('SatelliteGroupSelector(') < panel.indexOf('ForEach(this.satItems'));
-  assert.match(panel, /Scroll\(this.satellitePanelScroller\)/);
+  assert.match(panel, /Scroll\(this\.panelScroller\)/);
   const selector = readFileSync(new URL('../harmonyos/ets-source/panels/satellite/SatelliteGroupSelector.ets', import.meta.url), 'utf8');
   assert.match(selector, /Scroll\(this\.scroller\)/);
   assert.match(selector, /height\(180\)/);

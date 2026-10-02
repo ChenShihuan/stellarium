@@ -10,6 +10,9 @@ const sectionSource = readFileSync(new URL('../harmonyos/ets-source/panels/setti
 // Phase 3aq：信息模式按钮由宿主参数化 @Builder informationModeButton(mode, labelKey) 改为
 // panels/settings/SettingsRows.ets 的 InformationModeButton 组件，宿主调用点直接读当前模式。
 const settingsRowsSource = readFileSync(new URL('../harmonyos/ets-source/panels/settings/SettingsRows.ets', import.meta.url), 'utf8');
+// Phase 4j：设置面板 8 个子标签页由宿主内联下沉到 panels/panels/SettingsPanel.ets，
+// 信息模式按钮调用点与 pending 门控随之移入组件，改读组件文件。
+const settingsPanelSource = readFileSync(new URL('../harmonyos/ets-source/panels/panels/SettingsPanel.ets', import.meta.url), 'utf8');
 function method(name) {
   const start = source.indexOf(name);
   assert.ok(start >= 0, name);
@@ -26,8 +29,8 @@ test('all four settings groups read current state rather than a captured selecti
   for (const group of ['information', 'date', 'time', 'startup']) {
     assert.ok(dispatch.includes(`group === '${group}'`), group);
   }
-  assert.ok(source.includes("active: this.informationMode === 'all'"));
-  assert.ok(source.includes("active: this.informationMode === 'custom'"));
+  assert.ok(settingsPanelSource.includes("active: this.informationMode === 'all'"));
+  assert.ok(settingsPanelSource.includes("active: this.informationMode === 'custom'"));
   assert.ok(settingsRowsSource.includes('active: this.active'));
   assert.ok(sectionSource.includes('active: this.store.configDateFormat === option.id'));
   assert.ok(sectionSource.includes('active: this.store.configTimeFormat === option.id'));
@@ -49,8 +52,8 @@ test('selection animation follows the background, but does not animate button la
   assert.ok(buttonSource.indexOf('.animation(') < buttonSource.indexOf('.padding('));
   assert.match(buttonSource, /duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut/);
   assert.match(buttonSource, /clickEffect\(\{ level: ClickEffectLevel.LIGHT \}\)/);
-  assert.match(source, /canPick: !this\.informationSettingPending/);
-  assert.match(source, /pending: this\.timeSettingsPending/);
+  assert.match(settingsPanelSource, /canPick: !this\.informationSettingPending/);
+  assert.match(settingsPanelSource, /pending: this\.timeSettingsPending/);
   assert.match(sectionSource, /canPick: !this\.pending/);
 });
 
