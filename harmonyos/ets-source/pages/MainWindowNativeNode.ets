@@ -139,6 +139,7 @@ import { TimePanel } from '../panels/panels/TimePanel'
 import { HelpPanel } from '../panels/panels/HelpPanel'
 import { MeteorShowersPanel } from '../panels/panels/MeteorShowersPanel'
 import { NebulaTexturesPanel } from '../panels/panels/NebulaTexturesPanel'
+import { ScriptsPanel } from '../panels/panels/ScriptsPanel'
 import { LayersPanel } from '../panels/panels/LayersPanel'
 import { ObservingPanel } from '../panels/panels/ObservingPanel'
 import { SearchPanel } from '../panels/panels/SearchPanel'
@@ -20620,254 +20621,72 @@ private loadPlanetPositions(): void {
         onRemove: (imageUrl: string) => { this.removeNebulaTexture(imageUrl) }
       })
     } else if (this.activePanel === 'scripts') {
-      // 脚本面板：脚本列表 + 录制 / 回放（#39）
-      Scroll() {
-        Column({ space: 10 }) {
-          GuideLibrary({
-            textColor: this.nmText(), subColor: this.nmSub(), cardBg: this.nmBg(),
-            sessionActive: this.scriptSessionActive(),
-            onStartGuide: (id: string) => { this.executeGuideRequest('startGuide', id) }
-          })
-          // ===== 脚本播放列表 =====
-          Text(I18n.t('i0123')).fontSize(15).fontColor(this.nmText()).width('100%').margin({ top: 4 })
-          Row({ space: 8 }) {
-            Button(I18n.t('i0252')).fontSize(11).fontColor('#FFFFFF').backgroundColor('#C0392B')
-              .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-              .onClick(() => { this.stopScriptPlayback() })
-            Button(I18n.t('btn_import_script')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-              .enabled(!this.scriptImporting)
-              .onClick(() => { this.importScriptFile() })
-            if (this.scriptImporting) {
-              LoadingProgress().width(16).height(16).color(this.nmAccent())
-            }
-          }.width('100%').padding({ left: 6, right: 6 })
-          if (this.scriptList.length === 0) {
-            Text(I18n.t('msg_no_scripts')).fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 6 })
-          }
-          if (this.scriptLaunching) {
-            Row({ space: 6 }) {
-              LoadingProgress().width(16).height(16).color(this.nmAccent())
-              Text(I18n.format('script_starting_named', [this.scriptZh(this.scriptLaunchingName)])).fontSize(10).fontColor(this.nmSub())
-            }.width('100%').padding({ left: 6, right: 6, bottom: 2 })
-          }
-          Column({ space: 2 }) {
-              ForEach(this.scriptList, (s: string) => {
-                Column({ space: 0 }) {
-                  // 第一行：中文名 + 播放图标
-                  Row() {
-                    Text(this.scriptZh(s)).fontSize(11).fontColor(this.nmText())
-                      .fontWeight(FontWeight.Medium).layoutWeight(1)
-                    Text('▶').fontSize(9).fontColor('#7FD0FF')
-                  }
-                  .height(28).width('100%').padding({ left: 10, right: 10 })
-                  // 第二行：简短描述
-                  if (this.scriptDesc(s)) {
-                    Text(this.scriptDesc(s))
-                      .fontSize(8).fontColor('#77FFFFFF').width('100%')
-                      .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                      .padding({ left: 10, right: 10, bottom: 3 })
-                  }
-                  if (this.scriptMetaLine(s).length > 0) {
-                    Text(this.scriptMetaLine(s))
-                      .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                      .padding({ left: 10, right: 10, bottom: 3 })
-                  }
-                  if (this.scriptSourceLine(s).length > 0) {
-                    Text(this.scriptSourceLine(s)).fontSize(8).fontColor('#55FFFFFF').width('100%').maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis }).padding({ left: 10, right: 10, bottom: 3 })
-                  }
-              }
-              .width('100%')
-              .backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL)
-              .opacity(this.scriptLaunching && this.scriptLaunchingName !== s ? 0.55 : 1)
-              .hitTestBehavior(HitTestMode.Default)
-              .onClick(() => { this.playScriptByName(s) })
-            }, (s: string, index: number) => s)
-          }
-            .id('scripts-list-scroll')
-            .width('100%')
-            .hitTestBehavior(HitTestMode.Default)
-
-          Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 6, bottom: 6 })
-
-          // ===== 录制操作 =====
-          Text(I18n.t('c_script_record')).fontSize(15).fontColor(this.nmText()).width('100%').margin({ top: 4 })
-          Text(I18n.t('m_script_record_desc'))
-            .fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 4, right: 4 })
-
-          Row({ space: 10 }) {
-            Button(this.tools.recording ? I18n.t('btn_stop_recording') : I18n.t('btn_start_recording'))
-              .fontSize(13).fontColor('#FFFFFF').backgroundColor(this.tools.recording ? '#C0392B' : '#2E7D32')
-              .borderRadius(UI_RADIUS_CONTROL).height(36).padding({ left: 16, right: 16 })
-              .onClick(() => { this.tools.recording ? this.stopRecording() : this.startRecording() })
-            if (this.tools.recording) {
-              Text(I18n.t('c_recording')).fontSize(12).fontColor('#FF6B6B')
-            }
-          }.width('100%').padding({ left: 6, right: 6 })
-
-          Text(I18n.format('script_recorded_commands', [this.recordCount.toString()]) + (this.recordMsg.length > 0 ? ' · ' + this.recordMsg : ''))
-            .fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 6, right: 6 })
-
-          Row({ space: 8 }) {
-            TextInput({ placeholder: I18n.t('c_record_name_hint'), text: this.recordName })
-              .fontSize(12).fontColor(this.nmText())
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).layoutWeight(1).height(36)
-              .onChange((v: string) => { this.recordName = v })
-            Button(I18n.t('btn_save_record'))
-              .fontSize(12).fontColor('#FFFFFF').backgroundColor(this.recordCount > 0 ? '#5B93BF' : '#555555')
-              .borderRadius(UI_RADIUS_CONTROL).height(36).padding({ left: 12, right: 12 })
-              .enabled(this.recordCount > 0)
-              .onClick(() => { this.saveCurrentRecording() })
-          }.width('100%').padding({ left: 6, right: 6 })
-
-          Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 6, bottom: 6 })
-
-          Text(I18n.t('c_saved_recordings')).fontSize(13).fontColor(this.nmText()).width('100%').padding({ left: 6 })
-          if (this.recordings.length === 0) {
-            Text(I18n.t('m_no_recordings')).fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 6 })
-          }
-          ForEach(this.recordings, (rec: RecordingEntry, idx: number) => {
-            Column({ space: 4 }) {
-              Row({ space: 8 }) {
-                Column() {
-                  Text(rec.name).fontSize(13).fontColor(this.nmText()).width('100%')
-                  Text((rec.created.length > 0 ? rec.created + ' · ' : '') + rec.count + ' 条命令')
-                    .fontSize(10).fontColor('#99FFFFFF').width('100%')
-                }.layoutWeight(1)
-                Button(I18n.t('btn_playback'))
-                  .fontSize(11).fontColor('#FFFFFF').backgroundColor('#5B93BF')
-                  .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 12, right: 12 })
-                  .onClick(() => { this.playRecording(rec.file) })
-                Button('加载')
-                  .fontSize(11).fontColor('#FFFFFF').backgroundColor('#7D3C98')
-                  .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 12, right: 12 })
-                  .onClick(() => { this.loadRecordingByName(rec.file, rec.name) })
-                if ((rec.path ?? '').length > 0) {
-                  Button('分享')
-                    .id('recording-share-' + idx.toString())
-                    .fontSize(11).fontColor('#FFFFFF').backgroundColor('rgba(68,136,178,0.72)')
-                    .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-                    .onClick(() => {
-                      this.shareFile(rec.path ?? '', utd.UniformDataType.PLAIN_TEXT, rec.name,
-                        'Stellarium 操作录制', 'recording-share-' + idx.toString())
-                    })
-                }
-                Button(I18n.t('btn_delete'))
-                  .fontSize(11).fontColor('#FFFFFF').backgroundColor('#C0392B')
-                  .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 12, right: 12 })
-                  .onClick(() => { this.deleteRecording(rec.file) })
-              }.width('100%')
-            }.width('100%').padding({ left: 8, right: 8, top: 6, bottom: 6 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          }, (item: RecordingEntry, idx: number) => item.file)
-
-          // ===== 直接屏幕录制 MP4 =====
-          Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 6, bottom: 6 })
-          Text('屏幕视频（MP4）').fontSize(13).fontColor(this.nmText()).width('100%').padding({ left: 6 })
-          Text('录制屏幕中的星图与交互界面；系统会在开始前显示录屏授权确认。默认不录麦克风。')
-            .fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 6, right: 6 }).maxLines(3)
-          Row({ space: 8 }) {
-            Button(this.screenVideoRecording ? '停止并生成 MP4' : '开始录制 MP4')
-              .fontSize(12).fontColor('#FFFFFF')
-              .backgroundColor(this.screenVideoRecording ? '#C0392B' : '#2E7D32')
-              .borderRadius(UI_RADIUS_CONTROL).height(36).padding({ left: 14, right: 14 })
-              .onClick(() => {
-                if (this.screenVideoRecording) this.stopScreenVideoRecording()
-                else this.startScreenVideoRecording()
-              })
-            if (this.screenCaptureFinalizing) {
-              LoadingProgress().width(18).height(18).color(this.nmAccent())
-            }
-            Text(this.screenVideoStatus).fontSize(10)
-              .fontColor(this.screenVideoRecording ? '#FF9A9A' : this.nmSub())
-              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-          }.width('100%').padding({ left: 6, right: 6 })
-          if (this.screenVideoBytes > 0 && this.screenVideoPath.length > 0) {
-            Row({ space: 8 }) {
-              SaveButton({ icon: SaveIconStyle.LINES, text: SaveDescription.SAVE_TO_GALLERY,
-                buttonType: ButtonType.Capsule })
-                .height(34)
-                .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-                  this.saveScreenVideoToGallery(result)
-                })
-              Button('分享')
-                .id('screen-video-share')
-                .fontSize(11).fontColor('#FFFFFF').backgroundColor('rgba(68,136,178,0.72)')
-                .borderRadius(UI_RADIUS_CONTROL).height(34).padding({ left: 12, right: 12 })
-                .onClick(() => {
-                  this.shareFile(this.screenVideoPath, utd.UniformDataType.VIDEO, this.screenVideoFileName,
-                    'Stellarium 屏幕视频', 'screen-video-share')
-                })
-              Button('另存为')
-                .fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(34).padding({ left: 12, right: 12 })
-                .onClick(() => { this.saveFileAs(this.screenVideoPath, this.screenVideoFileName, 'MP4 视频|.mp4') })
-            }.width('100%').padding({ left: 6, right: 6 })
-          }
-
-          // ===== 视频录制（帧序列方案，纯星图高质量导出）=====
-          Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 6, bottom: 6 })
-          Text(I18n.t('c_video_frames')).fontSize(13).fontColor(this.nmText()).width('100%').padding({ left: 6 })
-          Text(I18n.t('m_video_frames_desc'))
-            .fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 4, right: 4 })
-
-          Row({ space: 8 }) {
-            Column({ space: 2 }) {
-              Text(I18n.t('c_fps')).fontSize(10).fontColor('#99FFFFFF')
-              TextInput({ placeholder: '1', text: this.videoFps })
-                .fontSize(12).fontColor(this.nmText())
-                .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).width(72).height(34)
-                .onChange((v: string) => { this.videoFps = v })
-            }.width(72)
-            Column({ space: 2 }) {
-              Text(I18n.t('c_duration_sec')).fontSize(10).fontColor('#99FFFFFF')
-              TextInput({ placeholder: '5', text: this.videoDuration })
-                .fontSize(12).fontColor(this.nmText())
-                .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).width(72).height(34)
-                .onChange((v: string) => { this.videoDuration = v })
-            }.width(72)
-            Button(this.videoRecording ? '停止录制' : '开始录制')
-              .fontSize(13).fontColor('#FFFFFF').backgroundColor(this.videoRecording ? '#C0392B' : '#2E7D32')
-              .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1).padding({ left: 16, right: 16 })
-              .onClick(() => { this.videoRecording ? this.stopVideoRecording() : this.startVideoRecording() })
-          }.width('100%').padding({ left: 6, right: 6 })
-
-          if (this.videoRecording || this.videoFrameCount > 0) {
-            Row({ space: 10 }) {
-              if (this.videoRecording) {
-                Text(I18n.t('c_recording')).fontSize(12).fontColor('#FF6B6B')
-              }
-              Text(I18n.t('c_captured') + ' ' + this.videoFrameCount + ' / ' + this.videoMaxFrames + ' ' + I18n.t('c_frames'))
-                .fontSize(11).fontColor('#99FFFFFF')
-              if (this.videoFailedFrames > 0) {
-                Text('失败 ' + this.videoFailedFrames).fontSize(10).fontColor('#FFB38A')
-              }
-            }.width('100%').padding({ left: 6, right: 6 })
-          }
-          if (this.videoDir.length > 0) {
-            Text('存放目录：' + this.videoDir)
-              .fontSize(10).fontColor('#99FFFFFF').width('100%').padding({ left: 6, right: 6 })
-          }
-          if (this.videoArchivePath.length > 0) {
-            Row({ space: 8 }) {
-              Button('分享帧包')
-                .id('video-frames-share')
-                .fontSize(11).fontColor('#FFFFFF').backgroundColor('rgba(68,136,178,0.72)')
-                .borderRadius(UI_RADIUS_CONTROL).height(34).padding({ left: 12, right: 12 })
-                .onClick(() => {
-                  this.shareFile(this.videoArchivePath, utd.UniformDataType.ZIP_ARCHIVE,
-                    this.videoArchiveFileName, 'Stellarium 高质量星图帧序列', 'video-frames-share')
-                })
-              Button('导出 ZIP')
-                .fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(34).padding({ left: 12, right: 12 })
-                .onClick(() => { this.saveFileAs(this.videoArchivePath, this.videoArchiveFileName, 'ZIP 压缩包|.zip') })
-            }.width('100%').padding({ left: 6, right: 6, bottom: 8 })
-          }
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 16 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+      ScriptsPanel({
+        tools: this.tools,
+        guideSessionActive: this.scriptSessionActive(),
+        scriptImporting: this.scriptImporting,
+        scriptList: this.scriptList,
+        scriptLaunching: this.scriptLaunching,
+        scriptLaunchingName: this.scriptLaunchingName,
+        recordCount: this.recordCount,
+        recordMsg: this.recordMsg,
+        recordName: this.recordName,
+        recordings: this.recordings,
+        screenVideoRecording: this.screenVideoRecording,
+        screenCaptureFinalizing: this.screenCaptureFinalizing,
+        screenVideoStatus: this.screenVideoStatus,
+        screenVideoBytes: this.screenVideoBytes,
+        screenVideoPath: this.screenVideoPath,
+        videoFps: this.videoFps,
+        videoDuration: this.videoDuration,
+        videoRecording: this.videoRecording,
+        videoFrameCount: this.videoFrameCount,
+        videoMaxFrames: this.videoMaxFrames,
+        videoFailedFrames: this.videoFailedFrames,
+        videoDir: this.videoDir,
+        videoArchivePath: this.videoArchivePath,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        lineColor: this.nmBorder(),
+        scriptZh: (filename: string) => { return this.scriptZh(filename) },
+        scriptDesc: (filename: string) => { return this.scriptDesc(filename) },
+        scriptMetaLine: (filename: string) => { return this.scriptMetaLine(filename) },
+        scriptSourceLine: (filename: string) => { return this.scriptSourceLine(filename) },
+        onStartGuide: (id: string) => { this.executeGuideRequest('startGuide', id) },
+        onStopPlayback: () => { this.stopScriptPlayback() },
+        onImportScript: () => { this.importScriptFile() },
+        onPlayScript: (name: string) => { this.playScriptByName(name) },
+        onToggleRecording: () => { this.tools.recording ? this.stopRecording() : this.startRecording() },
+        onSaveRecording: () => { this.saveCurrentRecording() },
+        onSetRecordName: (value: string) => { this.recordName = value },
+        onPlayRecording: (file: string) => { this.playRecording(file) },
+        onLoadRecording: (file: string, name: string) => { this.loadRecordingByName(file, name) },
+        onShareRecording: (rec: RecordingEntry, idx: number) => {
+          this.shareFile(rec.path ?? '', utd.UniformDataType.PLAIN_TEXT, rec.name,
+            'Stellarium 操作录制', 'recording-share-' + idx.toString())
+        },
+        onDeleteRecording: (file: string) => { this.deleteRecording(file) },
+        onToggleScreenVideo: () => {
+          if (this.screenVideoRecording) this.stopScreenVideoRecording()
+          else this.startScreenVideoRecording()
+        },
+        onSaveScreenVideoToGallery: (result: SaveButtonOnClickResult) => { this.saveScreenVideoToGallery(result) },
+        onShareScreenVideo: () => {
+          this.shareFile(this.screenVideoPath, utd.UniformDataType.VIDEO, this.screenVideoFileName,
+            'Stellarium 屏幕视频', 'screen-video-share')
+        },
+        onSaveScreenVideoAs: () => { this.saveFileAs(this.screenVideoPath, this.screenVideoFileName, 'MP4 视频|.mp4') },
+        onSetVideoFps: (value: string) => { this.videoFps = value },
+        onSetVideoDuration: (value: string) => { this.videoDuration = value },
+        onToggleVideoRecording: () => { this.videoRecording ? this.stopVideoRecording() : this.startVideoRecording() },
+        onShareVideoArchive: () => {
+          this.shareFile(this.videoArchivePath, utd.UniformDataType.ZIP_ARCHIVE,
+            this.videoArchiveFileName, 'Stellarium 高质量星图帧序列', 'video-frames-share')
+        },
+        onExportVideoArchive: () => { this.saveFileAs(this.videoArchivePath, this.videoArchiveFileName, 'ZIP 压缩包|.zip') }
+      })
     } else if (this.activePanel === 'observing') {
       ObservingPanel({
         wutStore: this.wutStore,
