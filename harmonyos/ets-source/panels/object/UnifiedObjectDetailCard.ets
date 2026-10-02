@@ -68,7 +68,9 @@ export struct UnifiedObjectDetailCard {
     Column() {
       ObjectDetailCardHeader({
         store: this.store, iconName: this.iconName, liveInfoVisible: this.liveInfoVisible,
-        resolve: this.resolve, distanceSummary: () => this.distanceSummaryText,
+        // 距离摘要的可见性/回退仍由宿主决定（``distanceSummaryText``）；两个实参在页头内直接读
+        // ``@ObjectLink store``，仅用于建立元素级依赖，使切换天体时该摘要会重算。
+        distanceSummary: (_distance: string, _compact: string) => this.distanceSummaryText,
         nameOf: this.nameOf, typeOf: this.typeOf,
         onDragTouch: (event: TouchEvent) => { this.onDragTouch(event) }, onDismiss: () => { this.onDismiss() }
       })
