@@ -157,9 +157,12 @@ Move-Item "$work\fast_float-*" build\_deps\fastfloat-src
    等长短名 + NUL 填充改写 `.dynstr`，安全但**必须在每次重新链接引擎后重跑**。
    根治办法是在 CMake 层给 `md4c` / `md4c-html` / `nlopt` 目标加 `SOVERSION`（或改为静态链接），
    让链接器直接写入普通库名。
-2. **未生成 `.model.rgba` 侧车文件**。上游 `sync-ohos-resources.sh` 用 `ffmpeg` 生成它们
-   （行星细节模型的 512×256 RGBA 纹理），Windows 移植版目前跳过 → 打开"细节模型"时纹理会缺失。
-   补齐方式：安装 `ffmpeg` 后跑原脚本，或用 `System.Drawing` 实现等价缩放。
+2. ~~**未生成 `.model.rgba` 侧车文件**~~ → **已修复（2026-10-02）**。
+   `sync-ohos-resources-windows.ps1` 现在用 `System.Drawing`（不依赖 ffmpeg，与 Windows 移植版的
+   其它图像处理一致）生成与 bash 版同口径的侧车：50 个 512×256 行星/卫星 + 3 个 512×2 行星环，
+   输出为裸 RGBA（`R,G,B,A` 字节序，与 `DetailModelRasterizer.ets` 的读取一致），单文件
+   524288 / 4096 字节。已随 HAP 打包并经真机验证走回"侧车优先"路径。
+   ⚠️ 侧车由资源同步阶段生成，因此 `build-ohos-hap-windows.ps1 -SkipResources` 会跳过它。
 3. **`qt-platform-patch` 版本对不上**：`scripts/build-ohos-platform-patch.sh` 写死
    qtbase `REVISION=97575d35…`（Qt 6.12.0 Beta2），而本机装的是 6.12.0 Release
    （`sbom` 里是 `a2c0b1ea…`）→ 脚本会在版本校验处硬失败，**剪贴板通知补丁版的

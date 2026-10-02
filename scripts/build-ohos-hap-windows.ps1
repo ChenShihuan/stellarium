@@ -31,7 +31,10 @@
     Keep the existing entry/libs/arm64-v8a instead of re-running harmonydeployqt.
 
 .PARAMETER SkipResources
-    Keep the existing rawfile tree instead of refilling it.
+    Keep the existing rawfile tree instead of refilling it. The 16-bit /
+    grayscale PNG normalisation AND the detail-model .model.rgba sidecars are
+    produced by that resource sync, so skipping it reuses whatever the previous
+    sync generated (and leaves a frozen tree without sidecars).
 
 .PARAMETER Install
     Install the signed HAP on the connected device and start QAbility.

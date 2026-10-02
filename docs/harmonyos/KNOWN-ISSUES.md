@@ -36,11 +36,11 @@
 - **当前处理：** `scripts/build-ohos-hap-windows.ps1` 的 `Repair-NeededPaths` 在 `.dynstr` 内等长改写为普通库名（NUL 填充），并把三个库补进 `entry/libs/arm64-v8a`，随后自检不允许残留路径形式的 `NEEDED`（注意只检查 `NEEDED`，`RPATH`/`RUNPATH` 里的路径在设备上会被忽略）。
 - **根治方向：** 在 CMake 层给这些目标加 `SOVERSION`（或改为静态链接），由链接器直接写普通库名，去掉二进制补丁这一环。
 
-### 2. 行星细节模型纹理缺失（`.model.rgba` 未生成）— 【P2：影响细节模型外观】
+### 2. 行星细节模型纹理缺失（`.model.rgba` 未生成）— 【2026-10-02 已修复（Windows 同步脚本生成侧车）】
 
-- 上游 `sync-ohos-resources.sh` 会用 `ffmpeg` 生成 512×256（行星）与 512×2（行星环）的 RGBA 侧车文件；Windows 移植版 `sync-ohos-resources-windows.ps1` 目前跳过该步，本机无 ffmpeg。
-- **影响：** 打开「细节模型」时纹理缺失或异常；主星图、星空文化、深空天体不受影响。
-- **补齐方式：** 安装 ffmpeg 后跑上游脚本；或用 `System.Drawing` 实现等价缩放（需先确认 `.model.rgba` 的 RGBA 字节序）。
+- 上游 `sync-ohos-resources.sh` 用 `ffmpeg` 生成 512×256（行星）与 512×2（行星环）的 RGBA 侧车；Windows 移植版 `sync-ohos-resources-windows.ps1` 现已用 `System.Drawing` 生成同口径侧车（50 + 3 个），无 ffmpeg 依赖。详见第 22 条。
+- **影响：** （修复前）打开「细节模型」时纹理缺失或异常；主星图、星空文化、深空天体不受影响。修复后已走"侧车优先"路径。
+- **补齐（已落地）：** 无需安装 ffmpeg；`System.Drawing` 等价缩放，字节序为裸 `R,G,B,A`（与 `DetailModelRasterizer.ets` 读取一致）。
 
 ### 3. 平台插件补丁与已安装 Qt 版本不匹配 — 【P1：剪贴板修复进不了包】
 
@@ -460,7 +460,7 @@
 
 **2026-10-01 验收附带记录（非第 21 条本身，新开条目）**：`BottomDock` 的 `DockButton` active 高亮在真机上不显示（面板打开后对应入口不变蓝 `#70C8FF`；像素采样 max(B−R)=3–11，而同刻 `CompactQuickButton` 激活态为 66）。疑因 `ForEach` 键不含 `active`（键不变 → 子项不重建 → `@Prop active` 陈旧），或 Phase 3at 把 `dockActionActive` 改为 `isActive` 闭包入参后依赖无法追踪；未确认属回归还是既有，留待独立切片。
 
-### 22. 行星三维模型显示"本地资源解码失败"（构建期缺 `.model.rgba` 侧车）— 【2026-10-02 已修复（应用内回退解码 PNG），真机验证通过】
+### 22. 行星三维模型显示"本地资源解码失败"（构建期缺 `.model.rgba` 侧车）— 【2026-10-02 完全修复：应用内 PNG 回退 + Windows 构建脚本生成侧车，真机验证通过】
 
 - **现象（用户真机）**：详情卡"资料"页媒体区（`objectInspectorMediaKind === 'model'` 的天体，如火星、土星）显示 `TabletInspectorNoticeRow` 的**「本地资源解码失败 / 资源已找到，但当前设备无法显示此文件」+「重试」**，即 `ObjectMediaStore.objectInspectorMediaLoadFailed === true`。`kind === 'image'` 的深空天体（实测 M31）正常，故**仅 model 路径受影响**。
 - **真机复现与日志**（Mate 80 Pro `192.168.50.108:40565`，`com.cnchensh.stellarium`，`searchObject Mars`）：
@@ -471,4 +471,11 @@
 - **修法（应用内回退，不改构建产物）**：`loadObjectInspectorModelRawTexture()` 在侧车缺失/读取失败时改为**回退用鸿蒙图像框架解码 PNG**：`decodeLocalImage(png, 'model', ..., { width: 512, height: 256 })`（`RGBA_8888`，专为 model 准备的既有分支）→ `pixelMap.readPixelsToBufferSync()` 读回 524288 字节 RGBA → 复用同一提交路径设置 `objectInspectorModelTexturePixels` 并触发 CPU 光栅化。环形纹理同法按 `512×2` 回退（土星环实测生效）。侧车存在时优先走原快速路径，行为不变。CPU 光栅化器按 `[R,G,B,A]` 读取（`DetailModelRasterizer.ets`），与 `RGBA_8888` readback 字节序一致，颜色实测正确。
 - **诊断增强**：`describeDecodeError()` 显式输出 `err.name + ': ' + err.message`（取代丢失 message 的 `JSON.stringify`）；`TabletInspectorMedia.ets` 两个 `Image.onError` 改为 `(err: ImageError)` 并打印 `err.error.code` 与 `err.message`。
 - **真机验证**：重建 HAP（39s）安装后 `searchObject Mars` → `[detail-model] sidecar missing, decoding PNG fallback` → `[detail-model] CPU texture ready bytes=524288 source=png` → `[detail-media-card] sphere loaded`；截图确认**带地表的火星球体**（非失败提示）。土星含环同样渲染成功（`satellite rings_radial.png` 解码 + `released pixel map kind=model-ring-texture-fallback`）。沉浸叠层（Phase 5d）复测：`devecocli ui click` 打开 `object-model-stage` → `drag` 旋转（前后截图地表特征位移）→ 关闭回到 `object-model-inline-stage`；**双指缩放未用 CLI 走查（`devecocli ui` 无多点触控）**。
-- **仍需处理（构建侧，非本轮）**：`sync-ohos-resources-windows.ps1` 仍未生成 `.model.rgba`；本轮回退让功能可用，但侧车仍可省去每次选择的运行时解码。若日后补齐 Windows 侧生成步骤，可恢复"侧车优先"的快速路径（应用逻辑已兼容两者）。
+- **构建侧补齐（2026-10-02，本片）**：`sync-ohos-resources-windows.ps1` 新增 `Export-RgbaSidecar` / `Invoke-DetailModelSidecarBatch`，用 `System.Drawing`（`HighQualityBicubic` + `WrapMode.TileFlipXY` 复刻 ffmpeg/swscale 的边缘处理，避免纹理边缘变暗）导出裸 RGBA 侧车，字节序 `R,G,B,A`、行星环为 `512×2`；名单与 bash 版 `MODEL_TEXTURES`/`RING_TEXTURES` 逐字对齐（50 + 3）。幂等：侧车尺寸正确且不旧于源 PNG 时跳过；失败逐文件 `Write-Warning`。
+  - **产出**：构建 rawfile 与签名 HAP 内各 **53 个** `textures/*.png.model.rgba`（50×524288 B + 3×4096 B），`mars.png.model.rgba` 与 `saturn_rings_radial.png.model.rgba` 均已核对。
+  - **真机验收**（Mate 80 Pro `192.168.50.108:40565`，`bm clean -d` 后全新解包）：
+    - 火星：`[detail-model] CPU texture ready uri=.../textures/mars.png bytes=524288 source=sidecar`（**无** `sidecar missing, decoding PNG fallback`）；截图确认带地表的火星球体。
+    - 土星：`[detail-model] ring texture ready path=.../saturn_rings_radial.png.model.rgba bytes=4096` + `source=sidecar`；截图确认含环土星。
+    - M31 回归：`[detail-media-card] image loaded uri=.../nebulae/default/m31.png`，进程存活。
+  - ⚠️ 侧车在资源同步阶段生成，`build-ohos-hap-windows.ps1 -SkipResources` 会跳过着一步。
+- **应用内 PNG 回退保留**：作为无侧车（如 `-SkipResources` 冻结树、或清单外新增纹理）时的兜底，二者共用同一提交路径。
