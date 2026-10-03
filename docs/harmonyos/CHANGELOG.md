@@ -1,3 +1,10 @@
+
+## [2026-10-02] DevEco Code - 资源覆盖审计结论与打包决策（都不补 models/atmosphere）
+
+- **审计结论**：签名 HAP 内**应随包的运行时资源全部齐备** —— `nebulae/default` 674/674、行星模型侧车 `.model.rgba` 53/53、`scenery3d` 135/135、`data`/`landscapes`/`stars`/`translations`/`skycultures` 与源镜像一致、`scripts` 90。**无缺失**。
+- **纠错**：视野资料图横幅的"N 项待完成"是**加载中而非缺失** —— 真机 `getDeepSkyImageStatus` 回读 `referenced=674 onDisk=674 missingCount=0 err=0`；改视野后 `pending=111 loading=111 notStarted=0`。上一轮"推测 5 项确实缺失"的说法据此更正。
+- **修掉审计脚本自身 bug**：`audit-ohos-resource-coverage.mjs` 对 `skycultures` 按整路径比较，把 63 个嵌套 `CMakeLists.txt`/`.template`/`TODO.txt`/`*.py` 误报缺失 → 改按 basename 排除后 **63 → 0**；顺带把 `scenery3d` 纳入对照、把写死的"未打包"结论改为实测判定。审计报告已随包提交（含"未随包家族与原因"表）。
+- **决策（用户确认）**：`models/`（17.8 MiB）与 `atmosphere/`（58.7 MiB）**都不补**。二者均被引擎引用但只由默认关闭的配置项启用（`astro/flag_use_obj_models`、`landscape/atmosphere_model`），App 未暴露入口，界面无差别；`atmosphere/` 的高质量路径在本构建已被 `ENABLE_SHOWMYSKY` 编译掉。后续若露出"真实形状模型"开关，`models/` 为必须项，届时按 bash 白名单补入两平台同步脚本。
 ## [2026-10-02] DevEco Code - 审计：HAP 资源缺失清单（Phase RA）——FOV 横幅的 N 是加载中而非缺失
 
 - **任务与结论**：排查"当前 HAP 到底缺哪些资源"，逐族给出"应有/实有/缺失/原因"清单。结论：**所有应随包的运行时资源都已进包**；此前用户看到的「当前视野资料图 · N 项待完成」中的 N 是原生 `getDeepSkyImageStatus.activeTexturePendingCount`（当前视口内**尚未上传**的纹理数），不是资源缺失。
