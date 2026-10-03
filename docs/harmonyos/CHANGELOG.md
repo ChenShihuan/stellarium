@@ -1,3 +1,18 @@
+## [2026-10-03] DevEco Code - 修复：行星盘面整会话消失（OHOS 渲染泵从未复位纹理上传预算）
+
+- **现象**：深视场下行星只剩标签、选择箭头与 halo/点源，**盘面完全不画**；日志里没有任何告警。它会随会话"随机"出现，一旦出现则**杀后台重启也复现**；本次在**彻底卸载重装（沙箱全量抽取已完成）之后依旧复现**。
+- **排查过程（依次排除）**：
+  1. **资源/打包假设 → 排除**。源树与打包 `rawfile` 逐项比对：`data/shaders/planet.vert|frag`、`textures/jupiter.png` 均与源树**逐字节一致**；91 条 `tex_map` 全量审计：84 条 PNG 全部存在（九大天体逐一确认），余 7 条 `.jpg` 全部属于 `*_observer` 段（观测者行星表面图，非盘面）。干净重装日志显示首跑全量抽取正常：`asynchronous Stellarium resource extraction started / completed in 14108 ms`（3007 文件 / 393.5 MB）。
+  2. **引导完整性缺陷 → 记录下来但不构成本次根因**。`StellariumResourceBootstrap.ets:393-402` 的 `hasStartupResourceFiles()` 只校验 10 条与行星渲染无关的路径（**从不包含 `data/shaders/*` 与行星纹理**，`git log -S "data/shaders"` 为空），`:408` 一旦满足即 `return` 跳过全树回补，故部分损坏的沙箱永不修复；同步脚本还把判据自身的标志 `data/ohos/skyculture_art_rgba_v1.txt` 烤进了包（抽取序累计第 222–228，紧随其后的就是 `data/shaders` 229–248），理论上存在"判据满足而着色器缺失"的窗口。本次实验（干净重装仍复现）证明它不是当前主因，另行留档。
+  3. **地平线以下被地面遮挡 → 排除**。土星当时 `altitude=+50°`、视场中心正对它，盘面同样缺失。
+  4. **行星开关/幅度限制 → 排除**。`astro/flag_planets=true`、`flag_planet_magnitude_limit=false`、`actionShow_Planets` checked。
+  5. **插桩定位（决定性）**。对木星/土星每 30 帧打印 `Planet::draw` 各出口与 `drawSphere` 入口，得到：`IN-VIEWPORT cutDimObjects=false screenRd=1633.28` → `draw3dModel entersSphereBlock=true` → `drawSphere enter texMap=true shaderError=false planetShader=false`，而 `planetShader=false` 与 `shaderError=false` **反复同时出现**。这一组合只可能意味着 **`initShader()` 从未被调用**，即 `drawSphere` 在它之前就返回了 —— 唯一无日志的出口是三行 `bind()`，而其中 `texMap->bind(0)` 恒为 false。同时确认 `screenRd` 严格跟随视场（60°→0.133、0.02°→408.3、0.005°→1633），投影侧无问题。
+- **根因**：`StelTextureMgr` 的每帧上传预算 `totalLoadTimeTaken` **只在 `StelTextureMgr::onFrameFinished()` 里清零**（`StelTextureMgr.cpp:182`），它由 Qt 信号 `frameFinished` 驱动（`:49`）；而该信号**只在一处发射** —— `StelMainView::drawEnded()`（`StelMainView.cpp:17340`），那是 **Qt 桌面帧结束**的钩子。OHOS 的渲染泵 `StelMainView::renderOhosFrameNow()` 是设备上唯一的帧驱动，**既没调 `drawEnded()` 也没发 `frameFinished`** ⇒ 计数器只增不减；一旦超过 `maxTimeNS = max(1e9/(2*fps), MAX_LOAD_NANOSEC_PER_FRAME=1e9/120≈8.33 ms)`，**所有节流路径的 `bind()` 永久返回 false**。`Planet::drawSphere()` 用的正是 `texMap->bind(0)`（`StelTexture::bind` 默认 `prioritizeUpload=false`）且失败时**静默 return**（`Planet.cpp:5191-5204`）⇒ 行星盘面在整个会话内彻底消失，而 halo、标签、选择箭头、星表以及所有 `prioritizeUpload=true`/已预上传的纹理继续正常。这同时解释了：随机性（取决于本会话累计上传耗时）、杀后台仍必现（同样加载序列会再次撞线）、干净安装后更易复现（首跑深空抽取大量刷纹理）、以及**全程零日志**。
+- **修复（`src/StelMainView.cpp`，渲染泵内 +14 行含注释）**：在 `renderOhosFrameNow()` 中 `submitOhosFramebuffer(gl)` 之后补发一次 `emit frameFinished();`，与桌面路径 `drawEnded()` 的行为对齐，恢复"每渲染帧复位一次上传预算"。注释中写明为什么 OHOS 路径必须自己发这个信号。
+- **验证（真机 `192.168.50.108:36717`，`install -r` 增量安装、未清沙箱）**：修复前该会话中 `Initializing planets GL shaders... ` **从未出现**；修复后出现 `[25.133][DBG ] Initializing planets GL shaders...`，即 `drawSphere` 首次越过三处 `bind()`。`searchObject Saturn`（alt +50°，地平线以上）+ `setFOV 0.01` 截图：**土星本体（球面纹理、条带）与光环完整渲染**，附带土卫十二/十三/十八/六/五/十等标签与选择箭头；修复前同一位置为纯黑 + 仅标签箭头。
+- **影响面（附带收益）**：该复位同时惠及所有走节流路径的纹理（深空资料图、星空文化插画等），此前它们同样可能"本会话内永久不再出现"而无任何日志。
+- **构建**：`scripts/build-ohos-hap-windows.ps1 -SkipDeploy -SkipResources`，引擎重链 + **BUILD SUCCESSFUL**（708.9 MB signed HAP）。临时插桩已全部回退，提交不含诊断代码。
+
 ## [2026-10-03] DevEco Code - 修复：+/- 放大时天体偏离准星（缩放锚点被 s_viewLock 挡住）
 
 - **问题（用户真机实测）**：搜索行星并居中后，用新增的 + 放大按钮连续放大，天体会离开屏幕中心 —— 金星最明显，放到最后整个盘面跑到屏幕底缘之外。
