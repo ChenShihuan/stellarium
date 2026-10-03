@@ -1,3 +1,19 @@
+## [2026-10-04] DevEco Code - 修复：观测列表切回"梅西耶"后无限循环（WUT 作业被旧轮询反复取消）+ 恒星按星等截断
+
+- **现象**：观测工作区 · 观测列表（今晚可观测目标，标签 行星/恒星/梅西耶）。首次选**梅西耶**很快出结果；点过一次**恒星**后（恒星量大），再切回**梅西耶**就**不停转圈、始终不出结果**。
+- **取证（日志 + 代码双向）**：
+  - `getWutTargets` 是**单实例异步作业** `s_ohosWutJob`（`src/StelMainView.cpp:1810-1840`），按 `OHOS_WUT_SLICE_MS = 18 ms/帧` 切片推进，`key` 取**整个 payload 字符串**。
+  - App 侧 `callLongRunningInteractive`（`MainWindowNativeNode.ets:2876`）以**硬编码 100 ms** 间隔（`:2887`）反复重发**同一 payload**；`loadWutTargets` 传入的 `900` 是 **maxAttempts**（`:6598`→`:2876`）而非间隔。
+  - 日志实证：同一 payload 的 `command received: "getWutTargets"` 在 **t=629.917 / 629.998 / 629.999 / 630.078（160 ms 内 4 次）**；单次作业约 **6 s**（批量 messier→stars→messier 共 18 488 ms）。
+  - **根因**：`loadWutTargets` 只用 `wutRequestSequence` **丢弃过期结果**，却**从不停止上一条轮询**。切标签后旧 poller 继续以 100 ms 重发旧 payload，而旧引擎逻辑 `if (key != requestKey) { delete s_ohosWutJob; }`（`:12812-12817`）会**把新标签正在跑的作业删掉重算** ⇒ 两个 poller 互相取消，谁都永远到不了 `ok`。恒星集大、作业久，故"点过一次恒星"后才必然触发。
+- **修复**：
+  - **引擎（`src/StelMainView.cpp`）**：① 新增显式取消 —— payload 带 `{"cancel":true}` 时立即丢弃作业并返回 `cancelled:true`；② `key` 收窄为语义参数 `category|period|direction|minAlt|maxMag|limitSize|minAng|maxAng`，无关字段差异不再触发重算；③ key 不匹配时**不再销毁运行中的作业**，改为返回 `ok:false/pending:true/superseded:true`，让真正的属主跑完（有意切换先由 ① 取消）。
+  - **恒星按星等截断**：新增 `OHOS_WUT_STAR_MAGNITUDE_CUTOFF = 3.0`（`:1840`，紧邻 `OHOS_WUT_SLICE_MS`），在**构建候选表时**截断（原 `stars` 分支把整个 Hipparcos 集约 **118k** 全塞进候选，每个都要做一次可见性评估）。仅作用于**未策展的 `stars`**；`carbonStars`/`bariumStars` 是手工子集且大多暗于该阈值，不截断以免被清空。（用户先定 2 等、后改为 **3 等**。）
+  - **App（`MainWindowNativeNode.ets`）**：④ `callLongRunningInteractive` 新增第 7 个可选参数 `isCancelled`，`poll()` **每轮开头先检查并 return**，被取代的请求停止重发；⑤ `loadWutTargets` 每次先 `callNativeFire('getWutTargets', '{"cancel":true}')` 丢弃上一个作业，并传入 `() => requestId !== this.wutRequestSequence` 作为取消判据（`:6639`）。
+- **验证**：`arkts_check` 通过；UI 契约 `intact`（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点）；**BUILD SUCCESSFUL** 并 `install -r` 到真机。**用户界面实测确认**：观测列表内 行星 ⇄ 恒星 ⇄ 梅西耶 来回切换均正常出结果，恒星为短列表。
+- **本轮未取证项（如实记录）**：引擎层的 CLI 批量验证未能取证 —— PowerShell 5.1 对内联 JSON 的引号处理不稳定，`--payload-json` 三次均返回空结果（改用 `--batch <文件>` 亦无法可靠解析），故最终验收以**用户界面实测**为准。
+- **缺失命令（按项目约定记录）**：目前**没有**可语义驱动"观测列表标签切换"的 CLI 命令，只能用引擎层 `getWutTargets` + id 映射（`0=planets` / `1=stars` / `34=messier`，见 `wutCategoryKey`）等价复现；建议后续补一个 `setObservantWutCategory` 之类的语义命令。
+
 ## [2026-10-03] DevEco Code - 加固：资源引导的完整性判据与抽取容错（消除"部分抽取永不修复"隐患）
 
 - **背景**：该隐患是在排查"行星盘面消失"时发现的（真因另见当日 `fix(harmonyos): reset the texture-upload budget on every OHOS frame`，与本条无关）。

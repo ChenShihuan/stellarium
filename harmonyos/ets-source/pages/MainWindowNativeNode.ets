@@ -2873,9 +2873,13 @@ export struct WindowNativeNode {
     }
   }
 
-  private callLongRunningInteractive(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts: number = 240): void {
+  private callLongRunningInteractive(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts: number = 240, isCancelled?: () => boolean): void {
     let attempt = 0
     const poll = (): void => {
+      // A superseded request must stop re-issuing its payload. The engine keeps a
+      // single long-running job, so a stale loop used to cancel the newest job on
+      // every tick and neither side ever produced a result.
+      if (isCancelled !== undefined && isCancelled()) { return }
       const response = this.callNative(name, payload)
       if (response.ok === true) {
         onOk(response)
@@ -6580,6 +6584,10 @@ export struct WindowNativeNode {
 
   private loadWutTargets(): void {
     const requestId = ++this.wutRequestSequence
+    // Drop the previous job first: the engine answers "pending" for a mismatching
+    // key instead of discarding the running job, so a deliberate category switch
+    // has to cancel explicitly.
+    this.callNativeFire('getWutTargets', '{"cancel":true}')
     this.wutStore.wutLoading = true
     this.wutStore.wutHasResult = false
     this.wutStore.wutProgress = I18n.t('observing_loading') as string
@@ -6628,7 +6636,7 @@ export struct WindowNativeNode {
       this.wutStore.wutProgress = total > 0
         ? I18n.t('observing_filtering') + ' ' + completed.toFixed(0) + ' / ' + total.toFixed(0)
         : I18n.t('observing_filtering')
-    }, 900)
+    }, 900, () => requestId !== this.wutRequestSequence)
   }
 
   private addWutTargetToObservingList(target: WutTarget): void {

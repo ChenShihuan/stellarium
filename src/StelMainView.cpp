@@ -1831,6 +1831,13 @@ struct OhosWutJob
 
 static OhosWutJob* s_ohosWutJob = nullptr;
 static constexpr qint64 OHOS_WUT_SLICE_MS = 18;
+// "Stars" is the only uncurated star category a what's-up-tonight pass is asked
+// for, and the full Hipparcos set is ~118k objects: every one of them costs a
+// visibility evaluation inside the 18 ms/frame job, so the category ran for
+// seconds - far longer than the ArkTS 100 ms poll window, which is what let a
+// stale poll loop outlive it. Cap the candidate list by magnitude while it is
+// built instead of filtering every star afterwards.
+static constexpr double OHOS_WUT_STAR_MAGNITUDE_CUTOFF = 3.0;
 
 // Cross-thread command queue drained by the OHOS render pump
 // (renderOhosFrameNow) on the Qt main thread every frame. OHOS Qt may
@@ -12809,11 +12816,39 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				return result;
 			}
 
-			const QString requestKey = arg;
-			if (s_ohosWutJob && s_ohosWutJob->key != requestKey)
+			// Explicit cancellation, sent by the ArkTS side when the user changes
+			// category. A deliberate switch drops the superseded job here instead
+			// of relying on a key mismatch to do it.
+			if (options.value(QStringLiteral("cancel")).toBool(false))
 			{
 				delete s_ohosWutJob;
 				s_ohosWutJob = nullptr;
+				result["ok"] = true;
+				result["cancelled"] = true;
+				return result;
+			}
+
+			// Key the job on the semantic parameters only, so an unrelated payload
+			// difference cannot restart work that is already running.
+			const QString requestKey = QStringLiteral("%1|%2|%3|%4|%5|%6|%7")
+				.arg(category, period, direction)
+				.arg(minimumAltitude)
+				.arg(maximumMagnitude)
+				.arg(limitAngularSize ? 1 : 0)
+				.arg(minimumAngularSizeArcmin)
+				.arg(maximumAngularSizeArcmin);
+			if (s_ohosWutJob && s_ohosWutJob->key != requestKey)
+			{
+				// A request for a different job while one is running is a stale poll
+				// from a superseded category, not a reason to throw the running work
+				// away. Deleting it here let two poll loops cancel each other forever
+				// (the newest job was destroyed on every tick of the older loop, so
+				// neither ever reached a result). Report "pending" and let the real
+				// owner finish; a deliberate switch cancels first, above.
+				result["ok"] = false;
+				result["pending"] = true;
+				result["superseded"] = true;
+				return result;
 			}
 			if (!s_ohosWutJob)
 			{
@@ -12872,9 +12907,18 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				}
 				else if (starMgr && (category == QStringLiteral("stars") || category == QStringLiteral("carbonStars") || category == QStringLiteral("bariumStars")))
 				{
+					const bool isUncuratedStars = category == QStringLiteral("stars");
 					const QList<StelObjectP> stars = category == QStringLiteral("carbonStars") ? starMgr->getHipparcosCarbonStars()
 						: (category == QStringLiteral("bariumStars") ? starMgr->getHipparcosBariumStars() : starMgr->getHipparcosStars());
-					for (const StelObjectP& star : stars) addCandidate(star, QString(), false, false);
+					for (const StelObjectP& star : stars)
+					{
+						if (!star) continue;
+						// Only the uncurated set is capped; the carbon/barium subsets are
+						// already hand-picked and largely fainter than the cut.
+						if (isUncuratedStars && star->getVMagnitudeWithExtinction(core) > OHOS_WUT_STAR_MAGNITUDE_CUTOFF)
+							continue;
+						addCandidate(star, QString(), false, false);
+					}
 				}
 				else if (starMgr && (category == QStringLiteral("variableStars") || category == QStringLiteral("algolVariables") || category == QStringLiteral("cepheidVariables") || category == QStringLiteral("highProperMotion")))
 				{
