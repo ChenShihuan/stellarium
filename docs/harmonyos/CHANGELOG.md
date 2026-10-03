@@ -1,3 +1,24 @@
+## [2026-10-03] DevEco Code - 加固：资源引导的完整性判据与抽取容错（消除"部分抽取永不修复"隐患）
+
+- **背景**：该隐患是在排查"行星盘面消失"时发现的（真因另见当日 `fix(harmonyos): reset the texture-upload budget on every OHOS frame`，与本条无关）。
+- **原缺陷（三处，均在 `harmonyos/ets-source/qability/StellariumResourceBootstrap.ets`）**：
+  1. **判据与渲染无关**：`hasStartupResourceFiles()` 只校验 10 条路径（`stars/hip_gaia3/defaultStarsConfig.json`、`data/ohos/skyculture_art_rgba_v1.txt`、4 个 `zh_CN.qm`、`skycultures/modern/index.json`、`.../illustrations/andromeda.png`、`scripts/constellations_tour.ssc`、`data/default_cfg.ini`），**既不包含 `data/shaders/*` 也不包含任何行星纹理**（`git log -S "data/shaders"` 对该文件为空 ⇒ 从未覆盖）。而该判据是**唯一**决定"是否重跑全树抽取"的开关。
+  2. **异常当控制流 + 单点失败即整体夭折**：`extractRawTree` / `extractRawTreeAsync` 用 `try { getRawFileList(entry) } catch { writeRawFile(entry) }` 判定"目录 vs 文件"；任一目录列举瞬时失败会被误判为文件，`writeRawFile` 抛错后**整次抽取从中断点之后全部放弃**（`writeRawFile` 本身也是失败即 throw）。
+  3. **全程零日志**：跳过回补的分支与逐条失败都不打日志，因此"沙箱残缺"在现场完全不可见。
+- **后果链**：全树抽取（3007 文件 / 393.5 MB，抽取顺序 `data`→`landscapes`→`scenery3d`→`scripts`→`skycultures`→`stars`→`textures`→`translations`；`data/` 内部 `gui(213)→icons(8)→ohos(7)→search(1)→shaders(19)`）若在早期被打断（首跑在 `QAbilityStage.ets:52` 能力启动期同步等待、该文件 `:345-347` 自陈有被 watchdog 杀进程的风险），而判据恰好在 `data/ohos`（累计第 222–228 个文件，且判据标志本身被同步脚本烤进了包）之后即满足，则沙箱**永久残缺**：`data/shaders/*` 缺失 ⇒ `Planet::initShader()` 失败（`Planet.cpp:4094/4099`）⇒ `shaderError=true` ⇒ `drawSphere` 在 `:5253` 直接返回 ⇒ 所有行星盘面消失，且**杀后台、`install -r` 都不会修复**（沙箱不清空就不重跑抽取），只有彻底卸载重装才能恢复。
+- **修复**：
+  1. **判据拆分并覆盖真实资产**：`requiredMarkers`（证据文件，24 字节，按"存在"判定）与 `requiredAssets`（17 条，按 `fileSize > 0` 判定）—— 新增 `data/ssystem_major.ini`、`data/ssystem_minor.ini`、`data/shaders/planet.vert`、`data/shaders/planet.frag`、`textures/{sun,moon,jupiter,saturn,saturn_rings_radial}.png`，并保留原有全部条目。**加入前逐条核对了打包树，19 条全部存在**（唯一需注意的 `skyculture_art_rgba_v1.txt` 为 24 字节而非 0 字节，故仍按"存在"判定，避免把判据写成恒假而每次都重跑 14 s 抽取）。
+  2. **判据为假即自愈**：由于抽取后的既有复检 `if (!hasStartupResourceFiles(...)) throw` 复用同一判据，判据一严，**残缺沙箱在下次启动就会重跑全树抽取并复检通过**，无需卸载重装。
+  3. **抽取容错**：新增 `tryListRawDir()` / `tryListRawDirAsync()`（列举失败即视为"非目录"），逐条拷贝改为**失败只跳过该条并记日志**，不再让单个条目夭折整次走查。
+  4. **可观测性**：判据失败时输出 `[startup] resource verification failed: markers=[...] assets=[...]`；跳过条目输出 `[startup] skipped raw resource <path>`。
+  5. 顺带修掉本文件 9 处既有 `arkts-no-any-unknown`（`libentry.so` 的 `setEnv` 返回类型未标注，给 9 个 `const` 补显式 `boolean`，语义不变），使该文件 `arkts_check` 干净。
+- **验证（真机 `192.168.50.108:36717`）**：
+  - **无回归**：在沙箱已完整的现有安装上 `install -r` 后冷启，`arkts_check` 通过、构建 **BUILD SUCCESSFUL**；清缓冲窗口抓到 `[startup] refreshed bundled catalogue manifest and script translation` + `Qt resource preparation completed in 164/177 ms` ⇒ **严格判据在完整沙箱上通过、未重跑全量抽取**；`resource verification failed` / `incomplete after asynchronous` / `skipped raw resource` 三条告警均 0 命中。
+  - **修复路径有效**：`uninstall` → `install` 清空沙箱使判据为假 → 冷启 `title-released activeMs=44076`（明显是长首跑，即全树抽取在跑）且**未抛** `Startup resources are incomplete after asynchronous extraction` ⇒ 抽取后的严格复检通过；再启动一次即回到快路径（177 ms）⇒ 沙箱已完整、自愈成立。
+  - 功能面：`searchObject Saturn`（alt +51.2°，地平线以上）+ 深放大，盘面正常（同构建链的盘面修复已由截图确认）。
+- **同日记录更正**：此前把构建告警 `missing HarmonyOS libjpeg.so ... JPEG textures will not load` 判为缺陷，经核实为**误报**：`libqjpeg.so`（594 KB）随包在 `entry/libs/arm64-v8a/imageformats/`，`llvm-readelf -d` 显示其 DT_NEEDED 只有 `libQt6Gui/libQt6Core/libGLESv3/libEGL/libc++_shared/libc`，**无 `libjpeg.so`** ⇒ libjpeg 静态链接进插件（`scripts/check-ohos.sh:85` 亦如此说明）。故 133 个星空文化 JPEG（含 90 个 `illustrations/`）、7 个 `obs_*.jpg`、23 个 scenery3d 均可正常解码，**此项从缺陷清单撤除**。
+- **仍未处理（待定）**：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md`（29.9 KB，来源不明）与 `.deveco/{agents,plans,skills}`、`.iis/` 等未跟踪项尚未纳入版本控制，等待用户决定。
+
 ## [2026-10-03] DevEco Code - 修复：行星盘面整会话消失（OHOS 渲染泵从未复位纹理上传预算）
 
 - **现象**：深视场下行星只剩标签、选择箭头与 halo/点源，**盘面完全不画**；日志里没有任何告警。它会随会话"随机"出现，一旦出现则**杀后台重启也复现**；本次在**彻底卸载重装（沙箱全量抽取已完成）之后依旧复现**。
