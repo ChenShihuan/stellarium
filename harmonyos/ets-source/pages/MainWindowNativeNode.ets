@@ -14030,6 +14030,23 @@ private loadPlanetPositions(): void {
           return
         }
       }
+      // 左侧非手势缩放按钮（+放大 / −缩小）：与右上角快捷区同理，XComponent 吞掉
+      // ArkUI onClick，必须在 Down 上按坐标分派，否则点击会穿到星图变成 selectAt。
+      const zoomHit = this.skyZoomButtonAt(downX, downY)
+      if (zoomHit.length > 0) {
+        this.resetSkyTapSequence()
+        this.touchStartedOnUi = true
+        this.skyTouchFeedback = false
+        this.skyTouchActive = false
+        if (zoomHit === 'in') {
+          hilog.info(0x0000, 'StellariumArkUI', '[DIAG] sky zoom in via handleSkyTouch')
+          this.zoomStep(0.8)
+        } else {
+          hilog.info(0x0000, 'StellariumArkUI', '[DIAG] sky zoom out via handleSkyTouch')
+          this.zoomStep(1.25)
+        }
+        return
+      }
       if (this.isDockPoint(downX, downY)) {
         this.resetSkyTapSequence()
         this.dockTouchActive = true
@@ -14602,6 +14619,8 @@ private loadPlanetPositions(): void {
                 onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
                 onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) },
                 onOpenTime: () => { this.setPanel('time') },
+                onZoomIn: () => { this.zoomStep(0.8) },
+                onZoomOut: () => { this.zoomStep(1.25) },
                 onFlashHint: (text: string) => { this.flashHint(text) },
                 onCalibrate: () => { this.calibrateGyroscope() },
                 onToggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
@@ -14716,6 +14735,8 @@ private loadPlanetPositions(): void {
                 onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
                 onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) },
                 onOpenTime: () => { this.setPanel('time') },
+                onZoomIn: () => { this.zoomStep(0.8) },
+                onZoomOut: () => { this.zoomStep(1.25) },
                 onGyro: () => {
                   hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
                   this.resetPanelIdle()
@@ -15053,6 +15074,21 @@ private loadPlanetPositions(): void {
     const qx = this.compactTopQuickX()
     const qy = this.compactTopQuickY()
     return x >= qx - 8 && x <= qx + 52 && y >= qy - 8 && y <= qy + 108
+  }
+
+  /**
+   * 星图缩放按钮命中（vp）：返回 'in'（+放大）| 'out'（−缩小）| ''。
+   * 几何必须与 panels/shell/PanelChromeExtras.ets 的 SkyZoomLayer 保持一致：
+   * posX=dockLeft, posY=dockTop-104, padding-left 4, 两个 44x44 按钮间距 8。
+   */
+  private skyZoomButtonAt(x: number, y: number): string {
+    if (this.panelVisible || this.polarScopeVisible) { return '' }
+    const left = this.dockLeft() + 4
+    if (x < left || x > left + 44) { return '' }
+    const top = this.dockTop() - 104
+    if (y >= top && y <= top + 44) { return 'in' }
+    if (y >= top + 52 && y <= top + 96) { return 'out' }
+    return ''
   }
 
   private compactQuickIdAt(x: number, y: number): string {

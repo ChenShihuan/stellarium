@@ -2,7 +2,7 @@ import { curves } from '@kit.ArkUI'
 import { ShellAction } from '../../pages/StellariumTypes'
 import { BottomDock } from './BottomDock'
 import { CompactTopQuickControls } from './CompactTopQuickControls'
-import { DockClockLayer } from './PanelChromeExtras'
+import { DockClockLayer, SkyZoomLayer } from './PanelChromeExtras'
 import { GyroCalibPanel } from '../sensors/GyroCalibPanel'
 import { ObjectDetailConnectorLayer } from '../overlay/ObjectDetailConnectorLayer'
 import { UnifiedObjectDetailCard } from '../object/UnifiedObjectDetailCard'
@@ -101,6 +101,8 @@ export struct CompactShell {
   onDockTap: (item: ShellAction) => void = () => {}
   onPanelTouch: (event: TouchEvent) => void = () => {}
   onOpenTime: () => void = () => {}
+  onZoomIn: () => void = () => {}
+  onZoomOut: () => void = () => {}
   onGyro: () => void = () => {}
   onAudio: () => void = () => {}
   onCompactTopQuickTouch: (event: TouchEvent) => void = () => {}
@@ -164,6 +166,16 @@ export struct CompactShell {
 
       if (!this.panelVisible && !this.polarScopeVisible && this.dockClockText.length > 0) {
         DockClockLayer({ clockText: this.dockClockText, layerWidth: this.dockWidth, posX: this.dockLeft, posY: this.dockTop - 48, onOpenTime: () => { this.onOpenTime() } })
+      }
+
+      // 与常驻时钟左右对称的非手势缩放按钮：竖排 +放大 / −缩小。
+      if (!this.panelVisible && !this.polarScopeVisible) {
+        SkyZoomLayer({
+          layerWidth: this.dockWidth, posX: this.dockLeft, posY: this.dockTop - 104,
+          textColor: this.textColor,
+          onZoomIn: () => { this.onZoomIn() },
+          onZoomOut: () => { this.onZoomOut() }
+        })
       }
 
       // 手机端右上角常驻快捷区：陀螺仪 + 音频（与平板左侧栏入口一致）

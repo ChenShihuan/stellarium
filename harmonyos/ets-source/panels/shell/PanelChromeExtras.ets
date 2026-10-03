@@ -54,6 +54,61 @@ export struct DockClockLayer {
   }
 }
 
+// 星图缩放按钮层：Dock 左端、与常驻时钟（DockClockLayer）左右对称，竖排 +放大 / −缩小。
+// 非手势缩放：直接走原生 zoomStep（与键盘快捷键同一命令，factor<1 放大、>1 缩小），
+// 空白区触摸穿透回星图，仅按钮本体拦截点击。视觉与 DockClockChip 同族。
+@Component
+export struct SkyZoomLayer {
+  @Prop layerWidth: number
+  @Prop posX: number
+  @Prop posY: number
+  @Prop textColor: string
+  onZoomIn: () => void = () => {}
+  onZoomOut: () => void = () => {}
+
+  build() {
+    Row() {
+      Column({ space: 8 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          Text('+')
+            .fontSize(24)
+            .fontColor(this.textColor.length > 0 ? this.textColor : 'rgba(229, 255, 255, 0.85)')
+        }
+          .width(44)
+          .height(44)
+          .backgroundColor('rgba(10, 14, 26, 0.55)')
+          .backdropBlur(20)
+          .borderRadius(22)
+          .clickEffect({ level: ClickEffectLevel.LIGHT })
+          .onClick(() => { this.onZoomIn() })
+          .id('skyZoomInButton')
+        Stack({ alignContent: Alignment.Center }) {
+          Text('−')
+            .fontSize(24)
+            .fontColor(this.textColor.length > 0 ? this.textColor : 'rgba(229, 255, 255, 0.85)')
+        }
+          .width(44)
+          .height(44)
+          .backgroundColor('rgba(10, 14, 26, 0.55)')
+          .backdropBlur(20)
+          .borderRadius(22)
+          .clickEffect({ level: ClickEffectLevel.LIGHT })
+          .onClick(() => { this.onZoomOut() })
+          .id('skyZoomOutButton')
+      }
+        .hitTestBehavior(HitTestMode.Block)
+    }
+      .width(this.layerWidth)
+      .height(96)
+      .justifyContent(FlexAlign.Start)
+      .alignItems(VerticalAlign.Center)
+      .padding({ left: 4 })
+      .position({ x: this.posX, y: this.posY })
+      .hitTestBehavior(HitTestMode.Transparent)
+      .zIndex(40)
+  }
+}
+
 // 平板/折叠布局的面板抓手（纯装饰）。
 @Component
 export struct PadPanelHandle {
