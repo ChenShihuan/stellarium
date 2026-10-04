@@ -41,6 +41,7 @@ import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, g
 import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, csvCell, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
+import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, normalizeLocationSearchText, officialLocationAliases, sessionSignature } from '../common/derive/actions'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
@@ -191,9 +192,9 @@ import { ConfigFallbackPanel } from '../panels/panels/ConfigFallbackPanel'
 import { SkyCultureSectionHeader, SkyCultureMetaItem, SkyCultureLabelSettingCard, SkyCultureFilterPicker } from '../panels/skyculture/SkyCultureViewParts'
 import { SatelliteGroupSelector } from '../panels/satellite/SatelliteGroupSelector'
 import {
-  CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
+  ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
   NebulaTextureItem, NebulaTextureStatus, NebulaTextureRefreshResponse, SkyCultureMakerArtworkAnchor, SkyCultureMakerArtwork, SkyCultureMakerConstellation,
-  SkyCultureMakerDraft, SkyCultureMakerIssue, SkyCultureMakerValidation, TelescopeControlResponse, TelescopeProfile, TelescopeProfilesResponse,
+  SkyCultureMakerDraft, SkyCultureMakerIssue, TelescopeControlResponse, TelescopeProfile, TelescopeProfilesResponse,
   TELESCOPE_SIMULATOR_MODEL, HeliocentricOrbit, ConfigurationOption, SkyCultureVisualColors, CelestialPositionOptions,
   CelestialPositionCategory, PhenomenaOptions, PhenomenaStartOption, EphemerisOptions, RtsCalendarOptions, EclipseOptions,
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
@@ -853,56 +854,10 @@ export struct WindowNativeNode {
   private panelDragStartOffsetY: number = 0
 
   // 所有设备共享同一动作模型。布局只决定面板如何呈现，不改变入口和语义。
-  private primaryDockActions(): ShellAction[] {
-    return [
-      { label: I18n.t('dock_search'), icon: 'search', panel: 'search' },
-      { label: I18n.t('dock_time'), icon: 'clock', panel: 'time' },
-      { label: I18n.t('dock_place'), icon: 'location', panel: 'place' },
-      { label: I18n.t('dock_layers'), icon: 'layers', panel: 'layers' }
-    ]
-  }
 
-  private moreActions(): ShellAction[] {
-    return [
-      { label: I18n.t('more_workspace_observing'), icon: 'observe', panel: 'observeHub', section: I18n.t('more_section_workspace') },
-      { label: I18n.t('more_sky_data'), icon: 'satellite', panel: 'dataHub', section: I18n.t('more_section_data') },
-      { label: I18n.t('more_automation'), icon: 'script', panel: 'automationHub', section: I18n.t('more_section_automation') },
-      { label: I18n.t('panel_tools_data'), icon: 'tools', panel: 'tools', section: I18n.t('more_section_system') },
-      { label: I18n.t('dock_settings'), icon: 'settings', panel: 'settings', section: I18n.t('more_section_system') },
-      { icon: 'help', label: I18n.t('i0217'), panel: 'help', section: I18n.t('more_section_system') }
-    ]
-  }
-  private observingHubActions(): ShellAction[] {
-    return [
-      { label: I18n.t('more_observe_list'), icon: 'observe', panel: 'observing' },
-      { label: I18n.t('panel_bookmarks'), icon: 'bookmarks', panel: 'bookmarks' },
-      { label: I18n.t('panel_oculars'), icon: 'oculars', panel: 'oculars' },
-      { label: I18n.t('panel_angle_measure'), icon: 'angle', panel: 'angleMeasure' },
-      { label: I18n.t('panel_nav_stars'), icon: 'nav_stars', panel: 'navStars' },
-      { label: I18n.t('polar_scope_title'), icon: 'polar_scope', panel: 'polarScope' },
-      { label: I18n.t('panel_telescope_control'), icon: 'telescope', panel: 'telescope' }
-    ]
-  }
-  private skyDataHubActions(): ShellAction[] {
-    return [
-      { label: I18n.t('i0274'), icon: 'orbit', panel: 'astro' },
-      { label: I18n.t('panel_satellites'), icon: 'satellite', panel: 'satellites' },
-      { label: I18n.t('panel_meteorshowers'), icon: 'meteor', panel: 'meteorshowers' },
-      { label: I18n.pluginName('Scenery3d'), icon: 'scenery3d', panel: 'scenery3d' },
-      { label: I18n.t('panel_catalogs'), icon: 'catalogs', panel: 'catalogs' },
-      { label: I18n.t('more_plugins_manage'), icon: 'settings', panel: 'pluginManager' }
-    ]
-  }
-  private automationHubActions(): ShellAction[] {
-    return [
-      { icon: 'script', label: I18n.t('panel_scripts'), panel: 'scripts' },
-      { icon: 'code', label: I18n.t('panel_commands'), panel: 'commands' },
-      { icon: 'audio', label: I18n.t('panel_audio_ctrl'), panel: 'audio' }
-    ]
-  }
   private moreActionStartsSection(item: ShellAction, index: number): boolean {
     if (index === 0) return true
-    const actions = this.moreActions()
+    const actions = moreActions()
     return actions[index - 1].section !== item.section
   }
   private railTop(): number { return this.EDGE_MARGIN }
@@ -910,34 +865,6 @@ export struct WindowNativeNode {
   private SELFTEST: boolean = false  // 开发自检：启动即对全部开关跑一次 findAction，验证无死开关。发布前改 false。
 
   // 城市快速定位预设数据: id -> "lat|lon|alt"
-  private getCityPreset(id: string): CityPreset | undefined {
-    const m: Record<string, string> = {
-      'Beijing': '39.9042|116.4074|44', 'Shanghai': '31.2304|121.4737|4',
-      'Guangzhou': '23.1291|113.2644|21', 'Shenzhen': '22.5431|114.0579|7',
-      'Chengdu': '30.5728|104.0668|500', 'Hangzhou': '30.2741|120.1551|11',
-      'Wuhan': '30.5928|114.3055|23', 'Xian': '34.3416|108.9398|405',
-      'Nanjing': '32.0603|118.7969|20', 'Chongqing': '29.5630|106.5516|259',
-      'Harbin': '45.7500|126.6500|132', 'Lhasa': '29.6500|91.1000|3650',
-      'Urumqi': '43.8256|87.6168|800', 'HongKong': '22.3193|114.1694|32',
-      'Tokyo': '35.6762|139.6503|40', 'Seoul': '37.5665|126.9780|38',
-      'Singapore': '1.3521|103.8198|15', 'NewYork': '40.7128|-74.0060|10',
-      'London': '51.5074|-0.1278|25', 'Sydney': '-33.8688|151.2093|58',
-      'Paris': '48.8566|2.3522|35', 'Berlin': '52.5200|13.4050|34',
-      'Moscow': '55.7558|37.6173|156', 'Dubai': '25.2048|55.2708|16',
-      'Mumbai': '19.0760|72.8777|14', 'Cairo': '30.0444|31.2357|23',
-      'Rio': '-22.9068|-43.1729|5', 'LosAngeles': '34.0522|-118.2437|89',
-      'Toronto': '43.6532|-79.3832|76', 'Mexico': '19.4326|-99.1332|2240',
-      'Bangkok': '13.7563|100.5018|2', 'Istanbul': '41.0082|28.9784|39',
-      'Amsterdam': '52.3676|4.9041|2', 'Stockholm': '59.3293|18.0686|28',
-      'Reykjavik': '64.1466|-21.9426|61', 'CapeTown': '-33.9249|18.4241|25',
-      'BuenosAires': '-34.6037|-58.3816|25', 'Honolulu': '21.3099|-157.8581|4',
-    }
-    const v = m[id]
-    if (v === undefined) { return undefined }
-    const p = v.split('|')
-    const result: CityPreset = { lat: parseFloat(p[0]), lon: parseFloat(p[1]), alt: parseFloat(p[2]) }
-    return result
-  }
 
   private readonly SELFTEST_ACTION_IDS: string[] = [
     "actionHorizontal_Flip",
@@ -1914,13 +1841,6 @@ export struct WindowNativeNode {
     }, delayMs) as number
   }
 
-  private telescopeUpdateTime(): string {
-    const now = new Date()
-    const hours = now.getHours().toString().padStart(2, '0')
-    const minutes = now.getMinutes().toString().padStart(2, '0')
-    const seconds = now.getSeconds().toString().padStart(2, '0')
-    return hours + ':' + minutes + ':' + seconds
-  }
 
   private refreshTelescopeLivePosition(): void {
     if (!this.shouldRefreshTelescopePosition() || this.lx200LivePositionRequestPending) return
@@ -1933,14 +1853,14 @@ export struct WindowNativeNode {
       if (result.ok === true) {
         this.telescopeStore.lx200ConnectionState = 'available'
         this.telescopeStore.lx200Position = (result.ra ?? '--:--:--') + ' / ' + (result.dec ?? '--°--:--')
-        this.telescopeStore.lx200PositionUpdatedAt = this.telescopeUpdateTime()
+        this.telescopeStore.lx200PositionUpdatedAt = telescopeUpdateTime()
         this.telescopeStore.lx200PositionUpdateState = 'fresh'
         this.scheduleTelescopeLivePosition(1000)
         return
       }
       if (result.state === 'available' || result.state === 'unavailable') this.telescopeStore.lx200ConnectionState = result.state
       this.telescopeStore.lx200PositionUpdateState = 'error'
-      this.telescopeStore.lx200Status = this.telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
+      this.telescopeStore.lx200Status = telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
       this.scheduleTelescopeLivePosition(1800)
     }, (result: StellariumBridgeResponse) => {
       if (requestId !== this.lx200LivePositionRequestId) return
@@ -2161,9 +2081,9 @@ export struct WindowNativeNode {
   private panelRouteParent(panel: string): string {
     if (panel === 'observeHub' || panel === 'dataHub' || panel === 'automationHub') return 'more'
     if (panel === 'pluginManager') return 'dataHub'
-    if (this.observingHubActions().some((item: ShellAction) => item.panel === panel)) return 'observeHub'
-    if (this.skyDataHubActions().some((item: ShellAction) => item.panel === panel)) return 'dataHub'
-    if (this.automationHubActions().some((item: ShellAction) => item.panel === panel)) return 'automationHub'
+    if (observingHubActions().some((item: ShellAction) => item.panel === panel)) return 'observeHub'
+    if (skyDataHubActions().some((item: ShellAction) => item.panel === panel)) return 'dataHub'
+    if (automationHubActions().some((item: ShellAction) => item.panel === panel)) return 'automationHub'
     return ''
   }
 
@@ -8097,16 +8017,6 @@ export struct WindowNativeNode {
     }, 650) as number
   }
 
-  private validationFromResponse(response: StellariumBridgeResponse): SkyCultureMakerValidation | undefined {
-    const values = response as Record<string, Object>
-    const source = values['validation'] !== undefined ? values['validation'] : response
-    try {
-      const validation = JSON.parse(JSON.stringify(source)) as SkyCultureMakerValidation
-      return validation.errorCount !== undefined ? validation : undefined
-    } catch (_error) {
-      return undefined
-    }
-  }
 
   private saveSkyCultureMakerDraft(silent: boolean = false, onComplete?: (success: boolean) => void): void {
     if (!this.skyCultureMakerStore.draftReady) {
@@ -8127,7 +8037,7 @@ export struct WindowNativeNode {
         return
       }
       this.skyCultureMakerStore.canUndo = true
-      this.skyCultureMakerStore.validation = this.validationFromResponse(response)
+      this.skyCultureMakerStore.validation = validationFromResponse(response)
       if (!silent) this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_saved')
       if (onComplete !== undefined) onComplete(true)
     }, () => {
@@ -8139,7 +8049,7 @@ export struct WindowNativeNode {
 
   private validateSkyCultureMaker(): void {
     this.callInteractive('validateSkyCultureMakerDraft', JSON.stringify(this.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
-      this.skyCultureMakerStore.validation = this.validationFromResponse(response)
+      this.skyCultureMakerStore.validation = validationFromResponse(response)
       this.skyCultureMakerStore.status = response.ok === true
         ? I18n.t('sky_culture_maker_valid')
         : I18n.t('sky_culture_maker_invalid')
@@ -8361,7 +8271,7 @@ export struct WindowNativeNode {
     if (response.ok === true && draft !== undefined) {
       this.applySkyCultureMakerDraft(draft)
       this.skyCultureMakerStore.canUndo = true
-      this.skyCultureMakerStore.validation = this.validationFromResponse(response)
+      this.skyCultureMakerStore.validation = validationFromResponse(response)
       this.skyCultureMakerStore.status = successText
     } else {
       this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_artwork_failed')
@@ -8454,7 +8364,7 @@ export struct WindowNativeNode {
     this.saveSkyCultureMakerDraft(true, (saved: boolean) => {
       if (!saved) return
       this.callInteractive('exportSkyCultureMaker', '', (response: StellariumBridgeResponse) => {
-        this.skyCultureMakerStore.validation = this.validationFromResponse(response)
+        this.skyCultureMakerStore.validation = validationFromResponse(response)
         const values = response as Record<string, Object>
         if (response.ok === true) {
           this.skyCultureMakerStore.exportPath = values['path'] as string
@@ -10033,28 +9943,17 @@ private loadPlanetPositions(): void {
 	  this.telescopeStore.lx200ConnectionState = result.ok === true ? 'available' : 'unavailable'
 	  this.telescopeStore.lx200Status = result.ok === true
 		? (result.simulated === true ? I18n.t('m_telescope_simulator_ready') : I18n.t('m_telescope_available'))
-		: this.telescopeErrorText(result, I18n.t('m_telescope_test_failed'))
+		: telescopeErrorText(result, I18n.t('m_telescope_test_failed'))
 	  this.scheduleTelescopeLivePosition()
 	}, (result: StellariumBridgeResponse) => {
 	  const response = result as TelescopeControlResponse
 	  this.telescopeStore.lx200Busy = false
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
-	  this.telescopeStore.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_test_failed'))
+	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_test_failed'))
 	  this.scheduleTelescopeLivePosition()
 	})
   }
 
-  private telescopeErrorText(result: TelescopeControlResponse, fallback: ResourceStr): ResourceStr {
-	if (result.errorCode === 'no_selected_object') return I18n.t('m_telescope_select_target')
-	if (result.errorCode === 'endpoint_blocked') return I18n.t('m_telescope_error_endpoint_blocked')
-	if (result.errorCode === 'connect_failed') return I18n.t('m_telescope_error_connect_failed')
-	if (result.errorCode === 'protocol_probe_failed') return I18n.t('m_telescope_error_protocol_probe')
-	if (result.errorCode === 'command_timeout') return I18n.t('m_telescope_error_timeout')
-	if (result.errorCode === 'ra_rejected' || result.errorCode === 'dec_rejected') return I18n.t('m_telescope_error_target_rejected')
-	if (result.errorCode === 'slew_rejected') return I18n.t('m_telescope_error_slew_rejected')
-	if (result.errorCode === 'coordinate_response_invalid') return I18n.t('m_telescope_error_position_invalid')
-	return result.error ?? fallback
-  }
 
   private applyLx200Result(result: StellariumBridgeResponse): void {
 	const response = result as TelescopeControlResponse
@@ -10068,7 +9967,7 @@ private loadPlanetPositions(): void {
 	  if (result.mode === 'goto') this.setTelescopeLivePosition(true)
     } else {
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
-	  this.telescopeStore.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_disconnected'))
+	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_disconnected'))
     }
 	this.scheduleTelescopeLivePosition()
   }
@@ -10111,13 +10010,13 @@ private loadPlanetPositions(): void {
 	  this.telescopeStore.lx200Busy = false
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
 	  this.telescopeStore.lx200Status = result.ok === true ? I18n.t('m_telescope_stop_sent') :
-		this.telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
+		telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
 	  this.scheduleTelescopeLivePosition()
 	}, (result: StellariumBridgeResponse) => {
 	  const response = result as TelescopeControlResponse
 	  this.telescopeStore.lx200Busy = false
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
-	  this.telescopeStore.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
+	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
 	  this.scheduleTelescopeLivePosition()
 	})
   }
@@ -10136,12 +10035,12 @@ private loadPlanetPositions(): void {
 	  if (result.ok === true) {
 		this.telescopeStore.lx200ConnectionState = 'available'
 		this.telescopeStore.lx200Position = (result.ra ?? '--:--:--') + ' / ' + (result.dec ?? '--°--:--')
-		this.telescopeStore.lx200PositionUpdatedAt = this.telescopeUpdateTime()
+		this.telescopeStore.lx200PositionUpdatedAt = telescopeUpdateTime()
 		this.telescopeStore.lx200PositionUpdateState = 'fresh'
 		this.telescopeStore.lx200Status = center ? I18n.t('m_telescope_centered') : I18n.t('m_telescope_position_updated')
 	  } else {
 		if (result.state === 'available' || result.state === 'unavailable') this.telescopeStore.lx200ConnectionState = result.state
-		this.telescopeStore.lx200Status = this.telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
+		this.telescopeStore.lx200Status = telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
 	  }
 	  this.scheduleTelescopeLivePosition()
 	}, (result: StellariumBridgeResponse) => {
@@ -10149,7 +10048,7 @@ private loadPlanetPositions(): void {
 	  this.telescopeStore.lx200Busy = false
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
 	  this.telescopeStore.lx200PositionUpdateState = 'error'
-	  this.telescopeStore.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_position_failed'))
+	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_position_failed'))
 	  this.scheduleTelescopeLivePosition()
 	})
   }
@@ -12322,7 +12221,7 @@ private loadPlanetPositions(): void {
     ]
     const items: Array<LocSearchItem> = []
     for (const name of names) {
-      const preset = this.getCityPreset(name)
+      const preset = getCityPreset(name)
       if (preset === undefined) continue
       const displayName = this.locationPickerStore.locationDisplayName(name)
       items.push({ name: name, displayName: displayName, lat: preset.lat, lon: preset.lon, alt: preset.alt, planet: 'Earth', country: '', region: '' })
@@ -12330,42 +12229,30 @@ private loadPlanetPositions(): void {
     return items
   }
 
-  private normalizeLocationSearchText(value: string): string {
-    return value.toLocaleLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[\s._'’`-]+/g, '')
-  }
 
   private matchesLocationSearch(text: string, query: string): boolean {
     const rawQuery = query.trim().toLocaleLowerCase()
     if (!rawQuery) return false
     const rawText = text.toLocaleLowerCase()
     return rawText.includes(rawQuery) ||
-      this.normalizeLocationSearchText(rawText).includes(this.normalizeLocationSearchText(rawQuery))
+      normalizeLocationSearchText(rawText).includes(normalizeLocationSearchText(rawQuery))
   }
 
   private locationSearchMatchScore(query: string, primaryNames: Array<string>, text: string): number {
-    const normalizedQuery = this.normalizeLocationSearchText(query)
+    const normalizedQuery = normalizeLocationSearchText(query)
     if (!normalizedQuery) return 0
     let best = 0
     for (const primaryName of primaryNames) {
-      const normalizedName = this.normalizeLocationSearchText(primaryName)
+      const normalizedName = normalizeLocationSearchText(primaryName)
       if (!normalizedName) continue
       if (normalizedName === normalizedQuery) best = Math.max(best, 100)
       else if (normalizedName.startsWith(normalizedQuery)) best = Math.max(best, 85)
       else if (normalizedName.includes(normalizedQuery)) best = Math.max(best, 70)
     }
     if (best > 0) return best
-    return this.normalizeLocationSearchText(text).includes(normalizedQuery) ? 40 : 0
+    return normalizeLocationSearchText(text).includes(normalizedQuery) ? 40 : 0
   }
 
-  private officialLocationAliases(countryCode: string): string {
-    if (countryCode === 'TW') return ' 中国台湾地区 台湾 China Taiwan'
-    if (countryCode === 'HK') return ' 中国香港特别行政区 香港 China Hong Kong'
-    if (countryCode === 'MO') return ' 中国澳门特别行政区 澳门 China Macao Macau'
-    return ''
-  }
 
   private locationSearchCountryName(countryCode: string): string {
     if (countryCode === 'TW' || countryCode === 'HK' || countryCode === 'MO') {
@@ -12468,7 +12355,7 @@ private loadPlanetPositions(): void {
       const sourceCountry = LOCATION_COUNTRY_NAMES[countryCode]
       const text = city.n + ' ' + chinese + ' ' + displayName + ' ' +
         (city.province ?? '') + ' ' + province + ' ' + region + ' ' + country + ' ' +
-        (sourceCountry?.zh ?? '') + ' ' + (sourceCountry?.en ?? '') + this.officialLocationAliases(countryCode)
+        (sourceCountry?.zh ?? '') + ' ' + (sourceCountry?.en ?? '') + officialLocationAliases(countryCode)
       const matchScore = this.locationSearchMatchScore(this.locationSearchScanQuery,
         [city.n, chinese, displayName, city.province ?? '', province, region, country], text)
       if (matchScore <= 0) continue
@@ -12862,13 +12749,6 @@ private loadPlanetPositions(): void {
     return (d.length >= 10 ? d.slice(5) : d) + ' ' + (t.length >= 8 ? t.slice(0, 5) : t)
   }
 
-  private sessionSignature(r: StellariumBridgeResponse): string {
-    const v = r.viewJ2000
-    const vr: number[] = (v && v.length === 3) ? v.map((x: number) => Math.round(x * 1e4) / 1e4) : [0, 0, 0]
-    const locObj = r.location as Record<string, Object>
-    const locName = (r.location && locObj['name'] !== undefined) ? String(locObj['name']) : ''
-    return [vr.join(','), Math.round((r.fovDeg ?? 0) * 100) / 100, r.selected ?? '', locName].join('|')
-  }
 
   private sessionSummary(r: StellariumBridgeResponse): string {
     const locObj = r.location as Record<string, Object>
@@ -12892,7 +12772,7 @@ private loadPlanetPositions(): void {
       }
       this.sessionToolStore.sessionJson = JSON.stringify(snap, null, '  ')
       this.tools.sessionExportText = this.sessionToolStore.sessionJson
-      this.sessionToolStore.sessionExportSig = this.sessionSignature(r)
+      this.sessionToolStore.sessionExportSig = sessionSignature(r)
       this.sessionToolStore.sessionHint = I18n.t('m_session_exported') + ': ' + this.sessionSummary(r)
       this.copyTextToClipboard(this.sessionToolStore.sessionJson, I18n.t('session_export_copied'))
     })
@@ -12910,7 +12790,7 @@ private loadPlanetPositions(): void {
       setTimeout(() => {
         this.callNativeWhenReady('getSessionState', '', (r3: StellariumBridgeResponse) => {
           if (!r3.ok) return
-          const sig = this.sessionSignature(r3)
+          const sig = sessionSignature(r3)
           if (sig === this.sessionToolStore.sessionExportSig) {
             this.sessionToolStore.sessionHint = I18n.t('m_session_exact')
             this.flashHint(I18n.t('m_session_exact'))
@@ -15079,10 +14959,10 @@ private loadPlanetPositions(): void {
 
   private canonicalDockActions(): ShellAction[] {
     return [
-      this.primaryDockActions()[0],
-      this.primaryDockActions()[1],
-      this.primaryDockActions()[2],
-      this.primaryDockActions()[3],
+      primaryDockActions()[0],
+      primaryDockActions()[1],
+      primaryDockActions()[2],
+      primaryDockActions()[3],
       { label: I18n.t('c_more_functions'), icon: 'more', panel: 'more' }
     ] as ShellAction[]
   }
@@ -16608,26 +16488,26 @@ private loadPlanetPositions(): void {
   panelContent() {
     if (this.activePanel === 'more') {
       MorePanel({
-        actions: this.moreActions(),
+        actions: moreActions(),
         languageRevision: this.languageStore.languageRevision,
         startsSection: (item: ShellAction, index: number) => this.moreActionStartsSection(item, index),
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'observeHub') {
       HubActionList({
-        actions: this.observingHubActions(), description: I18n.t('more_workspace_observing_desc'),
+        actions: observingHubActions(), description: I18n.t('more_workspace_observing_desc'),
         subColor: this.nmSub(), languageRevision: this.languageStore.languageRevision,
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'dataHub') {
       HubActionList({
-        actions: this.skyDataHubActions(), description: I18n.t('more_sky_data_desc'),
+        actions: skyDataHubActions(), description: I18n.t('more_sky_data_desc'),
         subColor: this.nmSub(), languageRevision: this.languageStore.languageRevision,
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'automationHub') {
       HubActionList({
-        actions: this.automationHubActions(), description: I18n.t('more_automation_desc'),
+        actions: automationHubActions(), description: I18n.t('more_automation_desc'),
         subColor: this.nmSub(), languageRevision: this.languageStore.languageRevision,
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
@@ -17614,7 +17494,7 @@ private loadPlanetPositions(): void {
       this.searchObject('Jupiter')
     } else if (id.startsWith('city_')) {
       const cityId = id.substring(5)
-      const preset = this.getCityPreset(cityId)
+      const preset = getCityPreset(cityId)
       if (preset !== undefined) {
         this.setLocation(cityId, preset.lat, preset.lon, preset.alt)
       }
