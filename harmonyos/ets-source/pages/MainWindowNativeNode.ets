@@ -490,11 +490,9 @@ export struct WindowNativeNode {
   private rtsTargetPickerActive: boolean = false
   private ephemerisTargetPickerActive: boolean = false
   // eclipseStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7，食相属天文派生域）。
-  private moonPhaseRequestId: number = 0
-  private moonPhaseLoadingDays: number = 0
   private astroContextTimer: number = 0
-  private astroContextRequestId: number = 0
-  private astroContextRequestPending: boolean = false
+  // 月相 / 天文计算上下文的请求态（moonPhaseRequestId / moonPhaseLoadingDays /
+  // astroContextRequestId / astroContextRequestPending）随加载器下沉 state/AstroStore.ets（§14 B3-2）。
   // 大气观测辅助（atmoPressure / atmoTemperature / atmoExtinction / refractionOn，共 4 字段）
   // 已下沉 state/AtmosphereStore.ets（review §2.7）。
   @State private atmosphereStore: AtmosphereStore = new AtmosphereStore()
@@ -735,8 +733,8 @@ export struct WindowNativeNode {
   private skyCultureTimeFollowTimer: number = 0
   private skyCultureTimeFollowRequestPending: boolean = false
   private polarScopeTimer: number = 0
-  private polarScopeRequestPending: boolean = false
-  private polarScopeDataRequestId: number = 0
+  // 极轴镜在途请求态（polarScopeRequestPending / polarScopeDataRequestId）随加载器下沉
+  // state/PolarScopeStore.ets（§14 B3-2）。
   private skyCultureDetailsRequestId: number = 0
   private skyCultureRowY: Record<string, number> = {}
   private skyCultureAnchorId: string = ''
@@ -1235,7 +1233,7 @@ export struct WindowNativeNode {
     // §14 B2A：Astro 簇加载器下沉。astroStore 复用同一 HostCommandPort；onChanged 走
     // publishAstroPanelState，保持 CLI 侧 stellariumAstroPanelState 同步；跨 store
     // （objectDetailStore / wutStore / ephemerisStore）与未随本片下沉的宿主加载器
-    // （loadPlanetPositions / loadMoonPhases / loadAstroCalcContext）经 AstroHostHooks 具名注入。
+    // （loadPlanetPositions）经 AstroHostHooks 具名注入（月相 / 天文计算上下文加载器已于 B3-2 下沉）。
     this.astroStore.attachPort(hostPort, () => { this.publishAstroPanelState() })
     this.astroStore.attachHooks({
       hasSelectedObject: () => this.hasSelectedObject(),
@@ -1246,9 +1244,13 @@ export struct WindowNativeNode {
       ephemerisCustomStartJD: () => dateToJD(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth, this.ephemerisStore.ephemerisStartDay, 0, 0),
       fmtDateTime: (s: string | undefined) => this.fmtDateTime(s),
       hecLayoutPositions: (positions: Array<HeliocentricPosition>) => this.hecLayoutPositions(positions),
-      loadPlanetPositions: () => { this.loadPlanetPositions() },
-      loadMoonPhases: () => { this.loadMoonPhases() },
-      loadAstroCalcContext: () => { this.loadAstroCalcContext() }
+      loadPlanetPositions: () => { this.loadPlanetPositions() }
+    })
+    // §14 B3-2：极轴镜加载器下沉 PolarScopeStore；「是否应刷新」谓词仍归宿主经具名 hooks 注入，
+    // 每 1s 计时器与面板开合只调用 store 的 loadPolarScopeData / cancelPolarScopeRequest。
+    this.polarScopeStore.attachPort(hostPort)
+    this.polarScopeStore.attachHooks({
+      shouldRefreshPolarScope: () => this.shouldRefreshPolarScope()
     })
     // §14 B2A：今晚观测目标（WUT）簇的 loadWutTargets 下沉 state/WutStore.ets；onChanged 走
     // publishAstroPanelState，保持 CLI 侧 astroPanelState 的 wut 字段同步。
@@ -1959,8 +1961,7 @@ export struct WindowNativeNode {
       clearInterval(this.polarScopeTimer)
       this.polarScopeTimer = 0
     }
-    this.polarScopeRequestPending = false
-    ++this.polarScopeDataRequestId
+    this.polarScopeStore.cancelPolarScopeRequest()
   }
 
   private syncPolarScopeTimer(): void {
@@ -1968,9 +1969,9 @@ export struct WindowNativeNode {
       this.stopPolarScopeTimer()
       return
     }
-    this.loadPolarScopeData()
+    this.polarScopeStore.loadPolarScopeData()
     if (this.polarScopeTimer === 0) {
-      this.polarScopeTimer = setInterval(() => { this.loadPolarScopeData(false) }, 1000)
+      this.polarScopeTimer = setInterval(() => { this.polarScopeStore.loadPolarScopeData(false) }, 1000)
     }
   }
 
@@ -1983,7 +1984,7 @@ export struct WindowNativeNode {
       clearInterval(this.astroContextTimer)
       this.astroContextTimer = 0
     }
-    ++this.astroContextRequestId
+    this.astroStore.cancelAstroCalcContext()
   }
 
   private syncAstroCalcContextTimer(): void {
@@ -1992,8 +1993,8 @@ export struct WindowNativeNode {
       return
     }
     if (this.astroContextTimer !== 0) return
-    this.loadAstroCalcContext()
-    this.astroContextTimer = setInterval(() => { this.loadAstroCalcContext() }, 1000)
+    this.astroStore.loadAstroCalcContext()
+    this.astroContextTimer = setInterval(() => { this.astroStore.loadAstroCalcContext() }, 1000)
   }
 
   private shouldRefreshTelescopePosition(): boolean {
@@ -2068,26 +2069,6 @@ export struct WindowNativeNode {
     } else {
       this.stopTelescopeLivePosition()
     }
-  }
-
-  private loadPolarScopeData(showLoading: boolean = true): void {
-    if (!this.shouldRefreshPolarScope() || this.polarScopeRequestPending) return
-    this.polarScopeRequestPending = true
-    const requestId = this.polarScopeDataRequestId
-    if (showLoading && this.polarScopeStore.polarScopeData === undefined) this.polarScopeStore.polarScopeLoading = true
-    this.callNativeWhenReady('getPolarScopeData', '', (response: StellariumBridgeResponse) => {
-      if (requestId !== this.polarScopeDataRequestId) return
-      this.polarScopeRequestPending = false
-      this.polarScopeStore.polarScopeLoading = false
-      if (!this.shouldRefreshPolarScope() || response.polarScope === undefined) return
-      this.polarScopeStore.polarScopeData = response.polarScope
-      this.polarScopeStore.polarScopeError = ''
-    }, 0, 34, 8, () => {
-      if (requestId !== this.polarScopeDataRequestId) return
-      this.polarScopeRequestPending = false
-      this.polarScopeStore.polarScopeLoading = false
-      this.polarScopeStore.polarScopeError = I18n.t('polar_scope_earth_only')
-    })
   }
 
   private enterPolarScope(): void {
@@ -2206,7 +2187,7 @@ export struct WindowNativeNode {
   private recenterPolarScope(): void {
     if (this.polarScopeTransitionPending) return
     this.callInteractive('centerPolarScope', '', () => {
-      this.callInteractive('setFOV', '4', () => { this.loadPolarScopeData(false) })
+      this.callInteractive('setFOV', '4', () => { this.polarScopeStore.loadPolarScopeData(false) })
     })
   }
 
@@ -2215,7 +2196,7 @@ export struct WindowNativeNode {
     this.polarScopeStore.polarScopeHorizontalFlip = value
     this.syncNativePolarScopeOverlay(true)
     this.callInteractive('setActionChecked', 'actionHorizontal_Flip|' + (value ? '1' : '0'), () => {
-      this.loadPolarScopeData(false)
+      this.polarScopeStore.loadPolarScopeData(false)
     }, () => {
       this.polarScopeStore.polarScopeHorizontalFlip = !value
     })
@@ -2226,7 +2207,7 @@ export struct WindowNativeNode {
     this.polarScopeStore.polarScopeVerticalFlip = value
     this.syncNativePolarScopeOverlay(true)
     this.callInteractive('setActionChecked', 'actionVertical_Flip|' + (value ? '1' : '0'), () => {
-      this.loadPolarScopeData(false)
+      this.polarScopeStore.loadPolarScopeData(false)
     }, () => {
       this.polarScopeStore.polarScopeVerticalFlip = !value
     })
@@ -5737,42 +5718,6 @@ export struct WindowNativeNode {
     return v.toFixed(digits) + suffix
   }
 
-  private loadAstroCalcContext(): void {
-    if (this.astroContextRequestPending) return
-    this.astroContextRequestPending = true
-    const requestId = ++this.astroContextRequestId
-    this.callInteractive('getAstroCalcContext', '', (r: StellariumBridgeResponse) => {
-      this.astroContextRequestPending = false
-      if (requestId !== this.astroContextRequestId) return
-      if (r.ok !== true) {
-        this.astroStore.astroContext = undefined
-        return
-      }
-      this.astroStore.astroContext = {
-        jd: r.jd as number,
-        localTime: r.localTime as string,
-        observerLocation: r.observerLocation as string,
-        timeZone: r.timeZone as string,
-        latitude: Number(r.latitude),
-        longitude: Number(r.longitude),
-        altitude: Number(r.altitude),
-        meanSiderealTime: r.meanSiderealTime as string,
-        apparentSiderealTime: r.apparentSiderealTime as string,
-        meanSiderealHours: Number(r.meanSiderealHours),
-        apparentSiderealHours: Number(r.apparentSiderealHours),
-        equationOfTimeMinutes: Number(r.equationOfTimeMinutes),
-        sunAltitude: Number(r.sunAltitude),
-        sunAzimuth: Number(r.sunAzimuth),
-        moonAltitude: Number(r.moonAltitude),
-        moonAzimuth: Number(r.moonAzimuth),
-        moonIllumination: Number(r.moonIllumination),
-        offline: r.offline === true
-      }
-    }, () => {
-      this.astroContextRequestPending = false
-    })
-  }
-
   private almanacHoursLabel(key: string): string {
     const value = this.astroStore.almanacData.get(key) ?? ''
     return value.length > 0 ? parseFloat(value).toFixed(1) + ' 小时' : '--'
@@ -5876,42 +5821,6 @@ export struct WindowNativeNode {
 
 
 
-
-  private loadMoonPhases(): void {
-    this.astroStore.updateAstroCalcSnapshot()
-    const days = this.astroStore.moonPhaseDays
-    if (this.astroStore.moonPhaseLoading && this.moonPhaseLoadingDays === days) return
-    const requestId = ++this.moonPhaseRequestId
-    this.moonPhaseLoadingDays = days
-    this.astroStore.moonPhaseData = []
-    this.astroStore.moonPhaseError = ''
-    this.astroStore.moonPhaseLoading = true
-    const finish = (callback: () => void): void => {
-      if (requestId !== this.moonPhaseRequestId) return
-      callback()
-    }
-    // 90 天会在原生线程中逐日推进天体模型，不能使用普通交互命令的
-    // 1.5 秒超时；长任务通道会持续读取异步结果，避免首次点击误报超时。
-    this.callLongRunningInteractive('getMoonPhases', JSON.stringify({ days: days }), (r: StellariumBridgeResponse) => {
-      finish(() => {
-        this.astroStore.moonPhaseLoading = false
-        if (r.ok === true && r.moonPhases !== undefined) {
-          this.astroStore.moonPhaseData = r.moonPhases as Array<MoonPhaseItem>
-        } else {
-          this.astroStore.moonPhaseError = r.error ?? '月相计算未能完成，请稍后重试。'
-        }
-      })
-    }, (r: StellariumBridgeResponse) => {
-      finish(() => {
-        this.astroStore.moonPhaseLoading = false
-        this.astroStore.moonPhaseError = r.error ?? '月相计算等待超时，请稍后重试。'
-      })
-    }, (r: StellariumBridgeResponse) => {
-      finish(() => {
-        this.astroStore.moonPhaseError = ''
-      })
-    }, days >= 90 ? 600 : 240)
-  }
 
   private jumpToMoonPhase(item: MoonPhaseItem): void {
     if (item.jd === undefined || item.jd <= 0) return
@@ -15179,7 +15088,7 @@ private loadPlanetPositions(): void {
           loadEphemeris: () => { this.astroStore.loadEphemeris() },
           loadHeliocentricPositions: () => { this.astroStore.loadHeliocentricPositions() },
           loadLunarElongation: () => { this.astroStore.loadLunarElongation() },
-          loadMoonPhases: () => { this.loadMoonPhases() },
+          loadMoonPhases: () => { this.astroStore.loadMoonPhases() },
           loadObservabilityCalendar: () => { this.astroStore.loadObservabilityCalendar() },
           loadPhenomena: () => { this.astroStore.loadPhenomena() },
           loadPlanetCalc: () => { this.astroStore.loadPlanetCalc() },
