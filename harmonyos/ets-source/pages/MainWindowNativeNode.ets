@@ -1472,6 +1472,34 @@ export struct WindowNativeNode {
       // §14 B3-4：视频状态轮询收口时调用的宿主 stopVideoRecording（store 不触碰桥/UI）。
       stopVideoRecording: (): void => { this.stopVideoRecording() }
     })
+    // M1-A 子组④：原生脚本播放的跨域/UI/定时器动作经具名注入（store 不触碰 UI/他 store）。
+    this.scriptStore.attachPlaybackHooks({
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+      sessionBusy: (): boolean => this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
+      guideActive: (): boolean => this.guideStore.guideState.active,
+      requestStopGuide: (): void => { this.executeGuideRequest('guideAction', 'stop') },
+      finishReplay: (message: string): void => this.finishRecordingReplay(message),
+      finishNativeScriptUi: (message: string): void => this.finishNativeScriptUi(message),
+      dismissScriptOverlays: (): void => {
+        this.panelVisible = false
+        this.infoWindowStore.infoWinVisible = false
+        this.gyroStore.gyroCalibPanelOpen = false
+      },
+      stopBackgroundTimers: (): void => {
+        this.stopTimePanelTimers()
+        this.stopSkyCultureTimeFollowTimer()
+        this.stopPolarScopeTimer()
+      },
+      startStatusPolling: (): void => this.startScriptStatusPolling(),
+      stopStatusPolling: (): void => this.stopScriptStatusPolling(),
+      refreshStatus: (): void => { this.refreshScriptStatus() },
+      runWaitingAnimation: (action: () => void): void => {
+        this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, action)
+      },
+      logScriptError: (filename: string, error: string): void => {
+        hilog.error(0x0000, 'StellariumArkUI', 'playScript failed %{public}s err=%{public}s', filename, error)
+      }
+    })
     this.sessionToolStore.attachPort(hostPort, () => {})
     // M1-A：会话导出/应用/迁移的 UI 提示、剪贴板、ToolsStore 文本框与分布式能力经具名注入。
     this.sessionToolStore.attachHooks({
@@ -1889,7 +1917,7 @@ export struct WindowNativeNode {
         this.scriptStore.scriptLaunching = false
         this.scriptStore.scriptLaunchingName = ''
         this.scriptStore.scriptId = String(event['payload'] ?? '')
-        this.scriptStartGraceUntil = Date.now() + 2500
+        this.scriptStore.scriptStartGraceUntil = Date.now() + 2500
         this.panelVisible = false
         this.infoWindowStore.infoWinVisible = false
         this.startScriptStatusPolling()
@@ -3389,7 +3417,7 @@ export struct WindowNativeNode {
     this.scriptStore.scriptFocusActive = false
     this.scriptStore.scriptLaunching = false
     this.scriptStore.scriptLaunchingName = ''
-    this.scriptStartGraceUntil = 0
+    this.scriptStore.scriptStartGraceUntil = 0
     this.tools.recordingUiExpanded = true
     this.stopScriptStatusPolling()
     this.flashHint(message)
@@ -3425,7 +3453,7 @@ export struct WindowNativeNode {
       if (typeof status.scriptRate === 'number' && Number.isFinite(status.scriptRate)) {
         this.scriptStore.scriptRate = status.scriptRate
       }
-      if (!running && !this.scriptStore.scriptLaunching && !this.scriptStore.replaying && Date.now() >= this.scriptStartGraceUntil) {
+      if (!running && !this.scriptStore.scriptLaunching && !this.scriptStore.replaying && Date.now() >= this.scriptStore.scriptStartGraceUntil) {
         this.finishNativeScriptUi(I18n.t('script_finished'))
       }
     }, () => {
@@ -3457,19 +3485,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private stopScriptPlayback(): void {
-    if (this.guideStore.guideState.active) {
-      this.executeGuideRequest('guideAction', 'stop')
-      return
-    }
-    if (this.scriptStore.replaying) {
-      this.finishRecordingReplay('回放已停止')
-    }
-    this.callInteractive('stopScript', '', (r: StellariumBridgeResponse) => {
-      this.finishNativeScriptUi(r.ok === true ? I18n.t('script_stopped') : I18n.t('script_stop_failed'))
-    })
-  }
-
   private changeScriptRate(direction: number): void {
     const next = Math.max(0.25, Math.min(16, this.scriptStore.scriptRate * (direction > 0 ? 2 : 0.5)))
     this.callInteractive('setScriptRate', next.toString(), (r: StellariumBridgeResponse) => {
@@ -3488,30 +3503,6 @@ export struct WindowNativeNode {
         this.scriptStore.loadRecordings()
       } else {
         this.flashHint(I18n.t('msg_delete_failed'))
-      }
-    })
-  }
-
-  private continueNativeScript(): void {
-    if (!this.scriptStore.scriptRunning || this.scriptStore.replaying) return
-    this.callInteractive('continueScript', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, () => {
-          this.scriptStore.scriptWaiting = false
-          this.scriptStore.scriptWaitMessage = ''
-        })
-        this.flashHint(I18n.t('script_continue'))
-      } else {
-        this.flashHint(I18n.t('script_continue_failed'))
-      }
-    })
-  }
-
-  private sendScriptKey(key: string): void {
-    if (!this.scriptStore.scriptRunning || this.scriptStore.replaying) return
-    this.callInteractive('sendKey', key, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) {
-        this.flashHint('脚本按键不可用')
       }
     })
   }
@@ -6599,51 +6590,6 @@ private loadPlanetPositions(): void {
     this.layerViewStore.landscapeFadeWithZoom = false
     this.callInteractive('setLandscapeUseTransparency', '1', () => {})
     this.callInteractive('setLandscapeTransparency', v, () => {})
-  }
-
-  private playScriptByName(filename: string): void {
-    if (this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active)) {
-      return
-    }
-    this.scriptStore.scriptLaunching = true
-    this.scriptStore.scriptLaunchingName = filename
-    this.scriptStore.scriptFocusActive = true
-    this.scriptStore.scriptId = filename
-    this.scriptStore.scriptRate = 1
-    this.scriptStore.scriptWaiting = false
-    this.scriptStore.scriptWaitMessage = ''
-    this.scriptStartGraceUntil = Date.now() + 2500
-    this.panelVisible = false
-    this.infoWindowStore.infoWinVisible = false
-    this.gyroStore.gyroCalibPanelOpen = false
-    this.stopTimePanelTimers()
-    this.stopSkyCultureTimeFollowTimer()
-    this.stopPolarScopeTimer()
-    this.startScriptStatusPolling()
-    this.flashHint('正在启动脚本…')
-    this.callInteractive('playScript', filename, (r: StellariumBridgeResponse) => {
-      this.scriptStore.scriptLaunching = false
-      this.scriptStore.scriptLaunchingName = ''
-      if (r.ok === true) {
-        this.flashHint(I18n.t('msg_script_running'))
-        this.refreshScriptStatus()
-      } else {
-        this.scriptStore.scriptFocusActive = false
-        this.scriptStore.scriptWaiting = false
-        this.scriptStore.scriptWaitMessage = ''
-        this.stopScriptStatusPolling()
-        hilog.error(0x0000, 'StellariumArkUI', 'playScript failed %{public}s err=%{public}s', filename, r.error ?? '')
-        this.flashHint(I18n.t('msg_apply_failed'))
-      }
-    }, () => {
-      this.scriptStore.scriptLaunching = false
-      this.scriptStore.scriptLaunchingName = ''
-      this.scriptStore.scriptFocusActive = false
-      this.scriptStore.scriptWaiting = false
-      this.scriptStore.scriptWaitMessage = ''
-      this.stopScriptStatusPolling()
-      this.flashHint('脚本启动超时，请重试')
-    })
   }
 
   private selectCommandEntry(item: CommandCatalogEntry): void {
@@ -10810,11 +10756,11 @@ private loadPlanetPositions(): void {
             controlY: scriptControlY(this.skyHeight, this.scriptControlSafeTop(), this.scriptStore.scriptControlHeight(), this.scriptStore.scriptControlOffsetY),
             onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
             onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
-            onContinue: () => { this.continueNativeScript() },
+            onContinue: () => { this.scriptStore.continueNativeScript() },
             onChangeRate: (delta: number) => { this.changePlaybackRate(delta) },
             onToggleReplayPause: () => { this.toggleReplayPause() },
-            onStop: () => { this.stopScriptPlayback() },
-            onSendKey: (k: string) => { this.sendScriptKey(k) }
+            onStop: () => { this.scriptStore.stopScriptPlayback() },
+            onSendKey: (k: string) => { this.scriptStore.sendScriptKey(k) }
           })
         }
       }
@@ -13443,7 +13389,7 @@ private loadPlanetPositions(): void {
         confirmPrivacyRevocation: () => { this.confirmPrivacyRevocation() },
         loadPluginList: () => { this.pluginStore.loadPluginList() },
         openPluginFeature: (id: string) => { this.openPluginFeature(id) },
-        playScriptByName: (filename: string) => { this.playScriptByName(filename) },
+        playScriptByName: (filename: string) => { this.scriptStore.playScriptByName(filename) },
         triggerAction: (actionId: string) => { this.triggerAction(actionId) },
         moveToSelectedObject: () => { this.moveToSelectedObject() },
         onOpenLayersSky: () => { this.viewTab = 0; this.openSubPanel('layers') },
@@ -13745,9 +13691,9 @@ private loadPlanetPositions(): void {
         scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
         onStartGuide: (id: string) => { this.executeGuideRequest('startGuide', id) },
-        onStopPlayback: () => { this.stopScriptPlayback() },
+        onStopPlayback: () => { this.scriptStore.stopScriptPlayback() },
         onImportScript: () => { this.importScriptFile() },
-        onPlayScript: (name: string) => { this.playScriptByName(name) },
+        onPlayScript: (name: string) => { this.scriptStore.playScriptByName(name) },
         onToggleRecording: () => { this.tools.recording ? this.stopRecording() : this.startRecording() },
         onSaveRecording: () => { this.saveCurrentRecording() },
         onSetRecordName: (value: string) => { this.scriptStore.recordName = value },

@@ -14,6 +14,35 @@ export interface ScriptHostHooks {
   stopVideoRecording(): void
 }
 
+// 宿主 → ScriptStore 的原生脚本播放注入（PLAN §15.4 P2-1 / §15.10 M1-6，M1-A 子组④）。
+// playScriptByName / continueNativeScript / stopScriptPlayback / sendScriptKey 从宿主下沉本 store 后：
+// 会话忙判定、UI 叠层关闭、宿主后台定时器收口、脚本状态轮询（宿主自持 scriptStatusTimer）、
+// 等待动画（animateTo）与回放/收尾动作经具名回注（store 不 import UI / 他 store）。
+export interface ScriptPlaybackHooks {
+  flashHint(text: ResourceStr): void
+  // 是否已有脚本/录制/导览会话（原宿主 scriptStore.scriptSessionActive(tools.recording, guideState.active)）。
+  sessionBusy(): boolean
+  // 交互导览是否进行中（原宿主 guideStore.guideState.active）。
+  guideActive(): boolean
+  // 停止导览（原宿主 this.executeGuideRequest('guideAction', 'stop')）。
+  requestStopGuide(): void
+  // 回放收尾（原宿主 finishRecordingReplay）。
+  finishReplay(message: string): void
+  // 原生脚本 UI 收尾（原宿主 finishNativeScriptUi）。
+  finishNativeScriptUi(message: string): void
+  // 关闭脚本相关叠层（panelVisible / infoWindowStore.infoWinVisible / gyroStore.gyroCalibPanelOpen）。
+  dismissScriptOverlays(): void
+  // 停止与脚本互斥的宿主后台定时器（时间面板 / 星空文化时间跟随 / 极轴镜）。
+  stopBackgroundTimers(): void
+  startStatusPolling(): void
+  stopStatusPolling(): void
+  refreshStatus(): void
+  // 在 animateTo 动画中执行「等待态清空」（store 不触碰 UI 上下文）。
+  runWaitingAnimation(action: () => void): void
+  // 脚本启动失败诊断日志（原宿主 hilog.error）。
+  logScriptError(filename: string, error: string): void
+}
+
 // 脚本 / 录制 / 视频导出域中"面板可见"的状态（原宿主的 21 个 @State）。
 //
 // review §2.7 的第二片（Prop 风格 → Store 风格）。本片只搬**面板入参**字段：这 21 个此前以
@@ -78,6 +107,10 @@ export class ScriptStore {
   videoArchiveFileName: string = ''
   screenVideoFileName: string = ''
 
+  // —— M1-A 子组④：原生脚本启动后的宽限期（原宿主 scriptStartGraceUntil 普通字段迁入本 store）——
+  // refreshScriptStatus 读它以免刚启动就被判为已结束；playScriptByName 与 CLI 事件写它。
+  scriptStartGraceUntil: number = 0
+
   // —— §14 B3-4：视频状态轮询定时器（原宿主 videoStateTimer 裸字段，随加载器收口迁入本 store） ——
   private videoStateTimer: number = -1
 
@@ -88,6 +121,8 @@ export class ScriptStore {
   private onChanged: (() => void) | null = null
   // 宿主 UI 提示注入（§14 B2R-4 loadRecordingByName）。
   private hooks: ScriptHostHooks | null = null
+  // 原生脚本播放注入（M1-A 子组④）。
+  private playbackHooks: ScriptPlaybackHooks | null = null
 
   // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
   attachPort(port: CommandPort, onChanged: () => void): void {
@@ -97,6 +132,10 @@ export class ScriptStore {
 
   attachHooks(hooks: ScriptHostHooks): void {
     this.hooks = hooks
+  }
+
+  attachPlaybackHooks(hooks: ScriptPlaybackHooks): void {
+    this.playbackHooks = hooks
   }
 
   // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
@@ -287,5 +326,112 @@ export class ScriptStore {
   replayTimelineMs(pauseStartedAt: number, startedAt: number, pausedTotal: number): number {
     const now = this.replayPaused && pauseStartedAt > 0 ? pauseStartedAt : Date.now()
     return Math.max(0, now - startedAt - pausedTotal) * this.replayRate
+  }
+
+  // ── 原生脚本播放（原宿主 playScriptByName / continueNativeScript / stopScriptPlayback /
+  //    sendScriptKey，PLAN §15.4 P2-1，M1-A 子组④逐字搬入）。差异仅：this.callInteractive →
+  //    port.requestInteractive、this.flashHint → playbackHooks.flashHint、跨域/UI/定时器 →
+  //    playbackHooks 具名回注、this.scriptStore.<f> → this.<f>。
+
+  // 按文件名启动原生脚本（原宿主 playScriptByName）。
+  playScriptByName(filename: string): void {
+    const hooks = this.playbackHooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    if (hooks.sessionBusy()) {
+      return
+    }
+    this.scriptLaunching = true
+    this.scriptLaunchingName = filename
+    this.scriptFocusActive = true
+    this.scriptId = filename
+    this.scriptRate = 1
+    this.scriptWaiting = false
+    this.scriptWaitMessage = ''
+    this.scriptStartGraceUntil = Date.now() + 2500
+    hooks.dismissScriptOverlays()
+    hooks.stopBackgroundTimers()
+    hooks.startStatusPolling()
+    hooks.flashHint('正在启动脚本…')
+    port.requestInteractive('playScript', filename, (r: StellariumBridgeResponse) => {
+      this.scriptLaunching = false
+      this.scriptLaunchingName = ''
+      if (r.ok === true) {
+        hooks.flashHint(I18n.t('msg_script_running'))
+        hooks.refreshStatus()
+      } else {
+        this.scriptFocusActive = false
+        this.scriptWaiting = false
+        this.scriptWaitMessage = ''
+        hooks.stopStatusPolling()
+        hooks.logScriptError(filename, r.error ?? '')
+        hooks.flashHint(I18n.t('msg_apply_failed'))
+      }
+    }, () => {
+      this.scriptLaunching = false
+      this.scriptLaunchingName = ''
+      this.scriptFocusActive = false
+      this.scriptWaiting = false
+      this.scriptWaitMessage = ''
+      hooks.stopStatusPolling()
+      hooks.flashHint('脚本启动超时，请重试')
+    })
+  }
+
+  // 继续原生脚本等待（原宿主 continueNativeScript）。
+  continueNativeScript(): void {
+    const hooks = this.playbackHooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    if (!this.scriptRunning || this.replaying) return
+    port.requestInteractive('continueScript', '', (r: StellariumBridgeResponse) => {
+      if (r.ok === true) {
+        hooks.runWaitingAnimation(() => {
+          this.scriptWaiting = false
+          this.scriptWaitMessage = ''
+        })
+        hooks.flashHint(I18n.t('script_continue'))
+      } else {
+        hooks.flashHint(I18n.t('script_continue_failed'))
+      }
+    })
+  }
+
+  // 停止脚本播放 / 导览（原宿主 stopScriptPlayback）。
+  stopScriptPlayback(): void {
+    const hooks = this.playbackHooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    if (hooks.guideActive()) {
+      hooks.requestStopGuide()
+      return
+    }
+    if (this.replaying) {
+      hooks.finishReplay('回放已停止')
+    }
+    port.requestInteractive('stopScript', '', (r: StellariumBridgeResponse) => {
+      hooks.finishNativeScriptUi(r.ok === true ? I18n.t('script_stopped') : I18n.t('script_stop_failed'))
+    })
+  }
+
+  // 向原生脚本发送按键（原宿主 sendScriptKey）。
+  sendScriptKey(key: string): void {
+    const hooks = this.playbackHooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    if (!this.scriptRunning || this.replaying) return
+    port.requestInteractive('sendKey', key, (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) {
+        hooks.flashHint('脚本按键不可用')
+      }
+    })
   }
 }
