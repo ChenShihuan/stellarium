@@ -106,4 +106,18 @@ export class ObjectMediaStore {
       hooks.failObjectInspectorModelTexture(mediaGeneration, 'sidecar failed: ' + describeDecodeError(err as Error))
     }
   }
+
+  // 离线图库预热进度文案（原宿主 objectInspectorMediaWarmupText，函数体逐字搬入）。
+  // 差异仅：this.objectMediaStore.objectInspectorMediaWarmup* → this.objectInspectorMediaWarmup*。
+  objectInspectorMediaWarmupText(): string {
+    if (this.objectInspectorMediaWarmupTotal <= 0) {
+      return '正在检查离线图库'
+    }
+    let text = '离线图库已准备 ' + this.objectInspectorMediaWarmupInstalled.toString() + '/' +
+      this.objectInspectorMediaWarmupTotal.toString()
+    if (this.objectInspectorMediaWarmupFailed > 0) {
+      text += ' · ' + this.objectInspectorMediaWarmupFailed.toString() + ' 项失败'
+    }
+    return text
+  }
 }
