@@ -1272,3 +1272,63 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 - **回滚**：每片独立提交，且以**新增控制器/服务文件**为主、宿主只做"调用点改指向 + 删方法"，单文件回归面最小；高风险片若真机回归，`git revert` 单片即可。
 - **`P1-2 RecordingController` 与 `ScriptStore` 已有部分重叠**（录制/回放状态已在 store）：本片只搬**行为与定时器**，不重复搬状态；若发现状态冗余，先登记再定。
 
+
+### 15.10 模块级大切片队列（2026-10-04 重排；**中低风险优先 + 功能模块级粒度**）
+
+> **重排依据（用户 2026-10-04 指示）**：① 先聚焦 STATE-REVIEW §9.7 的**中低风险**模块，高风险（`SkyInputController`、`SelectionService`）放最后；
+> ② 切片粒度放宽到**功能模块级**——**一个功能模块 = 一片**，**允许数千行的整体拆分**（不再用 §14 的 300–500 行细粒度）。
+> 因此把 §15.1–§15.5 的 19 片**合并为 10 片**，分三批：**M1 中低风险（6 片，先做）→ M2 中高（2 片）→ M3 高风险（3 片，最后）**；
+> 三个端口合并为 1 片。**§13.2 八步协议与 §14.8/§15.7 硬规则不变**；每片仍独立提交、可单独 `git revert`。
+
+#### 批次 M1：中低风险（先做，6 片）
+
+| 片 | 模块 | 内容（合并自 §15.1–§15.4） | 规模 | 前置 | 风险 |
+|---|---|---|---:|---|---|
+| **M1-1** | **端口组** | `MediaPort` + `SensorPort` + `PlatformPort` 三个纯接口 + 宿主具名适配器 + 三个最小试点（`releaseDecodedImage` / `watchGyro*` 退订 / `copyTextToClipboard`） | ~300 行 | — | 低 |
+| **M1-2** | **传感器/陀螺仪** | `SensorController` 整体：22 方法（`onRotationVectorDirect` 122 / `startGyroscope` 121 / `onOrientationData` 113 / `updateGyroTargetGuide` 109 / `stopGyroscope` 56 / `watchGyro*` / `emitGyroPoseProbe`）+ **48 个字段** + 扩充 `state/GyroStore.ets` 的可观测子集（先扩 store 再搬控制器，避免中间态） | ~700 行 | M1-1 | 中 |
+| **M1-3** | **录制/回放/视频/截图** | `RecordingController` 整体：23 方法（`startScreenVideoRecording` 51 / `playRecording` 25 / `saveCurrentRecording` 22 / `replayNextCommand` 22 / `startRecording` 21 / `finalizeScreenVideo` 21 / `stopScreenCapture` / `saveScreenshot` 等）+ 13 字段 + 自持 `videoStateTimer` / `recordViewCheckpointTimer`（只搬**行为与定时器**，状态已在 `ScriptStore`，勿重复搬） | ~450 行 | M1-1 | 中 |
+| **M1-4** | **媒体/平台/语音服务** | `common/media/ImageDecoder.ets`（`decodeLocalImage` 70 / `decodeSkyCultureArtThumbnail` 33 / `decodeSkyCultureArtPreview` 27 / `releaseDecodedImage` 11）＋ `common/platform/{Share,Clipboard,Screenshot}.ets`（`shareFile` 22 / `copyTextToClipboard` 13 / `saveScreenshot` 17 / `exportScreenshotToUserStorage` 25）＋ `common/SpeechService.ets`（`speakSelectedObject` 11） | ~250 行 / 3 个新文件族 | M1-1 | 低 |
+| **M1-5** | **启动 / 会话 / 平台杂项** | `capability/StartupBridge.ets`（`restoreStartupSettings` 65 / `runStartupBridgeTasks` 37 / `startupBridgeSync` 11 / `saveCurrentViewAsStartup` 10）＋ `state/SessionStore.ets`（`sessionApply` 24 / `sessionExport` 20 / `sessionHandoff` 14 / `sessionSummary` 6）＋ 其余启动/隐私/平台杂项（§9.1 记该模块 ~18 方法 / ~330 行，**开工重测列出全名单**） | ~400 行 | — | 低 |
+| **M1-6** | **并入既有 store（P2 三域）** | 脚本播放 → `ScriptStore`（`playScriptByName` 44 / `continueNativeScript` / `toggleReplayPause` 20 / `changePlaybackRate` / `stopScriptPlayback` / `sendScriptKey`；+ `ScriptHostHooks` 注入）；交互导览 → `GuideStore`（`executeGuideRequest` 63 + guide 请求/定时器）；跟踪 → `ViewSettingsStore`（`setTrackingState` 37 / `toggleTracking`） | ~270 行 | — | 中低 |
+
+**M1 预期收益**：宿主 14,347 → **≈12,000 行**、`private` 593 → **≈500**；覆盖 §9.7「低风险高价值」全部 + P2 三域。
+
+#### 批次 M2：中高风险（M1 完成后做）
+
+| 片 | 模块 | 内容 | 规模 | 风险 |
+|---|---|---|---:|---|
+| **M2-1** | **对象模型渲染 ①** | `ObjectModelRenderer` 的渲染与纹理部分：`renderObjectInspectorModel`(106) / `decodeObjectInspectorModelTextureFromPng`(46) / `commitObjectInspectorModelTexture`(36) / `clearObjectInspectorModelRenderer`(35) / `requestObjectInspectorModelRender`(25) + `ObjectMediaStore` 可观测子集 | ~400 行 | 中高 |
+| **M2-2** | **对象模型渲染 ②** | 剩余部分：`handleObjectInspectorModelTouch`(57) / `refreshObjectInspectorModelLighting`(11) / `objectInspectorModelRenderTimer` 自持 + ~25 个 `objectInspectorModel*` 字段 | ~350 行 | 中高 |
+
+> 开工时若实测一片可行（<~500 行），**允许合并为一片 M2**；按实测决定并在 CHANGELOG 说明。
+
+#### 批次 M3：高风险（最后，须真机命中 + 截图对照）
+
+| 片 | 模块 | 内容 | 规模 | 风险 |
+|---|---|---|---:|---|
+| **M3-1** | **天空输入 ①（骨架）** | `SkyInputController` 骨架：`handleSkyMouse`(51) / `handleSkyKey`(31) / `handleSkyAxis`(23) / `handleSkyTap`(11) / `startSkyInertia`+`stopSkyInertia`(25) + **89 个手势/视图字段**迁入普通类（可观测子集入 `OverlayStore`/`DockStore`） | ~400 行 | 高 |
+| **M3-2** | **天空输入 ②（主路径）** | `handleSkyTouch`(318) + `emitFluidDrag`(36) | ~400 行 | 高 |
+| **M3-3** | **选中服务（决策片）** | `SelectionService`：**先普查** → 能整片逐字搬则 `capability/SelectionService.ets`；含热路径/多入口无法逐字等价则**登记保留**（§9.3 明确给出的合法选项） | ~1,200 行 **或 0** | 高 |
+
+**M3 许可**：M3-1/2/3 若真机不可用、或无法保证逐字等价，**允许登记保留并写明理由**（§15.6），**不得为凑指标硬搬**。
+
+#### 队列与优先级（重排后：10 片）
+
+| ID | 批次 | 模块 | 前置 | 状态 |
+|---|---|---|---|---|
+| M1-1 | M1 | 端口组（`MediaPort`/`SensorPort`/`PlatformPort` + 试点） | — | 待做 |
+| M1-2 | M1 | `SensorController`（22 方法 + 48 字段） | M1-1 | 待做 |
+| M1-3 | M1 | `RecordingController`（23 方法 + 13 字段 + 2 定时器） | M1-1 | 待做 |
+| M1-4 | M1 | `ImageDecoder` + `PlatformServices` + `SpeechService` | M1-1 | 待做 |
+| M1-5 | M1 | `StartupBridge` + `SessionStore` + 启动杂项 | — | 待做 |
+| M1-6 | M1 | 脚本播放 / 导览 / 跟踪 → 既有 store（P2） | — | 待做 |
+| M2-1 | M2 | `ObjectModelRenderer` 渲染/纹理（或与 M2-2 合并） | M1-1 | 待做 |
+| M2-2 | M2 | `ObjectModelRenderer` 触摸/光照/字段 | M1-1 | 待做 |
+| M3-1 | M3 | `SkyInputController` 骨架（89 字段 + 鼠标/键盘/轴/惯性） | — | 待做（最后） |
+| M3-2 | M3 | `SkyInputController` 主路径（`handleSkyTouch` 318） | M3-1 | 待做（最后） |
+| M3-3 | M3 | `SelectionService` 决策片（搬或登记） | — | 待做（最后） |
+
+**建议首序**：`M1-1` → `M1-2` → `M1-3` → `M1-4` → `M1-5` → `M1-6` → `M2-1` / `M2-2` → `M3-1` / `M3-2` → `M3-3`。
+
+**与 §15.1–§15.5 的关系**：本节**取代** §15.1–§15.5 的 19 片细分（后者保留作模块普查与依赖说明）；**执行以 §15.10 为准**。§15.6 保留项、§15.7 硬规则、§15.8 度量、§15.9 风险**继续有效**。
+
