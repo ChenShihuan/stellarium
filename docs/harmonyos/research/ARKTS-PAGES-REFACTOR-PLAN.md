@@ -966,7 +966,7 @@ export interface CommandPort {
 
 | 片 | 模块 | 函数（§2.12 A1 清单按前缀归类） | 约数 |
 |---|---|---|---:|
-| A1-1 | `derive/gyro.ets` | `gyroRotateAboutAxis` `gyroMultiplyQuaternions` `gyroFilterDeviceVector` `gyroCross` `gyroRotateAboutVertical` `gyroScreenAxisForDisplay` `shortestGyroAzimuthDelta` `wrapGyroAzimuth` `gyroNormalizeVector` `gyroNormalizeQuaternion` `gyroConjugateQuaternion` `gyroDot` | 12 |
+| A1-1 | `derive/gyro.ets` | `gyroRotateAboutAxis` `gyroMultiplyQuaternions` `gyroFilterDeviceVector` `gyroCross` `gyroRotateAboutVertical` `gyroScreenAxisForDisplay` `shortestGyroAzimuthDelta` `wrapGyroAzimuth` `gyroNormalizeVector` `gyroNormalizeQuaternion` `gyroConjugateQuaternion` `gyroDot` | 12 | **已完成（2026-10-04）** |
 | A1-2 | `derive/astro.ets` | `dateToJD` `jdToLocalTimeText` `astroTabItemsForGroup` `astroGroupItems` `astroGroupForTab` `rtsCalendarDurationLabel` `graphModeLabel` `graphStartOptionLabel` `hourOffsetLabel` `planetMetricLabel` `planetMetricUnit` `planetPairBodyName` `planetPairLinearLabel` `hecPointSize` `hecPointAngle` `hecDistanceLabel` `hecPlanetOrbitRadius` `lunarElongationBarHeight` `planetTimeSeriesBarHeight` `planetPairBarHeight` `messierNumberOf` `minorPlanetNumberOf` `fmtDegMin` `clamp` `distance` | 25 |
 | A1-3 | `derive/labels.ets` | `zhNameOf` `zhType` `planetZh` `sensZh` `scriptZh` `scriptDesc` `pluginZh` `pluginDesc` `pluginHostName` `pluginFeatureRoute` `resourceText` `describeDecodeError` | 12 |
 | A1-4 | `derive/skycult.ets` | `isSafeSkyCultureArtPath` `cleanSkyCultureDescription` `cleanSkyCultureNarration` `isCliPanelName` `parseObservingList` `csvCell` `formatRate` `configDitheringLabel` `informationMaskBit` `isRecordable` | 10 |
@@ -1046,7 +1046,7 @@ export interface CommandPort {
 | ID | 轨道 | 内容 | 前置 | 状态 |
 |---|---|---|---|---|
 | AB-0 | B 前置 | `bridge/CommandPort.ets` + `loadAboutInfo` 试点 | — | **已完成（Phase AB-0，2026-10-04；新增 `bridge/CommandPort.ets` 33 行纯接口 + 具名适配器 `HostCommandPort` 注入；`loadAboutInfo` 迁入 `ToolsStore`，宿主零残留/零双写；构建/契约 intact；模拟器端口链路实证，`about*` 数据渲染待真机）** |
-| A1-1…A1-7 | A1 | 91 个纯函数 → `common/derive/*.ets`（7 片） | — | 待做（与 AB-0 并行） |
+| A1-1…A1-7 | A1 | 91 个纯函数 → `common/derive/*.ets`（7 片） | — | 进行中（与 AB-0 并行）。**A1-1 已完成（2026-10-04；`common/derive/gyro.ets` 12 个陀螺/四元数/向量纯函数迁出，宿主 −12 `private`、−91 行，零残留/零双写，构建/契约绿，模拟器冒烟，真机陀螺待验）** |
 | B1-1…B1-6 | B1 | 24 个加载器 → store（6 片） | AB-0 | 待做 |
 | B2A-1…B2A-2 | B2 | Astro 簇 19 个（1–2 片） | AB-0、A1-2 | 待做 |
 | B2R-1…B2R-4 | B2 | 其余 16 个（4 片） | AB-0 | 待做 |

@@ -1,3 +1,15 @@
+## [2026-10-04] DevEco Code - 重构：§14 A1-1 陀螺纯函数抽取（derive/gyro.ets）
+
+- 依据：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.2（轨道 A1：零宿主依赖纯函数 → `common/derive/*.ets`）与 §14.8（A/B 专属硬规则）；判据 §2.12。本片是 A1 轨道首片，抽出陀螺/四元数/向量数学簇。
+- **开工复测**：用 §2.12 判据在当前宿主逐名核验 12 个候选函数体——**全部零宿主状态读取**（体内无 `this.<字段>`）、无成员写/IO/桥/路由/定时器/`AppStorage`/`hilog` → 全部归 A1，**无剔除项**。§2.12 列为 A2 的 `gyroOrthonormalizeUp`（读 `this.gyroNormalizeVector`）/`gyroMagneticHeadingFromDeviceVectors` 属 A2，**未纳入本片**，仍留宿主（其内部对已迁函数的调用改为模块函数调用）。
+- **新增 `harmonyos/ets-source/common/derive/gyro.ets`（约 96 行，12 个文件级 `export function`）**：`gyroNormalizeQuaternion`、`gyroConjugateQuaternion`、`gyroMultiplyQuaternions`、`gyroNormalizeVector`、`gyroRotateAboutVertical`、`gyroRotateAboutAxis`、`gyroFilterDeviceVector`、`gyroCross`、`gyroDot`、`gyroScreenAxisForDisplay`、`wrapGyroAzimuth`、`shortestGyroAzimuthDelta`。函数体从宿主**逐字剪切**（保留默认值/分支语义），仅改 `private`→`export function`。**无类型 import**：这些函数只用内建 `number[]` / `number`，不依赖任何既有类型定义（故未新造类型）。模块内**零 `this`、零 `import`、零模块级可变变量**（§14.8 规则 6）。
+- **宿主手术**：删除 12 个 `private` 方法声明（用 `[regex]::Escape(签名)` + 非贪婪到 `\n  }` 的正则逐名删除，删前断言每名匹配数 = 1）；所有调用点 `this.gyroXxx(` → `gyroXxx(`（共 **38 处**，全在宿主，组件内零调用点）；宿主顶部新增**具名 import** `import { ... } from '../common/derive/gyro'`。一并删除只描述 `gyroRotateAboutVertical` 的孤立注释。
+- **三项复核**：宿主 `this.gyro*` 残留 = **0**；模块内 `this` = **0**；12 个函数的调用点总数 = **38 不变**（`gyro*` 引用仅存于 `MainWindowNativeNode.ets`，grep 全 `ets-source` 确认无组件调用）。
+- 单体 `MainWindowNativeNode.ets` **18634 → 18543 行（−91）**；宿主 `private` 方法 **941 → 929（−12）**；`load*` 72 不变。
+- 验证：`check-ohos-refactor-slice.mjs` 通过（括号深度 0，`@Builder` 成对）；`arkts_check` 2 文件（gyro.ets / MainWindowNativeNode.ets）无错；`build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources` = **BUILD SUCCESSFUL**；`check-ohos-ui-contract.mjs` = **intact**（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 208 文件，未新增或改名任何 `.id()`）；切片脚本扫描仅剩 §13.6 的 7 个环境类失败（4 个 `-pad` 需设备、`mist-performance` 需设备、`location-search` 路径 bug、`search` macOS 假设），**无新增回归**（无测试脚本按文本引用 gyro 函数）。
+- **设备走查（模拟器 `127.0.0.1:5555`，x86_64 phone 1256×2760，UI-only 无引擎；真机离线）**：安装 → `aa force-stop` + `aa start -a QAbility -b com.cnchensh.stellarium` → `pidof` 存活；`ui layout` 确认底部 Dock / 缩放按钮渲染正常；点按「更多功能」→ `ui layout` 确认面板实时刷新并出现 `#more-action-*` 按钮，再次 `pidof` 仍存活；关闭面板后无持久化设置被改。纯函数迁移不改 UI，此为「无回归」冒烟。
+- **待真机验证（模拟器无引擎、无真实传感器，无法覆盖）**：陀螺仪/罗盘面板入口与真实传感器数据驱动的姿态计算（`setGyroView` 链路）、`gyro*` 在真机高频回调下的数值正确性——本片仅做等价搬迁，建议真机走查陀螺校准面板与目标引导。
+- **本片新踩的坑**：无。删方法时逐名断言匹配数 = 1 有效规避了 §13.3 的「越过方法边界误删相邻成员」。
 ## [2026-10-04] DevEco Code - 重构：§14 AB-0 CommandPort enabler + loadAboutInfo 试点
 
 - 依据：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.1（轨道 B 硬前置）与 §14.8。本片是「A/B 类方法下沉」队列（§14.7）的首片 enabler：把「桥调用」从宿主剥离为可注入的 `CommandPort` 接口，使域 store 能在**不 import NAPI / UI / libentry.so** 的前提下自持「桥调用 → 解析回包 → 写本域状态」的加载逻辑（§13.1 规则 6 授权；先例 `state/TimeWheelController.ets` 的 `onSeek` / `onStopSpeed` / `getUtcOffsetHours`）。
