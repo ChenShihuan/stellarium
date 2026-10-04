@@ -1,5 +1,5 @@
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
-import { AboutResponse } from '../pages/MainWindowModels'
+import { AboutResponse, LogResponse } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 「工具 / 帮助 / 角度测量 / 录制控制」域的状态簇（Phase 3ao）。
@@ -101,6 +101,21 @@ export class ToolsStore {
       this.aboutQt = resp.qtVersion ?? ''
       this.aboutUserDir = resp.userDir ?? ''
       this.aboutConfigFile = resp.configFile ?? ''
+      this.notifyChanged()
+    })
+  }
+
+  // 帮助面板「日志」：桥拉取最近日志文本并置为可见（原宿主 loadLog，函数体逐字搬入；
+  // 仅 this.callNativeWhenReady → this.port.requestWhenReady、this.tools.<f> → this.<f>）。
+  loadLog(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    port.requestWhenReady('getLog', '6000', (r: StellariumBridgeResponse) => {
+      const resp = r as LogResponse
+      this.logText = resp.log ?? ''
+      this.logVisible = true
       this.notifyChanged()
     })
   }
