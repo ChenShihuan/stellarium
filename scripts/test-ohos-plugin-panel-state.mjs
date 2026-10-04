@@ -13,18 +13,19 @@ const mosaic = method('setMosaicCamera', ['setting', 'value']);
 const texture = method('setNebulaTextureFlag', ['command', 'enabled', 'current']);
 
 function state() {
+  const reloads = [];
   return {
     mosaicStore: {
       mosaicCameraPending: false, mosaicCameraLoading: false, mosaicCameraEnabled: false,
-      mosaicCameraVisible: false, mosaicCameraCurrent: 'LSSTCam'
+      mosaicCameraVisible: false, mosaicCameraCurrent: 'LSSTCam',
+      loadMosaicCamera(initial) { reloads.push(initial); }
     },
     nebulaTextureStore: {
       nebulaTexturePending: false, nebulaTextureLoading: false, nebulaTextureImporting: false,
       nebulaTextureActionStatus: '', nebulaTextureStatus: { enabled: false }
     },
-    calls: [], reloads: [],
-    callInteractive(name, payload, success, failure) { this.calls.push({ name, payload, success, failure }); },
-    loadMosaicCamera(initial) { this.reloads.push(initial); }
+    calls: [], reloads,
+    callInteractive(name, payload, success, failure) { this.calls.push({ name, payload, success, failure }); }
   };
 }
 
