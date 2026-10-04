@@ -441,10 +441,6 @@ export struct WindowNativeNode {
   @State private rtsCalendarStartMonth: number = new Date().getMonth() + 1
   @State private rtsCalendarStartDay: number = new Date().getDate()
   private almanacRequestSequence: number = 0
-  @State private dsoTotalCount: number = 0
-  @State private dsoGalaxies: number = 0
-  @State private dsoClusters: number = 0
-  @State private dsoNebulae: number = 0
   private planetPositionsRequestSequence: number = 0
   private hecPositionsRequestSequence: number = 0
   private celestialPositionsRequestSequence: number = 0
@@ -8960,18 +8956,6 @@ export struct WindowNativeNode {
 
   private setFovMarkerSetting(setting: string, value: number): void {
     this.callInteractive('setFovMarkerSetting', setting + '|' + value.toFixed(1), () => {})
-  }
-
-private loadDSOCounts(): void {
-    this.callInteractive('getDSOCounts', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.dsoCounts !== undefined) {
-        const d = r.dsoCounts as Record<string, Object>;
-        this.dsoTotalCount = (d['total'] as number) ?? 0;
-        this.dsoGalaxies = (d['galaxies'] as number) ?? 0;
-        this.dsoClusters = (d['clusters'] as number) ?? 0;
-        this.dsoNebulae = (d['nebulae'] as number) ?? 0;
-      }
-    })
   }
 
   private loadObjectInfo(): void {
