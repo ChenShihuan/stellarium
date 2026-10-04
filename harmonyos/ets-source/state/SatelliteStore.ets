@@ -3,6 +3,7 @@ import {
   SatelliteSource,
   SatelliteUpdateSettings,
   SatelliteSourcesResponse,
+  SatellitesResponse,
   CatalogHealthEntry
 } from '../pages/MainWindowModels'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
@@ -56,14 +57,31 @@ export class SatelliteStore {
   satelliteListLoading: boolean = false
   satelliteCatalogHealth: CatalogHealthEntry = {}
 
+  // —— §14 B3-4：loadSatellites 的保留裸字段 / 定时器（单一持有者迁入本 store） ——
+  // 原宿主裸字段 satelliteListRequestId / satelliteLoadTimer / satelliteLoadIncludeSources /
+  // satelliteFlagMutationId / satelliteListElapsedMs。
+  //   - satelliteListRequestId：加载器请求序号（§14.8 规则 3 随加载器搬入），宿主 CLI 发布点
+  //     publishSatellitePanelState 需读取其值，故保持 public 且为唯一副本。
+  //   - satelliteListElapsedMs：加载耗时，同样由宿主发布点读取，保持 public。
+  //   - satelliteFlagMutationId：卫星标志代际，载入回包用它决定是否回写标志；宿主动作
+  //     setSatelliteFlag 与 CLI 事件两处写入，仍保持 public 单一副本（宿主经 this.satelliteStore.X 读写）。
+  //   - satelliteLoadTimer / satelliteLoadIncludeSources：仅本加载器自持，private。
+  satelliteListRequestId: number = 0
+  satelliteListElapsedMs: number = 0
+  satelliteFlagMutationId: number = 0
+  private satelliteLoadTimer: number = -1
+  private satelliteLoadIncludeSources: boolean = false
+
   // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadSatelliteSources） ——
   private port: CommandPort | null = null
   // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
   private seq: number = 0
-  private onChanged: (() => void) | null = null
+  private onChanged: ((error: string) => void) | null = null
 
   // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
-  attachPort(port: CommandPort, onChanged: () => void): void {
+  // onChanged 带 error 形参：宿主 publishSatellitePanelState(error) 的 CLI 错误语义需逐字保留
+  //（成功路径传空串，失败路径传 'satellite query failed'）。
+  attachPort(port: CommandPort, onChanged: (error: string) => void): void {
     this.port = port
     this.onChanged = onChanged
   }
@@ -73,9 +91,9 @@ export class SatelliteStore {
     return this.port
   }
 
-  private notifyChanged(): void {
+  private notifyChanged(error: string = ''): void {
     if (this.onChanged !== null) {
-      this.onChanged()
+      this.onChanged(error)
     }
   }
 
@@ -95,5 +113,70 @@ export class SatelliteStore {
       }
       this.notifyChanged()
     })
+  }
+
+  // 卫星列表加载（原宿主 loadSatellites，函数体逐字搬入；差异仅：
+  // this.callNativeWhenReady → port.requestWhenReady（attempt/interval/max 0/100/15，onFailure 透传）、
+  // this.satelliteStore.<f> → this.<f>、this.publishSatellitePanelState() → this.notifyChanged()，
+  // this.satelliteListRequestId / satelliteLoadTimer / satelliteLoadIncludeSources / satelliteFlagMutationId
+  // 为本地字段。requestId/flagMutationId 的并发抑制、includeSources 合并与 90ms 去抖逐字保留。）
+  loadSatellites(includeSources: boolean = false, immediate: boolean = false): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    const requestId = ++this.satelliteListRequestId
+    const flagMutationId = this.satelliteFlagMutationId
+    const startedAt = Date.now()
+    this.satelliteListLoading = true
+    this.notifyChanged()
+    this.satelliteLoadIncludeSources = this.satelliteLoadIncludeSources || includeSources
+    if (this.satelliteLoadTimer >= 0) {
+      clearTimeout(this.satelliteLoadTimer)
+      this.satelliteLoadTimer = -1
+    }
+    const run = (): void => {
+      this.satelliteLoadTimer = -1
+      const includeSourcesForRequest = this.satelliteLoadIncludeSources
+      this.satelliteLoadIncludeSources = false
+      const payload = this.activeSatGroup + '|' + this.satQuery + '|40'
+      this.satelliteListLoading = true
+      port.requestWhenReady('getSatellites', payload, (r: StellariumBridgeResponse) => {
+        if (requestId !== this.satelliteListRequestId) return
+        this.satelliteListLoading = false
+        const resp = r as SatellitesResponse
+        const s = resp.satellites
+        if (!s) return
+        if (this.satGroups.join('|') !== s.groups.join('|')) this.satGroups = s.groups
+        if (flagMutationId === this.satelliteFlagMutationId) {
+          this.satLabels = s.labels
+          this.satOrbitLines = s.orbitLines
+          this.satHints = s.hints
+          this.satIconicMode = s.iconicMode
+          this.satHideInvisible = s.hideInvisible
+        }
+        this.satCount = s.count
+        this.satOffline = s.offline
+        this.satObserverIsEarth = s.observerIsEarth
+        this.satDateInRange = s.dateInRange
+        this.satNewestUpdate = s.newestUpdate
+        this.satOutdatedCount = s.outdatedCount
+        this.satMatchedCount = s.matchedCount
+        this.satCatalogCreator = s.catalogCreator ?? ''
+        this.satCatalogSnapshot = s.catalogSnapshot ?? ''
+        this.satCatalogSource = s.catalogSource ?? ''
+        this.satItems = s.items
+        this.satelliteListElapsedMs = Date.now() - startedAt
+        this.notifyChanged()
+        if (includeSourcesForRequest) this.loadSatelliteSources()
+      }, () => {
+        if (requestId === this.satelliteListRequestId) {
+          this.satelliteListLoading = false
+          this.notifyChanged('satellite query failed')
+        }
+      }, 0, 100, 15)
+    }
+    if (immediate) run()
+    else this.satelliteLoadTimer = setTimeout(run, 90)
   }
 }

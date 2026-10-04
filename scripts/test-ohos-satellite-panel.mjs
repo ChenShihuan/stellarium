@@ -3,22 +3,25 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const page = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
+const satelliteStoreSrc = readFileSync(new URL('../harmonyos/ets-source/state/SatelliteStore.ets', import.meta.url), 'utf8');
 const satellite = readFileSync(new URL('../plugins/Satellites/src/Satellite.cpp', import.meta.url), 'utf8');
 const manager = readFileSync(new URL('../plugins/Satellites/src/Satellites.cpp', import.meta.url), 'utf8');
 const method = name => page.match(new RegExp(`private ${name}\\([^\\n]*\\): void \\{([\\s\\S]*?)\\n  \\}`))[1];
+// §14 B3-4：loadSatellites 已搬入 SatelliteStore（public 方法），按 store 文件切片。
+const storeMethod = name => satelliteStoreSrc.match(new RegExp(`\\n  ${name}\\([^\\n]*\\): void \\{([\\s\\S]*?)\\n  \\}`))[1];
 
 test('group selection uses a local non-linear animation and preserves same-value state', () => {
   const select = new Function('group', 'Curve', method('selectSatelliteGroup'));
-  const model = { satelliteStore: { activeSatGroup: 'visual', satGroups: ['visual', 'beidou'] }, calls: 0, errors: [],
+  const model = { satelliteStore: { activeSatGroup: 'visual', satGroups: ['visual', 'beidou'], calls: 0,
+    loadSatellites() { this.calls++; } }, errors: [],
     publishSatellitePanelState(error) { this.errors.push(error); },
-    getUIContext() { return { animateTo: (options, change) => { assert.equal(options.duration, 180); assert.equal(options.curve, 'EaseOut'); change(); } }; },
-    loadSatellites() { this.calls++; }
+    getUIContext() { return { animateTo: (options, change) => { assert.equal(options.duration, 180); assert.equal(options.curve, 'EaseOut'); change(); } }; }
   };
   select.call(model, 'visual', { EaseOut: 'EaseOut' });
-  assert.equal(model.calls, 0);
+  assert.equal(model.satelliteStore.calls, 0);
   select.call(model, 'beidou', { EaseOut: 'EaseOut' });
   assert.equal(model.satelliteStore.activeSatGroup, 'beidou');
-  assert.equal(model.calls, 1);
+  assert.equal(model.satelliteStore.calls, 1);
   select.call(model, 'invalid', { EaseOut: 'EaseOut' });
   assert.equal(model.satelliteStore.activeSatGroup, 'beidou');
   assert.equal(model.errors.at(-1), 'unknown satellite group');
@@ -40,16 +43,16 @@ test('filter rows precede variable results and retain their own bounded scroll c
 });
 
 test('queued filtering invalidates previous results before the debounce fires', () => {
-  const load = method('loadSatellites');
+  const load = storeMethod('loadSatellites');
   assert.ok(load.indexOf('++this.satelliteListRequestId') < load.indexOf('const run'));
   assert.match(load, /requestId !== this.satelliteListRequestId/);
   assert.match(load, /flagMutationId === this.satelliteFlagMutationId/);
-  assert.match(load, /this.satelliteStore.satGroups.join\('\|'\) !== s.groups.join\('\|'\)/);
+  assert.match(load, /this.satGroups.join\('\|'\) !== s.groups.join\('\|'\)/);
 });
 
 test('panel diagnostics remain available before scroll attachment and after closing', () => {
   const publish = new Function('error', 'AppStorage', method('publishSatellitePanelState').replaceAll(': SatelliteListItem', ''));
-  const model = { satelliteStore: { satItems: [], satOrbitLines: false },
+  const model = { satelliteStore: { satItems: [], satOrbitLines: false, satelliteListRequestId: 0, satelliteListElapsedMs: 0 },
     satellitePanelScroller: { currentOffset: () => undefined },
     satelliteGroupScroller: { currentOffset: () => undefined } };
   let state;

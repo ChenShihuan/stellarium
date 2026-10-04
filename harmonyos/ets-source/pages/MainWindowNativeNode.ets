@@ -205,7 +205,7 @@ import {
   BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
-  SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, SatellitesResponse, CatalogHealthEntry,
+  SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
   CatalogHealthResponse, MeteorShowersData, Scenery3dResponse, LogResponse,
   ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
   RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptStatusResponse, ScriptCaption, ScriptCaptionsResponse,
@@ -609,13 +609,10 @@ export struct WindowNativeNode {
   @State private catalogManifestPresent: boolean = false
   // starCatalogHealth 与 objectCatalogCategories 已并入 state/CatalogStore.ets（review §2.7）；
   // catalogHealthLoaded / catalogManifestPresent 仍留宿主（与卫星面板共用）。
-  private satelliteListRequestId: number = 0
-  private satelliteLoadTimer: number = -1
-  private satelliteLoadIncludeSources: boolean = false
-  private satelliteFlagMutationId: number = 0
+  // §14 B3-4：satelliteListRequestId / satelliteLoadTimer / satelliteLoadIncludeSources /
+  // satelliteFlagMutationId / satelliteListElapsedMs 已随 loadSatellites 搬入 SatelliteStore。
   private satellitePanelScroller: Scroller = new Scroller()
   private satelliteGroupScroller: Scroller = new Scroller()
-  private satelliteListElapsedMs: number = 0
   private equationOfTimeMutationId: number = 0
   private archaeoMutationId: number = 0
   // 流星雨（MeteorShowers）请求序号 meteorShowersLoadRequestId 已随 §14 B3-1 搬入 MeteorStore 的 `seq`。
@@ -627,9 +624,8 @@ export struct WindowNativeNode {
   @State private skyTouchFeedbackMulti: boolean = false
   @State private skyTouchX2: number = 0
   @State private skyTouchY2: number = 0
-  private lx200LivePositionTimer: number = 0
-  private lx200LivePositionRequestPending: boolean = false
-  private lx200LivePositionRequestId: number = 0
+  // §14 B3-4：lx200LivePositionTimer / lx200LivePositionRequestPending /
+  // lx200LivePositionRequestId 已随 live-position 定时器簇整体搬入 TelescopeStore。
   @State private actionHint: ResourceStr = ''
   // ===== 脚本录制 / 回放（39）=====
   @State private recordBuffer: Array<RecordCmd> = []
@@ -658,7 +654,7 @@ export struct WindowNativeNode {
   private replayIndex: number = 0
   private replayCommands: Array<RecordCmd> = []
   private recordViewCheckpointTimer: number = -1
-  private videoStateTimer: number = -1
+  // §14 B3-4：videoStateTimer 已随影片状态轮询收口搬入 ScriptStore。
   private screenCapture?: media.AVScreenCaptureRecorder
   private screenCaptureFile?: fileIo.File
   private scriptControlDragging: boolean = false
@@ -1140,6 +1136,12 @@ export struct WindowNativeNode {
     // §14 B1-1：望远镜/目镜域复用同一个 HostCommandPort 实例。其消费方均为 @ObjectLink，
     // 字段赋值即刷新，且该域无 publish* 发布点，故 onChanged 传空实现。
     this.telescopeStore.attachPort(hostPort, () => {})
+    // §14 B3-4：live-position 定时器簇随加载器/动作整体下沉 TelescopeStore，store 自持 start/stop；
+    // 「是否应刷新」谓词读宿主 applicationInForeground / panelVisible / activePanel，故宿主保留
+    // shouldRefreshTelescopePosition 并经 TelescopeHostHooks 注入（store 不触碰 UI 生命周期）。
+    this.telescopeStore.attachHooks({
+      shouldRefreshTelescopePosition: (): boolean => this.shouldRefreshTelescopePosition()
+    })
     // §14 B1-2：图层视图域（地景列表 / 行星轨道 / 行星轨迹）复用同一实例；消费方均为
     // @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，onChanged 传空实现。
     this.layerViewStore.attachPort(hostPort, () => {})
@@ -1176,7 +1178,9 @@ export struct WindowNativeNode {
     // §14 B2R-4：脚本列表 / 资源元数据 / 录制载入加载器下沉 ScriptStore。loadRecordingByName
     // 回包后的 UI 提示经 ScriptHostHooks.flashHint 回注（store 不触碰 UI）。
     this.scriptStore.attachHooks({
-      flashHint: (text: ResourceStr): void => { this.flashHint(text) }
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+      // §14 B3-4：视频状态轮询收口时调用的宿主 stopVideoRecording（store 不触碰桥/UI）。
+      stopVideoRecording: (): void => { this.stopVideoRecording() }
     })
     this.sessionToolStore.attachPort(hostPort, () => {})
     this.skyCultureSettingsStore.attachPort(hostPort, () => {})
@@ -1226,7 +1230,7 @@ export struct WindowNativeNode {
     })
     // §14 B1-6：卫星域有 publish* CLI 发布点（publishSatellitePanelState），
     // 故 onChanged 用它，保持 CLI 侧 satellitePanelState 与 store 同步。
-    this.satelliteStore.attachPort(hostPort, () => { this.publishSatellitePanelState() })
+    this.satelliteStore.attachPort(hostPort, (error: string) => { this.publishSatellitePanelState(error) })
     // §14 B1-6：位置域的 loadSavedLocations 读 AppStorage 而非桥，port 暂未使用（预留）。
     this.locationStore.attachPort(hostPort, () => {})
     // §14 B2A：Astro 簇加载器下沉。astroStore 复用同一 HostCommandPort；onChanged 走
@@ -1389,7 +1393,7 @@ export struct WindowNativeNode {
       if (commandName === 'setSatellitesFlag' && response.ok === true) {
         const parts = String(event['payload'] ?? '').split(':')
         const enabled = parts[1] === '1' || parts[1] === 'true'
-        this.satelliteFlagMutationId++
+        this.satelliteStore.satelliteFlagMutationId++
         if (parts[0] === 'labels') this.satelliteStore.satLabels = enabled
         else if (parts[0] === 'orbitLines') this.satelliteStore.satOrbitLines = enabled
         else if (parts[0] === 'hints') this.satelliteStore.satHints = enabled
@@ -1560,7 +1564,7 @@ export struct WindowNativeNode {
       if (commandName === 'setTelescopeLivePosition') {
         const value = String(event['payload'] ?? '').trim().toLowerCase()
         const enabled = value === '1' || value === 'true' || value === 'on'
-        this.setTelescopeLivePosition(enabled)
+        this.telescopeStore.setTelescopeLivePosition(enabled)
         hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] telescope live position enabled=%{public}s', enabled.toString())
         return
       }
@@ -1849,7 +1853,7 @@ export struct WindowNativeNode {
     this.stopSkyCultureTimeFollowTimer()
     this.stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
-    this.stopTelescopeLivePosition(false)
+    this.telescopeStore.stopTelescopeLivePosition(false)
     this.stopScriptStatusPolling()
     if (this.scriptStore.replaying) {
       this.finishRecordingReplay('回放已结束')
@@ -1892,7 +1896,7 @@ export struct WindowNativeNode {
       this.syncSkyCultureTimeFollowTimer()
       this.syncPolarScopeTimer()
       this.syncAstroCalcContextTimer()
-      this.syncTelescopeLivePosition()
+      this.telescopeStore.syncTelescopeLivePosition()
       return
     }
 
@@ -1906,7 +1910,7 @@ export struct WindowNativeNode {
     this.stopSkyCultureTimeFollowTimer()
     this.stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
-    this.stopTelescopeLivePosition(false)
+    this.telescopeStore.stopTelescopeLivePosition(false)
     this.stopDetailAutoRefresh()
     this.stopSkyInertia()
     void AudioEngine.getInstance().stop()
@@ -2012,74 +2016,10 @@ export struct WindowNativeNode {
       this.activePanel === 'telescope' && !this.telescopeStore.lx200EditingNew
   }
 
-  private stopTelescopeLivePosition(markStale: boolean = true): void {
-    if (this.lx200LivePositionTimer !== 0) {
-      clearTimeout(this.lx200LivePositionTimer)
-      this.lx200LivePositionTimer = 0
-    }
-    this.lx200LivePositionRequestPending = false
-    this.lx200LivePositionRequestId++
-    if (markStale && this.telescopeStore.lx200Position.length > 0) {
-      this.telescopeStore.lx200PositionUpdateState = 'stale'
-    }
-  }
-
-  private scheduleTelescopeLivePosition(delayMs: number = 1000): void {
-    if (!this.shouldRefreshTelescopePosition() || this.lx200LivePositionTimer !== 0) return
-    this.lx200LivePositionTimer = setTimeout(() => {
-      this.lx200LivePositionTimer = 0
-      this.refreshTelescopeLivePosition()
-    }, delayMs) as number
-  }
-
-
-  private refreshTelescopeLivePosition(): void {
-    if (!this.shouldRefreshTelescopePosition() || this.lx200LivePositionRequestPending) return
-    this.lx200LivePositionRequestPending = true
-    this.telescopeStore.lx200PositionUpdateState = 'updating'
-    const requestId = ++this.lx200LivePositionRequestId
-    this.callInteractive('getTelescopePosition', this.lx200Payload(), (result: TelescopeControlResponse) => {
-      if (requestId !== this.lx200LivePositionRequestId) return
-      this.lx200LivePositionRequestPending = false
-      if (result.ok === true) {
-        this.telescopeStore.lx200ConnectionState = 'available'
-        this.telescopeStore.lx200Position = (result.ra ?? '--:--:--') + ' / ' + (result.dec ?? '--°--:--')
-        this.telescopeStore.lx200PositionUpdatedAt = telescopeUpdateTime()
-        this.telescopeStore.lx200PositionUpdateState = 'fresh'
-        this.scheduleTelescopeLivePosition(1000)
-        return
-      }
-      if (result.state === 'available' || result.state === 'unavailable') this.telescopeStore.lx200ConnectionState = result.state
-      this.telescopeStore.lx200PositionUpdateState = 'error'
-      this.telescopeStore.lx200Status = telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
-      this.scheduleTelescopeLivePosition(1800)
-    }, (result: StellariumBridgeResponse) => {
-      if (requestId !== this.lx200LivePositionRequestId) return
-      this.lx200LivePositionRequestPending = false
-      this.telescopeStore.lx200PositionUpdateState = 'error'
-      this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_position_failed')
-      this.scheduleTelescopeLivePosition(1800)
-    })
-  }
-
-  private syncTelescopeLivePosition(): void {
-    if (!this.shouldRefreshTelescopePosition()) {
-      this.stopTelescopeLivePosition()
-      return
-    }
-    if (this.lx200LivePositionRequestPending || this.lx200LivePositionTimer !== 0) return
-    this.refreshTelescopeLivePosition()
-  }
-
-  private setTelescopeLivePosition(enabled: boolean): void {
-    this.telescopeStore.lx200LivePositionEnabled = enabled
-    if (enabled) {
-      this.telescopeStore.lx200PositionUpdateState = 'updating'
-      this.syncTelescopeLivePosition()
-    } else {
-      this.stopTelescopeLivePosition()
-    }
-  }
+  // §14 B3-4：stopTelescopeLivePosition / scheduleTelescopeLivePosition / refreshTelescopeLivePosition /
+  // syncTelescopeLivePosition / setTelescopeLivePosition（及其 timer / pending / requestId 三字段）
+  // 已整体搬入 state/TelescopeStore.ets（store 自持 start/stop）；宿主保留上面的生命周期谓词
+  // shouldRefreshTelescopePosition 经 TelescopeHostHooks 注入。
 
   private enterPolarScope(): void {
     if (this.polarScopeStore.polarScopeVisible) {
@@ -2331,7 +2271,7 @@ export struct WindowNativeNode {
     this.stopSkyCultureTimeFollowTimer()
     this.stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
-    this.stopTelescopeLivePosition(false)
+    this.telescopeStore.stopTelescopeLivePosition(false)
     if (!nextVisible) {
       this.schedulePanelDataLoad(panel, false)
       const closeSerial = ++this.panelContentKey
@@ -2447,7 +2387,7 @@ export struct WindowNativeNode {
         this.ensurePluginLoaded('NavStars', () => { this.navStarsStore.loadNavStars(false) })
       } else if (panel === 'satellites') {
         this.loadCatalogHealth()
-        this.ensurePluginLoaded('Satellites', () => { this.loadSatellites(true, true) })
+        this.ensurePluginLoaded('Satellites', () => { this.satelliteStore.loadSatellites(true, true) })
       } else if (panel === 'meteorshowers') {
         this.ensurePluginLoaded('MeteorShowers', () => { this.meteorStore.loadMeteorShowers() })
       } else if (panel === 'scenery3d') {
@@ -2466,9 +2406,9 @@ export struct WindowNativeNode {
       } else if (panel === 'scripts') {
         this.scriptStore.loadScriptList()
         this.scriptStore.loadRecordings()
-        this.loadVideoRecordingState()
+        this.scriptStore.loadVideoRecordingState()
       } else if (panel === 'telescope') {
-        this.loadTelescopeControlStatus()
+        this.telescopeStore.loadTelescopeControlStatus()
       }
     }, 280) as number
   }
@@ -2568,7 +2508,7 @@ export struct WindowNativeNode {
     this.stopSkyCultureTimeFollowTimer()
     this.stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
-    this.stopTelescopeLivePosition(false)
+    this.telescopeStore.stopTelescopeLivePosition(false)
     if (this.panelDataLoadTimer >= 0) {
       clearTimeout(this.panelDataLoadTimer)
       this.panelDataLoadTimer = -1
@@ -3796,7 +3736,7 @@ export struct WindowNativeNode {
         this.scriptStore.videoMaxFrames = r.maxFrames as number ?? 0
         this.scriptStore.videoArchivePath = ''
         this.scriptStore.videoArchiveFileName = ''
-        this.startVideoStatePolling()
+        this.scriptStore.startVideoStatePolling()
         this.flashHint('开始录制视频帧序列：' + fps + ' fps × ' + duration + ' s')
       } else {
         this.flashHint('开始录制失败：' + (r.error ?? '未知错误'))
@@ -3808,7 +3748,7 @@ export struct WindowNativeNode {
     this.callInteractive('stopVideoRecording', '', (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.scriptStore.videoRecording = false
-        this.stopVideoStatePolling()
+        this.scriptStore.stopVideoStatePolling()
         this.scriptStore.videoFrameCount = (r.diskFrames as number) ?? (r.frameCount as number) ?? 0
         this.scriptStore.videoFailedFrames = (r.failedFrames as number) ?? 0
         this.scriptStore.videoDir = r.dir as string ?? ''
@@ -3823,32 +3763,8 @@ export struct WindowNativeNode {
     })
   }
 
-  private loadVideoRecordingState(): void {
-    this.callInteractive('getVideoRecordingState', '', (r: StellariumBridgeResponse) => {
-      const wasRecording = this.scriptStore.videoRecording
-      this.scriptStore.videoRecording = r.recording === true
-      this.scriptStore.videoDir = r.dir as string ?? ''
-      this.scriptStore.videoFrameCount = r.frameCount as number ?? 0
-      this.scriptStore.videoFailedFrames = r.failedFrames as number ?? 0
-      this.scriptStore.videoMaxFrames = r.maxFrames as number ?? 0
-      if (wasRecording && !this.scriptStore.videoRecording) {
-        this.stopVideoStatePolling()
-        setTimeout(() => { this.stopVideoRecording() }, 0)
-      }
-    })
-  }
-
-  private startVideoStatePolling(): void {
-    this.stopVideoStatePolling()
-    this.videoStateTimer = setInterval(() => { this.loadVideoRecordingState() }, 450) as number
-  }
-
-  private stopVideoStatePolling(): void {
-    if (this.videoStateTimer >= 0) {
-      clearInterval(this.videoStateTimer)
-      this.videoStateTimer = -1
-    }
-  }
+  // §14 B3-4：loadVideoRecordingState / startVideoStatePolling / stopVideoStatePolling
+  // 及其 videoStateTimer 已整体搬入 state/ScriptStore.ets。
 
   // ===== 望远镜/目镜配置（Oculars 插件桥）=====
   private setOcularMode(v: boolean): void {
@@ -4030,9 +3946,9 @@ export struct WindowNativeNode {
       ok: error.length === 0, error: error, panel: this.activePanel, group: this.satelliteStore.activeSatGroup,
       loading: this.satelliteStore.satelliteListLoading, matchedCount: this.satelliteStore.satMatchedCount,
       ids: this.satelliteStore.satItems.map((item: SatelliteListItem) => item.id),
-      groups: this.satelliteStore.satGroups, requestId: this.satelliteListRequestId,
+      groups: this.satelliteStore.satGroups, requestId: this.satelliteStore.satelliteListRequestId,
       orbitLines: this.satelliteStore.satOrbitLines, hints: this.satelliteStore.satHints,
-      elapsedMs: this.satelliteListElapsedMs,
+      elapsedMs: this.satelliteStore.satelliteListElapsedMs,
       scrollY: this.satellitePanelScroller.currentOffset()?.yOffset ?? 0,
       groupScrollY: this.satelliteGroupScroller.currentOffset()?.yOffset ?? 0
     }))
@@ -4049,63 +3965,11 @@ export struct WindowNativeNode {
     this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => {
       this.satelliteStore.activeSatGroup = group
     })
-    this.loadSatellites()
+    this.satelliteStore.loadSatellites()
   }
-  private loadSatellites(includeSources: boolean = false, immediate: boolean = false): void {
-    const requestId = ++this.satelliteListRequestId
-    const flagMutationId = this.satelliteFlagMutationId
-    const startedAt = Date.now()
-    this.satelliteStore.satelliteListLoading = true
-    this.publishSatellitePanelState()
-    this.satelliteLoadIncludeSources = this.satelliteLoadIncludeSources || includeSources
-    if (this.satelliteLoadTimer >= 0) {
-      clearTimeout(this.satelliteLoadTimer)
-      this.satelliteLoadTimer = -1
-    }
-    const run = (): void => {
-      this.satelliteLoadTimer = -1
-      const includeSourcesForRequest = this.satelliteLoadIncludeSources
-      this.satelliteLoadIncludeSources = false
-      const payload = this.satelliteStore.activeSatGroup + '|' + this.satelliteStore.satQuery + '|40'
-      this.satelliteStore.satelliteListLoading = true
-      this.callNativeWhenReady('getSatellites', payload, (r: StellariumBridgeResponse) => {
-        if (requestId !== this.satelliteListRequestId) return
-        this.satelliteStore.satelliteListLoading = false
-        const resp = r as SatellitesResponse
-        const s = resp.satellites
-        if (!s) return
-        if (this.satelliteStore.satGroups.join('|') !== s.groups.join('|')) this.satelliteStore.satGroups = s.groups
-        if (flagMutationId === this.satelliteFlagMutationId) {
-          this.satelliteStore.satLabels = s.labels
-          this.satelliteStore.satOrbitLines = s.orbitLines
-          this.satelliteStore.satHints = s.hints
-          this.satelliteStore.satIconicMode = s.iconicMode
-          this.satelliteStore.satHideInvisible = s.hideInvisible
-        }
-        this.satelliteStore.satCount = s.count
-        this.satelliteStore.satOffline = s.offline
-        this.satelliteStore.satObserverIsEarth = s.observerIsEarth
-        this.satelliteStore.satDateInRange = s.dateInRange
-        this.satelliteStore.satNewestUpdate = s.newestUpdate
-        this.satelliteStore.satOutdatedCount = s.outdatedCount
-        this.satelliteStore.satMatchedCount = s.matchedCount
-        this.satelliteStore.satCatalogCreator = s.catalogCreator ?? ''
-        this.satelliteStore.satCatalogSnapshot = s.catalogSnapshot ?? ''
-        this.satelliteStore.satCatalogSource = s.catalogSource ?? ''
-        this.satelliteStore.satItems = s.items
-        this.satelliteListElapsedMs = Date.now() - startedAt
-        this.publishSatellitePanelState()
-        if (includeSourcesForRequest) this.satelliteStore.loadSatelliteSources()
-      }, 0, 100, 15, () => {
-        if (requestId === this.satelliteListRequestId) {
-          this.satelliteStore.satelliteListLoading = false
-          this.publishSatellitePanelState('satellite query failed')
-        }
-      })
-    }
-    if (immediate) run()
-    else this.satelliteLoadTimer = setTimeout(run, 90)
-  }
+  // §14 B3-4：loadSatellites 及其 satelliteListRequestId / satelliteLoadTimer /
+  // satelliteLoadIncludeSources / satelliteFlagMutationId / satelliteListElapsedMs 已整体搬入
+  // state/SatelliteStore.ets（90ms 去抖、请求序号并发抑制、includeSources 合并逐字保留）。
   private setSatelliteUpdateSetting(key: string, value: boolean | number): void {
     const payload: Record<string, boolean | number> = {}
     payload[key] = value
@@ -4149,7 +4013,7 @@ export struct WindowNativeNode {
       if (r.ok === true) {
         this.satelliteStore.satTleFileInput = ''
         this.satelliteStore.satSourceStatus = I18n.t('sat_tle_imported')
-        this.loadSatellites(true, true)
+        this.satelliteStore.loadSatellites(true, true)
       } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_tle_import_failed')
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_tle_import_failed') })
   }
@@ -4165,7 +4029,7 @@ export struct WindowNativeNode {
       (name === 'hints' && this.satelliteStore.satHints === v) ||
       (name === 'iconicMode' && this.satelliteStore.satIconicMode === v) ||
       (name === 'hideInvisible' && this.satelliteStore.satHideInvisible === v)) return
-    const mutationId = ++this.satelliteFlagMutationId
+    const mutationId = ++this.satelliteStore.satelliteFlagMutationId
     let previous: boolean | undefined
     if (name == 'labels') { previous = this.satelliteStore.satLabels; this.satelliteStore.satLabels = v }
     else if (name == 'orbitLines') { previous = this.satelliteStore.satOrbitLines; this.satelliteStore.satOrbitLines = v }
@@ -4173,7 +4037,7 @@ export struct WindowNativeNode {
     else if (name == 'iconicMode') { previous = this.satelliteStore.satIconicMode; this.satelliteStore.satIconicMode = v }
     else if (name == 'hideInvisible') { previous = this.satelliteStore.satHideInvisible; this.satelliteStore.satHideInvisible = v }
     this.callNativeWhenReady('setSatellitesFlag', name + ':' + (v ? '1' : '0'), () => {}, 0, 100, 15, () => {
-      if (mutationId !== this.satelliteFlagMutationId || previous === undefined) return
+      if (mutationId !== this.satelliteStore.satelliteFlagMutationId || previous === undefined) return
       if (name == 'labels') this.satelliteStore.satLabels = previous
       else if (name == 'orbitLines') this.satelliteStore.satOrbitLines = previous
       else if (name == 'hints') this.satelliteStore.satHints = previous
@@ -7986,53 +7850,8 @@ private loadPlanetPositions(): void {
     }, () => { this.tools.skyTextureStatusError = true })
   }
 
-  private lx200Payload(): string {
-    return JSON.stringify({
-      slot: this.telescopeStore.lx200SelectedSlot,
-      targetSource: this.telescopeStore.lx200TargetSource
-    })
-  }
-
-  private applyTelescopeProfile(profile: TelescopeProfile): void {
-    this.stopTelescopeLivePosition(false)
-    this.telescopeStore.lx200SelectedSlot = profile.slot
-    this.telescopeStore.lx200Name = profile.name
-    this.telescopeStore.lx200Protocol = profile.protocol
-    this.telescopeStore.lx200DeviceModel = profile.deviceModel
-    this.telescopeStore.lx200Host = profile.host
-    this.telescopeStore.lx200Port = profile.port.toString()
-    this.telescopeStore.lx200Equinox = profile.equinox
-    this.telescopeStore.lx200CommandDelayMs = profile.commandDelayMs
-    this.telescopeStore.lx200Circles = profile.circles.join(', ')
-	this.telescopeStore.lx200ConnectionState = profile.protocol === 'simulated' ? 'available' : (profile.state ?? 'not_tested')
-	this.telescopeStore.lx200Position = ''
-	this.telescopeStore.lx200PositionUpdatedAt = ''
-	this.telescopeStore.lx200PositionUpdateState = 'idle'
-	if (profile.protocol === 'simulated') {
-	  this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_simulated')
-	  this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_offline')
-	  this.telescopeStore.lx200Status = I18n.t('m_telescope_simulator_ready')
-	} else if (this.telescopeStore.lx200ConnectionState === 'unavailable') {
-	  this.telescopeStore.lx200Status = profile.lastError ?? I18n.t('m_telescope_unavailable')
-	} else if (this.telescopeStore.lx200ConnectionState === 'available') {
-	  this.telescopeStore.lx200Status = I18n.t('m_telescope_available')
-	} else {
-	  this.telescopeStore.lx200Status = I18n.t('m_telescope_not_tested')
-    }
-    this.telescopeStore.lx200EditingNew = false
-    this.scheduleTelescopeLivePosition(500)
-  }
-
-  private applyTelescopeProfiles(result: TelescopeProfilesResponse): void {
-    const profiles = result.profiles ?? []
-    this.telescopeStore.lx200Profiles = profiles
-    const selectedSlot = result.selectedSlot ?? (profiles.length > 0 ? profiles[0].slot : 1)
-    this.telescopeStore.lx200SelectedSlot = selectedSlot
-    const selected = profiles.find((profile: TelescopeProfile) => profile.slot === selectedSlot)
-    if (selected !== undefined) {
-      this.applyTelescopeProfile(selected)
-    }
-  }
+  // §14 B3-4：lx200Payload / applyTelescopeProfile / applyTelescopeProfiles 已搬入 TelescopeStore
+  //（它们只读写 telescopeStore 字段与 live-position 定时器，属单一域，随定时器簇同片下沉）。
 
   private validateTelescopeEditorStatus(): void {
 	if (this.telescopeStore.lx200Protocol === 'simulated') {
@@ -8042,50 +7861,17 @@ private loadPlanetPositions(): void {
 	  return
 	}
     this.callInteractive('getTelescopeControl', this.telescopeStore.lx200Host.trim() + '|' + this.telescopeStore.lx200Port.trim(), (result: TelescopeControlResponse) => {
-      this.applyTelescopeEndpointStatus(result)
+      this.telescopeStore.applyTelescopeEndpointStatus(result)
     })
   }
 
-  private applyTelescopeEndpointStatus(result: TelescopeControlResponse): void {
-    if (result.ok !== true) {
-      this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_invalid')
-      this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_tcp')
-      return
-    }
-	if (result.simulated === true || result.scope === 'offline_simulator') {
-	  this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_simulated')
-	  this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_offline')
-	  this.telescopeStore.lx200ConnectionState = 'available'
-	  return
-	}
-    this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_tcp')
-    const scope = result.scope as string
-    if (scope === 'local_device') this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_local')
-    else if (scope === 'local_or_lan') this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_lan')
-    else if (scope === 'public_or_unclassified' || scope === 'hostname_or_unclassified') this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_blocked')
-    else this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_unknown')
-	this.telescopeStore.lx200ConnectionState = result.state ?? this.telescopeStore.lx200ConnectionState
-  }
-
-  private loadTelescopeControlStatus(): void {
-    this.callInteractive('getTelescopeProfiles', '', (result: TelescopeProfilesResponse) => {
-      if (result.ok !== true) {
-        this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_load_failed')
-        return
-      }
-      this.applyTelescopeProfiles(result)
-      this.callInteractive('getTelescopeControl', this.lx200Payload(), (endpoint: TelescopeControlResponse) => {
-        this.applyTelescopeEndpointStatus(endpoint)
-        this.scheduleTelescopeLivePosition(500)
-      })
-    })
-  }
+  // §14 B3-4：applyTelescopeEndpointStatus / loadTelescopeControlStatus 已搬入 TelescopeStore。
 
   private selectTelescopeProfile(slot: number): void {
     if (slot === this.telescopeStore.lx200SelectedSlot && !this.telescopeStore.lx200EditingNew) return
     this.callInteractive('selectTelescopeProfile', slot.toString(), (result: TelescopeProfilesResponse) => {
       if (result.ok === true) {
-        this.applyTelescopeProfiles(result)
+        this.telescopeStore.applyTelescopeProfiles(result)
         this.validateTelescopeEditorStatus()
       } else {
         this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_load_failed')
@@ -8094,7 +7880,7 @@ private loadPlanetPositions(): void {
   }
 
   private beginNewTelescopeProfile(): void {
-    this.stopTelescopeLivePosition(false)
+    this.telescopeStore.stopTelescopeLivePosition(false)
     const used = new Set<number>(this.telescopeStore.lx200Profiles.map((profile: TelescopeProfile) => profile.slot))
     let slot = 1
     while (slot <= 9 && used.has(slot)) slot += 1
@@ -8121,7 +7907,7 @@ private loadPlanetPositions(): void {
 
   private selectTelescopeProtocol(protocol: string): void {
 	if (protocol === this.telescopeStore.lx200Protocol) return
-	this.stopTelescopeLivePosition(false)
+	this.telescopeStore.stopTelescopeLivePosition(false)
 	this.telescopeStore.lx200Protocol = protocol
 	this.telescopeStore.lx200Position = ''
 	this.telescopeStore.lx200PositionUpdatedAt = ''
@@ -8182,7 +7968,7 @@ private loadPlanetPositions(): void {
         this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_save_failed')
         return
       }
-      this.applyTelescopeProfiles(result)
+      this.telescopeStore.applyTelescopeProfiles(result)
       this.telescopeStore.lx200Status = I18n.t('m_telescope_saved')
       this.validateTelescopeEditorStatus()
     }, () => { this.telescopeStore.lx200Busy = false })
@@ -8190,12 +7976,12 @@ private loadPlanetPositions(): void {
 
   private deleteTelescopeProfile(): void {
     if (this.telescopeStore.lx200EditingNew) {
-      this.loadTelescopeControlStatus()
+      this.telescopeStore.loadTelescopeControlStatus()
       return
     }
     this.callInteractive('deleteTelescopeProfile', this.telescopeStore.lx200SelectedSlot.toString(), (result: TelescopeProfilesResponse) => {
       if (result.ok === true) {
-        this.applyTelescopeProfiles(result)
+        this.telescopeStore.applyTelescopeProfiles(result)
         this.telescopeStore.lx200Status = I18n.t('m_telescope_deleted')
         this.validateTelescopeEditorStatus()
       } else {
@@ -8209,23 +7995,23 @@ private loadPlanetPositions(): void {
       this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_test')
       return
     }
-    this.stopTelescopeLivePosition(false)
+    this.telescopeStore.stopTelescopeLivePosition(false)
     this.telescopeStore.lx200Busy = true
     this.telescopeStore.lx200Status = I18n.t('m_telescope_connecting')
-    this.callInteractive('testTelescopeConnection', this.lx200Payload(), (result: TelescopeControlResponse) => {
+    this.callInteractive('testTelescopeConnection', this.telescopeStore.lx200Payload(), (result: TelescopeControlResponse) => {
 	  this.telescopeStore.lx200Busy = false
-	  this.applyTelescopeEndpointStatus(result)
+	  this.telescopeStore.applyTelescopeEndpointStatus(result)
 	  this.telescopeStore.lx200ConnectionState = result.ok === true ? 'available' : 'unavailable'
 	  this.telescopeStore.lx200Status = result.ok === true
 		? (result.simulated === true ? I18n.t('m_telescope_simulator_ready') : I18n.t('m_telescope_available'))
 		: telescopeErrorText(result, I18n.t('m_telescope_test_failed'))
-	  this.scheduleTelescopeLivePosition()
+	  this.telescopeStore.scheduleTelescopeLivePosition()
 	}, (result: StellariumBridgeResponse) => {
 	  const response = result as TelescopeControlResponse
 	  this.telescopeStore.lx200Busy = false
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
 	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_test_failed'))
-	  this.scheduleTelescopeLivePosition()
+	  this.telescopeStore.scheduleTelescopeLivePosition()
 	})
   }
 
@@ -8239,12 +8025,12 @@ private loadPlanetPositions(): void {
       const mode = result.mode === 'sync' ? I18n.t('m_telescope_mode_sync') : I18n.t('m_telescope_mode_goto')
 	  const coord = result.ra && result.dec ? ' · ' + result.ra + ' / ' + result.dec : ''
 	  this.telescopeStore.lx200Status = I18n.format('m_telescope_command_sent', [mode as string, target as string, coord])
-	  if (result.mode === 'goto') this.setTelescopeLivePosition(true)
+	  if (result.mode === 'goto') this.telescopeStore.setTelescopeLivePosition(true)
     } else {
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
 	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_disconnected'))
     }
-	this.scheduleTelescopeLivePosition()
+	this.telescopeStore.scheduleTelescopeLivePosition()
   }
 
   private lx200GotoSelected(): void {
@@ -8252,10 +8038,10 @@ private loadPlanetPositions(): void {
 	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
 	  return
 	}
-	this.stopTelescopeLivePosition(false)
+	this.telescopeStore.stopTelescopeLivePosition(false)
 	this.telescopeStore.lx200Busy = true
 	this.telescopeStore.lx200Status = I18n.t('m_telescope_sending_goto')
-    this.callInteractive('telescopeLx200GotoSelected', this.lx200Payload(),
+    this.callInteractive('telescopeLx200GotoSelected', this.telescopeStore.lx200Payload(),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result))
   }
@@ -8265,10 +8051,10 @@ private loadPlanetPositions(): void {
 	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
 	  return
 	}
-	this.stopTelescopeLivePosition(false)
+	this.telescopeStore.stopTelescopeLivePosition(false)
 	this.telescopeStore.lx200Busy = true
 	this.telescopeStore.lx200Status = I18n.t('m_telescope_sending_sync')
-    this.callInteractive('telescopeLx200SyncSelected', this.lx200Payload(),
+    this.callInteractive('telescopeLx200SyncSelected', this.telescopeStore.lx200Payload(),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result))
   }
@@ -8278,21 +8064,21 @@ private loadPlanetPositions(): void {
 	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
 	  return
 	}
-    this.stopTelescopeLivePosition(false)
+    this.telescopeStore.stopTelescopeLivePosition(false)
     this.telescopeStore.lx200Busy = true
-    this.callInteractive('telescopeLx200Abort', this.lx200Payload(), (result) => {
+    this.callInteractive('telescopeLx200Abort', this.telescopeStore.lx200Payload(), (result) => {
 	  const response = result as TelescopeControlResponse
 	  this.telescopeStore.lx200Busy = false
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
 	  this.telescopeStore.lx200Status = result.ok === true ? I18n.t('m_telescope_stop_sent') :
 		telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
-	  this.scheduleTelescopeLivePosition()
+	  this.telescopeStore.scheduleTelescopeLivePosition()
 	}, (result: StellariumBridgeResponse) => {
 	  const response = result as TelescopeControlResponse
 	  this.telescopeStore.lx200Busy = false
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
 	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
-	  this.scheduleTelescopeLivePosition()
+	  this.telescopeStore.scheduleTelescopeLivePosition()
 	})
   }
 
@@ -8301,11 +8087,11 @@ private loadPlanetPositions(): void {
 	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
 	  return
 	}
-	this.stopTelescopeLivePosition(false)
+	this.telescopeStore.stopTelescopeLivePosition(false)
 	this.telescopeStore.lx200Busy = true
 	this.telescopeStore.lx200Status = center ? I18n.t('m_telescope_centering') : I18n.t('m_telescope_reading_position')
 	const command = center ? 'centerScreenOnTelescope' : 'getTelescopePosition'
-	this.callInteractive(command, this.lx200Payload(), (result: TelescopeControlResponse) => {
+	this.callInteractive(command, this.telescopeStore.lx200Payload(), (result: TelescopeControlResponse) => {
 	  this.telescopeStore.lx200Busy = false
 	  if (result.ok === true) {
 		this.telescopeStore.lx200ConnectionState = 'available'
@@ -8317,14 +8103,14 @@ private loadPlanetPositions(): void {
 		if (result.state === 'available' || result.state === 'unavailable') this.telescopeStore.lx200ConnectionState = result.state
 		this.telescopeStore.lx200Status = telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
 	  }
-	  this.scheduleTelescopeLivePosition()
+	  this.telescopeStore.scheduleTelescopeLivePosition()
 	}, (result: StellariumBridgeResponse) => {
 	  const response = result as TelescopeControlResponse
 	  this.telescopeStore.lx200Busy = false
 	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
 	  this.telescopeStore.lx200PositionUpdateState = 'error'
 	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_position_failed'))
-	  this.scheduleTelescopeLivePosition()
+	  this.telescopeStore.scheduleTelescopeLivePosition()
 	})
   }
 
@@ -12489,7 +12275,7 @@ private loadPlanetPositions(): void {
         this.stopTimePanelTimers()
         this.stopSkyCultureTimeFollowTimer()
         this.stopAstroCalcContextTimer()
-        this.stopTelescopeLivePosition(false)
+        this.telescopeStore.stopTelescopeLivePosition(false)
         this.guideTimer = setInterval(() => {
           if (this.applicationInForeground) this.guidePlayer?.tick(0.25)
         }, 250) as number
@@ -15159,8 +14945,8 @@ private loadPlanetPositions(): void {
         },
         onSetFlag: (flag: string, isOn: boolean) => { this.setSatelliteFlag(flag, isOn) },
         onSelectGroup: (group: string) => { this.selectSatelliteGroup(group) },
-        onQueryChange: (value: string) => { this.satelliteStore.satQuery = value; this.loadSatellites() },
-        onSubmitQuery: () => { this.loadSatellites(false, true) },
+        onQueryChange: (value: string) => { this.satelliteStore.satQuery = value; this.satelliteStore.loadSatellites() },
+        onSubmitQuery: () => { this.satelliteStore.loadSatellites(false, true) },
         onSearchObject: (item: SatelliteListItem) => { this.searchObject(item.name, '', 'object|Satellite|' + item.id) }
       })
     } else if (this.activePanel === 'meteorshowers') {
@@ -15312,7 +15098,7 @@ private loadPlanetPositions(): void {
         onSync: () => { this.lx200SyncSelected() },
         onAbort: () => { this.lx200Abort() },
         onReadPosition: (center: boolean) => { this.readTelescopePosition(center) },
-        onSetLivePosition: (enabled: boolean) => { this.setTelescopeLivePosition(enabled) }
+        onSetLivePosition: (enabled: boolean) => { this.telescopeStore.setTelescopeLivePosition(enabled) }
       })
     } else if (this.activePanel === 'tools') {
       ToolsPanel({
@@ -15831,7 +15617,7 @@ private loadPlanetPositions(): void {
       if (tabId === 5) {
         this.scriptStore.loadScriptList()
         this.scriptStore.loadRecordings()
-        this.loadVideoRecordingState()
+        this.scriptStore.loadVideoRecordingState()
       } else if (tabId === 6) {
         this.pluginStore.loadPluginList()
       }
