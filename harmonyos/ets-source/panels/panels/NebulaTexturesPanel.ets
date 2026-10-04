@@ -1,27 +1,19 @@
 import { I18n } from '../../pages/I18n'
 import { NebulaTextureItem } from '../../pages/MainWindowModels'
+import { NebulaTextureStore } from '../../state/NebulaTextureStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
 // 星云贴图面板（原宿主 panelContent() 的 `nebulaTextures` 分支，分支体原样下沉）。
 //
-// 判定条件 `activePanel === 'nebulaTextures'` 留在宿主。宿主把 `NebulaTextureStatus`
-// 拆成若干 @Prop 标志/计数/条目（避免把可空对象整体作为 @Prop 传递），刷新/导入/
-// 可见性/冲突规避/定位/删除等动作回注宿主。随 UI 下沉的纯助手
-// nebulaTextureStatusLabel 一并迁入本组件。
+// 判定条件 `activePanel === 'nebulaTextures'` 留在宿主。状态改为 @Observed store + 本组件
+// @ObjectLink（review §2.7 Prop 风格 → Store 风格）：panel 就地读 nebulaTextureStatus
+// 与加载/导入态，状态变更只重绘本面板，不再是宿主级 @Prop 快照。
+// 刷新/导入/可见性/冲突规避/定位/删除等动作仍回注宿主。随 UI 下沉的纯助手
+// nebulaTextureStatusLabel 保留在本组件。
 
 @Component
 export struct NebulaTexturesPanel {
-  @Prop statusPresent: boolean
-  @Prop statusEnabled: boolean
-  @Prop statusAvoidConflict: boolean
-  @Prop statusReadyCount: number
-  @Prop statusCount: number
-  @Prop statusConfigLoaded: boolean
-  @Prop statusItems: NebulaTextureItem[]
-  @Prop pending: boolean
-  @Prop loading: boolean
-  @Prop importing: boolean
-  @Prop actionStatus: string
+  @ObjectLink store: NebulaTextureStore
   @Prop textColor: string
   @Prop subColor: string
   @Prop accentColor: string
@@ -51,44 +43,44 @@ export struct NebulaTexturesPanel {
             Text(I18n.t('nebula_texture_title')).fontSize(14).fontColor(this.textColor).fontWeight(FontWeight.Medium)
             Text(I18n.t('nebula_texture_hint')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3)
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-          Toggle({ type: ToggleType.Switch, isOn: this.statusEnabled })
+          Toggle({ type: ToggleType.Switch, isOn: this.store.nebulaTextureStatus?.enabled === true })
             .width(42).height(24).selectedColor(this.accentColor)
-            .enabled(this.statusPresent && !this.pending && !this.loading && !this.importing)
+            .enabled(this.store.nebulaTextureStatus !== undefined && !this.store.nebulaTexturePending && !this.store.nebulaTextureLoading && !this.store.nebulaTextureImporting)
             .onChange((enabled: boolean) => { this.onSetVisible(enabled) })
         }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 })
           .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
         Row({ space: 8 }) {
           Button(I18n.t('act_refresh')).fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor)
-            .borderRadius(UI_RADIUS_CONTROL).height(30).layoutWeight(1).enabled(!this.loading)
+            .borderRadius(UI_RADIUS_CONTROL).height(30).layoutWeight(1).enabled(!this.store.nebulaTextureLoading)
             .onClick(() => { this.onRefresh() })
           Button(I18n.t('nebula_texture_import')).fontSize(10).fontColor(this.textColor).backgroundColor(this.accentColor)
-            .borderRadius(UI_RADIUS_CONTROL).height(30).layoutWeight(1).enabled(!this.importing)
+            .borderRadius(UI_RADIUS_CONTROL).height(30).layoutWeight(1).enabled(!this.store.nebulaTextureImporting)
             .onClick(() => { this.onImport() })
-          if (this.loading || this.importing) LoadingProgress().width(18).height(18).color(this.accentColor)
+          if (this.store.nebulaTextureLoading || this.store.nebulaTextureImporting) LoadingProgress().width(18).height(18).color(this.accentColor)
         }.width('100%')
-        if (this.actionStatus.length > 0) {
-          Text(this.actionStatus).fontSize(10).fontColor('#FFD59A').width('100%').maxLines(2)
+        if (this.store.nebulaTextureActionStatus.length > 0) {
+          Text(this.store.nebulaTextureActionStatus).fontSize(10).fontColor('#FFD59A').width('100%').maxLines(2)
             .padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor('rgba(194,128,36,0.14)').borderRadius(UI_RADIUS_CONTROL)
         }
-        if (this.statusPresent) {
+        if (this.store.nebulaTextureStatus !== undefined) {
           Text(I18n.t('nebula_texture_library_hint')).fontSize(12).fontColor(this.subColor).width('100%').padding(8)
           Row() {
             Text(I18n.t('nebula_texture_conflict')).fontSize(12).fontColor(this.textColor).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.statusAvoidConflict })
+            Toggle({ type: ToggleType.Switch, isOn: this.store.nebulaTextureStatus?.avoidAreaConflict === true })
               .width(42).height(24).selectedColor(this.accentColor)
-              .enabled(!this.pending && !this.loading && !this.importing)
+              .enabled(!this.store.nebulaTexturePending && !this.store.nebulaTextureLoading && !this.store.nebulaTextureImporting)
               .onChange((value: boolean) => { this.onSetConflictAvoidance(value) })
           }.width('100%').padding(8)
           Column({ space: 3 }) {
-            Text(I18n.format('nebula_texture_summary', [String(this.statusReadyCount), String(this.statusCount)]))
+            Text(I18n.format('nebula_texture_summary', [String(this.store.nebulaTextureStatus?.readyCount ?? 0), String(this.store.nebulaTextureStatus?.count ?? 0)]))
               .fontSize(11).fontColor(this.textColor).width('100%')
-            Text(this.statusConfigLoaded ? I18n.t('nebula_texture_config_ok') : I18n.t('nebula_texture_config_invalid'))
+            Text(this.store.nebulaTextureStatus?.configLoaded === true ? I18n.t('nebula_texture_config_ok') : I18n.t('nebula_texture_config_invalid'))
               .fontSize(9).fontColor(this.subColor).width('100%')
             Text(I18n.t('nebula_texture_offline_solver')).fontSize(9).fontColor('#FFD59A').width('100%').maxLines(2)
           }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor('rgba(111,168,207,0.08)').borderRadius(UI_RADIUS_CONTROL)
         }
-        if (this.statusItems.length > 0) {
-          ForEach(this.statusItems, (item: NebulaTextureItem) => {
+        if ((this.store.nebulaTextureStatus?.items ?? []).length > 0) {
+          ForEach(this.store.nebulaTextureStatus?.items ?? [], (item: NebulaTextureItem) => {
             Column({ space: 4 }) {
               Row() {
                 Text(item.imageUrl).fontSize(11).fontColor(this.textColor).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -108,7 +100,7 @@ export struct NebulaTexturesPanel {
               }.width('100%')
             }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
           }, (item: NebulaTextureItem) => item.imageUrl)
-        } else if (!this.loading) {
+        } else if (!this.store.nebulaTextureLoading) {
           Text(I18n.t('nebula_texture_empty')).fontSize(11).fontColor(this.subColor).width('100%').textAlign(TextAlign.Center).padding(18)
         }
       }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })

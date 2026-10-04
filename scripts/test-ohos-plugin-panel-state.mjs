@@ -18,8 +18,11 @@ function state() {
       mosaicCameraPending: false, mosaicCameraLoading: false, mosaicCameraEnabled: false,
       mosaicCameraVisible: false, mosaicCameraCurrent: 'LSSTCam'
     },
-    nebulaTexturePending: false, nebulaTextureLoading: false, nebulaTextureImporting: false,
-    nebulaTextureStatus: { enabled: false }, calls: [], reloads: [],
+    nebulaTextureStore: {
+      nebulaTexturePending: false, nebulaTextureLoading: false, nebulaTextureImporting: false,
+      nebulaTextureActionStatus: '', nebulaTextureStatus: { enabled: false }
+    },
+    calls: [], reloads: [],
     callInteractive(name, payload, success, failure) { this.calls.push({ name, payload, success, failure }); },
     loadMosaicCamera(initial) { this.reloads.push(initial); }
   };
@@ -54,10 +57,10 @@ test('texture toggles wait for authoritative state and ignore feedback', () => {
   texture.call(model, 'setNebulaTexturesVisible', true, false, localization);
   texture.call(model, 'setNebulaTexturesVisible', true, false, localization);
   assert.equal(model.calls.length, 1);
-  assert.equal(model.nebulaTextureStatus.enabled, false);
+  assert.equal(model.nebulaTextureStore.nebulaTextureStatus.enabled, false);
   model.calls[0].success({ ok: true, enabled: true });
-  assert.equal(model.nebulaTexturePending, false);
-  texture.call(model, 'setNebulaTexturesVisible', true, model.nebulaTextureStatus.enabled, localization);
+  assert.equal(model.nebulaTextureStore.nebulaTexturePending, false);
+  texture.call(model, 'setNebulaTexturesVisible', true, model.nebulaTextureStore.nebulaTextureStatus.enabled, localization);
   assert.equal(model.calls.length, 1);
 });
 
@@ -65,6 +68,6 @@ test('texture transport failure releases the lock and retains the saved state', 
   const model = state();
   texture.call(model, 'setNebulaTexturesVisible', true, false, localization);
   model.calls[0].failure();
-  assert.equal(model.nebulaTexturePending, false);
-  assert.equal(model.nebulaTextureStatus.enabled, false);
+  assert.equal(model.nebulaTextureStore.nebulaTexturePending, false);
+  assert.equal(model.nebulaTextureStore.nebulaTextureStatus.enabled, false);
 });
