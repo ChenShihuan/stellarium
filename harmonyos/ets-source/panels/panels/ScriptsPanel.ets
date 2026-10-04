@@ -1,6 +1,7 @@
 import { I18n } from '../../pages/I18n'
 import { RecordingEntry } from '../../pages/MainWindowModels'
 import { ToolsStore } from '../../state/ToolsStore'
+import { ScriptStore } from '../../state/ScriptStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { GuideLibrary } from '../guide/GuideLibrary'
 
@@ -17,27 +18,10 @@ import { GuideLibrary } from '../guide/GuideLibrary'
 export struct ScriptsPanel {
   @ObjectLink tools: ToolsStore
   @Prop guideSessionActive: boolean
-  @Prop scriptImporting: boolean
-  @Prop scriptList: string[]
-  @Prop scriptLaunching: boolean
-  @Prop scriptLaunchingName: string
-  @Prop recordCount: number
-  @Prop recordMsg: string
-  @Prop recordName: string
-  @Prop recordings: RecordingEntry[]
-  @Prop screenVideoRecording: boolean
-  @Prop screenCaptureFinalizing: boolean
-  @Prop screenVideoStatus: string
-  @Prop screenVideoBytes: number
-  @Prop screenVideoPath: string
-  @Prop videoFps: string
-  @Prop videoDuration: string
-  @Prop videoRecording: boolean
-  @Prop videoFrameCount: number
-  @Prop videoMaxFrames: number
-  @Prop videoFailedFrames: number
-  @Prop videoDir: string
-  @Prop videoArchivePath: string
+  // 脚本 / 录制 / 视频导出状态经 @ObjectLink 订阅（review §2.7 第二片：Prop → Store）。
+  // guideSessionActive 属导览会话域（宿主由 scriptSessionActive() 派生），仍为 @Prop；
+  // 录屏开关走既有的 ToolsStore；全部动作仍是宿主注入的回调。
+  @ObjectLink scriptStore: ScriptStore
   @Prop textColor: string
   @Prop subColor: string
   @Prop accentColor: string
@@ -84,23 +68,23 @@ export struct ScriptsPanel {
             .onClick(() => { this.onStopPlayback() })
           Button(I18n.t('btn_import_script')).fontSize(11).fontColor(this.textColor).backgroundColor(this.panelColor)
             .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-            .enabled(!this.scriptImporting)
+            .enabled(!this.scriptStore.scriptImporting)
             .onClick(() => { this.onImportScript() })
-          if (this.scriptImporting) {
+          if (this.scriptStore.scriptImporting) {
             LoadingProgress().width(16).height(16).color(this.accentColor)
           }
         }.width('100%').padding({ left: 6, right: 6 })
-        if (this.scriptList.length === 0) {
+        if (this.scriptStore.scriptList.length === 0) {
           Text(I18n.t('msg_no_scripts')).fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 6 })
         }
-        if (this.scriptLaunching) {
+        if (this.scriptStore.scriptLaunching) {
           Row({ space: 6 }) {
             LoadingProgress().width(16).height(16).color(this.accentColor)
-            Text(I18n.format('script_starting_named', [this.scriptZh(this.scriptLaunchingName)])).fontSize(10).fontColor(this.subColor)
+            Text(I18n.format('script_starting_named', [this.scriptZh(this.scriptStore.scriptLaunchingName)])).fontSize(10).fontColor(this.subColor)
           }.width('100%').padding({ left: 6, right: 6, bottom: 2 })
         }
         Column({ space: 2 }) {
-            ForEach(this.scriptList, (s: string) => {
+            ForEach(this.scriptStore.scriptList, (s: string) => {
               Column({ space: 0 }) {
                 // 第一行：中文名 + 播放图标
                 Row() {
@@ -129,7 +113,7 @@ export struct ScriptsPanel {
             .width('100%')
             .backgroundColor(this.panelColor)
             .borderRadius(UI_RADIUS_CONTROL)
-            .opacity(this.scriptLaunching && this.scriptLaunchingName !== s ? 0.55 : 1)
+            .opacity(this.scriptStore.scriptLaunching && this.scriptStore.scriptLaunchingName !== s ? 0.55 : 1)
             .hitTestBehavior(HitTestMode.Default)
             .onClick(() => { this.onPlayScript(s) })
           }, (s: string, index: number) => s)
@@ -155,28 +139,28 @@ export struct ScriptsPanel {
           }
         }.width('100%').padding({ left: 6, right: 6 })
 
-        Text(I18n.format('script_recorded_commands', [this.recordCount.toString()]) + (this.recordMsg.length > 0 ? ' · ' + this.recordMsg : ''))
+        Text(I18n.format('script_recorded_commands', [this.scriptStore.recordCount.toString()]) + (this.scriptStore.recordMsg.length > 0 ? ' · ' + this.scriptStore.recordMsg : ''))
           .fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 6, right: 6 })
 
         Row({ space: 8 }) {
-          TextInput({ placeholder: I18n.t('c_record_name_hint'), text: this.recordName })
+          TextInput({ placeholder: I18n.t('c_record_name_hint'), text: this.scriptStore.recordName })
             .fontSize(12).fontColor(this.textColor)
             .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).layoutWeight(1).height(36)
             .onChange((v: string) => { this.onSetRecordName(v) })
           Button(I18n.t('btn_save_record'))
-            .fontSize(12).fontColor('#FFFFFF').backgroundColor(this.recordCount > 0 ? '#5B93BF' : '#555555')
+            .fontSize(12).fontColor('#FFFFFF').backgroundColor(this.scriptStore.recordCount > 0 ? '#5B93BF' : '#555555')
             .borderRadius(UI_RADIUS_CONTROL).height(36).padding({ left: 12, right: 12 })
-            .enabled(this.recordCount > 0)
+            .enabled(this.scriptStore.recordCount > 0)
             .onClick(() => { this.onSaveRecording() })
         }.width('100%').padding({ left: 6, right: 6 })
 
         Row().width('100%').height(0.5).backgroundColor(this.lineColor).margin({ top: 6, bottom: 6 })
 
         Text(I18n.t('c_saved_recordings')).fontSize(13).fontColor(this.textColor).width('100%').padding({ left: 6 })
-        if (this.recordings.length === 0) {
+        if (this.scriptStore.recordings.length === 0) {
           Text(I18n.t('m_no_recordings')).fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 6 })
         }
-        ForEach(this.recordings, (rec: RecordingEntry, idx: number) => {
+        ForEach(this.scriptStore.recordings, (rec: RecordingEntry, idx: number) => {
           Column({ space: 4 }) {
             Row({ space: 8 }) {
               Column() {
@@ -216,21 +200,21 @@ export struct ScriptsPanel {
         Text('录制屏幕中的星图与交互界面；系统会在开始前显示录屏授权确认。默认不录麦克风。')
           .fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 6, right: 6 }).maxLines(3)
         Row({ space: 8 }) {
-          Button(this.screenVideoRecording ? '停止并生成 MP4' : '开始录制 MP4')
+          Button(this.scriptStore.screenVideoRecording ? '停止并生成 MP4' : '开始录制 MP4')
             .fontSize(12).fontColor('#FFFFFF')
-            .backgroundColor(this.screenVideoRecording ? '#C0392B' : '#2E7D32')
+            .backgroundColor(this.scriptStore.screenVideoRecording ? '#C0392B' : '#2E7D32')
             .borderRadius(UI_RADIUS_CONTROL).height(36).padding({ left: 14, right: 14 })
             .onClick(() => {
               this.onToggleScreenVideo()
             })
-          if (this.screenCaptureFinalizing) {
+          if (this.scriptStore.screenCaptureFinalizing) {
             LoadingProgress().width(18).height(18).color(this.accentColor)
           }
-          Text(this.screenVideoStatus).fontSize(10)
-            .fontColor(this.screenVideoRecording ? '#FF9A9A' : this.subColor)
+          Text(this.scriptStore.screenVideoStatus).fontSize(10)
+            .fontColor(this.scriptStore.screenVideoRecording ? '#FF9A9A' : this.subColor)
             .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
         }.width('100%').padding({ left: 6, right: 6 })
-        if (this.screenVideoBytes > 0 && this.screenVideoPath.length > 0) {
+        if (this.scriptStore.screenVideoBytes > 0 && this.scriptStore.screenVideoPath.length > 0) {
           Row({ space: 8 }) {
             SaveButton({ icon: SaveIconStyle.LINES, text: SaveDescription.SAVE_TO_GALLERY,
               buttonType: ButtonType.Capsule })
@@ -261,41 +245,41 @@ export struct ScriptsPanel {
         Row({ space: 8 }) {
           Column({ space: 2 }) {
             Text(I18n.t('c_fps')).fontSize(10).fontColor('#99FFFFFF')
-            TextInput({ placeholder: '1', text: this.videoFps })
+            TextInput({ placeholder: '1', text: this.scriptStore.videoFps })
               .fontSize(12).fontColor(this.textColor)
               .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).width(72).height(34)
               .onChange((v: string) => { this.onSetVideoFps(v) })
           }.width(72)
           Column({ space: 2 }) {
             Text(I18n.t('c_duration_sec')).fontSize(10).fontColor('#99FFFFFF')
-            TextInput({ placeholder: '5', text: this.videoDuration })
+            TextInput({ placeholder: '5', text: this.scriptStore.videoDuration })
               .fontSize(12).fontColor(this.textColor)
               .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).width(72).height(34)
               .onChange((v: string) => { this.onSetVideoDuration(v) })
           }.width(72)
-          Button(this.videoRecording ? '停止录制' : '开始录制')
-            .fontSize(13).fontColor('#FFFFFF').backgroundColor(this.videoRecording ? '#C0392B' : '#2E7D32')
+          Button(this.scriptStore.videoRecording ? '停止录制' : '开始录制')
+            .fontSize(13).fontColor('#FFFFFF').backgroundColor(this.scriptStore.videoRecording ? '#C0392B' : '#2E7D32')
             .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1).padding({ left: 16, right: 16 })
             .onClick(() => { this.onToggleVideoRecording() })
         }.width('100%').padding({ left: 6, right: 6 })
 
-        if (this.videoRecording || this.videoFrameCount > 0) {
+        if (this.scriptStore.videoRecording || this.scriptStore.videoFrameCount > 0) {
           Row({ space: 10 }) {
-            if (this.videoRecording) {
+            if (this.scriptStore.videoRecording) {
               Text(I18n.t('c_recording')).fontSize(12).fontColor('#FF6B6B')
             }
-            Text(I18n.t('c_captured') + ' ' + this.videoFrameCount + ' / ' + this.videoMaxFrames + ' ' + I18n.t('c_frames'))
+            Text(I18n.t('c_captured') + ' ' + this.scriptStore.videoFrameCount + ' / ' + this.scriptStore.videoMaxFrames + ' ' + I18n.t('c_frames'))
               .fontSize(11).fontColor('#99FFFFFF')
-            if (this.videoFailedFrames > 0) {
-              Text('失败 ' + this.videoFailedFrames).fontSize(10).fontColor('#FFB38A')
+            if (this.scriptStore.videoFailedFrames > 0) {
+              Text('失败 ' + this.scriptStore.videoFailedFrames).fontSize(10).fontColor('#FFB38A')
             }
           }.width('100%').padding({ left: 6, right: 6 })
         }
-        if (this.videoDir.length > 0) {
-          Text('存放目录：' + this.videoDir)
+        if (this.scriptStore.videoDir.length > 0) {
+          Text('存放目录：' + this.scriptStore.videoDir)
             .fontSize(10).fontColor('#99FFFFFF').width('100%').padding({ left: 6, right: 6 })
         }
-        if (this.videoArchivePath.length > 0) {
+        if (this.scriptStore.videoArchivePath.length > 0) {
           Row({ space: 8 }) {
             Button('分享帧包')
               .id('video-frames-share')

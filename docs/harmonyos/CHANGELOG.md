@@ -1,3 +1,18 @@
+## [2026-10-04] DevEco Code - 重构：脚本/录制/视频导出域由 Prop 风格转 Store 风格（review §2.7 第二片；宿主 @State 306 → 286）
+
+- **依据**：同 §2.7 的目标清单第二项 `ScriptsPanel`。改造前该面板已是**混合状态**——`@ObjectLink tools`（录屏开关走已有的 `ToolsStore`）+ **27 个 `@Prop`**，后者覆盖 script*/record*/screenVideo*/video* 四个子域。
+- **本片内容**：
+  - **新增 `state/ScriptStore.ets`**：承载**面板可见的 21 个**字段（`scriptList/scriptLaunching/scriptLaunchingName/scriptImporting`、`recordCount/recordName/recordMsg/recordings`、`videoRecording/videoDir/videoFrameCount/videoMaxFrames/videoFailedFrames/videoArchivePath/videoFps/videoDuration`、`screenVideoRecording/screenVideoPath/screenVideoBytes/screenVideoStatus/screenCaptureFinalizing`）。
+  - **`panels/panels/ScriptsPanel.ets`**：21 个 `@Prop` → 1 个 `@ObjectLink scriptStore`；`@Prop` 由 27 降至 **6**（5 个主题色 + `guideSessionActive`），`@ObjectLink` 变为 2（`tools` + `scriptStore`）。`guideSessionActive` **刻意保留 @Prop**：宿主并无同名字段，它在调用点由 `scriptSessionActive()` 派生，属导览会话域而非本 store 的域。
+  - **宿主**：删除 21 个 `@State`，新增 `@State private scriptStore: ScriptStore = new ScriptStore()`；**96 处** `this.<字段>` 机械改为 `this.scriptStore.<字段>`（复核：0 残留、0 双重前缀）；调用点 21 条绑定收敛为 `scriptStore: this.scriptStore,`。
+- **刻意留在宿主、并已写入 store 头注的字段（附理由）**：
+  - **`recordBuffer: Array<RecordCmd>`**：录制引擎的**追加型工作缓冲**（每次录制命令 `push`，整体重赋值清空）。它**不是任何面板的入参**；搬进观测 store 要么因"只观测字段赋值、观测不到原地 push"而失去刷新，要么被迫每次 append 全量拷贝 —— 两者都不可接受。
+  - `scriptRunning / scriptWaiting / scriptWaitMessage / scriptCaptions / scriptId / scriptRate / scriptControlOffsetX / scriptControlOffsetY / scriptMetadata / scriptFocusActive`：脚本**播放引擎/焦点壳**（`ScriptFocusShell`）自有状态，非本面板入参；属 §2.13 的 B3 类，本片创建的 store 正是其"前置"。
+- **改造前普查**：`recordings` / `scriptList` / `videoDir` 等数组**均无原地变更** ⇒ `@ObjectLink` 语义等价（继承上一片的检查口径）。
+- **收益（实测）**：宿主 `@State` **306 → 286**（本片 −21 +1 store）；`ScriptsPanel` 入参 `@Prop` **27 → 6**。
+- **验证**：`arkts_check` 通过；UI 契约 `intact`（33 面板 / 24 静态 id / 17 动态前缀 / **44 锚点** / **187** 文件）；**BUILD SUCCESSFUL**；真机（`192.168.50.108:36717`）经 `更多功能 → 自动化 → 脚本与自动化 → 脚本` 打开面板（入口链 `moreActions → automationHubActions`，本轮 `automationHub` 页首行即"脚本"；仍无"打开面板"的语义命令，只能坐标点击）：面板正常渲染导览库段（`GuideLibrary`，含「太阳系邻居 5 · 个观测站点」），滚动到**store 驱动段**可见脚本列表 `tests/exit_test.ssc` / `tests/sky_image4.ssc` / 从火星观测地球与其他行星 及作者·许可证·来源·版本元数据 —— 这些 `scriptList` 与四条 `script*Line` 回调已全部不再经宿主 `@Prop`。
+- **队列状态（§2.7 目标清单）**：① `SatellitesPanel` ✅（`01fa76b970`）② `ScriptsPanel` ✅（本片）③ 待做：`astroExtras` 簇 55 个（navStars / archaeo / mosaic / catalogs / meteorShowers / scenery3d）→ ④ 其余 `other` 232 个。宿主 `@State` 累计 **333 → 286**。
+
 ## [2026-10-04] DevEco Code - 重构：卫星域由 Prop 风格转 Store 风格（review §2.7 第一批；宿主 @State 333 → 306）
 
 - **依据**：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` **§2.7**（两种组件接入风格）——文档指出 **Prop 风格域是"残留 333 个宿主 `@State`"的主要来源**，并明确"这些域是后续继续瘦身（或翻 V2）最明确的目标清单"，其中首个点名的就是 `SatellitesPanel`（25+ 个 `sat*` 字段）。目标 store 名沿用计划 §2 蓝图里早已规划的 **`SatelliteStore`**。

@@ -40,6 +40,7 @@ import {
 import { BridgeClient } from '../bridge/BridgeClient'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
+import { ScriptStore } from '../state/ScriptStore'
 import { TimeSpeedChips } from '../panels/time/TimeSpeedChips'
 import { JulianDateStore } from '../state/JulianDateStore'
 import { JulianDateControls } from '../panels/time/JulianDateControls'
@@ -438,7 +439,6 @@ export struct WindowNativeNode {
   // 画面防弯曲：限制最大视场角(100°)，不能缩到"整个天空变成一个球"，地平线保持基本平直。
   @State private flatHorizon: boolean = true
   // 桥接数据
-  @State private scriptList: string[] = []
   @State private scriptMetadata: Record<string, ScriptMetadata> = {}
   @State private moduleList: string[] = []
   private rtsRequestSequence: number = 0
@@ -635,6 +635,9 @@ export struct WindowNativeNode {
   // SatellitesPanel 改为 @ObjectLink 订阅该 store，刷新粒度不再落在宿主整棵树上。
   // 下面两个"资源目录健康"字段与星表域共用、且不是卫星面板的入参，故仍留在宿主。
   @State private satelliteStore: SatelliteStore = new SatelliteStore()
+  // 脚本/录制/视频导出域的面板可见状态同样已下沉（review §2.7 第二片）。
+  // recordBuffer 与脚本播放引擎字段刻意留在宿主，理由见 state/ScriptStore.ets 头注。
+  @State private scriptStore: ScriptStore = new ScriptStore()
   @State private catalogHealthLoaded: boolean = false
   @State private catalogManifestPresent: boolean = false
   @State private starCatalogHealth: CatalogHealthEntry = {}
@@ -676,16 +679,10 @@ export struct WindowNativeNode {
   @State private speechStatus: string = ''
   // ===== 脚本录制 / 回放（#39）=====
   @State private recordBuffer: Array<RecordCmd> = []
-  @State private recordCount: number = 0
-  @State private recordName: string = ''
-  @State private recordMsg: string = ''
-  @State private recordings: Array<RecordingEntry> = []
   @State private replaying: boolean = false
   @State private replayPaused: boolean = false
   @State private replayRate: number = 1
   @State private replayName: string = ''
-  @State private scriptLaunching: boolean = false
-  @State private scriptLaunchingName: string = ''
   @State private scriptFocusActive: boolean = false
   @State private guideState: GuideState = { active: false, phase: 'idle', guideId: '', index: 0, count: 0, automatic: false, remaining: 0, error: '' }
   private guidePlayer?: GuidePlayer
@@ -698,27 +695,13 @@ export struct WindowNativeNode {
   @State private scriptWaiting: boolean = false
   @State private scriptWaitMessage: string = ''
   @State private scriptCaptions: Array<string> = []
-  @State private scriptImporting: boolean = false
   @State private scriptId: string = ''
   @State private scriptRate: number = 1
   @State private scriptControlOffsetX: number = 0
   @State private scriptControlOffsetY: number = 0
   // ===== 视频帧序列录制（#40）=====
-  @State private videoRecording: boolean = false
-  @State private videoDir: string = ''
-  @State private videoFrameCount: number = 0
-  @State private videoMaxFrames: number = 0
-  @State private videoFailedFrames: number = 0
-  @State private videoArchivePath: string = ''
   @State private videoArchiveFileName: string = ''
-  @State private videoFps: string = '1'
-  @State private videoDuration: string = '5'
-  @State private screenVideoRecording: boolean = false
-  @State private screenVideoPath: string = ''
   @State private screenVideoFileName: string = ''
-  @State private screenVideoBytes: number = 0
-  @State private screenVideoStatus: string = ''
-  @State private screenCaptureFinalizing: boolean = false
   private lastRecordKey: string = ''
   private lastRecordTime: number = 0
   private recordStartedAt: number = 0
@@ -1519,8 +1502,8 @@ export struct WindowNativeNode {
       }
       if (commandName === 'playScript' && response.ok === true) {
         this.scriptFocusActive = true
-        this.scriptLaunching = false
-        this.scriptLaunchingName = ''
+        this.scriptStore.scriptLaunching = false
+        this.scriptStore.scriptLaunchingName = ''
         this.scriptId = String(event['payload'] ?? '')
         this.scriptStartGraceUntil = Date.now() + 2500
         this.panelVisible = false
@@ -1630,7 +1613,7 @@ export struct WindowNativeNode {
       () => this.callNativeWhenReady('setLanguage', this.selectedLanguage, () => {}),
       () => this.loadLandscapeList(),
       () => this.callNativeWhenReady("getScriptList", "", (r) => {
-        if (r.ok === true && Array.isArray(r.items)) { this.scriptList = r.items as string[]; this.setScriptMetadata(r.details) }
+        if (r.ok === true && Array.isArray(r.items)) { this.scriptStore.scriptList = r.items as string[]; this.setScriptMetadata(r.details) }
       }),
       () => this.callNativeWhenReady("getLoadedModuleNames", "", (r) => {
         if (r.ok === true && Array.isArray(r.items)) { this.moduleList = r.items as string[] }
@@ -2621,7 +2604,7 @@ export struct WindowNativeNode {
     if (key === this.lastRecordKey && now - this.lastRecordTime <= 400) { return }
     this.recordBuffer.push({ c: name, p: payload,
       t: Math.max(0, now - this.recordStartedAt - this.recordPausedTotal) })
-    this.recordCount = this.recordBuffer.length
+    this.scriptStore.recordCount = this.recordBuffer.length
     this.lastRecordKey = key
     this.lastRecordTime = now
   }
@@ -3118,8 +3101,8 @@ export struct WindowNativeNode {
     this.tools.recording = true
     this.tools.recordingPaused = false
     this.recordBuffer = []
-    this.recordCount = 0
-    this.recordMsg = '录制中…'
+    this.scriptStore.recordCount = 0
+    this.scriptStore.recordMsg = '录制中…'
     this.lastRecordKey = ''
     this.lastRecordTime = 0
     this.recordStartedAt = Date.now()
@@ -3143,10 +3126,10 @@ export struct WindowNativeNode {
       this.recordPausedTotal += now - this.recordPausedAt
       this.recordPausedAt = 0
     }
-    this.recordMsg = this.tools.recordingPaused ? '已暂停录制' : '录制中…'
+    this.scriptStore.recordMsg = this.tools.recordingPaused ? '已暂停录制' : '录制中…'
     this.lastRecordKey = ''
     this.lastRecordTime = 0
-    this.flashHint(this.recordMsg)
+    this.flashHint(this.scriptStore.recordMsg)
   }
 
   private stopRecording(): void {
@@ -3158,31 +3141,31 @@ export struct WindowNativeNode {
     this.cancelRecordingViewCheckpoint()
     this.tools.recordingPaused = false
     this.tools.recordingUiExpanded = true
-    this.recordCount = this.recordBuffer.length
-    this.recordMsg = this.recordCount > 0 ? '已停止，可保存' : '已停止（没有可保存的操作）'
-    this.flashHint(this.recordMsg)
+    this.scriptStore.recordCount = this.recordBuffer.length
+    this.scriptStore.recordMsg = this.scriptStore.recordCount > 0 ? '已停止，可保存' : '已停止（没有可保存的操作）'
+    this.flashHint(this.scriptStore.recordMsg)
     this.setPanel('scripts')
   }
 
   private saveCurrentRecording(): void {
     if (this.recordBuffer.length === 0) {
-      this.recordMsg = '没有可保存的操作，请先开始录制'
-      this.flashHint(this.recordMsg)
+      this.scriptStore.recordMsg = '没有可保存的操作，请先开始录制'
+      this.flashHint(this.scriptStore.recordMsg)
       return
     }
-    const safeName = this.recordName.trim().replace(/\|/g, '_').replace(/\n/g, ' ')
+    const safeName = this.scriptStore.recordName.trim().replace(/\|/g, '_').replace(/\n/g, ' ')
     const payload = safeName + '|' + JSON.stringify(this.recordBuffer)
     this.callInteractive('saveRecording', payload, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.recordMsg = '已保存：' + (r.name ?? this.recordName)
-        this.flashHint(this.recordMsg)
+        this.scriptStore.recordMsg = '已保存：' + (r.name ?? this.scriptStore.recordName)
+        this.flashHint(this.scriptStore.recordMsg)
         this.recordBuffer = []
-        this.recordCount = 0
-        this.recordName = ''
+        this.scriptStore.recordCount = 0
+        this.scriptStore.recordName = ''
         this.loadRecordings()
       } else {
-        this.recordMsg = '保存失败：' + (r.error ?? '未知错误')
-        this.flashHint(this.recordMsg)
+        this.scriptStore.recordMsg = '保存失败：' + (r.error ?? '未知错误')
+        this.flashHint(this.scriptStore.recordMsg)
       }
     })
   }
@@ -3190,7 +3173,7 @@ export struct WindowNativeNode {
   private loadRecordings(): void {
     this.callInteractive('listRecordings', '', (r: StellariumBridgeResponse) => {
       const resp = r as RecordingsResponse
-      this.recordings = resp.items ?? []
+      this.scriptStore.recordings = resp.items ?? []
     })
   }
 
@@ -3314,7 +3297,7 @@ export struct WindowNativeNode {
   }
 
   private scriptPlaybackVisible(): boolean {
-    return this.guideState.active || this.scriptFocusActive || this.scriptLaunching || this.replaying
+    return this.guideState.active || this.scriptFocusActive || this.scriptStore.scriptLaunching || this.replaying
   }
 
   private scriptSessionActive(): boolean {
@@ -3400,8 +3383,8 @@ export struct WindowNativeNode {
     this.scriptWaitMessage = ''
     this.scriptId = ''
     this.scriptFocusActive = false
-    this.scriptLaunching = false
-    this.scriptLaunchingName = ''
+    this.scriptStore.scriptLaunching = false
+    this.scriptStore.scriptLaunchingName = ''
     this.scriptStartGraceUntil = 0
     this.tools.recordingUiExpanded = true
     this.stopScriptStatusPolling()
@@ -3438,7 +3421,7 @@ export struct WindowNativeNode {
       if (typeof status.scriptRate === 'number' && Number.isFinite(status.scriptRate)) {
         this.scriptRate = status.scriptRate
       }
-      if (!running && !this.scriptLaunching && !this.replaying && Date.now() >= this.scriptStartGraceUntil) {
+      if (!running && !this.scriptStore.scriptLaunching && !this.replaying && Date.now() >= this.scriptStartGraceUntil) {
         this.finishNativeScriptUi(I18n.t('script_finished'))
       }
     }, () => {
@@ -3556,7 +3539,7 @@ export struct WindowNativeNode {
   private loadScriptList(): void {
     this.callInteractive('getScriptList', '', (r: StellariumBridgeResponse) => {
       if (r.ok === true && Array.isArray(r.items)) {
-        this.scriptList = r.items as string[]
+        this.scriptStore.scriptList = r.items as string[]
         this.setScriptMetadata(r.details)
       }
     })
@@ -3622,8 +3605,8 @@ export struct WindowNativeNode {
   }
 
   private async importScriptFile(): Promise<void> {
-    if (this.scriptImporting) return
-    this.scriptImporting = true
+    if (this.scriptStore.scriptImporting) return
+    this.scriptStore.scriptImporting = true
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const options = new picker.DocumentSelectOptions()
@@ -3652,7 +3635,7 @@ export struct WindowNativeNode {
       hilog.error(0x0000, 'StellariumArkUI', 'Script import failed: %{public}s', String(error))
       this.flashHint(I18n.t('script_import_failed'))
     } finally {
-      this.scriptImporting = false
+      this.scriptStore.scriptImporting = false
     }
   }
 
@@ -3774,8 +3757,8 @@ export struct WindowNativeNode {
   }
 
   private async finalizeScreenVideo(message: string): Promise<void> {
-    if (this.screenCaptureFinalizing) { return }
-    this.screenCaptureFinalizing = true
+    if (this.scriptStore.screenCaptureFinalizing) { return }
+    this.scriptStore.screenCaptureFinalizing = true
     const recorder = this.screenCapture
     this.screenCapture = undefined
     if (recorder !== undefined) {
@@ -3784,28 +3767,28 @@ export struct WindowNativeNode {
       try { await recorder.release() } catch (_error) {}
     }
     this.closeScreenCaptureFile()
-    this.screenVideoRecording = false
+    this.scriptStore.screenVideoRecording = false
     try {
-      this.screenVideoBytes = this.screenVideoPath.length > 0 ? fileIo.statSync(this.screenVideoPath).size : 0
+      this.scriptStore.screenVideoBytes = this.scriptStore.screenVideoPath.length > 0 ? fileIo.statSync(this.scriptStore.screenVideoPath).size : 0
     } catch (_error) {
-      this.screenVideoBytes = 0
+      this.scriptStore.screenVideoBytes = 0
     }
-    this.screenVideoStatus = this.screenVideoBytes > 0 ? message : '录屏没有生成有效视频'
-    this.screenCaptureFinalizing = false
-    this.flashHint(this.screenVideoStatus)
+    this.scriptStore.screenVideoStatus = this.scriptStore.screenVideoBytes > 0 ? message : '录屏没有生成有效视频'
+    this.scriptStore.screenCaptureFinalizing = false
+    this.flashHint(this.scriptStore.screenVideoStatus)
   }
 
   private async startScreenVideoRecording(): Promise<void> {
-    if (this.screenVideoRecording || this.screenCaptureFinalizing) { return }
+    if (this.scriptStore.screenVideoRecording || this.scriptStore.screenCaptureFinalizing) { return }
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const dir = context.filesDir + '/recordings/videos'
       fileIo.mkdirSync(dir, true)
       this.screenVideoFileName = 'stellarium-screen-' + Date.now().toString() + '.mp4'
-      this.screenVideoPath = dir + '/' + this.screenVideoFileName
-      this.screenVideoBytes = 0
-      this.screenVideoStatus = '等待系统录屏授权…'
-      this.screenCaptureFile = fileIo.openSync(this.screenVideoPath,
+      this.scriptStore.screenVideoPath = dir + '/' + this.screenVideoFileName
+      this.scriptStore.screenVideoBytes = 0
+      this.scriptStore.screenVideoStatus = '等待系统录屏授权…'
+      this.screenCaptureFile = fileIo.openSync(this.scriptStore.screenVideoPath,
         fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC)
       const displayInfo = display.getDefaultDisplaySync()
       const frameWidth = Math.max(64, Math.floor(displayInfo.width / 64) * 64)
@@ -3814,8 +3797,8 @@ export struct WindowNativeNode {
       this.screenCapture = recorder
       recorder.on('stateChange', (state: media.AVScreenCaptureStateCode) => {
         if (state === media.AVScreenCaptureStateCode.SCREENCAPTURE_STATE_STARTED) {
-          this.screenVideoRecording = true
-          this.screenVideoStatus = '正在录制 MP4'
+          this.scriptStore.screenVideoRecording = true
+          this.scriptStore.screenVideoStatus = '正在录制 MP4'
         } else if (state === media.AVScreenCaptureStateCode.SCREENCAPTURE_STATE_CANCELED) {
           this.finalizeScreenVideo('用户取消了录屏授权')
         } else if (state === media.AVScreenCaptureStateCode.SCREENCAPTURE_STATE_STOPPED_BY_USER) {
@@ -3848,8 +3831,8 @@ export struct WindowNativeNode {
   }
 
   private async stopScreenVideoRecording(): Promise<void> {
-    if (this.screenCapture === undefined || this.screenCaptureFinalizing) { return }
-    this.screenCaptureFinalizing = true
+    if (this.screenCapture === undefined || this.scriptStore.screenCaptureFinalizing) { return }
+    this.scriptStore.screenCaptureFinalizing = true
     try {
       this.screenCapture.off('stateChange')
       this.screenCapture.off('error')
@@ -3860,15 +3843,15 @@ export struct WindowNativeNode {
     }
     this.screenCapture = undefined
     this.closeScreenCaptureFile()
-    this.screenVideoRecording = false
-    try { this.screenVideoBytes = fileIo.statSync(this.screenVideoPath).size } catch (_error) { this.screenVideoBytes = 0 }
-    this.screenVideoStatus = this.screenVideoBytes > 0 ? 'MP4 已生成，可保存到相册或分享' : '录屏没有生成有效视频'
-    this.screenCaptureFinalizing = false
-    this.flashHint(this.screenVideoStatus)
+    this.scriptStore.screenVideoRecording = false
+    try { this.scriptStore.screenVideoBytes = fileIo.statSync(this.scriptStore.screenVideoPath).size } catch (_error) { this.scriptStore.screenVideoBytes = 0 }
+    this.scriptStore.screenVideoStatus = this.scriptStore.screenVideoBytes > 0 ? 'MP4 已生成，可保存到相册或分享' : '录屏没有生成有效视频'
+    this.scriptStore.screenCaptureFinalizing = false
+    this.flashHint(this.scriptStore.screenVideoStatus)
   }
 
   private async saveScreenVideoToGallery(result: SaveButtonOnClickResult): Promise<void> {
-    if (result !== SaveButtonOnClickResult.SUCCESS || this.screenVideoPath.length === 0) {
+    if (result !== SaveButtonOnClickResult.SUCCESS || this.scriptStore.screenVideoPath.length === 0) {
       this.flashHint('未获得保存到相册的临时授权')
       return
     }
@@ -3876,7 +3859,7 @@ export struct WindowNativeNode {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const helper = photoAccessHelper.getPhotoAccessHelper(context)
       const request = photoAccessHelper.MediaAssetChangeRequest.createVideoAssetRequest(
-        context, fileUri.getUriFromPath(this.screenVideoPath))
+        context, fileUri.getUriFromPath(this.scriptStore.screenVideoPath))
       await helper.applyChanges(request)
       this.flashHint('视频已保存到相册')
     } catch (error) {
@@ -3887,16 +3870,16 @@ export struct WindowNativeNode {
 
   // ===== 视频帧序列录制（纯星图高质量导出）=====
   private startVideoRecording(): void {
-    const fps = parseInt(this.videoFps, 10) || 1
-    const duration = parseInt(this.videoDuration, 10) || 5
+    const fps = parseInt(this.scriptStore.videoFps, 10) || 1
+    const duration = parseInt(this.scriptStore.videoDuration, 10) || 5
     this.callInteractive('startVideoRecording', fps + '|' + duration, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.videoRecording = true
-        this.videoDir = r.dir as string ?? ''
-        this.videoFrameCount = 0
-        this.videoFailedFrames = 0
-        this.videoMaxFrames = r.maxFrames as number ?? 0
-        this.videoArchivePath = ''
+        this.scriptStore.videoRecording = true
+        this.scriptStore.videoDir = r.dir as string ?? ''
+        this.scriptStore.videoFrameCount = 0
+        this.scriptStore.videoFailedFrames = 0
+        this.scriptStore.videoMaxFrames = r.maxFrames as number ?? 0
+        this.scriptStore.videoArchivePath = ''
         this.videoArchiveFileName = ''
         this.startVideoStatePolling()
         this.flashHint('开始录制视频帧序列：' + fps + ' fps × ' + duration + ' s')
@@ -3909,16 +3892,16 @@ export struct WindowNativeNode {
   private stopVideoRecording(): void {
     this.callInteractive('stopVideoRecording', '', (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.videoRecording = false
+        this.scriptStore.videoRecording = false
         this.stopVideoStatePolling()
-        this.videoFrameCount = (r.diskFrames as number) ?? (r.frameCount as number) ?? 0
-        this.videoFailedFrames = (r.failedFrames as number) ?? 0
-        this.videoDir = r.dir as string ?? ''
-        this.videoArchivePath = r.archivePath as string ?? ''
+        this.scriptStore.videoFrameCount = (r.diskFrames as number) ?? (r.frameCount as number) ?? 0
+        this.scriptStore.videoFailedFrames = (r.failedFrames as number) ?? 0
+        this.scriptStore.videoDir = r.dir as string ?? ''
+        this.scriptStore.videoArchivePath = r.archivePath as string ?? ''
         this.videoArchiveFileName = r.archiveFileName as string ?? ''
-        this.flashHint(this.videoArchivePath.length > 0 ?
-          '已停止，共 ' + this.videoFrameCount + ' 帧，ZIP 已生成' :
-          '已停止，共 ' + this.videoFrameCount + ' 帧，但 ZIP 生成失败')
+        this.flashHint(this.scriptStore.videoArchivePath.length > 0 ?
+          '已停止，共 ' + this.scriptStore.videoFrameCount + ' 帧，ZIP 已生成' :
+          '已停止，共 ' + this.scriptStore.videoFrameCount + ' 帧，但 ZIP 生成失败')
       } else {
         this.flashHint('停止录制失败')
       }
@@ -3927,13 +3910,13 @@ export struct WindowNativeNode {
 
   private loadVideoRecordingState(): void {
     this.callInteractive('getVideoRecordingState', '', (r: StellariumBridgeResponse) => {
-      const wasRecording = this.videoRecording
-      this.videoRecording = r.recording === true
-      this.videoDir = r.dir as string ?? ''
-      this.videoFrameCount = r.frameCount as number ?? 0
-      this.videoFailedFrames = r.failedFrames as number ?? 0
-      this.videoMaxFrames = r.maxFrames as number ?? 0
-      if (wasRecording && !this.videoRecording) {
+      const wasRecording = this.scriptStore.videoRecording
+      this.scriptStore.videoRecording = r.recording === true
+      this.scriptStore.videoDir = r.dir as string ?? ''
+      this.scriptStore.videoFrameCount = r.frameCount as number ?? 0
+      this.scriptStore.videoFailedFrames = r.failedFrames as number ?? 0
+      this.scriptStore.videoMaxFrames = r.maxFrames as number ?? 0
+      if (wasRecording && !this.scriptStore.videoRecording) {
         this.stopVideoStatePolling()
         setTimeout(() => { this.stopVideoRecording() }, 0)
       }
@@ -9228,8 +9211,8 @@ private loadPlanetPositions(): void {
     if (this.scriptSessionActive()) {
       return
     }
-    this.scriptLaunching = true
-    this.scriptLaunchingName = filename
+    this.scriptStore.scriptLaunching = true
+    this.scriptStore.scriptLaunchingName = filename
     this.scriptFocusActive = true
     this.scriptId = filename
     this.scriptRate = 1
@@ -9245,8 +9228,8 @@ private loadPlanetPositions(): void {
     this.startScriptStatusPolling()
     this.flashHint('正在启动脚本…')
     this.callInteractive('playScript', filename, (r: StellariumBridgeResponse) => {
-      this.scriptLaunching = false
-      this.scriptLaunchingName = ''
+      this.scriptStore.scriptLaunching = false
+      this.scriptStore.scriptLaunchingName = ''
       if (r.ok === true) {
         this.flashHint(I18n.t('msg_script_running'))
         this.refreshScriptStatus()
@@ -9259,8 +9242,8 @@ private loadPlanetPositions(): void {
         this.flashHint(I18n.t('msg_apply_failed'))
       }
     }, () => {
-      this.scriptLaunching = false
-      this.scriptLaunchingName = ''
+      this.scriptStore.scriptLaunching = false
+      this.scriptStore.scriptLaunchingName = ''
       this.scriptFocusActive = false
       this.scriptWaiting = false
       this.scriptWaitMessage = ''
@@ -14434,7 +14417,7 @@ private loadPlanetPositions(): void {
             replayPaused: this.replayPaused,
             playbackVisible: this.scriptPlaybackVisible(),
             compact: this.scriptControlCompact(),
-            displayName: this.scriptZh(this.scriptId.length > 0 ? this.scriptId : (this.scriptLaunchingName.length > 0 ? this.scriptLaunchingName : this.replayName)),
+            displayName: this.scriptZh(this.scriptId.length > 0 ? this.scriptId : (this.scriptStore.scriptLaunchingName.length > 0 ? this.scriptStore.scriptLaunchingName : this.replayName)),
             hasCaptions: this.visibleScriptCaptions().length > 0,
             captionText: this.visibleScriptCaptionText(),
             waitText: this.scriptWaitDisplayText(),
@@ -14849,7 +14832,7 @@ private loadPlanetPositions(): void {
       }
       if (!this.scriptPlaybackVisible() && this.tools.recording) {
         RecordingControlBar({
-          store: this.tools, recordCount: this.recordCount, skyWidth: this.skyWidth, safeTop: this.scriptControlSafeTop(),
+          store: this.tools, recordCount: this.scriptStore.recordCount, skyWidth: this.skyWidth, safeTop: this.scriptControlSafeTop(),
           onToggleUi: () => { this.toggleRecordingUi() },
           onTogglePause: () => { this.toggleRecordingPause() },
           onStop: () => { this.stopRecording() }
@@ -17746,9 +17729,9 @@ private loadPlanetPositions(): void {
         ephemerisDe441Active: this.ephemerisDe441Active,
         timeSettingsPending: this.timeSettingsPending,
         observationTimeText: this.timeStore.observationTimeText,
-        scriptLaunching: this.scriptLaunching,
-        scriptLaunchingName: this.scriptLaunchingName,
-        scriptList: this.scriptList,
+        scriptLaunching: this.scriptStore.scriptLaunching,
+        scriptLaunchingName: this.scriptStore.scriptLaunchingName,
+        scriptList: this.scriptStore.scriptList,
         pluginList: this.pluginList,
         pluginListLoading: this.pluginListLoading,
         fovText: this.fovText,
@@ -18188,27 +18171,7 @@ private loadPlanetPositions(): void {
       ScriptsPanel({
         tools: this.tools,
         guideSessionActive: this.scriptSessionActive(),
-        scriptImporting: this.scriptImporting,
-        scriptList: this.scriptList,
-        scriptLaunching: this.scriptLaunching,
-        scriptLaunchingName: this.scriptLaunchingName,
-        recordCount: this.recordCount,
-        recordMsg: this.recordMsg,
-        recordName: this.recordName,
-        recordings: this.recordings,
-        screenVideoRecording: this.screenVideoRecording,
-        screenCaptureFinalizing: this.screenCaptureFinalizing,
-        screenVideoStatus: this.screenVideoStatus,
-        screenVideoBytes: this.screenVideoBytes,
-        screenVideoPath: this.screenVideoPath,
-        videoFps: this.videoFps,
-        videoDuration: this.videoDuration,
-        videoRecording: this.videoRecording,
-        videoFrameCount: this.videoFrameCount,
-        videoMaxFrames: this.videoMaxFrames,
-        videoFailedFrames: this.videoFailedFrames,
-        videoDir: this.videoDir,
-        videoArchivePath: this.videoArchivePath,
+        scriptStore: this.scriptStore,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         accentColor: this.nmAccent(),
@@ -18224,7 +18187,7 @@ private loadPlanetPositions(): void {
         onPlayScript: (name: string) => { this.playScriptByName(name) },
         onToggleRecording: () => { this.tools.recording ? this.stopRecording() : this.startRecording() },
         onSaveRecording: () => { this.saveCurrentRecording() },
-        onSetRecordName: (value: string) => { this.recordName = value },
+        onSetRecordName: (value: string) => { this.scriptStore.recordName = value },
         onPlayRecording: (file: string) => { this.playRecording(file) },
         onLoadRecording: (file: string, name: string) => { this.loadRecordingByName(file, name) },
         onShareRecording: (rec: RecordingEntry, idx: number) => {
@@ -18233,23 +18196,23 @@ private loadPlanetPositions(): void {
         },
         onDeleteRecording: (file: string) => { this.deleteRecording(file) },
         onToggleScreenVideo: () => {
-          if (this.screenVideoRecording) this.stopScreenVideoRecording()
+          if (this.scriptStore.screenVideoRecording) this.stopScreenVideoRecording()
           else this.startScreenVideoRecording()
         },
         onSaveScreenVideoToGallery: (result: SaveButtonOnClickResult) => { this.saveScreenVideoToGallery(result) },
         onShareScreenVideo: () => {
-          this.shareFile(this.screenVideoPath, utd.UniformDataType.VIDEO, this.screenVideoFileName,
+          this.shareFile(this.scriptStore.screenVideoPath, utd.UniformDataType.VIDEO, this.screenVideoFileName,
             'Stellarium 屏幕视频', 'screen-video-share')
         },
-        onSaveScreenVideoAs: () => { this.saveFileAs(this.screenVideoPath, this.screenVideoFileName, 'MP4 视频|.mp4') },
-        onSetVideoFps: (value: string) => { this.videoFps = value },
-        onSetVideoDuration: (value: string) => { this.videoDuration = value },
-        onToggleVideoRecording: () => { this.videoRecording ? this.stopVideoRecording() : this.startVideoRecording() },
+        onSaveScreenVideoAs: () => { this.saveFileAs(this.scriptStore.screenVideoPath, this.screenVideoFileName, 'MP4 视频|.mp4') },
+        onSetVideoFps: (value: string) => { this.scriptStore.videoFps = value },
+        onSetVideoDuration: (value: string) => { this.scriptStore.videoDuration = value },
+        onToggleVideoRecording: () => { this.scriptStore.videoRecording ? this.stopVideoRecording() : this.startVideoRecording() },
         onShareVideoArchive: () => {
-          this.shareFile(this.videoArchivePath, utd.UniformDataType.ZIP_ARCHIVE,
+          this.shareFile(this.scriptStore.videoArchivePath, utd.UniformDataType.ZIP_ARCHIVE,
             this.videoArchiveFileName, 'Stellarium 高质量星图帧序列', 'video-frames-share')
         },
-        onExportVideoArchive: () => { this.saveFileAs(this.videoArchivePath, this.videoArchiveFileName, 'ZIP 压缩包|.zip') }
+        onExportVideoArchive: () => { this.saveFileAs(this.scriptStore.videoArchivePath, this.videoArchiveFileName, 'ZIP 压缩包|.zip') }
       })
     } else if (this.activePanel === 'observing') {
       ObservingPanel({
