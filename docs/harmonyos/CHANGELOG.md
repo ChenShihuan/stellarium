@@ -1,3 +1,31 @@
+## [2026-10-04] DevEco Code - 重构：§14 B3-3 搜索 / 分页 / 历史族（loadCategoryObjects / loadMoreCategoryObjects / loadSearchHistoryFromStorage）
+
+- 依据 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.6（B3 表第 2 行）/ §14.7 / §14.8（规则 2「store 不得 import NAPI/UI」、规则 3「请求序号随加载器搬入 store」、规则 5「禁双写」）；复用 §14.1 的 `bridge/CommandPort.ets` 与宿主同一 `HostCommandPort` 实例（AB-0 / B1 / B2 / B3-1 / B3-2 先例），注入沿用「纯接口 + 宿主具名 `attachHooks({...})`」先例。**单提交完成。**
+
+- **本片手法（B3 既定解法）**：B3 的根因是「加载器仍要写某个刻意保留的宿主裸字段」。先做逐字段依赖普查，把裸字段搬入其**真正归属 store**（单一持有者 + 无第二份副本）或经 hooks 注入读写，加载器即降为 B1/B2，再按 B1 标准手法下沉。函数体**逐字**搬入，差异仅 `callNative*`→`port.*`（重试档 0/100/60 与 onFailure 逐字保留）、`this.searchStore.<f>`→`this.<f>`、`this.<宿主游标/标志>`→`this.<store 字段>`、`this.<宿主助手>`→`hooks.*`。
+
+- **逐加载器依赖普查（字段读写点 → 单一持有者方案）**：
+  - `loadCategoryObjects`(35)：`categoryOffset`（写 0；由 `loadMoreCategoryObjects` 写 `offset+len` 并读 `>0`）、`categoryRequestSerial`（写 `+=1`；两加载器及其回包/失败回调读比对，代际计数）、`satelliteCatalogReady`（读 `!satelliteCatalogReady` / 写 `true`，仅本加载器 Satellites 分支，全工程无第二读写点）。助手 `categoryModuleIdFor` / `publishSearchBrowserState` / `ensurePluginLoaded` 均宿主方法 → hooks；`this.loadMoreCategoryObjects` 同片同 store。→ **完成**（搬入 `SearchStore`）。
+  - `loadMoreCategoryObjects`(51)：`categoryOffset`（读、写）、`categoryRequestSerial`（读比对）；`CATEGORY_PAGE_SIZE`（宿主 `readonly 60`，仅本方法引用）入 store；`celestialTitle` / `celestialSubtitle` 宿主助手 → hooks。→ **完成**。
+  - `loadSearchHistoryFromStorage`(13)：`searchHistory`（写 `parsed.slice(0,20)`）。→ **完成**（同片把其读/写方 `saveSearchHistoryToStorage` 与 `searchObject` 历史写入一并改写）。
+
+- **跨域字段处理**：① `searchHistory` 登记为「跨域共用」，普查确认全工程读写点**仅宿主**（`searchObject()` 去重写入 + 持久化、`loadSearchHistoryFromStorage` 写入），**无任何面板/渲染读取**；按「单一持有者」移入 `SearchStore`，宿主 `searchObject()` 直接写 `this.searchStore.searchHistory`（宿主读 store 安全，§13.1 规则 4）、持久化改 `this.searchStore.saveSearchHistoryToStorage()`；**未引入 hooks 读取回注**（唯一读取方是宿主自身，非另一 store）。② `satelliteCatalogReady` 语义属搜索/目录（Satellites 分类目录载入标志），普查确认仅 `loadCategoryObjects` 读写、卫星域无第二副本，故随加载器留 `SearchStore`，卫星域未消费、无需 hooks。Preferences 的 `getUIContext` + `@ohos.data.preferences` 按 §14.8 规则 2 经 `readSearchHistoryStorage` / `writeSearchHistoryStorage` 注入（先例 `BookmarkHostHooks` / `ObservingListHostHooks`）。
+
+- **新增 / 撤除 hooks**：`SearchHostHooks` 由 1 法扩为 8 法（新增 `publishSearchBrowserState` / `categoryModuleIdFor` / `ensurePluginLoaded` / `celestialTitle` / `celestialSubtitle` / `readSearchHistoryStorage` / `writeSearchHistoryStorage`），**撤除 0 个**（`languageSerial` 保留）。宿主侧 `saveSearchHistoryToStorage` / `loadSearchHistoryFromStorage` 两个旧方法替换为**无状态适配器** `readSearchHistoryStorage()` / `writeSearchHistoryStorage(json)`（承载 NAPI/UI 上下文）。
+
+- **body diff 摘要**：`SearchStore.ets` **113 → 280**（+177：4 个搬入方法 + 4 个栏位 + `CATEGORY_PAGE_SIZE` + 接口 7 法 + 注释）；宿主 **15,944 → 15,859**（−85）：删 3 个 `private load*` + 2 个存储方法、删 5 个栏位（`searchHistory`/`categoryOffset`/`categoryRequestSerial`/`satelliteCatalogReady`/`CATEGORY_PAGE_SIZE`）、9 处 `loadCategoryObjects` + 1 处 `loadMoreCategoryObjects` + 1 处 `loadSearchHistoryFromStorage` + 1 处 CatalogStore hooks 适配器改 `this.searchStore.*`。
+  - **残留复核**：宿主 `grep this.(loadCategoryObjects|loadMoreCategoryObjects|loadSearchHistoryFromStorage|saveSearchHistoryToStorage|searchHistory|categoryOffset|categoryRequestSerial|satelliteCatalogReady|CATEGORY_PAGE_SIZE)` = **0**。
+  - **双写复核**：宿主无同名方法副本（§14.8 规则 5）。`test-ohos-search-browser.mjs` 假宿主把 `loadCategoryObjects` 移入 `searchStore` 对象（3/3 绿）。
+  - **宿主 `private load*` 前后**：**9 → 6**。**计数校正**：B3-2 条目记「14 → 11」与 HEAD 不符（`git show HEAD:harmonyos/ets-source/pages/MainWindowNativeNode.ets` 实测为 **9**）；本片以实测为准。
+
+- **验证证据**：`node scripts/check-ohos-refactor-slice.mjs` 通过；`arkts_check`（SearchStore / CatalogStore / MainWindowNativeNode）无错；**BUILD SUCCESSFUL in 29s**（30 executed / 3 up-to-date，signed HAP 708.7 MB）；`check-ohos-ui-contract.mjs` = 33 panels / 24 static ids / 17 dynamic prefixes / 44 id anchors / over 214 files，**intact**；`test-ohos-search-browser.mjs` 3/3、`test-ohos-constellation-lookup.mjs` 2/2；全量 `*ohos*.mjs` 扫描仅 §13.6 的 **7 个环境类**失败（4 个 `-pad`、`mist-performance`、`verify-ohos-location-search`、`verify-ohos-search`）；扫描重写的 `RESOURCE-COVERAGE-AUDIT-2026-08-24.md` 已 `git checkout --` 还原。
+  - **模拟器冒烟（真机离线；`127.0.0.1:5555`，UI-only 无引擎）**：install → `aa start -a QAbility -b com.cnchensh.stellarium` → `pidof` = **21546 全程存活**。Dock「搜索」打开面板（hilog `[DOCK] up … item=search` / `setPanel search` / `[panel-transition] finish serial=1 panel=search`）；开分类选择器，选「月球」→ 标签**实时**由「行星」变「月球」，再选「恒星」→「恒星」（`searchCategory` 走 store 的实时刷新）；结果列出现 `读取失败，点击重试`（`loadMoreCategoryObjects` 无引擎走 onFailure、写 `categoryLoadFailed`），点击「重试」（迁移后的 `onRetry` → `searchStore.loadCategoryObjects`）后 `pidof` 仍存活。hilog 无 ArkTS 异常；仅模拟器系统 TextInput autofill 缺 `libhint2type.z.so`（平台侧，与本片无关）。
+  - **模拟器无法覆盖（待真机）**：`listObjects` 真实回包 → `categoryObjects` 追加 / `categoryOffset` 递增 / `categoryHasMore` 翻页（无引擎，日志反复 `Stellarium command bridge not loaded yet`）；Satellites 分类分支 `ensurePluginLoaded('Satellites')` 成功回调（写 `satelliteCatalogReady = true`）；搜索历史 Preferences **真实写盘**（为不污染持久化设置未提交查询，读路径启动时无 warn）。
+
+- **B3 剩余登记（更新后）**：§14.6 表内 **6 行 / 加载器** —— `loadSkyCultureDetails`(69)（`skyCultureArtStates` 逐帧，保持登记、经注入上报）/ `loadSatellites`(55)（计时器）/ `loadVideoRecordingState`(14)（定时器收口）/ `loadScenery3d`(12)（保持登记）/ `loadCatalogHealth`(9)（保持登记）/ `loadTelescopeControlStatus`(13)（live-position 定时器簇）。
+
+- **踩坑（本片新增）**：① 模拟器 UI-only 通道下 `stellarium-cli.mjs --list` 超时（CLI 回包通道不可用）；且 Dock 栏（含「搜索」）在 `devecocli ui layout` 中**无 `.id()`**，语义化点击不可达 → 本片用坐标点击 Dock + `--id` 点面板内带 id 控件（`search-category-picker` / `search-category-*`），并**登记此缺失语义命令**（Dock 项 / CLI 面板命令在该构建上不可达）。② §14.6 的 load* 计数在 B3-2 记录有误，本片以 `git show HEAD:` 实测校正。
+
 ## [2026-10-04] DevEco Code - 重构：§14 B3-2 请求进度/进行中标志组（moonPhases / astroCalcContext / polarScopeData）
 
 - 依据 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.6（B3「先解其保留裸字段，再按 B1 手法下沉」）第 4 行 / §14.7 / §14.8（规则 3「请求序号随加载器搬入 store，禁宿主与 store 双序号、禁共享」、规则 5「禁双写」）；复用 §14.1 的 `bridge/CommandPort.ets` 与宿主同一 `HostCommandPort` 实例（AB-0 / B1 / B2 / B3-1 先例），注入接口沿用「纯接口 + 宿主具名对象 `attachHooks({...})`」先例。**单提交完成。**

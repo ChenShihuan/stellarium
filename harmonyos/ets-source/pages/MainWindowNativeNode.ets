@@ -313,7 +313,7 @@ export struct WindowNativeNode {
   @State private astroStore: AstroStore = new AstroStore()
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
   @State private tools: ToolsStore = new ToolsStore()
-  private searchHistory: string[] = []
+  // searchHistory 已下沉 state/SearchStore.ets（§14 B3-3，单一持有者）。
   private searchPanelScroller: Scroller = new Scroller()
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
@@ -721,10 +721,8 @@ export struct WindowNativeNode {
   // timer separate from the live-value poll prevents it from delaying panning.
   private lastSafeNavigationPayload: string = ''
   private lastSafeNavigationAt: number = 0
-  private categoryOffset: number = 0
-  private categoryRequestSerial: number = 0
-  private satelliteCatalogReady: boolean = false
-  private readonly CATEGORY_PAGE_SIZE: number = 60
+  // categoryOffset / categoryRequestSerial / satelliteCatalogReady / CATEGORY_PAGE_SIZE 已随
+  // loadCategoryObjects / loadMoreCategoryObjects 下沉 state/SearchStore.ets（§14 B3-3）。
   // 时间面板打开时，每 1s 拉一次 getState，让"时间"字段像走动的钟一样实时更新
   // （否则只在打开瞬间刷新一次，点按钮/时间流逝都不会再更新，永远显示 --）
   private timePanelTimer: number = 0
@@ -1150,15 +1148,16 @@ export struct WindowNativeNode {
     this.catalogStore.attachPort(hostPort, () => {})
     // §14 B2R-4：目录分类加载器 loadObjectCatalogCategories 下沉 CatalogStore。它只读语言刷新
     // 代际 languageRefreshSerial（§14 B3-1 起单一持有者为 LanguageStore）、读写 SearchStore 的
-    // pendingPluginCatalogId / searchCategory / categoryModuleId，并调用未随本片下沉的搜索域动作
-    // loadCategoryObjects（B3）与 CLI 发布点 publishSearchBrowserState —— 全部经 CatalogHostHooks 具名回注。
+    // pendingPluginCatalogId / searchCategory / categoryModuleId，并调用搜索域动作 loadCategoryObjects
+    //（§14 B3-3 起为 SearchStore 方法）与 CLI 发布点 publishSearchBrowserState —— 全部经
+    // CatalogHostHooks 具名回注。
     this.catalogStore.attachHooks({
       languageSerial: (): number => this.languageStore.languageRefreshSerial,
       pendingPluginCatalogId: (): string => this.searchStore.pendingPluginCatalogId,
       clearPendingPluginCatalogId: (): void => { this.searchStore.pendingPluginCatalogId = '' },
       searchCategory: (): string => this.searchStore.searchCategory,
       categoryModuleId: (): string => this.searchStore.categoryModuleId,
-      loadCategoryObjects: (category: string, moduleIdOverride: string): void => { this.loadCategoryObjects(category, moduleIdOverride) },
+      loadCategoryObjects: (category: string, moduleIdOverride: string): void => { this.searchStore.loadCategoryObjects(category, moduleIdOverride) },
       publishSearchBrowserState: (): void => { this.publishSearchBrowserState() }
     })
     // §14 B1-4：相机拼接（MosaicCamera）与古天文辅助线（ArchaeoLines）两域复用同一实例。
@@ -1322,8 +1321,19 @@ export struct WindowNativeNode {
     this.navStarsStore.attachPort(hostPort, () => {})
     this.meteorStore.attachPort(hostPort, () => {})
     this.searchStore.attachPort(hostPort, () => {})
+    // §14 B3-3：分类浏览加载器（loadCategoryObjects / loadMoreCategoryObjects）与搜索历史加载器
+    // （loadSearchHistoryFromStorage）下沉 SearchStore。分类加载器调用的宿主助手 / CLI 发布点 /
+    // 插件加载器与搜索历史 Preferences 读写经 SearchHostHooks 具名回注（store 不 import 桥/UI/
+    // NAPI）；语言刷新代际仍只读 LanguageStore（§14 B3-1）。
     this.searchStore.attachHooks({
-      languageSerial: (): number => this.languageStore.languageRefreshSerial
+      languageSerial: (): number => this.languageStore.languageRefreshSerial,
+      publishSearchBrowserState: (): void => { this.publishSearchBrowserState() },
+      categoryModuleIdFor: (category: string): string => this.categoryModuleIdFor(category),
+      ensurePluginLoaded: (pluginName: string, callback: () => void, failureCallback?: () => void): void => this.ensurePluginLoaded(pluginName, callback, failureCallback),
+      celestialTitle: (nativeName: string, englishName: string): string => this.celestialTitle(nativeName, englishName),
+      celestialSubtitle: (title: string, englishName: string): string => this.celestialSubtitle(title, englishName),
+      readSearchHistoryStorage: (): Promise<string> => this.readSearchHistoryStorage(),
+      writeSearchHistoryStorage: (json: string): Promise<void> => this.writeSearchHistoryStorage(json)
     })
     this.startPageAfterPrivacyIfNeeded()
   }
@@ -1637,7 +1647,7 @@ export struct WindowNativeNode {
     const stored = AppStorage.get<string>("observingList")
     if (stored) this.obsListStore.observingList = parseObservingList(stored)
     this.obsListStore.loadObservingListFromStorage()
-    this.loadSearchHistoryFromStorage()
+    this.searchStore.loadSearchHistoryFromStorage()
     this.bookmarkStore.loadBookmarksFromStorage()
     this.registerFoldListeners()
     this.subscribeApplicationLifecycle()
@@ -2394,7 +2404,7 @@ export struct WindowNativeNode {
       if (panel === 'search') {
         this.catalogStore.loadObjectCatalogCategories(this.languageStore.languageRefreshSerial)
         this.searchStore.loadConstellationNavigation(this.languageStore.languageRefreshSerial)
-        if (this.searchStore.categoryObjects.length === 0) this.loadCategoryObjects(this.searchStore.searchCategory)
+        if (this.searchStore.categoryObjects.length === 0) this.searchStore.loadCategoryObjects(this.searchStore.searchCategory)
       }
       if (panel === 'time') {
         this.timeStore.loadTimeExtras()
@@ -2983,30 +2993,19 @@ export struct WindowNativeNode {
     return (await store.get('bookmarks', '[]')) as string
   }
 
-  private async saveSearchHistoryToStorage(): Promise<void> {
-    try {
-      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const store = await preferences.getPreferences(ctx, SEARCH_HISTORY_STORE)
-      const jsonStr: string = JSON.stringify(this.searchHistory)
-      await store.put('history', jsonStr)
-      await store.flush()
-    } catch (e) {
-      hilog.warn(0xD002, 'Stellarium', 'save search history failed: %{public}s', String(e))
-    }
+  // Preferences 原始读写助手：供 SearchStore.loadSearchHistoryFromStorage / saveSearchHistoryToStorage
+  // 经 hooks 调用（§14 B3-3；与 readBookmarksStorage 同型，承载 getUIContext + @ohos.data.preferences）。
+  private async readSearchHistoryStorage(): Promise<string> {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+    const store = await preferences.getPreferences(ctx, SEARCH_HISTORY_STORE)
+    return (await store.get('history', '[]')) as string
   }
 
-  private async loadSearchHistoryFromStorage(): Promise<void> {
-    try {
-      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const store = await preferences.getPreferences(ctx, SEARCH_HISTORY_STORE)
-      const jsonStr: string = (await store.get('history', '[]')) as string
-      const parsed: string[] = JSON.parse(jsonStr)
-      if (parsed.length > 0) {
-        this.searchHistory = parsed.slice(0, 20)
-      }
-    } catch (e) {
-      hilog.warn(0xD002, 'Stellarium', 'load search history failed: %{public}s', String(e))
-    }
+  private async writeSearchHistoryStorage(json: string): Promise<void> {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+    const store = await preferences.getPreferences(ctx, SEARCH_HISTORY_STORE)
+    await store.put('history', json)
+    await store.flush()
   }
 
   // ===== 书签（C++ 桥：addBookmark / getBookmarks / deleteBookmark / gotoBookmark）=====
@@ -5264,7 +5263,7 @@ export struct WindowNativeNode {
     this.graphTargetPickerActive = true
     this.searchStore.searchText = ''
     this.searchStore.searchSuggestions = []
-    this.loadCategoryObjects('planet')
+    this.searchStore.loadCategoryObjects('planet')
     this.setPanel('search')
   }
 
@@ -5272,7 +5271,7 @@ export struct WindowNativeNode {
     this.rtsTargetPickerActive = true
     this.searchStore.searchText = ''
     this.searchStore.searchSuggestions = []
-    this.loadCategoryObjects('planet')
+    this.searchStore.loadCategoryObjects('planet')
     this.setPanel('search')
   }
 
@@ -5280,7 +5279,7 @@ export struct WindowNativeNode {
     this.ephemerisTargetPickerActive = true
     this.searchStore.searchText = ''
     this.searchStore.searchSuggestions = []
-    this.loadCategoryObjects('planet')
+    this.searchStore.loadCategoryObjects('planet')
     this.setPanel('search')
   }
 
@@ -7176,7 +7175,7 @@ export struct WindowNativeNode {
     if (route.catalogModuleId !== undefined) {
       this.searchStore.searchText = ''
       this.searchStore.searchCategory = 'module:' + route.catalogModuleId
-      this.loadCategoryObjects(this.searchStore.searchCategory, route.catalogModuleId)
+      this.searchStore.loadCategoryObjects(this.searchStore.searchCategory, route.catalogModuleId)
       this.searchStore.pendingPluginCatalogId = route.catalogModuleId
     }
     this.openSubPanel(route.panel)
@@ -7448,41 +7447,7 @@ private loadPlanetPositions(): void {
     return ''
   }
 
-  private loadCategoryObjects(category: string, moduleIdOverride: string = ''): void {
-    this.searchStore.searchCategory = category
-    this.searchStore.pendingPluginCatalogId = ''
-    const moduleId = moduleIdOverride.length > 0 ? moduleIdOverride : this.categoryModuleIdFor(category)
-    this.searchStore.categoryModuleId = moduleId
-    this.searchStore.categoryObjects = []
-    this.searchStore.categoryObjectCount = 0
-    this.searchStore.categoryLoadedCount = 0
-    this.searchStore.categoryLoading = false
-    this.searchStore.categoryLoadFailed = false
-    this.searchStore.categoryHasMore = false
-    this.searchStore.categoryListKind = ''
-    this.searchStore.categoryCatalogTotal = 0
-    this.searchStore.categoryCatalogReady = true
-    this.searchStore.categoryCatalogMessage = ''
-    this.categoryOffset = 0
-    this.categoryRequestSerial += 1
-    this.publishSearchBrowserState()
-    if (moduleId === 'Satellites' && !this.satelliteCatalogReady) {
-      const serial = this.categoryRequestSerial
-      this.searchStore.categoryLoading = true
-      this.ensurePluginLoaded('Satellites', () => {
-        if (serial !== this.categoryRequestSerial || this.searchStore.categoryModuleId !== 'Satellites') return
-        this.satelliteCatalogReady = true
-        this.searchStore.categoryLoading = false
-        this.loadMoreCategoryObjects()
-      }, () => {
-        if (serial !== this.categoryRequestSerial || this.searchStore.categoryModuleId !== 'Satellites') return
-        this.searchStore.categoryLoading = false
-        this.searchStore.categoryLoadFailed = true
-      })
-      return
-    }
-    this.loadMoreCategoryObjects()
-  }
+  // loadCategoryObjects 已下沉 state/SearchStore.ets（§14 B3-3）。
 
   private searchCategoryOptions(): Array<CatOption> {
     const core: CatOption[] = [
@@ -7571,7 +7536,7 @@ private loadPlanetPositions(): void {
   }
 
   private refreshSearchFilterResults(): void {
-    this.loadCategoryObjects(this.searchStore.searchCategory)
+    this.searchStore.loadCategoryObjects(this.searchStore.searchCategory)
     this.searchPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
   }
 
@@ -7582,7 +7547,7 @@ private loadPlanetPositions(): void {
     }
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
       this.searchStore.searchFilterPage = ''
-      this.loadCategoryObjects(category)
+      this.searchStore.loadCategoryObjects(category)
     })
     this.searchPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
   }
@@ -7634,57 +7599,7 @@ private loadPlanetPositions(): void {
 
   // Catalogs may contain many thousands of entries. Request small pages so the
   // first page is usable immediately and append more only when the user scrolls.
-  private loadMoreCategoryObjects(): void {
-    if (this.searchStore.categoryLoading || !this.searchStore.categoryModuleId.length || (!this.searchStore.categoryHasMore && this.categoryOffset > 0)) {
-      return
-    }
-    const serial = this.categoryRequestSerial
-    const offset = this.categoryOffset
-    const category = this.searchStore.searchCategory
-    this.searchStore.categoryLoading = true
-    this.searchStore.categoryLoadFailed = false
-    this.callNativeWhenReady('listObjects', this.searchStore.categoryModuleId + '|' + this.CATEGORY_PAGE_SIZE + '|' + offset + '|' + this.searchStore.searchVisibilityFilter + '|' + this.searchStore.searchInstrumentFilter, (result) => {
-      if (serial !== this.categoryRequestSerial) { return }
-      const items = Array.isArray(result.items) ? result.items as string[] : []
-      const keys = Array.isArray(result.keys) ? result.keys as string[] : []
-      const types = Array.isArray(result.types) ? result.types as string[] : []
-      const altitudes = Array.isArray(result.altitudes) ? result.altitudes as number[] : []
-      const magnitudes = Array.isArray(result.magnitudes) ? result.magnitudes as number[] : []
-      const visibleNow = Array.isArray(result.visibleNow) ? result.visibleNow as boolean[] : []
-      const seen: Record<string, boolean> = {}
-      for (const existing of this.searchStore.categoryObjects) {
-        if (existing.name.length > 0) { seen[existing.name] = true }
-      }
-      const browse: NameItem[] = []
-      for (let i = 0; i < items.length; i++) {
-        const key = (keys[i] && keys[i].length > 0) ? keys[i] : items[i]
-        if (key.length === 0 || seen[key]) { continue }
-        seen[key] = true
-        // Keep the stable catalog ID for native selection. The display label
-        // already comes from StelObject::getNameI18n() and the official sky
-        // translation resources loaded by the native core.
-        const title = this.celestialTitle(items[i], key)
-        browse.push({ name: key, zh: title, subtitle: this.celestialSubtitle(title, key), type: types[i] ?? '', altitude: altitudes[i], magnitude: magnitudes[i], visibleNow: visibleNow[i] === true })
-      }
-      const combined = this.searchStore.categoryObjects.concat(browse)
-      this.searchStore.categoryObjects = combined
-      this.searchStore.categoryLoadedCount = combined.length
-      this.searchStore.categoryObjectCount = typeof result.count === 'number' && result.count > 0 ? result.count : combined.length
-      this.categoryOffset = offset + items.length
-      this.searchStore.categoryHasMore = result.hasMore === true && items.length > 0
-      this.searchStore.categoryListKind = result.listKind ?? ''
-      this.searchStore.categoryCatalogTotal = typeof result.catalogTotal === 'number' ? result.catalogTotal : this.searchStore.categoryObjectCount
-      this.searchStore.categoryCatalogReady = result.catalogReady !== false
-      this.searchStore.categoryCatalogMessage = result.catalogMessage !== undefined ? String(result.catalogMessage) : ''
-      this.searchStore.categoryLoading = false
-      this.searchStore.categoryLoadFailed = false
-    }, 0, 100, 60, (_failure) => {
-      if (serial !== this.categoryRequestSerial) { return }
-      this.searchStore.categoryLoading = false
-      this.searchStore.categoryLoadFailed = true
-      this.searchStore.categoryHasMore = false
-    })
-  }
+  // loadMoreCategoryObjects 已下沉 state/SearchStore.ets（§14 B3-3）。
 
   private stopTracking(): void {
     this.setTrackingState(false)
@@ -7911,7 +7826,7 @@ private loadPlanetPositions(): void {
         this.searchStore.constellationNavigationItems = []
         this.catalogStore.loadObjectCatalogCategories(languageSerial)
         this.searchStore.loadConstellationNavigation(languageSerial)
-        this.loadCategoryObjects(this.searchStore.searchCategory, selectedCategoryModuleId)
+        this.searchStore.loadCategoryObjects(this.searchStore.searchCategory, selectedCategoryModuleId)
         const query = this.searchStore.searchText.trim()
         if (query.length > 0) this.fetchSuggestions(query, languageSerial)
       }, 0, 300, 3)
@@ -9219,10 +9134,10 @@ private loadPlanetPositions(): void {
     }
     this.flashHint(I18n.t('i0070').replace('%s', query))
     // 保存搜索历史（去重，最多保留 20 条）
-    const hist = this.searchHistory.filter(h => h !== query)
+    const hist = this.searchStore.searchHistory.filter(h => h !== query)
     hist.unshift(query)
-    this.searchHistory = hist.slice(0, 20)
-    this.saveSearchHistoryToStorage()
+    this.searchStore.searchHistory = hist.slice(0, 20)
+    this.searchStore.saveSearchHistoryToStorage()
     const gyroSelection = this.gyroStore.gyroscopeEnabled
     let payload = exactSelectionPayload.length > 0
       ? exactSelectionPayload
@@ -14936,8 +14851,8 @@ private loadPlanetPositions(): void {
         categorySubtitle: (item: NameItem) => { return this.categoryObservationSubtitle(item) },
         onOpenCategories: () => { this.setSearchFilterPage('categories') },
         onOpenFilters: () => { this.setSearchFilterPage('root') },
-        onRetry: () => { this.loadCategoryObjects(this.searchStore.searchCategory) },
-        onLoadMore: () => { this.loadMoreCategoryObjects() },
+        onRetry: () => { this.searchStore.loadCategoryObjects(this.searchStore.searchCategory) },
+        onLoadMore: () => { this.searchStore.loadMoreCategoryObjects() },
         onSelectCategoryObject: (item: NameItem) => {
           if (this.searchStore.searchCategory === 'constellation') {
             this.openConstellationGuide(item.name ?? '', this.searchStore.categoryModuleId)
