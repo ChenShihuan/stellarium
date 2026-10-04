@@ -10,4 +10,43 @@
 @Observed
 export class NightModeStore {
   nightMode: boolean = false
+
+  // 夜视模式颜色方案（计划 §14.3 A2-5；原宿主 private nm* 族逐字迁入）。
+  // 原读 this.nightModeStore.nightMode，入本 store 后读 this.nightMode，其余一字未改。
+  nmText(): string {
+    return this.nightMode ? '#FF6644' : '#E5FFFFFF'
+  }
+  nmSub(): string {
+    return this.nightMode ? '#CC5533' : '#99FFFFFF'
+  }
+  nmAccent(): string {
+    return this.nightMode ? '#FF5533' : '#5B93BF'
+  }
+  nmBg(): string {
+    return this.nightMode ? 'rgba(180, 40, 20, 0.12)' : 'rgba(255,255,255,0.04)'
+  }
+  nmBorder(): string {
+    return this.nightMode ? 'rgba(200, 60, 30, 0.20)' : 'rgba(255,255,255,0.08)'
+  }
+  nmInput(): string {
+    return this.nightMode ? 'rgba(120, 30, 15, 0.50)' : 'rgba(255,255,255,0.06)'
+  }
+  nmInputBorder(): string {
+    return this.nightMode ? 'rgba(200, 60, 30, 0.25)' : 'rgba(214, 238, 255, 0.14)'
+  }
+  nmPickerSurface(): string {
+    return this.nightMode ? '#32120D' : '#101A2B'
+  }
+  nmPickerHeader(): string {
+    return this.nightMode ? '#48170F' : '#18263B'
+  }
+  nmPickerHeaderActive(): string {
+    return this.nightMode ? '#5D1D12' : '#1E3A54'
+  }
+  nmPickerSelected(): string {
+    return this.nightMode ? '#8A2B1B' : '#285F84'
+  }
+  nmPickerOption(): string {
+    return this.nightMode ? '#41160F' : '#172338'
+  }
 }

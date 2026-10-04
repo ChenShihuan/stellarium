@@ -230,6 +230,110 @@ export function planetPairBarHeight(value: number | undefined, min: number, max:
   return Math.max(1, Math.min(96, ((value ?? min) - min) / (max - min) * 96))
 }
 
+// ---- 日心黄道位置点的几何簇（计划 §14.3 A2-5 逐字迁出；零宿主状态，仅依赖入参与模块内助手）----
+
+export function hecDistanceToRadius(distanceAU: number): number {
+  if (distanceAU <= 1) return clamp(24 + distanceAU * 33, 24, 57)
+  if (distanceAU <= 5) return 57 + (distanceAU - 1) * 7.5
+  if (distanceAU <= 15) return 87 + (distanceAU - 5) * 2.6
+  return clamp(113 + (distanceAU - 15) * 1.35, 113, 133)
+}
+
+export function hecOrbitVerticalRadius(englishName: string): number {
+  const radius = hecPlanetOrbitRadius(englishName)
+  return radius > 0 ? radius * 0.86 : 0
+}
+
+export function hecPointDistance(position: HeliocentricPosition): number {
+  if (position.displayRadius !== undefined) return position.displayRadius
+  const planetRadius = hecPlanetOrbitRadius(position.englishName)
+  return planetRadius > 0 ? planetRadius : hecDistanceToRadius(position.distanceAU)
+}
+
+export function hecPointHorizontalRadius(position: HeliocentricPosition): number {
+  return hecPointDistance(position)
+}
+
+export function hecPointVerticalRadius(position: HeliocentricPosition): number {
+  const orbitVerticalRadius = hecOrbitVerticalRadius(position.englishName)
+  return orbitVerticalRadius > 0 ? orbitVerticalRadius : hecPointDistance(position)
+}
+
+export function hecPointX(position: HeliocentricPosition): number {
+  const angle = (360 - hecPointAngle(position)) * Math.PI / 180
+  return 146 + hecPointHorizontalRadius(position) * Math.sin(angle)
+}
+
+export function hecPointY(position: HeliocentricPosition): number {
+  const angle = (360 - hecPointAngle(position)) * Math.PI / 180
+  return 146 - hecPointVerticalRadius(position) * Math.cos(angle)
+}
+
+export function hecPointLeft(position: HeliocentricPosition): number {
+  return hecPointX(position) - hecPointSize(position) / 2
+}
+
+export function hecPointTop(position: HeliocentricPosition): number {
+  return hecPointY(position) - hecPointSize(position) / 2
+}
+
+export function hecLayoutPositions(positions: Array<HeliocentricPosition>): Array<HeliocentricPosition> {
+  const placed: Array<HeliocentricPosition> = []
+  for (const position of positions) {
+    const baseRadius = hecPointDistance(position)
+    const flexiblePosition = position.isComet || position.isSelectedMinor
+    // 行星必须留在真实黄经对应的轨道位置。只有没有专属轨道的小天体
+    // 才允许做很小的视觉避让，否则点会看起来偏离自己的轨道。
+    const angularOffsets: Array<number> = flexiblePosition ? [0, 4, -4, 8, -8, 14, -14] : [0]
+    const radialOffsets: Array<number> = flexiblePosition ? [0, 3, -3, 6, -6] : [0]
+    let displayPosition: HeliocentricPosition = {
+      name: position.name,
+      englishName: position.englishName,
+      latitude: position.latitude,
+      longitude: position.longitude,
+      distanceAU: position.distanceAU,
+      isComet: position.isComet,
+      isSelectedMinor: position.isSelectedMinor,
+      displayLongitude: position.longitude,
+      displayRadius: baseRadius,
+    }
+    let collisionFree: boolean = false
+    for (const radialOffset of radialOffsets) {
+      if (collisionFree) break
+      for (const angularOffset of angularOffsets) {
+        const candidate: HeliocentricPosition = {
+          name: position.name,
+          englishName: position.englishName,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          distanceAU: position.distanceAU,
+          isComet: position.isComet,
+          isSelectedMinor: position.isSelectedMinor,
+          displayLongitude: position.longitude + angularOffset,
+          displayRadius: clamp(baseRadius + radialOffset, 22, 136),
+        }
+        let collides: boolean = false
+        for (const existing of placed) {
+          const deltaX = hecPointX(candidate) - hecPointX(existing)
+          const deltaY = hecPointY(candidate) - hecPointY(existing)
+          const clearance = (hecPointSize(candidate) + hecPointSize(existing)) / 2 + 2
+          if (deltaX * deltaX + deltaY * deltaY < clearance * clearance) {
+            collides = true
+            break
+          }
+        }
+        if (!collides) {
+          displayPosition = candidate
+          collisionFree = true
+          break
+        }
+      }
+    }
+    placed.push(displayPosition)
+  }
+  return placed
+}
+
 // 天象类型 → 说明性标题（计划 §14.2 A1-7 迁入）。
 export function phenomenonCaption(type: string): string {
   if (type === '合') return '合 · 同向接近'
