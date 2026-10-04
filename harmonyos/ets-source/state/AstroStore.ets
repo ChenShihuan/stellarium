@@ -4,6 +4,10 @@
 // 宿主保留 astro 域的加载/导出/路由/持久化方法（它们继续写本 store），
 // 组件通过注入的回调（AstroPanelHost）驱动这些方法。
 // 高频/跨域字段（夜视三色、objectDetailStore、wutStore、Scroller）不进本 store。
+//
+// review §2.7 续作：食相起始日期 eclipseStartYear/Month/Day 属天文派生域，并入本 store
+// （原宿主 @State，仅被 eclipseStartOptionLabel / chooseEclipseStartDate / resolveEclipseStartJD
+// 读写；AstroPanel 经 eclipseStartOptionLabel 回调展示该日期，故放被观察 store 一致）。
 import { TonightEvents, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, PlanetPosition, HeliocentricPosition, CelestialPosition } from '../pages/StellariumTypes'
 
 @Observed
@@ -118,6 +122,9 @@ export class AstroStore {
   eclipseData: Array<EclipseItem> = []
   eclipseMonths: number = 36
   eclipseStartOffsetDays: number = 0
+  eclipseStartYear: number = new Date().getFullYear()
+  eclipseStartMonth: number = new Date().getMonth() + 1
+  eclipseStartDay: number = new Date().getDate()
   eclipseLoading: boolean = false
   eclipseError: string = ''
   eclipseKindFilter: number = 0
