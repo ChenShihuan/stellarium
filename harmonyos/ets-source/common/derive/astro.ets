@@ -213,3 +213,17 @@ export function planetTimeSeriesBarHeight(value: number | undefined, min: number
 export function planetPairBarHeight(value: number | undefined, min: number, max: number): number {
   return Math.max(1, Math.min(96, ((value ?? min) - min) / (max - min) * 96))
 }
+
+// 天象类型 → 说明性标题（计划 §14.2 A1-7 迁入）。
+export function phenomenonCaption(type: string): string {
+  if (type === '合') return '合 · 同向接近'
+  if (type === '冲') return '冲 · 日地星共线'
+  if (type.indexOf('方照') >= 0) return type + ' · 与太阳90°'
+  if (type.indexOf('东大距') >= 0) return '东大距 · 傍晚最远离日'
+  if (type.indexOf('西大距') >= 0) return '西大距 · 清晨最远离日'
+  if (type.indexOf('近日点') >= 0) return '近日点 · 绕日最近'
+  if (type.indexOf('远日点') >= 0) return '远日点 · 绕日最远'
+  if (type.indexOf('逆行') >= 0) return '留 · 改为逆行'
+  if (type.indexOf('顺行') >= 0) return '留 · 改为顺行'
+  return type
+}
