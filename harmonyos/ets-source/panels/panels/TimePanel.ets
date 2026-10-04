@@ -3,6 +3,7 @@ import { TimeWheelStore } from '../../state/TimeWheelStore'
 import { EquationOfTimeStore } from '../../state/EquationOfTimeStore'
 import { JulianDateStore } from '../../state/JulianDateStore'
 import { NightModeStore } from '../../state/NightModeStore'
+import { AtmosphereStore } from '../../state/AtmosphereStore'
 import { NightModeToggleRow } from '../../common/ui/NightModeToggleRow'
 import { QuickChipRow } from '../QuickChipRow'
 import { TimeWheelScrubber } from '../time/TimeWheelScrubber'
@@ -17,7 +18,9 @@ import { ManualTimeBlock } from '../time/ManualTimeBlock'
 //
 // 判定条件 `activePanel === 'time'` 留在宿主。该分支本就是把已有组件组装起来：
 // 时间转轴 + 速率档位 + 快捷跳转 + 恒星时 + 均时差 + 儒略日 + 夜视模式 +
-// 大气折射 + 手动指定时间。五个 store 走 @ObjectLink 实时刷新，其余数值/颜色走
+// 大气折射 + 手动指定时间。六个 store 走 @ObjectLink 实时刷新（新增 atmosphereStore，
+// 承载 refractionOn / atmoPressure / atmoTemperature / atmoExtinction，原 4 个 @Prop），
+// 其余数值/颜色走
 // @Prop；时间轮控制器（this.wheel()）与手动时间的读写属宿主私有状态，
 // 按 §13.1 规则 6 用回调回注。顶层用 Column()（无 space）与原调用点
 // `Column() { this.panelContent() }` 的间距一致。
@@ -29,10 +32,7 @@ export struct TimePanel {
   @ObjectLink equationOfTimeStore: EquationOfTimeStore
   @ObjectLink julianStore: JulianDateStore
   @ObjectLink nightModeStore: NightModeStore
-  @Prop refractionOn: boolean
-  @Prop atmoPressure: number
-  @Prop atmoTemperature: number
-  @Prop atmoExtinction: number
+  @ObjectLink atmosphereStore: AtmosphereStore
   @Prop manualYear: number
   @Prop manualMonth: number
   @Prop manualDay: number
@@ -100,10 +100,10 @@ export struct TimePanel {
         onToggle: (enabled: boolean) => { this.onNightMode(enabled) }
       })
       ObservationAidBlock({
-        refractionOn: this.refractionOn,
-        atmoPressure: this.atmoPressure,
-        atmoTemperature: this.atmoTemperature,
-        atmoExtinction: this.atmoExtinction,
+        refractionOn: this.atmosphereStore.refractionOn,
+        atmoPressure: this.atmosphereStore.atmoPressure,
+        atmoTemperature: this.atmosphereStore.atmoTemperature,
+        atmoExtinction: this.atmosphereStore.atmoExtinction,
         textColor: this.textColor,
         subColor: this.subColor,
         borderColorValue: this.borderTint,

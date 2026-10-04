@@ -6,7 +6,7 @@
 //
 // 状态体系（§13.1 规则 1/5/6）：
 //   - gyroStore / layerStore / nightModeStore / telescopeStore / observingListStore /
-//     skyCultureViewStore 六个 @Observed store 走 @ObjectLink（宿主源均为 @State 实例）；组件内对其属性的写入会被宿主观测到（规则 4）。
+//     skyCultureViewStore / viewSettingsStore 七个 @Observed store 走 @ObjectLink（宿主源均为 @State 实例）；组件内对其属性的写入会被宿主观测到（规则 4）。
 //   - 其余标量/数组状态走 @Prop，主题色由宿主算好后传入（panelColor）。
 //   - 宿主私有动作（sensZh / flashHint / handleChip / refreshState / saveScreenshot /
 //     observing* / setLanguage / setSkyCulture / triggerAction 等）按规则 6 回注。
@@ -25,6 +25,7 @@ import { NightModeStore } from '../../state/NightModeStore'
 import { TelescopeStore } from '../../state/TelescopeStore'
 import { ObservingListStore } from '../../state/ObservingListStore'
 import { SkyCultureViewStore } from '../../state/SkyCultureViewStore'
+import { ViewSettingsStore } from '../../state/ViewSettingsStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 import { InfoRow } from '../../common/ui/InfoRow'
 import { GyroscopeRow, LanguageRow } from '../settings/DeviceAndLanguageRows'
@@ -38,10 +39,10 @@ export struct ConfigFallbackPanel {
   @ObjectLink telescopeStore: TelescopeStore
   @ObjectLink observingListStore: ObservingListStore
   @ObjectLink skyCultureViewStore: SkyCultureViewStore
+  @ObjectLink viewSettingsStore: ViewSettingsStore
   @Prop isExpandedLayout: boolean
   @Prop fovText: string
   @Prop selectedLanguage: string
-  @Prop useMetricUnits: boolean
   @Prop panelColor: string
   sensZh: (en: string) => string = (en: string) => en
   observingDisplayName: (name: string) => string = (name: string) => name
@@ -76,18 +77,18 @@ export struct ConfigFallbackPanel {
         Row({ space: 6 }) {
           Text(I18n.t('unit_km'))
             .fontSize(12)
-            .fontColor(this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
+            .fontColor(this.viewSettingsStore.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-            .backgroundColor(this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
+            .backgroundColor(this.viewSettingsStore.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
             .borderRadius(UI_RADIUS_CONTROL)
             .onClick(() => {
               this.setLegacyDistanceUnit(true)
             })
           Text(I18n.t('unit_mile'))
             .fontSize(12)
-            .fontColor(!this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
+            .fontColor(!this.viewSettingsStore.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-            .backgroundColor(!this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
+            .backgroundColor(!this.viewSettingsStore.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
             .borderRadius(UI_RADIUS_CONTROL)
             .onClick(() => {
               this.setLegacyDistanceUnit(false)
