@@ -134,4 +134,13 @@ export class TimeStore {
     const date = idx > 0 ? text.substring(0, idx) : ''
     return date.length > 0 ? date + ' · ' + this.timeRateText : this.timeRateText
   }
+
+  // 面板副标题：仅当活动面板为时间面板时返回日期+速率，否则为空（§14 A2-4，原宿主 panelSubtitle）。
+  // activePanel 属宿主路由保留字段，按显式入参传入。
+  panelSubtitle(activePanel: string): string {
+    if (activePanel === 'time') {
+      return this.timePanelDateText()
+    }
+    return ''
+  }
 }
