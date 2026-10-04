@@ -112,6 +112,7 @@ export struct LayerSkyTab {
         Row({ space: 6 }) {
           Button('-').fontSize(12).fontColor(this.textColor).backgroundColor(this.panelColor)
             .borderRadius(UI_RADIUS_CONTROL).width(36).height(28)
+            .padding({ left: 0, right: 0 })
             .onClick(() => {
               if (this.layerViewStore.milkyWayBright > 0) {
                 this.onMilkyWayBright(this.layerViewStore.milkyWayBright - 1)
@@ -120,6 +121,7 @@ export struct LayerSkyTab {
           Text(this.layerViewStore.milkyWayBright.toString()).fontSize(14).fontColor(this.textColor).width(24).textAlign(TextAlign.Center)
           Button('+').fontSize(12).fontColor(this.textColor).backgroundColor(this.panelColor)
             .borderRadius(UI_RADIUS_CONTROL).width(36).height(28)
+            .padding({ left: 0, right: 0 })
             .onClick(() => {
               if (this.layerViewStore.milkyWayBright < 6) {
                 this.onMilkyWayBright(this.layerViewStore.milkyWayBright + 1)
