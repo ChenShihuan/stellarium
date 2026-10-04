@@ -47,6 +47,14 @@ import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wut
 import { objectInspectorPlanetTexturePath, objectInspectorPlanetRingSpec, objectInspectorDeepSkyImageName, objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
+import { MediaPort, MediaSaveResult } from '../bridge/MediaPort'
+import { PlatformPort } from '../bridge/PlatformPort'
+import { SensorPort, SensorProbeInfo } from '../bridge/SensorPort'
+import { decodeLocalImage, releaseDecodedImage } from '../common/media/ImageDecoder'
+import { copyTextToClipboard } from '../common/platform/Clipboard'
+import { shareFile } from '../common/platform/Share'
+import { saveScreenshot, exportScreenshotToUserStorage } from '../common/platform/Screenshot'
+import { speakSelectedObject } from '../common/SpeechService'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
@@ -277,6 +285,225 @@ class HostCommandPort implements CommandPort {
   }
 }
 
+// 宿主 → MediaPort 的具名适配器（PLAN §15.1 AB2-0a / M1-A）。把 fileIo / image / picker 调用
+// 逐字转发给媒体服务（common/media、common/platform），使服务不 import NAPI。用具名 class 实现接口，
+// 避免 ArkTS 匿名对象字面量越界；先例 HostCommandPort。
+class HostMediaPort implements MediaPort {
+  // 宿主 UI 上下文工厂经 configure 惰性注入（适配器在字段初始化时构造，此时 getUIContext 尚不可用）。
+  private contextFactory: (() => common.UIAbilityContext) | null = null
+
+  configure(contextFactory: () => common.UIAbilityContext): void {
+    this.contextFactory = contextFactory
+  }
+
+  fileExists(path: string): boolean {
+    return fileIo.accessSync(path)
+  }
+
+  openReadOnlyFile(path: string, label: string): number {
+    const file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY)
+    hilog.info(0x0000, 'StellariumArkUI',
+      '[detail-media] create image source kind=%{public}s path=%{public}s fd=%{public}s',
+      label, path, file.fd.toString())
+    return file.fd
+  }
+
+  closeFile(fd: number, label: string): void {
+    try {
+      fileIo.closeSync(fd)
+    } catch (err) {
+      hilog.warn(0x0000, 'StellariumArkUI', '[detail-media] file close failed kind=%{public}s error=%{public}s',
+        label, JSON.stringify(err))
+    }
+  }
+
+  createImageSource(fd: number, label: string): image.ImageSource {
+    return image.createImageSource(fd)
+  }
+
+  createPixelMap(source: image.ImageSource, label: string, desiredSize?: ImageDecodeSize): Promise<image.PixelMap> {
+    const pixelMapPromise = label === 'model'
+      ? (desiredSize === undefined
+        ? source.createPixelMapUsingAllocator({
+          desiredPixelFormat: image.PixelMapFormat.RGBA_8888,
+          desiredDynamicRange: image.DecodingDynamicRange.SDR
+        }, image.AllocatorType.SHARE_MEMORY)
+        : source.createPixelMapUsingAllocator({
+          desiredSize: desiredSize,
+          desiredPixelFormat: image.PixelMapFormat.RGBA_8888,
+          desiredDynamicRange: image.DecodingDynamicRange.SDR
+        }, image.AllocatorType.SHARE_MEMORY))
+      : (desiredSize === undefined
+        ? source.createPixelMap()
+        : source.createPixelMap({ desiredSize: desiredSize }))
+    if (label === 'model') {
+      return pixelMapPromise.then((pixelMap: image.PixelMap) => {
+        hilog.info(0x0000, 'StellariumArkUI',
+          '[detail-media] decode promise settled kind=%{public}s bytes=%{public}s',
+          label, pixelMap.getPixelBytesNumber().toString())
+        return pixelMap
+      })
+    }
+    return pixelMapPromise
+  }
+
+  releaseImageSource(source: image.ImageSource, label: string): void {
+    source.release().catch((err: Error) => {
+      hilog.warn(0x0000, 'StellariumArkUI', '[detail-media] image source release failed kind=%{public}s error=%{public}s',
+        label, JSON.stringify(err))
+    })
+  }
+
+  releasePixelMap(pixelMap: image.PixelMap | undefined, label: string): void {
+    if (pixelMap === undefined) {
+      return
+    }
+    pixelMap.release().then(() => {
+      hilog.info(0x0000, 'StellariumArkUI', '[detail-media] released pixel map kind=%{public}s', label)
+    }).catch((err: Error) => {
+      hilog.warn(0x0000, 'StellariumArkUI', '[detail-media] pixel map release failed kind=%{public}s error=%{public}s',
+        label, JSON.stringify(err))
+    })
+  }
+
+  saveFileAs(sourcePath: string, fileName: string, suffixLabel: string, onDone: (result: MediaSaveResult) => void): void {
+    const factory = this.contextFactory
+    if (factory === null) {
+      onDone(MediaSaveResult.Failed)
+      return
+    }
+    const run = async (): Promise<void> => {
+      try {
+        const context = factory()
+        const saveOptions = new picker.DocumentSaveOptions()
+        saveOptions.newFileNames = [fileName]
+        saveOptions.fileSuffixChoices = [suffixLabel]
+        const selectedUris = await new picker.DocumentViewPicker(context).save(saveOptions)
+        if (selectedUris.length === 0 || selectedUris[0].length === 0) {
+          onDone(MediaSaveResult.Cancelled)
+          return
+        }
+        await fileIo.copy(fileUri.getUriFromPath(sourcePath), selectedUris[0])
+        onDone(MediaSaveResult.Saved)
+      } catch (error) {
+        hilog.error(0x0000, 'StellariumArkUI', 'Export file failed: %{public}s', String(error))
+        onDone(MediaSaveResult.Failed)
+      }
+    }
+    void run()
+  }
+
+  deleteFile(path: string): void {
+    try {
+      fileIo.unlinkSync(path)
+    } catch (error) {
+    }
+  }
+}
+
+// 宿主 → PlatformPort 的具名适配器（PLAN §15.1 AB2-0c / M1-A）。把 systemShare / pasteboard / TTS
+// 逐字转发给平台服务。TTS 当前 SDK 未集成语音合成，speak 实现为不发声（与宿主原注释一致）。
+class HostPlatformPort implements PlatformPort {
+  private contextFactory: (() => common.UIAbilityContext) | null = null
+  private expandedFactory: (() => boolean) | null = null
+
+  configure(contextFactory: () => common.UIAbilityContext, expandedFactory: () => boolean): void {
+    this.contextFactory = contextFactory
+    this.expandedFactory = expandedFactory
+  }
+
+  async writeClipboardText(text: string): Promise<boolean> {
+    const result = await writeClipboardText(text)
+    return result.ok
+  }
+
+  shareFile(
+    path: string,
+    utdType: string,
+    title: string,
+    description: string,
+    anchorId: string,
+    expanded: boolean,
+    onDone: (ok: boolean) => void,
+  ): void {
+    const factory = this.contextFactory
+    if (factory === null) {
+      onDone(false)
+      return
+    }
+    const run = async (): Promise<void> => {
+      try {
+        const context = factory()
+        const data = new systemShare.SharedData({
+          utd: utdType,
+          uri: fileUri.getUriFromPath(path),
+          title: title,
+          description: description
+        })
+        const controller = new systemShare.ShareController(data)
+        const options: systemShare.ShareControllerOptions = expanded ? { anchor: anchorId } : {}
+        await controller.show(context, options)
+        onDone(true)
+      } catch (error) {
+        hilog.error(0x0000, 'StellariumArkUI', 'Share failed: %{public}s', String(error))
+        onDone(false)
+      }
+    }
+    void run()
+  }
+
+  speak(text: string): void {
+    // 基础 SDK 无 @kit.CoreSpeechKit；此处保留槽位，暂不发声（朗读文本由 SpeechService 生成后显示）。
+  }
+}
+
+// 宿主 → SensorPort 的具名适配器（PLAN §15.1 AB2-0b / M1-A）。转发 sensor.* 查询/订阅/退订。
+class HostSensorPort implements SensorPort {
+  probeSensor(sensorType: sensor.SensorId, label: string): SensorProbeInfo | undefined {
+    try {
+      const info = sensor.getSingleSensorSync(sensorType)
+      hilog.info(0x0000, 'StellariumArkUI', '[gyro-probe] sensor=%{public}s supported=true name=%{public}s vendor=%{public}s',
+        label, info.sensorName, info.vendorName)
+      return { sensorName: info.sensorName, vendorName: info.vendorName }
+    } catch (error) {
+      hilog.warn(0x0000, 'StellariumArkUI', '[gyro-probe] sensor=%{public}s supported=false error=%{public}s', label, JSON.stringify(error))
+      return undefined
+    }
+  }
+
+  subscribeRotationVector(callback: (data: sensor.RotationVectorResponse) => void, intervalNs: number): void {
+    sensor.on(sensor.SensorId.ROTATION_VECTOR, callback, { interval: intervalNs })
+  }
+
+  unsubscribeRotationVector(callback: (data: sensor.RotationVectorResponse) => void): void {
+    sensor.off(sensor.SensorId.ROTATION_VECTOR, callback)
+  }
+
+  subscribeOrientation(callback: (data: sensor.OrientationResponse) => void, intervalNs: number): void {
+    sensor.on(sensor.SensorId.ORIENTATION, callback, { interval: intervalNs })
+  }
+
+  unsubscribeOrientation(callback: (data: sensor.OrientationResponse) => void): void {
+    sensor.off(sensor.SensorId.ORIENTATION, callback)
+  }
+
+  subscribeGravity(callback: (data: sensor.GravityResponse) => void, intervalNs: number): void {
+    sensor.on(sensor.SensorId.GRAVITY, callback, { interval: intervalNs })
+  }
+
+  unsubscribeGravity(callback: (data: sensor.GravityResponse) => void): void {
+    sensor.off(sensor.SensorId.GRAVITY, callback)
+  }
+
+  subscribeMagneticField(callback: (data: sensor.MagneticFieldResponse) => void, intervalNs: number): void {
+    sensor.on(sensor.SensorId.MAGNETIC_FIELD, callback, { interval: intervalNs })
+  }
+
+  unsubscribeMagneticField(callback: (data: sensor.MagneticFieldResponse) => void): void {
+    sensor.off(sensor.SensorId.MAGNETIC_FIELD, callback)
+  }
+}
+
 @Component
 export struct WindowNativeNode {
   @State private createInfo: WindowNativeNodeCreateInfo | undefined = undefined
@@ -316,6 +543,11 @@ export struct WindowNativeNode {
   @State private tools: ToolsStore = new ToolsStore()
   // searchHistory 已下沉 state/SearchStore.ets（§14 B3-3，单一持有者）。
   private searchPanelScroller: Scroller = new Scroller()
+  // PLAN §15.1 / M1-A 端口适配器（宿主具名实现，aboutToAppear 里 configure 后注入服务层）。
+  private hostCommandPort: HostCommandPort | null = null
+  private hostMediaPort: HostMediaPort = new HostMediaPort()
+  private hostPlatformPort: HostPlatformPort = new HostPlatformPort()
+  private hostSensorPort: HostSensorPort = new HostSensorPort()
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -1106,27 +1338,42 @@ export struct WindowNativeNode {
     hilog.info(0x0000, 'StellariumArkUI', 'layout source=%{public}s w=%{public}s h=%{public}s foldable=%{public}s status=%{public}s displayMode=%{public}s angle=%{public}s uiMode=%{public}s hover=%{public}s foldTablet=%{public}s expanded=%{public}s', source, width.toString(), height.toString(), this.isFoldableDevice.toString(), this.foldStatusValue.toString(), this.foldDisplayModeValue.toString(), angle.toString(), nextMode, this.isFoldHoverLayout.toString(), this.isFoldTabletLayout.toString(), this.isExpandedLayout.toString())
   }
 
+  // PLAN §14.1 / M1-A：宿主桥端口的惰性单例。首次调用构造 HostCommandPort 并缓存，
+  // 之后 aboutToAppear 里的各 store 与 UI 回调共用同一实例（行为与原先的局部 const 一致）。
+  private commandPort(): CommandPort {
+    if (this.hostCommandPort === null) {
+      this.hostCommandPort = new HostCommandPort(
+        (name: string, payload: string) => this.callNative(name, payload),
+        (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, attempt?: number, intervalMs?: number, maxAttempts?: number) => {
+          this.callNativeWhenReady(name, payload, onOk, attempt ?? 0, intervalMs ?? 200, maxAttempts ?? 60, onFailure)
+        },
+        (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => {
+          this.callInteractive(name, payload, onOk, onFailure)
+        },
+        (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts?: number, isCancelled?: () => boolean) => {
+          this.callLongRunningInteractive(name, payload, onOk, onFailure, onProgress, maxAttempts, isCancelled)
+        },
+        (name: string, payload: string) => { this.callNativeFire(name, payload) }
+      )
+    }
+    return this.hostCommandPort
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
     if (localStorage) {
       this.createInfo = localStorage.get<WindowNativeNodeCreateInfo>('createInfo')
     }
+    // §15.1 / M1-A：配置媒体 / 平台 / 传感器三个端口适配器（服务层经它们调用 NAPI，不直接 import）。
+    this.hostMediaPort.configure((): common.UIAbilityContext => this.getUIContext().getHostContext() as common.UIAbilityContext)
+    this.hostPlatformPort.configure(
+      (): common.UIAbilityContext => this.getUIContext().getHostContext() as common.UIAbilityContext,
+      (): boolean => this.isExpandedLayout
+    )
     // §14.1：把宿主桥注入 ToolsStore。ToolsStore 消费方均为 @ObjectLink，字段赋值即刷新，
     // 故此处 onChanged 注入等价空实现（该域无 publish* 发布点）。
-    const hostPort = new HostCommandPort(
-      (name: string, payload: string) => this.callNative(name, payload),
-      (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, attempt?: number, intervalMs?: number, maxAttempts?: number) => {
-        this.callNativeWhenReady(name, payload, onOk, attempt ?? 0, intervalMs ?? 200, maxAttempts ?? 60, onFailure)
-      },
-      (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => {
-        this.callInteractive(name, payload, onOk, onFailure)
-      },
-      (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts?: number, isCancelled?: () => boolean) => {
-        this.callLongRunningInteractive(name, payload, onOk, onFailure, onProgress, maxAttempts, isCancelled)
-      },
-      (name: string, payload: string) => { this.callNativeFire(name, payload) }
-    )
+    const hostPort = this.commandPort()
     this.tools.attachPort(hostPort, () => {})
     // §14 B3-1：角度测量加载器 loadAngleMeasure 与动作 toggleAngleMeasure 同片搬入 ToolsStore；
     // 动作回包后的 UI 提示经 ToolsHostHooks.flashHint 回注（store 不触碰 UI）。
@@ -1854,7 +2101,7 @@ export struct WindowNativeNode {
     this.stateRefreshQueued = false
     const skyCulturePixelMap = this.skyCultureViewStore.artPreviewPixelMap
     this.skyCultureViewStore.artPreviewPixelMap = undefined
-    this.releaseDecodedImage(skyCulturePixelMap, 'disappear-sky-culture-art')
+    releaseDecodedImage(this.hostMediaPort, skyCulturePixelMap, 'disappear-sky-culture-art')
     this.clearSkyCultureMakerArtworkPreview('disappear-sky-culture-maker-artwork')
     this.stopSkyTextureStatusObserver()
     this.stopTimePanelTimers()
@@ -3470,48 +3717,18 @@ export struct WindowNativeNode {
     }
   }
 
-  private async shareFile(path: string, type: string, title: string, description: string,
-    anchorId: string): Promise<void> {
-    if (path.length === 0 || !fileIo.accessSync(path)) {
-      this.flashHint('没有可分享的文件')
-      return
-    }
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const data = new systemShare.SharedData({
-        utd: type,
-        uri: fileUri.getUriFromPath(path),
-        title: title,
-        description: description
-      })
-      const controller = new systemShare.ShareController(data)
-      const options: systemShare.ShareControllerOptions = this.isExpandedLayout ? { anchor: anchorId } : {}
-      await controller.show(context, options)
-    } catch (error) {
-      hilog.error(0x0000, 'StellariumArkUI', 'Share failed: %{public}s', String(error))
-      this.flashHint('无法打开系统分享面板')
-    }
-  }
-
   private async saveFileAs(path: string, fileName: string, suffixLabel: string): Promise<void> {
-    if (path.length === 0 || !fileIo.accessSync(path)) {
+    if (path.length === 0 || !this.hostMediaPort.fileExists(path)) {
       this.flashHint('没有可导出的文件')
       return
     }
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const options = new picker.DocumentSaveOptions()
-      options.newFileNames = [fileName]
-      options.fileSuffixChoices = [suffixLabel]
-      const uris = await new picker.DocumentViewPicker(context).save(options)
-      if (uris.length > 0) {
-        await fileIo.copy(fileUri.getUriFromPath(path), uris[0])
+    this.hostMediaPort.saveFileAs(path, fileName, suffixLabel, (result: MediaSaveResult) => {
+      if (result === MediaSaveResult.Saved) {
         this.flashHint('文件已导出')
+      } else if (result === MediaSaveResult.Failed) {
+        this.flashHint('导出失败')
       }
-    } catch (error) {
-      hilog.error(0x0000, 'StellariumArkUI', 'Export file failed: %{public}s', String(error))
-      this.flashHint('导出失败')
-    }
+    })
   }
 
   private closeScreenCaptureFile(): void {
@@ -4032,22 +4249,8 @@ export struct WindowNativeNode {
       }
       this.tools.configExportText = resp.content ?? ''
       this.tools.configExportVisible = true
-      this.copyTextToClipboard(this.tools.configExportText, I18n.t('config_export_copied'))
+      copyTextToClipboard(this.hostPlatformPort, this.tools.configExportText, I18n.t('config_export_copied'), { flashHint: (text: ResourceStr): void => this.flashHint(text) })
     })
-  }
-
-  private async copyTextToClipboard(text: string, successHint: ResourceStr): Promise<boolean> {
-    if (text.length === 0) {
-      this.flashHint(I18n.t('clipboard_copy_empty'))
-      return false
-    }
-    const result = await writeClipboardText(text)
-    if (result.ok) {
-      this.flashHint(successHint)
-      return true
-    }
-    this.flashHint(I18n.t('clipboard_copy_failed'))
-    return false
   }
 
   private importConfig(): void {
@@ -4075,18 +4278,6 @@ export struct WindowNativeNode {
   // 无法在此环境做真正的 TTS 音频播报。这里保留 C++ 侧生成的"可读中文描述"
   // （getObjectSpokenText 命令），点按按钮即在面板中显示该文本，验证命令通道，
   // 待切换到含 CoreSpeechKit 的 SDK 后即可接真实语音合成。
-  private speakSelectedObject(): void {
-    this.callNativeWhenReady('getObjectSpokenText', '', (r: StellariumBridgeResponse) => {
-      const resp = r as SpokenTextResponse
-      if (resp.ok !== true || !resp.text) {
-        this.flashHint(I18n.t('msg_no_selection_for_tts'))
-        return
-      }
-      this.guideStore.speechStatus = resp.text
-      this.flashHint('已生成朗读文本（当前 SDK 未集成语音合成）')
-    })
-  }
-
   private refreshState(): void {
     if (this.stateRefreshRequestPending) {
       this.stateRefreshQueued = true
@@ -4662,50 +4853,6 @@ export struct WindowNativeNode {
       this.tools.angleMeasureText = r.angleText ?? ''
       this.flashHint(this.tools.angleMeasureHasEnd ? '角距离：' + this.tools.angleMeasureText : '已记录第一个位置，请点击第二个位置')
     })
-  }
-
-  private saveScreenshot(): void {
-    if (this.tools.screenshotSaving) return
-    this.tools.screenshotSaving = true
-    this.flashHint(I18n.t('screenshot_preparing'))
-    this.callInteractive('saveScreenShot', '', (r: StellariumBridgeResponse) => {
-      const response = r as ScreenshotResponse
-      if (response.ok !== true || !response.path || !response.fileName) {
-        this.tools.screenshotSaving = false
-        this.flashHint(I18n.t('screenshot_failed'))
-        return
-      }
-      this.exportScreenshotToUserStorage(response)
-    }, () => {
-      this.tools.screenshotSaving = false
-      this.flashHint(I18n.t('screenshot_failed'))
-    })
-  }
-
-  private async exportScreenshotToUserStorage(response: ScreenshotResponse): Promise<void> {
-    const sourcePath = response.path ?? ''
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const saveOptions = new picker.DocumentSaveOptions()
-      saveOptions.newFileNames = [response.fileName ?? ('stellarium-' + Date.now().toString() + '.png')]
-      const format = (response.format ?? 'png').toUpperCase()
-      saveOptions.fileSuffixChoices = [format + ' image|.' + format.toLowerCase()]
-      const selectedUris = await new picker.DocumentViewPicker(context).save(saveOptions)
-      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
-        this.flashHint(I18n.t('screenshot_cancelled'))
-        return
-      }
-      await fileIo.copy(fileUri.getUriFromPath(sourcePath), selectedUris[0])
-      this.flashHint(I18n.t('screenshot_saved'))
-    } catch (error) {
-      hilog.error(0x0000, 'StellariumArkUI', 'Screenshot export failed: %{public}s', String(error))
-      this.flashHint(I18n.t('screenshot_failed'))
-    } finally {
-      if (sourcePath.length > 0) {
-        try { fileIo.unlinkSync(sourcePath) } catch (error) {}
-      }
-      this.tools.screenshotSaving = false
-    }
   }
 
   private jdToDateStr(jd: string): string {
@@ -5545,7 +5692,7 @@ export struct WindowNativeNode {
     const oldMaps = this.skyCultureArtThumbnailPixelMaps
     this.skyCultureArtThumbnailPixelMaps = {}
     for (const rawPath of Object.keys(oldMaps)) {
-      this.releaseDecodedImage(oldMaps[rawPath], 'sky-culture-art-thumbnail')
+      releaseDecodedImage(this.hostMediaPort, oldMaps[rawPath], 'sky-culture-art-thumbnail')
     }
   }
 
@@ -5558,10 +5705,10 @@ export struct WindowNativeNode {
       return
     }
     const generation = this.skyCultureArtThumbnailGeneration
-    this.decodeLocalImage(filePath, 'sky-culture-art-thumbnail', (pixelMap: image.PixelMap) => {
+    decodeLocalImage(this.hostMediaPort, filePath, 'sky-culture-art-thumbnail', (pixelMap: image.PixelMap) => {
       if (requestId !== this.skyCultureDetailsRequestId || generation !== this.skyCultureArtThumbnailGeneration ||
         this.skyCultureViewStore.currentSkyCultureId.length === 0) {
-        this.releaseDecodedImage(pixelMap, 'stale-sky-culture-art-thumbnail')
+        releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-sky-culture-art-thumbnail')
         return
       }
       const next: Record<string, image.PixelMap> = {}
@@ -5660,7 +5807,7 @@ export struct WindowNativeNode {
     this.skyCultureArtDecodeGeneration++
     const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
     this.skyCultureViewStore.artPreviewPixelMap = undefined
-    this.releaseDecodedImage(oldPixelMap, 'switch-sky-culture-art')
+    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'switch-sky-culture-art')
     this.skyCultureViewStore.artPreviewRawPath = art.rawPath
     this.skyCultureViewStore.artPreviewName = art.name !== undefined && art.name.length > 0 ? art.name : '星座绘图 ' + art.index
     this.skyCultureViewStore.artPreviewFailed = false
@@ -5704,7 +5851,7 @@ export struct WindowNativeNode {
     this.skyCultureArtDecodeGeneration++
     const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
     this.skyCultureViewStore.artPreviewPixelMap = undefined
-    this.releaseDecodedImage(oldPixelMap, 'sky-culture-art')
+    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'sky-culture-art')
     this.skyCultureViewStore.artPreviewPath = ''
     this.skyCultureViewStore.artPreviewName = ''
     this.skyCultureViewStore.artPreviewRawPath = ''
@@ -5722,15 +5869,15 @@ export struct WindowNativeNode {
 
   private decodeSkyCultureArtPreview(filePath: string, rawPath: string): void {
     const generation = ++this.skyCultureArtDecodeGeneration
-    this.decodeLocalImage(filePath, 'sky-culture-art', (pixelMap: image.PixelMap) => {
+    decodeLocalImage(this.hostMediaPort, filePath, 'sky-culture-art', (pixelMap: image.PixelMap) => {
       if (!this.skyCultureViewStore.artPreviewOpen || this.skyCultureViewStore.artPreviewRawPath !== rawPath ||
         generation !== this.skyCultureArtDecodeGeneration) {
-        this.releaseDecodedImage(pixelMap, 'stale-sky-culture-art')
+        releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-sky-culture-art')
         return
       }
       const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
       this.skyCultureViewStore.artPreviewPixelMap = pixelMap
-      this.releaseDecodedImage(oldPixelMap, 'previous-sky-culture-art')
+      releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'previous-sky-culture-art')
       this.skyCultureViewStore.artPreviewLoading = false
       this.skyCultureViewStore.artPreviewFailed = false
       this.setSkyCultureArtStatus(rawPath, 'ready')
@@ -5761,7 +5908,7 @@ export struct WindowNativeNode {
     this.skyCultureViewStore.artPreviewLoading = true
     const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
     this.skyCultureViewStore.artPreviewPixelMap = undefined
-    this.releaseDecodedImage(oldPixelMap, 'retry-sky-culture-art')
+    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'retry-sky-culture-art')
     this.skyCultureViewStore.artPreviewPath = ''
     this.resolveSkyCultureArtPreview(this.skyCultureViewStore.artPreviewRawPath)
   }
@@ -6111,7 +6258,7 @@ export struct WindowNativeNode {
     this.skyCultureMakerStore.artworkPreviewState = 'empty'
     const oldPixelMap = this.skyCultureMakerStore.artworkPixelMap
     this.skyCultureMakerStore.artworkPixelMap = undefined
-    this.releaseDecodedImage(oldPixelMap, label)
+    releaseDecodedImage(this.hostMediaPort, oldPixelMap, label)
   }
 
   private refreshSkyCultureMakerArtworkPreview(): void {
@@ -6134,7 +6281,7 @@ export struct WindowNativeNode {
     const generation = ++this.skyCultureMakerArtworkDecodeGeneration
     const oldPixelMap = this.skyCultureMakerStore.artworkPixelMap
     this.skyCultureMakerStore.artworkPixelMap = undefined
-    this.releaseDecodedImage(oldPixelMap, 'previous-sky-culture-maker-artwork')
+    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'previous-sky-culture-maker-artwork')
     this.skyCultureMakerArtworkPreviewPath = filePath
     this.skyCultureMakerStore.artworkPreviewState = 'preparing'
     const sourceWidth = Math.max(1, artwork.size?.[0] ?? 1)
@@ -6144,9 +6291,9 @@ export struct WindowNativeNode {
       width: Math.max(1, Math.round(sourceWidth * scale)),
       height: Math.max(1, Math.round(sourceHeight * scale))
     }
-    this.decodeLocalImage(filePath, 'sky-culture-maker-artwork', (pixelMap: image.PixelMap) => {
+    decodeLocalImage(this.hostMediaPort, filePath, 'sky-culture-maker-artwork', (pixelMap: image.PixelMap) => {
       if (generation !== this.skyCultureMakerArtworkDecodeGeneration || this.skyCultureMakerArtworkPreviewPath !== filePath) {
-        this.releaseDecodedImage(pixelMap, 'stale-sky-culture-maker-artwork')
+        releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-sky-culture-maker-artwork')
         return
       }
       this.skyCultureMakerStore.artworkPixelMap = pixelMap
@@ -7531,7 +7678,7 @@ private loadPlanetPositions(): void {
     this.gyroStore.gyroscopeStatus = '正在校准'
     this.callNativeFire('beginGyroViewTransition')
 
-    const rotationSupported = this.probeGyroSensor(sensor.SensorId.ROTATION_VECTOR, 'rotation-vector')
+    const rotationSupported = this.hostSensorPort.probeSensor(sensor.SensorId.ROTATION_VECTOR, 'rotation-vector') !== undefined
     if (rotationSupported) {
       try {
         sensor.on(sensor.SensorId.ROTATION_VECTOR, this.gyroRotationCallback, { interval: 16666667 })
@@ -7544,7 +7691,7 @@ private loadPlanetPositions(): void {
     }
 
     if (this.gyroRotationSubscribed) {
-      if (this.probeGyroSensor(sensor.SensorId.GRAVITY, 'gravity')) {
+      if (this.hostSensorPort.probeSensor(sensor.SensorId.GRAVITY, 'gravity') !== undefined) {
         try {
           sensor.on(sensor.SensorId.GRAVITY, this.gyroGravityCallback, { interval: 16666667 })
           this.gyroGravitySubscribed = true
@@ -7553,7 +7700,7 @@ private loadPlanetPositions(): void {
           hilog.warn(0x0000, 'StellariumArkUI', '[gyro-probe] subscribe failed sensor=gravity error=%{public}s', JSON.stringify(error))
         }
       }
-      if (this.probeGyroSensor(sensor.SensorId.MAGNETIC_FIELD, 'magnetic-field')) {
+      if (this.hostSensorPort.probeSensor(sensor.SensorId.MAGNETIC_FIELD, 'magnetic-field') !== undefined) {
         try {
           sensor.on(sensor.SensorId.MAGNETIC_FIELD, this.gyroMagneticCallback, { interval: 33333333 })
           this.gyroMagneticSubscribed = true
@@ -7567,7 +7714,7 @@ private loadPlanetPositions(): void {
       return
     }
 
-    if (this.probeGyroSensor(sensor.SensorId.ORIENTATION, 'orientation-fallback')) {
+    if (this.hostSensorPort.probeSensor(sensor.SensorId.ORIENTATION, 'orientation-fallback') !== undefined) {
       try {
         sensor.on(sensor.SensorId.ORIENTATION, this.gyroCallback, { interval: 16666667 })
         this.gyroOrientationSubscribed = true
@@ -7584,19 +7731,6 @@ private loadPlanetPositions(): void {
     this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_unavailable')
     this.flashHint(I18n.t('m_gyro_unavailable'))
     hilog.error(0x0000, 'StellariumArkUI', '[gyro-probe] start failed no supported orientation sensor')
-  }
-
-  private probeGyroSensor(type: sensor.SensorId, label: string): boolean {
-    try {
-      const info = sensor.getSingleSensorSync(type)
-      this.gyroLastProbeSensor = label
-      hilog.info(0x0000, 'StellariumArkUI', '[gyro-probe] sensor=%{public}s supported=true name=%{public}s vendor=%{public}s',
-        label, info.sensorName, info.vendorName)
-      return true
-    } catch (error) {
-      hilog.warn(0x0000, 'StellariumArkUI', '[gyro-probe] sensor=%{public}s supported=false error=%{public}s', label, JSON.stringify(error))
-      return false
-    }
   }
 
   private stopGyroscope(updateStatus: boolean): void {
@@ -9836,7 +9970,7 @@ private loadPlanetPositions(): void {
       this.tools.sessionExportText = this.sessionToolStore.sessionJson
       this.sessionToolStore.sessionExportSig = sessionSignature(r)
       this.sessionToolStore.sessionHint = I18n.t('m_session_exported') + ': ' + this.sessionSummary(r)
-      this.copyTextToClipboard(this.sessionToolStore.sessionJson, I18n.t('session_export_copied'))
+      copyTextToClipboard(this.hostPlatformPort, this.sessionToolStore.sessionJson, I18n.t('session_export_copied'), { flashHint: (text: ResourceStr): void => this.flashHint(text) })
     })
   }
 
@@ -10933,7 +11067,7 @@ private loadPlanetPositions(): void {
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
                 onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
                 onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
-                onSpeak: () => { this.speakSelectedObject() }
+                onSpeak: () => { speakSelectedObject(this.commandPort(), { flashHint: (text: ResourceStr): void => this.flashHint(text), setSpeechStatus: (text: string): void => { this.guideStore.speechStatus = text } }) }
               })
               if (this.panelVisible) {
                 Stack() { this.compactPanel() }
@@ -11050,7 +11184,7 @@ private loadPlanetPositions(): void {
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
                 onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
                 onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
-                onSpeak: () => { this.speakSelectedObject() }
+                onSpeak: () => { speakSelectedObject(this.commandPort(), { flashHint: (text: ResourceStr): void => this.flashHint(text), setSpeechStatus: (text: string): void => { this.guideStore.speechStatus = text } }) }
               })
               if (this.panelVisible) {
                 Stack({ alignContent: Alignment.TopStart }) { this.floatingPanel() }
@@ -11184,7 +11318,7 @@ private loadPlanetPositions(): void {
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
                 onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
                 onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
-                onSpeak: () => { this.speakSelectedObject() }
+                onSpeak: () => { speakSelectedObject(this.commandPort(), { flashHint: (text: ResourceStr): void => this.flashHint(text), setSpeechStatus: (text: string): void => { this.guideStore.speechStatus = text } }) }
               })
               if (this.panelVisible) {
                 Stack({ alignContent: Alignment.Bottom }) {
@@ -12046,24 +12180,12 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private releaseDecodedImage(pixelMap: image.PixelMap | undefined, label: string): void {
-    if (pixelMap === undefined) {
-      return
-    }
-    pixelMap.release().then(() => {
-      hilog.info(0x0000, 'StellariumArkUI', '[detail-media] released pixel map kind=%{public}s', label)
-    }).catch((err: Error) => {
-      hilog.warn(0x0000, 'StellariumArkUI', '[detail-media] pixel map release failed kind=%{public}s error=%{public}s',
-        label, JSON.stringify(err))
-    })
-  }
-
   private clearObjectInspectorDecodedImage(): void {
     const oldPixelMap = this.objectMediaStore.objectInspectorMediaPixelMap
     this.objectMediaStore.objectInspectorMediaPixelMap = undefined
     this.objectInspectorMediaDecodeGeneration++
     this.clearObjectInspectorModelRenderer()
-    this.releaseDecodedImage(oldPixelMap, 'object-inspector')
+    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'object-inspector')
   }
 
   private clearObjectInspectorModelRenderer(): void {
@@ -12099,78 +12221,7 @@ private loadPlanetPositions(): void {
     this.objectInspectorModelRenderHighQuality = false
     this.objectMediaStore.objectInspectorModelInteracting = false
     this.objectInspectorModelRenderGeneration++
-    this.releaseDecodedImage(oldModelPixelMap, 'object-inspector-model')
-  }
-
-  private decodeLocalImage(
-    filePath: string,
-    label: string,
-    onSuccess: (pixelMap: image.PixelMap) => void,
-    onFailure: (err: Error) => void,
-    desiredSize?: ImageDecodeSize,
-  ): void {
-    let source: image.ImageSource | undefined = undefined
-    let file: fileIo.File | undefined = undefined
-    const closeFile = (): void => {
-      if (file === undefined) return
-      try {
-        fileIo.closeSync(file)
-      } catch (err) {
-        hilog.warn(0x0000, 'StellariumArkUI', '[detail-media] file close failed kind=%{public}s error=%{public}s',
-          label, JSON.stringify(err))
-      }
-      file = undefined
-    }
-    try {
-      file = fileIo.openSync(filePath, fileIo.OpenMode.READ_ONLY)
-      hilog.info(0x0000, 'StellariumArkUI',
-        '[detail-media] create image source kind=%{public}s path=%{public}s fd=%{public}s',
-        label, filePath, file.fd.toString())
-      source = image.createImageSource(file.fd)
-      const pixelMapPromise = label === 'model'
-        ? (desiredSize === undefined
-          ? source.createPixelMapUsingAllocator({
-            desiredPixelFormat: image.PixelMapFormat.RGBA_8888,
-            desiredDynamicRange: image.DecodingDynamicRange.SDR
-          }, image.AllocatorType.SHARE_MEMORY)
-          : source.createPixelMapUsingAllocator({
-            desiredSize: desiredSize,
-            desiredPixelFormat: image.PixelMapFormat.RGBA_8888,
-            desiredDynamicRange: image.DecodingDynamicRange.SDR
-          }, image.AllocatorType.SHARE_MEMORY))
-        : (desiredSize === undefined
-          ? source.createPixelMap()
-          : source.createPixelMap({ desiredSize: desiredSize }))
-      pixelMapPromise.then((pixelMap: image.PixelMap) => {
-        if (label === 'model') {
-          hilog.info(0x0000, 'StellariumArkUI',
-            '[detail-media] decode promise settled kind=%{public}s bytes=%{public}s',
-            label, pixelMap.getPixelBytesNumber().toString())
-        }
-        onSuccess(pixelMap)
-        source?.release().catch((err: Error) => {
-          hilog.warn(0x0000, 'StellariumArkUI', '[detail-media] image source release failed kind=%{public}s error=%{public}s',
-            label, JSON.stringify(err))
-        })
-        closeFile()
-      }).catch((err: Error) => {
-        source?.release().catch((releaseErr: Error) => {
-          hilog.warn(0x0000, 'StellariumArkUI', '[detail-media] image source release failed kind=%{public}s error=%{public}s',
-            label, JSON.stringify(releaseErr))
-        })
-        closeFile()
-        onFailure(err)
-      })
-    } catch (err) {
-      if (source !== undefined) {
-        source.release().catch((releaseErr: Error) => {
-          hilog.warn(0x0000, 'StellariumArkUI', '[detail-media] image source release failed kind=%{public}s error=%{public}s',
-            label, JSON.stringify(releaseErr))
-        })
-      }
-      closeFile()
-      onFailure(err as Error)
-    }
+    releaseDecodedImage(this.hostMediaPort, oldModelPixelMap, 'object-inspector-model')
   }
 
   private updateObjectInspectorMediaWarmup(kind: string): void {
@@ -12405,16 +12456,16 @@ private loadPlanetPositions(): void {
           filePath, ringPngFilePath)
         return
       }
-      this.decodeLocalImage(filePath, kind, (pixelMap: image.PixelMap) => {
+      decodeLocalImage(this.hostMediaPort, filePath, kind, (pixelMap: image.PixelMap) => {
         const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
         if (currentSelection !== expectedSelection || this.objectMediaStore.objectInspectorMediaPath !== expectedPath ||
           generation !== this.objectInspectorMediaDecodeGeneration) {
-          this.releaseDecodedImage(pixelMap, 'stale-object-inspector')
+          releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-object-inspector')
           return
         }
         const oldPixelMap = this.objectMediaStore.objectInspectorMediaPixelMap
         this.objectMediaStore.objectInspectorMediaPixelMap = pixelMap
-        this.releaseDecodedImage(oldPixelMap, 'previous-object-inspector')
+        releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'previous-object-inspector')
         this.objectMediaStore.objectInspectorMediaLoading = false
         this.objectMediaStore.objectInspectorMediaLoadFailed = false
         this.objectMediaStore.objectInspectorMediaDecoding = false
@@ -12507,21 +12558,21 @@ private loadPlanetPositions(): void {
       this.failObjectInspectorModelTexture(mediaGeneration, 'sidecar and PNG are both missing')
       return
     }
-    this.decodeLocalImage(pngFilePath, 'model', (pixelMap: image.PixelMap) => {
+    decodeLocalImage(this.hostMediaPort, pngFilePath, 'model', (pixelMap: image.PixelMap) => {
       const pixels = new ArrayBuffer(512 * 256 * 4)
       try {
         pixelMap.readPixelsToBufferSync(pixels)
       } catch (err) {
-        this.releaseDecodedImage(pixelMap, 'model-texture-fallback')
+        releaseDecodedImage(this.hostMediaPort, pixelMap, 'model-texture-fallback')
         this.failObjectInspectorModelTexture(mediaGeneration, 'PNG readback failed: ' + describeDecodeError(err as Error))
         return
       }
-      this.releaseDecodedImage(pixelMap, 'model-texture-fallback')
+      releaseDecodedImage(this.hostMediaPort, pixelMap, 'model-texture-fallback')
       if (ringPngFilePath.length === 0) {
         this.commitObjectInspectorModelTexture(pixels, undefined, mediaGeneration, expectedSelection, expectedPath, 'png')
         return
       }
-      this.decodeLocalImage(ringPngFilePath, 'model', (ringPixelMap: image.PixelMap) => {
+      decodeLocalImage(this.hostMediaPort, ringPngFilePath, 'model', (ringPixelMap: image.PixelMap) => {
         const ringPixels = new ArrayBuffer(512 * 2 * 4)
         let ringTexture: ArrayBuffer | undefined = undefined
         try {
@@ -12531,7 +12582,7 @@ private loadPlanetPositions(): void {
           hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] ring PNG readback failed error=%{public}s',
             describeDecodeError(err as Error))
         }
-        this.releaseDecodedImage(ringPixelMap, 'model-ring-texture-fallback')
+        releaseDecodedImage(this.hostMediaPort, ringPixelMap, 'model-ring-texture-fallback')
         this.commitObjectInspectorModelTexture(pixels, ringTexture, mediaGeneration, expectedSelection, expectedPath, 'png')
       }, (err: Error) => {
         hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] ring PNG decode failed error=%{public}s',
@@ -12690,7 +12741,7 @@ private loadPlanetPositions(): void {
     }).then((pixelMap: image.PixelMap) => {
       if (generation !== this.objectInspectorModelRenderGeneration ||
         !this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
-        this.releaseDecodedImage(pixelMap, 'stale-object-inspector-model')
+        releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-object-inspector-model')
         return
       }
       const oldPixelMap = this.objectMediaStore.objectInspectorModelPixelMap
@@ -12706,7 +12757,7 @@ private loadPlanetPositions(): void {
         uiPulseCount: uiPulseCount, uiMaxDelayMs: uiMaxDelayMs,
         pixelMapMs: Date.now() - pixelMapStarted, totalMs: Date.now() - started
       }))
-      this.releaseDecodedImage(oldPixelMap, 'previous-object-inspector-model')
+      releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'previous-object-inspector-model')
       this.objectInspectorModelRendering = false
       this.objectMediaStore.objectInspectorMediaDecoding = false
       this.objectMediaStore.objectInspectorMediaLoadFailed = false
@@ -13202,7 +13253,7 @@ private loadPlanetPositions(): void {
           this.persistObservingList()
         },
         onGotoReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object') },
-        onSpeak: () => { this.speakSelectedObject() },
+        onSpeak: () => { speakSelectedObject(this.commandPort(), { flashHint: (text: ResourceStr): void => this.flashHint(text), setSpeechStatus: (text: string): void => { this.guideStore.speechStatus = text } }) },
         onOpenMedia: () => { this.openObjectInspectorMediaPreview() },
         onRetryMedia: () => { this.retryObjectInspectorMedia() },
         onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
@@ -13818,7 +13869,7 @@ private loadPlanetPositions(): void {
         onValidate: () => { this.validateSkyCultureMaker() },
         onImport: () => { this.importSkyCultureMakerFile() },
         onExport: () => { this.exportSkyCultureMaker() },
-        onShare: () => { this.shareFile(this.skyCultureMakerStore.exportPath, utd.UniformDataType.ZIP_ARCHIVE, this.skyCultureMakerStore.exportFileName, I18n.t('sky_culture_maker_share_description'), 'sky-culture-maker-share') },
+        onShare: () => { shareFile(this.hostMediaPort, this.hostPlatformPort, this.skyCultureMakerStore.exportPath, utd.UniformDataType.ZIP_ARCHIVE, this.skyCultureMakerStore.exportFileName, I18n.t('sky_culture_maker_share_description'), 'sky-culture-maker-share', { flashHint: (text: ResourceStr): void => this.flashHint(text), isExpandedLayout: (): boolean => this.isExpandedLayout }) },
         onSaveAs: () => { this.saveFileAs(this.skyCultureMakerStore.exportPath, this.skyCultureMakerStore.exportFileName, 'ZIP 压缩包|.zip') },
         onSaveDraft: () => { this.saveSkyCultureMakerDraft(false) },
         onUndo: () => { this.undoSkyCultureMaker() },
@@ -13860,8 +13911,9 @@ private loadPlanetPositions(): void {
         onPlayRecording: (file: string) => { this.playRecording(file) },
         onLoadRecording: (file: string, name: string) => { this.scriptStore.loadRecordingByName(file, name) },
         onShareRecording: (rec: RecordingEntry, idx: number) => {
-          this.shareFile(rec.path ?? '', utd.UniformDataType.PLAIN_TEXT, rec.name,
-            'Stellarium 操作录制', 'recording-share-' + idx.toString())
+          shareFile(this.hostMediaPort, this.hostPlatformPort, rec.path ?? '', utd.UniformDataType.PLAIN_TEXT, rec.name,
+            'Stellarium 操作录制', 'recording-share-' + idx.toString(),
+            { flashHint: (text: ResourceStr): void => this.flashHint(text), isExpandedLayout: (): boolean => this.isExpandedLayout })
         },
         onDeleteRecording: (file: string) => { this.deleteRecording(file) },
         onToggleScreenVideo: () => {
@@ -13870,16 +13922,18 @@ private loadPlanetPositions(): void {
         },
         onSaveScreenVideoToGallery: (result: SaveButtonOnClickResult) => { this.saveScreenVideoToGallery(result) },
         onShareScreenVideo: () => {
-          this.shareFile(this.scriptStore.screenVideoPath, utd.UniformDataType.VIDEO, this.scriptStore.screenVideoFileName,
-            'Stellarium 屏幕视频', 'screen-video-share')
+          shareFile(this.hostMediaPort, this.hostPlatformPort, this.scriptStore.screenVideoPath, utd.UniformDataType.VIDEO, this.scriptStore.screenVideoFileName,
+            'Stellarium 屏幕视频', 'screen-video-share',
+            { flashHint: (text: ResourceStr): void => this.flashHint(text), isExpandedLayout: (): boolean => this.isExpandedLayout })
         },
         onSaveScreenVideoAs: () => { this.saveFileAs(this.scriptStore.screenVideoPath, this.scriptStore.screenVideoFileName, 'MP4 视频|.mp4') },
         onSetVideoFps: (value: string) => { this.scriptStore.videoFps = value },
         onSetVideoDuration: (value: string) => { this.scriptStore.videoDuration = value },
         onToggleVideoRecording: () => { this.scriptStore.videoRecording ? this.stopVideoRecording() : this.startVideoRecording() },
         onShareVideoArchive: () => {
-          this.shareFile(this.scriptStore.videoArchivePath, utd.UniformDataType.ZIP_ARCHIVE,
-            this.scriptStore.videoArchiveFileName, 'Stellarium 高质量星图帧序列', 'video-frames-share')
+          shareFile(this.hostMediaPort, this.hostPlatformPort, this.scriptStore.videoArchivePath, utd.UniformDataType.ZIP_ARCHIVE,
+            this.scriptStore.videoArchiveFileName, 'Stellarium 高质量星图帧序列', 'video-frames-share',
+            { flashHint: (text: ResourceStr): void => this.flashHint(text), isExpandedLayout: (): boolean => this.isExpandedLayout })
         },
         onExportVideoArchive: () => { this.saveFileAs(this.scriptStore.videoArchivePath, this.scriptStore.videoArchiveFileName, 'ZIP 压缩包|.zip') }
       })
@@ -13938,7 +13992,7 @@ private loadPlanetPositions(): void {
         textColor: this.nightModeStore.nmText(), subColor: this.nightModeStore.nmSub(), panelColor: this.nightModeStore.nmBg(), inputColor: this.nightModeStore.nmInput(),
         configImportText: this.tools.configImportText,
         sessionImportText: this.tools.sessionImportText,
-        onScreenshot: () => { this.saveScreenshot() },
+        onScreenshot: () => { saveScreenshot(this.commandPort(), this.hostMediaPort, { flashHint: (text: ResourceStr): void => this.flashHint(text), screenshotSaving: (): boolean => this.tools.screenshotSaving, setScreenshotSaving: (saving: boolean): void => { this.tools.screenshotSaving = saving } }) },
         onExportConfig: () => { this.exportConfig() },
         onImportConfig: () => { this.importConfig() },
         onConfigImportText: (value: string) => { this.tools.configImportText = value },
@@ -13994,7 +14048,7 @@ private loadPlanetPositions(): void {
         setSkyCulture: (culture: string) => { this.setSkyCulture(culture) },
         triggerAction: (actionId: string) => { this.triggerAction(actionId) },
         refreshState: () => { this.refreshState() },
-        saveScreenshot: () => { this.saveScreenshot() }
+        saveScreenshot: () => { saveScreenshot(this.commandPort(), this.hostMediaPort, { flashHint: (text: ResourceStr): void => this.flashHint(text), screenshotSaving: (): boolean => this.tools.screenshotSaving, setScreenshotSaving: (saving: boolean): void => { this.tools.screenshotSaving = saving } }) }
       })
     }
   }
