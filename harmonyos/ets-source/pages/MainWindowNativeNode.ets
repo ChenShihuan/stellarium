@@ -37,10 +37,10 @@ import {
   chromeZoomButtonLeft,
   chromeZoomButtonTop
 } from '../common/ui/ChromeGeometry'
-import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot } from '../common/derive/gyro'
-import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
+import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot, gyroMagneticHeadingFromDeviceVectors } from '../common/derive/gyro'
+import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay } from '../common/derive/labels'
-import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, csvCell, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
+import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, normalizeLocationSearchText, officialLocationAliases, sessionSignature } from '../common/derive/actions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
@@ -3835,7 +3835,7 @@ export struct WindowNativeNode {
 
   private setArchaeoLineSetting(setting: string, value: string): void {
     const mutationId = ++this.archaeoMutationId
-    const previous = this.archaeoLineSettingValue(setting)
+    const previous = this.archaeoStore.archaeoLineSettingValue(setting)
     this.applyArchaeoLineSetting(setting, value)
     this.archaeoStore.archaeoStatus = ''
     this.callInteractive('setArchaeoLineSetting', setting + '|' + value, () => {}, () => {
@@ -3843,28 +3843,6 @@ export struct WindowNativeNode {
       this.applyArchaeoLineSetting(setting, previous)
       this.archaeoStore.archaeoStatus = I18n.t('plugin_action_failed')
     })
-  }
-
-  private archaeoLineSettingValue(setting: string): string {
-    switch (setting) {
-      case 'enabled': return this.archaeoStore.archaeoLinesEnabled ? '1' : '0'
-      case 'equinox': return this.archaeoStore.archaeoEquinox ? '1' : '0'
-      case 'solstices': return this.archaeoStore.archaeoSolstices ? '1' : '0'
-      case 'crossquarters': return this.archaeoStore.archaeoCrossquarters ? '1' : '0'
-      case 'majorStandstills': return this.archaeoStore.archaeoMajorStandstills ? '1' : '0'
-      case 'minorStandstills': return this.archaeoStore.archaeoMinorStandstills ? '1' : '0'
-      case 'polarCircles': return this.archaeoStore.archaeoPolarCircles ? '1' : '0'
-      case 'zenithPassage': return this.archaeoStore.archaeoZenithPassage ? '1' : '0'
-      case 'nadirPassage': return this.archaeoStore.archaeoNadirPassage ? '1' : '0'
-      case 'selectedObject': return this.archaeoStore.archaeoSelectedObject ? '1' : '0'
-      case 'selectedObjectAzimuth': return this.archaeoStore.archaeoSelectedObjectAzimuth ? '1' : '0'
-      case 'selectedObjectHourAngle': return this.archaeoStore.archaeoSelectedObjectHourAngle ? '1' : '0'
-      case 'currentSun': return this.archaeoStore.archaeoCurrentSun ? '1' : '0'
-      case 'currentMoon': return this.archaeoStore.archaeoCurrentMoon ? '1' : '0'
-      case 'currentPlanet': return ['none', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'][this.archaeoStore.archaeoCurrentPlanet] ?? 'none'
-      case 'lineWidth': return this.archaeoStore.archaeoLineWidth.toString()
-      default: return ''
-    }
   }
 
   private applyArchaeoLineSetting(setting: string, value: string): void {
@@ -4863,26 +4841,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private makeAstroCsv(exportData: AstroCsvExport): string {
-    const lines: Array<string> = []
-    lines.push('# ' + exportData.title)
-    if (this.astroStore.astroContext !== undefined) {
-      const location = this.astroStore.astroContext.observerLocation !== undefined && this.astroStore.astroContext.observerLocation.length > 0
-        ? this.astroStore.astroContext.observerLocation : '当前观测位置'
-      lines.push('# 观测地点: ' + location)
-      lines.push('# 本地时间: ' + this.fmtDateTime(this.astroStore.astroContext.localTime))
-      lines.push('# 时区: ' + (this.astroStore.astroContext.timeZone ?? '--'))
-      lines.push('# 平恒星时: ' + (this.astroStore.astroContext.meanSiderealTime ?? '--'))
-      lines.push('# 视恒星时: ' + (this.astroStore.astroContext.apparentSiderealTime ?? '--'))
-    }
-    if (this.astroStore.astroCalcSnapshot.length > 0) lines.push('# 参数: ' + this.astroStore.astroCalcSnapshot)
-    lines.push(exportData.headers.map((header: string) => csvCell(header)).join(','))
-    for (const row of exportData.rows) {
-      lines.push(row.map((cell: string | number | boolean | undefined) => csvCell(cell)).join(','))
-    }
-    return lines.join('\r\n') + '\r\n'
-  }
-
   private currentAstroCsvExport(): AstroCsvExport | undefined {
     if (this.astroStore.astroTab === 0) {
       if (this.astroStore.positionMode === 0 && this.astroStore.planetPositions.length > 0) {
@@ -4940,9 +4898,9 @@ export struct WindowNativeNode {
           rows: this.astroStore.planetPairDistanceData.map((item: PlanetPairDistancePoint) => [item.date, item.jd, item.t, item.linearDistance, item.angularDistance]) }
       }
     } else if (this.astroStore.astroTab === 7) {
-      if (this.astroStore.eclipseMode === 0 && this.filteredEclipses().length > 0) {
+      if (this.astroStore.eclipseMode === 0 && this.astroStore.filteredEclipses().length > 0) {
         return { title: '日月食预报', headers: ['日期时间', '类别', '类型', '食分', '沙罗周期', '本地可见', '本地食甚', '太阳高度(度)', '月亮高度(度)', '备注'],
-          rows: this.filteredEclipses().map((item: EclipseItem) => [item.date, item.kind, item.type, item.magnitude, item.saros, item.localVisible, item.localMax, item.localSunAltitude, item.localMoonAltitude, item.note]) }
+          rows: this.astroStore.filteredEclipses().map((item: EclipseItem) => [item.date, item.kind, item.type, item.magnitude, item.saros, item.localVisible, item.localMax, item.localSunAltitude, item.localMoonAltitude, item.note]) }
       }
       if (this.astroStore.eclipseMode === 1 && this.astroStore.planetaryTransitData.length > 0) {
         return { title: '行星凌日预报', headers: ['日期时间', '行星', '初亏', '内切始', '食甚', '内切终', '复圆', '食分', '最小距日心(度)', '持续(分钟)', '本地可见'],
@@ -4982,7 +4940,7 @@ export struct WindowNativeNode {
       const scratchPath = context.cacheDir + '/astrocalc-' + Date.now().toString() + '.csv'
       const file = fileIo.openSync(scratchPath, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE)
       const encoder = new util.TextEncoder('utf-8')
-      const bytes = encoder.encodeInto(this.makeAstroCsv(exportData))
+      const bytes = encoder.encodeInto(this.astroStore.makeAstroCsv(exportData))
       fileIo.writeSync(file.fd, bytes.buffer)
       fileIo.closeSync(file)
       await fileIo.copy(fileUri.getUriFromPath(scratchPath), selectedUris[0])
@@ -4999,14 +4957,6 @@ export struct WindowNativeNode {
 
 
 
-
-  private rtsCalendarStartOptionLabel(offsetDays: number): string {
-    if (offsetDays < 0) {
-      return this.astroStore.rtsCalendarStartYear.toString() + '-' + this.astroStore.rtsCalendarStartMonth.toString().padStart(2, '0') + '-' + this.astroStore.rtsCalendarStartDay.toString().padStart(2, '0')
-    }
-    if (offsetDays === 0) return '当前'
-    return '+' + offsetDays.toString() + ' 天'
-  }
 
 
   private chooseRtsCalendarStartDate(): void {
@@ -5085,11 +5035,6 @@ export struct WindowNativeNode {
 
 
 
-  private graphCustomStartLabel(): string {
-    if (this.astroStore.graphStartOffsetDays >= 0) return '指定日期'
-    return this.astroStore.graphStartYear.toString() + '-' + this.astroStore.graphStartMonth.toString().padStart(2, '0') + '-' + this.astroStore.graphStartDay.toString().padStart(2, '0')
-  }
-
   private chooseGraphStartDate(): void {
     this.pickedDate = new Date(this.astroStore.graphStartYear, this.astroStore.graphStartMonth - 1, this.astroStore.graphStartDay)
     this.getUIContext().showDatePickerDialog({
@@ -5157,14 +5102,6 @@ export struct WindowNativeNode {
 
 
 
-  private eclipseStartOptionLabel(offsetDays: number): string {
-    if (offsetDays < 0) {
-      return this.astroStore.eclipseStartYear.toString() + '-' + this.astroStore.eclipseStartMonth.toString().padStart(2, '0') + '-' + this.astroStore.eclipseStartDay.toString().padStart(2, '0')
-    }
-    if (offsetDays === 0) return '当前'
-    return '+' + offsetDays.toString() + ' 天'
-  }
-
   private chooseEclipseStartDate(): void {
     this.pickedDate = new Date(this.astroStore.eclipseStartYear, this.astroStore.eclipseStartMonth - 1, this.astroStore.eclipseStartDay)
     this.getUIContext().showDatePickerDialog({
@@ -5180,21 +5117,6 @@ export struct WindowNativeNode {
       },
       onCancel: () => {}
     })
-  }
-
-  private filteredEclipses(): Array<EclipseItem> {
-    const filtered: Array<EclipseItem> = []
-    for (const eclipse of this.astroStore.eclipseData) {
-      if (this.astroStore.eclipseKindFilter === 1 && eclipse.kind !== 'solar') continue
-      if (this.astroStore.eclipseKindFilter === 2 && eclipse.kind !== 'lunar') continue
-      const type = eclipse.type ?? ''
-      if (this.astroStore.eclipseTypeFilter === 1 && type !== '全食') continue
-      if (this.astroStore.eclipseTypeFilter === 2 && type !== '环食') continue
-      if (this.astroStore.eclipseTypeFilter === 3 && type !== '偏食') continue
-      if (this.astroStore.eclipseTypeFilter === 4 && type !== '半影食') continue
-      filtered.push(eclipse)
-    }
-    return filtered
   }
 
 
@@ -5262,38 +5184,6 @@ export struct WindowNativeNode {
 
   // ---- 天文计算辅助：高度曲线 ----
 
-  private altAzMaxLabel(): string {
-    let m: number = -999
-    let t: number = 0
-    for (let i = 0; i < this.astroStore.altAzCurve.length; i++) {
-      const p: AltAzPoint = this.astroStore.altAzCurve[i]
-      const v: number = p.altitude !== undefined ? p.altitude : -999
-      if (v > m) { m = v; t = p.t !== undefined ? p.t : 0 }
-    }
-    if (m < -90) return '--'
-    return m.toFixed(1) + '°（' + hourOffsetLabel(t) + '）'
-  }
-
-  private altAzNowLabel(): string {
-    if (this.astroStore.altAzCurve.length === 0) return '--'
-    const p: AltAzPoint = this.astroStore.altAzCurve[0]
-    const alt: number = p.altitude !== undefined ? p.altitude : 0
-    const az: number = p.azimuth !== undefined ? p.azimuth : 0
-    return '高度 ' + alt.toFixed(1) + '° / 方位 ' + az.toFixed(1) + '°'
-  }
-
-  private altAzVisibleHours(): string {
-    let hours: number = 0
-    for (let i = 0; i + 1 < this.astroStore.altAzCurve.length; i++) {
-      const p: AltAzPoint = this.astroStore.altAzCurve[i]
-      const next: AltAzPoint = this.astroStore.altAzCurve[i + 1]
-      if (p.altitude !== undefined && p.altitude > 0 && p.t !== undefined && next.t !== undefined) {
-        hours += next.t - p.t
-      }
-    }
-    return hours.toFixed(1) + ' 小时'
-  }
-
   private altAzRangeLabel(): string {
     return '未来 ' + this.astroStore.altAzHours.toString() + ' 小时'
   }
@@ -5337,19 +5227,6 @@ export struct WindowNativeNode {
     return Math.max(1, Math.min(6, 292 / this.astroStore.annualElevationData.length))
   }
 
-  private annualMaxLabel(): string {
-    let maximum: number = -91
-    let date: string = ''
-    for (const point of this.astroStore.annualElevationData) {
-      const altitude: number = point.altitude ?? -91
-      if (altitude > maximum) {
-        maximum = altitude
-        date = point.date ?? ''
-      }
-    }
-    return maximum < -90 ? '--' : maximum.toFixed(1) + '°（' + (date.length >= 10 ? date.slice(5) : date) + '）'
-  }
-
   private azimuthNowLabel(): string {
     if (this.astroStore.altAzCurve.length === 0) return '--'
     return (this.astroStore.altAzCurve[0].azimuth ?? 0).toFixed(1) + '°'
@@ -5368,19 +5245,6 @@ export struct WindowNativeNode {
   private lunarElongationNowLabel(): string {
     if (this.astroStore.lunarElongationData.length === 0) return '--'
     return (this.astroStore.lunarElongationData[0].separation ?? 0).toFixed(1) + '°'
-  }
-
-  private lunarElongationClosestLabel(): string {
-    let closest: number = 181
-    let time: number = 0
-    for (const point of this.astroStore.lunarElongationData) {
-      const separation: number = point.separation ?? 181
-      if (separation < closest) {
-        closest = separation
-        time = point.t ?? 0
-      }
-    }
-    return closest > 180 ? '--' : closest.toFixed(1) + '°（' + hourOffsetLabel(time) + '）'
   }
 
 
@@ -6462,28 +6326,6 @@ export struct WindowNativeNode {
     this.refreshSkyCultureMakerArtworkPreview()
   }
 
-  private currentSkyCultureMakerDraft(): SkyCultureMakerDraft {
-    let beginTime = Number(this.skyCultureMakerStore.beginTime)
-    let endTime = Number(this.skyCultureMakerStore.endTime)
-    if (!Number.isFinite(beginTime)) beginTime = 0
-    if (!Number.isFinite(endTime)) endTime = 0
-    return {
-      schemaVersion: 1,
-      id: this.skyCultureMakerStore.id.trim(),
-      name: this.skyCultureMakerStore.name.trim(),
-      author: this.skyCultureMakerStore.author.trim(),
-      license: this.skyCultureMakerStore.license.trim(),
-      region: this.skyCultureMakerStore.region.trim(),
-      classification: [this.skyCultureMakerStore.classification],
-      native_lang: this.skyCultureMakerStore.nativeLang.trim(),
-      beginTime: Math.trunc(beginTime),
-      endTime: Math.trunc(endTime),
-      introduction: this.skyCultureMakerStore.introduction,
-      description: this.skyCultureMakerStore.description,
-      constellations: this.skyCultureMakerStore.constellations
-    }
-  }
-
   private scheduleSkyCultureMakerSave(): void {
     if (!this.skyCultureMakerStore.draftReady) return
     if (this.skyCultureMakerSaveTimer > 0) clearTimeout(this.skyCultureMakerSaveTimer)
@@ -6505,7 +6347,7 @@ export struct WindowNativeNode {
       return
     }
     this.skyCultureMakerStore.saving = true
-    this.callInteractive('saveSkyCultureMakerDraft', JSON.stringify(this.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
+    this.callInteractive('saveSkyCultureMakerDraft', JSON.stringify(this.skyCultureMakerStore.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
       this.skyCultureMakerStore.saving = false
       if (response.ok !== true) {
         this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_save_failed')
@@ -6524,7 +6366,7 @@ export struct WindowNativeNode {
   }
 
   private validateSkyCultureMaker(): void {
-    this.callInteractive('validateSkyCultureMakerDraft', JSON.stringify(this.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
+    this.callInteractive('validateSkyCultureMakerDraft', JSON.stringify(this.skyCultureMakerStore.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
       this.skyCultureMakerStore.validation = validationFromResponse(response)
       this.skyCultureMakerStore.status = response.ok === true
         ? I18n.t('sky_culture_maker_valid')
@@ -7920,20 +7762,6 @@ private loadPlanetPositions(): void {
 	this.validateTelescopeEditorStatus()
   }
 
-  private telescopeCircleValues(): number[] {
-    const values: number[] = []
-    const parts = this.telescopeStore.lx200Circles.split(',')
-    for (let index = 0; index < parts.length; index += 1) {
-      const value = Number(parts[index].trim())
-      if (Number.isFinite(value) && value > 0 && value <= 180 && !values.includes(value)) {
-        values.push(value)
-      }
-      if (values.length >= 10) break
-    }
-    values.sort((left: number, right: number) => left - right)
-    return values
-  }
-
   private saveTelescopeProfile(): void {
     const port = Number(this.telescopeStore.lx200Port.trim())
 	const invalidEndpoint = this.telescopeStore.lx200Protocol === 'lx200_tcp' &&
@@ -7951,7 +7779,7 @@ private loadPlanetPositions(): void {
 	  port: this.telescopeStore.lx200Protocol === 'simulated' ? 0 : port,
       equinox: this.telescopeStore.lx200Equinox,
       commandDelayMs: this.telescopeStore.lx200CommandDelayMs,
-      circles: this.telescopeCircleValues()
+      circles: this.telescopeStore.telescopeCircleValues()
     }
     this.telescopeStore.lx200Busy = true
     this.callInteractive('saveTelescopeProfile', JSON.stringify(profile), (result: TelescopeProfilesResponse) => {
@@ -8717,37 +8545,6 @@ private loadPlanetPositions(): void {
   // Magnetic x up points east; up x east points north.
   // This gives a true device pose without applying a second correction to an
   // already fused rotation quaternion.
-  // Heading from magnetic north with tilt compensation. `GRAVITY` supplies
-  // the physical up axis and the horizontal component of the magnetic field
-  // supplies magnetic north, so this remains meaningful while the tablet is
-  // tilted toward the horizon. It is deliberately diagnostic/calibration-only
-  // and never fed into the high-frequency camera loop.
-  private gyroMagneticHeadingFromDeviceVectors(): number {
-    if (this.gyroGravityDevice.length !== 3 || this.gyroMagneticDevice.length !== 3) {
-      return Number.NaN
-    }
-    const gravity = this.gyroFilteredGravityDevice.length === 3
-      ? this.gyroFilteredGravityDevice : this.gyroGravityDevice
-    const magneticField = this.gyroFilteredMagneticDevice.length === 3
-      ? this.gyroFilteredMagneticDevice : this.gyroMagneticDevice
-    const up = gyroNormalizeVector(gravity)
-    const magnetic = gyroNormalizeVector(magneticField)
-    const northRaw = [
-      magnetic[0] - up[0] * gyroDot(magnetic, up),
-      magnetic[1] - up[1] * gyroDot(magnetic, up),
-      magnetic[2] - up[2] * gyroDot(magnetic, up)
-    ]
-    const northLength = Math.sqrt(gyroDot(northRaw, northRaw))
-    if (northLength < 0.12) { return Number.NaN }
-    const north = [northRaw[0] / northLength, northRaw[1] / northLength, northRaw[2] / northLength]
-    const east = gyroNormalizeVector(gyroCross(north, up))
-    // The observer looks through the rear side of the display.
-    const rearNormal = [0, 0, -1]
-    const eastComponent = gyroDot(rearNormal, east)
-    const northComponent = gyroDot(rearNormal, north)
-    return wrapGyroAzimuth(Math.atan2(eastComponent, northComponent) * 180 / Math.PI)
-  }
-
   private gyroCompassDirection(heading: number): string {
     const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北']
     const index = Math.floor((wrapGyroAzimuth(heading) + 22.5) / 45) % directions.length
@@ -8755,7 +8552,7 @@ private loadPlanetPositions(): void {
   }
 
   private updateGyroCompassReadout(): void {
-    const heading = this.gyroMagneticHeadingFromDeviceVectors()
+    const heading = gyroMagneticHeadingFromDeviceVectors(this.gyroGravityDevice, this.gyroMagneticDevice, this.gyroFilteredGravityDevice, this.gyroFilteredMagneticDevice)
     if (!Number.isFinite(heading)) { return }
     this.gyroMagneticHeading = heading
     // Keep the needle continuous through 359 -> 0 rather than animating a
@@ -10199,25 +9996,6 @@ private loadPlanetPositions(): void {
   }
 
   // ===== 位置搜索（离线数据，按查询分块扫描）=====
-  private quickLocationSearchItems(): Array<LocSearchItem> {
-    const names: string[] = [
-      'Beijing', 'Shanghai', 'Guangzhou', 'Shenzhen', 'Chengdu', 'Hangzhou', 'Wuhan',
-      'Xian', 'Nanjing', 'Chongqing', 'Harbin', 'Lhasa', 'Urumqi', 'HongKong', 'Taipei',
-      'Tokyo', 'Seoul', 'Singapore', 'NewYork', 'London', 'Sydney', 'Paris', 'Berlin',
-      'Moscow', 'Dubai', 'Mumbai', 'Cairo', 'Rio', 'LosAngeles', 'Toronto', 'Mexico',
-      'Bangkok', 'Istanbul', 'Amsterdam', 'Stockholm', 'Reykjavik', 'CapeTown',
-      'BuenosAires', 'Honolulu'
-    ]
-    const items: Array<LocSearchItem> = []
-    for (const name of names) {
-      const preset = getCityPreset(name)
-      if (preset === undefined) continue
-      const displayName = this.locationPickerStore.locationDisplayName(name)
-      items.push({ name: name, displayName: displayName, lat: preset.lat, lon: preset.lon, alt: preset.alt, planet: 'Earth', country: '', region: '' })
-    }
-    return items
-  }
-
 
   private matchesLocationSearch(text: string, query: string): boolean {
     const rawQuery = query.trim().toLocaleLowerCase()
@@ -10265,7 +10043,7 @@ private loadPlanetPositions(): void {
 
   private quickLocationSearch(query: string): Array<LocSearchItem> {
     if (!query.trim()) return []
-    return this.quickLocationSearchItems()
+    return this.locationPickerStore.quickLocationSearchItems()
       .filter((item: LocSearchItem) => item.planet.toLowerCase() === this.sessionToolStore.observerPlanet.toLowerCase())
       .filter((item: LocSearchItem) => this.matchesLocationSearch(
         item.name + ' ' + (item.displayName ?? '') + ' ' + (LOCATION_ZH_NAMES[item.name] ?? ''), query))
@@ -14622,18 +14400,18 @@ private loadPlanetPositions(): void {
         scroller: this.astroPanelScroller,
         host: {
           almanacHoursLabel: (key: string) => this.almanacHoursLabel(key),
-          altAzMaxLabel: () => this.altAzMaxLabel(),
+          altAzMaxLabel: () => this.astroStore.altAzMaxLabel(),
           altAzMidpointLabel: () => this.altAzMidpointLabel(),
-          altAzNowLabel: () => this.altAzNowLabel(),
+          altAzNowLabel: () => this.astroStore.altAzNowLabel(),
           altAzRangeLabel: () => this.altAzRangeLabel(),
-          altAzVisibleHours: () => this.altAzVisibleHours(),
+          altAzVisibleHours: () => this.astroStore.altAzVisibleHours(),
           altBarHeight: (alt: number | undefined) => this.altBarHeight(alt),
           altBarWidth: () => this.altBarWidth(),
           altCurveSegmentWidth: () => this.altCurveSegmentWidth(),
           altitudeCurveColor: (altitude: number | undefined, color: string) => this.altitudeCurveColor(altitude, color),
           annualBarHeight: (altitude: number | undefined) => this.annualBarHeight(altitude),
           annualBarWidth: () => this.annualBarWidth(),
-          annualMaxLabel: () => this.annualMaxLabel(),
+          annualMaxLabel: () => this.astroStore.annualMaxLabel(),
           astroNeedsSelectedObject: () => this.astroNeedsSelectedObject(),
           azimuthNowLabel: () => this.azimuthNowLabel(),
           callNative: (name: string, payload?: string) => { this.callNative(name, payload) },
@@ -14643,15 +14421,15 @@ private loadPlanetPositions(): void {
           chooseEphemerisStartDate: () => { this.chooseEphemerisStartDate() },
           chooseGraphStartDate: () => { this.chooseGraphStartDate() },
           chooseRtsCalendarStartDate: () => { this.chooseRtsCalendarStartDate() },
-          eclipseStartOptionLabel: (offsetDays: number) => this.eclipseStartOptionLabel(offsetDays),
+          eclipseStartOptionLabel: (offsetDays: number) => this.astroStore.eclipseStartOptionLabel(offsetDays),
           ephemerisStartOptionLabel: (offsetDays: number) => this.ephemerisStartOptionLabel(offsetDays),
           exportCurrentAstroCsv: () => this.exportCurrentAstroCsv(),
-          filteredEclipses: () => this.filteredEclipses(),
+          filteredEclipses: () => this.astroStore.filteredEclipses(),
           fmtClock: (s: string | undefined) => this.fmtClock(s),
           fmtDateTime: (s: string | undefined) => this.fmtDateTime(s),
           fmtEphemerisDate: (s: string | undefined) => this.fmtEphemerisDate(s),
           fmtNum: (v: number | undefined, digits: number, suffix: string) => this.fmtNum(v, digits, suffix),
-          graphCustomStartLabel: () => this.graphCustomStartLabel(),
+          graphCustomStartLabel: () => this.astroStore.graphCustomStartLabel(),
           graphTargetLabel: () => this.astroStore.graphTargetLabel(),
           hasSelectedObject: () => this.hasSelectedObject(),
           hecPointColor: (position: HeliocentricPosition) => this.hecPointColor(position),
@@ -14688,7 +14466,7 @@ private loadPlanetPositions(): void {
           loadTonightAstro: () => { this.astroStore.loadTonightAstro() },
           loadWutTargets: () => { this.wutStore.loadWutTargets() },
           lunarElongationBarWidth: () => this.lunarElongationBarWidth(),
-          lunarElongationClosestLabel: () => this.lunarElongationClosestLabel(),
+          lunarElongationClosestLabel: () => this.astroStore.lunarElongationClosestLabel(),
           lunarElongationLineTop: () => this.lunarElongationLineTop(),
           lunarElongationNowLabel: () => this.lunarElongationNowLabel(),
           markRtsCalendarForRegeneration: () => { this.astroStore.markRtsCalendarForRegeneration() },
@@ -14706,7 +14484,7 @@ private loadPlanetPositions(): void {
           publishAstroPanelState: () => { this.publishAstroPanelState() },
           reloadCurrentGraph: () => { this.reloadCurrentGraph() },
           reloadEclipses: () => { this.astroStore.reloadEclipses() },
-          rtsCalendarStartOptionLabel: (offsetDays: number) => this.rtsCalendarStartOptionLabel(offsetDays),
+          rtsCalendarStartOptionLabel: (offsetDays: number) => this.astroStore.rtsCalendarStartOptionLabel(offsetDays),
           searchObject: (name: string, catalogModuleId?: string, exactSelectionPayload?: string, placement?: string) => { this.searchObject(name, catalogModuleId, exactSelectionPayload, placement) },
           selectAstroFilter: (key: string, value: string) => { this.selectAstroFilter(key, value) },
           selectAstroGroup: (group: number) => { this.selectAstroGroup(group) },

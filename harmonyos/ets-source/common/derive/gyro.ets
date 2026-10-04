@@ -94,3 +94,35 @@ export function shortestGyroAzimuthDelta(from: number, to: number): number {
   if (delta < -180) { delta += 360 }
   return delta
 }
+
+// Heading from magnetic north with tilt compensation. GRAVITY supplies the
+// physical up axis and the horizontal component of the magnetic field supplies
+// magnetic north, so this remains meaningful while the tablet is tilted toward
+// the horizon. Moved verbatim from the host (plan §14.3 track A2-2); the four
+// device vectors are passed in explicitly because they stay reserved host
+// fields (review §2.7.1).
+export function gyroMagneticHeadingFromDeviceVectors(gravityDevice: number[], magneticDevice: number[], filteredGravityDevice: number[], filteredMagneticDevice: number[]): number {
+  if (gravityDevice.length !== 3 || magneticDevice.length !== 3) {
+    return Number.NaN
+  }
+  const gravity = filteredGravityDevice.length === 3
+    ? filteredGravityDevice : gravityDevice
+  const magneticField = filteredMagneticDevice.length === 3
+    ? filteredMagneticDevice : magneticDevice
+  const up = gyroNormalizeVector(gravity)
+  const magnetic = gyroNormalizeVector(magneticField)
+  const northRaw = [
+    magnetic[0] - up[0] * gyroDot(magnetic, up),
+    magnetic[1] - up[1] * gyroDot(magnetic, up),
+    magnetic[2] - up[2] * gyroDot(magnetic, up)
+  ]
+  const northLength = Math.sqrt(gyroDot(northRaw, northRaw))
+  if (northLength < 0.12) { return Number.NaN }
+  const north = [northRaw[0] / northLength, northRaw[1] / northLength, northRaw[2] / northLength]
+  const east = gyroNormalizeVector(gyroCross(north, up))
+  // The observer looks through the rear side of the display.
+  const rearNormal = [0, 0, -1]
+  const eastComponent = gyroDot(rearNormal, east)
+  const northComponent = gyroDot(rearNormal, north)
+  return wrapGyroAzimuth(Math.atan2(eastComponent, northComponent) * 180 / Math.PI)
+}

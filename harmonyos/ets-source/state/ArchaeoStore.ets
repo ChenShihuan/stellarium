@@ -13,9 +13,10 @@ import { CommandPort } from '../bridge/CommandPort'
 //   - 总开关 archaeoLinesEnabled 与线宽 archaeoLineWidth；
 //   - 13 个线条开关 + 当前行星档位 archaeoCurrentPlanet。
 //
-// 写回动作仍在宿主（setArchaeoLineSetting / archaeoLineSettingValue / applyArchaeoLineSetting
-// 及 archaeoMutationId），面板只回注回调；加载器 loadArchaeoLines（§14 B1-4）已随桥注入
-// 搬入本 store（不使用 archaeoMutationId，故与宿主动作无共享代际依赖）。
+// 写回动作仍在宿主（setArchaeoLineSetting / applyArchaeoLineSetting 及 archaeoMutationId），
+// 面板只回注回调；只读取值 archaeoLineSettingValue（§14 A2-2）已并入本 store；加载器
+// loadArchaeoLines（§14 B1-4）已随桥注入搬入本 store（不使用 archaeoMutationId，故与
+// 宿主动作无共享代际依赖）。
 //
 // 约束：所有更新必须是"字段整体赋值"。改造前已普查确认本域无数组/对象字段，不存在
 // 原地 push/splice 或 `this.<f>.<prop> =`（@ObjectLink 观测不到原地变更）。
@@ -101,5 +102,30 @@ export class ArchaeoStore {
       this.archaeoStatus = I18n.t('plugin_status_unavailable')
       this.notifyChanged()
     }, 0, 100, 15)
+  }
+
+  // 逐条读出当前古天文线设置的 CLI 取值（plan §14.3 A2-2）。原先读宿主 archaeoStore.* 的
+  // 分支体逐字迁入本 store，改为零宿主引用；宿主 setArchaeoLineSetting 调用点改为
+  // this.archaeoStore.archaeoLineSettingValue(setting)。
+  archaeoLineSettingValue(setting: string): string {
+    switch (setting) {
+      case 'enabled': return this.archaeoLinesEnabled ? '1' : '0'
+      case 'equinox': return this.archaeoEquinox ? '1' : '0'
+      case 'solstices': return this.archaeoSolstices ? '1' : '0'
+      case 'crossquarters': return this.archaeoCrossquarters ? '1' : '0'
+      case 'majorStandstills': return this.archaeoMajorStandstills ? '1' : '0'
+      case 'minorStandstills': return this.archaeoMinorStandstills ? '1' : '0'
+      case 'polarCircles': return this.archaeoPolarCircles ? '1' : '0'
+      case 'zenithPassage': return this.archaeoZenithPassage ? '1' : '0'
+      case 'nadirPassage': return this.archaeoNadirPassage ? '1' : '0'
+      case 'selectedObject': return this.archaeoSelectedObject ? '1' : '0'
+      case 'selectedObjectAzimuth': return this.archaeoSelectedObjectAzimuth ? '1' : '0'
+      case 'selectedObjectHourAngle': return this.archaeoSelectedObjectHourAngle ? '1' : '0'
+      case 'currentSun': return this.archaeoCurrentSun ? '1' : '0'
+      case 'currentMoon': return this.archaeoCurrentMoon ? '1' : '0'
+      case 'currentPlanet': return ['none', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'][this.archaeoCurrentPlanet] ?? 'none'
+      case 'lineWidth': return this.archaeoLineWidth.toString()
+      default: return ''
+    }
   }
 }

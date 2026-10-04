@@ -453,4 +453,21 @@ export class TelescopeStore {
       })
     })
   }
+
+  // 从 lx200Circles 解析出赤道仪刻度环取值（plan §14.3 A2-2）。原先读宿主
+  // telescopeStore.lx200Circles 的函数体逐字迁入本 store，改为零宿主引用；宿主保存档位
+  // 调用点改为 this.telescopeStore.telescopeCircleValues()。
+  telescopeCircleValues(): number[] {
+    const values: number[] = []
+    const parts = this.lx200Circles.split(',')
+    for (let index = 0; index < parts.length; index += 1) {
+      const value = Number(parts[index].trim())
+      if (Number.isFinite(value) && value > 0 && value <= 180 && !values.includes(value)) {
+        values.push(value)
+      }
+      if (values.length >= 10) break
+    }
+    values.sort((left: number, right: number) => left - right)
+    return values
+  }
 }
