@@ -1165,6 +1165,18 @@ export struct WindowNativeNode {
     this.commandStore.attachPort(hostPort, () => {})
     this.equationOfTimeStore.attachPort(hostPort, () => {})
     this.nebulaTextureStore.attachPort(hostPort, () => {})
+    // §14 B1-6：脚本录制 / 观测星球 / 星空文化标志 / 天体资料 / 指针坐标五域复用同一实例，
+    // 其消费方均为 @ObjectLink，字段赋值即刷新，五个域都无 publish* 发布点，故 onChanged 传空实现。
+    this.scriptStore.attachPort(hostPort, () => {})
+    this.sessionToolStore.attachPort(hostPort, () => {})
+    this.skyCultureSettingsStore.attachPort(hostPort, () => {})
+    this.objectDetailStore.attachPort(hostPort, () => {})
+    this.overlayStore.attachPort(hostPort, () => {})
+    // §14 B1-6：卫星域有 publish* CLI 发布点（publishSatellitePanelState），
+    // 故 onChanged 用它，保持 CLI 侧 satellitePanelState 与 store 同步。
+    this.satelliteStore.attachPort(hostPort, () => { this.publishSatellitePanelState() })
+    // §14 B1-6：位置域的 loadSavedLocations 读 AppStorage 而非桥，port 暂未使用（预留）。
+    this.locationStore.attachPort(hostPort, () => {})
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -2279,9 +2291,9 @@ export struct WindowNativeNode {
         if (this.configTab === 6) this.pluginStore.loadPluginList()
       } else if (panel === 'place') {
         this.refreshState()
-        this.loadPlanetList()
+        this.sessionToolStore.loadPlanetList()
         this.loadObserverInfo()
-        this.loadSavedLocations()
+        this.locationStore.loadSavedLocations()
       } else if (panel === 'catalogs' && !OFFLINE_APPGALLERY_BUILD) {
         if (this.catalogStore.catalogList.length === 0) this.catalogStore.loadStarCatalogs()
       } else if (panel === 'bookmarks') {
@@ -2308,7 +2320,7 @@ export struct WindowNativeNode {
       } else if (panel === 'skyCultureMaker') {
         this.loadSkyCultureMakerDraft()
       } else if (panel === 'pointerCoordinates') {
-        this.ensurePluginLoaded('PointerCoordinates', () => { this.loadPointerCoordinates() })
+        this.ensurePluginLoaded('PointerCoordinates', () => { this.overlayStore.loadPointerCoordinates() })
       } else if (panel === 'observing') {
       } else if (panel === 'commands') {
         this.commandStore.loadCommandCatalog()
@@ -2316,7 +2328,7 @@ export struct WindowNativeNode {
         this.tools.loadAboutInfo()
       } else if (panel === 'scripts') {
         this.loadScriptList()
-        this.loadRecordings()
+        this.scriptStore.loadRecordings()
         this.loadVideoRecordingState()
       } else if (panel === 'telescope') {
         this.loadTelescopeControlStatus()
@@ -3000,18 +3012,11 @@ export struct WindowNativeNode {
         this.recordBuffer = []
         this.scriptStore.recordCount = 0
         this.scriptStore.recordName = ''
-        this.loadRecordings()
+        this.scriptStore.loadRecordings()
       } else {
         this.scriptStore.recordMsg = '保存失败：' + (r.error ?? '未知错误')
         this.flashHint(this.scriptStore.recordMsg)
       }
-    })
-  }
-
-  private loadRecordings(): void {
-    this.callInteractive('listRecordings', '', (r: StellariumBridgeResponse) => {
-      const resp = r as RecordingsResponse
-      this.scriptStore.recordings = resp.items ?? []
     })
   }
 
@@ -3233,7 +3238,7 @@ export struct WindowNativeNode {
     setTimeout(() => {
       this.refreshState()
       this.loadObserverInfo(true)
-      this.loadPlanetList()
+      this.sessionToolStore.loadPlanetList()
     }, 220)
   }
 
@@ -3335,7 +3340,7 @@ export struct WindowNativeNode {
     this.callInteractive('deleteRecording', file, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.flashHint(I18n.t('msg_recording_deleted'))
-        this.loadRecordings()
+        this.scriptStore.loadRecordings()
       } else {
         this.flashHint(I18n.t('msg_delete_failed'))
       }
@@ -4011,33 +4016,10 @@ export struct WindowNativeNode {
   private resetOcularInstrument(kind: string): void {
     this.callNativeWhenReady('resetOcularInstrument', kind, () => { this.telescopeStore.loadOculars(false) })
   }
-  private loadPointerCoordinates(): void {
-    this.overlayStore.pointerCoordinatesLoading = true
-    this.callNativeWhenReady('getPointerCoordinates', '', (r: StellariumBridgeResponse) => {
-      this.overlayStore.pointerCoordinatesLoading = false
-      const data = (r as PointerCoordinatesResponse).pointerCoordinates
-      if (r.ok !== true || data === undefined) {
-        this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_status_unavailable')
-        return
-      }
-      this.overlayStore.pointerCoordinatesEnabled = data.enabled
-      this.overlayStore.pointerCoordinatesStartup = data.enableAtStartup
-      this.overlayStore.pointerCoordinatesButton = data.showCoordinatesButton
-      this.overlayStore.pointerCoordinatesConstellation = data.showConstellation
-      this.overlayStore.pointerCoordinatesCrossedLines = data.showCrossedLines
-      this.overlayStore.pointerCoordinatesElongation = data.showElongation
-      this.overlayStore.pointerCoordinatesSystem = data.coordinateSystem
-      this.overlayStore.pointerCoordinatesPlace = data.coordinatesPlace
-      this.overlayStore.pointerCoordinatesStatus = ''
-    }, 0, 100, 15, () => {
-      this.overlayStore.pointerCoordinatesLoading = false
-      this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_status_unavailable')
-    })
-  }
   private setPointerCoordinates(setting: string, value: string): void {
     this.callNativeWhenReady('setPointerCoordinates', setting + '|' + value, (r: StellariumBridgeResponse) => {
       if (r.ok !== true) this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed')
-      this.loadPointerCoordinates()
+      this.overlayStore.loadPointerCoordinates()
     }, 0, 100, 15, () => { this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed') })
   }
 
@@ -4112,7 +4094,7 @@ export struct WindowNativeNode {
         this.satelliteStore.satItems = s.items
         this.satelliteListElapsedMs = Date.now() - startedAt
         this.publishSatellitePanelState()
-        if (includeSourcesForRequest) this.loadSatelliteSources()
+        if (includeSourcesForRequest) this.satelliteStore.loadSatelliteSources()
       }, 0, 100, 15, () => {
         if (requestId === this.satelliteListRequestId) {
           this.satelliteStore.satelliteListLoading = false
@@ -4123,21 +4105,11 @@ export struct WindowNativeNode {
     if (immediate) run()
     else this.satelliteLoadTimer = setTimeout(run, 90)
   }
-  private loadSatelliteSources(): void {
-    this.callNativeWhenReady('getSatelliteSources', '', (r: StellariumBridgeResponse) => {
-      const response = r as SatelliteSourcesResponse
-      this.satelliteStore.satSources = response.sources ?? []
-      if (response.settings) {
-        this.satelliteStore.satUpdateSettings = response.settings
-        this.satelliteStore.satUpdateFrequencyInput = response.settings.updateFrequencyHours.toString()
-      }
-    })
-  }
   private setSatelliteUpdateSetting(key: string, value: boolean | number): void {
     const payload: Record<string, boolean | number> = {}
     payload[key] = value
     this.callInteractive('setSatelliteUpdateSetting', JSON.stringify(payload), () => {
-      this.loadSatelliteSources()
+      this.satelliteStore.loadSatelliteSources()
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
   private addSatelliteSource(): void {
@@ -4150,7 +4122,7 @@ export struct WindowNativeNode {
       if (r.ok === true) {
         this.satelliteStore.satSourceInput = ''
         this.satelliteStore.satSourceStatus = I18n.t('sat_source_saved')
-        this.loadSatelliteSources()
+        this.satelliteStore.loadSatelliteSources()
       } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
@@ -4165,7 +4137,7 @@ export struct WindowNativeNode {
     this.callInteractive('setSatelliteSources', JSON.stringify({ sources: sources }), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.satelliteStore.satSourceStatus = I18n.t('sat_source_deleted')
-        this.loadSatelliteSources()
+        this.satelliteStore.loadSatelliteSources()
       } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
@@ -4183,7 +4155,7 @@ export struct WindowNativeNode {
   private refreshSatelliteCatalog(): void {
     this.callInteractive('refreshSatelliteCatalog', '', (r: StellariumBridgeResponse) => {
       this.satelliteStore.satSourceStatus = r.ok === true ? I18n.t('sat_refresh_started') : (r.error ?? I18n.t('sat_refresh_offline'))
-      this.loadSatelliteSources()
+      this.satelliteStore.loadSatelliteSources()
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_refresh_offline') })
   }
   private setSatelliteFlag(name: string, v: boolean): void {
@@ -7060,7 +7032,7 @@ export struct WindowNativeNode {
       this.skyCultureViewStore.detailsReady = true
       this.skyCultureViewStore.pendingId = ''
       this.skyCultureViewStore.detailsLoading = false
-      this.loadSkyCultureConstellationSelectionFlags()
+      this.skyCultureSettingsStore.loadSkyCultureConstellationSelectionFlags()
       this.loadSkyCultureVisualSettings()
     }, () => {
       if (requestId !== this.skyCultureDetailsRequestId) return
@@ -7158,15 +7130,6 @@ export struct WindowNativeNode {
   private setSkyCultureCommonNames(enabled: boolean): void {
     this.callInteractive('setSkyCultureCommonNames', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.skyCultureSettingsStore.skyCultureOverrideCommonNames = r.overrideCommonNames === true
-    })
-  }
-
-  private loadSkyCultureConstellationSelectionFlags(): void {
-    this.callInteractive('getConstellationFlags', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true || r.flags === undefined) return
-      const flags = r.flags as Record<string, Object>
-      this.skyCultureSettingsStore.skyCultureIsolateSelected = flags['isolateSelected'] === true
-      this.skyCultureSettingsStore.skyCultureSinglePick = flags['constellationPick'] === true
     })
   }
 
@@ -8366,24 +8329,6 @@ export struct WindowNativeNode {
     this.callInteractive('setFovMarkerSetting', setting + '|' + value.toFixed(1), () => {})
   }
 
-  private loadObjectInfo(): void {
-    this.callInteractive('getObjectInfo', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.objectInfoData !== undefined) {
-        const obj = r.objectInfoData as Record<string, Object>;
-        const m = new Map<string, string>();
-        if (obj['name'] !== undefined) m.set('name', obj['name'] as string);
-        if (obj['nameI18'] !== undefined) m.set('nameI18', obj['nameI18'] as string);
-        if (obj['englishName'] !== undefined) m.set('englishName', obj['englishName'] as string);
-        if (obj['type'] !== undefined) m.set('type', obj['type'] as string);
-        if (obj['ra'] !== undefined) m.set('ra', (obj['ra'] as number).toFixed(4));
-        if (obj['dec'] !== undefined) m.set('dec', (obj['dec'] as number).toFixed(4));
-        if (obj['alt'] !== undefined) m.set('alt', (obj['alt'] as number).toFixed(2));
-        if (obj['az'] !== undefined) m.set('az', (obj['az'] as number).toFixed(2));
-        if (obj['magnitude'] !== undefined) m.set('magnitude', (obj['magnitude'] as number).toFixed(2));
-        this.objectDetailStore.objectInfo = m;
-      }
-    })
-  }
 private loadPlanetPositions(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.planetPositionsRequestSequence
@@ -12042,27 +11987,6 @@ private loadPlanetPositions(): void {
   }
 
   // ===== 已保存位置管理（持久化到 preferences）=====
-  private loadSavedLocations(): void {
-    try {
-      const prefs = AppStorage.get<Record<string, Object>>('stellariumPrefs')
-      if (prefs && prefs['savedLocations']) {
-        const raw = prefs['savedLocations'] as Object[]
-        this.locationStore.savedLocations = raw.map((item: Object): SavedLocation => {
-          const loc = item as Record<string, string | number>
-          return {
-            name: (loc['name'] as string) ?? '',
-            lat: (loc['lat'] as number) ?? 0,
-            lon: (loc['lon'] as number) ?? 0,
-            alt: (loc['alt'] as number) ?? 0,
-            planet: (loc['planet'] as string) ?? 'Earth',
-          } as SavedLocation
-        })
-      }
-    } catch (e) {
-      hilog.info(0x0000, 'StellariumArkUI', 'loadSavedLocations error: %{public}s', (e as Error).message ?? '')
-    }
-  }
-
   private saveCurrentLocation(): void {
     const name = this.locationPickerStore.locationPickerName
     // 检查是否已存在
@@ -12099,18 +12023,6 @@ private loadPlanetPositions(): void {
     } catch (e) {
       hilog.info(0x0000, 'StellariumArkUI', 'persistSavedLocations error: %{public}s', (e as Error).message ?? '')
     }
-  }
-
-  private loadPlanetList(): void {
-    this.callInteractive('getObserverPlanetList', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.planets) {
-        // 只保留"有专属地景、能站着看天+换地景"的星球；getAllPlanetEnglishNames
-        // 还会返回大量彗星/矮行星，列出来既冗长又无对应地景，对切星球毫无意义。
-        const standable = ['Earth', 'Moon', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Sun']
-        const all = r.planets as string[]
-        this.sessionToolStore.planetList = standable.filter((s) => all.indexOf(s) >= 0)
-      }
-    })
   }
 
   private setObserverPlanet(name: string): void {
@@ -17335,7 +17247,7 @@ private loadPlanetPositions(): void {
       this.configTabContentOffsetX = direction * 8
       if (tabId === 5) {
         this.loadScriptList()
-        this.loadRecordings()
+        this.scriptStore.loadRecordings()
         this.loadVideoRecordingState()
       } else if (tabId === 6) {
         this.pluginStore.loadPluginList()

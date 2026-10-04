@@ -2,8 +2,11 @@ import {
   SatelliteListItem,
   SatelliteSource,
   SatelliteUpdateSettings,
+  SatelliteSourcesResponse,
   CatalogHealthEntry
 } from '../pages/MainWindowModels'
+import { StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { CommandPort } from '../bridge/CommandPort'
 
 // 卫星域状态（原宿主的 28 个 @State 字段：sat* 簇 + activeSatGroup +
 // satelliteListLoading + satelliteCatalogHealth）。
@@ -52,4 +55,45 @@ export class SatelliteStore {
   satUpdateFrequencyInput: string = '72'
   satelliteListLoading: boolean = false
   satelliteCatalogHealth: CatalogHealthEntry = {}
+
+  // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadSatelliteSources） ——
+  private port: CommandPort | null = null
+  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  private seq: number = 0
+  private onChanged: (() => void) | null = null
+
+  // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
+  attachPort(port: CommandPort, onChanged: () => void): void {
+    this.port = port
+    this.onChanged = onChanged
+  }
+
+  // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  private notifyChanged(): void {
+    if (this.onChanged !== null) {
+      this.onChanged()
+    }
+  }
+
+  // 卫星面板「数据源」：桥拉取 TLE 源列表与更新设置（原宿主 loadSatelliteSources，函数体逐字搬入；
+  // 仅 this.callNativeWhenReady → this.port.requestWhenReady、this.satelliteStore.<f> → this.<f>）。
+  loadSatelliteSources(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    port.requestWhenReady('getSatelliteSources', '', (r: StellariumBridgeResponse) => {
+      const response = r as SatelliteSourcesResponse
+      this.satSources = response.sources ?? []
+      if (response.settings) {
+        this.satUpdateSettings = response.settings
+        this.satUpdateFrequencyInput = response.settings.updateFrequencyHours.toString()
+      }
+      this.notifyChanged()
+    })
+  }
 }

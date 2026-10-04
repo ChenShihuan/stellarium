@@ -1,4 +1,6 @@
 import { TonightPlanetRow } from '../pages/MainWindowModels'
+import { StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { CommandPort } from '../bridge/CommandPort'
 
 // 观测/会话工具区块（观测星球切换、虚拟指星笔、手表陀螺仪模拟、今晚天象、会话续传）的状态簇。
 //
@@ -54,4 +56,47 @@ export class SessionToolStore {
   sessionJson: string = ''
   sessionExportSig: string = ''
   sessionHint: string = ''
+
+  // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadPlanetList） ——
+  private port: CommandPort | null = null
+  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  private seq: number = 0
+  private onChanged: (() => void) | null = null
+
+  // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
+  attachPort(port: CommandPort, onChanged: () => void): void {
+    this.port = port
+    this.onChanged = onChanged
+  }
+
+  // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  private notifyChanged(): void {
+    if (this.onChanged !== null) {
+      this.onChanged()
+    }
+  }
+
+  // 「位置」面板观测星球列表：桥拉取全部星球名，仅保留有专属地景、可站立观天的 8 颗
+  // （原宿主 loadPlanetList，函数体逐字搬入；仅 this.callInteractive → this.port.requestInteractive、
+  // this.sessionToolStore.<f> → this.<f>）。本域无 publish* 发布点，onChanged 为等价空实现。
+  loadPlanetList(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    port.requestInteractive('getObserverPlanetList', '', (r: StellariumBridgeResponse) => {
+      if (r.ok === true && r.planets) {
+        // 只保留"有专属地景、能站着看天+换地景"的星球；getAllPlanetEnglishNames
+        // 还会返回大量彗星/矮行星，列出来既冗长又无对应地景，对切星球毫无意义。
+        const standable = ['Earth', 'Moon', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Sun']
+        const all = r.planets as string[]
+        this.planetList = standable.filter((s) => all.indexOf(s) >= 0)
+        this.notifyChanged()
+      }
+    })
+  }
 }
