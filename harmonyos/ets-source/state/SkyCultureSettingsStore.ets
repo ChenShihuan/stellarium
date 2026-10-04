@@ -3,6 +3,17 @@ import { StellariumBridgeResponse, SkyCultureItem, SkyCultureTerritoryEntry, Sky
 import { ConfigurationOption, SkyCultureVisualColors } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
 
+// 宿主 → SkyCultureSettingsStore 的加载助手（§14.5 B2R-3「额外注入」）。
+export interface SkyCultureSettingsHostHooks {
+  // 当前有效的配色目标（读 layerStore 图层开关 + 本 store 的 hasZodiac/hasLunarSystem）。
+  skyCultureActiveColorTarget(): string
+  // Canvas 领地地图重绘（持有 skyCultureMapContext / skyCultureMapRenderWidth|Height，属 UI/NAPI）。
+  drawSkyCultureTerritoryMap(): void
+  // 当前选中的星空文化 id（属 SkyCultureViewStore，跨 store 读取经注入，§14.8 规则 4）。
+  // 领地地图加载器开头 `currentSkyCultureId.length === 0` 门禁所用（§14.5 表未列，普查补出）。
+  skyCultureCurrentId(): string
+}
+
 // 「星空文化」面板（`activePanel === 'layers'` 的第 7 个视图标签页 `viewSkyCultureTab`）的
 // **设置字段簇 + 纯计算**。
 //
@@ -130,11 +141,16 @@ export class SkyCultureSettingsStore {
   // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
+  private hooks: SkyCultureSettingsHostHooks | null = null
 
   // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
   attachPort(port: CommandPort, onChanged: () => void): void {
     this.port = port
     this.onChanged = onChanged
+  }
+
+  attachHooks(hooks: SkyCultureSettingsHostHooks): void {
+    this.hooks = hooks
   }
 
   // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
@@ -162,6 +178,93 @@ export class SkyCultureSettingsStore {
       this.skyCultureIsolateSelected = flags['isolateSelected'] === true
       this.skyCultureSinglePick = flags['constellationPick'] === true
       this.notifyChanged()
+    })
+  }
+
+  // 星空文化视觉设置：桥读字号/粗细/亮度/过渡时长与配色（原宿主 loadSkyCultureVisualSettings，
+  // 函数体逐字搬入；仅 this.callInteractive → this.port.requestInteractive、
+  // this.skyCultureSettingsStore.<f> → this.<f>、this.skyCultureActiveColorTarget() →
+  // hooks.skyCultureActiveColorTarget()）。
+  loadSkyCultureVisualSettings(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    const hooks = this.hooks
+    if (hooks === null) {
+      return
+    }
+    port.requestInteractive('getSkyCultureVisualSettings', '', (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) return
+      this.skyCultureConstellationFontSize = r.constellationFontSize !== undefined ? r.constellationFontSize : this.skyCultureConstellationFontSize
+      this.skyCultureConstellationLineThickness = r.constellationLineThickness !== undefined ? r.constellationLineThickness : this.skyCultureConstellationLineThickness
+      this.skyCultureConstellationBoundaryThickness = r.constellationBoundaryThickness !== undefined ? r.constellationBoundaryThickness : this.skyCultureConstellationBoundaryThickness
+      this.skyCultureConstellationHullsThickness = r.constellationHullsThickness !== undefined ? r.constellationHullsThickness : this.skyCultureConstellationHullsThickness
+      this.skyCultureZodiacThickness = r.zodiacThickness !== undefined ? r.zodiacThickness : this.skyCultureZodiacThickness
+      this.skyCultureLunarSystemThickness = r.lunarSystemThickness !== undefined ? r.lunarSystemThickness : this.skyCultureLunarSystemThickness
+      this.skyCultureConstellationArtIntensity = r.constellationArtIntensity !== undefined ? r.constellationArtIntensity : this.skyCultureConstellationArtIntensity
+      this.skyCultureConstellationLinesFadeDuration = r.constellationLinesFadeDuration !== undefined ? r.constellationLinesFadeDuration : this.skyCultureConstellationLinesFadeDuration
+      this.skyCultureConstellationLabelsFadeDuration = r.constellationLabelsFadeDuration !== undefined ? r.constellationLabelsFadeDuration : this.skyCultureConstellationLabelsFadeDuration
+      this.skyCultureConstellationArtFadeDuration = r.constellationArtFadeDuration !== undefined ? r.constellationArtFadeDuration : this.skyCultureConstellationArtFadeDuration
+      this.skyCultureConstellationBoundariesFadeDuration = r.constellationBoundariesFadeDuration !== undefined ? r.constellationBoundariesFadeDuration : this.skyCultureConstellationBoundariesFadeDuration
+      this.skyCultureConstellationHullsFadeDuration = r.constellationHullsFadeDuration !== undefined ? r.constellationHullsFadeDuration : this.skyCultureConstellationHullsFadeDuration
+      this.skyCultureZodiacFadeDuration = r.zodiacFadeDuration !== undefined ? r.zodiacFadeDuration : this.skyCultureZodiacFadeDuration
+      this.skyCultureLunarSystemFadeDuration = r.lunarSystemFadeDuration !== undefined ? r.lunarSystemFadeDuration : this.skyCultureLunarSystemFadeDuration
+      this.skyCultureAsterismFontSize = r.asterismFontSize !== undefined ? r.asterismFontSize : this.skyCultureAsterismFontSize
+      this.skyCultureAsterismLineThickness = r.asterismLineThickness !== undefined ? r.asterismLineThickness : this.skyCultureAsterismLineThickness
+      this.skyCultureRayHelperThickness = r.rayHelperThickness !== undefined ? r.rayHelperThickness : this.skyCultureRayHelperThickness
+      this.skyCultureAsterismLinesFadeDuration = r.asterismLinesFadeDuration !== undefined ? r.asterismLinesFadeDuration : this.skyCultureAsterismLinesFadeDuration
+      this.skyCultureAsterismLabelsFadeDuration = r.asterismLabelsFadeDuration !== undefined ? r.asterismLabelsFadeDuration : this.skyCultureAsterismLabelsFadeDuration
+      this.skyCultureRayHelperFadeDuration = r.rayHelperFadeDuration !== undefined ? r.rayHelperFadeDuration : this.skyCultureRayHelperFadeDuration
+      if (r.skyCultureColors !== undefined) {
+        const colors = r.skyCultureColors
+        this.skyCultureVisualColors = {
+          constellationLines: colors.constellationLines ?? this.skyCultureVisualColors.constellationLines,
+          constellationLabels: colors.constellationLabels ?? this.skyCultureVisualColors.constellationLabels,
+          constellationBoundaries: colors.constellationBoundaries ?? this.skyCultureVisualColors.constellationBoundaries,
+          constellationHulls: colors.constellationHulls ?? this.skyCultureVisualColors.constellationHulls,
+          zodiac: colors.zodiac ?? this.skyCultureVisualColors.zodiac,
+          lunarSystem: colors.lunarSystem ?? this.skyCultureVisualColors.lunarSystem,
+          asterismLines: colors.asterismLines ?? this.skyCultureVisualColors.asterismLines,
+          asterismLabels: colors.asterismLabels ?? this.skyCultureVisualColors.asterismLabels,
+          rayHelpers: colors.rayHelpers ?? this.skyCultureVisualColors.rayHelpers
+        }
+        this.skyCultureColorInput = this.skyCultureVisualColor(hooks.skyCultureActiveColorTarget())
+      }
+    })
+  }
+
+  // 星空文化领地地图：桥读指定年份的区域几何并触发重绘（原宿主 loadSkyCultureTerritoryMap，
+  // 函数体逐字搬入；仅 this.callInteractive → this.port.requestInteractive、
+  // this.skyCultureSettingsStore.<f> → this.<f>、this.skyCultureViewStore.currentSkyCultureId →
+  // hooks.skyCultureCurrentId()、this.drawSkyCultureTerritoryMap() → hooks.drawSkyCultureTerritoryMap()）。
+  loadSkyCultureTerritoryMap(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    const hooks = this.hooks
+    if (hooks === null) {
+      return
+    }
+    if (!this.skyCultureHasTerritoryArchive || hooks.skyCultureCurrentId().length === 0 || this.skyCultureTerritoryMapLoading) return
+    this.applySkyCultureTerritoryMapYearInput()
+    const requestedYear = this.skyCultureTerritoryMapYear
+    this.skyCultureTerritoryMapLoading = true
+    this.skyCultureTerritoryMapError = ''
+    port.requestInteractive('getSkyCultureTerritoryGeometry', requestedYear.toString(), (r: StellariumBridgeResponse) => {
+      this.skyCultureTerritoryMapLoading = false
+      if (r.ok !== true || r.territoryPolygons === undefined || !Array.isArray(r.territoryPolygons)) {
+        this.skyCultureTerritoryMapError = '未能读取该年份的文化区域。'
+        return
+      }
+      this.skyCultureTerritoryMapPolygons = r.territoryPolygons as Array<SkyCultureTerritoryPolygon>
+      this.skyCultureTerritoryMapYear = r.year !== undefined ? Math.round(r.year) : requestedYear
+      this.skyCultureTerritoryMapExpanded = true
+      hooks.drawSkyCultureTerritoryMap()
+    }, () => {
+      this.skyCultureTerritoryMapLoading = false
+      this.skyCultureTerritoryMapError = '未能读取该年份的文化区域。'
     })
   }
 
