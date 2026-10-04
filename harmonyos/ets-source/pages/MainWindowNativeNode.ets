@@ -236,14 +236,14 @@ const BODY_DETAIL_TEXTURE_PATHS: Array<string> = [
 // 用具名 class 实现接口，避免 ArkTS 匿名对象字面量越界；先例 state/TimeWheelController.ets。
 class HostCommandPort implements CommandPort {
   private readonly requestFn: (name: string, payload: string) => StellariumBridgeResponse
-  private readonly whenReadyFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => void
+  private readonly whenReadyFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, attempt?: number, intervalMs?: number, maxAttempts?: number) => void
   private readonly interactiveFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => void
   private readonly longRunningFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts?: number, isCancelled?: () => boolean) => void
   private readonly fireFn: (name: string, payload: string) => void
 
   constructor(
     requestFn: (name: string, payload: string) => StellariumBridgeResponse,
-    whenReadyFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => void,
+    whenReadyFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, attempt?: number, intervalMs?: number, maxAttempts?: number) => void,
     interactiveFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => void,
     longRunningFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts?: number, isCancelled?: () => boolean) => void,
     fireFn: (name: string, payload: string) => void
@@ -259,8 +259,8 @@ class HostCommandPort implements CommandPort {
     return this.requestFn(name, payload)
   }
 
-  requestWhenReady(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void): void {
-    this.whenReadyFn(name, payload, onOk, onFailure)
+  requestWhenReady(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, attempt?: number, intervalMs?: number, maxAttempts?: number): void {
+    this.whenReadyFn(name, payload, onOk, onFailure, attempt, intervalMs, maxAttempts)
   }
 
   requestInteractive(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void): void {
@@ -590,9 +590,8 @@ export struct WindowNativeNode {
   private compactPanelScroller: Scroller = new Scroller()
   private scriptListScroller: Scroller = new Scroller()
   @State private bookmarkStore: BookmarkStore = new BookmarkStore()
-  // 望远镜/目镜配置（Oculars）：状态已迁入 TelescopeStore（Phase 3al）；加载请求序号由宿主自持
+  // 望远镜/目镜配置（Oculars）：状态与加载请求序号（seq）均已迁入 TelescopeStore（Phase 3al / §14 B1-1）
   @State private telescopeStore: TelescopeStore = new TelescopeStore()
-  private ocularLoadRequestId: number = 0
   // 视图/叠层域（指针坐标插件 + 视图中心坐标叠层 + 天体详情指向线）：状态已迁入 OverlayStore（Phase 3an）
   @State private overlayStore: OverlayStore = new OverlayStore()
   // 相机拼接视场域状态已下沉 state/MosaicStore.ets（review §2.7：Prop 风格 → Store 风格）。
@@ -1132,10 +1131,10 @@ export struct WindowNativeNode {
     }
     // §14.1：把宿主桥注入 ToolsStore。ToolsStore 消费方均为 @ObjectLink，字段赋值即刷新，
     // 故此处 onChanged 注入等价空实现（该域无 publish* 发布点）。
-    this.tools.attachPort(new HostCommandPort(
+    const hostPort = new HostCommandPort(
       (name: string, payload: string) => this.callNative(name, payload),
-      (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => {
-        this.callNativeWhenReady(name, payload, onOk, 0, 200, 60, onFailure)
+      (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, attempt?: number, intervalMs?: number, maxAttempts?: number) => {
+        this.callNativeWhenReady(name, payload, onOk, attempt ?? 0, intervalMs ?? 200, maxAttempts ?? 60, onFailure)
       },
       (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => {
         this.callInteractive(name, payload, onOk, onFailure)
@@ -1144,7 +1143,11 @@ export struct WindowNativeNode {
         this.callLongRunningInteractive(name, payload, onOk, onFailure, onProgress, maxAttempts, isCancelled)
       },
       (name: string, payload: string) => { this.callNativeFire(name, payload) }
-    ), () => {})
+    )
+    this.tools.attachPort(hostPort, () => {})
+    // §14 B1-1：望远镜/目镜域复用同一个 HostCommandPort 实例。其消费方均为 @ObjectLink，
+    // 字段赋值即刷新，且该域无 publish* 发布点，故 onChanged 传空实现。
+    this.telescopeStore.attachPort(hostPort, () => {})
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -2267,7 +2270,7 @@ export struct WindowNativeNode {
       } else if (panel === 'bookmarks') {
         this.loadBookmarks()
       } else if (panel === 'oculars') {
-        this.ensurePluginLoaded('Oculars', () => { this.loadOculars(false) })
+        this.ensurePluginLoaded('Oculars', () => { this.telescopeStore.loadOculars(false) })
       } else if (panel === 'mosaicCamera') {
         this.ensurePluginLoaded('MosaicCamera', () => { this.loadMosaicCamera() })
       } else if (panel === 'archaeoLines') {
@@ -3782,82 +3785,6 @@ export struct WindowNativeNode {
   }
 
   // ===== 望远镜/目镜配置（Oculars 插件桥）=====
-  private loadOculars(showLoading: boolean = true): void {
-    const requestId = ++this.ocularLoadRequestId
-    if (showLoading) this.telescopeStore.ocularLoading = true
-    this.callNativeWhenReady('getOculars', '', (r: StellariumBridgeResponse) => {
-      if (requestId !== this.ocularLoadRequestId) return
-      this.telescopeStore.ocularLoading = false
-      const resp = r as OcularsResponse
-      const o = resp.oculars
-      if (!o) {
-        this.telescopeStore.ocularStatusMessage = I18n.t('ocular_status_unavailable')
-        return
-      }
-      this.telescopeStore.ocularMode = o.ocularMode
-      this.telescopeStore.telradOn = o.telrad
-      this.telescopeStore.crosshairsOn = o.crosshairs
-      this.telescopeStore.ccdOn = o.ccd
-      this.telescopeStore.ocularNames = o.ocularNames
-      this.telescopeStore.telescopeNames = o.telescopeNames
-      this.telescopeStore.lensNames = o.lensNames
-      this.telescopeStore.ccdNames = o.ccdNames
-      this.telescopeStore.ocularIndex = o.ocularIndex
-      this.telescopeStore.telescopeIndex = o.telescopeIndex
-      this.telescopeStore.lensIndex = o.lensIndex
-      this.telescopeStore.ccdIndex = o.ccdIndex
-      this.telescopeStore.ocularItems = o.ocularItems ?? []
-      this.telescopeStore.telescopeItems = o.telescopeItems ?? []
-      this.telescopeStore.lensItems = o.lensItems ?? []
-      this.telescopeStore.ccdItems = o.ccdItems ?? []
-      this.telescopeStore.ocularReady = o.ocularReady
-      this.telescopeStore.ocularCcdReady = o.ccdReady
-      this.telescopeStore.ocularHasSelection = o.hasSelection
-      this.telescopeStore.ocularRequireSelection = o.requireSelection
-      this.telescopeStore.ocularAutoLimitMagnitude = o.autoLimitMagnitude
-      this.telescopeStore.ocularHideGridsLines = o.hideGridsLines
-      this.telescopeStore.ocularAutoScaleTelrad = o.autoScaleTelrad
-      this.telescopeStore.ocularAutoScaleCcd = o.autoScaleCcd
-      this.telescopeStore.ocularSemiTransparentMask = o.semiTransparentMask
-      this.telescopeStore.ocularMaskOpacity = o.maskOpacity
-      this.telescopeStore.ocularShowResolutionCriteria = o.showResolutionCriteria
-      this.telescopeStore.ocularAutoSetMountForCcd = o.autoSetMountForCcd
-      this.telescopeStore.ocularHorizontalCoordinates = o.horizontalCoordinates
-      this.telescopeStore.ocularSensorCropOverlay = o.sensorCropOverlay
-      this.telescopeStore.ocularSensorPixelGrid = o.sensorPixelGrid
-      this.telescopeStore.ocularFocuserOverlay = o.focuserOverlay
-      this.telescopeStore.ocularScaleImageCircle = o.scaleImageCircle
-      this.telescopeStore.ocularMaxExposureTimeForCcd = o.maxExposureTimeForCcd
-      this.telescopeStore.ocularShowContour = o.showContour
-      this.telescopeStore.ocularShowCardinals = o.showCardinals
-      this.telescopeStore.ocularAlignCrosshair = o.alignCrosshair
-      this.telescopeStore.ocularSmallFocuserOverlay = o.smallFocuserOverlay
-      this.telescopeStore.ocularMediumFocuserOverlay = o.mediumFocuserOverlay
-      this.telescopeStore.ocularLargeFocuserOverlay = o.largeFocuserOverlay
-      this.telescopeStore.ocularDmsDegrees = o.dmsDegrees
-      this.telescopeStore.ocularInitFov = o.initFov
-      this.telescopeStore.ocularInitDirection = o.initDirection
-      this.telescopeStore.ocularOagLimits = o.oagLimits
-      this.telescopeStore.ocularCcdCropHSize = o.ccdCropHSize ?? 250
-      this.telescopeStore.ocularCcdCropVSize = o.ccdCropVSize ?? 250
-      this.telescopeStore.ocularCcdPrismRotation = o.ccdPrismRotation ?? 0
-      this.telescopeStore.ocularGuiPanelEnabled = o.guiPanelEnabled
-      this.telescopeStore.ocularMagnification = o.magnification ?? 0
-      this.telescopeStore.ocularActualFov = o.actualFov ?? 0
-      this.telescopeStore.ocularExitPupil = o.exitPupil ?? 0
-      this.telescopeStore.ocularLimitMagnitude = o.limitMagnitude ?? 0
-      this.telescopeStore.ocularCcdFovX = o.ccdFovX ?? 0
-      this.telescopeStore.ocularCcdFovY = o.ccdFovY ?? 0
-      this.telescopeStore.ocularCcdPixelScaleX = o.ccdPixelScaleX ?? 0
-      this.telescopeStore.ocularCcdPixelScaleY = o.ccdPixelScaleY ?? 0
-      this.telescopeStore.ocularCcdRotation = o.ccdRotation ?? 0
-      this.telescopeStore.ocularStatusMessage = this.telescopeStore.ocularReady ? '' : I18n.t('ocular_status_no_config')
-    }, 0, 100, 15, () => {
-      if (requestId === this.ocularLoadRequestId) this.telescopeStore.ocularLoading = false
-      this.telescopeStore.ocularStatusMessage = I18n.t('ocular_status_unavailable')
-    })
-  }
-
   private setOcularMode(v: boolean): void {
     this.telescopeStore.ocularMode = v
     this.callNativeWhenReady('setOcularMode', v ? '1' : '0', (r: StellariumBridgeResponse) => {
@@ -3866,7 +3793,7 @@ export struct WindowNativeNode {
       if (v && response.selectionRequired === true) {
         this.telescopeStore.ocularStatusMessage = I18n.t('ocular_status_select_target')
       }
-      this.loadOculars(false)
+      this.telescopeStore.loadOculars(false)
     })
   }
 
@@ -4119,31 +4046,31 @@ export struct WindowNativeNode {
 
   private setTelrad(v: boolean): void {
     this.telescopeStore.telradOn = v
-    this.callNativeWhenReady('setTelrad', v ? '1' : '0', () => { this.loadOculars(false) })
+    this.callNativeWhenReady('setTelrad', v ? '1' : '0', () => { this.telescopeStore.loadOculars(false) })
   }
   private setCrosshairs(v: boolean): void {
     this.telescopeStore.crosshairsOn = v
-    this.callNativeWhenReady('setCrosshairs', v ? '1' : '0', () => { this.loadOculars(false) })
+    this.callNativeWhenReady('setCrosshairs', v ? '1' : '0', () => { this.telescopeStore.loadOculars(false) })
   }
   private setCCD(v: boolean): void {
     this.telescopeStore.ccdOn = v
-    this.callNativeWhenReady('setCCD', v ? '1' : '0', () => { this.loadOculars(false) })
+    this.callNativeWhenReady('setCCD', v ? '1' : '0', () => { this.telescopeStore.loadOculars(false) })
   }
   private selectOcularInstrument(kind: string, index: number): void {
     this.callNativeWhenReady('selectOcularInstrument', kind.toLowerCase() + '|' + index.toString(), () => {
-      this.loadOculars(false)
+      this.telescopeStore.loadOculars(false)
     })
   }
   private setOcularSetting(name: string, enabled: boolean): void {
     this.callNativeWhenReady('setOcularSetting', name + '|' + (enabled ? '1' : '0'), () => {
-      this.loadOculars(false)
+      this.telescopeStore.loadOculars(false)
     })
   }
   private changeOcularCcdRotation(value: number, mode: SliderChangeMode): void {
     this.telescopeStore.ocularCcdRotation = value
     if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
       this.callNativeWhenReady('setOcularSetting', 'ccdRotation|' + value.toFixed(1), () => {
-        this.loadOculars(false)
+        this.telescopeStore.loadOculars(false)
       })
     }
   }
@@ -4151,14 +4078,14 @@ export struct WindowNativeNode {
     this.telescopeStore.ocularMaskOpacity = Math.round(value)
     if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
       this.callNativeWhenReady('setOcularSetting', 'maskOpacity|' + this.telescopeStore.ocularMaskOpacity.toString(), () => {
-        this.loadOculars(false)
+        this.telescopeStore.loadOculars(false)
       })
     }
   }
   private changeOcularPrismRotation(value: number, mode: SliderChangeMode): void {
     this.telescopeStore.ocularCcdPrismRotation = value
     if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-      this.callNativeWhenReady('setOcularSetting', 'prismRotation|' + value.toFixed(1), () => { this.loadOculars(false) })
+      this.callNativeWhenReady('setOcularSetting', 'prismRotation|' + value.toFixed(1), () => { this.telescopeStore.loadOculars(false) })
     }
   }
   private changeOcularCropSize(setting: string, value: number, mode: SliderChangeMode): void {
@@ -4166,14 +4093,14 @@ export struct WindowNativeNode {
     if (setting === 'ccdCropHSize') this.telescopeStore.ocularCcdCropHSize = size
     else this.telescopeStore.ocularCcdCropVSize = size
     if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-      this.callNativeWhenReady('setOcularSetting', setting + '|' + size.toString(), () => { this.loadOculars(false) })
+      this.callNativeWhenReady('setOcularSetting', setting + '|' + size.toString(), () => { this.telescopeStore.loadOculars(false) })
     }
   }
   private rotateOcularReticle(direction: string): void {
-    this.callNativeWhenReady('rotateOcularReticle', direction, () => { this.loadOculars(false) })
+    this.callNativeWhenReady('rotateOcularReticle', direction, () => { this.telescopeStore.loadOculars(false) })
   }
   private resetOcularInstrument(kind: string): void {
-    this.callNativeWhenReady('resetOcularInstrument', kind, () => { this.loadOculars(false) })
+    this.callNativeWhenReady('resetOcularInstrument', kind, () => { this.telescopeStore.loadOculars(false) })
   }
   private loadPointerCoordinates(): void {
     this.overlayStore.pointerCoordinatesLoading = true
