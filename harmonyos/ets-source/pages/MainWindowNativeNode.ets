@@ -22,7 +22,7 @@ import { LOCATION_ZH_NAMES } from './location_names_zh'
 import { modelIdentity, modelDrag } from './DetailModelGeometry'
 import { proceduralModelKind, proceduralParticles } from './ProceduralDetailModel'
 import { DetailModelRenderClient } from './DetailModelRenderClient'
-import { ASTRONOMY_GUIDES, AstronomyGuide, GuidePlayer, GuideState, GuideResult, GuideStep } from './AstronomyGuide'
+import { ASTRONOMY_GUIDES, AstronomyGuide, GuideState, GuideStep } from './AstronomyGuide'
 import { DetailModelResources, DetailModelFrame, DetailModelResult, DetailModelRing, DetailModelLight } from './DetailModelRenderTypes'
 
 import { StellariumBridgeResponse, SessionSnapshot, TonightEvents, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, CatOption, NameItem, SearchSug, WindowNativeNodeCreateInfo, TabItem, ChipItem, LandscapeItem, ScriptMetadata, PlanetPosition, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass } from './StellariumTypes'
@@ -866,13 +866,9 @@ export struct WindowNativeNode {
   // ===== 脚本录制 / 回放（39）=====
   @State private recordBuffer: Array<RecordCmd> = []
   // speechStatus / guideState 已并入 state/GuideStore.ets（review §2.7，2026-10-04）。
+  // M1-A 子组④：guidePlayer / guideTimer / guideGyroWasEnabled / guidePanelWasVisible /
+  // guideLastRequest / guideLastResult 随 executeGuideRequest 一并迁入 GuideStore（自持定时器）。
   @State private guideStore: GuideStore = new GuideStore()
-  private guidePlayer?: GuidePlayer
-  private guideTimer: number = -1
-  private guideGyroWasEnabled: boolean = false
-  private guidePanelWasVisible: boolean = false
-  private guideLastRequest: string = ''
-  private guideLastResult: GuideResult = { ok: true }
   // ===== 视频帧序列录制（#40）=====
   private lastRecordKey: string = ''
   private lastRecordTime: number = 0
@@ -1477,7 +1473,7 @@ export struct WindowNativeNode {
       flashHint: (text: ResourceStr): void => { this.flashHint(text) },
       sessionBusy: (): boolean => this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
       guideActive: (): boolean => this.guideStore.guideState.active,
-      requestStopGuide: (): void => { this.executeGuideRequest('guideAction', 'stop') },
+      requestStopGuide: (): void => { this.guideStore.executeGuideRequest('guideAction', 'stop') },
       finishReplay: (message: string): void => this.finishRecordingReplay(message),
       finishNativeScriptUi: (message: string): void => this.finishNativeScriptUi(message),
       dismissScriptOverlays: (): void => {
@@ -1510,6 +1506,36 @@ export struct WindowNativeNode {
       sessionImportText: (): string => this.tools.sessionImportText,
       setSessionExportText: (text: string): void => { this.tools.sessionExportText = text },
       canUseDistributed: (): boolean => this.canUseDistributed
+    })
+    // M1-A 子组④：交互导览的引擎/请求/定时器并入 GuideStore（定时器 store 自持 start/stop）；
+    // 跨域/UI/引擎动作经具名 hooks 回注（store 不 import UI/他 store）。
+    this.guideStore.attachPort(hostPort)
+    this.guideStore.attachHooks({
+      flashHint: (text: ResourceStr): void => this.flashHint(text),
+      publishGuideState: (): void => this.publishGuideState(),
+      sessionBusy: (): boolean => this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
+      polarScopeVisible: (): boolean => this.polarScopeStore.polarScopeVisible,
+      panelVisible: (): boolean => this.panelVisible,
+      setPanelVisible: (value: boolean): void => { this.panelVisible = value },
+      hideInfoWindow: (): void => { this.infoWindowStore.infoWinVisible = false },
+      applicationInForeground: (): boolean => this.applicationInForeground,
+      gyroscopeEnabled: (): boolean => this.gyroStore.gyroscopeEnabled,
+      setGyroscopeEnabled: (value: boolean): void => { this.gyroStore.gyroscopeEnabled = value },
+      startGyroscope: (): void => this.startGyroscope(),
+      stopGyroscope: (updateStatus: boolean): void => this.stopGyroscope(updateStatus),
+      stopSkyInertia: (): void => this.stopSkyInertia(),
+      stopCompetingTasks: (): void => {
+        this.stopDetailAutoRefresh()
+        this.stopTimePanelTimers()
+        this.stopSkyCultureTimeFollowTimer()
+        this.stopAstroCalcContextTimer()
+        this.telescopeStore.stopTelescopeLivePosition(false)
+      },
+      refreshState: (): void => { this.refreshState() },
+      reloadObserverInfo: (): void => { this.locationPickerStore.loadObserverInfo(true) },
+      animateTo: (action: () => void): void => {
+        this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, action)
+      }
     })
     this.skyCultureSettingsStore.attachPort(hostPort, () => {})
     this.objectDetailStore.attachPort(hostPort, () => {})
@@ -1713,7 +1739,7 @@ export struct WindowNativeNode {
       const commandName = event['commandName'] as string
       const response = event['response'] as StellariumBridgeResponse
       if (commandName === 'startGuide' || commandName === 'guideAction') {
-        this.executeGuideRequest(commandName, String(event['payload'] ?? ''), requestId)
+        this.guideStore.executeGuideRequest(commandName, String(event['payload'] ?? ''), requestId)
         return
       }
       if (commandName === 'setSatellitesFlag' && response.ok === true) {
@@ -2015,11 +2041,10 @@ export struct WindowNativeNode {
 
   // 启动期自动定位（只触发一次）。GPS 可用时更新为真实位置，不可用时回退到已保存/默认位置。
   aboutToDisappear(): void {
-    if (this.guideTimer >= 0) clearInterval(this.guideTimer)
-    this.guideTimer = -1
-    this.guideGyroWasEnabled = false
-    this.guidePanelWasVisible = false
-    this.guidePlayer?.stop()
+    this.guideStore.stopGuideTimer()
+    this.guideStore.guideGyroWasEnabled = false
+    this.guideStore.guidePanelWasVisible = false
+    this.guideStore.stopPlayer()
     if (this.skyCultureMakerSaveTimer > 0) {
       clearTimeout(this.skyCultureMakerSaveTimer)
       this.skyCultureMakerSaveTimer = 0
@@ -2074,7 +2099,7 @@ export struct WindowNativeNode {
 
   private handleApplicationLifecycle = (foreground: boolean): void => {
     this.applicationInForeground = foreground
-    if (!foreground && this.guideStore.guideState.phase === 'observing') this.guidePlayer?.action('pause')
+    if (!foreground && this.guideStore.guideState.phase === 'observing') this.guideStore.pausePlayer()
     this.objectInspectorModelRenderClient?.setSuspended(!foreground)
     if (foreground) {
       if (this.foregroundRefreshPaused) {
@@ -10737,7 +10762,7 @@ private loadPlanetPositions(): void {
             cardY: guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY),
             onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
             onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
-            onAction: (action: string) => { this.executeGuideRequest('guideAction', action) }
+            onAction: (action: string) => { this.guideStore.executeGuideRequest('guideAction', action) }
           })
         } else {
           ScriptFocusShell({
@@ -11304,73 +11329,9 @@ private loadPlanetPositions(): void {
   }
   private publishGuideState(): void {
     AppStorage.setOrCreate('stellariumGuideState', JSON.stringify({
-      ok: true, state: this.guideStore.guideState, lastRequestId: this.guideLastRequest,
-      result: this.guideLastResult, guides: ASTRONOMY_GUIDES
+      ok: true, state: this.guideStore.guideState, lastRequestId: this.guideStore.guideLastRequest,
+      result: this.guideStore.guideLastResult, guides: ASTRONOMY_GUIDES
     }))
-  }
-
-  private async executeGuideRequest(commandName: string, payload: string, requestId: string = ''): Promise<void> {
-    if (!this.guidePlayer) {
-      this.guidePlayer = new GuidePlayer((name: string, value: string): Promise<GuideResult> => {
-        return new Promise<GuideResult>((resolve) => {
-          this.callInteractive(name, value,
-            (response: StellariumBridgeResponse) => resolve({ ok: response.ok === true, error: response.error }),
-            () => resolve({ ok: false, error: 'bridge_timeout' }))
-        })
-      }, (state: GuideState) => {
-        const ended = this.guideStore.guideState.active && !state.active
-        if (this.guideStore.guideState.phase !== state.phase || this.guideStore.guideState.index !== state.index) {
-          this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => { this.guideStore.guideState = state })
-        } else {
-          this.guideStore.guideState = state
-        }
-        this.publishGuideState()
-        if (ended) {
-          if (this.guideTimer >= 0) clearInterval(this.guideTimer)
-          this.guideTimer = -1
-          this.panelVisible = this.guidePanelWasVisible
-          if (this.guideGyroWasEnabled && this.applicationInForeground) {
-            this.gyroStore.gyroscopeEnabled = true
-            this.startGyroscope()
-          }
-          this.guideGyroWasEnabled = false
-          this.refreshState()
-          this.locationPickerStore.loadObserverInfo(true)
-        }
-      })
-    }
-    let result: GuideResult
-    if (commandName === 'startGuide') {
-      if (this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active) || this.polarScopeStore.polarScopeVisible || !ASTRONOMY_GUIDES.some((guide: AstronomyGuide) => guide.id === payload)) {
-        result = { ok: false, error: 'session_busy_or_unknown_guide' }
-      } else {
-        this.guidePanelWasVisible = this.panelVisible
-        this.guideGyroWasEnabled = this.gyroStore.gyroscopeEnabled
-        this.stopGyroscope(false)
-        this.gyroStore.gyroscopeEnabled = false
-        this.stopSkyInertia()
-        this.panelVisible = false
-        this.infoWindowStore.infoWinVisible = false
-        this.stopDetailAutoRefresh()
-        this.stopTimePanelTimers()
-        this.stopSkyCultureTimeFollowTimer()
-        this.stopAstroCalcContextTimer()
-        this.telescopeStore.stopTelescopeLivePosition(false)
-        this.guideTimer = setInterval(() => {
-          if (this.applicationInForeground) this.guidePlayer?.tick(0.25)
-        }, 250) as number
-        result = await this.guidePlayer.start(payload)
-      }
-    } else {
-      if (['return', 'next', 'previous', 'stop', 'retry', 'center', 'closer', 'wider'].includes(payload)) {
-        this.stopSkyInertia()
-      }
-      result = await this.guidePlayer.action(payload)
-    }
-    this.guideLastRequest = requestId
-    this.guideLastResult = result
-    this.publishGuideState()
-    if (!result.ok) this.flashHint(I18n.t('guide_error'))
   }
 
   private currentGuide(): AstronomyGuide {
@@ -13690,7 +13651,7 @@ private loadPlanetPositions(): void {
         lineColor: this.nightModeStore.nmBorder(),
         scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
-        onStartGuide: (id: string) => { this.executeGuideRequest('startGuide', id) },
+        onStartGuide: (id: string) => { this.guideStore.executeGuideRequest('startGuide', id) },
         onStopPlayback: () => { this.scriptStore.stopScriptPlayback() },
         onImportScript: () => { this.importScriptFile() },
         onPlayScript: (name: string) => { this.scriptStore.playScriptByName(name) },
