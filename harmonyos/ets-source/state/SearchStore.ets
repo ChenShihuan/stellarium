@@ -1,8 +1,9 @@
 import hilog from '@ohos.hilog'
-import { NameItem, SearchSug, StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { NameItem, SearchSug, StellariumBridgeResponse, WutTarget } from '../pages/StellariumTypes'
 import { ConstellationNavigationItem } from '../pages/MainWindowModels'
 import { I18n } from '../pages/I18n'
 import { messierNumberOf, minorPlanetNumberOf } from '../common/derive/astro'
+import { celestialTitle } from '../common/derive/labels'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → SearchStore 的跨域只读 / 助手 / 存储注入（§13.1 规则 6 / §14.8 规则 2）。
@@ -314,6 +315,12 @@ export class SearchStore {
       if (number.length > 0) { parts.push(I18n.format('search_permanent_number', [number])) }
     }
     return parts.join(' · ')
+  }
+
+  // WUT 目标副标题（原宿主 wutTargetSubtitle，A2-6）：标题经同源纯函数 celestialTitle 求得，
+  // 再走本 store 的 celestialSubtitle。函数体逐字等价（this.wutTargetTitle/target → 内联标题）。
+  wutTargetSubtitle(target: WutTarget): string {
+    return this.celestialSubtitle(celestialTitle(target.name ?? '', target.englishName ?? ''), target.englishName ?? '')
   }
 
   // 分类浏览条目的副标题（原宿主 categoryObservationSubtitle）。
