@@ -1,5 +1,5 @@
 import { image } from '@kit.ImageKit'
-import { SkyCultureArtItem, SkyCultureItem, TabItem } from '../../pages/StellariumTypes'
+import { SkyCultureArtItem, TabItem } from '../../pages/StellariumTypes'
 import { ConfigurationOption, OFFLINE_APPGALLERY_BUILD } from '../../pages/MainWindowModels'
 import { LayerStore } from '../../state/LayerStore'
 import { LayerViewStore } from '../../state/LayerViewStore'
@@ -15,9 +15,9 @@ import { SkyCultureViewTab } from '../skyculture/SkyCultureViewTab'
 // 判定条件 `activePanel === 'layers'` 留在宿主。该分支本就是把已有组件组装起来：
 // 图层预设条 + 视图标签页选择器 + 六个图层页签（LayerSkyTab / LayerSsoTab / LayerDsoTab /
 // LayerMarkingsTab / LayerLandscapeTab / LayerSurveysTab）+ 星空文化页签 SkyCultureViewTab。
-// 四个 store 走 @ObjectLink 实时刷新；主题色、当前页签、标签数据、星空文化列表 / 解码结果 /
-// canvas 上下文等走 @Prop 或普通成员；native 桥 / 定时器 / 解码 / canvas 绘制 / 快捷键分发动作用
-// 回调回注宿主（§13.1 规则 6）。
+// 四个 store 走 @ObjectLink 实时刷新（星空文化列表 / 当前选择已并入 SkyCultureViewStore，
+// Phase 4 residual）；主题色、当前页签、标签数据、解码结果 / canvas 上下文等走 @Prop 或普通成员；
+// native 桥 / 定时器 / 解码 / canvas 绘制 / 快捷键分发动作用回调回注宿主（§13.1 规则 6）。
 //
 // 本文件不含 @BuilderParam，不含参数化 @Builder（规则 9）；顶层 Column().width('100%')
 // 与原分支体逐字一致（规则 7），视觉未改。
@@ -34,10 +34,6 @@ export struct LayersPanel {
   @Prop viewTabContentOpacity: number
   @Prop viewTabContentOffsetX: number
   @Prop layerTabs: TabItem[]
-  @Prop currentSkyCultureId: string
-  @Prop currentSkyCultureName: string
-  @Prop skyCultureListLoading: boolean
-  @Prop skyCultureList: Array<SkyCultureItem> = []
   @Prop skyCultureArtStates: Record<string, string> = {}
   @Prop skyCultureArtThumbnailPixelMaps: Record<string, image.PixelMap> = {}
   @Prop narrationParagraphs: Array<string> = []
@@ -176,10 +172,6 @@ export struct LayersPanel {
               settings: this.skyCultureSettingsStore,
               layerStore: this.layerStore,
               skyCultureViewStore: this.skyCultureViewStore,
-              currentSkyCultureId: this.currentSkyCultureId,
-              currentSkyCultureName: this.currentSkyCultureName,
-              skyCultureListLoading: this.skyCultureListLoading,
-              skyCultureList: this.skyCultureList,
               artStates: this.skyCultureArtStates,
               artThumbnailPixelMaps: this.skyCultureArtThumbnailPixelMaps,
               narrationParagraphs: this.narrationParagraphs,
