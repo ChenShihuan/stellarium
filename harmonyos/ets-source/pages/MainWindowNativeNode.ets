@@ -41,7 +41,7 @@ import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, g
 import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointColor, hecLayoutPositions, hecPointLeft, hecPointTop, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
-import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, officialLocationAliases, sessionSignature, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
+import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, objectActionBarY, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
 import { objectInspectorPlanetTexturePath, objectInspectorPlanetRingSpec, objectInspectorDeepSkyImageName, objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
@@ -55,6 +55,7 @@ import { copyTextToClipboard } from '../common/platform/Clipboard'
 import { shareFile } from '../common/platform/Share'
 import { saveScreenshot, exportScreenshotToUserStorage } from '../common/platform/Screenshot'
 import { speakSelectedObject } from '../common/SpeechService'
+import { StartupBridge, StartupHooks } from '../capability/StartupBridge'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
@@ -210,7 +211,7 @@ import {
   CelestialPositionCategory, PhenomenaOptions, PhenomenaStartOption, EphemerisOptions, RtsCalendarOptions, EclipseOptions,
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
   HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS, TonightPlanetRow,
-  StarCatalogStatusResponse, LimitMagnitudeResponse, GyroGuideProjection, SkyUiObstacle, BookmarkItem,
+  StarCatalogStatusResponse, GyroGuideProjection, SkyUiObstacle, BookmarkItem,
   BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
@@ -548,6 +549,8 @@ export struct WindowNativeNode {
   private hostMediaPort: HostMediaPort = new HostMediaPort()
   private hostPlatformPort: HostPlatformPort = new HostPlatformPort()
   private hostSensorPort: HostSensorPort = new HostSensorPort()
+  // M1-A：启动桥服务（惰性构造，持有跨域 store 引用与宿主生命周期 hooks）。
+  private startupBridgeImpl: StartupBridge | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -1359,6 +1362,33 @@ export struct WindowNativeNode {
     return this.hostCommandPort
   }
 
+  // PLAN §15.2 P1-4 / M1-A：启动桥服务的惰性单例。持有各域 store 实例与宿主生命周期 hooks，
+  // 在首次调用（aboutToAppear 末尾或 onAreaChange）时构造。
+  private startupBridge(): StartupBridge {
+    if (this.startupBridgeImpl === null) {
+      this.startupBridgeImpl = new StartupBridge(
+        this.commandPort(),
+        {
+          flashHint: (text: ResourceStr): void => this.flashHint(text),
+          dismissSplash: (): void => this.dismissSplash(),
+          setLanguage: (language: string): void => this.setLanguage(language),
+          syncViewCoordinateTimer: (): void => this.syncViewCoordinateTimer(),
+          syncDockClockTimer: (): void => this.syncDockClockTimer(),
+          setCurrentProjection: (value: string): void => { this.currentProjection = value },
+          bridgeSyncStarted: (): boolean => this.bridgeSyncStarted,
+          setBridgeSyncStarted: (value: boolean): void => { this.bridgeSyncStarted = value },
+          selftestEnabled: (): boolean => this.SELFTEST,
+          runSelftest: (): void => this.selfTestAllActions()
+        },
+        this.skyCultureViewStore, this.pluginStore, this.nightModeStore, this.telescopeStore,
+        this.gyroStore, this.languageStore, this.audioStore, this.viewSettingsStore,
+        this.overlayStore, this.astroStore, this.layerViewStore, this.scriptStore,
+        this.layerStore, this.timeSettingsStore
+      )
+    }
+    return this.startupBridgeImpl
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
@@ -1443,6 +1473,16 @@ export struct WindowNativeNode {
       stopVideoRecording: (): void => { this.stopVideoRecording() }
     })
     this.sessionToolStore.attachPort(hostPort, () => {})
+    // M1-A：会话导出/应用/迁移的 UI 提示、剪贴板、ToolsStore 文本框与分布式能力经具名注入。
+    this.sessionToolStore.attachHooks({
+      flashHint: (text: ResourceStr): void => this.flashHint(text),
+      copySessionJson: (text: string, successHint: ResourceStr): void => {
+        copyTextToClipboard(this.hostPlatformPort, text, successHint, { flashHint: (hint: ResourceStr): void => this.flashHint(hint) })
+      },
+      sessionImportText: (): string => this.tools.sessionImportText,
+      setSessionExportText: (text: string): void => { this.tools.sessionExportText = text },
+      canUseDistributed: (): boolean => this.canUseDistributed
+    })
     this.skyCultureSettingsStore.attachPort(hostPort, () => {})
     this.objectDetailStore.attachPort(hostPort, () => {})
     // §14 B2R-4：卫星过境加载器 loadSelectedSatellitePasses 下沉 ObjectDetailStore，复用未随本片
@@ -1913,125 +1953,7 @@ export struct WindowNativeNode {
     this.bookmarkStore.loadBookmarksFromStorage()
     this.registerFoldListeners()
     this.subscribeApplicationLifecycle()
-    this.startupBridgeSync()
-  }
-
-  // 启动期只用一个轻量查询确认 Qt 核心就绪。其余查询分批执行，避免在
-  // ArkUI 主线程上并发创建大量同步 NAPI 调用和重试链。
-  private startupBridgeSync(): void {
-    if (this.bridgeSyncStarted) { return }
-    this.bridgeSyncStarted = true
-    this.callNativeWhenReady("getSkyCultures", "", (r) => {
-      if (r.ok !== true || !Array.isArray(r.items)) { return }
-      this.skyCultureViewStore.skyCultures = r.items as string[]
-      this.skyCultureViewStore.currentSkyCulture = r.current as string
-      this.dismissSplash()
-      this.runStartupBridgeTasks()
-    })
-  }
-
-  private runStartupBridgeTasks(): void {
-    const tasks: Array<() => void> = [
-      () => this.callNativeWhenReady('setLanguage', this.languageStore.selectedLanguage, () => {}),
-      () => this.layerViewStore.loadLandscapeList(),
-      () => this.callNativeWhenReady("getScriptList", "", (r) => {
-        if (r.ok === true && Array.isArray(r.items)) { this.scriptStore.scriptList = r.items as string[]; this.scriptStore.setScriptMetadata(r.details) }
-      }),
-      () => this.callNativeWhenReady('getProjectionList', '', (r) => {
-        if (r.ok === true && r.current !== undefined) { this.currentProjection = r.current as string }
-      }),
-      () => this.callNativeWhenReady('getConfigString', 'astronomy/flag_use_km_for_distance', (r) => {
-        if (r.ok) { this.viewSettingsStore.useMetricUnits = r.value === 'true' }
-      }),
-      () => this.callNativeWhenReady('getLimitMagnitude', '', (r) => {
-        const response = r as LimitMagnitudeResponse
-        if (response.ok && response.customStarMagLimit !== undefined) {
-          const value = Number(response.customStarMagLimit)
-          if (!isNaN(value)) { this.layerViewStore.starMagLimit = Math.round(value * 10) / 10 }
-        }
-      }),
-      () => this.restoreStartupSettings(),
-      () => this.callNativeWhenReady("setFlatHorizon", "1", (r: StellariumBridgeResponse) => {
-        if (r.ok === true) { this.viewSettingsStore.flatHorizon = true }
-      }),
-      () => this.callNativeWhenReady("setActionChecked", "actionShow_Zenith_Nadir|1", (r: StellariumBridgeResponse) => {
-        if (r.ok === true) { this.layerStore.zenithNadir = true }
-      }),
-      () => { if (this.SELFTEST) { this.selfTestAllActions() } },
-    ]
-    let taskIndex = 0
-    const runNext = (): void => {
-      if (taskIndex >= tasks.length) { return }
-      tasks[taskIndex++]()
-      setTimeout(runNext, 48)
-    }
-    runNext()
-  }
-
-  private restoreStartupSettings(): void {
-    this.skyCultureViewStore.loadSkyCultureList()
-    this.pluginStore.loadPluginList()
-    const settings = AppStorage.get<string>("stellariumSettings")
-    if (settings) {
-      try {
-        const saved = JSON.parse(settings) as Record<string, boolean | string>
-        if (saved.nightMode !== undefined) {
-          this.nightModeStore.nightMode = saved.nightMode as boolean
-                    this.callNativeWhenReady('setNightMode', this.nightModeStore.nightMode ? 'true' : 'false', () => {})
-        }
-        if (saved.equatorialMount !== undefined) {
-          this.telescopeStore.equatorialMount = saved.equatorialMount as boolean
-          this.callNativeWhenReady('setActionChecked', 'actionSwitch_Equatorial_Mount|' + (this.telescopeStore.equatorialMount ? '1' : '0'), () => {})
-        }
-        if (saved.gyroscopeEnabled !== undefined) {
-          this.gyroStore.gyroscopeEnabled = false
-          this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_off')
-        }
-        if (saved.gyroscopeSensitivityText !== undefined) { this.gyroStore.gyroscopeSensitivityText = saved.gyroscopeSensitivityText as string }
-        if (saved.selectedLanguage !== undefined) {
-          const language = saved.selectedLanguage as string
-          if (language !== this.languageStore.selectedLanguage) {
-            I18n.setLanguage(I18n.fromStellariumCode(language))
-            this.setLanguage(language)
-          }
-        }
-        if (saved.musicEnabled !== undefined) { this.audioStore.musicEnabled = saved.musicEnabled as boolean }
-        if (saved.useMetricUnits !== undefined) { this.viewSettingsStore.useMetricUnits = saved.useMetricUnits as boolean }
-        if (saved.viewCoordinatesVisible !== undefined) { this.overlayStore.viewCoordinatesVisible = saved.viewCoordinatesVisible as boolean }
-        if (saved.viewCoordinateFamily !== undefined) { this.overlayStore.viewCoordinateFamily = saved.viewCoordinateFamily as string }
-        if (saved.viewEquatorialEpoch !== undefined) { this.overlayStore.viewEquatorialEpoch = saved.viewEquatorialEpoch as string }
-        if (saved.objectDetailConnectorVisible !== undefined) { this.overlayStore.objectDetailConnectorVisible = saved.objectDetailConnectorVisible as boolean }
-        const savedAstroTab = Number(saved.astroTab)
-        if (Number.isInteger(savedAstroTab) && savedAstroTab >= 0 && savedAstroTab <= 9) {
-          this.astroStore.astroTab = savedAstroTab
-          this.astroStore.astroGroup = astroGroupForTab(savedAstroTab)
-        }
-        const savedPositionMode = Number(saved.positionMode)
-        if (Number.isInteger(savedPositionMode) && savedPositionMode >= 0 && savedPositionMode <= 2) this.astroStore.positionMode = savedPositionMode
-        const savedCelestialMagnitude = Number(saved.celestialPositionMagnitude)
-        if (Number.isFinite(savedCelestialMagnitude)) this.astroStore.celestialPositionMagnitude = clamp(savedCelestialMagnitude, -5, 25)
-        if (saved.celestialPositionCategory !== undefined) this.astroStore.celestialPositionCategory = saved.celestialPositionCategory as string
-        if (saved.celestialPositionHorizontal !== undefined) this.astroStore.celestialPositionHorizontal = saved.celestialPositionHorizontal === 'true'
-        const savedEphemerisMode = Number(saved.ephemerisMode)
-        if (Number.isInteger(savedEphemerisMode) && savedEphemerisMode >= 0 && savedEphemerisMode <= 2) this.astroStore.ephemerisMode = savedEphemerisMode
-        const savedEphemerisDays = Number(saved.ephemerisDays)
-        if (Number.isInteger(savedEphemerisDays) && savedEphemerisDays >= 1 && savedEphemerisDays <= 31) this.astroStore.ephemerisDays = savedEphemerisDays
-        const savedEphemerisStep = Number(saved.ephemerisStepHours)
-        if (Number.isInteger(savedEphemerisStep) && savedEphemerisStep >= 1 && savedEphemerisStep <= 24) this.astroStore.ephemerisStepHours = savedEphemerisStep
-        const savedRtsDays = Number(saved.rtsCalendarDays)
-        if (Number.isInteger(savedRtsDays) && savedRtsDays >= 1 && savedRtsDays <= 365) this.astroStore.rtsCalendarDays = savedRtsDays
-        const savedGraphMode = Number(saved.graphMode)
-        if (Number.isInteger(savedGraphMode) && savedGraphMode >= 0 && savedGraphMode <= 5) this.astroStore.graphMode = savedGraphMode
-        const savedEclipseMonths = Number(saved.eclipseMonths)
-        if (Number.isInteger(savedEclipseMonths) && savedEclipseMonths >= 1 && savedEclipseMonths <= 60) this.astroStore.eclipseMonths = savedEclipseMonths
-        const savedMoonPhaseDays = Number(saved.moonPhaseDays)
-        if (savedMoonPhaseDays === 30 || savedMoonPhaseDays === 90) this.astroStore.moonPhaseDays = savedMoonPhaseDays
-      } catch (_err) { }
-    }
-    if (this.audioStore.musicEnabled) { AudioEngine.getInstance().start() }
-    I18n.setLanguage(I18n.fromStellariumCode(this.languageStore.selectedLanguage))
-    this.syncViewCoordinateTimer()
-    this.syncDockClockTimer()
+    this.startupBridge().startupBridgeSync()
   }
 
   private saveAppSettings(): void {
@@ -4756,17 +4678,6 @@ export struct WindowNativeNode {
       } else {
         this.flashHint(I18n.t('msg_apply_failed'))
       }
-    })
-  }
-
-  private saveCurrentViewAsStartup(): void {
-    this.callInteractive('saveCurrentView', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) {
-        this.flashHint(I18n.t('msg_apply_failed'))
-        return
-      }
-      this.flashHint(I18n.t('settings_view_saved'))
-      this.timeSettingsStore.loadConfigurationSettings()
     })
   }
 
@@ -9946,74 +9857,6 @@ private loadPlanetPositions(): void {
   }
 
 
-  private sessionSummary(r: StellariumBridgeResponse): string {
-    const locObj = r.location as Record<string, Object>
-    const planet = (r.location && locObj['planetName'] !== undefined) ? String(locObj['planetName']) : 'Earth'
-    const selection = r.selected ? I18n.format('m_session_selected', [r.selected]) : I18n.t('m_session_unselected')
-    return I18n.format('m_session_summary', [(r.fovDeg ?? 0).toFixed(1), planetZh(planet), selection])
-  }
-
-  private sessionExport(): void {
-    this.callNativeWhenReady('getSessionState', '', (r: StellariumBridgeResponse) => {
-      if (!r.ok) { this.sessionToolStore.sessionHint = I18n.t('m_session_export_failed'); return }
-      const snap: SessionSnapshot = {
-        schemaVersion: 1,
-        exportedAt: new Date().toISOString(),
-        viewJ2000: r.viewJ2000,
-        fovDeg: r.fovDeg,
-        jd: r.jd,
-        location: r.location,
-        selected: r.selected,
-        flags: r.flags
-      }
-      this.sessionToolStore.sessionJson = JSON.stringify(snap, null, '  ')
-      this.tools.sessionExportText = this.sessionToolStore.sessionJson
-      this.sessionToolStore.sessionExportSig = sessionSignature(r)
-      this.sessionToolStore.sessionHint = I18n.t('m_session_exported') + ': ' + this.sessionSummary(r)
-      copyTextToClipboard(this.hostPlatformPort, this.sessionToolStore.sessionJson, I18n.t('session_export_copied'), { flashHint: (text: ResourceStr): void => this.flashHint(text) })
-    })
-  }
-
-  private sessionApply(): void {
-    const importedJson = this.tools.sessionImportText.trim()
-    const json = importedJson.length > 0 ? importedJson : this.sessionToolStore.sessionJson.trim()
-    if (!json) { this.sessionToolStore.sessionHint = I18n.t('m_session_export_first'); return }
-    this.callNativeWhenReady('applySessionState', json, (r2: StellariumBridgeResponse) => {
-      if (!r2.ok) { this.sessionToolStore.sessionHint = I18n.t('m_apply_failed') + ': ' + (r2.error ?? I18n.t('m_unknown')); this.flashHint(I18n.t('m_apply_failed')); return }
-      this.sessionToolStore.sessionHint = I18n.t('m_session_applied_syncing')
-      this.flashHint(I18n.t('m_session_applied_syncing'))
-      // 等一帧让 applySessionState 生效，再导出比对，验证无缝还原
-      setTimeout(() => {
-        this.callNativeWhenReady('getSessionState', '', (r3: StellariumBridgeResponse) => {
-          if (!r3.ok) return
-          const sig = sessionSignature(r3)
-          if (sig === this.sessionToolStore.sessionExportSig) {
-            this.sessionToolStore.sessionHint = I18n.t('m_session_exact')
-            this.flashHint(I18n.t('m_session_exact'))
-          } else {
-            this.sessionToolStore.sessionHint = I18n.t('m_session_applied_done')
-            this.flashHint(I18n.t('m_session_applied_done'))
-          }
-        })
-      }, 500)
-    })
-  }
-
-  private sessionHandoff(): void {
-    // 完整形态需华为分布式软总线(Distributed Hardware Kit)：
-    //   const dm = distributedHardware.createDeviceManager()
-    //   const devs = dm.getAvailableDeviceListSync()          // 同账号设备
-    //   continuationManager.startContinuation(...)            // 拉起目标 Ability 并带 want 参数
-    // 当前基础 SDK 无这些 kit，故先给出可落地的本地能力说明。
-    if (this.canUseDistributed) {
-      this.flashHint(I18n.t('msg_continuation_initiated'))
-      this.sessionToolStore.sessionHint = I18n.t('m_continuation_migrating')
-    } else {
-      this.flashHint(I18n.t('m_continuation_basic_sdk'))
-      this.sessionToolStore.sessionHint = I18n.t('m_continuation_basic_desc')
-    }
-  }
-
   private selectContinent(c: string): void {
     this.locationPickerStore.hierContinent = c
     this.locationPickerStore.hierCountry = ''
@@ -11492,7 +11335,7 @@ private loadPlanetPositions(): void {
       .onAreaChange((oldArea: Area, newArea: Area) => {
         // 布局硬回调：稳定触发。冷启动期 ArkUI setTimeout 重试不可靠，
         // 这里借 onAreaChange 反复尝试把启动命令送到 Qt 线程。
-        this.startupBridgeSync()
+        this.startupBridge().startupBridgeSync()
         this.skyWidth = Number(newArea.width) > 1 ? Number(newArea.width) : 1
         this.skyHeight = Number(newArea.height) > 1 ? Number(newArea.height) : 1
         this.refreshFoldState('onAreaChange')
@@ -13336,9 +13179,9 @@ private loadPlanetPositions(): void {
         onSend: () => { this.watchGyroSend() },
         onStart: () => { this.watchGyroStart() },
         onStop: () => { this.watchGyroStop() },
-        onExport: () => { this.sessionExport() },
-        onSessionApply: () => { this.sessionApply() },
-        onHandoff: () => { this.sessionHandoff() },
+        onExport: () => { this.sessionToolStore.sessionExport() },
+        onSessionApply: () => { this.sessionToolStore.sessionApply() },
+        onHandoff: () => { this.sessionToolStore.sessionHandoff() },
         onRefreshTonight: () => { this.refreshTonight() },
         onJump: (jd: number, lock: string, title: string) => { this.gotoTonightEvent(jd, lock, title) }
       })
@@ -13588,7 +13431,7 @@ private loadPlanetPositions(): void {
         flashHint: (text: ResourceStr) => { this.flashHint(text) },
         saveAllCoreSettings: () => { this.saveAllCoreSettings() },
         restoreCoreDefaults: () => { this.restoreCoreDefaults() },
-        saveCurrentViewAsStartup: () => { this.saveCurrentViewAsStartup() },
+        saveCurrentViewAsStartup: () => { this.startupBridge().saveCurrentViewAsStartup() },
         setViewLockState: (enabled: boolean) => { this.setViewLockState(enabled) },
         setNavigationBoolean: (setting: string, enabled: boolean) => { this.setNavigationBoolean(setting, enabled) },
         setNavigationMaxFov: (value: number) => { this.setNavigationMaxFov(value) },
@@ -13996,8 +13839,8 @@ private loadPlanetPositions(): void {
         onExportConfig: () => { this.exportConfig() },
         onImportConfig: () => { this.importConfig() },
         onConfigImportText: (value: string) => { this.tools.configImportText = value },
-        onSessionExport: () => { this.sessionExport() },
-        onSessionApply: () => { this.sessionApply() },
+        onSessionExport: () => { this.sessionToolStore.sessionExport() },
+        onSessionApply: () => { this.sessionToolStore.sessionApply() },
         onSessionImportText: (value: string) => { this.tools.sessionImportText = value },
         onLoadLog: () => { this.tools.loadLog() },
         onCollapseLog: () => { this.tools.logVisible = false }
