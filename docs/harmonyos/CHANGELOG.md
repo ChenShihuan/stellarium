@@ -1,3 +1,19 @@
+## [2026-10-04] DevEco Code - 重构：Prop 风格域转 Store 第三批（archaeo / navStars / polarScope；viewCoordinate 经核查无字段可迁；宿主 @State 266 → 231）
+
+- **依据**：review §2.7「Store 风格 vs Prop 风格」。本批把 3 个 Prop 风格域的宿主 `@State` 下沉为 `@Observed` store，面板/叠层改为 `@ObjectLink` 订阅；动作（加载/设置/翻转）仍由宿主回调注入，store 只承载状态。
+- **新增 3 个 store（共 38 个字段）**：
+  | store | 字段 | 消费组件 | 组件入参变化 |
+  |---|---|---|---|
+  | `ArchaeoStore` | 18 | `ArchaeoLinesPanel` | `@Prop` 18 → 0（+1 `@ObjectLink`） |
+  | `NavStarsStore` | 14 | `NavStarsPanel` | `@Prop` 14 → 0（+1 `@ObjectLink`） |
+  | `PolarScopeStore` | 6 | `PolarScopeOverlay` | `@Prop` 7 → 0（+1 `@ObjectLink`；几何 6 个 `@Prop` 保留） |
+  - `PolarScopeOverlay` 原先以别名传值（`loading←polarScopeLoading`、`isSouthHemisphere/hourAngleText/viewAngleText ← polarScopeData?.X`），调用点整块换成 `polarScopeStore` 绑定，读数改为组件内就地读 store 派生。
+- **viewCoordinate 域经核查无字段可迁（本批唯一未做的一簇）**：`viewCoordinatePrimaryText/SecondaryText`（由 50ms 定时器 `syncViewCoordinateTimer` 回填）、`viewCoordinateOffsetX/Y`（触摸拖拽逐帧写）按 §13.1 规则 4 /「高频字段不入被观察 store」刻意留宿主；`ViewCoordinateSettings` 早已用 `OverlayStore`，`ViewCenterCoordinateOverlay` 以 `@Prop` 接收逐帧读数 —— 故不新建 `ViewCoordinateStore`（理由见 `OverlayStore.ets` 头注）。
+- **刻意留宿主**：极轴镜几何（`polarScopeTopInset`/`ControlWidth`/`FooterHeight`）与引擎/定时器字段（`polarScopeRestoreState`/`Transition*`/`RequestPending`/`Timer`/`DataRequestId`）、`archaeoMutationId`、`navStarsLoadRequestId`/`navStarsMutationId`；均写入各 store 头注。
+- **宿主 @State 计数**：266 → 231（−38 字段、+3 store 字段）。
+- **同步**：`scripts/test-ohos-polar-scope.mjs` 的 dock 命中断言改读 `this.polarScopeStore.polarScopeVisible`。
+- **验证**：`check-ohos-refactor-slice.mjs` 通过；`arkts_check` 7 文件 0 错；`BUILD SUCCESSFUL`；契约 `intact`（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 194+ 文件）；真机（192.168.50.108:36717）打开三域面板/叠层均从 store 渲染，navStars 总开关、polarScope 水平翻转、archaeo 二分日线各点两次（改后复原）后 `pidof` 仍存活。
+- **存量失败（非本批引入）**：`test-ohos-satellite-panel.mjs` 5 项失败 —— 上一提交（卫星域转 `SatelliteStore`，`01fa76b970`）未同步该脚本假宿主（flat `satGroups`/`satLabels` 等应改 `satelliteStore.*`），HEAD 时即失败。
 ## [2026-10-04] DevEco Code - 重构：小簇批处理（scenery3d / catalogs / meteorShowers / commandConsole 四簇同批转 Store；宿主 @State 286 → 266）
 
 - **依据**：review §2.7 目标清单里的独立小簇。一次做四簇以省去重复的构建/安装开销，每簇仍走同一口径（先普查原地变更 → 只搬面板入参 → 动作留回调 → 机械替换后复核"0 残留 / 0 双重前缀"）。
