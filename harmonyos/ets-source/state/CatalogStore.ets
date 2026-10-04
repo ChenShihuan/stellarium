@@ -1,4 +1,4 @@
-import { StarCatalogItem, CatalogHealthEntry, StarCatalogsResponse, StarCatalogRaw } from '../pages/MainWindowModels'
+import { StarCatalogItem, CatalogHealthEntry, StarCatalogsResponse, StarCatalogRaw, CatalogHealthResponse } from '../pages/MainWindowModels'
 import { CatOption, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { catalogIconForModule } from '../common/derive/catalog'
@@ -22,6 +22,13 @@ export interface CatalogHostHooks {
   // CLI 发布点 publishSearchBrowserState 仍留宿主）。
   loadCategoryObjects(category: string, moduleIdOverride: string): void
   publishSearchBrowserState(): void
+  // §14 B3-5：目录健康加载器 loadCatalogHealth 下沉后，两条 §2.7.1 保留的「跨域共用」标志
+  //（catalogHealthLoaded / catalogManifestPresent，宿主保留字段，供 SettingsQuickLegacyPanel /
+  // SatellitesPanel 经宿主闭包 catalogHealthText/catalogHealthColor 读取）经此 setter 回注；
+  // satelliteCatalogHealth 归属 SatelliteStore，同样经 setter 回注（store 不 import/持有他 store）。
+  setCatalogHealthLoaded(loaded: boolean): void
+  setCatalogManifestPresent(present: boolean): void
+  setSatelliteCatalogHealth(health: CatalogHealthEntry): void
 }
 
 // 星表下载域中"面板可见"的状态（原宿主 5 个 @State）。
@@ -32,6 +39,8 @@ export interface CatalogHostHooks {
 //
 // `catalogHealthLoaded` / `catalogManifestPresent` **不搬**：它们与卫星面板（"卫星目录健康"
 // 文案）及恒星表共用，不是本面板的入参 —— 与卫星片里保留这两个字段的判断一致。
+// §14 B3-5：`loadCatalogHealth` 由本 store 自持（宿主不再持有同名方法）；上述两个保留字段与
+// 他域的 `satelliteCatalogHealth` 经 CatalogHostHooks setter 回注，宿主字段本身不变。
 // 后续（review §2.7 续作）并入：`starCatalogHealth`（SettingsQuickLegacyPanel 以 @Prop 消费）与
 // `objectCatalogCategories`（经宿主 searchAllCategoryOptions() 进 SearchPanel @Prop categories）。
 //
@@ -148,6 +157,26 @@ export class CatalogStore {
           hooks.loadCategoryObjects('module:' + pendingModuleId, pendingModuleId)
         }
       }
+    })
+  }
+
+  // 目录健康（原宿主 loadCatalogHealth，函数体逐字搬入）。
+  // 差异仅：this.callNativeWhenReady → port.requestWhenReady、this.catalogStore.<f> → this.<f>、
+  // this.catalogHealthLoaded/this.catalogManifestPresent → hooks.setCatalogHealthLoaded/
+  // setCatalogManifestPresent（§2.7.1 保留的跨域共用字段仍留宿主）、
+  // this.satelliteStore.satelliteCatalogHealth → hooks.setSatelliteCatalogHealth（他域 store 经 setter）。
+  loadCatalogHealth(): void {
+    const hooks = this.hooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    port.requestWhenReady('getCatalogHealth', '', (r: StellariumBridgeResponse) => {
+      const health = r as CatalogHealthResponse
+      hooks.setCatalogHealthLoaded(true)
+      hooks.setCatalogManifestPresent(health.manifestPresent === true)
+      hooks.setSatelliteCatalogHealth(health.satellites ?? {})
+      this.starCatalogHealth = health.stars ?? {}
     })
   }
 }
