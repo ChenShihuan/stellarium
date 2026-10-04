@@ -1,6 +1,7 @@
 import { I18n } from '../../pages/I18n'
 import { CommandCatalogEntry } from '../../pages/MainWindowModels'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
+import { CommandStore } from '../../state/CommandStore'
 
 // 统一命令控制面板（原宿主 panelContent() 的 `commands` 分支，分支体原样下沉）。
 //
@@ -11,13 +12,8 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
 @Component
 export struct CommandsPanel {
-  @Prop commandSearchText: string
-  @Prop commandCatalog: CommandCatalogEntry[]
-  @Prop commandNameInput: string
-  @Prop commandPayloadInput: string
-  @Prop commandResultText: string
-  @Prop commandPendingConfirmation: string
-  @Prop commandBusy: boolean
+  // 状态经 @ObjectLink 订阅（review §2.7 第三批小簇批处理）。动作仍为宿主注入的回调。
+  @ObjectLink commandStore: CommandStore
   @Prop textColor: string
   @Prop subColor: string
   @Prop inputColor: string
@@ -31,17 +27,17 @@ export struct CommandsPanel {
   onExecute: (force: boolean) => void = () => {}
 
   private filteredCommandCatalog(): Array<CommandCatalogEntry> {
-    const query = this.commandSearchText.trim().toLowerCase()
-    if (query.length === 0) return this.commandCatalog.slice(0, 40)
-    return this.commandCatalog.filter((item: CommandCatalogEntry) =>
-      item.name.toLowerCase().includes(query) || item.category.includes(this.commandSearchText.trim())).slice(0, 40)
+    const query = this.commandStore.commandSearchText.trim().toLowerCase()
+    if (query.length === 0) return this.commandStore.commandCatalog.slice(0, 40)
+    return this.commandStore.commandCatalog.filter((item: CommandCatalogEntry) =>
+      item.name.toLowerCase().includes(query) || item.category.includes(this.commandStore.commandSearchText.trim())).slice(0, 40)
   }
 
   build() {
     Column({ space: 7 }) {
       Text('统一命令控制').fontSize(13).fontColor(this.textColor).width('100%')
       Text('本机命令').fontSize(10).fontColor(this.subColor).width('100%')
-      TextInput({ text: this.commandSearchText, placeholder: '筛选命令或分类' })
+      TextInput({ text: this.commandStore.commandSearchText, placeholder: '筛选命令或分类' })
         .height(34).fontSize(11).fontColor(this.textColor).placeholderColor(this.subColor)
         .backgroundColor(this.inputColor).borderRadius(UI_RADIUS_CONTROL)
         .onChange((value: string) => { this.onSearchTextChange(value) })
@@ -54,13 +50,13 @@ export struct CommandsPanel {
               if (item.requiresConfirmation) Text('需确认').fontSize(8).fontColor('#FFD38A')
             }
             .width('100%').height(29).padding({ left: 8, right: 8 })
-            .backgroundColor(this.commandNameInput === item.name ? 'rgba(91,147,191,0.25)' : this.panelColor)
+            .backgroundColor(this.commandStore.commandNameInput === item.name ? 'rgba(91,147,191,0.25)' : this.panelColor)
             .borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.onSelectEntry(item) })
           }, (item: CommandCatalogEntry) => item.name)
         }.width('100%')
       }.width('100%').height(160).scrollBar(BarState.Auto).scrollBarWidth(4)
       Row({ space: 6 }) {
-        TextInput({ text: this.commandNameInput, placeholder: '命令名，例如 getTimeInfo' })
+        TextInput({ text: this.commandStore.commandNameInput, placeholder: '命令名，例如 getTimeInfo' })
           .height(34).fontSize(11).fontColor(this.textColor).placeholderColor(this.subColor)
           .backgroundColor(this.inputColor).borderRadius(UI_RADIUS_CONTROL).layoutWeight(1)
           .onChange((value: string) => { this.onNameInputChange(value) })
@@ -68,24 +64,24 @@ export struct CommandsPanel {
           .fontColor(this.textColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
           .onClick(() => { this.onRefreshCatalog() })
       }.width('100%')
-      TextInput({ text: this.commandPayloadInput, placeholder: 'payload（可留空；对象请填 JSON 字符串）' })
+      TextInput({ text: this.commandStore.commandPayloadInput, placeholder: 'payload（可留空；对象请填 JSON 字符串）' })
         .height(34).fontSize(11).fontColor(this.textColor).placeholderColor(this.subColor)
         .backgroundColor(this.inputColor).borderRadius(UI_RADIUS_CONTROL)
         .onChange((value: string) => { this.onPayloadInputChange(value) })
       Row({ space: 6 }) {
-        Button(this.commandBusy ? '执行中…' : '执行命令').fontSize(11).height(32).padding({ left: 12, right: 12 })
+        Button(this.commandStore.commandBusy ? '执行中…' : '执行命令').fontSize(11).height(32).padding({ left: 12, right: 12 })
           .fontColor(this.textColor).backgroundColor(this.accentColor).borderRadius(UI_RADIUS_CONTROL)
-          .enabled(!this.commandBusy && this.commandPendingConfirmation.length === 0)
+          .enabled(!this.commandStore.commandBusy && this.commandStore.commandPendingConfirmation.length === 0)
           .onClick(() => { this.onExecute(false) })
-        if (this.commandPendingConfirmation.length > 0) {
+        if (this.commandStore.commandPendingConfirmation.length > 0) {
           Button('确认执行').fontSize(11).height(32).padding({ left: 12, right: 12 })
             .fontColor(this.textColor).backgroundColor('#9B6E39').borderRadius(UI_RADIUS_CONTROL)
             .onClick(() => { this.onExecute(true) })
         }
       }.width('100%')
-      if (this.commandResultText.length > 0) {
+      if (this.commandStore.commandResultText.length > 0) {
         Scroll() {
-          Text(this.commandResultText).fontSize(9).fontColor(this.subColor).fontFamily('monospace').width('100%')
+          Text(this.commandStore.commandResultText).fontSize(9).fontColor(this.subColor).fontFamily('monospace').width('100%')
         }.width('100%').height(150).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).padding(8)
       }
     }.width('100%')
