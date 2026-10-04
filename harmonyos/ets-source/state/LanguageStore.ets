@@ -10,6 +10,11 @@ import { I18n } from '../pages/I18n'
 //   - selectedLanguage —— 当前界面语言（Stellarium 语言码，默认取系统语言）；
 //   - languageRevision —— 语言刷新锚点：setLanguage 里 `languageStore.languageRevision++`，
 //     以 ForEach 键后缀强制语言相关列表/文案重建。**该字段的刷新语义不得改动。**
+//   - languageRefreshSerial —— 语言刷新代际（§14 B3-1 搬入）：`setLanguage` 里 `++`，
+//     回包返回时比对以丢弃过期请求。它被搜索域（fetchSuggestions / loadConstellationNavigation）
+//     与目录域（CatalogStore.loadObjectCatalogCategories 经 CatalogHostHooks.languageSerial）
+//     只读使用 —— 属"语言刷新"语义，故移入本 store 作**单一持有者**（§14.8 规则 3：宿主不留副本）。
+//     跨域读者一律经宿主注入的只读 hooks / 显式传参获取，store 不互相持有。
 //
 // 消费方仍以 @Prop 快照接收、宿主在下发点读 store（`this.languageStore.X`）：
 //   - selectedLanguage：SettingsPanel / SettingsQuickLegacyPanel / ConfigFallbackPanel
@@ -24,4 +29,5 @@ import { I18n } from '../pages/I18n'
 export class LanguageStore {
   selectedLanguage: string = I18n.systemLanguage()
   languageRevision: number = 0
+  languageRefreshSerial: number = 0
 }

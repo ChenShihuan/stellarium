@@ -206,7 +206,7 @@ import {
   OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, SatellitesResponse, CatalogHealthEntry,
-  CatalogHealthResponse, MeteorShowersData, MeteorShowerItem, MeteorShowersResponse, Scenery3dResponse, LogResponse,
+  CatalogHealthResponse, MeteorShowersData, Scenery3dResponse, LogResponse,
   ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
   RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptStatusResponse, ScriptCaption, ScriptCaptionsResponse,
   CommandCatalogEntry
@@ -331,7 +331,7 @@ export struct WindowNativeNode {
   private lastInfoWinCloseMs: number = 0
   private dismissedObjectName: string = ''
   @State private panelContentKey: number = 0
-  private languageRefreshSerial: number = 0
+  // languageRefreshSerial 已随 §14 B3-1 搬入 state/LanguageStore.ets（语言刷新代际单一持有者）。
   private languageSwitchTimer: number = -1
   @State private cardOffsetX: number = 0
   @State private cardOffsetY: number = 0
@@ -531,12 +531,11 @@ export struct WindowNativeNode {
   @State private pluginStore: PluginStore = new PluginStore()
   private pluginFeatureLoading: string[] = []
   @State private nebulaTextureStore: NebulaTextureStore = new NebulaTextureStore()
-  private angleMeasureRequestId: number = 0
+  // angleMeasureRequestId 已随 §14 B3-1 搬入 ToolsStore 的 `seq`（与 toggleAngleMeasure 同片）。
   // 航海星域状态已下沉 state/NavStarsStore.ets（review §2.7：Prop 风格 → Store 风格）。
-  // 请求序号 navStarsLoadRequestId / navStarsMutationId 仍由宿主自持（见下方）。
+  // §14 B3-1：loadNavStars / setNavStarsSetting（含 applyNavStarsSetting）及其请求序号
+  // navStarsLoadRequestId / navStarsMutationId 已同片搬入 NavStarsStore（宿主零副本）。
   @State private navStarsStore: NavStarsStore = new NavStarsStore()
-  private navStarsLoadRequestId: number = 0
-  private navStarsMutationId: number = 0
   @State private landscapeDetailOpen: boolean = false
   // infoLevel 已下沉 state/InfoWindowStore.ets（review §2.7）。
   // 新增面板控制
@@ -621,8 +620,7 @@ export struct WindowNativeNode {
   private satelliteListElapsedMs: number = 0
   private equationOfTimeMutationId: number = 0
   private archaeoMutationId: number = 0
-  // 流星雨（MeteorShowers）
-  private meteorShowersLoadRequestId: number = 0
+  // 流星雨（MeteorShowers）请求序号 meteorShowersLoadRequestId 已随 §14 B3-1 搬入 MeteorStore 的 `seq`。
   // 三维地景：直接读取原版 scenery3d.ini 与语言描述文件
   @State private scenery3dCurrentId: string = ''
   @State private skyTouchFeedback: boolean = false
@@ -1138,6 +1136,11 @@ export struct WindowNativeNode {
       (name: string, payload: string) => { this.callNativeFire(name, payload) }
     )
     this.tools.attachPort(hostPort, () => {})
+    // §14 B3-1：角度测量加载器 loadAngleMeasure 与动作 toggleAngleMeasure 同片搬入 ToolsStore；
+    // 动作回包后的 UI 提示经 ToolsHostHooks.flashHint 回注（store 不触碰 UI）。
+    this.tools.attachHooks({
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) }
+    })
     // §14 B1-1：望远镜/目镜域复用同一个 HostCommandPort 实例。其消费方均为 @ObjectLink，
     // 字段赋值即刷新，且该域无 publish* 发布点，故 onChanged 传空实现。
     this.telescopeStore.attachPort(hostPort, () => {})
@@ -1147,12 +1150,12 @@ export struct WindowNativeNode {
     // §14 B1-3：星表下载域复用同一 HostCommandPort 实例。其消费方（CatalogsPanel）为
     // @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，故 onChanged 传空实现。
     this.catalogStore.attachPort(hostPort, () => {})
-    // §14 B2R-4：目录分类加载器 loadObjectCatalogCategories 下沉 CatalogStore。它读宿主语言刷新
-    // 代际 languageRefreshSerial（单序号，宿主持有）、读写 SearchStore 的 pendingPluginCatalogId /
-    // searchCategory / categoryModuleId，并调用未随本片下沉的搜索域动作 loadCategoryObjects（B3）
-    // 与 CLI 发布点 publishSearchBrowserState —— 全部经 CatalogHostHooks 具名回注。
+    // §14 B2R-4：目录分类加载器 loadObjectCatalogCategories 下沉 CatalogStore。它只读语言刷新
+    // 代际 languageRefreshSerial（§14 B3-1 起单一持有者为 LanguageStore）、读写 SearchStore 的
+    // pendingPluginCatalogId / searchCategory / categoryModuleId，并调用未随本片下沉的搜索域动作
+    // loadCategoryObjects（B3）与 CLI 发布点 publishSearchBrowserState —— 全部经 CatalogHostHooks 具名回注。
     this.catalogStore.attachHooks({
-      languageSerial: (): number => this.languageRefreshSerial,
+      languageSerial: (): number => this.languageStore.languageRefreshSerial,
       pendingPluginCatalogId: (): string => this.searchStore.pendingPluginCatalogId,
       clearPendingPluginCatalogId: (): void => { this.searchStore.pendingPluginCatalogId = '' },
       searchCategory: (): string => this.searchStore.searchCategory,
@@ -1308,6 +1311,17 @@ export struct WindowNativeNode {
       setInformationCustomMask: (mask: number): void => { this.infoWindowStore.informationCustomMask = mask },
       applySelectedInfoMode: (mode: string): void => this.applySelectedInfoMode(mode),
       applyTimeSettings: (response: StellariumBridgeResponse): void => this.applyTimeSettings(response)
+    })
+    // §14 B3-1：航海星 / 流星雨 / 搜索三域分别自持加载器（loadNavStars / loadMeteorShowers /
+    // loadConstellationNavigation）与其配对写方；三者复用同一 HostCommandPort 实例，消费方均为
+    // @ObjectLink（字段赋值即刷新），无 publish* 发布点，故 onChanged 传空实现。
+    // SearchStore 的 loadConstellationNavigation 经 SearchHostHooks.languageSerial 只读 LanguageStore
+    // 的语言刷新代际（§14.8 规则 3：单一持有者，宿主不留副本）。
+    this.navStarsStore.attachPort(hostPort, () => {})
+    this.meteorStore.attachPort(hostPort, () => {})
+    this.searchStore.attachPort(hostPort, () => {})
+    this.searchStore.attachHooks({
+      languageSerial: (): number => this.languageStore.languageRefreshSerial
     })
     this.startPageAfterPrivacyIfNeeded()
   }
@@ -2397,8 +2411,8 @@ export struct WindowNativeNode {
         this.wutStore.loadWutTargets()
       }
       if (panel === 'search') {
-        this.catalogStore.loadObjectCatalogCategories(this.languageRefreshSerial)
-        this.loadConstellationNavigation()
+        this.catalogStore.loadObjectCatalogCategories(this.languageStore.languageRefreshSerial)
+        this.searchStore.loadConstellationNavigation(this.languageStore.languageRefreshSerial)
         if (this.searchStore.categoryObjects.length === 0) this.loadCategoryObjects(this.searchStore.searchCategory)
       }
       if (panel === 'time') {
@@ -2437,14 +2451,14 @@ export struct WindowNativeNode {
     } else if (panel === 'archaeoLines') {
       this.ensurePluginLoaded('ArchaeoLines', () => { this.archaeoStore.loadArchaeoLines() })
       } else if (panel === 'angleMeasure') {
-        this.ensurePluginLoaded('AngleMeasure', () => { this.loadAngleMeasure() })
+        this.ensurePluginLoaded('AngleMeasure', () => { this.tools.loadAngleMeasure() })
       } else if (panel === 'navStars') {
-        this.ensurePluginLoaded('NavStars', () => { this.loadNavStars(false) })
+        this.ensurePluginLoaded('NavStars', () => { this.navStarsStore.loadNavStars(false) })
       } else if (panel === 'satellites') {
         this.loadCatalogHealth()
         this.ensurePluginLoaded('Satellites', () => { this.loadSatellites(true, true) })
       } else if (panel === 'meteorshowers') {
-        this.ensurePluginLoaded('MeteorShowers', () => { this.loadMeteorShowers() })
+        this.ensurePluginLoaded('MeteorShowers', () => { this.meteorStore.loadMeteorShowers() })
       } else if (panel === 'scenery3d') {
         this.ensurePluginLoaded('Scenery3d', () => { this.loadScenery3d() })
       } else if (panel === 'nebulaTextures') {
@@ -3965,81 +3979,6 @@ export struct WindowNativeNode {
     }
   }
 
-  private loadAngleMeasure(): void {
-    const requestId = ++this.angleMeasureRequestId
-    this.callNativeWhenReady('getAngleMeasure', '', (r: StellariumBridgeResponse) => {
-      if (requestId !== this.angleMeasureRequestId) return
-      if (r.ok !== true) return
-      this.tools.angleMeasureEnabled = r.enabled === true
-      this.tools.angleMeasureHasStart = r.hasStart === true
-      this.tools.angleMeasureHasEnd = r.hasEnd === true
-      this.tools.angleMeasureText = r.angleText ?? ''
-    })
-  }
-
-  private loadNavStars(showLoading: boolean = true): void {
-    const requestId = ++this.navStarsLoadRequestId
-    const mutationId = this.navStarsMutationId
-    if (showLoading) this.navStarsStore.navStarsLoading = true
-    this.callNativeWhenReady('getNavStars', '', (r: StellariumBridgeResponse) => {
-      if (requestId !== this.navStarsLoadRequestId) return
-      this.navStarsStore.navStarsLoading = false
-      if (mutationId !== this.navStarsMutationId) return
-      if (r.ok !== true) {
-        this.navStarsStore.navStarsStatus = I18n.t('plugin_status_unavailable')
-      } else {
-        this.navStarsStore.navStarsEnabled = r.enabled === true
-        this.navStarsStore.navStarsSetKey = r.setKey ?? 'AngloAmerican'
-        this.navStarsStore.navStarsSetDescription = r.setDescription ?? ''
-        this.navStarsStore.navStarsSetKeys = r.setKeys ?? []
-        this.navStarsStore.navStarsCount = r.starCount ?? 0
-        this.navStarsStore.navStarsHighlight = r.highlightWhenVisible === true
-        this.navStarsStore.navStarsLimitInfo = r.limitInfo === true
-        this.navStarsStore.navStarsUpperLimb = r.upperLimb === true
-        this.navStarsStore.navStarsTabulated = r.tabulatedDisplay === true
-        this.navStarsStore.navStarsExtraDecimals = r.extraDecimals === true
-        this.navStarsStore.navStarsUseUtc = r.useUtc === true
-        this.navStarsStore.navStarsStartup = r.enableAtStartup === true
-        this.navStarsStore.navStarsStatus = ''
-      }
-    }, 0, 100, 15, () => {
-      if (requestId !== this.navStarsLoadRequestId) return
-      this.navStarsStore.navStarsLoading = false
-      this.navStarsStore.navStarsStatus = I18n.t('plugin_status_unavailable')
-    })
-  }
-
-  private applyNavStarsSetting(setting: string, value: string): void {
-    const enabled = value === '1' || value.toLowerCase() === 'true'
-    if (setting === 'enabled') this.navStarsStore.navStarsEnabled = enabled
-    else if (setting === 'set') this.navStarsStore.navStarsSetKey = value
-    else if (setting === 'highlightWhenVisible') this.navStarsStore.navStarsHighlight = enabled
-    else if (setting === 'limitInfo') this.navStarsStore.navStarsLimitInfo = enabled
-    else if (setting === 'upperLimb') this.navStarsStore.navStarsUpperLimb = enabled
-    else if (setting === 'tabulatedDisplay') this.navStarsStore.navStarsTabulated = enabled
-    else if (setting === 'extraDecimals') this.navStarsStore.navStarsExtraDecimals = enabled
-    else if (setting === 'useUtc') this.navStarsStore.navStarsUseUtc = enabled
-    else if (setting === 'enableAtStartup') this.navStarsStore.navStarsStartup = enabled
-  }
-
-  private setNavStarsSetting(setting: string, value: string): void {
-    const mutationId = ++this.navStarsMutationId
-    this.applyNavStarsSetting(setting, value)
-    this.callInteractive('setNavStarsSetting', setting + '|' + value, (r: StellariumBridgeResponse) => {
-      if (mutationId !== this.navStarsMutationId) return
-      if (r.ok === true) {
-        if (setting === 'set') this.loadNavStars(false)
-      } else {
-        this.navStarsStore.navStarsStatus = I18n.t('plugin_action_failed')
-        this.loadNavStars(false)
-      }
-    }, () => {
-      if (mutationId !== this.navStarsMutationId) return
-      this.navStarsStore.navStarsStatus = I18n.t('plugin_action_failed')
-      this.loadNavStars(false)
-    })
-  }
-
   private setTelrad(v: boolean): void {
     this.telescopeStore.telradOn = v
     this.callNativeWhenReady('setTelrad', v ? '1' : '0', () => { this.telescopeStore.loadOculars(false) })
@@ -4318,7 +4257,7 @@ export struct WindowNativeNode {
             // Loading a feature plugin must not rebuild unrelated panels. The
             // catalog chips only need refreshing while the search panel is
             // visible; doing it for every plugin caused a full-shell flash.
-            if (this.activePanel === 'search') this.catalogStore.loadObjectCatalogCategories(this.languageRefreshSerial)
+            if (this.activePanel === 'search') this.catalogStore.loadObjectCatalogCategories(this.languageStore.languageRefreshSerial)
             callback()
           }
           else {
@@ -4338,49 +4277,7 @@ export struct WindowNativeNode {
   }
 
   // ===== 流星雨（MeteorShowers 插件桥）=====
-  private loadMeteorShowers(): void {
-    const requestId = ++this.meteorShowersLoadRequestId
-    this.callNativeWhenReady('getMeteorShowers', '', (r: StellariumBridgeResponse) => {
-      if (requestId !== this.meteorShowersLoadRequestId) return
-      const resp = r as MeteorShowersResponse
-      const m = resp.meteorShowers
-      if (!m) { return }
-      this.meteorStore.msEnabled = m.enabled
-      this.meteorStore.msLabels = m.labels
-      this.meteorStore.msActiveOnly = m.activeOnly
-      this.meteorStore.msMarker = m.marker
-      this.meteorStore.msCatalogVersion = m.catalogVersion ?? ''
-      this.meteorStore.msCatalogName = m.catalogName ?? ''
-      this.meteorStore.msCatalogSource = m.catalogSource ?? ''
-      // Parse active shower list
-      if (resp.showerList && resp.showerList.length > 0) {
-        this.meteorStore.msShowerList = resp.showerList.map((s): MeteorShowerItem => ({
-          name: s.name ?? '',
-          englishName: s.englishName ?? '',
-          zhr: s.zhr ?? 0,
-          status: s.status ?? '',
-          speed: s.speed ?? 0,
-          popIdx: s.popIdx ?? 0,
-          parent: s.parent ?? '',
-          peakDate: s.peakDate ?? '',
-          activeStart: s.activeStart ?? '',
-          activeEnd: s.activeEnd ?? ''
-        }))
-      } else {
-        this.meteorStore.msShowerList = []
-      }
-    })
-  }
-  private setMeteorShowersFlag(name: string, v: boolean): void {
-    this.meteorShowersLoadRequestId++
-    if (name == 'enabled') { this.meteorStore.msEnabled = v }
-    else if (name == 'labels') { this.meteorStore.msLabels = v }
-    else if (name == 'activeOnly') { this.meteorStore.msActiveOnly = v }
-    else if (name == 'marker') { this.meteorStore.msMarker = v }
-    this.callNativeWhenReady('setMeteorShowersFlag', name + ':' + (v ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) this.loadMeteorShowers()
-    }, 0, 100, 15, () => { this.loadMeteorShowers() })
-  }
+  // loadMeteorShowers / setMeteorShowersFlag 已随 §14 B3-1 同片搬入 state/MeteorStore.ets。
 
   private loadScenery3d(): void {
     this.sceneryStore.scenery3dLoading = true
@@ -5034,49 +4931,6 @@ export struct WindowNativeNode {
       if (actionId.indexOf('actionDisplayInfo_') === 0) {
         this.refreshSelectedObject()
       }
-    })
-  }
-
-  private toggleAngleMeasure(targetEnabled?: boolean): void {
-    const enabled = targetEnabled === undefined ? !this.tools.angleMeasureEnabled : targetEnabled
-    const previousEnabled = this.tools.angleMeasureEnabled
-    const previousHasStart = this.tools.angleMeasureHasStart
-    const previousHasEnd = this.tools.angleMeasureHasEnd
-    const previousText = this.tools.angleMeasureText
-    const requestId = ++this.angleMeasureRequestId
-    this.tools.angleMeasurePending = true
-    this.tools.angleMeasureEnabled = enabled
-    if (!enabled) {
-      this.tools.angleMeasureHasStart = false
-      this.tools.angleMeasureHasEnd = false
-      this.tools.angleMeasureText = ''
-    }
-    this.callInteractive('setActionChecked', 'actionShow_Angle_Measure|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (requestId !== this.angleMeasureRequestId) return
-      this.tools.angleMeasurePending = false
-      if (r.ok !== true) {
-        this.tools.angleMeasureEnabled = previousEnabled
-        this.tools.angleMeasureHasStart = previousHasStart
-        this.tools.angleMeasureHasEnd = previousHasEnd
-        this.tools.angleMeasureText = previousText
-        this.flashHint('角度测量插件不可用')
-        return
-      }
-      this.tools.angleMeasureEnabled = r.checked === true
-      if (!this.tools.angleMeasureEnabled) {
-        this.tools.angleMeasureHasStart = false
-        this.tools.angleMeasureHasEnd = false
-        this.tools.angleMeasureText = ''
-      }
-      this.flashHint(this.tools.angleMeasureEnabled ? '角度测量已开启，请点击两个位置' : '角度测量已关闭')
-    }, () => {
-      if (requestId !== this.angleMeasureRequestId) return
-      this.tools.angleMeasurePending = false
-      this.tools.angleMeasureEnabled = previousEnabled
-      this.tools.angleMeasureHasStart = previousHasStart
-      this.tools.angleMeasureHasEnd = previousHasEnd
-      this.tools.angleMeasureText = previousText
-      this.flashHint('角度测量插件不可用')
     })
   }
 
@@ -7595,13 +7449,13 @@ private loadPlanetPositions(): void {
     }, 140)
   }
 
-  private fetchSuggestions(prefix: string, languageSerial: number = this.languageRefreshSerial): void {
+  private fetchSuggestions(prefix: string, languageSerial: number = this.languageStore.languageRefreshSerial): void {
     if (prefix.length < 1) { this.searchStore.searchSuggestions = []; return }
     // Native matching covers localized names, English names, catalog IDs, and
     // spacing/hyphen variants across every currently loaded object module.
     this.callInteractive('listMatchingObjects', prefix + '|30', (result) => {
       // Only apply if the query prefix is still current (user may have typed more).
-      if (this.searchStore.searchText.trim() !== prefix || this.languageRefreshSerial !== languageSerial) { return }
+      if (this.searchStore.searchText.trim() !== prefix || this.languageStore.languageRefreshSerial !== languageSerial) { return }
       const suggestions: SearchSug[] = []
       const seen: Record<string, boolean> = {}
       if (Array.isArray(result.items)) {
@@ -7665,33 +7519,7 @@ private loadPlanetPositions(): void {
 
   // loadObjectCatalogCategories 已下沉 CatalogStore（§14 B2R-4）。
 
-  private loadConstellationNavigation(languageSerial: number = this.languageRefreshSerial): void {
-    this.callNativeWhenReady('getConstellationList', '', (result: StellariumBridgeResponse) => {
-      if (this.languageRefreshSerial !== languageSerial) return
-      if (result.ok !== true || !Array.isArray(result.items)) return
-      const rawItems = result.items as Array<Record<string, Object>>
-      const localizedByEnglish: Record<string, string> = {}
-      for (let index = 0; index < rawItems.length; index++) {
-        const rawItem = rawItems[index]
-        const englishName = rawItem['englishName'] !== undefined ? String(rawItem['englishName']) : ''
-        const localizedName = rawItem['localizedName'] !== undefined ? String(rawItem['localizedName']) : englishName
-        if (englishName.length > 0) localizedByEnglish[englishName] = localizedName
-      }
-      const navigationItems: ConstellationNavigationItem[] = []
-      const seen: Record<string, boolean> = {}
-      for (const rawItem of rawItems) {
-        const englishName = rawItem['englishName'] !== undefined ? String(rawItem['englishName']) : ''
-        const localizedName = localizedByEnglish[englishName] ?? englishName
-        if (englishName.length > 0 && localizedName.length > 0 && !seen[englishName]) {
-          seen[englishName] = true
-          navigationItems.push({ englishName: englishName, localizedName: localizedName })
-        }
-      }
-      navigationItems.sort((left: ConstellationNavigationItem, right: ConstellationNavigationItem) =>
-        left.localizedName.localeCompare(right.localizedName))
-      this.searchStore.constellationNavigationItems = navigationItems
-    })
-  }
+  // loadConstellationNavigation 已随 §14 B3-1 搬入 state/SearchStore.ets（宿主调用点显式传 languageSerial）。
 
   private catalogLabelForModule(moduleId: string, fallback: ResourceStr): ResourceStr {
     for (const option of this.catalogStore.objectCatalogCategories) {
@@ -8144,7 +7972,7 @@ private loadPlanetPositions(): void {
     // rather than waiting for it to be closed and opened again.
     this.i18nLang = i18nCode
     this.languageStore.selectedLanguage = lang
-    const languageSerial = ++this.languageRefreshSerial
+    const languageSerial = ++this.languageStore.languageRefreshSerial
     this.languageStore.languageRevision++
     this.panelContentKey++
     // 持久化语言选择
@@ -8166,14 +7994,14 @@ private loadPlanetPositions(): void {
     this.languageSwitchTimer = setTimeout(() => {
       this.languageSwitchTimer = -1
       this.callNativeWhenReady('setLanguage', lang, () => {
-        if (this.languageRefreshSerial !== languageSerial) return
+        if (this.languageStore.languageRefreshSerial !== languageSerial) return
         const selectedCategoryModuleId = this.searchStore.categoryModuleId
         this.catalogStore.objectCatalogCategories = []
         this.searchStore.categoryObjects = []
         this.searchStore.searchSuggestions = []
         this.searchStore.constellationNavigationItems = []
         this.catalogStore.loadObjectCatalogCategories(languageSerial)
-        this.loadConstellationNavigation(languageSerial)
+        this.searchStore.loadConstellationNavigation(languageSerial)
         this.loadCategoryObjects(this.searchStore.searchCategory, selectedCategoryModuleId)
         const query = this.searchStore.searchText.trim()
         if (query.length > 0) this.fetchSuggestions(query, languageSerial)
@@ -15467,7 +15295,7 @@ private loadPlanetPositions(): void {
         subColor: this.nmSub(),
         panelColor: this.nmBg(),
         accentColor: this.nmAccent(),
-        onToggle: (enabled: boolean) => { this.toggleAngleMeasure(enabled) },
+        onToggle: (enabled: boolean) => { this.tools.toggleAngleMeasure(enabled) },
         onReset: () => { this.resetAngleMeasure() }
       })
     } else if (this.activePanel === 'navStars') {
@@ -15477,7 +15305,7 @@ private loadPlanetPositions(): void {
         subColor: this.nmSub(),
         panelColor: this.nmBg(),
         accentColor: this.nmAccent(),
-        onSetSetting: (setting: string, value: string) => { this.setNavStarsSetting(setting, value) }
+        onSetSetting: (setting: string, value: string) => { this.navStarsStore.setNavStarsSetting(setting, value) }
       })
     } else if (this.activePanel === 'satellites') {
       SatellitesPanel({
@@ -15515,7 +15343,7 @@ private loadPlanetPositions(): void {
       MeteorShowersPanel({
         meteorStore: this.meteorStore,
         panelColor: this.nmBg(),
-        onSetFlag: (flag: string, value: boolean) => { this.setMeteorShowersFlag(flag, value) },
+        onSetFlag: (flag: string, value: boolean) => { this.meteorStore.setMeteorShowersFlag(flag, value) },
         onSearch: (name: string) => { this.searchObject(name, '', '', 'center') }
       })
     } else if (this.activePanel === 'scenery3d') {
