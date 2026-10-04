@@ -50,6 +50,14 @@ export interface MediaPort {
   // 删除文件（对应 fileIo.unlinkSync，用于截图导出后的临时文件清理）。
   deleteFile(path: string): void
 
+  // ── 对象模型渲染（M2-A ObjectModelRenderer）──
+  // 由原始 RGBA 字节创建像素图（对应 image.createPixelMap(buffer, { size, RGBA_8888, UNPREMUL })）：
+  // 三维模型 worker 光栅化结果的提交。
+  createPixelMapFromRgba(pixels: ArrayBuffer, width: number, height: number, label: string): Promise<image.PixelMap>
+  // 把像素图读回 RGBA 字节缓冲（对应 pixelMap.readPixelsToBufferSync(buffer)，失败抛 Error）：
+  // PNG 回退路径（侧车缺失时）。
+  readPixelMapPixels(pixelMap: image.PixelMap, buffer: ArrayBuffer, label: string): void
+
   // ── 屏幕录制（M1-B 子组② RecordingController）──
   // 录屏工作目录（对应宿主 context.filesDir + '/recordings/videos'）。
   screenVideoDir(): string

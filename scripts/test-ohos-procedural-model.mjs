@@ -109,6 +109,6 @@ test('immersive modal blocks underlying sky hit tests without suppressing its co
   assert.match(mediaComponents, /id\('object-model-inline-stage'\)\s*\.hitTestBehavior\(HitTestMode.BLOCK_HIERARCHY\)/);
   assert.match(mediaComponents, /width\(this\.inlineModelSize\)\.height\(this\.inlineModelSize\)/);
   assert.match(source, /inlineModelSize: this\.objectInspectorInlineModelSize\(\)/);
-  assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
+  assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.objectModelRendererCtl\(\)\.handleObjectInspectorModelTouch\(event\) \}/);
   assert.doesNotMatch(modelOverlay, /modelNotice\(\).*maxLines/);
 });
