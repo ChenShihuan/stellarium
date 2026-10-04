@@ -13,8 +13,11 @@
 //     viewSettingsStore 承载视图交互偏好（useMetricUnits / viewLock / autoZoomResets，原 3 个 @Prop）。
 //   - 其余标量/字符串状态走 @Prop；主题色由宿主算好后传入（避免组件名与
 //     CustomComponent 基类属性方法冲突，边框色命名为 lineColor）。
-//   - 宿主私有助手（sensZh / configDitheringLabel / informationMaskHas / plugin* /
-//     script* 等纯查表或读宿主字段）与全部动作按规则 6 回注，组件内不改宿主 @State。
+//   - 标签/文案纯函数（sensZh / pluginZh / pluginDesc / pluginFeatureRoute /
+//     resourceText / scriptZh / scriptDesc）已随 §14.2 A1-3 直连 common/derive/labels；
+//     其余宿主私有助手（configDitheringLabel / informationMaskHas / pluginMetaLine /
+//     pluginFeatureDestination / pluginFeatureIsActionable / pluginFeatureActionLabel /
+//     scriptMetaLine / scriptSourceLine）与全部动作按规则 6 回注，组件内不改宿主 @State。
 //     `viewTab = 0; openSubPanel('layers')` 与 `openSubPanel('tools')` 合并为
 //     onOpenLayersSky / onOpenTools 两个动作回调。
 //   - 原 `Slider` 直接写宿主导航设置字段；组件改为本地 @State 草稿
@@ -26,7 +29,7 @@
 import { curves } from '@kit.ArkUI'
 import { I18n, PROJECTION_KEYS } from '../../pages/I18n'
 import { TabItem, PluginItem } from '../../pages/StellariumTypes'
-import { ConfigurationOption, PluginFeatureRoute } from '../../pages/MainWindowModels'
+import { ConfigurationOption } from '../../pages/MainWindowModels'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL, UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 import { GyroStore } from '../../state/GyroStore'
 import { OverlayStore } from '../../state/OverlayStore'
@@ -42,6 +45,7 @@ import { LanguageRow, DevicePrivacySection } from '../settings/DeviceAndLanguage
 import { TimeSettingsSection } from '../settings/TimeSettingsSection'
 import { DeltaTSettingsBlock } from '../time/DeltaTSettingsBlock'
 import { ViewCoordinateSettings } from '../view/ViewCoordinateSettings'
+import { sensZh, pluginZh, pluginDesc, pluginFeatureRoute, resourceText, scriptZh, scriptDesc } from '../../common/derive/labels'
 
 @Component
 export struct SettingsPanel {
@@ -77,19 +81,12 @@ export struct SettingsPanel {
   @Prop inputColor: string
   scroller: Scroller = new Scroller()
   @State private maxFovDraft: number = 180
-  sensZh: (en: string) => string = (en: string) => en
   configDitheringLabel: (value: string) => string = () => ''
   informationMaskHas: (key: string) => boolean = () => false
-  pluginZh: (en: string) => string = (en: string) => en
-  pluginDesc: (en: string) => string = () => ''
   pluginMetaLine: (plugin: PluginItem) => string = () => ''
-  pluginFeatureRoute: (id: string) => PluginFeatureRoute = () => ({ panel: '', kind: '' })
   pluginFeatureDestination: (id: string) => string = () => ''
   pluginFeatureIsActionable: (id: string) => boolean = () => false
   pluginFeatureActionLabel: (id: string) => string = () => ''
-  resourceText: (value: string | undefined, fallback: string) => string = (value: string | undefined, fallback: string) => value !== undefined && value.length > 0 ? value : fallback
-  scriptZh: (filename: string) => string = (filename: string) => filename
-  scriptDesc: (filename: string) => string = () => ''
   scriptMetaLine: (filename: string) => string = () => ''
   scriptSourceLine: (filename: string) => string = () => ''
   hasSelectedObject: () => boolean = () => false
@@ -159,7 +156,7 @@ export struct SettingsPanel {
           .margin({ top: 4, bottom: 8 }).id('config-tabs-' + this.i18nLang)
         Column({ space: 0 }) {
           if (this.configTab === -1) {
-            DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.textColor, subColor: this.subColor, onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
+            DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.textColor, subColor: this.subColor, onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
             Row().width('100%').height(0.5).backgroundColor(this.lineColor).margin({ top: 10, bottom: 10 })
           ViewCoordinateSettings({
             store: this.overlayStore,
@@ -340,7 +337,7 @@ export struct SettingsPanel {
             if (this.scriptLaunching) {
               Row({ space: 6 }) {
                 LoadingProgress().width(16).height(16).color(this.accentColor)
-                Text(I18n.format('script_starting_named', [this.scriptZh(this.scriptLaunchingName)])).fontSize(10).fontColor(this.subColor)
+                Text(I18n.format('script_starting_named', [scriptZh(this.scriptLaunchingName)])).fontSize(10).fontColor(this.subColor)
               }.width('100%').padding({ left: 8, right: 8, bottom: 4 })
             }
             Scroll(this.scroller) {
@@ -349,14 +346,14 @@ export struct SettingsPanel {
                   Column({ space: 0 }) {
                     // 第一行：中文名
                     Row() {
-                      Text(this.scriptZh(s)).fontSize(11).fontColor(this.textColor)
+                      Text(scriptZh(s)).fontSize(11).fontColor(this.textColor)
                         .fontWeight(FontWeight.Medium).layoutWeight(1)
                       Text('▶').fontSize(9).fontColor('#7FD0FF')
                     }
                     .height(28).width('100%').padding({ left: 10, right: 10 })
                     // 第二行：简短描述
-                    if (this.scriptDesc(s)) {
-                      Text(this.scriptDesc(s))
+                    if (scriptDesc(s)) {
+                      Text(scriptDesc(s))
                         .fontSize(8).fontColor('#77FFFFFF').width('100%')
                         .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                         .padding({ left: 10, right: 10, bottom: 3 })
@@ -408,7 +405,7 @@ export struct SettingsPanel {
                 ForEach(this.pluginStore.pluginList, (pl: PluginItem) => {
                   Column({ space: 5 }) {
                     Row() {
-                      Text(this.pluginZh(pl.name)).fontSize(12).fontColor(this.textColor)
+                      Text(pluginZh(pl.name)).fontSize(12).fontColor(this.textColor)
                         .fontWeight(FontWeight.Medium).layoutWeight(1)
                       Text(pl.loaded ? I18n.t('plugin_runtime_loaded') : I18n.t('plugin_runtime_unloaded'))
                         .fontSize(9).fontColor(pl.loaded ? '#B9E6C4' : this.subColor)
@@ -417,12 +414,12 @@ export struct SettingsPanel {
                         .borderRadius(UI_RADIUS_PILL)
                     }
                     .height(28)
-                    if (this.resourceText(pl.description, this.pluginDesc(pl.name)).length > 0) {
-                      Text(this.resourceText(pl.description, this.pluginDesc(pl.name)))
+                    if (resourceText(pl.description, pluginDesc(pl.name)).length > 0) {
+                      Text(resourceText(pl.description, pluginDesc(pl.name)))
                         .fontSize(10).fontColor(this.subColor).width('100%')
                         .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                     }
-                    Text(I18n.t('resource_author') + ': ' + this.resourceText(pl.authors, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + this.resourceText(pl.license, I18n.t('resource_not_provided')))
+                    Text(I18n.t('resource_author') + ': ' + resourceText(pl.authors, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + resourceText(pl.license, I18n.t('resource_not_provided')))
                       .fontSize(9).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                     if (this.pluginMetaLine(pl).length > 0) {
                       Text(this.pluginMetaLine(pl))
@@ -449,8 +446,8 @@ export struct SettingsPanel {
                         .zIndex(2)
                         .onClick(() => { this.openPluginFeature(pl.id) })
                     } else {
-                      Text(this.pluginFeatureRoute(pl.id).kind === 'offline' || this.pluginFeatureRoute(pl.id).kind === 'network'
-                        ? this.pluginFeatureRoute(pl.id).kind === 'network'
+                      Text(pluginFeatureRoute(pl.id).kind === 'offline' || pluginFeatureRoute(pl.id).kind === 'network'
+                        ? pluginFeatureRoute(pl.id).kind === 'network'
                           ? I18n.t('plugin_network_disabled')
                           : I18n.t('plugin_offline_disabled')
                         : I18n.t('plugin_background_only'))
