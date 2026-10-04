@@ -32,6 +32,11 @@ import { I18n, LANGUAGE_DISPLAY, PROJECTION_KEYS } from './I18n'
 import { DeepSkyWarmupStatus, getDeepSkyResourceWarmupStatus, isStellariumDetailMediaPreparationFailed, resolveStellariumDetailMediaAsset } from '../qability/StellariumResourceBootstrap'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PANEL, UI_RADIUS_SHEET, UI_RADIUS_PILL, UI_OPTION_ANIMATION_MS } from '../common/ui/UiTokens'
 import { getIcon } from '../common/ui/ShellIcons'
+import {
+  CHROME_ZOOM_BUTTON_SIZE,
+  chromeZoomButtonLeft,
+  chromeZoomButtonTop
+} from '../common/ui/ChromeGeometry'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { TimeStore } from '../state/TimeStore'
 import { TimeSpeedChips } from '../panels/time/TimeSpeedChips'
@@ -2800,6 +2805,16 @@ export struct WindowNativeNode {
         this.dockClockText = text
       }
     })
+    // The FOV chip above the dock reads the same @State the zoom paths write, but
+    // a programmatic view change (restoring the saved view, safe-area recentring)
+    // never goes through changeFovBySlider/zoomStep, so the chip could sit on a
+    // stale value. Refresh it on the same 1 s tick as the clock and only write on
+    // change, so an unchanged FOV costs no re-render.
+    this.callInteractive('getFieldOfView', '', (f: StellariumBridgeResponse) => {
+      if (f.ok !== true || f.fov === undefined) { return }
+      const fovText: string = (f.fov as number).toFixed(1) + '°'
+      if (fovText !== this.currentFovText) { this.currentFovText = fovText }
+    })
   }
 
   private setViewCoordinatesVisible(visible: boolean): void {
@@ -5163,14 +5178,6 @@ export struct WindowNativeNode {
     this.layerViewStore.milkyWayBright = value
     this.callInteractive('setMilkyWayIntensity', (value / 3).toFixed(2), () => {})
   }
-  private setFovPreset(deg: number): void {
-    this.callInteractive('setFOV', deg.toString(), (r: StellariumBridgeResponse) => {
-      hilog.info(0x0000, 'StellariumArkUI', 'setFovPreset %{public}d ok=%{public}s', deg, r.ok === true ? '1' : '0')
-      this.flashHint('视场 ' + deg.toFixed(1) + '°')
-      this.refreshState()
-    })
-  }
-
 
   private setProjection(name: string): void {
     this.callInteractive('setProjectionType', name, (r: StellariumBridgeResponse) => {
@@ -9928,9 +9935,10 @@ private loadPlanetPositions(): void {
       this.callInteractive('getFieldOfView', '', (r: StellariumBridgeResponse) => {
         if (r.ok === true && r.fov !== undefined) {
           const fovDeg = r.fov as number
+          // 只更新常驻的 FOV 读数（dock 上方的胶囊），不再弹 "视场 xx°" 提示：
+          // 胶囊一直可见，提示属于重复反馈，且会盖住星图中央。
           this.currentFovText = fovDeg.toFixed(1) + '°'
           this.fovSliderValue = fovDeg
-          this.flashHint('视场 ' + this.currentFovText)
         }
       })
     }, 450)
@@ -14656,6 +14664,12 @@ private loadPlanetPositions(): void {
                 onOpenTime: () => { this.setPanel('time') },
                 onZoomIn: () => { this.zoomStep(0.8) },
                 onZoomOut: () => { this.zoomStep(1.25) },
+                fovText: this.currentFovText,
+                chromeRowY: this.chromeRowY(),
+                chromeRowWidth: this.chromeRowWidth(),
+                chromeRowPosXLeft: this.chromeRowPosXLeft(),
+                chromeRowPosXRight: this.chromeRowPosXRight(),
+                chromeZoomHorizontal: this.chromeZoomHorizontal(),
                 onFlashHint: (text: string) => { this.flashHint(text) },
                 onCalibrate: () => { this.calibrateGyroscope() },
                 onToggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
@@ -14772,6 +14786,12 @@ private loadPlanetPositions(): void {
                 onOpenTime: () => { this.setPanel('time') },
                 onZoomIn: () => { this.zoomStep(0.8) },
                 onZoomOut: () => { this.zoomStep(1.25) },
+                fovText: this.currentFovText,
+                chromeRowY: this.chromeRowY(),
+                chromeRowWidth: this.chromeRowWidth(),
+                chromeRowPosXLeft: this.chromeRowPosXLeft(),
+                chromeRowPosXRight: this.chromeRowPosXRight(),
+                chromeZoomHorizontal: this.chromeZoomHorizontal(),
                 onGyro: () => {
                   hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
                   this.resetPanelIdle()
@@ -15118,11 +15138,28 @@ private loadPlanetPositions(): void {
    */
   private skyZoomButtonAt(x: number, y: number): string {
     if (this.panelVisible || this.polarScopeVisible) { return '' }
-    const left = this.dockLeft() + 4
-    if (x < left || x > left + 44) { return '' }
-    const top = this.dockTop() - 104
-    if (y >= top && y <= top + 44) { return 'in' }
-    if (y >= top + 52 && y <= top + 96) { return 'out' }
+    // 几何与 SkyZoomLayer 共用 common/ui/ChromeGeometry：绘制位置和命中区域必须同源，
+    // 否则两者会各自漂移（曾出现"点 + 无响应、点 − 变成放大"的整列错位）。
+    const horizontal = this.chromeZoomHorizontal()
+    const rowY = this.chromeRowY()
+    const inTop = chromeZoomButtonTop(rowY, horizontal, 0)
+    const outTop = chromeZoomButtonTop(rowY, horizontal, 1)
+    const inLeft = chromeZoomButtonLeft(this.chromeRowPosXLeft(), horizontal, 0)
+    const outLeft = chromeZoomButtonLeft(this.chromeRowPosXLeft(), horizontal, 1)
+    const within = (v: number, start: number): boolean => v >= start && v <= start + CHROME_ZOOM_BUTTON_SIZE
+    if (horizontal) {
+      // 横排两枚按钮同一行、左右并排，靠 x 区分。
+      if (within(y, inTop)) {
+        if (within(x, inLeft)) { return 'in' }
+        if (within(x, outLeft)) { return 'out' }
+      }
+      return ''
+    }
+    // 竖排两枚按钮同一列、上下排列，靠 y 区分（上 + 下 −）。
+    if (within(x, inLeft)) {
+      if (within(y, inTop)) { return 'in' }
+      if (within(y, outTop)) { return 'out' }
+    }
     return ''
   }
 
@@ -15620,6 +15657,35 @@ private loadPlanetPositions(): void {
       this.primaryDockActions()[3],
       { label: I18n.t('c_more_functions'), icon: 'more', panel: 'more' }
     ] as ShellAction[]
+  }
+
+  // ---- dock 上方三件套（FOV 读数 / 缩放按钮 / 常驻时钟）的统一锚点 --------------
+  // 手机与半折：左右两端取同一个 x，等价于跟随 dock 两端（与改造前逐字一致，回归安全）。
+  // 平板：改贴屏幕左右缘 —— 平板 dock 宽度封顶 640，且面板打开时会被挤到面板右侧，
+  // 继续跟随 dock 两端会让三件套随面板开合整体横移，读数位置"漂"。
+  private chromeRowY(): number {
+    return this.dockTop() - 48
+  }
+
+  private chromeRowWidth(): number {
+    return this.dockWidthPixels()
+  }
+
+  private chromeRowPosXLeft(): number {
+    return this.isExpandedLayout ? this.EDGE_MARGIN : this.dockLeft()
+  }
+
+  private chromeRowPosXRight(): number {
+    if (this.isExpandedLayout) {
+      return this.skyWidth - this.EDGE_MARGIN - this.dockWidthPixels()
+    }
+    return this.dockLeft()
+  }
+
+  // 竖排（手机·半折，列高 96）还是横排（平板，一行 44 高）：平板 dock 只有 54 高，
+  // 96 高的竖排压在它上方过于突兀，横排更贴近平板的工具条语汇。
+  private chromeZoomHorizontal(): boolean {
+    return this.isExpandedLayout
   }
 
   private expandedDockOccupiedLeft(): number {
@@ -18518,25 +18584,6 @@ private loadPlanetPositions(): void {
       this.stopTracking(); this.triggerAction('actionLook_Towards_Zenith'); this.refreshState(); this.flashHint(I18n.t('i0088'))
     } else if (id === 'ncp') {
       this.stopTracking(); this.triggerAction('actionLook_Towards_NCP'); this.refreshState(); this.flashHint(I18n.t('i0089'))
-    // FOV 快捷切换（actionSet_FOV 索引: 0=0.5°, 1=180°, 2=90°, 3=60°, 4=45°, 5=20°, 6=10°, 7=5°, 8=2°, 9=1°）
-    } else if (id === 'fov1') {
-      this.stopTracking(); this.setFovPreset(1); this.refreshState(); this.flashHint(I18n.t('i0090'))
-    } else if (id === 'fov2') {
-      this.stopTracking(); this.setFovPreset(2); this.refreshState(); this.flashHint(I18n.t('i0091'))
-    } else if (id === 'fov5') {
-      this.stopTracking(); this.setFovPreset(5); this.refreshState(); this.flashHint(I18n.t('i0092'))
-    } else if (id === 'fov10') {
-      this.stopTracking(); this.setFovPreset(10); this.refreshState(); this.flashHint(I18n.t('i0093'))
-    } else if (id === 'fov20') {
-      this.stopTracking(); this.setFovPreset(20); this.refreshState(); this.flashHint(I18n.t('i0094'))
-    } else if (id === 'fov45') {
-      this.stopTracking(); this.setFovPreset(45); this.refreshState(); this.flashHint(I18n.t('i0095'))
-    } else if (id === 'fov60') {
-      this.stopTracking(); this.setFovPreset(60); this.refreshState(); this.flashHint(I18n.t('i0096'))
-    } else if (id === 'fov90') {
-      this.stopTracking(); this.setFovPreset(90); this.refreshState(); this.flashHint(I18n.t('i0097'))
-    } else if (id === 'fov180') {
-      this.stopTracking(); this.setFovPreset(180); this.refreshState(); this.flashHint(I18n.t('i0098'))
     }
   }
 

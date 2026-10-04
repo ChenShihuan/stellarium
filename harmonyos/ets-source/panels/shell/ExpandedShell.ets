@@ -1,7 +1,7 @@
 import { curves } from '@kit.ArkUI'
 import { ShellAction } from '../../pages/StellariumTypes'
 import { BottomDock } from './BottomDock'
-import { DockClockLayer, SkyZoomLayer } from './PanelChromeExtras'
+import { DockClockLayer, DockFovLayer, SkyZoomLayer } from './PanelChromeExtras'
 import { GyroCalibPanel } from '../sensors/GyroCalibPanel'
 import { ObjectDetailConnectorLayer } from '../overlay/ObjectDetailConnectorLayer'
 import { UnifiedObjectDetailCard } from '../object/UnifiedObjectDetailCard'
@@ -45,6 +45,12 @@ export struct ExpandedShell {
   @Prop skyHeight: number
   @Prop polarScopeVisible: boolean
   @Prop dockClockText: string
+  @Prop fovText: string
+  @Prop chromeRowY: number
+  @Prop chromeRowWidth: number
+  @Prop chromeRowPosXLeft: number
+  @Prop chromeRowPosXRight: number
+  @Prop chromeZoomHorizontal: boolean
   @Prop dockWidth: number
   @Prop dockLeft: number
   @Prop dockTop: number
@@ -158,13 +164,23 @@ export struct ExpandedShell {
           .hitTestBehavior(HitTestMode.Block)
           .zIndex(40)
           .animation({ duration: 300, curve: curves.springMotion(0.46, 0.86) })
+        // 三件套共用宿主锚点：平板（expanded）下贴屏幕左右缘 —— 平板 dock 宽度封顶 640 且
+        // 面板打开时会被挤到右侧，若跟随 dock 两端，三件套会随面板开合整体横移。
         if (!this.panelVisible && !this.polarScopeVisible && this.dockClockText.length > 0) {
-          DockClockLayer({ clockText: this.dockClockText, layerWidth: this.dockWidth, posX: this.dockLeft, posY: this.dockTop - 48, onOpenTime: () => { this.onOpenTime() } })
+          DockClockLayer({ clockText: this.dockClockText, layerWidth: this.chromeRowWidth, posX: this.chromeRowPosXRight, posY: this.chromeRowY, onOpenTime: () => { this.onOpenTime() } })
         }
-        // 与常驻时钟左右对称的非手势缩放按钮：竖排 +放大 / −缩小。
+        // FOV 读数：贴左端，与右侧时钟左右对称（整层不参与命中测试）。首帧前为 '--'，用 '°' 兜住。
+        if (!this.panelVisible && !this.polarScopeVisible && this.fovText.indexOf('°') >= 0) {
+          DockFovLayer({
+            fovText: this.fovText, layerWidth: this.chromeRowWidth, posX: this.chromeRowPosXLeft,
+            posY: this.chromeRowY, textColor: this.textColor
+          })
+        }
+        // 缩放按钮：紧贴读数行上沿；平板横排（一行 44 + 4 间隙），手机·半折竖排（96 高）。
         if (!this.panelVisible && !this.polarScopeVisible) {
           SkyZoomLayer({
-            layerWidth: this.dockWidth, posX: this.dockLeft, posY: this.dockTop - 104,
+            layerWidth: this.chromeRowWidth, posX: this.chromeRowPosXLeft,
+            rowY: this.chromeRowY, horizontal: this.chromeZoomHorizontal,
             textColor: this.textColor,
             onZoomIn: () => { this.onZoomIn() },
             onZoomOut: () => { this.onZoomOut() }
