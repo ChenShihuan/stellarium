@@ -38,6 +38,7 @@ import {
   chromeZoomButtonTop
 } from '../common/ui/ChromeGeometry'
 import { BridgeClient } from '../bridge/BridgeClient'
+import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
@@ -199,7 +200,7 @@ import {
   MosaicCameraData, EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, SatellitesResponse, CatalogHealthEntry,
   CatalogHealthResponse, MeteorShowersData, MeteorShowerItem, MeteorShowersResponse, Scenery3dResponse, LogResponse,
-  AboutResponse, ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
+  ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
   RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptStatusResponse, ScriptCaption, ScriptCaptionsResponse,
   CommandCatalogEntry, CommandCatalogResponse
 } from './MainWindowModels'
@@ -221,6 +222,52 @@ const BODY_DETAIL_TEXTURE_PATHS: Array<string> = [
   'textures/jupiter.png', 'textures/saturn.png', 'textures/uranus.png', 'textures/neptune.png',
   'textures/moon.png',
 ]
+
+// 宿主 → CommandPort 的具名适配器（§14.1 AB-0）。把宿主既有的桥方法逐字转发给注入端口，
+// 使域 store 能在不 import NAPI 的前提下调用桥；行为与直接调用宿主方法完全一致
+// （callNativeWhenReady 仍走宿主的录制记录，默认重试参数 200ms × 60 显式传入）。
+// 用具名 class 实现接口，避免 ArkTS 匿名对象字面量越界；先例 state/TimeWheelController.ets。
+class HostCommandPort implements CommandPort {
+  private readonly requestFn: (name: string, payload: string) => StellariumBridgeResponse
+  private readonly whenReadyFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => void
+  private readonly interactiveFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => void
+  private readonly longRunningFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts?: number, isCancelled?: () => boolean) => void
+  private readonly fireFn: (name: string, payload: string) => void
+
+  constructor(
+    requestFn: (name: string, payload: string) => StellariumBridgeResponse,
+    whenReadyFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => void,
+    interactiveFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => void,
+    longRunningFn: (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts?: number, isCancelled?: () => boolean) => void,
+    fireFn: (name: string, payload: string) => void
+  ) {
+    this.requestFn = requestFn
+    this.whenReadyFn = whenReadyFn
+    this.interactiveFn = interactiveFn
+    this.longRunningFn = longRunningFn
+    this.fireFn = fireFn
+  }
+
+  request(name: string, payload: string = ''): StellariumBridgeResponse {
+    return this.requestFn(name, payload)
+  }
+
+  requestWhenReady(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void): void {
+    this.whenReadyFn(name, payload, onOk, onFailure)
+  }
+
+  requestInteractive(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void): void {
+    this.interactiveFn(name, payload, onOk, onFailure)
+  }
+
+  requestLongRunning(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts?: number, isCancelled?: () => boolean): void {
+    this.longRunningFn(name, payload, onOk, onFailure, onProgress, maxAttempts, isCancelled)
+  }
+
+  fire(name: string, payload: string = ''): void {
+    this.fireFn(name, payload)
+  }
+}
 
 @Component
 export struct WindowNativeNode {
@@ -1150,6 +1197,21 @@ export struct WindowNativeNode {
     if (localStorage) {
       this.createInfo = localStorage.get<WindowNativeNodeCreateInfo>('createInfo')
     }
+    // §14.1：把宿主桥注入 ToolsStore。ToolsStore 消费方均为 @ObjectLink，字段赋值即刷新，
+    // 故此处 onChanged 注入等价空实现（该域无 publish* 发布点）。
+    this.tools.attachPort(new HostCommandPort(
+      (name: string, payload: string) => this.callNative(name, payload),
+      (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => {
+        this.callNativeWhenReady(name, payload, onOk, 0, 200, 60, onFailure)
+      },
+      (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void) => {
+        this.callInteractive(name, payload, onOk, onFailure)
+      },
+      (name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts?: number, isCancelled?: () => boolean) => {
+        this.callLongRunningInteractive(name, payload, onOk, onFailure, onProgress, maxAttempts, isCancelled)
+      },
+      (name: string, payload: string) => { this.callNativeFire(name, payload) }
+    ), () => {})
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -2327,7 +2389,7 @@ export struct WindowNativeNode {
       } else if (panel === 'commands') {
         this.loadCommandCatalog()
       } else if (panel === 'help') {
-        this.loadAboutInfo()
+        this.tools.loadAboutInfo()
       } else if (panel === 'scripts') {
         this.loadScriptList()
         this.loadRecordings()
@@ -4574,16 +4636,6 @@ export struct WindowNativeNode {
   }
 
   // ===== 帮助面板：关于 / 日志 / 配置导入导出 =====
-  private loadAboutInfo(): void {
-    this.callNativeWhenReady('getAboutInfo', '', (r: StellariumBridgeResponse) => {
-      const resp = r as AboutResponse
-      this.tools.aboutVersion = resp.version ?? ''
-      this.tools.aboutQt = resp.qtVersion ?? ''
-      this.tools.aboutUserDir = resp.userDir ?? ''
-      this.tools.aboutConfigFile = resp.configFile ?? ''
-    })
-  }
-
   private loadLog(): void {
     this.callNativeWhenReady('getLog', '6000', (r: StellariumBridgeResponse) => {
       const resp = r as LogResponse

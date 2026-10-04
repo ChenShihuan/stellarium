@@ -1,3 +1,7 @@
+import { StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { AboutResponse } from '../pages/MainWindowModels'
+import { CommandPort } from '../bridge/CommandPort'
+
 // 「工具 / 帮助 / 角度测量 / 录制控制」域的状态簇（Phase 3ao）。
 //
 // 本片边界：只搬**数据**字段（原宿主 `@State`），不搬任何副作用：
@@ -18,7 +22,15 @@
 //     `ContinuationSection`（astro 域）共享，刻意**不并入 ToolsStore**；2026-10-04 已并入语义更贴的
 //     `SessionToolStore`（PlacePanel 早已 `@ObjectLink sessionToolStore`）。
 //
-// 只放数据与纯计算，不 import UI / NAPI。
+// 只放数据与纯计算，不 import UI / NAPI（只额外 import 纯类型 AboutResponse 与纯接口
+// CommandPort，两者都不触碰 libentry.so / @ohos.*）。
+//
+// —— 桥注入约定（§14.1，AB-0 起，供后续 B1/B2 加载器复用） ——
+// 本 store 的加载器（load*）由 store 自持，宿主不再持有同名方法：宿主在 aboutToAppear 调用
+// attachPort(port, onChanged) 注入 CommandPort 与发布回调，store 侧用 ensurePort() 守卫。
+// 请求序号 seq 随加载器搬入 store（禁止宿主 / store 双序号，§14.8 规则 3），本加载器暂未用到。
+// ToolsStore 的消费方均为 @ObjectLink，字段赋值即刷新，故宿主注入的 onChanged 目前为等价的
+// 空实现（§14.1 备注：该域无 publish* 发布点）。
 @Observed
 export class ToolsStore {
   // —— 帮助 / 工具面板（原宿主注释：关于 / 日志 / 配置导入导出） ——
@@ -53,4 +65,43 @@ export class ToolsStore {
   recording: boolean = false
   recordingPaused: boolean = false
   recordingUiExpanded: boolean = true
+
+  // —— 桥注入（§14.1 AB-0） ——
+  private port: CommandPort | null = null
+  // 原宿主的请求序号搬入 store（§14.8 规则 3）；本加载器暂未用到，供后续 B 片复用。
+  private seq: number = 0
+  private onChanged: (() => void) | null = null
+
+  // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
+  attachPort(port: CommandPort, onChanged: () => void): void {
+    this.port = port
+    this.onChanged = onChanged
+  }
+
+  // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  private notifyChanged(): void {
+    if (this.onChanged !== null) {
+      this.onChanged()
+    }
+  }
+
+  // 帮助面板「关于」：桥查询版本 / Qt 版本 / 用户目录 / 配置文件（原宿主 loadAboutInfo）。
+  loadAboutInfo(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    port.requestWhenReady('getAboutInfo', '', (r: StellariumBridgeResponse) => {
+      const resp = r as AboutResponse
+      this.aboutVersion = resp.version ?? ''
+      this.aboutQt = resp.qtVersion ?? ''
+      this.aboutUserDir = resp.userDir ?? ''
+      this.aboutConfigFile = resp.configFile ?? ''
+      this.notifyChanged()
+    })
+  }
 }
