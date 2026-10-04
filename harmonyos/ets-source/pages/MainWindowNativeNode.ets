@@ -38,7 +38,7 @@ import {
   chromeZoomButtonTop
 } from '../common/ui/ChromeGeometry'
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot, gyroMagneticHeadingFromDeviceVectors } from '../common/derive/gyro'
-import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
+import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointSize, hecPointAngle, hecPointColor, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, normalizeLocationSearchText, officialLocationAliases, sessionSignature } from '../common/derive/actions'
@@ -1202,7 +1202,6 @@ export struct WindowNativeNode {
     // §14 B2R-4：卫星过境加载器 loadSelectedSatellitePasses 下沉 ObjectDetailStore，复用未随本片
     // 下沉的宿主助手 selectedObjectIsArtificialSatellite / requestSatellitePasses（经 hooks 回注）。
     this.objectDetailStore.attachHooks({
-      selectedObjectIsArtificialSatellite: (): boolean => this.selectedObjectIsArtificialSatellite(),
       requestSatellitePasses: (expectedName: string): void => { this.requestSatellitePasses(expectedName) }
     })
     // §14 B2R-4：书签加载器 loadBookmarks / loadBookmarksFromStorage 下沉 BookmarkStore。
@@ -1253,7 +1252,7 @@ export struct WindowNativeNode {
     // （loadPlanetPositions）经 AstroHostHooks 具名注入（月相 / 天文计算上下文加载器已于 B3-2 下沉）。
     this.astroStore.attachPort(hostPort, () => { this.publishAstroPanelState() })
     this.astroStore.attachHooks({
-      hasSelectedObject: () => this.hasSelectedObject(),
+      hasSelectedObject: () => this.objectDetailStore.hasSelectedObject(),
       selectedObjectName: () => this.objectDetailStore.selectedName,
       wutCategory: () => this.wutStore.wutCategory,
       wutObservationTime: () => this.wutStore.wutObservationTime,
@@ -1346,10 +1345,9 @@ export struct WindowNativeNode {
     this.searchStore.attachHooks({
       languageSerial: (): number => this.languageStore.languageRefreshSerial,
       publishSearchBrowserState: (): void => { this.publishSearchBrowserState() },
-      categoryModuleIdFor: (category: string): string => this.categoryModuleIdFor(category),
+      categoryModuleIdFor: (category: string): string => this.catalogStore.categoryModuleIdFor(category),
       ensurePluginLoaded: (pluginName: string, callback: () => void, failureCallback?: () => void): void => this.ensurePluginLoaded(pluginName, callback, failureCallback),
       celestialTitle: (nativeName: string, englishName: string): string => this.celestialTitle(nativeName, englishName),
-      celestialSubtitle: (title: string, englishName: string): string => this.celestialSubtitle(title, englishName),
       readSearchHistoryStorage: (): Promise<string> => this.readSearchHistoryStorage(),
       writeSearchHistoryStorage: (json: string): Promise<void> => this.writeSearchHistoryStorage(json)
     })
@@ -3352,22 +3350,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private visibleScriptCaptions(): Array<string> {
-    return this.scriptStore.scriptCaptions.slice(-3)
-  }
-
-  private visibleScriptCaptionText(): string {
-    return this.visibleScriptCaptions().join('\n')
-  }
-
-  private scriptWaitDisplayText(): string {
-    const message = this.scriptStore.scriptWaitMessage.trim()
-    if (message.length === 0 || /press\s+(any\s+)?key\s+to\s+continue/i.test(message)) {
-      return I18n.t('script_wait_hint')
-    }
-    return message
-  }
-
   private stopScriptPlayback(): void {
     if (this.guideStore.guideState.active) {
       this.executeGuideRequest('guideAction', 'stop')
@@ -3436,25 +3418,6 @@ export struct WindowNativeNode {
   }
 
   // loadScriptList / setScriptMetadata 已下沉 ScriptStore（§14 B2R-4）。
-
-  private scriptMeta(filename: string): ScriptMetadata | undefined {
-    return this.scriptStore.scriptMetadata[filename]
-  }
-
-  private scriptMetaLine(filename: string): string {
-    const metadata = this.scriptMeta(filename)
-    if (metadata === undefined) { return I18n.t('resource_not_provided') }
-    const values: string[] = []
-    values.push(I18n.t('resource_author') + ': ' + resourceText(metadata.author, I18n.t('resource_not_provided')))
-    values.push(I18n.t('resource_license') + ': ' + resourceText(metadata.license, I18n.t('resource_not_provided')))
-    if (metadata.version && metadata.version.trim().length > 0) { values.push(I18n.t('resource_version') + ': ' + metadata.version.trim()) }
-    return values.join(' · ')
-  }
-
-  private scriptSourceLine(filename: string): string {
-    const metadata = this.scriptMeta(filename)
-    return metadata !== undefined && metadata.source ? I18n.t('resource_source') + ': ' + metadata.source : ''
-  }
 
   private pluginMetaLine(plugin: PluginItem): string {
     const values: string[] = []
@@ -4479,7 +4442,7 @@ export struct WindowNativeNode {
   }
 
   private setViewLockState(enabled: boolean): void {
-    if (enabled && !this.hasSelectedObject()) {
+    if (enabled && !this.objectDetailStore.hasSelectedObject()) {
       this.viewSettingsStore.viewLock = false
       this.flashHint(I18n.t('view_lock_requires_selection'))
       return
@@ -4564,11 +4527,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private informationMaskHas(key: string): boolean {
-    const bit = informationMaskBit(key)
-    return bit > 0 && (this.infoWindowStore.informationCustomMask & bit) === bit
-  }
-
   private setInformationMode(mode: string): void {
     if (this.infoWindowStore.informationSettingPending || mode === this.infoWindowStore.informationMode) return
     this.infoWindowStore.informationSettingPending = true
@@ -4587,7 +4545,7 @@ export struct WindowNativeNode {
   }
 
   private setInformationField(key: string, enabled: boolean): void {
-    if (this.infoWindowStore.informationSettingPending || this.infoWindowStore.informationMode !== 'custom' || this.informationMaskHas(key) === enabled) return
+    if (this.infoWindowStore.informationSettingPending || this.infoWindowStore.informationMode !== 'custom' || this.infoWindowStore.informationMaskHas(key) === enabled) return
     const bit = informationMaskBit(key)
     if (bit === 0) return
     const nextMask = enabled ? (this.infoWindowStore.informationCustomMask | bit) : (this.infoWindowStore.informationCustomMask & ~bit)
@@ -4987,14 +4945,6 @@ export struct WindowNativeNode {
 
 
 
-  private ephemerisStartOptionLabel(offsetDays: number): string {
-    if (offsetDays < 0) {
-      return this.ephemerisStore.ephemerisStartYear.toString() + '-' + this.ephemerisStore.ephemerisStartMonth.toString().padStart(2, '0') + '-' + this.ephemerisStore.ephemerisStartDay.toString().padStart(2, '0')
-    }
-    if (offsetDays === 0) return '当前'
-    return '+' + offsetDays.toString() + ' 天'
-  }
-
   private chooseEphemerisStartDate(): void {
     this.pickedDate = new Date(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth - 1, this.ephemerisStore.ephemerisStartDay)
     this.getUIContext().showDatePickerDialog({
@@ -5082,10 +5032,6 @@ export struct WindowNativeNode {
     this.searchStore.searchSuggestions = []
     this.searchStore.loadCategoryObjects('planet')
     this.setPanel('search')
-  }
-
-  private hasSelectedObject(): boolean {
-    return this.objectDetailStore.selectedStatus === 'Selected' && this.objectDetailStore.selectedName.length > 0
   }
 
 
@@ -5327,20 +5273,6 @@ export struct WindowNativeNode {
     return this.hecPointY(position) - hecPointSize(position) / 2
   }
 
-  private hecPointColor(position: HeliocentricPosition): string {
-    if (position.isComet) return '#7CC8E8'
-    if (position.isSelectedMinor) return '#C2A36B'
-    if (position.englishName === 'Mercury') return '#AAB5C5'
-    if (position.englishName === 'Venus') return '#DEC18A'
-    if (position.englishName === 'Earth') return '#6BAED6'
-    if (position.englishName === 'Mars') return '#D18467'
-    if (position.englishName === 'Jupiter') return '#D6A06D'
-    if (position.englishName === 'Saturn') return '#D7BF76'
-    if (position.englishName === 'Uranus') return '#82C9D2'
-    if (position.englishName === 'Neptune') return '#6F9EDD'
-    return this.nmAccent()
-  }
-
   private hecLayoutPositions(positions: Array<HeliocentricPosition>): Array<HeliocentricPosition> {
     const placed: Array<HeliocentricPosition> = []
     for (const position of positions) {
@@ -5402,10 +5334,6 @@ export struct WindowNativeNode {
     return this.celestialTitle(position.name, position.englishName)
   }
 
-
-  private isObserverPlanetSelection(name: string): boolean {
-    return name.trim().toLowerCase() === this.sessionToolStore.observerPlanet.trim().toLowerCase()
-  }
 
   private celestialPositionTitle(position: CelestialPosition): string {
     return this.celestialTitle(position.name, position.englishName)
@@ -5518,13 +5446,6 @@ export struct WindowNativeNode {
       this.astroStore.astroContentOpacity = 0
       this.astroStore.astroContentOffsetX = (0 - direction) * 8
     })
-  }
-
-  private astroNeedsSelectedObject(): boolean {
-    if (this.astroStore.astroTab === 2 || this.astroStore.astroTab === 4) return true
-    if (this.astroStore.astroTab === 1 && this.astroStore.ephemerisMode < 2) return true
-    if (this.astroStore.astroTab === 6 && this.astroStore.planetCalcMode === 1) return false
-    return false
   }
 
   private openAstroTargetPicker(): void {
@@ -5898,10 +5819,6 @@ export struct WindowNativeNode {
     })
   }
 
-
-  private skyCultureNarrationParagraphs(): string[] {
-    return cleanSkyCultureNarration(this.skyCultureViewStore.narration).split(/\n+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0)
-  }
 
 
   private skyCultureArtFilePath(rawPath: string): string {
@@ -6503,14 +6420,8 @@ export struct WindowNativeNode {
     })
   }
 
-  private selectedSkyCultureMakerConstellation(): SkyCultureMakerConstellation | undefined {
-    const index = this.skyCultureMakerStore.selectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return undefined
-    return this.skyCultureMakerStore.constellations[index]
-  }
-
   private skyCultureMakerArtworkFilePath(): string {
-    const constellation = this.selectedSkyCultureMakerConstellation()
+    const constellation = this.skyCultureMakerStore.selected()
     const assetFile = constellation?.image?.file ?? ''
     if (assetFile.length === 0 || assetFile.startsWith('/') || assetFile.includes('..')) return ''
     const filePath = this.stellariumFilesDir() + '/stellarium_userdir/sky-culture-maker/assets/' + assetFile
@@ -6532,7 +6443,7 @@ export struct WindowNativeNode {
   }
 
   private refreshSkyCultureMakerArtworkPreview(): void {
-    const artwork = this.selectedSkyCultureMakerConstellation()?.image
+    const artwork = this.skyCultureMakerStore.selected()?.image
     if (artwork === undefined) {
       this.clearSkyCultureMakerArtworkPreview()
       return
@@ -6597,7 +6508,7 @@ export struct WindowNativeNode {
   }
 
   private async importSkyCultureMakerArtworkFile(): Promise<void> {
-    const constellation = this.selectedSkyCultureMakerConstellation()
+    const constellation = this.skyCultureMakerStore.selected()
     if (constellation === undefined || this.skyCultureMakerStore.artworkImporting) return
     this.skyCultureMakerStore.artworkImporting = true
     try {
@@ -6632,7 +6543,7 @@ export struct WindowNativeNode {
   }
 
   private removeSkyCultureMakerArtwork(): void {
-    const constellation = this.selectedSkyCultureMakerConstellation()
+    const constellation = this.skyCultureMakerStore.selected()
     if (constellation === undefined) return
     this.callInteractive('removeSkyCultureMakerArtwork', JSON.stringify({ constellationId: constellation.id }), (response: StellariumBridgeResponse) => {
       this.skyCultureMakerStore.artworkAnchorIndex = 0
@@ -6641,7 +6552,7 @@ export struct WindowNativeNode {
   }
 
   private bindSkyCultureMakerArtworkAnchor(x: number, y: number): void {
-    const constellation = this.selectedSkyCultureMakerConstellation()
+    const constellation = this.skyCultureMakerStore.selected()
     const image = constellation?.image
     if (constellation === undefined || image === undefined || image.size.length !== 2) return
     const pixelX = clamp(x / Math.max(1, this.skyCultureMakerStore.artworkRenderWidth) * image.size[0], 0, image.size[0])
@@ -7127,110 +7038,16 @@ private loadPlanetPositions(): void {
 
   // loadConstellationNavigation 已随 §14 B3-1 搬入 state/SearchStore.ets（宿主调用点显式传 languageSerial）。
 
-  private catalogLabelForModule(moduleId: string, fallback: ResourceStr): ResourceStr {
-    for (const option of this.catalogStore.objectCatalogCategories) {
-      if (option.moduleId === moduleId) return option.label
-    }
-    return fallback
-  }
-
-
-  private categoryModuleIdFor(category: string): string {
-    for (const option of this.searchCategoryOptions()) {
-      if (option.code === category) return option.moduleId ?? ''
-    }
-    for (const option of this.catalogStore.objectCatalogCategories) {
-      if (option.code === category) return option.moduleId ?? ''
-    }
-    return ''
-  }
 
   // loadCategoryObjects 已下沉 state/SearchStore.ets（§14 B3-3）。
-
-  private searchCategoryOptions(): Array<CatOption> {
-    const core: CatOption[] = [
-      { code: 'planet', label: this.catalogLabelForModule('SolarSystem:planet', I18n.t('i0103')), moduleId: 'SolarSystem:planet', iconKey: 'catalog_planet' },
-      { code: 'moon', label: this.catalogLabelForModule('SolarSystem:moon', I18n.objectType('Moon')), moduleId: 'SolarSystem:moon', iconKey: 'catalog_moon' },
-      { code: 'comet', label: this.catalogLabelForModule('SolarSystem:comet', I18n.objectType('Comet')), moduleId: 'SolarSystem:comet', iconKey: 'catalog_comet' },
-      { code: 'asteroid', label: this.catalogLabelForModule('SolarSystem:asteroid', I18n.objectType('Asteroid')), moduleId: 'SolarSystem:asteroid', iconKey: 'catalog_asteroid' },
-      { code: 'star', label: this.catalogLabelForModule('StarMgr', I18n.t('i0104')), moduleId: 'StarMgr', iconKey: 'catalog_star' },
-      { code: 'variable', label: this.catalogLabelForModule('StarMgr:1', I18n.objectType('Variable star')), moduleId: 'StarMgr:1', iconKey: 'catalog_variable_star' },
-      { code: 'constellation', label: this.catalogLabelForModule('ConstellationMgr', I18n.objectType('Constellation')), moduleId: 'ConstellationMgr', iconKey: 'catalog_constellation' },
-      { code: 'galaxy', label: this.catalogLabelForModule('NebulaMgr:0', I18n.objectType('Galaxy')), moduleId: 'NebulaMgr:0', iconKey: 'catalog_galaxy' },
-      { code: 'cluster', label: this.catalogLabelForModule('NebulaMgr:5', I18n.objectType('Cluster')), moduleId: 'NebulaMgr:5', iconKey: 'catalog_cluster' },
-      { code: 'nebula', label: this.catalogLabelForModule('NebulaMgr:200', I18n.t('i0107')), moduleId: 'NebulaMgr:200', iconKey: 'catalog_nebula' },
-      { code: 'messier', label: this.catalogLabelForModule('NebulaMgr:100', I18n.t('i0108')), moduleId: 'NebulaMgr:100', iconKey: 'catalog_messier' },
-      { code: 'artificial', label: this.catalogLabelForModule('ArtificialObjects', I18n.t('search_artificial_objects')), moduleId: 'ArtificialObjects', iconKey: 'catalog_satellite' },
-      { code: 'satellite', label: this.catalogLabelForModule('Satellites', I18n.objectType('Artificial satellite')), moduleId: 'Satellites', iconKey: 'catalog_satellite' }
-    ]
-    return core
-  }
-
-  private searchDynamicCategoryOptions(): Array<CatOption> {
-    const core = this.searchCategoryOptions()
-    const knownModules: Record<string, boolean> = {}
-    for (const option of core) knownModules[option.moduleId ?? ''] = true
-    const dynamic: CatOption[] = []
-    for (const option of this.catalogStore.objectCatalogCategories) {
-      if (!knownModules[option.moduleId ?? ''] && option.isPluginCatalog === true) dynamic.push(option)
-    }
-    dynamic.sort((left: CatOption, right: CatOption) => String(left.label).localeCompare(String(right.label)))
-    return dynamic
-  }
-
-  private searchCategoryLabel(): string {
-    for (const option of this.searchCategoryOptions()) {
-      if (option.code === this.searchStore.searchCategory) return String(option.label)
-    }
-    for (const option of this.catalogStore.objectCatalogCategories) {
-      if (option.code === this.searchStore.searchCategory) return String(option.label)
-    }
-    return I18n.t('search_browse_categories')
-  }
-
-  private searchAllCategoryOptions(): Array<CatOption> {
-    const result: CatOption[] = []
-    const modules: Record<string, boolean> = {}
-    for (const option of [...this.searchCategoryOptions(), ...this.searchDynamicCategoryOptions()]) {
-      const key = option.moduleId || option.code
-      if (!modules[key]) {
-        modules[key] = true
-        result.push(option)
-      }
-    }
-    return result
-  }
 
   private publishSearchBrowserState(error: string = ''): void {
     AppStorage.setOrCreate('stellariumSearchBrowserState', JSON.stringify({
       ok: error.length === 0, error: error, page: this.searchStore.searchFilterPage || 'browse',
       category: this.searchStore.searchCategory, moduleId: this.searchStore.categoryModuleId,
       visibility: this.searchStore.searchVisibilityFilter, instrument: this.searchStore.searchInstrumentFilter,
-      categories: this.searchAllCategoryOptions(), scrollY: this.searchPanelScroller.currentOffset()?.yOffset ?? 0
+      categories: this.catalogStore.searchAllCategoryOptions(), scrollY: this.searchPanelScroller.currentOffset()?.yOffset ?? 0
     }))
-  }
-
-  private searchCategoryIcon(category: string): string {
-    for (const option of this.searchCategoryOptions()) {
-      if (option.code === category) return option.iconKey ?? 'catalog_plugin'
-    }
-    for (const option of this.catalogStore.objectCatalogCategories) {
-      if (option.code === category) return option.iconKey ?? 'catalog_plugin'
-    }
-    return 'catalog_plugin'
-  }
-
-  private searchVisibilityLabel(): string {
-    if (this.searchStore.searchVisibilityFilter === 'above') return I18n.t('search_above_horizon')
-    if (this.searchStore.searchVisibilityFilter === 'good') return I18n.t('search_good_observing')
-    return ''
-  }
-
-  private searchInstrumentLabel(): string {
-    if (this.searchStore.searchInstrumentFilter === 'naked') return I18n.t('search_naked_eye')
-    if (this.searchStore.searchInstrumentFilter === 'binocular') return I18n.t('search_binoculars')
-    if (this.searchStore.searchInstrumentFilter === 'telescope') return I18n.t('search_telescope')
-    return ''
   }
 
   private refreshSearchFilterResults(): void {
@@ -7239,7 +7056,7 @@ private loadPlanetPositions(): void {
   }
 
   private selectSearchFilterCategory(category: string): void {
-    if (!this.searchAllCategoryOptions().some((option: CatOption) => option.code === category)) {
+    if (!this.catalogStore.searchAllCategoryOptions().some((option: CatOption) => option.code === category)) {
       this.publishSearchBrowserState('unknown category')
       return
     }
@@ -7266,26 +7083,6 @@ private loadPlanetPositions(): void {
     })
   }
 
-  private categoryObservationSubtitle(item: NameItem): string {
-    const parts: string[] = []
-    const catalogText = this.celestialSubtitle(String(item.zh ?? item.name), item.name)
-    if (catalogText.length > 0) parts.push(catalogText)
-    if (item.visibleNow !== undefined) {
-      parts.push(item.visibleNow ? I18n.t('search_visible_now') : I18n.t('search_below_horizon'))
-    }
-    if (item.altitude !== undefined && Number.isFinite(item.altitude)) {
-      parts.push(I18n.format('search_altitude', [item.altitude.toFixed(0)]))
-    }
-    if (item.magnitude !== undefined && Number.isFinite(item.magnitude) && item.magnitude < 90) {
-      parts.push(I18n.format('search_magnitude', [item.magnitude.toFixed(1)]))
-    }
-    return parts.join(' · ')
-  }
-
-
-  private categoryObjectIcon(item: NameItem): string {
-    return catalogIconForObjectType(item.type ?? '', this.searchCategoryIcon(this.searchStore.searchCategory))
-  }
 
   private setSearchFilterPage(page: string): void {
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
@@ -8721,7 +8518,7 @@ private loadPlanetPositions(): void {
     this.callInteractive('searchObject', payload, (result) => {
       if (result.found === true) {
         const selectedEnglishName = result.englishName ?? result.name ?? query
-        const observerPlanetSelection = this.isObserverPlanetSelection(selectedEnglishName)
+        const observerPlanetSelection = this.sessionToolStore.isObserverPlanetSelection(selectedEnglishName)
         const returnToGraph = this.graphTargetPickerActive
         const returnToRts = this.rtsTargetPickerActive
         const returnToEphemeris = this.ephemerisTargetPickerActive
@@ -9174,7 +8971,7 @@ private loadPlanetPositions(): void {
   // loadSelectedSatellitePasses 已下沉 ObjectDetailStore（§14 B2R-4）。
 
   private moveToSelectedObject(fromLayoutChange: boolean = false): void {
-    if (!this.hasSelectedObject()) {
+    if (!this.objectDetailStore.hasSelectedObject()) {
       this.flashHint(I18n.t('center_requires_selection'))
       return
     }
@@ -9452,20 +9249,6 @@ private loadPlanetPositions(): void {
   }
 
 
-  private celestialSubtitle(title: string, englishName: string): string {
-    const parts: string[] = []
-    if (englishName.length > 0 && title.trim().toLowerCase() !== englishName.trim().toLowerCase()) {
-      parts.push(englishName.trim())
-    }
-    const messier = messierNumberOf(englishName)
-    if (messier.length > 0) { parts.push(I18n.format('search_catalog_number', ['M' + messier])) }
-    if (this.searchStore.searchCategory === 'asteroid') {
-      const number = minorPlanetNumberOf(englishName)
-      if (number.length > 0) { parts.push(I18n.format('search_permanent_number', [number])) }
-    }
-    return parts.join(' · ')
-  }
-
   private wutTargetTitle(target: WutTarget): string {
     return this.celestialTitle(target.name ?? '', target.englishName ?? '')
   }
@@ -9475,7 +9258,7 @@ private loadPlanetPositions(): void {
 
 
   private wutTargetSubtitle(target: WutTarget): string {
-    return this.celestialSubtitle(this.wutTargetTitle(target), target.englishName ?? '')
+    return this.searchStore.celestialSubtitle(this.wutTargetTitle(target), target.englishName ?? '')
   }
 
 
@@ -9495,44 +9278,40 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private selectedLiveInfoVisible(): boolean {
-    return this.infoWindowStore.infoLevel <= 1
-  }
-
   private applyCustomInformationMask(): void {
     if (this.infoWindowStore.informationMode !== 'custom') return
-    if (!this.informationMaskHas('magnitude')) {
+    if (!this.infoWindowStore.informationMaskHas('magnitude')) {
       this.objectDetailStore.selectedMagnitude = ''
       this.objectDetailStore.selectedApparentMagnitude = ''
       this.objectDetailStore.selectedAirmass = ''
       this.objectDetailStore.selectedExtinction = ''
     }
-    if (!this.informationMaskHas('raOfDate')) this.objectDetailStore.selectedCoordEq = ''
-    if (!this.informationMaskHas('raJ2000')) this.objectDetailStore.selectedCoordEqJ2000 = ''
-    if (!this.informationMaskHas('altAz')) {
+    if (!this.infoWindowStore.informationMaskHas('raOfDate')) this.objectDetailStore.selectedCoordEq = ''
+    if (!this.infoWindowStore.informationMaskHas('raJ2000')) this.objectDetailStore.selectedCoordEqJ2000 = ''
+    if (!this.infoWindowStore.informationMaskHas('altAz')) {
       this.objectDetailStore.selectedCoordAlt = ''
       this.objectDetailStore.selectedCoordApparentAltAz = ''
       this.objectDetailStore.selectedCoordGeometricAltAz = ''
     }
-    if (!this.informationMaskHas('eclipticOfDate')) this.objectDetailStore.selectedCoordEcliptic = ''
-    if (!this.informationMaskHas('eclipticJ2000')) this.objectDetailStore.selectedCoordEclipticJ2000 = ''
-    if (!this.informationMaskHas('galactic')) this.objectDetailStore.selectedCoordGalactic = ''
-    if (!this.informationMaskHas('supergalactic')) this.objectDetailStore.selectedCoordSupergalactic = ''
-    if (!this.informationMaskHas('otherCoordinates')) this.objectDetailStore.selectedCoordParallactic = ''
-    if (!this.informationMaskHas('hourAngle')) this.objectDetailStore.selectedHourAngle = ''
-    if (!this.informationMaskHas('constellation')) this.objectDetailStore.selectedConstellation = ''
-    if (!this.informationMaskHas('distance')) this.objectDetailStore.selectedDistance = ''
-    if (!this.informationMaskHas('size')) this.objectDetailStore.selectedSize = ''
-    if (!this.informationMaskHas('siderealTime')) {
+    if (!this.infoWindowStore.informationMaskHas('eclipticOfDate')) this.objectDetailStore.selectedCoordEcliptic = ''
+    if (!this.infoWindowStore.informationMaskHas('eclipticJ2000')) this.objectDetailStore.selectedCoordEclipticJ2000 = ''
+    if (!this.infoWindowStore.informationMaskHas('galactic')) this.objectDetailStore.selectedCoordGalactic = ''
+    if (!this.infoWindowStore.informationMaskHas('supergalactic')) this.objectDetailStore.selectedCoordSupergalactic = ''
+    if (!this.infoWindowStore.informationMaskHas('otherCoordinates')) this.objectDetailStore.selectedCoordParallactic = ''
+    if (!this.infoWindowStore.informationMaskHas('hourAngle')) this.objectDetailStore.selectedHourAngle = ''
+    if (!this.infoWindowStore.informationMaskHas('constellation')) this.objectDetailStore.selectedConstellation = ''
+    if (!this.infoWindowStore.informationMaskHas('distance')) this.objectDetailStore.selectedDistance = ''
+    if (!this.infoWindowStore.informationMaskHas('size')) this.objectDetailStore.selectedSize = ''
+    if (!this.infoWindowStore.informationMaskHas('siderealTime')) {
       this.objectDetailStore.selectedMeanSiderealTime = ''
       this.objectDetailStore.selectedApparentSiderealTime = ''
     }
-    if (!this.informationMaskHas('riseTransitSet')) {
+    if (!this.infoWindowStore.informationMaskHas('riseTransitSet')) {
       this.objectDetailStore.selectedRise = ''
       this.objectDetailStore.selectedSet = ''
       this.objectDetailStore.selectedTransit = ''
     }
-    if (!this.informationMaskHas('elongation')) {
+    if (!this.infoWindowStore.informationMaskHas('elongation')) {
       this.objectDetailStore.selectedPhase = ''
       this.objectDetailStore.selectedElongation = ''
     }
@@ -9545,7 +9324,7 @@ private loadPlanetPositions(): void {
       ['angularAxes', 'size'], ['positionAngle', 'size']
     ])
     this.objectDetailStore.selectedDetailFields = this.objectDetailStore.selectedDetailFields.filter((field: ObjectDetailField) =>
-      this.informationMaskHas(groups.get(field.key) ?? 'extra'))
+      this.infoWindowStore.informationMaskHas(groups.get(field.key) ?? 'extra'))
   }
 
   private updateSelectedLiveDetails(fields: Array<ObjectDetailField>): void {
@@ -9695,7 +9474,7 @@ private loadPlanetPositions(): void {
         this.objectDetailStore.selectedSatellitePassesRequested = false
         // Sensor tracking owns the camera. A gyro-mode search selects the
         // target and opens its card, but never starts a safe-area fly-to.
-        if (!this.gyroStore.gyroscopeEnabled && !this.isObserverPlanetSelection(incomingName)) {
+        if (!this.gyroStore.gyroscopeEnabled && !this.sessionToolStore.isObserverPlanetSelection(incomingName)) {
           if (placement === 'center') {
             this.navigateSelectedObjectTo(this.skyWidth / 2, this.skyHeight / 2, 'center')
           }
@@ -11435,9 +11214,9 @@ private loadPlanetPositions(): void {
             playbackVisible: this.scriptPlaybackVisible(),
             compact: this.scriptControlCompact(),
             displayName: scriptZh(this.scriptStore.scriptId.length > 0 ? this.scriptStore.scriptId : (this.scriptStore.scriptLaunchingName.length > 0 ? this.scriptStore.scriptLaunchingName : this.scriptStore.replayName)),
-            hasCaptions: this.visibleScriptCaptions().length > 0,
-            captionText: this.visibleScriptCaptionText(),
-            waitText: this.scriptWaitDisplayText(),
+            hasCaptions: this.scriptStore.visibleScriptCaptions().length > 0,
+            captionText: this.scriptStore.visibleScriptCaptionText(),
+            waitText: this.scriptStore.scriptWaitDisplayText(),
             rateText: (this.scriptStore.replaying ? this.scriptStore.replayRate : this.scriptStore.scriptRate).toFixed((this.scriptStore.replaying ? this.scriptStore.replayRate : this.scriptStore.scriptRate) < 1 ? 2 : 1) + 'x',
             keyButtonWidth: this.scriptKeyButtonWidth(),
             controlWidth: this.scriptControlWidth(),
@@ -11484,7 +11263,7 @@ private loadPlanetPositions(): void {
                 dockItemHeight: this.compactDockItemHeight(),
                 infoWinVisible: this.infoWindowStore.infoWinVisible,
                 bottomCardIndex: this.objectDetailStore.bottomCardIndex,
-                liveInfoVisible: this.selectedLiveInfoVisible(),
+                liveInfoVisible: this.infoWindowStore.selectedLiveInfoVisible(),
                 contentOpacity: this.objectDetailContentOpacity,
                 contentTranslateX: this.objectDetailContentTranslateX,
                 cardWidth: this.bottomCardWidth(),
@@ -11492,22 +11271,22 @@ private loadPlanetPositions(): void {
                 viewLock: this.viewSettingsStore.viewLock,
                 speechStatus: this.guideStore.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
-                iconName: this.objectInspectorIcon(),
-                distanceText: this.objectDistanceNoticeText(),
-                distanceSummaryText: this.objectDistanceSummary(),
-                imageHeight: this.objectInspectorImageHeight(),
+                iconName: this.objectDetailStore.objectInspectorIcon(),
+                distanceText: this.objectDetailStore.objectDistanceNoticeText(this.infoWindowStore.distanceInformationVisible()),
+                distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
+                imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
                 inlineModelSize: this.objectInspectorInlineModelSize(),
                 modelReady: this.objectInspectorModelReady(),
                 modelRendering: this.objectInspectorModelRendering,
                 hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-                modelNotice: this.objectInspectorModelNotice(),
+                modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
                 warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
                 fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
                 starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
-                satelliteVisible: this.selectedObjectIsArtificialSatellite(),
-                tleEpoch: this.selectedSatelliteTleEpoch(),
+                satelliteVisible: this.objectDetailStore.selectedObjectIsArtificialSatellite(),
+                tleEpoch: this.objectDetailStore.selectedSatelliteTleEpoch(),
                 accent: this.nmAccent(),
-                cultureVisible: this.selectedObjectIsConstellation(),
+                cultureVisible: this.objectDetailStore.selectedObjectIsConstellation(),
                 textColor: this.nmText(),
                 connectorVisible: this.overlayStore.objectDetailConnectorVisible,
                 connectorLength: this.objectDetailConnectorLength,
@@ -11589,7 +11368,7 @@ private loadPlanetPositions(): void {
                 gyroPanelTop: this.railTop() + 120,
                 infoWinVisible: this.infoWindowStore.infoWinVisible,
                 bottomCardIndex: this.objectDetailStore.bottomCardIndex,
-                liveInfoVisible: this.selectedLiveInfoVisible(),
+                liveInfoVisible: this.infoWindowStore.selectedLiveInfoVisible(),
                 contentOpacity: this.objectDetailContentOpacity,
                 contentTranslateX: this.objectDetailContentTranslateX,
                 cardWidth: this.bottomCardWidth(),
@@ -11597,22 +11376,22 @@ private loadPlanetPositions(): void {
                 viewLock: this.viewSettingsStore.viewLock,
                 speechStatus: this.guideStore.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
-                iconName: this.objectInspectorIcon(),
-                distanceText: this.objectDistanceNoticeText(),
-                distanceSummaryText: this.objectDistanceSummary(),
-                imageHeight: this.objectInspectorImageHeight(),
+                iconName: this.objectDetailStore.objectInspectorIcon(),
+                distanceText: this.objectDetailStore.objectDistanceNoticeText(this.infoWindowStore.distanceInformationVisible()),
+                distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
+                imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
                 inlineModelSize: this.objectInspectorInlineModelSize(),
                 modelReady: this.objectInspectorModelReady(),
                 modelRendering: this.objectInspectorModelRendering,
                 hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-                modelNotice: this.objectInspectorModelNotice(),
+                modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
                 warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
                 fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
                 starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
-                satelliteVisible: this.selectedObjectIsArtificialSatellite(),
-                tleEpoch: this.selectedSatelliteTleEpoch(),
+                satelliteVisible: this.objectDetailStore.selectedObjectIsArtificialSatellite(),
+                tleEpoch: this.objectDetailStore.selectedSatelliteTleEpoch(),
                 accent: this.nmAccent(),
-                cultureVisible: this.selectedObjectIsConstellation(),
+                cultureVisible: this.objectDetailStore.selectedObjectIsConstellation(),
                 textColor: this.nmText(),
                 connectorVisible: this.overlayStore.objectDetailConnectorVisible,
                 connectorLength: this.objectDetailConnectorLength,
@@ -11711,7 +11490,7 @@ private loadPlanetPositions(): void {
                 quickY: compactTopQuickY(),
                 infoWinVisible: this.infoWindowStore.infoWinVisible,
                 bottomCardIndex: this.objectDetailStore.bottomCardIndex,
-                liveInfoVisible: this.selectedLiveInfoVisible(),
+                liveInfoVisible: this.infoWindowStore.selectedLiveInfoVisible(),
                 contentOpacity: this.objectDetailContentOpacity,
                 contentTranslateX: this.objectDetailContentTranslateX,
                 cardWidth: this.bottomCardWidth(),
@@ -11719,22 +11498,22 @@ private loadPlanetPositions(): void {
                 viewLock: this.viewSettingsStore.viewLock,
                 speechStatus: this.guideStore.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
-                iconName: this.objectInspectorIcon(),
-                distanceText: this.objectDistanceNoticeText(),
-                distanceSummaryText: this.objectDistanceSummary(),
-                imageHeight: this.objectInspectorImageHeight(),
+                iconName: this.objectDetailStore.objectInspectorIcon(),
+                distanceText: this.objectDetailStore.objectDistanceNoticeText(this.infoWindowStore.distanceInformationVisible()),
+                distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
+                imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
                 inlineModelSize: this.objectInspectorInlineModelSize(),
                 modelReady: this.objectInspectorModelReady(),
                 modelRendering: this.objectInspectorModelRendering,
                 hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-                modelNotice: this.objectInspectorModelNotice(),
+                modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
                 warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
                 fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
                 starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
-                satelliteVisible: this.selectedObjectIsArtificialSatellite(),
-                tleEpoch: this.selectedSatelliteTleEpoch(),
+                satelliteVisible: this.objectDetailStore.selectedObjectIsArtificialSatellite(),
+                tleEpoch: this.objectDetailStore.selectedSatelliteTleEpoch(),
                 accent: this.nmAccent(),
-                cultureVisible: this.selectedObjectIsConstellation(),
+                cultureVisible: this.objectDetailStore.selectedObjectIsConstellation(),
                 textColor: this.nmText(),
                 connectorVisible: this.overlayStore.objectDetailConnectorVisible,
                 connectorLength: this.objectDetailConnectorLength,
@@ -11901,7 +11680,7 @@ private loadPlanetPositions(): void {
           ObjectInspectorModelOverlay({
             objectMediaStore: this.objectMediaStore,
             titleText: this.objectDetailStore.selectedName,
-            noticeText: this.objectInspectorModelNotice(),
+            noticeText: this.objectMediaStore.objectInspectorModelNotice(),
             topInset: this.mediaPreviewTopInset(),
             onCloseOverlay: () => { this.setObjectInspectorModelImmersive(false) },
             onResetView: () => { this.resetObjectInspectorModelView() },
@@ -12188,7 +11967,7 @@ private loadPlanetPositions(): void {
   // 它独立于右侧菜单面板（activePanel），选中天体时不再强制切换菜单，
   // 因此不会打扰用户正在进行的操作。
   private setTrackingState(enabled: boolean): void {
-    if (enabled && !this.hasSelectedObject()) {
+    if (enabled && !this.objectDetailStore.hasSelectedObject()) {
       this.flashHint(I18n.t('tracking_requires_selection'))
       return
     }
@@ -12523,7 +12302,7 @@ private loadPlanetPositions(): void {
   }
 
   private toggleObjectInspector(): void {
-    if (!this.hasSelectedObject()) {
+    if (!this.objectDetailStore.hasSelectedObject()) {
       this.flashHint(I18n.t('center_requires_selection'))
       return
     }
@@ -12759,14 +12538,6 @@ private loadPlanetPositions(): void {
 
   // Pad 端的详情保持为左侧检查器。它不接管星图，也不会随着实时数据刷新
   // 重新打开或改变位置；长资料和观测数字使用同一个连续滚动区。
-  private objectInspectorIcon(): string {
-    return catalogIconForObjectType(this.objectDetailStore.selectedType + ' ' + this.objectDetailStore.selectedObjectType, 'catalog_star')
-  }
-
-  private objectInspectorSearchText(): string {
-    return (this.objectDetailStore.selectedCatalogId + ' ' + this.objectDetailStore.selectedEnglishName + ' ' + this.objectDetailStore.selectedName).toLowerCase()
-  }
-
   private objectInspectorFilePath(relativePath: string): string {
     const path = this.stellariumFilesDir() + '/stellarium/' + relativePath
     try {
@@ -13001,7 +12772,7 @@ private loadPlanetPositions(): void {
   private refreshObjectInspectorMedia(): void {
     const planetTexturePath = objectInspectorPlanetTexturePath(this.objectDetailStore.selectedEnglishName)
     const deepSkyImageName = planetTexturePath.length === 0 && this.objectDetailStore.selectedDetailMediaPath.length === 0
-      ? objectInspectorDeepSkyImageName(objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType), this.objectInspectorSearchText())
+      ? objectInspectorDeepSkyImageName(objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType), this.objectDetailStore.objectInspectorSearchText())
       : ''
     const requestedPath = planetTexturePath.length > 0
       ? planetTexturePath
@@ -13069,7 +12840,7 @@ private loadPlanetPositions(): void {
     this.objectMediaStore.objectInspectorMediaPreviewLoading = false
     this.objectMediaStore.objectInspectorMediaPreviewFailed = false
     this.objectMediaStore.objectInspectorModelScale = 1
-    this.objectInspectorModelRotation = this.defaultObjectInspectorModelRotation()
+    this.objectInspectorModelRotation = this.objectMediaStore.defaultObjectInspectorModelRotation()
     this.objectInspectorModelLastPinchDistance = 0
     this.objectMediaStore.objectInspectorMediaLoading = shouldResolve || shouldDecode
     this.objectMediaStore.objectInspectorMediaDecoding = shouldDecode
@@ -13470,22 +13241,12 @@ private loadPlanetPositions(): void {
       (this.objectInspectorModelTexturePixels !== undefined && this.objectInspectorModelTextureWidth > 0 && this.objectInspectorModelTextureHeight > 0)
   }
 
-  private defaultObjectInspectorModelRotation(): number[] {
-    return this.objectMediaStore.objectInspectorProceduralKind === 'quasar' ? modelDrag(modelIdentity(), 0, -100) : modelIdentity()
-  }
-
   private resetObjectInspectorModelView(): void {
-    this.objectInspectorModelRotation = this.defaultObjectInspectorModelRotation()
+    this.objectInspectorModelRotation = this.objectMediaStore.defaultObjectInspectorModelRotation()
     this.objectMediaStore.objectInspectorModelScale = 1
     this.objectInspectorModelLastPinchDistance = 0
     this.objectMediaStore.objectInspectorModelInteracting = false
     this.requestObjectInspectorModelRender(true)
-  }
-
-  private objectInspectorModelNotice(): string {
-    return this.objectMediaStore.objectInspectorProceduralKind.length > 0
-      ? I18n.t('model_basis_' + this.objectMediaStore.objectInspectorProceduralKind)
-      : I18n.t('model_lighting_note')
   }
 
   private setObjectInspectorModelImmersive(open: boolean): void {
@@ -13570,11 +13331,6 @@ private loadPlanetPositions(): void {
     return Math.min(200, Math.max(80, this.bottomCardWidth() - 112))
   }
 
-  private objectInspectorImageHeight(): number {
-    return this.objectMediaStore.objectInspectorMediaViewportHeight > 0
-      ? Math.max(72, Math.min(210, this.objectMediaStore.objectInspectorMediaViewportHeight - 88)) : 210
-  }
-
 
 
   private selectedDisplayValue(key: string): string {
@@ -13606,38 +13362,12 @@ private loadPlanetPositions(): void {
       case 'selectedSize': return this.objectDetailStore.selectedSize
       case 'selectedTransit': return this.objectDetailStore.selectedTransit
       case 'extinctionUnits': return this.objectDetailStore.selectedExtinction.length > 0 ? this.objectDetailStore.selectedExtinction + ' 等' : ''
-      case 'atmosphere': return this.expandedAtmosphereSummary()
+      case 'atmosphere': return this.objectDetailStore.expandedAtmosphereSummary()
       default: return ''
     }
   }
 
-  private expandedAtmosphereSummary(): string {
-    const apparent = this.objectDetailStore.selectedApparentMagnitude.length > 0 ? '大气后 ' + this.objectDetailStore.selectedApparentMagnitude + ' 等' : ''
-    const airmass = this.objectDetailStore.selectedAirmass.length > 0 ? '气团 ' + this.objectDetailStore.selectedAirmass : ''
-    return (apparent + '  ' + airmass).trim()
-  }
 
-
-
-  private distanceInformationVisible(): boolean {
-    return this.infoWindowStore.infoLevel <= 1 && (this.infoWindowStore.informationMode !== 'custom' || this.informationMaskHas('distance'))
-  }
-
-  private objectDistanceSummary(): string {
-    if (!this.distanceInformationVisible()) return '--'
-    return this.objectDetailStore.selectedDistance.length > 0 ? (this.objectDetailStore.selectedDistanceCompact || this.objectDetailStore.selectedDistance) : I18n.t('distance_missing')
-  }
-
-  private objectDistanceNoticeText(): string {
-    if (!this.distanceInformationVisible()) return ''
-    const status = this.objectDetailStore.selectedDistanceStatus
-    if (status === 'invalid_orbit') return I18n.t('satellite_propagation_invalid')
-    if (this.objectDetailStore.selectedTleOutdated) return I18n.t('satellite_tle_stale')
-    if (status === 'catalog' || status === 'computed' || status.length === 0) return ''
-    const key = ['low_confidence', 'redshift_only', 'invalid_orbit', 'unsupported_unit', 'estimated'].includes(status)
-      ? status : 'unavailable'
-    return I18n.t('distance_' + key)
-  }
 
 
 
@@ -13750,25 +13480,6 @@ private loadPlanetPositions(): void {
   }
 
 
-  private selectedObjectIsConstellation(): boolean {
-    const type = (this.objectDetailStore.selectedType + ' ' + this.objectDetailStore.selectedObjectType).toLowerCase()
-    return type.indexOf('constellation') >= 0 || type.indexOf('星座') >= 0
-  }
-
-  private selectedObjectIsArtificialSatellite(): boolean {
-    if (this.objectDetailStore.selectedSatellitePassesLoaded) return true
-    for (let index = 0; index < this.objectDetailStore.selectedDetailFields.length; index++) {
-      if (this.objectDetailStore.selectedDetailFields[index].key === 'tleEpoch') return true
-    }
-    const type = (this.objectDetailStore.selectedType + ' ' + this.objectDetailStore.selectedObjectType).toLowerCase()
-    return type.indexOf('artificial satellite') >= 0 || type.indexOf('人造卫星') >= 0
-  }
-
-
-  private selectedSatelliteTleEpoch(): string {
-    if (this.objectDetailStore.selectedSatellitePasses.length === 0) return ''
-    return this.objectDetailStore.selectedSatellitePasses[0].tleEpoch ?? ''
-  }
 
 
 
@@ -14002,18 +13713,18 @@ private loadPlanetPositions(): void {
         speechStatus: this.guideStore.speechStatus,
         observingListStore: this.obsListStore,
         isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
-        imageHeight: this.objectInspectorImageHeight(),
-        iconName: this.objectInspectorIcon(),
+        imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
+        iconName: this.objectDetailStore.objectInspectorIcon(),
         inlineModelSize: this.objectInspectorInlineModelSize(),
         modelReady: this.objectInspectorModelReady(),
         modelRendering: this.objectInspectorModelRendering,
         hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-        modelNotice: this.objectInspectorModelNotice(),
+        modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
         warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
         fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
         starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
-        satVisible: this.selectedObjectIsArtificialSatellite(),
-        tleEpoch: this.selectedSatelliteTleEpoch(),
+        satVisible: this.objectDetailStore.selectedObjectIsArtificialSatellite(),
+        tleEpoch: this.objectDetailStore.selectedSatelliteTleEpoch(),
         textColor: this.nmText(),
         panelColor: this.nmBg(),
         borderTint: this.nmBorder(),
@@ -14138,7 +13849,7 @@ private loadPlanetPositions(): void {
         layerTabs: this.layerTabItems(),
         skyCultureArtStates: this.skyCultureArtStates,
         skyCultureArtThumbnailPixelMaps: this.skyCultureArtThumbnailPixelMaps,
-        narrationParagraphs: this.skyCultureNarrationParagraphs(),
+        narrationParagraphs: this.skyCultureViewStore.skyCultureNarrationParagraphs(),
         mapContext: this.skyCultureMapContext,
         textColor: this.nmText(),
         subColor: this.nmSub(),
@@ -14262,11 +13973,11 @@ private loadPlanetPositions(): void {
       SearchPanel({
         store: this.searchStore,
         languageRevision: this.languageStore.languageRevision,
-        visibilityLabel: this.searchVisibilityLabel(),
-        instrumentLabel: this.searchInstrumentLabel(),
-        categories: this.searchAllCategoryOptions(),
-        categoryIconKey: this.searchCategoryIcon(this.searchStore.searchCategory),
-        categoryLabel: this.searchCategoryLabel(),
+        visibilityLabel: this.searchStore.searchVisibilityLabel(),
+        instrumentLabel: this.searchStore.searchInstrumentLabel(),
+        categories: this.catalogStore.searchAllCategoryOptions(),
+        categoryIconKey: this.catalogStore.searchCategoryIcon(this.searchStore.searchCategory),
+        categoryLabel: this.catalogStore.searchCategoryLabel(this.searchStore.searchCategory),
         textColor: this.nmText(),
         subColor: this.nmSub(),
         panelColor: this.nmBg(),
@@ -14295,10 +14006,10 @@ private loadPlanetPositions(): void {
         onSelectCategory: (code: string) => { this.selectSearchFilterCategory(code) },
         onSelectVisibility: (filter: string) => { this.selectSearchVisibilityFilter(filter) },
         onSelectInstrument: (filter: string) => { this.selectSearchInstrumentFilter(filter) },
-        suggestionSubtitle: (title: string, englishName: string) => { return this.celestialSubtitle(title, englishName) },
+        suggestionSubtitle: (title: string, englishName: string) => { return this.searchStore.celestialSubtitle(title, englishName) },
         onSelectSuggestion: (item: SearchSug) => { this.selectSearchSuggestion(item) },
-        iconFor: (item: NameItem) => { return this.categoryObjectIcon(item) },
-        categorySubtitle: (item: NameItem) => { return this.categoryObservationSubtitle(item) },
+        iconFor: (item: NameItem) => { return this.catalogStore.categoryObjectIcon(item, this.searchStore.searchCategory) },
+        categorySubtitle: (item: NameItem) => { return this.searchStore.categoryObservationSubtitle(item) },
         onOpenCategories: () => { this.setSearchFilterPage('categories') },
         onOpenFilters: () => { this.setSearchFilterPage('root') },
         onRetry: () => { this.searchStore.loadCategoryObjects(this.searchStore.searchCategory) },
@@ -14348,14 +14059,14 @@ private loadPlanetPositions(): void {
         panelColor: this.nmBg(),
         lineColor: this.nmBorder(),
         inputColor: this.nmInput(),
-        informationMaskHas: (key: string) => { return this.informationMaskHas(key) },
+        informationMaskHas: (key: string) => { return this.infoWindowStore.informationMaskHas(key) },
         pluginMetaLine: (plugin: PluginItem) => { return this.pluginMetaLine(plugin) },
         pluginFeatureDestination: (id: string) => { return this.pluginFeatureDestination(id) },
         pluginFeatureIsActionable: (id: string) => { return this.pluginFeatureIsActionable(id) },
         pluginFeatureActionLabel: (id: string) => { return this.pluginFeatureActionLabel(id) },
-        scriptMetaLine: (filename: string) => { return this.scriptMetaLine(filename) },
-        scriptSourceLine: (filename: string) => { return this.scriptSourceLine(filename) },
-        hasSelectedObject: () => { return this.hasSelectedObject() },
+        scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
+        scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
+        hasSelectedObject: () => { return this.objectDetailStore.hasSelectedObject() },
         selectConfigTab: (tabId: number) => { this.selectConfigTab(tabId) },
         setViewCoordinatesVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
         setViewCoordinateFamily: (family: string) => { this.setViewCoordinateFamily(family) },
@@ -14412,7 +14123,7 @@ private loadPlanetPositions(): void {
           annualBarHeight: (altitude: number | undefined) => this.annualBarHeight(altitude),
           annualBarWidth: () => this.annualBarWidth(),
           annualMaxLabel: () => this.astroStore.annualMaxLabel(),
-          astroNeedsSelectedObject: () => this.astroNeedsSelectedObject(),
+          astroNeedsSelectedObject: () => this.astroStore.astroNeedsSelectedObject(),
           azimuthNowLabel: () => this.azimuthNowLabel(),
           callNative: (name: string, payload?: string) => { this.callNative(name, payload) },
           celestialPositionSubtitle: (position: CelestialPosition) => this.celestialPositionSubtitle(position),
@@ -14422,7 +14133,7 @@ private loadPlanetPositions(): void {
           chooseGraphStartDate: () => { this.chooseGraphStartDate() },
           chooseRtsCalendarStartDate: () => { this.chooseRtsCalendarStartDate() },
           eclipseStartOptionLabel: (offsetDays: number) => this.astroStore.eclipseStartOptionLabel(offsetDays),
-          ephemerisStartOptionLabel: (offsetDays: number) => this.ephemerisStartOptionLabel(offsetDays),
+          ephemerisStartOptionLabel: (offsetDays: number) => this.ephemerisStore.ephemerisStartOptionLabel(offsetDays),
           exportCurrentAstroCsv: () => this.exportCurrentAstroCsv(),
           filteredEclipses: () => this.astroStore.filteredEclipses(),
           fmtClock: (s: string | undefined) => this.fmtClock(s),
@@ -14431,8 +14142,8 @@ private loadPlanetPositions(): void {
           fmtNum: (v: number | undefined, digits: number, suffix: string) => this.fmtNum(v, digits, suffix),
           graphCustomStartLabel: () => this.astroStore.graphCustomStartLabel(),
           graphTargetLabel: () => this.astroStore.graphTargetLabel(),
-          hasSelectedObject: () => this.hasSelectedObject(),
-          hecPointColor: (position: HeliocentricPosition) => this.hecPointColor(position),
+          hasSelectedObject: () => this.objectDetailStore.hasSelectedObject(),
+          hecPointColor: (position: HeliocentricPosition) => hecPointColor(position, this.nmAccent()),
           hecPointLeft: (position: HeliocentricPosition) => this.hecPointLeft(position),
           hecPointTop: (position: HeliocentricPosition) => this.hecPointTop(position),
           hecTitle: (position: HeliocentricPosition) => this.hecTitle(position),
@@ -14680,8 +14391,8 @@ private loadPlanetPositions(): void {
         accentColor: this.nmAccent(),
         panelColor: this.nmBg(),
         lineColor: this.nmBorder(),
-        scriptMetaLine: (filename: string) => { return this.scriptMetaLine(filename) },
-        scriptSourceLine: (filename: string) => { return this.scriptSourceLine(filename) },
+        scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
+        scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
         onStartGuide: (id: string) => { this.executeGuideRequest('startGuide', id) },
         onStopPlayback: () => { this.stopScriptPlayback() },
         onImportScript: () => { this.importScriptFile() },
@@ -15040,7 +14751,7 @@ private loadPlanetPositions(): void {
       return I18n.t('panel_observing_list')
     }
     if (this.activePanel === 'time') {
-      return I18n.t('i0054') + ' ' + this.timePanelClockText()
+      return I18n.t('i0054') + ' ' + this.timeStore.timePanelClockText()
     }
     if (this.activePanel === 'place') {
       return I18n.t('i0014')
@@ -15124,26 +14835,13 @@ private loadPlanetPositions(): void {
 
   private panelSubtitle(): string {
     if (this.activePanel === 'time') {
-      return this.timePanelDateText()
+      return this.timeStore.timePanelDateText()
     }
     return ''
   }
 
   /** 面板标题行的时分秒：从 timeStore.observationTimeText 拆出第一个空格之后的部分。 */
-  private timePanelClockText(): string {
-    const text = this.timeStore.observationTimeText
-    const idx = text.indexOf(' ')
-    return idx > 0 ? text.substring(idx + 1) : text
-  }
-
   /** 面板副标题行的年月日（附带当前时间速率）。 */
-  private timePanelDateText(): string {
-    const text = this.timeStore.observationTimeText
-    const idx = text.indexOf(' ')
-    const date = idx > 0 ? text.substring(0, idx) : ''
-    return date.length > 0 ? date + ' · ' + this.timeStore.timeRateText : this.timeStore.timeRateText
-  }
-
   /** 图层开关的统一写回：setSkyDisplay* 走 setSkyDisplaySetting，其余带 cmd 的走 setBridgeFlag，
    *  无 cmd 的走 setLayer；与原 @Builder switchRow 的 onChange 分派逐字等价（含 flashHint 提示）。 */
   private applyLayerSwitch(actionId: string, cmd: string, value: boolean): void {

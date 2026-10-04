@@ -30,4 +30,14 @@ export class EphemerisStore {
   ephemerisStartYear: number = new Date().getFullYear()
   ephemerisStartMonth: number = new Date().getMonth() + 1
   ephemerisStartDay: number = new Date().getDate()
+
+  // 星历表起始日期选项标签（原宿主 ephemerisStartOptionLabel，§14 A2-3 逐字搬入）。
+  // 读本 store 的 ephemerisStartYear/Month/Day，按 §14.3「读本域 store 字段 → 并入该 store 方法」。
+  ephemerisStartOptionLabel(offsetDays: number): string {
+    if (offsetDays < 0) {
+      return this.ephemerisStartYear.toString() + '-' + this.ephemerisStartMonth.toString().padStart(2, '0') + '-' + this.ephemerisStartDay.toString().padStart(2, '0')
+    }
+    if (offsetDays === 0) return '当前'
+    return '+' + offsetDays.toString() + ' 天'
+  }
 }

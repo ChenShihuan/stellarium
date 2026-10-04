@@ -4,6 +4,8 @@ import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 
 const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
+// §14 A2-3：分类选项族（searchCategoryOptions / searchAllCategoryOptions 等）已下沉 CatalogStore。
+const catalogStore = readFileSync(new URL('../harmonyos/ets-source/state/CatalogStore.ets', import.meta.url), 'utf8');
 const read = name => readFileSync(new URL('../harmonyos/ets-source/panels/search/' + name + '.ets', import.meta.url), 'utf8');
 // 搜索面板已组件化：分类/筛选选择器在 SearchCategoryBrowse，筛选页切换在 SearchFilterMenu，目录行在 CatalogFilterRow。
 const searchPanels = ['SearchBar', 'SearchSuggestions', 'SearchFilterMenu', 'SearchFilterChips', 'CatalogFilterRow',
@@ -11,11 +13,16 @@ const searchPanels = ['SearchBar', 'SearchSuggestions', 'SearchFilterMenu', 'Sea
 // 搜索面板分支已下沉为 SearchPanel 组件（Phase 4e），浏览器 Scroll 的 id/align 现在组件内。
 const searchPanelFile = readFileSync(new URL('../harmonyos/ets-source/panels/panels/SearchPanel.ets', import.meta.url), 'utf8');
 
+const methodSources = [source, catalogStore];
 function controllerFor(names) {
   const methods = names.map(name => {
-    const start = source.indexOf('  private ' + name + '(');
-    assert.ok(start >= 0, name);
-    return source.slice(start, source.indexOf('\n  }', start) + 4);
+    for (const src of methodSources) {
+      let start = src.indexOf('  private ' + name + '(');
+      if (start < 0) start = src.indexOf('\n  ' + name + '(');
+      if (start >= 0) return src.slice(start, src.indexOf('\n  }', start) + 4);
+    }
+    assert.ok(false, name);
+    return '';
   });
   const Controller = new Function('Curve', stripTypeScriptTypes('class Controller {\n' + methods.join('\n') + '\n}') + ';return Controller;')({ EaseInOut: 'EaseInOut' });
   return new Controller();
@@ -39,7 +46,7 @@ test('choosing a category returns to results without clearing observing filters'
   const errors = [];
   Object.assign(controller, { searchStore: { searchFilterPage: 'categories', searchVisibilityFilter: 'above',
     searchInstrumentFilter: 'binocular', loadCategoryObjects: category => loads.push(category) },
-    searchAllCategoryOptions: () => [{ code: 'satellite' }],
+    catalogStore: { searchAllCategoryOptions: () => [{ code: 'satellite' }] },
     getUIContext: () => ({ animateTo: (_options, callback) => callback() }),
     searchPanelScroller: { scrollTo: () => {} },
     publishSearchBrowserState: error => errors.push(error) });

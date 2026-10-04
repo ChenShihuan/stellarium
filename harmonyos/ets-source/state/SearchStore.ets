@@ -1,6 +1,8 @@
 import hilog from '@ohos.hilog'
 import { NameItem, SearchSug, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { ConstellationNavigationItem } from '../pages/MainWindowModels'
+import { I18n } from '../pages/I18n'
+import { messierNumberOf, minorPlanetNumberOf } from '../common/derive/astro'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → SearchStore 的跨域只读 / 助手 / 存储注入（§13.1 规则 6 / §14.8 规则 2）。
@@ -19,9 +21,9 @@ export interface SearchHostHooks {
   categoryModuleIdFor(category: string): string
   // 确保插件已加载（loadCategoryObjects 的 Satellites 分支）。
   ensurePluginLoaded(pluginName: string, callback: () => void, failureCallback?: () => void): void
-  // 天体标题 / 副标题（loadMoreCategoryObjects 生成 NameItem）。
+  // 天体标题（loadMoreCategoryObjects 生成 NameItem）；副标题已随 §14 A2-3 下沉本 store 方法，
+  // 故不再是 hook。
   celestialTitle(nativeName: string, englishName: string): string
-  celestialSubtitle(title: string, englishName: string): string
   // 搜索历史 Preferences 原始读写（宿主用 @ohos.data.preferences 实现）。
   readSearchHistoryStorage(): Promise<string>
   writeSearchHistoryStorage(json: string): Promise<void>
@@ -190,7 +192,7 @@ export class SearchStore {
   // 差异仅：this.searchStore.<f> → this.<f>、this.categoryOffset/categoryRequestSerial → this.<f>、
   // this.CATEGORY_PAGE_SIZE → this.CATEGORY_PAGE_SIZE（同 store 常量）、
   // this.callNativeWhenReady → port.requestWhenReady（重试档 0/100/60 逐字保留、onFailure 由第 4 参传入）、
-  // this.celestialTitle / this.celestialSubtitle → hooks.celestialTitle / hooks.celestialSubtitle。
+  // this.celestialTitle → hooks.celestialTitle（副标题经 §14 A2-3 下沉本 store 方法）。
   loadMoreCategoryObjects(): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -226,7 +228,7 @@ export class SearchStore {
         // already comes from StelObject::getNameI18n() and the official sky
         // translation resources loaded by the native core.
         const title = hooks.celestialTitle(items[i], key)
-        browse.push({ name: key, zh: title, subtitle: hooks.celestialSubtitle(title, key), type: types[i] ?? '', altitude: altitudes[i], magnitude: magnitudes[i], visibleNow: visibleNow[i] === true })
+        browse.push({ name: key, zh: title, subtitle: this.celestialSubtitle(title, key), type: types[i] ?? '', altitude: altitudes[i], magnitude: magnitudes[i], visibleNow: visibleNow[i] === true })
       }
       const combined = this.categoryObjects.concat(browse)
       this.categoryObjects = combined
@@ -276,5 +278,58 @@ export class SearchStore {
     } catch (e) {
       hilog.warn(0xD002, 'Stellarium', 'save search history failed: %{public}s', String(e))
     }
+  }
+
+  // ==== 搜索域「取值/标签」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  //
+  // 均读本 store 的搜索筛选/当前分类字段（searchVisibilityFilter / searchInstrumentFilter /
+  // searchCategory），按 §14.3「读本域 store 字段 → 并入该 store 方法（零入参）」下沉；
+  // 函数体逐字保留，仅去掉宿主前缀。
+
+  // 可见性筛选的当前标签（原宿主 searchVisibilityLabel）。
+  searchVisibilityLabel(): string {
+    if (this.searchVisibilityFilter === 'above') return I18n.t('search_above_horizon')
+    if (this.searchVisibilityFilter === 'good') return I18n.t('search_good_observing')
+    return ''
+  }
+
+  // 观测设备筛选的当前标签（原宿主 searchInstrumentLabel）。
+  searchInstrumentLabel(): string {
+    if (this.searchInstrumentFilter === 'naked') return I18n.t('search_naked_eye')
+    if (this.searchInstrumentFilter === 'binocular') return I18n.t('search_binoculars')
+    if (this.searchInstrumentFilter === 'telescope') return I18n.t('search_telescope')
+    return ''
+  }
+
+  // 天体副标题（目录号 / 小行星永久编号；原宿主 celestialSubtitle）。
+  celestialSubtitle(title: string, englishName: string): string {
+    const parts: string[] = []
+    if (englishName.length > 0 && title.trim().toLowerCase() !== englishName.trim().toLowerCase()) {
+      parts.push(englishName.trim())
+    }
+    const messier = messierNumberOf(englishName)
+    if (messier.length > 0) { parts.push(I18n.format('search_catalog_number', ['M' + messier])) }
+    if (this.searchCategory === 'asteroid') {
+      const number = minorPlanetNumberOf(englishName)
+      if (number.length > 0) { parts.push(I18n.format('search_permanent_number', [number])) }
+    }
+    return parts.join(' · ')
+  }
+
+  // 分类浏览条目的副标题（原宿主 categoryObservationSubtitle）。
+  categoryObservationSubtitle(item: NameItem): string {
+    const parts: string[] = []
+    const catalogText = this.celestialSubtitle(String(item.zh ?? item.name), item.name)
+    if (catalogText.length > 0) parts.push(catalogText)
+    if (item.visibleNow !== undefined) {
+      parts.push(item.visibleNow ? I18n.t('search_visible_now') : I18n.t('search_below_horizon'))
+    }
+    if (item.altitude !== undefined && Number.isFinite(item.altitude)) {
+      parts.push(I18n.format('search_altitude', [item.altitude.toFixed(0)]))
+    }
+    if (item.magnitude !== undefined && Number.isFinite(item.magnitude) && item.magnitude < 90) {
+      parts.push(I18n.format('search_magnitude', [item.magnitude.toFixed(1)]))
+    }
+    return parts.join(' · ')
   }
 }
