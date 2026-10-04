@@ -32,13 +32,14 @@ function harness() {
   const animations = [];
   const loads = [];
   Object.assign(controller, {
-    astroStore: { astroTab: 5, astroGroup: 0, astroContentOpacity: 1, astroContentOffsetX: 0 },
+    // §14 B2A：loadAstroTab 已下沉 state/AstroStore.ets，改由 astroStore 上的方法触发；
+    // loadWutTargets 在本提交仍留宿主（后续提交再下沉 WutStore）。
+    astroStore: { astroTab: 5, astroGroup: 0, astroContentOpacity: 1, astroContentOffsetX: 0, loadAstroTab: tab => loads.push(tab) },
     astroRequestedTab: -1, astroTransitionId: 0,
     panelVisible: true, activePanel: 'astro',
-    wutStore: { wutPeriod: 'evening', wutMinAltitude: 0, wutMaxMagnitude: 6, wutDirection: 'all' },
+    wutStore: { wutPeriod: 'evening', wutMinAltitude: 0, wutMaxMagnitude: 6, wutDirection: 'all', loadWutTargets: () => loads.push('wut') },
     astroPanelScroller: { scrollTo: () => {} },
     publishAstroPanelState: () => {}, saveAppSettings: () => {},
-    loadAstroTab: tab => loads.push(tab), loadWutTargets: () => loads.push('wut'),
     getUIContext: () => ({ animateTo: (options, update) => {
       animations.push(options);
       update();
