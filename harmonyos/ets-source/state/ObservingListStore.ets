@@ -1,3 +1,16 @@
+import hilog from '@ohos.hilog'
+import { parseObservingList } from '../common/derive/skycult'
+
+// 宿主 → ObservingListStore 的 Preferences 读写注入（§13.1 规则 6 / §14.8 规则 2：store 不得
+// import NAPI/UI 上下文，故 preferences + getUIContext 职责整体经 hooks 提供；先例
+// ObjectMediaHostHooks.readRawSidecar）。parseObservingList 是 A1 纯函数，store 直接 import。
+export interface ObservingListHostHooks {
+  // 读 Preferences 'observingList' 原始 JSON（无则 ''）；宿主用 @ohos.data.preferences 实现。
+  readObservingListStorage(): Promise<string>
+  // 首次读取时把内存值迁移写回 Preferences；宿主用 @ohos.data.preferences 实现。
+  writeObservingListStorage(json: string): Promise<void>
+}
+
 // 观测列表（observing list）域状态（review §2.7："Prop 风格 → Store 风格"）。
 //
 // 原宿主 2 个 @State：observingList（用户收藏的天体英文名列表，持久化于 Preferences /
@@ -16,4 +29,33 @@
 export class ObservingListStore {
   observingList: string[] = []
   observingListReady: boolean = false
+
+  // 宿主 Preferences / UI 上下文注入（§14 B2R-4 loadObservingListFromStorage）。
+  private hooks: ObservingListHostHooks | null = null
+
+  attachHooks(hooks: ObservingListHostHooks): void {
+    this.hooks = hooks
+  }
+
+  // 首次启动从 Preferences 载入观测列表（原宿主 loadObservingListFromStorage，函数体逐字搬入）。
+  // 差异仅：getUIContext + preferences I/O → hooks.read/writeObservingListStorage（store 不 import
+  // NAPI/UI）；this.obsListStore.<f> → this.<f>；parseObservingList 改由本 store import。
+  // 空库时把内存值迁移写回的行为逐字保留。
+  async loadObservingListFromStorage(): Promise<void> {
+    const hooks = this.hooks
+    try {
+      const jsonStr: string = hooks !== null ? await hooks.readObservingListStorage() : ''
+      if (jsonStr.length > 0) {
+        this.observingList = parseObservingList(jsonStr)
+      } else if (this.observingList.length > 0 && hooks !== null) {
+        // Migrate the pre-existing in-memory value on the first durable read.
+        await hooks.writeObservingListStorage(JSON.stringify(this.observingList))
+      }
+      AppStorage.setOrCreate('observingList', JSON.stringify(this.observingList))
+    } catch (e) {
+      hilog.warn(0xD002, 'Stellarium', 'load observing list failed: %{public}s', String(e))
+    } finally {
+      this.observingListReady = true
+    }
+  }
 }
