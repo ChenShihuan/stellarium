@@ -194,8 +194,9 @@ test('incomplete installations are repaired asynchronously, never by full sync e
   const resources = read('qability/StellariumResourceBootstrap.ets');
   const method = resources.match(/function hasStartupResourceFiles\([^)]*\): boolean \{[\s\S]*?\n\}/)[0];
   let missing = '';
-  const check = new Function('exists', 'MARKER', 'SKYCULTURE_ART_COMPAT_MARKER', plain(method) + ';return hasStartupResourceFiles;')(
-    path => !missing || !path.endsWith(missing), 'marker', 'compat');
+  const check = new Function('exists', 'fileSize', 'hilog', 'LOG_DOMAIN', 'LOG_TAG', 'MARKER', 'SKYCULTURE_ART_COMPAT_MARKER', plain(method) + ';return hasStartupResourceFiles;')(
+    path => !missing || !path.endsWith(missing), path => (!missing || !path.endsWith(missing)) ? 1 : 0,
+    logger, 0, 'test', 'marker', 'compat');
   assert.equal(check('/sandbox'), true);
   for (const file of ['marker', 'compat', 'data/default_cfg.ini', 'translations/stellarium/zh_CN.qm', 'skycultures/modern/illustrations/andromeda.png']) {
     missing = file;
