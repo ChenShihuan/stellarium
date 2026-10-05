@@ -1007,6 +1007,32 @@ export interface CommandPort {
 
 > **A2-2 已完成（Phase A2-2，2026-10-04，单提交）**：按行数降序取非热路径 **15 个**（开工重测宿主内余项边界）——`gyroMagneticHeadingFromDeviceVectors`(25) 读 §2.7.1 保留裸字段 → `common/derive/gyro.ets` + 显式入参；`archaeoLineSettingValue`(21) → `ArchaeoStore`；`currentSkyCultureMakerDraft`(21) → `SkyCultureMakerStore`；`makeAstroCsv`(19) → `AstroStore`（`fmtDateTime` 经既有 `AstroHostHooks` 注入）；`quickLocationSearchItems`(18) → `LocationPickerStore`；`filteredEclipses`(14) 与 `annualMaxLabel`(12)/`lunarElongationClosestLabel`(12)/`altAzMaxLabel`(11)/`altAzVisibleHours`(11)/`altAzNowLabel`(7)/`rtsCalendarStartOptionLabel`(7)/`eclipseStartOptionLabel`(7)/`graphCustomStartLabel`(4) → `AstroStore`；`telescopeCircleValues`(13) → `TelescopeStore`。**主动停下 2 个**：`currentAstroCsvExport`(76)（读 astro+wut 两域 + 3 宿主标题助手）、`objectDetailConnectorObstacles`(45)（A2-G 几何簇，含 8 几何助手）。函数体逐字搬入，仅改取值方式（`this.<store>.<field>`→`this.<field>`；`AstroPanelHost` 端口 lambda 改指向 store，组件接口/`@Prop` 未删除）；删 2 个失效 import（`csvCell`/`hourOffsetLabel`）；宿主零残留、store 零双写。宿主 `private` **747 → 732**、单体 **15,531 → 15,309**（−222）。构建/契约绿（44 锚点），全量脚本仅 §13.6 的 7 个环境类失败，模拟器冒烟（更多功能/观测工作区/目镜模拟 + 位置面板，`pidof` 全程存活）；astro/考古天文/位置快速搜索的端到端渲染待真机（UI-only 通道 `openUiPanel` 无回包）。**A2 进度：21 / 214。**
 
+#### 14.3.1 A2 重排（2026-10-04，放宽粒度；覆盖上表"12 片"的余量口径）
+
+**背景**：A2-1/A2-2 两片（各 6/15 个）按"每片 ≤15 个或 ≤350 行"推进，余量约 190 个，按原粒度需再 12+ 片；且大量条目是**布局/命中几何**（改造成本高、收益低、真机离线时不可验）。经实测量化后重排（用户 2026-10-04 指示"加快进度、放宽每片方法与行数"）。
+
+**实测口径**：宿主 `private`、非 `void`/`Promise` 返回、名字非动作动词、无成员写、无 IO/桥/路由/定时器/`AppStorage`/`hilog`、且读 `this.<field>`。按此口径 A2-1/A2-2 之后余量 = **153 个 / 1,131 行**（严于 §2.12 的 214；差额多为判定为动作/写状态的条目 —— **每片开工前仍以重测为准**）。拆两组：
+
+| 组 | 方法数 | 行数 | 判据 | 处置 |
+|---|---:|---:|---|---|
+| **A-保留组** | **31** | 127 | **仅**读 §2.7.1 保留裸字段，且不读任何 store | **登记为宿主控制器逻辑，永久保留**（与 §2.5"宿主是控制器"一致） |
+| **B-下沉组** | **122** | 1,004 | 读 store 字段，或读宿主**非保留** scratch 字段 | 下沉（见下 4 片） |
+
+**B-下沉组重排为 4 片（每片 ~30–45 个方法 / ~300–500 行）**：
+
+| 片 | 范围（示例，开工以重测为准） | 方法数 | 估行数 | 去向 |
+|---|---|---:|---:|---|
+| **A2-3** | 域取值/标签/选项族：`searchCategoryOptions` `searchAllCategoryOptions` `searchDynamicCategoryOptions` `searchCategoryLabel` `searchCategoryIcon` `categoryModuleIdFor` `categoryObservationSubtitle` `objectDistanceNoticeText` `hecPointColor` `scriptMetaLine` `sessionHandoff` 等 | ~35 | ~300 | 各域 store 方法 或 `derive/<域>.ets` + 显式入参 |
+| **A2-4** | 布局/几何（消费方组件自有数据）：`panelLeft` `bottomCardWidth` `baseBottomCardX/Y` `objectActionBarY` `locationMapWidth` `responsiveFoldAngle` `compactPanelUsableHeight` `expandedUiAllowed` `isCompactMorePoint` `dragFollowAlpha` `clampedViewCoordinateOffset*` `objectDetailMarkerSize` 等 | ~45 | ~350 | **组件文件级函数 + 显式入参**（A2-G） |
+| **A2-5** | 大项与耦合项：`panelTitle`(101) `currentAstroCsvExport`(76) `hecLayoutPositions`(56) `objectDetailConnectorObstacles`(45) `isDockPoint` `isPanelBackPoint` `isObjectDetailCardPoint` `expandedDock*` `chromeRowPosXRight` `panelSubtitle` `currentGuideStep` 等 | ~35 | ~450 | 组件文件级 / 域 store（按读取字段定） |
+| **A2-6** | **热路径收尾**：`isUiPoint`(84) `skyZoomButtonAt`(26) `dockActionAt`(14) `compactQuickIdAt`(9) `expandedSafeTargetPoint`(16) `inferredPanelRouteDirection`(16) + 残留 | ~12 | ~200 | 组件文件级 + **真机命中/截图对照**（真机离线时记为待验） |
+
+**合计**：A2 = 已完成 21 + A-保留 31（登记）+ B 4 片 ≈ 153 → 余项按新粒度 **4 片**（原口径需 11+ 片）。
+
+**A-保留组登记（进 §2.7.1 的"宿主控制器逻辑"子类；31 个由每片开工重测产出全量）**：`catalogHealthText` `catalogHealthColor` `bottomCardWidth` `baseBottomCardX/Y` `objectActionBarY` `locationMapWidth` `responsiveFoldAngle` `compactPanelUsableHeight` `expandedUiAllowed` `isCompactMorePoint` `dragFollowAlpha` `objectDetailMarkerSize` `clampedViewCoordinateOffset*` …。判据固定为："其全部读取项均 ∈ §2.7.1 保留集合，且不读任何 store"。
+
+**放宽后的片级约束**：每片 ≤ ~45 个方法、≤ ~500 行变更、≤ ~3 个文件族；其余仍守 §14.8 七条与 §13.1/§13.2/§13.3。
+
 ### 14.4 轨道 B1：24 个可直接沉（6 片，最优先）
 
 | 片 | 目标 store | 方法（行数） |
