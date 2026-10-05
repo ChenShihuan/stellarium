@@ -21,7 +21,7 @@ function method(name) {
 
 test('all four settings groups read current state rather than a captured selection boolean', () => {
   const selected = method('private settingsChoiceSelected(');
-  assert.ok(selected.includes('this.informationMode === value'));
+  assert.ok(selected.includes('this.infoWindowStore.informationMode === value'));
   for (const state of ['configDateFormat', 'configTimeFormat', 'startupTimeMode']) {
     assert.ok(selected.includes(`this.timeSettingsStore.${state} === value`), state);
   }

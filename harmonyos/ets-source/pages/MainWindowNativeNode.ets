@@ -130,6 +130,8 @@ import { NebulaTextureStore } from '../state/NebulaTextureStore'
 import { PluginStore } from '../state/PluginStore'
 import { NavigationSettingsStore } from '../state/NavigationSettingsStore'
 import { ViewSettingsStore } from '../state/ViewSettingsStore'
+import { InfoWindowStore } from '../state/InfoWindowStore'
+import { LanguageStore } from '../state/LanguageStore'
 import { AtmosphereStore } from '../state/AtmosphereStore'
 import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
@@ -264,8 +266,9 @@ export struct WindowNativeNode {
   // above Qt, so keep their pressed appearance in explicit ArkUI state.
   @State private compactQuickPressed: string = ''
   // 富化的天体详情（独立浮动窗口，不切换当前菜单；默认收起，可展开）
-  @State private infoWinVisible: boolean = false
-  @State private infoWinExpanded: boolean = false
+  // infoWinVisible / infoWinExpanded / informationMode / informationCustomMask /
+  // informationSettingPending / infoLevel 已下沉 state/InfoWindowStore.ets（review §2.7）。
+  @State private infoWindowStore: InfoWindowStore = new InfoWindowStore()
   @State private fullInspectorRequested: boolean = false
   @State private bottomCardIndex: number = 0
   @State private compactPanelSnapRatio: number = 0.6
@@ -361,9 +364,9 @@ export struct WindowNativeNode {
   private julianDateApplyInFlight: boolean = false
   private timeMarkLoading: boolean = false
   // manualYear/Month/Day/Hour/Minute 已并入 state/TimeStore.ets（review §2.7）。
-  @State private selectedLanguage: string = I18n.systemLanguage()
+  // selectedLanguage / languageRevision 已下沉 state/LanguageStore.ets（review §2.7）。
+  @State private languageStore: LanguageStore = new LanguageStore()
   @StorageLink('i18nLang') private i18nLang: string = I18n.systemLanguage()
-  @State private languageRevision: number = 0
   @State private bridgeSyncStarted: boolean = false
   @State private nightModeStore: NightModeStore = new NightModeStore()
   private pendingNightMode: boolean | undefined = undefined
@@ -381,9 +384,7 @@ export struct WindowNativeNode {
   // 观测/会话工具区块状态（观测星球切换、指星笔、手表陀螺仪模拟、今晚天象）—— Phase 3as 组件化。
   @State private sessionToolStore: SessionToolStore = new SessionToolStore()
   @State private watchLastSend: number = 0
-  @State private sessionJson: string = ''
-  @State private sessionExportSig: string = ''
-  @State private sessionHint: string = ''
+  // sessionJson / sessionExportSig / sessionHint 已并入 state/SessionToolStore.ets（review §2.7）。
   @State private canUseDistributed: boolean = false
 
   @State private locationStore: LocationStore = new LocationStore()
@@ -408,11 +409,9 @@ export struct WindowNativeNode {
   @State private viewTab: number = 0  // View面板子标签索引
   @State private configTab: number = 0  // 统一设置面板子标签索引；默认显示主设置
   @State private timeSettingsStore: TimeSettingsStore = new TimeSettingsStore()
-  @State private configDitheringMode: string = 'Color888'
+  // configDitheringMode 已并入 state/ViewSettingsStore.ets（review §2.7）。
   @State private ephemerisStore: EphemerisStore = new EphemerisStore()
-  @State private informationMode: string = 'default'
-  @State private informationCustomMask: number = 0
-  @State private informationSettingPending: boolean = false
+  // informationMode / informationCustomMask / informationSettingPending 已下沉 state/InfoWindowStore.ets（review §2.7）。
   @State private timeSettingsPending: boolean = false
   @State private deltaTStore: DeltaTStore = new DeltaTStore()
   // presetSkyTime 已并入 state/TimeSettingsStore.ets（review §2.7）。
@@ -492,13 +491,13 @@ export struct WindowNativeNode {
   private navStarsLoadRequestId: number = 0
   private navStarsMutationId: number = 0
   @State private landscapeDetailOpen: boolean = false
-  @State private infoLevel: number = 1
+  // infoLevel 已下沉 state/InfoWindowStore.ets（review §2.7）。
   // 新增面板控制
   @State private planetLabels: boolean = false
   private applicationInForeground: boolean = true
   private gyroPausedForBackground: boolean = false
   // The gyro control itself becomes a live compass while it is enabled.
-  @State private liveMode: boolean = true
+  // liveMode 已并入 state/ViewSettingsStore.ets（review §2.7）。
   @State private currentFovText: string = '--'
   @State private viewCoordinatePrimaryText: string = '--'
   @State private viewCoordinateSecondaryText: string = '--'
@@ -1263,7 +1262,7 @@ export struct WindowNativeNode {
       }
       if (commandName === 'setObjectDetailTab') {
         if (this.objectDetailStore.selectedName.length > 0) {
-          this.infoWinVisible = true
+          this.infoWindowStore.infoWinVisible = true
           this.selectObjectDetailTab(Number(event['payload']))
         }
         return
@@ -1277,7 +1276,7 @@ export struct WindowNativeNode {
           return
         }
         if (value === 'open') {
-          this.infoWinVisible = true
+          this.infoWindowStore.infoWinVisible = true
           this.selectObjectDetailTab(2)
         } else if (value === 'immersive') {
           this.setObjectInspectorModelImmersive(true)
@@ -1308,9 +1307,9 @@ export struct WindowNativeNode {
       }
       if (commandName === 'setInformationSetting' || commandName === 'getInformationSettings') {
         if (response.ok !== true) return
-        this.informationMode = response.infoMode ?? this.informationMode
-        if (response.customInfoMask !== undefined) this.informationCustomMask = Number(response.customInfoMask)
-        this.applySelectedInfoMode(this.informationMode)
+        this.infoWindowStore.informationMode = response.infoMode ?? this.infoWindowStore.informationMode
+        if (response.customInfoMask !== undefined) this.infoWindowStore.informationCustomMask = Number(response.customInfoMask)
+        this.applySelectedInfoMode(this.infoWindowStore.informationMode)
         this.objectDetailStore.selectedDetailLoaded = false
         this.refreshSelectedObject()
         return
@@ -1405,7 +1404,7 @@ export struct WindowNativeNode {
         this.scriptStore.scriptId = String(event['payload'] ?? '')
         this.scriptStartGraceUntil = Date.now() + 2500
         this.panelVisible = false
-        this.infoWinVisible = false
+        this.infoWindowStore.infoWinVisible = false
         this.startScriptStatusPolling()
         return
       }
@@ -1508,7 +1507,7 @@ export struct WindowNativeNode {
 
   private runStartupBridgeTasks(): void {
     const tasks: Array<() => void> = [
-      () => this.callNativeWhenReady('setLanguage', this.selectedLanguage, () => {}),
+      () => this.callNativeWhenReady('setLanguage', this.languageStore.selectedLanguage, () => {}),
       () => this.loadLandscapeList(),
       () => this.callNativeWhenReady("getScriptList", "", (r) => {
         if (r.ok === true && Array.isArray(r.items)) { this.scriptStore.scriptList = r.items as string[]; this.setScriptMetadata(r.details) }
@@ -1569,7 +1568,7 @@ export struct WindowNativeNode {
         if (saved.gyroscopeSensitivityText !== undefined) { this.gyroStore.gyroscopeSensitivityText = saved.gyroscopeSensitivityText as string }
         if (saved.selectedLanguage !== undefined) {
           const language = saved.selectedLanguage as string
-          if (language !== this.selectedLanguage) {
+          if (language !== this.languageStore.selectedLanguage) {
             I18n.setLanguage(I18n.fromStellariumCode(language))
             this.setLanguage(language)
           }
@@ -1608,7 +1607,7 @@ export struct WindowNativeNode {
       } catch (_err) { }
     }
     if (this.audioStore.musicEnabled) { AudioEngine.getInstance().start() }
-    I18n.setLanguage(I18n.fromStellariumCode(this.selectedLanguage))
+    I18n.setLanguage(I18n.fromStellariumCode(this.languageStore.selectedLanguage))
     this.syncViewCoordinateTimer()
     this.syncDockClockTimer()
   }
@@ -1619,7 +1618,7 @@ export struct WindowNativeNode {
       equatorialMount: this.telescopeStore.equatorialMount,
       gyroscopeEnabled: this.gyroStore.gyroscopeEnabled,
       gyroscopeSensitivityText: this.gyroStore.gyroscopeSensitivityText,
-      selectedLanguage: this.selectedLanguage,
+      selectedLanguage: this.languageStore.selectedLanguage,
       useMetricUnits: this.viewSettingsStore.useMetricUnits,
       musicEnabled: this.audioStore.musicEnabled,
       viewCoordinatesVisible: this.overlayStore.viewCoordinatesVisible,
@@ -1716,7 +1715,7 @@ export struct WindowNativeNode {
             this.loadTimeExtras()
           }, 3000)
         }
-        if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWinVisible)) {
+        if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWindowStore.infoWinVisible)) {
           this.startDetailAutoRefresh()
         }
       }
@@ -2194,7 +2193,7 @@ export struct WindowNativeNode {
     const routeSerial = nextVisible ? this.beginPanelRouteTransition(switchingPanel) : 0
     if (panel !== 'object') {
       this.fullInspectorRequested = false
-      this.infoWinExpanded = false
+      this.infoWindowStore.infoWinExpanded = false
     }
     this.stopTimePanelTimers()
     this.stopSkyCultureTimeFollowTimer()
@@ -2214,7 +2213,7 @@ export struct WindowNativeNode {
         this.panelPresentationOffsetY = 0
         if (panel === 'object') {
           this.fullInspectorRequested = false
-          this.infoWinExpanded = false
+          this.infoWindowStore.infoWinExpanded = false
         }
       } }, () => {
         this.panelRouteOpacity = 0
@@ -2461,7 +2460,7 @@ export struct WindowNativeNode {
       this.panelPresentationOffsetY = 0
       if (closingObjectPanel) {
         this.fullInspectorRequested = false
-        this.infoWinExpanded = false
+        this.infoWindowStore.infoWinExpanded = false
       }
     } }, () => {
       this.panelRouteOpacity = 0
@@ -3008,7 +3007,7 @@ export struct WindowNativeNode {
     this.recordPausedTotal = 0
     this.tools.recordingUiExpanded = false
     this.panelVisible = false
-    this.infoWinVisible = false
+    this.infoWindowStore.infoWinVisible = false
     this.scheduleRecordingViewCheckpoint(80, true)
     this.flashHint('开始录制：接下来的操作会被记录')
   }
@@ -3189,7 +3188,7 @@ export struct WindowNativeNode {
     this.tools.recordingUiExpanded = !this.tools.recordingUiExpanded
     if (!this.tools.recordingUiExpanded) {
       this.panelVisible = false
-      this.infoWinVisible = false
+      this.infoWindowStore.infoWinVisible = false
       this.gyroStore.gyroCalibPanelOpen = false
     }
   }
@@ -5059,7 +5058,7 @@ export struct WindowNativeNode {
       }
     })
     this.callInteractive('getDitheringMode', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.mode !== undefined) { this.configDitheringMode = r.mode as string }
+      if (r.ok === true && r.mode !== undefined) { this.viewSettingsStore.configDitheringMode = r.mode as string }
     })
     this.callInteractive('getNavigationSettings', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
@@ -5087,9 +5086,9 @@ export struct WindowNativeNode {
     })
     this.callInteractive('getInformationSettings', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      this.informationMode = r.infoMode ?? this.informationMode
-      if (r.customInfoMask !== undefined) this.informationCustomMask = Number(r.customInfoMask)
-      this.applySelectedInfoMode(this.informationMode)
+      this.infoWindowStore.informationMode = r.infoMode ?? this.infoWindowStore.informationMode
+      if (r.customInfoMask !== undefined) this.infoWindowStore.informationCustomMask = Number(r.customInfoMask)
+      this.applySelectedInfoMode(this.infoWindowStore.informationMode)
     })
     this.callInteractive('getTimeSettings', '', (r: StellariumBridgeResponse) => {
       this.applyTimeSettings(r)
@@ -5143,42 +5142,42 @@ export struct WindowNativeNode {
 
   private informationMaskHas(key: string): boolean {
     const bit = this.informationMaskBit(key)
-    return bit > 0 && (this.informationCustomMask & bit) === bit
+    return bit > 0 && (this.infoWindowStore.informationCustomMask & bit) === bit
   }
 
   private setInformationMode(mode: string): void {
-    if (this.informationSettingPending || mode === this.informationMode) return
-    this.informationSettingPending = true
+    if (this.infoWindowStore.informationSettingPending || mode === this.infoWindowStore.informationMode) return
+    this.infoWindowStore.informationSettingPending = true
     this.callInteractive('setInformationSetting', 'mode|' + mode, (r: StellariumBridgeResponse) => {
-      this.informationSettingPending = false
+      this.infoWindowStore.informationSettingPending = false
       if (r.ok !== true) { this.flashHint(r.error ?? I18n.t('msg_apply_failed')); return }
-      this.informationMode = r.infoMode ?? mode
-      if (r.customInfoMask !== undefined) this.informationCustomMask = Number(r.customInfoMask)
-      this.applySelectedInfoMode(this.informationMode)
+      this.infoWindowStore.informationMode = r.infoMode ?? mode
+      if (r.customInfoMask !== undefined) this.infoWindowStore.informationCustomMask = Number(r.customInfoMask)
+      this.applySelectedInfoMode(this.infoWindowStore.informationMode)
       this.objectDetailStore.selectedDetailLoaded = false
       this.refreshSelectedObject()
     }, () => {
-      this.informationSettingPending = false
+      this.infoWindowStore.informationSettingPending = false
       this.flashHint(I18n.t('msg_apply_failed'))
     })
   }
 
   private setInformationField(key: string, enabled: boolean): void {
-    if (this.informationSettingPending || this.informationMode !== 'custom' || this.informationMaskHas(key) === enabled) return
+    if (this.infoWindowStore.informationSettingPending || this.infoWindowStore.informationMode !== 'custom' || this.informationMaskHas(key) === enabled) return
     const bit = this.informationMaskBit(key)
     if (bit === 0) return
-    const nextMask = enabled ? (this.informationCustomMask | bit) : (this.informationCustomMask & ~bit)
-    this.informationSettingPending = true
+    const nextMask = enabled ? (this.infoWindowStore.informationCustomMask | bit) : (this.infoWindowStore.informationCustomMask & ~bit)
+    this.infoWindowStore.informationSettingPending = true
     this.callInteractive('setInformationSetting', 'mask|' + nextMask.toString(), (r: StellariumBridgeResponse) => {
-      this.informationSettingPending = false
+      this.infoWindowStore.informationSettingPending = false
       if (r.ok !== true) { this.flashHint(r.error ?? I18n.t('msg_apply_failed')); return }
-      this.informationMode = 'custom'
-      this.informationCustomMask = r.customInfoMask !== undefined ? Number(r.customInfoMask) : nextMask
-      this.infoLevel = 0
+      this.infoWindowStore.informationMode = 'custom'
+      this.infoWindowStore.informationCustomMask = r.customInfoMask !== undefined ? Number(r.customInfoMask) : nextMask
+      this.infoWindowStore.infoLevel = 0
       this.objectDetailStore.selectedDetailLoaded = false
       this.refreshSelectedObject()
     }, () => {
-      this.informationSettingPending = false
+      this.infoWindowStore.informationSettingPending = false
       this.flashHint(I18n.t('msg_apply_failed'))
     })
   }
@@ -5300,7 +5299,7 @@ export struct WindowNativeNode {
   private setConfigurationDithering(value: string): void {
     this.callInteractive('setDitheringMode', value.toLowerCase(), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.configDitheringMode = value
+        this.viewSettingsStore.configDitheringMode = value
         this.flashHint('渲染质量已更新')
       } else {
         this.flashHint(r.error ?? I18n.t('msg_apply_failed'))
@@ -9106,7 +9105,7 @@ private loadPlanetPositions(): void {
     this.scriptStore.scriptWaitMessage = ''
     this.scriptStartGraceUntil = Date.now() + 2500
     this.panelVisible = false
-    this.infoWinVisible = false
+    this.infoWindowStore.infoWinVisible = false
     this.gyroStore.gyroCalibPanelOpen = false
     this.stopTimePanelTimers()
     this.stopSkyCultureTimeFollowTimer()
@@ -9848,9 +9847,9 @@ private loadPlanetPositions(): void {
     // link and the panel identity makes the open panel rebuild immediately,
     // rather than waiting for it to be closed and opened again.
     this.i18nLang = i18nCode
-    this.selectedLanguage = lang
+    this.languageStore.selectedLanguage = lang
     const languageSerial = ++this.languageRefreshSerial
-    this.languageRevision++
+    this.languageStore.languageRevision++
     this.panelContentKey++
     // 持久化语言选择
     try {
@@ -11392,7 +11391,7 @@ private loadPlanetPositions(): void {
     if (this.detailTimer !== 0) { return }
     this.detailTimer = setInterval(() => {
       if (this.skyDragging) { return }
-      if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWinVisible)) {
+      if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWindowStore.infoWinVisible)) {
         // The one-shot full-details request owns the initial structured card
         // load. Do not race it with a second request from the live-value poll.
         if (!this.objectDetailStore.selectedDetailLoaded && this.objectDetailStore.selectedDetailTimer !== 0) { return }
@@ -11411,7 +11410,7 @@ private loadPlanetPositions(): void {
   }
 
   private resumeDetailRefreshAfterSkyDrag(): void {
-    if (this.infoWinVisible && this.objectDetailStore.selectedStatus === 'Selected') {
+    if (this.infoWindowStore.infoWinVisible && this.objectDetailStore.selectedStatus === 'Selected') {
       this.startDetailAutoRefresh()
       this.refreshObjectDetailConnector()
       this.scheduleSkyTextureStatusCheck()
@@ -11565,7 +11564,7 @@ private loadPlanetPositions(): void {
   }
 
   private refreshObjectDetailConnector(): void {
-    if (!this.overlayStore.objectDetailConnectorVisible || !this.infoWinVisible || this.objectDetailStore.selectedStatus !== 'Selected' ||
+    if (!this.overlayStore.objectDetailConnectorVisible || !this.infoWindowStore.infoWinVisible || this.objectDetailStore.selectedStatus !== 'Selected' ||
       this.objectDetailStore.selectedName.length === 0) {
       this.clearObjectDetailConnector()
       return
@@ -11717,7 +11716,7 @@ private loadPlanetPositions(): void {
     // Qt to collect the complete structured field set.
     this.objectDetailStore.selectedDetailTimer = setTimeout(() => {
       this.objectDetailStore.selectedDetailTimer = 0
-      if (!this.infoWinVisible || this.objectDetailStore.selectedName !== expectedName) {
+      if (!this.infoWindowStore.infoWinVisible || this.objectDetailStore.selectedName !== expectedName) {
         this.objectDetailStore.selectedDetailRequestPending = false
         return
       }
@@ -11787,7 +11786,7 @@ private loadPlanetPositions(): void {
     const payload = `${Math.round(x)}|${Math.round(y)}|${Math.round(this.skyWidth)}|${Math.round(this.skyHeight)}|${mode}`
     const navigationKey = this.objectDetailStore.selectedName + '|' + payload
     hilog.info(0x0000, 'StellariumArkUI', 'safe-target request mode=%{public}s compact=%{public}s panel=%{public}s drawer=%{public}s info=%{public}s target=%{public}s',
-      mode, (!this.isExpandedLayout).toString(), this.panelVisible.toString(), 'false', this.infoWinVisible.toString(), payload)
+      mode, (!this.isExpandedLayout).toString(), this.panelVisible.toString(), 'false', this.infoWindowStore.infoWinVisible.toString(), payload)
     const now = Date.now()
     // A layout callback can re-fire long after its animation has settled.
     // Repeating the same safe point would move a time-anchored target for no
@@ -11842,7 +11841,7 @@ private loadPlanetPositions(): void {
           bottom: this.panelTop() + this.panelMaxHeight
         })
       }
-      if (this.infoWinVisible) {
+      if (this.infoWindowStore.infoWinVisible) {
         if (this.useTabletObjectInspector()) {
           obstacles.push({
             label: 'object-inspector', left: this.tabletInspectorX(), top: this.tabletInspectorY(),
@@ -11869,7 +11868,7 @@ private loadPlanetPositions(): void {
       const sheetTop = this.isFoldHoverLayout ? this.hoverPanelTop() : this.skyHeight - 90 - this.compactPanelHeight()
       obstacles.push({ label: 'sheet', left: 0, top: sheetTop, right: this.skyWidth, bottom: this.skyHeight - 90 })
     }
-    if (!this.panelVisible && this.infoWinVisible) {
+    if (!this.panelVisible && this.infoWindowStore.infoWinVisible) {
       if (this.isPhoneDetailPeek()) {
         obstacles.push({
           label: 'object-peek', left: this.compactObjectPeekX(), top: this.compactObjectPeekY(),
@@ -11988,7 +11987,7 @@ private loadPlanetPositions(): void {
 
     // Compact panels replace the detailed object card. Reserving the hidden
     // card's area made a 9/10 sheet calculate a target underneath itself.
-    if (this.infoWinVisible && !this.panelVisible) {
+    if (this.infoWindowStore.infoWinVisible && !this.panelVisible) {
       if (this.isPhoneDetailPeek()) {
         top = Math.max(top, this.compactObjectPeekY() + 72 + 28)
       } else {
@@ -12015,11 +12014,11 @@ private loadPlanetPositions(): void {
   private expandedSafeTargetPoint(): number[] {
     const left = this.panelVisible ? this.expandedMainPanelLeft() + this.panelWidth + 18 : this.EDGE_MARGIN + 64
     const right = this.panelVisible ? this.skyWidth - this.EDGE_MARGIN
-      : (this.infoWinVisible ? this.bottomCardX() - 18 : this.skyWidth - this.EDGE_MARGIN)
+      : (this.infoWindowStore.infoWinVisible ? this.bottomCardX() - 18 : this.skyWidth - this.EDGE_MARGIN)
     let top = this.EDGE_MARGIN + 24
     // With both cards open, keep the target below the compact object summary
     // and inside the unobstructed sky to the right of the Pad panel.
-    if (this.panelVisible && this.infoWinVisible && this.useExpandedDetailSummary()) {
+    if (this.panelVisible && this.infoWindowStore.infoWinVisible && this.useExpandedDetailSummary()) {
       top = this.expandedDetailSummaryY() + this.expandedDetailSummaryHeight() + 28
     }
     const bottom = this.skyHeight - this.EDGE_MARGIN
@@ -12144,26 +12143,26 @@ private loadPlanetPositions(): void {
   }
 
   private applySelectedInfoMode(mode: string): void {
-    this.informationMode = mode
+    this.infoWindowStore.informationMode = mode
     if (mode === 'all') {
-      this.infoLevel = 0
+      this.infoWindowStore.infoLevel = 0
     } else if (mode === 'default') {
-      this.infoLevel = 1
+      this.infoWindowStore.infoLevel = 1
     } else if (mode === 'short') {
-      this.infoLevel = 2
+      this.infoWindowStore.infoLevel = 2
     } else if (mode === 'none') {
-      this.infoLevel = 3
+      this.infoWindowStore.infoLevel = 3
     } else if (mode === 'custom') {
-      this.infoLevel = 0
+      this.infoWindowStore.infoLevel = 0
     }
   }
 
   private selectedLiveInfoVisible(): boolean {
-    return this.infoLevel <= 1
+    return this.infoWindowStore.infoLevel <= 1
   }
 
   private applyCustomInformationMask(): void {
-    if (this.informationMode !== 'custom') return
+    if (this.infoWindowStore.informationMode !== 'custom') return
     if (!this.informationMaskHas('magnitude')) {
       this.objectDetailStore.selectedMagnitude = ''
       this.objectDetailStore.selectedApparentMagnitude = ''
@@ -12237,7 +12236,7 @@ private loadPlanetPositions(): void {
       // 只有真正换了目标才重开详情。用户手动关闭同一目标后，任何后续刷新/误触
       // 都只更新数值，不能把卡片重新弹回来。
       const targetChanged = (this.objectDetailStore.selectedName !== incomingName) || (this.objectDetailStore.selectedType !== incomingType)
-      const preserveClosedDetail = !this.infoWinVisible && !targetChanged && this.dismissedObjectName === incomingName
+      const preserveClosedDetail = !this.infoWindowStore.infoWinVisible && !targetChanged && this.dismissedObjectName === incomingName
       const isNewSelection = targetChanged
       this.objectDetailStore.selectedName = incomingName
       this.objectDetailStore.selectedEnglishName = result.englishName && result.englishName.length > 0 ? result.englishName : ''
@@ -12258,14 +12257,14 @@ private loadPlanetPositions(): void {
       this.refreshObjectInspectorMedia()
       if (result.infoMode !== undefined) {
         if (result.infoMode === 'custom' && result.customInfoMask !== undefined) {
-          this.informationCustomMask = Number(result.customInfoMask)
+          this.infoWindowStore.informationCustomMask = Number(result.customInfoMask)
         }
         this.applySelectedInfoMode(result.infoMode)
       }
       this.objectDetailStore.selectedStatus = 'Selected'
       const mag = (typeof result.magnitude === 'number') ? (result.magnitude as number) : 99
-      const showBasicInfo = this.infoLevel <= 2
-      const showObservedInfo = this.infoLevel <= 1
+      const showBasicInfo = this.infoWindowStore.infoLevel <= 2
+      const showObservedInfo = this.infoWindowStore.infoLevel <= 1
       this.objectDetailStore.selectedMagnitude = showBasicInfo && mag < 98 ? mag.toFixed(2) : ''
       const apparentMag = (typeof result.apparentMagnitude === 'number') ? (result.apparentMagnitude as number) : 99
       this.objectDetailStore.selectedApparentMagnitude = showObservedInfo && apparentMag < 98 ? apparentMag.toFixed(2) : ''
@@ -12340,10 +12339,10 @@ private loadPlanetPositions(): void {
         this.objectDetailStore.selectedConstellationCultureDescriptionExpanded = false
       }
       if (!preserveClosedDetail) {
-        this.infoWinVisible = true
+        this.infoWindowStore.infoWinVisible = true
       }
       if (isNewSelection) {
-        this.infoWinExpanded = true
+        this.infoWindowStore.infoWinExpanded = true
         this.fullInspectorRequested = true
         this.objectMediaStore.objectInspectorMoreOpen = false
         this.bottomCardIndex = 2
@@ -12447,7 +12446,7 @@ private loadPlanetPositions(): void {
       this.objectMediaStore.objectInspectorMediaPreviewPath = ''
       this.objectMediaStore.objectInspectorMediaPreviewLoading = false
       this.objectMediaStore.objectInspectorMediaPreviewFailed = false
-      this.infoWinVisible = false
+      this.infoWindowStore.infoWinVisible = false
       this.objectDetailStore.selectedInfo = '当前位置没有可选天体，请放大或使用搜索'
       this.clearRtsSelectionResults()
     }
@@ -13285,7 +13284,7 @@ private loadPlanetPositions(): void {
 
   private sessionExport(): void {
     this.callNativeWhenReady('getSessionState', '', (r: StellariumBridgeResponse) => {
-      if (!r.ok) { this.sessionHint = I18n.t('m_session_export_failed'); return }
+      if (!r.ok) { this.sessionToolStore.sessionHint = I18n.t('m_session_export_failed'); return }
       const snap: SessionSnapshot = {
         schemaVersion: 1,
         exportedAt: new Date().toISOString(),
@@ -13296,32 +13295,32 @@ private loadPlanetPositions(): void {
         selected: r.selected,
         flags: r.flags
       }
-      this.sessionJson = JSON.stringify(snap, null, '  ')
-      this.tools.sessionExportText = this.sessionJson
-      this.sessionExportSig = this.sessionSignature(r)
-      this.sessionHint = I18n.t('m_session_exported') + ': ' + this.sessionSummary(r)
-      this.copyTextToClipboard(this.sessionJson, I18n.t('session_export_copied'))
+      this.sessionToolStore.sessionJson = JSON.stringify(snap, null, '  ')
+      this.tools.sessionExportText = this.sessionToolStore.sessionJson
+      this.sessionToolStore.sessionExportSig = this.sessionSignature(r)
+      this.sessionToolStore.sessionHint = I18n.t('m_session_exported') + ': ' + this.sessionSummary(r)
+      this.copyTextToClipboard(this.sessionToolStore.sessionJson, I18n.t('session_export_copied'))
     })
   }
 
   private sessionApply(): void {
     const importedJson = this.tools.sessionImportText.trim()
-    const json = importedJson.length > 0 ? importedJson : this.sessionJson.trim()
-    if (!json) { this.sessionHint = I18n.t('m_session_export_first'); return }
+    const json = importedJson.length > 0 ? importedJson : this.sessionToolStore.sessionJson.trim()
+    if (!json) { this.sessionToolStore.sessionHint = I18n.t('m_session_export_first'); return }
     this.callNativeWhenReady('applySessionState', json, (r2: StellariumBridgeResponse) => {
-      if (!r2.ok) { this.sessionHint = I18n.t('m_apply_failed') + ': ' + (r2.error ?? I18n.t('m_unknown')); this.flashHint(I18n.t('m_apply_failed')); return }
-      this.sessionHint = I18n.t('m_session_applied_syncing')
+      if (!r2.ok) { this.sessionToolStore.sessionHint = I18n.t('m_apply_failed') + ': ' + (r2.error ?? I18n.t('m_unknown')); this.flashHint(I18n.t('m_apply_failed')); return }
+      this.sessionToolStore.sessionHint = I18n.t('m_session_applied_syncing')
       this.flashHint(I18n.t('m_session_applied_syncing'))
       // 等一帧让 applySessionState 生效，再导出比对，验证无缝还原
       setTimeout(() => {
         this.callNativeWhenReady('getSessionState', '', (r3: StellariumBridgeResponse) => {
           if (!r3.ok) return
           const sig = this.sessionSignature(r3)
-          if (sig === this.sessionExportSig) {
-            this.sessionHint = I18n.t('m_session_exact')
+          if (sig === this.sessionToolStore.sessionExportSig) {
+            this.sessionToolStore.sessionHint = I18n.t('m_session_exact')
             this.flashHint(I18n.t('m_session_exact'))
           } else {
-            this.sessionHint = I18n.t('m_session_applied_done')
+            this.sessionToolStore.sessionHint = I18n.t('m_session_applied_done')
             this.flashHint(I18n.t('m_session_applied_done'))
           }
         })
@@ -13337,10 +13336,10 @@ private loadPlanetPositions(): void {
     // 当前基础 SDK 无这些 kit，故先给出可落地的本地能力说明。
     if (this.canUseDistributed) {
       this.flashHint(I18n.t('msg_continuation_initiated'))
-      this.sessionHint = I18n.t('m_continuation_migrating')
+      this.sessionToolStore.sessionHint = I18n.t('m_continuation_migrating')
     } else {
       this.flashHint(I18n.t('m_continuation_basic_sdk'))
-      this.sessionHint = I18n.t('m_continuation_basic_desc')
+      this.sessionToolStore.sessionHint = I18n.t('m_continuation_basic_desc')
     }
   }
 
@@ -14340,7 +14339,7 @@ private loadPlanetPositions(): void {
                 panelVisible: this.panelVisible,
                 isExpandedLayout: this.isExpandedLayout,
                 activePanel: this.activePanel,
-                languageRevision: this.languageRevision,
+                languageRevision: this.languageStore.languageRevision,
                 actions: this.canonicalDockActions(),
                 chromeOpacity: this.phoneChromeOpacity(),
                 chromeIsGlass: this.phoneChromeIsGlass(),
@@ -14348,7 +14347,7 @@ private loadPlanetPositions(): void {
                 dockIconSize: this.compactDockIconSize(),
                 dockLabelFontSize: this.compactDockLabelFontSize(),
                 dockItemHeight: this.compactDockItemHeight(),
-                infoWinVisible: this.infoWinVisible,
+                infoWinVisible: this.infoWindowStore.infoWinVisible,
                 bottomCardIndex: this.bottomCardIndex,
                 liveInfoVisible: this.selectedLiveInfoVisible(),
                 contentOpacity: this.objectDetailContentOpacity,
@@ -14435,7 +14434,7 @@ private loadPlanetPositions(): void {
                 panelVisible: this.panelVisible,
                 isExpandedLayout: this.isExpandedLayout,
                 activePanel: this.activePanel,
-                languageRevision: this.languageRevision,
+                languageRevision: this.languageStore.languageRevision,
                 actions: this.canonicalDockActions(),
                 chromeOpacity: this.phoneChromeOpacity(),
                 chromeIsGlass: this.phoneChromeIsGlass(),
@@ -14453,7 +14452,7 @@ private loadPlanetPositions(): void {
                 expandedDockLeft: this.expandedDockLeft(),
                 gyroPanelLeft: this.EDGE_MARGIN + 64,
                 gyroPanelTop: this.railTop() + 120,
-                infoWinVisible: this.infoWinVisible,
+                infoWinVisible: this.infoWindowStore.infoWinVisible,
                 bottomCardIndex: this.bottomCardIndex,
                 liveInfoVisible: this.selectedLiveInfoVisible(),
                 contentOpacity: this.objectDetailContentOpacity,
@@ -14559,7 +14558,7 @@ private loadPlanetPositions(): void {
                 isExpandedLayout: this.isExpandedLayout,
                 polarScopeVisible: this.polarScopeStore.polarScopeVisible,
                 activePanel: this.activePanel,
-                languageRevision: this.languageRevision,
+                languageRevision: this.languageStore.languageRevision,
                 actions: this.canonicalDockActions(),
                 chromeOpacity: this.phoneChromeOpacity(),
                 chromeIsGlass: this.phoneChromeIsGlass(),
@@ -14575,7 +14574,7 @@ private loadPlanetPositions(): void {
                 compactQuickPressed: this.compactQuickPressed,
                 quickX: this.compactTopQuickX(),
                 quickY: this.compactTopQuickY(),
-                infoWinVisible: this.infoWinVisible,
+                infoWinVisible: this.infoWindowStore.infoWinVisible,
                 bottomCardIndex: this.bottomCardIndex,
                 liveInfoVisible: this.selectedLiveInfoVisible(),
                 contentOpacity: this.objectDetailContentOpacity,
@@ -14906,7 +14905,7 @@ private loadPlanetPositions(): void {
         this.gyroStore.gyroscopeEnabled = false
         this.stopSkyInertia()
         this.panelVisible = false
-        this.infoWinVisible = false
+        this.infoWindowStore.infoWinVisible = false
         this.stopDetailAutoRefresh()
         this.stopTimePanelTimers()
         this.stopSkyCultureTimeFollowTimer()
@@ -15285,7 +15284,7 @@ private loadPlanetPositions(): void {
   }
 
   private isObjectDetailCardRendered(): boolean {
-    return this.infoWinVisible && this.objectDetailStore.selectedName.length > 0
+    return this.infoWindowStore.infoWinVisible && this.objectDetailStore.selectedName.length > 0
   }
 
   private isObjectDetailCardPoint(x: number, y: number): boolean {
@@ -15353,9 +15352,9 @@ private loadPlanetPositions(): void {
       clearTimeout(this.objectDetailStore.selectedUiLayoutTimer)
       this.objectDetailStore.selectedUiLayoutTimer = 0
     }
-    this.infoWinVisible = false
+    this.infoWindowStore.infoWinVisible = false
     this.stopObjectDetailConnectorRefresh()
-    this.infoWinExpanded = false
+    this.infoWindowStore.infoWinExpanded = false
     this.objectMediaStore.objectInspectorMoreOpen = false
     this.dismissedObjectName = this.objectDetailStore.selectedName
     this.lastInfoWinCloseMs = Date.now()
@@ -15400,8 +15399,8 @@ private loadPlanetPositions(): void {
 
 
   private showFullObjectInspector(): void {
-    this.infoWinVisible = true
-    this.infoWinExpanded = true
+    this.infoWindowStore.infoWinVisible = true
+    this.infoWindowStore.infoWinExpanded = true
     this.fullInspectorRequested = true
     this.objectMediaStore.objectInspectorMoreOpen = false
     this.bottomCardIndex = 2
@@ -15418,7 +15417,7 @@ private loadPlanetPositions(): void {
       this.flashHint(I18n.t('center_requires_selection'))
       return
     }
-    if (this.infoWinVisible) {
+    if (this.infoWindowStore.infoWinVisible) {
       this.dismissObjectInspector()
     } else {
       this.showFullObjectInspector()
@@ -16350,7 +16349,7 @@ private loadPlanetPositions(): void {
   }
 
   private refreshObjectInspectorModelLighting(): void {
-    if (!this.infoWinVisible || this.bottomCardIndex !== 2) return
+    if (!this.infoWindowStore.infoWinVisible || this.bottomCardIndex !== 2) return
     const lighting = this.objectDetailStore.selectedDetailModel?.lighting
     if (lighting === undefined || this.objectInspectorModelTexturePixels === undefined) return
     const values = lighting.viewToBody.concat(lighting.sunDirectionBody)
@@ -16671,7 +16670,7 @@ private loadPlanetPositions(): void {
 
 
   private distanceInformationVisible(): boolean {
-    return this.infoLevel <= 1 && (this.informationMode !== 'custom' || this.informationMaskHas('distance'))
+    return this.infoWindowStore.infoLevel <= 1 && (this.infoWindowStore.informationMode !== 'custom' || this.informationMaskHas('distance'))
   }
 
   private objectDistanceSummary(): string {
@@ -17214,26 +17213,26 @@ private loadPlanetPositions(): void {
     if (this.activePanel === 'more') {
       MorePanel({
         actions: this.moreActions(),
-        languageRevision: this.languageRevision,
+        languageRevision: this.languageStore.languageRevision,
         startsSection: (item: ShellAction, index: number) => this.moreActionStartsSection(item, index),
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'observeHub') {
       HubActionList({
         actions: this.observingHubActions(), description: I18n.t('more_workspace_observing_desc'),
-        subColor: this.nmSub(), languageRevision: this.languageRevision,
+        subColor: this.nmSub(), languageRevision: this.languageStore.languageRevision,
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'dataHub') {
       HubActionList({
         actions: this.skyDataHubActions(), description: I18n.t('more_sky_data_desc'),
-        subColor: this.nmSub(), languageRevision: this.languageRevision,
+        subColor: this.nmSub(), languageRevision: this.languageStore.languageRevision,
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'automationHub') {
       HubActionList({
         actions: this.automationHubActions(), description: I18n.t('more_automation_desc'),
-        subColor: this.nmSub(), languageRevision: this.languageRevision,
+        subColor: this.nmSub(), languageRevision: this.languageStore.languageRevision,
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'object') {
@@ -17333,8 +17332,6 @@ private loadPlanetPositions(): void {
         locationText: this.locationText,
         coordinateText: this.coordinateText,
         altitudeText: this.altitudeText,
-        sessionHint: this.sessionHint,
-        sessionJson: this.sessionJson,
         mapWidth: this.locationMapWidth(),
         mapHeight: this.locationMapHeight(),
         textColor: this.nmText(),
@@ -17474,10 +17471,10 @@ private loadPlanetPositions(): void {
         nightModeStore: this.nightModeStore,
         telescopeStore: this.telescopeStore,
         viewSettingsStore: this.viewSettingsStore,
-        liveMode: this.liveMode,
+        liveMode: this.viewSettingsStore.liveMode,
         fovSliderValue: this.fovSliderValue,
         currentProjection: this.currentProjection,
-        selectedLanguage: this.selectedLanguage,
+        selectedLanguage: this.languageStore.selectedLanguage,
         skyCultureViewStore: this.skyCultureViewStore,
         satelliteCatalogHealth: this.satelliteStore.satelliteCatalogHealth,
         starCatalogHealth: this.catalogStore.starCatalogHealth,
@@ -17507,7 +17504,7 @@ private loadPlanetPositions(): void {
     } else if (this.activePanel === 'search') {
       SearchPanel({
         store: this.searchStore,
-        languageRevision: this.languageRevision,
+        languageRevision: this.languageStore.languageRevision,
         visibilityLabel: this.searchVisibilityLabel(),
         instrumentLabel: this.searchInstrumentLabel(),
         categories: this.searchAllCategoryOptions(),
@@ -17575,12 +17572,12 @@ private loadPlanetPositions(): void {
         configTabContentOpacity: this.configTabContentOpacity,
         configTabContentOffsetX: this.configTabContentOffsetX,
         i18nLang: this.i18nLang,
-        selectedLanguage: this.selectedLanguage,
+        selectedLanguage: this.languageStore.selectedLanguage,
         isExpandedLayout: this.isExpandedLayout,
-        informationMode: this.informationMode,
-        informationSettingPending: this.informationSettingPending,
+        informationMode: this.infoWindowStore.informationMode,
+        informationSettingPending: this.infoWindowStore.informationSettingPending,
         currentProjection: this.currentProjection,
-        configDitheringMode: this.configDitheringMode,
+        configDitheringMode: this.viewSettingsStore.configDitheringMode,
         timeSettingsPending: this.timeSettingsPending,
         observationTimeText: this.timeStore.observationTimeText,
         scriptLaunching: this.scriptStore.scriptLaunching,
@@ -18084,7 +18081,7 @@ private loadPlanetPositions(): void {
         telescopeStore: this.telescopeStore,
         isExpandedLayout: this.isExpandedLayout,
         fovText: this.fovText,
-        selectedLanguage: this.selectedLanguage,
+        selectedLanguage: this.languageStore.selectedLanguage,
         viewSettingsStore: this.viewSettingsStore,
         observingListStore: this.obsListStore,
         skyCultureViewStore: this.skyCultureViewStore,
@@ -18284,7 +18281,7 @@ private loadPlanetPositions(): void {
   }
 
   private settingsChoiceSelected(group: string, value: string): boolean {
-    if (group === 'information') return this.informationMode === value
+    if (group === 'information') return this.infoWindowStore.informationMode === value
     if (group === 'date') return this.timeSettingsStore.configDateFormat === value
     if (group === 'time') return this.timeSettingsStore.configTimeFormat === value
     if (group === 'startup') return this.timeSettingsStore.startupTimeMode === value

@@ -15,7 +15,8 @@
 //     screenCapture* / scriptControl* 拖拽瞬时量）—— 由桥回调、定时器与触摸每帧写入，留在宿主；
 //   - skyTextureStatusTimer / DelayTimer / Polls 与 angleMeasureRequestId —— 定时器/请求标识，非 UI 状态；
 //   - sessionJson / sessionExportSig / sessionHint —— 与会话续传（`sessionApply` 500ms 后二次比对）及
-//     `ContinuationSection`（astro 域）共享，留在宿主避免跨域耦合。
+//     `ContinuationSection`（astro 域）共享，刻意**不并入 ToolsStore**；2026-10-04 已并入语义更贴的
+//     `SessionToolStore`（PlacePanel 早已 `@ObjectLink sessionToolStore`）。
 //
 // 只放数据与纯计算，不 import UI / NAPI。
 @Observed

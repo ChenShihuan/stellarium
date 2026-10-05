@@ -24,8 +24,8 @@ test('satellite age is distinct from propagation failure and package freshness',
 
 test('custom mask and brief information modes do not reveal hidden distance data', () => {
   const visible = extract('distanceInformationVisible');
-  assert.equal(visible.call({ infoLevel: 2, informationMode: 'short' }), false);
-  assert.equal(visible.call({ infoLevel: 1, informationMode: 'custom', informationMaskHas: () => false }), false);
+  assert.equal(visible.call({ infoWindowStore: { infoLevel: 2, informationMode: 'short' } }), false);
+  assert.equal(visible.call({ infoWindowStore: { infoLevel: 1, informationMode: 'custom' }, informationMaskHas: () => false }), false);
   const summary = extract('objectDistanceSummary');
   assert.equal(summary.call({ distanceInformationVisible: () => false, selectedDistance: '8.6 ly' }), '--');
 });

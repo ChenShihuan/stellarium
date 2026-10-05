@@ -1,10 +1,14 @@
 import { TonightPlanetRow } from '../pages/MainWindowModels'
 
-// 观测/会话工具区块（观测星球切换、虚拟指星笔、手表陀螺仪模拟、今晚天象）的状态簇。
+// 观测/会话工具区块（观测星球切换、虚拟指星笔、手表陀螺仪模拟、今晚天象、会话续传）的状态簇。
 //
 // 本片边界（Phase 3as）：原宿主 20 个 `@State private` 字段逐条搬到这里，保留原类型与默认值。
 // 宿主以 `@State private sessionToolStore: SessionToolStore = new SessionToolStore()` 持有；
 // UI 已下沉为 `panels/astro/SessionToolSections.ets` 下的组件（`@ObjectLink store` + `@Prop` + 回调解入）。
+//
+// 2026-10-04 追加：会话导出/应用/迁移三字段（sessionJson / sessionExportSig / sessionHint）由宿主并入本
+// store（review §2.7）。PlacePanel 早已 `@ObjectLink sessionToolStore`，其 `@Prop sessionHint / sessionJson`
+// 已移除，ContinuationSection 就地读 store。
 //
 // 刻意不搬的宿主职责（跨域 / 桥 / 定时器依赖，§13.1 规则 6）：
 //   - native 桥：`setObserverPlanet` / `pointAtSkyTest` / `watchGyroSend` / `watchGyroStart` /
@@ -43,4 +47,11 @@ export class SessionToolStore {
   tonightSunJd: number = 0
   tonightShowerJd: number = 0
   tonightPlanetRows: TonightPlanetRow[] = []
+
+  // —— 会话导出 / 应用 / 迁移（原宿主 @State，2026-10-04 并入）——
+  // sessionJson 与 sessionExportSig 供 sessionApply 500ms 后二次比对，验证无缝还原；
+  // sessionHint 为续传区块即时提示文案。三者均为标量整体赋值（无原地变更）。
+  sessionJson: string = ''
+  sessionExportSig: string = ''
+  sessionHint: string = ''
 }
