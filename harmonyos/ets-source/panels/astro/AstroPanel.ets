@@ -20,6 +20,7 @@ import { GraphLoadingRow, RtsSelectionGuide, GraphSelectionGuide } from './Graph
 import { WutTargetCard } from './WutTargetCard'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { astroGroupItems, astroTabItemsForGroup, rtsCalendarDurationLabel, graphStartOptionLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, planetPairLinearLabel, hecPointSize, hecDistanceLabel, lunarElongationBarHeight, planetTimeSeriesBarHeight, planetPairBarHeight } from '../../common/derive/astro'
+import { planetZh, zhNameOf, zhType } from '../../common/derive/labels'
 
 export interface AstroPanelHost {
   almanacHoursLabel: (key: string) => string
@@ -106,7 +107,6 @@ export interface AstroPanelHost {
   planetTimeSeriesBarWidth: () => number
   planetTimeSeriesSegmentWidth: () => number
   planetTimeSeriesValueLabel: (value: number | undefined, metric: string) => string
-  planetZh: (en: string) => string
   publishAstroPanelState: () => void
   reloadCurrentGraph: () => void
   reloadEclipses: () => void
@@ -121,8 +121,6 @@ export interface AstroPanelHost {
   wutDirectionLabel: (direction: string) => string
   wutTargetSubtitle: (target: WutTarget) => string
   wutTargetTitle: (target: WutTarget) => string
-  zhNameOf: (raw: string) => string
-  zhType: (type: string) => string
 }
 
 function noopAstroPanelHost(): AstroPanelHost {
@@ -211,7 +209,6 @@ function noopAstroPanelHost(): AstroPanelHost {
     planetTimeSeriesBarWidth: () => 0,
     planetTimeSeriesSegmentWidth: () => 0,
     planetTimeSeriesValueLabel: () => '',
-    planetZh: () => '',
     publishAstroPanelState: () => {},
     reloadCurrentGraph: () => {},
     reloadEclipses: () => {},
@@ -225,9 +222,7 @@ function noopAstroPanelHost(): AstroPanelHost {
     wutCategoryTitle: () => '',
     wutDirectionLabel: () => '',
     wutTargetSubtitle: () => '',
-    wutTargetTitle: () => '',
-    zhNameOf: () => '',
-    zhType: () => ''
+    wutTargetTitle: () => ''
   }
 }
 
@@ -368,7 +363,7 @@ export struct AstroPanel {
                     ForEach(this.store.planetPositions, (p: PlanetPosition) => {
                       Column({ space: 1 }) {
                         Row() {
-                          Text(this.host.planetZh(p.name)).fontSize(11).fontColor(this.textColor).width(60)
+                          Text(planetZh(p.name)).fontSize(11).fontColor(this.textColor).width(60)
                           Text(p.altitude.toFixed(1) + '°').fontSize(10).fontColor(this.subColor).width(50)
                           Text(p.azimuth.toFixed(1) + '°').fontSize(10).fontColor(this.subColor).width(50)
                           Text(p.magnitude.toFixed(1)).fontSize(10).fontColor(this.subColor).width(40)
@@ -578,7 +573,7 @@ export struct AstroPanel {
                 Row({ space: 8 }) {
                   Column({ space: 1 }) {
                     Text('星历目标').fontSize(9).fontColor(this.subColor)
-                    Text(this.objectDetailStore.selectedName.length > 0 ? this.host.zhNameOf(this.objectDetailStore.selectedName) : '尚未选择天体')
+                    Text(this.objectDetailStore.selectedName.length > 0 ? zhNameOf(this.objectDetailStore.selectedName) : '尚未选择天体')
                       .fontSize(11).fontColor(this.objectDetailStore.selectedName.length > 0 ? this.textColor : this.subColor)
                       .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   }.layoutWeight(1).alignItems(HorizontalAlign.Start)
@@ -1666,7 +1661,7 @@ export struct AstroPanel {
                   WutTargetCard({
                 target: target, textColor: this.textColor, subColor: this.subColor, panelColor: this.panelColor,
                 titleOf: (item: WutTarget) => this.host.wutTargetTitle(item), subtitleOf: (item: WutTarget) => this.host.wutTargetSubtitle(item),
-                typeOf: (type: string) => this.host.zhType(type), numberText: (value: number | undefined, digits: number, unit: string) => this.host.fmtNum(value, digits, unit),
+                typeOf: (type: string) => zhType(type), numberText: (value: number | undefined, digits: number, unit: string) => this.host.fmtNum(value, digits, unit),
                 clockText: (value: string | undefined) => this.host.fmtClock(value), onJump: (item: WutTarget) => { this.host.jumpToWutTarget(item) }
               })
                 }, (target: WutTarget, index: number) => (target.englishName ?? index.toString()))

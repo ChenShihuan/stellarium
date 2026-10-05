@@ -4,14 +4,15 @@ import { ToolsStore } from '../../state/ToolsStore'
 import { ScriptStore } from '../../state/ScriptStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { GuideLibrary } from '../guide/GuideLibrary'
+import { scriptZh, scriptDesc } from '../../common/derive/labels'
 
 // 脚本面板（原宿主 panelContent() 的 `scripts` 分支，分支体原样下沉）。
 //
 // 判定条件 `activePanel === 'scripts'` 留在宿主。脚本列表 / 回放 / 录制 / 屏幕
 // MP4 / 帧序列导出的全部状态由宿主 @State 以 @Prop 传入（宿主仍是写方），
 // 所有动作回注宿主；录制开关读 ToolsStore（@ObjectLink，实时刷新）。
-// scriptZh / scriptDesc / scriptMetaLine / scriptSourceLine 因设置页也在用，
-// 仍留宿主，以函数成员回注。
+// scriptZh / scriptDesc 已直连 common/derive/labels（§14.2 A1-3）；scriptMetaLine /
+// scriptSourceLine 因读 scriptStore 元数据仍留宿主，以函数成员回注。
 // 成员名避开 CustomComponent 属性方法（分隔线颜色用 lineColor，不用 borderColor）。
 
 @Component
@@ -27,8 +28,6 @@ export struct ScriptsPanel {
   @Prop accentColor: string
   @Prop panelColor: string
   @Prop lineColor: string
-  scriptZh: (filename: string) => string = (filename: string) => filename
-  scriptDesc: (filename: string) => string = () => ''
   scriptMetaLine: (filename: string) => string = () => ''
   scriptSourceLine: (filename: string) => string = () => ''
   onStartGuide: (id: string) => void = () => {}
@@ -80,7 +79,7 @@ export struct ScriptsPanel {
         if (this.scriptStore.scriptLaunching) {
           Row({ space: 6 }) {
             LoadingProgress().width(16).height(16).color(this.accentColor)
-            Text(I18n.format('script_starting_named', [this.scriptZh(this.scriptStore.scriptLaunchingName)])).fontSize(10).fontColor(this.subColor)
+            Text(I18n.format('script_starting_named', [scriptZh(this.scriptStore.scriptLaunchingName)])).fontSize(10).fontColor(this.subColor)
           }.width('100%').padding({ left: 6, right: 6, bottom: 2 })
         }
         Column({ space: 2 }) {
@@ -88,14 +87,14 @@ export struct ScriptsPanel {
               Column({ space: 0 }) {
                 // 第一行：中文名 + 播放图标
                 Row() {
-                  Text(this.scriptZh(s)).fontSize(11).fontColor(this.textColor)
+                  Text(scriptZh(s)).fontSize(11).fontColor(this.textColor)
                     .fontWeight(FontWeight.Medium).layoutWeight(1)
                   Text('▶').fontSize(9).fontColor('#7FD0FF')
                 }
                 .height(28).width('100%').padding({ left: 10, right: 10 })
                 // 第二行：简短描述
-                if (this.scriptDesc(s)) {
-                  Text(this.scriptDesc(s))
+                if (scriptDesc(s)) {
+                  Text(scriptDesc(s))
                     .fontSize(8).fontColor('#77FFFFFF').width('100%')
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     .padding({ left: 10, right: 10, bottom: 3 })
