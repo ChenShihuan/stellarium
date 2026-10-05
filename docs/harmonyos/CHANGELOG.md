@@ -1,3 +1,13 @@
+## [2026-09-30] DevEco Code - Phase 3 首两片尝试后回退：store + 组件的实时刷新路径未证实（既有现象）
+
+- **经过：** 按 (b) 方案试做两片并各自单独提交 —— ① `BookmarkStore` + `BookmarkPanel`（3 字段 / 12 引用 / 85 行面板分支）；② `TimeStore` + `TimeSpeedChips`（`timeSpeedIndex` / 21 处引用 / 速度 chips）。两片均通过 `arkts_check`、`BUILD SUCCESSFUL`、契约校验与模拟器安装启动，并实证了**状态归属正确**：书签面板输入后切走再切回（组件销毁重建），输入内容仍在。
+- **未通过项（实时刷新）：** 抽成组件后点击「快进」，`applySpeedStep` 确实写入 store（重开面板显示「快进 2x」）、副标题立即变 `2x`，但**面板开着的期间 chip 标签与高亮都不更新**；点「停止」同理（未变「继续」）。即子组件的 `@ObjectLink` 与 `@Prop` 都未触发重渲染，而该组件由 `panelContent()` 这个 `@Builder` 体创建。
+- **关键对照实验：** `git revert` 回原生实现后重装实测，**原生版本行为完全相同**（副标题 `2x`、chips 仍「快进」未高亮，截图确认 99,283 B）。因此这是**既有现象**（推断：面板实时刷新依赖 `timePanelTimer` 等周期性定时器写入 @State，UI-only 模拟器无引擎数据、定时器不产生写入），**不是本次重构引入的回归**；但本次重构同样**无法证明刷新等价**，故按"行为零变更"不变式回退，不保留未证实等价的重构。
+- **动作：** `git revert` 两片（`c1a4ae7dca` 回退生成副本同步、`71a524ffbe` 回退 bookmark store 与面板），同时删除 `state/BookmarkStore.ets`、`panels/BookmarkPanel.ets`、`state/TimeStore.ets`、`panels/time/TimeSpeedChips.ets` 与对应的 CHANGELOG 条目；回退后重建复测，契约校验通过，工作区与本轮起点（`c0e9402b4a`）差异为 **0 行**。
+- **仍沉淀的两条 ArkTS 规则（后续复用）：** ① `@ObjectLink` 的宿主源必须是可观察状态（`private` 字段会被编译器拒绝，须 `@State`）；② 组件成员不能与 `CustomComponent` 基类属性方法同名（`borderColor` → `cardBorderColor`）。
+- **后续依据：** 结论已写入 `research/ARKTS-PAGES-REFACTOR-PLAN.md` §11 修订 4 —— 先在**真机**做受控实验建立实时刷新基线（原生 chips 是否实时更新、`@ObjectLink` 组件是否等价），据此决定 **Phase 4 的 `PanelHost`（面板宿主改为由 `build()` 直接实例化的组件）是否必须先于 Phase 3**。
+- **范围约束：** 本轮最终净改动仅为文档；应用源码回到 Phase 1c 状态，行为零变更。
+
 ## [2026-09-30] DevEco Code - Phase 1c：抽出 MainWindowModels（93 个文件作用域类型与常量）
 
 - **新增文件：** `harmonyos/ets-source/pages/MainWindowModels.ets`（764 行）—— 原单体序言区（`interface CityPreset` 起、`@Component` 前）的全部文件作用域声明整体搬移，共 93 个（interface / const / class），逐条加 `export`；并复制单体的 `./StellariumTypes` 导入，因为 `Scenery3dResponse` 等引用了 `Scenery3dItem` 等类型。
