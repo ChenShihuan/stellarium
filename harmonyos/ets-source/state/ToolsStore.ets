@@ -1,11 +1,17 @@
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
-import { AboutResponse, LogResponse } from '../pages/MainWindowModels'
+import { AboutResponse, LogResponse, ExportConfigResponse, ImportConfigResponse } from '../pages/MainWindowModels'
+import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → ToolsStore 的 UI 提示注入（§13.1 规则 6 / §14.8 规则 2：store 不触碰 UI）。
 // 角度测量动作（toggleAngleMeasure）回包后经宿主 flashHint 提示（原宿主 this.flashHint 逐字语义）。
+// 2026-10-05（解散 SettingsController）：配置整包动作（保存设置 / 恢复默认 / 导出 / 导入）并入本
+// store —— 保存动作（宿主既有 saveAppSettings）与导出配置的剪贴板落点（PlatformPort 适配器留宿主）
+// 经具名 hook 回注。
 export interface ToolsHostHooks {
   flashHint(text: ResourceStr): void
+  saveAppSettings(): void
+  copyConfigExportText(text: string, successHint: ResourceStr): void
 }
 
 // 「工具 / 帮助 / 角度测量 / 录制控制」域的状态簇（Phase 3ao）。
@@ -202,6 +208,85 @@ export class ToolsStore {
       this.angleMeasureHasEnd = previousHasEnd
       this.angleMeasureText = previousText
       hooks.flashHint('角度测量插件不可用')
+    })
+  }
+
+  // ==== 配置整包（保存设置 / 恢复默认 / 导出 / 导入）====
+  // 2026-10-05 解散 capability/SettingsController.ets：四法按「读本域 store 字段 → 并入该 store 方法」
+  // 下沉（原 SettingsController.saveAllCoreSettings / restoreCoreDefaults / exportConfig / importConfig），
+  // 函数体逐字搬入；差异仅 this.port.request* → port.request*、this.hooks.* → hooks.*、
+  // this.tools.<f> → this.<f>。
+
+  // 保存全部核心设置（原 SettingsController.saveAllCoreSettings）：宿主持久化动作经 hooks.saveAppSettings。
+  saveAllCoreSettings(): void {
+    const hooks = this.hooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    hooks.saveAppSettings()
+    port.requestInteractive('saveAllSettings', '', (r: StellariumBridgeResponse) => {
+      hooks.flashHint(r.ok === true ? I18n.t('settings_saved') : I18n.t('msg_apply_failed'))
+    })
+  }
+
+  // 恢复默认设置（原 SettingsController.restoreCoreDefaults）。
+  restoreCoreDefaults(): void {
+    const hooks = this.hooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    port.requestInteractive('restoreDefaultSettings', '', (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) {
+        hooks.flashHint(I18n.t('msg_apply_failed'))
+        return
+      }
+      hooks.flashHint(I18n.t('settings_defaults_restart'))
+    })
+  }
+
+  // 导出配置（原 SettingsController.exportConfig）：导出文本落本 store，剪贴板经 hooks（适配器留宿主）。
+  exportConfig(): void {
+    const hooks = this.hooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    port.requestWhenReady('exportConfig', '', (r: StellariumBridgeResponse) => {
+      const resp = r as ExportConfigResponse
+      if (resp.ok !== true) {
+        hooks.flashHint(I18n.t('config_export_failed'))
+        return
+      }
+      this.configExportText = resp.content ?? ''
+      this.configExportVisible = true
+      hooks.copyConfigExportText(this.configExportText, I18n.t('config_export_copied'))
+    })
+  }
+
+  // 导入配置（原 SettingsController.importConfig）。
+  importConfig(): void {
+    const hooks = this.hooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    const text = this.configImportText.trim()
+    if (text.length === 0) {
+      hooks.flashHint(I18n.t('msg_paste_config_first'))
+      return
+    }
+    this.configImportMsg = '正在导入…'
+    port.requestWhenReady('importConfig', text, (r: StellariumBridgeResponse) => {
+      const resp = r as ImportConfigResponse
+      if (resp.ok === true) {
+        this.configImportText = ''
+        this.configImportMsg = '已导入 ' + (resp.applied ?? 0) + ' 项配置'
+        hooks.flashHint(this.configImportMsg)
+      } else {
+        this.configImportMsg = '导入失败：' + (resp.error ?? '未知错误')
+      }
     })
   }
 }

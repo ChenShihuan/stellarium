@@ -15,8 +15,7 @@ const settingsRowsSource = readFileSync(new URL('../harmonyos/ets-source/panels/
 const settingsPanelSource = readFileSync(new URL('../harmonyos/ets-source/panels/panels/SettingsPanel.ets', import.meta.url), 'utf8');
 // D4：applyTimeSettings 随时间行为下沉 capability/TimeController.ets（UI 动画改经 hooks.animateOption）。
 const timeControllerSource = readFileSync(new URL('../harmonyos/ets-source/capability/TimeController.ets', import.meta.url), 'utf8');
-// E3：settingsChoiceSelected / selectSettingsChoice 随设置选项行为下沉 capability/SettingsController.ets。
-const settingsControllerSource = readFileSync(new URL('../harmonyos/ets-source/capability/SettingsController.ets', import.meta.url), 'utf8');
+// 2026-10-05：解散 SettingsController 后 settingsChoiceSelected / selectSettingsChoice 作为跨域薄分派留宿主。
 function method(name) {
   const start = source.indexOf(name);
   assert.ok(start >= 0, name);
@@ -27,22 +26,18 @@ function controllerMethod(name) {
   assert.ok(start >= 0, name);
   return timeControllerSource.slice(start, timeControllerSource.indexOf('\n  }', start));
 }
-function settingsMethod(name) {
-  const start = settingsControllerSource.indexOf(name);
-  assert.ok(start >= 0, name);
-  return settingsControllerSource.slice(start, settingsControllerSource.indexOf('\n  }', start));
-}
 
 test('all four settings groups read current state rather than a captured selection boolean', () => {
-  const selected = settingsMethod('settingsChoiceSelected(');
+  const selected = method('private settingsChoiceSelected(');
   assert.ok(selected.includes('this.infoWindowStore.informationMode === value'));
   for (const state of ['configDateFormat', 'configTimeFormat', 'startupTimeMode']) {
     assert.ok(selected.includes(`this.timeSettingsStore.${state} === value`), state);
   }
-  const dispatch = settingsMethod('selectSettingsChoice(');
+  const dispatch = method('private selectSettingsChoice(');
   for (const group of ['information', 'date', 'time', 'startup']) {
     assert.ok(dispatch.includes(`group === '${group}'`), group);
   }
+  assert.ok(dispatch.includes('this.infoWindowStore.setInformationMode(value)'));
   assert.ok(settingsPanelSource.includes("active: this.informationMode === 'all'"));
   assert.ok(settingsPanelSource.includes("active: this.informationMode === 'custom'"));
   assert.ok(settingsRowsSource.includes('active: this.active'));

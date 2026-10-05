@@ -5,7 +5,7 @@
 //
 // **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort（宿主 callNativeWhenReady 的
 // requestWhenReady，含录制记录）；重试窗口 0ms × 100 × 120 = 12s 逐字保留（撑过 StelApp 初始化）。
-// 日志经 hilog（与 TimeController / SettingsController 先例一致）。
+// 日志经 hilog（与 TimeController 等控制器先例一致）。
 import hilog from '@ohos.hilog'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'

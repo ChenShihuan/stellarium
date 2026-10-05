@@ -22,7 +22,27 @@
 //
 // 约束：6 个字段均为标量，只做整体赋值（`informationCustomMask` 的读改写也是整体赋值，
 // `infoLevel` 由 applySelectedInfoMode 整体赋值）；改造前已普查确认无原地变更。
+//
+// 2026-10-05（解散 capability/SettingsController.ets）：信息模式 / 字段开关两个桥动作按「读本域
+// store 字段 → 并入该 store 方法」下沉（原 SettingsController.setInformationMode / setInformationField）。
+// 桥经 CommandPort；SelectionService 保留族的派生级别写回（applySelectedInfoMode）与选中详情刷新
+// （refreshSelectedObject）经 InfoWindowHostHooks 具名回注宿主（§15.7 规则 4）。ObjectDetailStore 的
+// 清空动作（清 selectedDetailLoaded）同样经 hook 回注，避免 store 相互 import。
+import { StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { I18n } from '../pages/I18n'
+import { CommandPort } from '../bridge/CommandPort'
 import { informationMaskBit } from '../common/derive/skycult'
+
+// 宿主 → InfoWindowStore 回注（§13.1 规则 6 / §15.7 规则 4）。
+export interface InfoWindowHostHooks {
+  // UI 提示（store 不触碰 UI）。
+  flashHint(text: ResourceStr): void
+  // SelectionService 保留族（§15.6-6）：信息模式派生级别 / 选中详情刷新本体留宿主。
+  applySelectedInfoMode(mode: string): void
+  refreshSelectedObject(): void
+  // 跨 store（ObjectDetailStore）：清 selectedDetailLoaded。
+  clearSelectedDetailLoaded(): void
+}
 
 @Observed
 export class InfoWindowStore {
@@ -32,6 +52,76 @@ export class InfoWindowStore {
   informationCustomMask: number = 0
   informationSettingPending: boolean = false
   infoLevel: number = 1
+
+  // —— 桥 / 宿主回注（§14.1 AB-0；2026-10-05 随信息模式动作并入） ——
+  private port: CommandPort | null = null
+  private hooks: InfoWindowHostHooks | null = null
+
+  // 宿主在 aboutToAppear 注入端口；字段赋值即驱动宿主重绘（store 无 publish* 发布点）。
+  attachPort(port: CommandPort): void {
+    this.port = port
+  }
+
+  attachHooks(hooks: InfoWindowHostHooks): void {
+    this.hooks = hooks
+  }
+
+  // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  // 天体信息模式切换（原 SettingsController.setInformationMode，函数体逐字搬入；仅
+  // this.port.requestInteractive → port.requestInteractive、this.objectDetailStore.selectedDetailLoaded=false
+  // → hooks.clearSelectedDetailLoaded、applySelectedInfoMode / refreshSelectedObject → hooks）。
+  setInformationMode(mode: string): void {
+    const port = this.ensurePort()
+    const hooks = this.hooks
+    if (port === null || hooks === null) {
+      return
+    }
+    if (this.informationSettingPending || mode === this.informationMode) return
+    this.informationSettingPending = true
+    port.requestInteractive('setInformationSetting', 'mode|' + mode, (r: StellariumBridgeResponse) => {
+      this.informationSettingPending = false
+      if (r.ok !== true) { hooks.flashHint(r.error ?? I18n.t('msg_apply_failed')); return }
+      this.informationMode = r.infoMode ?? mode
+      if (r.customInfoMask !== undefined) this.informationCustomMask = Number(r.customInfoMask)
+      hooks.applySelectedInfoMode(this.informationMode)
+      hooks.clearSelectedDetailLoaded()
+      hooks.refreshSelectedObject()
+    }, () => {
+      this.informationSettingPending = false
+      hooks.flashHint(I18n.t('msg_apply_failed'))
+    })
+  }
+
+  // 自定义信息模式下单字段开关（原 SettingsController.setInformationField，函数体逐字搬入；
+  // 差异同 setInformationMode：桥经 port、清详情经 hooks）。
+  setInformationField(key: string, enabled: boolean): void {
+    const port = this.ensurePort()
+    const hooks = this.hooks
+    if (port === null || hooks === null) {
+      return
+    }
+    if (this.informationSettingPending || this.informationMode !== 'custom' || this.informationMaskHas(key) === enabled) return
+    const bit = informationMaskBit(key)
+    if (bit === 0) return
+    const nextMask = enabled ? (this.informationCustomMask | bit) : (this.informationCustomMask & ~bit)
+    this.informationSettingPending = true
+    port.requestInteractive('setInformationSetting', 'mask|' + nextMask.toString(), (r: StellariumBridgeResponse) => {
+      this.informationSettingPending = false
+      if (r.ok !== true) { hooks.flashHint(r.error ?? I18n.t('msg_apply_failed')); return }
+      this.informationMode = 'custom'
+      this.informationCustomMask = r.customInfoMask !== undefined ? Number(r.customInfoMask) : nextMask
+      this.infoLevel = 0
+      hooks.clearSelectedDetailLoaded()
+      hooks.refreshSelectedObject()
+    }, () => {
+      this.informationSettingPending = false
+      hooks.flashHint(I18n.t('msg_apply_failed'))
+    })
+  }
 
   // ==== 信息显示「取值/判断」助手（§14 A2-3，原宿主私有方法逐字搬入）====
   //

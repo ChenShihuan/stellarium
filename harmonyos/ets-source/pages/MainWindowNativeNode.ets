@@ -75,7 +75,6 @@ import { TimeController, TimeHostHooks } from '../capability/TimeController'
 import { SkyCultureController, SkyCultureHostHooks } from '../capability/SkyCultureController'
 import { SkyCultureMakerController, SkyCultureMakerHostHooks } from '../capability/SkyCultureMakerController'
 import { BehaviorHostHooks } from '../capability/ControllerHooks'
-import { SettingsController, SettingsHostHooks } from '../capability/SettingsController'
 import { SearchController, SearchHostHooks } from '../capability/SearchController'
 import { SelfTestController } from '../capability/SelfTestController'
 import { TimeStore } from '../state/TimeStore'
@@ -1036,7 +1035,7 @@ export struct WindowNativeNode {
   // D13：卫星行为控制器（惰性构造；状态在 SatelliteStore，publish* 保留项经 hooks 回注）。
   private satelliteControllerImpl: SatelliteController | null = null
   // D7：天文计算行为控制器（惰性构造；状态在 astro/ephemeris/wut store，picker/animateTo/Scroller
-  // 与保留项 publishAstroPanelState/applyAtmosphereResponse/applySelectedObject 经 hooks 回注）。
+  // 与保留项 publishAstroPanelState/applySelectedObject 经 hooks 回注）。
   private astroCalcControllerImpl: AstroCalcController | null = null
   // D14：插件功能行为控制器（惰性构造；状态在 PluginStore，跨域路由经 hooks 回注）。
   private pluginFeatureControllerImpl: PluginFeatureController | null = null
@@ -1046,8 +1045,6 @@ export struct WindowNativeNode {
   private scriptPlaybackControllerImpl: ScriptPlaybackController | null = null
   // D4：时间操作控制器（惰性构造；状态在 time/timeSettings/deltaT store，时间面板定时器自持）。
   private timeControllerImpl: TimeController | null = null
-  // E3：设置面板选项 / 配置行为控制器（惰性构造；状态在 infoWindow/timeSettings/navigation/view/ephemeris/objectDetail/tools/atmosphere store）。
-  private settingsControllerImpl: SettingsController | null = null
   private searchControllerImpl: SearchController | null = null
   private selfTestControllerImpl: SelfTestController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
@@ -2131,7 +2128,8 @@ export struct WindowNativeNode {
 
   // D7：天文计算行为控制器惰性构造。桥经 HostCommandPort；picker/fileIo 经 HostMediaPort；
   // 状态在 astro/ephemeris/wut/search store；DatePicker/animateTo/Scroller/tab 过渡与保留宿主方法
-  // （publishAstroPanelState / applyAtmosphereResponse / applySelectedObject）经宿主 hooks 回注。
+  // （publishAstroPanelState / applySelectedObject）经宿主 hooks 回注；applyAtmosphereResponse 直接写
+  // AtmosphereStore（2026-10-05 并回 store）。
   private astroCalcCtl(): AstroCalcController {
     if (this.astroCalcControllerImpl === null) {
       const hooks: AstroCalcHostHooks = {
@@ -2166,7 +2164,7 @@ export struct WindowNativeNode {
           this.applySelectedObject(result, fromRefresh, placement, userReselect)
         },
         setPanel: (panel: string): void => { this.setPanel(panel) },
-        applyAtmosphereResponse: (result: StellariumBridgeResponse): void => { this.settingsCtl().applyAtmosphereResponse(result) }
+        applyAtmosphereResponse: (result: StellariumBridgeResponse): void => { this.atmosphereStore.applyAtmosphereResponse(result) }
       }
       this.astroCalcControllerImpl = new AstroCalcController(
         this.commandPort(), this.hostMediaPort, this.astroStore, this.ephemerisStore, this.wutStore, this.searchStore, hooks)
@@ -2298,36 +2296,26 @@ export struct WindowNativeNode {
     return this.timeControllerImpl
   }
 
-  // E3：设置面板选项 / 配置行为控制器惰性构造。桥经 HostCommandPort；可观测状态写各域 store；
-  // SelectionService 保留族（applySelectedInfoMode / refreshSelectedObject）、宿主 @State
-  // （setCurrentProjection）、保存动作、时间设置写回与导出剪贴板经 hooks 回注。
-  private settingsCtl(): SettingsController {
-    if (this.settingsControllerImpl === null) {
-      const hooks: SettingsHostHooks = {
-        refreshState: (): void => { this.refreshState() },
-        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
-        panelChange: (panel: string, visible: boolean): void => {
-          this.activePanel = panel
-          this.panelVisible = visible
-          this.syncDockClockTimer()
-        },
-        applySelectedInfoMode: (mode: string): void => { this.applySelectedInfoMode(mode) },
-        refreshSelectedObject: (): void => { this.refreshSelectedObject() },
-        setCurrentProjection: (value: string): void => { this.currentProjection = value },
-        saveAppSettings: (): void => { this.saveAppSettings() },
-        saveTimePreference: (command: string, payload: string, message: string): void => { this.timeCtl().saveTimePreference(command, payload, message) },
-        setConfigurationTimeFormat: (value: string): void => { this.timeCtl().setConfigurationTimeFormat(value) },
-        setStartupTimeSetting: (key: string, value: string): void => { this.timeCtl().setStartupTimeSetting(key, value) },
-        copyConfigExportText: (text: string, successHint: ResourceStr): void => {
-          copyTextToClipboard(this.hostPlatformPort, text, successHint, { flashHint: (hint: ResourceStr): void => this.flashHint(hint) })
-        }
-      }
-      this.settingsControllerImpl = new SettingsController(
-        this.commandPort(), this.infoWindowStore, this.timeSettingsStore, this.navigationStore,
-        this.viewSettingsStore, this.ephemerisStore, this.objectDetailStore, this.tools,
-        this.atmosphereStore, hooks)
-    }
-    return this.settingsControllerImpl
+  // E3 的「设置面板选项 / 配置行为」控制器已于 2026-10-05 解散：18 法按字段归属并回
+  // infoWindow / navigation / ephemeris / viewSettings / tools / atmosphere store（详见各 store），
+  // 跨域分派 settingsChoiceSelected / selectSettingsChoice 留宿主（下方薄分派）；SettingsController.ets 已删除。
+
+  // 设置选项分组判定（原 SettingsController.settingsChoiceSelected，跨 4 个 store 的谓词，留宿主；零副作用）。
+  private settingsChoiceSelected(group: string, value: string): boolean {
+    if (group === 'information') return this.infoWindowStore.informationMode === value
+    if (group === 'date') return this.timeSettingsStore.configDateFormat === value
+    if (group === 'time') return this.timeSettingsStore.configTimeFormat === value
+    if (group === 'startup') return this.timeSettingsStore.startupTimeMode === value
+    return false
+  }
+
+  // 设置选项分派（原 SettingsController.selectSettingsChoice）：跨域分派留宿主，调各 store 新方法 / timeCtl()。
+  private selectSettingsChoice(group: string, value: string): void {
+    if (this.settingsChoiceSelected(group, value)) return
+    if (group === 'information') this.infoWindowStore.setInformationMode(value)
+    else if (group === 'date') this.timeCtl().saveTimePreference('setDateFormat', value, 'time_settings_applied')
+    else if (group === 'time') this.timeCtl().setConfigurationTimeFormat(value)
+    else if (group === 'startup') this.timeCtl().setStartupTimeSetting('startupMode', value)
   }
 
   // E4：搜索 / 筛选行为控制器惰性构造。桥经 HostCommandPort；可观测状态写 SearchStore；
@@ -2378,8 +2366,42 @@ export struct WindowNativeNode {
     this.tools.attachPort(hostPort, () => {})
     // §14 B3-1：角度测量加载器 loadAngleMeasure 与动作 toggleAngleMeasure 同片搬入 ToolsStore；
     // 动作回包后的 UI 提示经 ToolsHostHooks.flashHint 回注（store 不触碰 UI）。
+    // 2026-10-05：配置整包四法（saveAllCoreSettings / restoreCoreDefaults / exportConfig / importConfig）
+    // 并入本 store，保存动作与导出剪贴板落点（PlatformPort 适配器留宿主）经 hook 回注。
     this.tools.attachHooks({
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+      saveAppSettings: (): void => { this.saveAppSettings() },
+      copyConfigExportText: (text: string, successHint: ResourceStr): void => {
+        copyTextToClipboard(this.hostPlatformPort, text, successHint, { flashHint: (hint: ResourceStr): void => this.flashHint(hint) })
+      }
+    })
+    // 2026-10-05（解散 SettingsController）：信息模式 / 导航 / 星历 / 显示四域设置动作并回各 store。
+    // 均复用同一 HostCommandPort；可观测状态写各 store（无 publish* 发布点，不注入 onChanged），
+    // SelectionService 保留族 / 跨 store / 宿主 @State / hilog 经各自具名 hooks 回注。
+    this.infoWindowStore.attachPort(hostPort)
+    this.infoWindowStore.attachHooks({
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+      applySelectedInfoMode: (mode: string): void => { this.applySelectedInfoMode(mode) },
+      refreshSelectedObject: (): void => { this.refreshSelectedObject() },
+      clearSelectedDetailLoaded: (): void => { this.objectDetailStore.selectedDetailLoaded = false }
+    })
+    this.navigationStore.attachPort(hostPort)
+    this.navigationStore.attachHooks({
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+      setAutoZoomResets: (value: boolean): void => { this.viewSettingsStore.autoZoomResets = value }
+    })
+    this.ephemerisStore.attachPort(hostPort)
+    this.ephemerisStore.attachHooks({
       flashHint: (text: ResourceStr): void => { this.flashHint(text) }
+    })
+    this.viewSettingsStore.attachPort(hostPort)
+    this.viewSettingsStore.attachHooks({
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+      setCurrentProjection: (name: string): void => { this.currentProjection = name },
+      reloadConfigurationSettings: (): void => { this.timeSettingsStore.loadConfigurationSettings() },
+      logProjectionError: (name: string, error: string): void => {
+        hilog.error(0x0000, 'StellariumArkUI', 'setProjectionType rejected %{public}s err=%{public}s', name, error)
+      }
     })
     // §14 B1-1：望远镜/目镜域复用同一个 HostCommandPort 实例。其消费方均为 @ObjectLink，
     // 字段赋值即刷新，且该域无 publish* 发布点，故 onChanged 传空实现。
@@ -2640,8 +2662,8 @@ export struct WindowNativeNode {
     // §14 B2R-2：设置 / 观测点 / 时间附加三个加载器分别下沉 TimeSettingsStore / LocationPickerStore /
     // TimeStore，均复用同一 HostCommandPort 实例。三者消费方均为 @ObjectLink（字段赋值即刷新），
     // 且无 publish* 发布点，故 onChanged 传空实现。跨 store 写入的字段与两个与宿主动作共享的
-    // 助手（applySelectedInfoMode / applyTimeSettings / applyAtmosphereResponse / syncNightModeFromEngine）
-    // 按 §14.5「额外注入」经具名 hooks 回注。
+    // 助手（applySelectedInfoMode / applyTimeSettings / syncNightModeFromEngine）按 §14.5「额外注入」
+    // 经具名 hooks 回注；applyAtmosphereResponse 已于 2026-10-05 并回 AtmosphereStore。
     this.locationPickerStore.attachPort(hostPort, () => {})
     this.locationPickerStore.attachHooks({
       setSkyCultureObserverLatitude: (value: number): void => { this.skyCultureSettingsStore.skyCultureObserverLatitude = value },
@@ -2653,7 +2675,7 @@ export struct WindowNativeNode {
     this.timeStore.attachPort(hostPort, () => {})
     this.timeStore.attachHooks({
       syncNightModeFromEngine: (engineNight: boolean): void => this.nightModeStore.syncNightModeFromEngine(engineNight),
-      applyAtmosphereResponse: (response: StellariumBridgeResponse): void => this.settingsCtl().applyAtmosphereResponse(response)
+      applyAtmosphereResponse: (response: StellariumBridgeResponse): void => this.atmosphereStore.applyAtmosphereResponse(response)
     })
     this.timeSettingsStore.attachPort(hostPort, () => {})
     this.timeSettingsStore.attachHooks({
@@ -3837,7 +3859,7 @@ export struct WindowNativeNode {
   // setScenery3dScene / setScenery3dEnabled 已随 E2 下沉 capability/LayerController.ets（桥经 CommandPort）。
 
   // ===== 帮助面板：关于 / 日志 / 配置导入导出 =====
-  // exportConfig / importConfig 已随 E3 下沉 capability/SettingsController.ets（桥经 CommandPort，剪贴板经 hooks）。
+  // exportConfig / importConfig 已于 2026-10-05 并回 state/ToolsStore.ets（桥经 CommandPort，剪贴板经 hooks）。
 
   // ===== 朗读 / 语音播报 =====
   // 说明：当前构建基于 OpenHarmony 基础 SDK（API 24），其 kit 列表不含
@@ -4050,10 +4072,12 @@ export struct WindowNativeNode {
 
   // setSkyDisplaySetting / applyStarMagLimit / applyMilkyWayBright 已随 E2 下沉 capability/LayerController.ets。
 
-  // setProjection / setEphemerisEnabled / setInformationMode / setInformationField /
-  // setNavigationBoolean / setNavigationMaxFov / saveAllCoreSettings / restoreCoreDefaults /
-  // setConfigurationDateFormat / setConfigurationDithering / setDistanceUnit 已随 E3 下沉
-  // capability/SettingsController.ets（桥经 CommandPort；宿主 @State / 保存动作 / 时间设置写回经 hooks）。
+  // setProjection → ViewSettingsStore / setEphemerisEnabled → EphemerisStore / setInformationMode /
+  // setInformationField → InfoWindowStore / setNavigationBoolean / setNavigationMaxFov →
+  // NavigationSettingsStore / saveAllCoreSettings / restoreCoreDefaults → ToolsStore /
+  // setConfigurationDithering / setDistanceUnit → ViewSettingsStore / applyCustomInformationMask →
+  // ObjectDetailStore。以上均于 2026-10-05 解散 SettingsController 时并回各 store；跨域分派
+  // settingsChoiceSelected / selectSettingsChoice 留宿主（上方薄分派）。
 
   private triggerAction(actionId: string): void {
     hilog.info(0x0000, 'StellariumArkUI', 'triggerAction send %{public}s', actionId)
@@ -4118,8 +4142,8 @@ export struct WindowNativeNode {
     this.flashHint(I18n.t('i0079'))
   }
 
-  // 大气参数回包写入 AtmosphereStore 已随 E3 下沉 capability/SettingsController.applyAtmosphereResponse；
-  // TimeStore.loadTimeExtras 与 AstroCalcController 经 hooks 路由到控制器（§14 B2R-2）。
+  // 大气参数回包写入 AtmosphereStore（已于 2026-10-05 并回 store.applyAtmosphereResponse）；
+  // TimeStore.loadTimeExtras 与 AstroCalcController 经 hooks 路由到 store（§14 B2R-2）。
 
   // ---- 天文计算辅助：高度曲线 ----
 
@@ -4289,7 +4313,7 @@ export struct WindowNativeNode {
     })
   }
 
-  // setFovMarkerSetting 已随 E3 下沉 capability/SettingsController.ets。
+  // setFovMarkerSetting 已于 2026-10-05 并回 state/ViewSettingsStore.ets。
 
   // selectLandscape / setLandscapeFadeWithZoom / changeLandscapeTransparency 已随 E2 下沉
   // capability/LayerController.ets（桥经 CommandPort）。
@@ -5006,7 +5030,8 @@ export struct WindowNativeNode {
     }
   }
 
-  // applyCustomInformationMask 已随 E3 下沉 capability/SettingsController.ets（选中后经该控制器调用）。
+  // applyCustomInformationMask 已于 2026-10-05 并回 state/ObjectDetailStore.ets（30 个被清字段全在该 store，
+  // 掩码判定以谓词传入）。
 
   private updateSelectedLiveDetails(fields: Array<ObjectDetailField>): void {
     const previous = this.objectDetailStore.selectedDetailFields
@@ -5132,7 +5157,7 @@ export struct WindowNativeNode {
       this.objectDetailStore.selectedTransit = showObservedInfo && result.transit && result.transit.length > 0 ? result.transit : ''
       this.objectDetailStore.selectedPhase = showObservedInfo && typeof result.phase === 'number' ? (result.phase as number).toFixed(0) + '%' : ''
       this.objectDetailStore.selectedElongation = showObservedInfo && typeof result.elongation === 'number' ? (result.elongation as number).toFixed(1) + '°' : ''
-      this.settingsCtl().applyCustomInformationMask()
+      this.objectDetailStore.applyCustomInformationMask(this.infoWindowStore.informationMode, (key: string): boolean => this.infoWindowStore.informationMaskHas(key))
       // 选中成功后弹出独立浮动详情窗口（新目标默认收起，不打扰当前菜单；同一目标刷新时保留展开态）
       if (targetChanged) {
         this.dismissedObjectName = ''
@@ -7310,7 +7335,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         onLoadTrailSettings: () => { this.layerViewStore.loadTrailDisplaySettings() },
         onApplyTrailColor: () => { this.layerCtl().applyTrailColor() },
         onTriggerAction: (actionId: string) => { this.triggerAction(actionId) },
-        onSetFovMarker: (setting: string, value: number) => { this.settingsCtl().setFovMarkerSetting(setting, value) },
+        onSetFovMarker: (setting: string, value: number) => { this.viewSettingsStore.setFovMarkerSetting(setting, value) },
         onSetLandscapeFadeWithZoom: (isOn: boolean) => { this.layerCtl().setLandscapeFadeWithZoom(isOn) },
         onImportLandscape: () => { this.layerCtl().importLandscapeFile() },
         onSelectLandscape: (id: string, name: string) => { this.layerCtl().selectLandscape(id, name) },
@@ -7394,7 +7419,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         onTogglePause: () => { this.timeCtl().togglePause() },
         onSpeedUp: () => { this.timeCtl().speedUp() },
         onFovChange: (val: number) => { this.fovSliderValue = Math.round(val); this.changeFovBySlider(val) },
-        onSetProjection: (name: string) => { this.settingsCtl().setProjection(name) },
+        onSetProjection: (name: string) => { this.viewSettingsStore.setProjection(name) },
         onSetLanguage: (lang: string) => { this.setLanguage(lang) },
         onSetSkyCulture: (name: string) => { this.skyCultureCtl().setSkyCulture(name) },
         onSetUnits: (metric: boolean) => { this.viewSettingsStore.useMetricUnits = metric; this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + metric, () => {}) },
@@ -7501,21 +7526,21 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         setViewCoordinateFamily: (family: string) => { this.viewCoordinateCtl().setViewCoordinateFamily(family) },
         setViewEquatorialEpoch: (epoch: string) => { this.viewCoordinateCtl().setViewEquatorialEpoch(epoch) },
         setLanguage: (lang: string) => { this.setLanguage(lang) },
-        setEphemerisEnabled: (key: string, available: boolean, enabled: boolean) => { this.settingsCtl().setEphemerisEnabled(key, available, enabled) },
-        setDistanceUnit: (useMetric: boolean) => { this.settingsCtl().setDistanceUnit(useMetric) },
-        setConfigurationDithering: (value: string) => { this.settingsCtl().setConfigurationDithering(value) },
-        setProjection: (name: string) => { this.settingsCtl().setProjection(name) },
+        setEphemerisEnabled: (key: string, available: boolean, enabled: boolean) => { this.ephemerisStore.setEphemerisEnabled(key, available, enabled) },
+        setDistanceUnit: (useMetric: boolean) => { this.viewSettingsStore.setDistanceUnit(useMetric) },
+        setConfigurationDithering: (value: string) => { this.viewSettingsStore.setConfigurationDithering(value) },
+        setProjection: (name: string) => { this.viewSettingsStore.setProjection(name) },
         saveAppSettings: () => { this.saveAppSettings() },
         flashHint: (text: ResourceStr) => { this.flashHint(text) },
-        saveAllCoreSettings: () => { this.settingsCtl().saveAllCoreSettings() },
-        restoreCoreDefaults: () => { this.settingsCtl().restoreCoreDefaults() },
+        saveAllCoreSettings: () => { this.tools.saveAllCoreSettings() },
+        restoreCoreDefaults: () => { this.tools.restoreCoreDefaults() },
         saveCurrentViewAsStartup: () => { this.startupBridge().saveCurrentViewAsStartup() },
         setViewLockState: (enabled: boolean) => { this.layerCtl().setViewLockState(enabled) },
-        setNavigationBoolean: (setting: string, enabled: boolean) => { this.settingsCtl().setNavigationBoolean(setting, enabled) },
-        setNavigationMaxFov: (value: number) => { this.settingsCtl().setNavigationMaxFov(value) },
-        selectSettingsChoice: (group: string, value: string) => { this.settingsCtl().selectSettingsChoice(group, value) },
+        setNavigationBoolean: (setting: string, enabled: boolean) => { this.navigationStore.setNavigationBoolean(setting, enabled) },
+        setNavigationMaxFov: (value: number) => { this.navigationStore.setNavigationMaxFov(value) },
+        selectSettingsChoice: (group: string, value: string) => { this.selectSettingsChoice(group, value) },
         setStartupTimeSetting: (key: string, value: string) => { this.timeCtl().setStartupTimeSetting(key, value) },
-        setInformationField: (key: string, enabled: boolean) => { this.settingsCtl().setInformationField(key, enabled) },
+        setInformationField: (key: string, enabled: boolean) => { this.infoWindowStore.setInformationField(key, enabled) },
         setObjectDetailConnector: (enabled: boolean) => { this.setObjectDetailConnector(enabled) },
         toggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
         confirmPrivacyRevocation: () => { this.confirmPrivacyRevocation() },
@@ -7914,8 +7939,8 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         configImportText: this.tools.configImportText,
         sessionImportText: this.tools.sessionImportText,
         onScreenshot: () => { saveScreenshot(this.commandPort(), this.hostMediaPort, { flashHint: (text: ResourceStr): void => this.flashHint(text), screenshotSaving: (): boolean => this.tools.screenshotSaving, setScreenshotSaving: (saving: boolean): void => { this.tools.screenshotSaving = saving } }) },
-        onExportConfig: () => { this.settingsCtl().exportConfig() },
-        onImportConfig: () => { this.settingsCtl().importConfig() },
+        onExportConfig: () => { this.tools.exportConfig() },
+        onImportConfig: () => { this.tools.importConfig() },
         onConfigImportText: (value: string) => { this.tools.configImportText = value },
         onSessionExport: () => { this.sessionToolStore.sessionExport() },
         onSessionApply: () => { this.sessionToolStore.sessionApply() },
@@ -7982,7 +8007,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
 
   // selfTestAllActions / SELFTEST_ACTION_IDS 已随 E4 下沉 capability/SelfTestController.ets。
 
-  // settingsChoiceSelected / selectSettingsChoice 已随 E3 下沉 capability/SettingsController.ets。
+  // settingsChoiceSelected / selectSettingsChoice 跨域分派留宿主（2026-10-05 解散 SettingsController 后的薄分派）。
 
   /** 面板标题行的时分秒：从 timeStore.observationTimeText 拆出第一个空格之后的部分。 */
   /** 面板副标题行的年月日（附带当前时间速率）。 */
