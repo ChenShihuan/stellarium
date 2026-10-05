@@ -10,6 +10,16 @@
 - **验证结果：** Pura 90 Pro 模拟器（`127.0.0.1:5555`，`abilist=x86_64`，API 26，`productModel=emulator`）`install bundle successfully` / `start ability successfully`；界面外壳完整渲染（底部 Dock 搜索/时间/位置/图层/更多功能 + 右上陀螺仪与音频按钮）；点击「时间」成功打开时间面板（标题「时间 --」、副标题 `1x`、日期转轮 `2026 / 08月 / 11日 / 20: / 00: / 00`、速度 chips 倒带/停止/实时/减速/快进），`.id()` 锚点 `panel-close`、`panel-scroll-zh_CN`、`panel-content-zh_CN` 均在。
 - **备注：** 按 §2.6 未提交，待用户明确要求。`docs/harmonyos/testing/PLATFORM-MATRIX.md` 中「Windows 模拟器无法运行本应用」的结论需补充本条 debug-only 例外（待确认后更新）。
 
+## [2026-09-30] DevEco Code - 新增 pages/ 代码库重构方案（预研文档，未改代码）
+
+- **新增文件：** `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md`；同步更新 `docs/harmonyos/AGENTS.md` §2.2 结构树中 `research/` 的条目。
+- **背景：** 用户指出 `pages/MainWindowNativeNode.ets`（32,774 行）把整个界面塞进单一 struct 属"代码工程大忌"，要求先给出重构方案；本轮只做取证与规划，不动源码。
+- **文档内容：** ① 现状取证（体量、单体内部结构、前 15 大 Builder 体积表、1,047 个状态字段的领域聚类、跨文件存储分布、同步链路与测试契约）；② 根因分析；③ 目标架构（`window/` 壳层与 overlay、`panels/` 33 面板、`state/` @Observed 领域 store、`bridge/` 命令桥、`common/ui/` 原子件）；④ V1 `@Observed` + `@ObjectLink` 状态策略与 7 条规则；⑤ 8 阶段绞杀者迁移计划与统一验收矩阵；⑥ 9 条硬性不变式；⑦ 风险登记表；⑧ 备选方案否决理由；⑨ 可复现命令附录。
+- **关键实测数据：** 主文件 32,774 行占业务 ArkTS（40,548 行，不含 `location_*` 数据表）的 80.8%；`@Component` 仅 1 个、`@State` 1,047（原始类型 948 / 数组 37 / 自定义类 13）、`@Builder` 145、私有方法 ≈1,109、`callInteractive` 调用点 203、定时器字段 38、`setInterval` 20、`ForEach` 169、`.id()` 锚点 41、`activePanel` 取值 33；`panelContent()` 单个 builder 5,138 行；`@Link`/`@Prop`/`@Provide`/`@Observed`/`@ObjectLink`/`$$`/`@BuilderParam`/`LazyForEach` 全为 0。
+- **两条决定性结论：** ① 根因是 V1 `@Builder` 参数按值捕获导致状态下沉不了、1,047 个 `@State` 只能集中在唯一 struct，故**纯文件切分无收益**，必须引入组件边界 + 状态所有权；② 状态字段上的就地属性赋值（`this.X.y =`）实测 **0 处**、3,259 处赋值中 1,028 个字段为整体替换，即 V1→V2 在本仓库近于机械改名（估 2–3 周），但**一个 struct 不能半 V1 半 V2**，只能原子翻代，故否决"现在迁 V2"，正确顺序是先拆分再按模块翻代。
+- **另记录：** `LocalStorage` 在本工程是 Qt 互操作桥面（`windowStage.loadContent(path, storage)`、`LocalStorageTsModule.makeNewLocalStorage` 经 `QtUtils.getModulesFactoriesMapForQt()` 暴露给 C++），**不可迁移**，已写入不变式。
+- **范围约束：** 仅新增文档与结构树条目，未改动任何应用源码、未修改 `build-profile.json5`/签名材料/隐私门控/联网配置；未提交（按 §2.6 待用户明确要求）。
+
 ## [2026-09-30] DevEco Code - 时间面板重排、时间/速率入标题栏、主界面 Dock 常驻时钟；新增两条协作规则
 
 - **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`（镜像；经 `scripts/sync-ohos-build-sources.sh` 同步到生成工程，生成目录不入库）、`docs/harmonyos/AGENTS.md`、`docs/harmonyos/CHANGELOG.md`。
