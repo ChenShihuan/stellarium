@@ -37,6 +37,7 @@ import {
   chromeZoomButtonLeft,
   chromeZoomButtonTop
 } from '../common/ui/ChromeGeometry'
+import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot } from '../common/derive/gyro'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
@@ -10469,13 +10470,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private gyroScreenAxisForDisplay(axis: number[], rotation: number): number[] {
-    const angle = rotation * Math.PI / 2
-    const c = Math.cos(angle)
-    const s = Math.sin(angle)
-    return [axis[0] * c - axis[1] * s, axis[0] * s + axis[1] * c, axis[2]]
-  }
-
   private confirmPrivacyRevocation(): void {
     this.getUIContext().showAlertDialog({
       title: I18n.t('privacy_revoke'),
@@ -10728,19 +10722,6 @@ private loadPlanetPositions(): void {
   // Stellarium's internal azimuth-sign convention (we read the live view back
   // from the engine instead of guessing an ENU->alt-az mapping).
 
-  private wrapGyroAzimuth(angle: number): number {
-    let wrapped = angle % 360
-    if (wrapped < 0) { wrapped += 360 }
-    return wrapped
-  }
-
-  private shortestGyroAzimuthDelta(from: number, to: number): number {
-    let delta = to - from
-    if (delta > 180) { delta -= 360 }
-    if (delta < -180) { delta += 360 }
-    return delta
-  }
-
   // Keep the guide's heading continuous. Native projection supplies angles in
   // [-180, 180], but animating that value directly can make a one-degree turn
   // across the boundary look like a full-circle spin.
@@ -10837,7 +10818,7 @@ private loadPlanetPositions(): void {
     // Project the target's local tangent-plane direction around the current
     // view. Cos(altitude) prevents a small azimuth change near zenith from
     // looking like an enormous horizontal turn.
-    const horizontal = this.shortestGyroAzimuthDelta(this.gyroGuideTargetAz, this.gyroLastAz) *
+    const horizontal = shortestGyroAzimuthDelta(this.gyroGuideTargetAz, this.gyroLastAz) *
       Math.cos(this.gyroLastAlt * Math.PI / 180)
     const vertical = this.gyroGuideTargetAlt - this.gyroLastAlt
     const separation = Math.sqrt(horizontal * horizontal + vertical * vertical)
@@ -10921,7 +10902,7 @@ private loadPlanetPositions(): void {
     // Stellarium's azimuth frame. More importantly, it becomes ambiguous when
     // the Pad is flat. Anchor only once the display has a real horizontal aim;
     // after that use its delta, not its changing Euler-angle zero point.
-    const rawHeading = this.wrapGyroAzimuth(-data.alpha + this.gyroStore.gyroOffsetAz)
+    const rawHeading = wrapGyroAzimuth(-data.alpha + this.gyroStore.gyroOffsetAz)
     let targetAz = rawHeading
     if (this.gyroAbsolutePoseReady) {
       if (!this.gyroHeadingReferenceReady && horizontalStrength >= 0.42) {
@@ -10930,7 +10911,7 @@ private loadPlanetPositions(): void {
         this.gyroHeadingReferenceReady = true
       }
       targetAz = this.gyroHeadingReferenceReady
-        ? this.wrapGyroAzimuth(this.gyroHeadingViewAz + this.shortestGyroAzimuthDelta(this.gyroHeadingSensorAz, rawHeading))
+        ? wrapGyroAzimuth(this.gyroHeadingViewAz + shortestGyroAzimuthDelta(this.gyroHeadingSensorAz, rawHeading))
         : this.gyroLastAz
     }
     // Device Y is the top edge of the screen. Keeping it as the camera up
@@ -10956,11 +10937,11 @@ private loadPlanetPositions(): void {
       initialPose = true
     }
     const headingFactor = this.gyroHeadingReferenceReady ? smoothFactor : 0
-    const smoothAz = this.wrapGyroAzimuth(this.gyroLastAz +
-      this.shortestGyroAzimuthDelta(this.gyroLastAz, targetAz) * headingFactor)
+    const smoothAz = wrapGyroAzimuth(this.gyroLastAz +
+      shortestGyroAzimuthDelta(this.gyroLastAz, targetAz) * headingFactor)
     const smoothAlt = this.gyroLastAlt + (targetAlt - this.gyroLastAlt) * smoothFactor
 
-    const azDelta = this.shortestGyroAzimuthDelta(this.gyroLastAz, smoothAz)
+    const azDelta = shortestGyroAzimuthDelta(this.gyroLastAz, smoothAz)
     const altDelta = smoothAlt - this.gyroLastAlt
     // The first valid pose must always reach the native view. Without this,
     // enabling the sensor while the Pad is held still leaves Stellarium at
@@ -10994,68 +10975,17 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private gyroNormalizeQuaternion(q: number[]): number[] {
-    const length = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
-    if (length < 0.000001) { return [0, 0, 0, 1] }
-    return [q[0] / length, q[1] / length, q[2] / length, q[3] / length]
-  }
-
-  private gyroConjugateQuaternion(q: number[]): number[] {
-    return [-q[0], -q[1], -q[2], q[3]]
-  }
-
-  private gyroMultiplyQuaternions(a: number[], b: number[]): number[] {
-    return [
-      a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
-      a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
-      a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
-      a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
-    ]
-  }
-
   private gyroRotateVector(q: number[], v: number[]): number[] {
     const vectorQuaternion = [v[0], v[1], v[2], 0]
-    const rotated = this.gyroMultiplyQuaternions(this.gyroMultiplyQuaternions(q, vectorQuaternion), this.gyroConjugateQuaternion(q))
+    const rotated = gyroMultiplyQuaternions(gyroMultiplyQuaternions(q, vectorQuaternion), gyroConjugateQuaternion(q))
     return [rotated[0], rotated[1], rotated[2]]
   }
 
-  private gyroNormalizeVector(v: number[]): number[] {
-    const length = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-    if (length < 0.000001) { return [1, 0, 0] }
-    return [v[0] / length, v[1] / length, v[2] / length]
-  }
-
   private gyroVectorAltAz(v: number[]): number[] {
-    const n = this.gyroNormalizeVector(v)
+    const n = gyroNormalizeVector(v)
     let azimuth = Math.atan2(n[1], n[0]) * 180 / Math.PI
     if (azimuth < 0) { azimuth += 360 }
     return [azimuth, Math.asin(n[2]) * 180 / Math.PI]
-  }
-
-  // Rotate about the local vertical. Azimuth in the bridge frame is
-  // atan2(y, x), so this adds `deg` to the azimuth of any vector.
-  private gyroRotateAboutVertical(v: number[], deg: number): number[] {
-    if (deg === 0) { return v }
-    const r = deg * Math.PI / 180
-    const c = Math.cos(r)
-    const s = Math.sin(r)
-    return [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]]
-  }
-
-  private gyroRotateAboutAxis(v: number[], axis: number[], deg: number): number[] {
-    if (deg === 0) { return v }
-    const r = deg * Math.PI / 180
-    const c = Math.cos(r)
-    const s = Math.sin(r)
-    const d = axis[0] * v[0] + axis[1] * v[1] + axis[2] * v[2]
-    const cx = axis[1] * v[2] - axis[2] * v[1]
-    const cy = axis[2] * v[0] - axis[0] * v[2]
-    const cz = axis[0] * v[1] - axis[1] * v[0]
-    return [
-      v[0] * c + cx * s + axis[0] * d * (1 - c),
-      v[1] * c + cy * s + axis[1] * d * (1 - c),
-      v[2] * c + cz * s + axis[2] * d * (1 - c)
-    ]
   }
 
   // Keep the up vector perpendicular to the view direction. Without this the
@@ -11069,7 +10999,7 @@ private loadPlanetPositions(): void {
       o = [-fwd[0] * dz, -fwd[1] * dz, 1 - fwd[2] * dz]
       if (o[0] * o[0] + o[1] * o[1] + o[2] * o[2] < 0.000001) { return [1, 0, 0] }
     }
-    return this.gyroNormalizeVector(o)
+    return gyroNormalizeVector(o)
   }
 
   // Interpolate directly on the unit sphere. Linear interpolation of the
@@ -11104,7 +11034,7 @@ private loadPlanetPositions(): void {
     if (Number.isFinite(data.x) && Number.isFinite(data.y) && Number.isFinite(data.z)) {
       const sample = [data.x, data.y, data.z]
       this.gyroGravityDevice = sample
-      this.gyroFilteredGravityDevice = this.gyroFilterDeviceVector(this.gyroFilteredGravityDevice, sample, 0.22)
+      this.gyroFilteredGravityDevice = gyroFilterDeviceVector(this.gyroFilteredGravityDevice, sample, 0.22)
     }
   }
 
@@ -11113,29 +11043,8 @@ private loadPlanetPositions(): void {
     if (Number.isFinite(data.x) && Number.isFinite(data.y) && Number.isFinite(data.z)) {
       const sample = [data.x, data.y, data.z]
       this.gyroMagneticDevice = sample
-      this.gyroFilteredMagneticDevice = this.gyroFilterDeviceVector(this.gyroFilteredMagneticDevice, sample, 0.16)
+      this.gyroFilteredMagneticDevice = gyroFilterDeviceVector(this.gyroFilteredMagneticDevice, sample, 0.16)
     }
-  }
-
-  private gyroFilterDeviceVector(previous: number[], sample: number[], alpha: number): number[] {
-    if (previous.length !== 3) { return sample }
-    return [
-      previous[0] + (sample[0] - previous[0]) * alpha,
-      previous[1] + (sample[1] - previous[1]) * alpha,
-      previous[2] + (sample[2] - previous[2]) * alpha
-    ]
-  }
-
-  private gyroCross(a: number[], b: number[]): number[] {
-    return [
-      a[1] * b[2] - a[2] * b[1],
-      a[2] * b[0] - a[0] * b[2],
-      a[0] * b[1] - a[1] * b[0]
-    ]
-  }
-
-  private gyroDot(a: number[], b: number[]): number {
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
   }
 
   // Derive the world basis directly from the two physical references. On this
@@ -11156,27 +11065,27 @@ private loadPlanetPositions(): void {
       ? this.gyroFilteredGravityDevice : this.gyroGravityDevice
     const magneticField = this.gyroFilteredMagneticDevice.length === 3
       ? this.gyroFilteredMagneticDevice : this.gyroMagneticDevice
-    const up = this.gyroNormalizeVector(gravity)
-    const magnetic = this.gyroNormalizeVector(magneticField)
+    const up = gyroNormalizeVector(gravity)
+    const magnetic = gyroNormalizeVector(magneticField)
     const northRaw = [
-      magnetic[0] - up[0] * this.gyroDot(magnetic, up),
-      magnetic[1] - up[1] * this.gyroDot(magnetic, up),
-      magnetic[2] - up[2] * this.gyroDot(magnetic, up)
+      magnetic[0] - up[0] * gyroDot(magnetic, up),
+      magnetic[1] - up[1] * gyroDot(magnetic, up),
+      magnetic[2] - up[2] * gyroDot(magnetic, up)
     ]
-    const northLength = Math.sqrt(this.gyroDot(northRaw, northRaw))
+    const northLength = Math.sqrt(gyroDot(northRaw, northRaw))
     if (northLength < 0.12) { return Number.NaN }
     const north = [northRaw[0] / northLength, northRaw[1] / northLength, northRaw[2] / northLength]
-    const east = this.gyroNormalizeVector(this.gyroCross(north, up))
+    const east = gyroNormalizeVector(gyroCross(north, up))
     // The observer looks through the rear side of the display.
     const rearNormal = [0, 0, -1]
-    const eastComponent = this.gyroDot(rearNormal, east)
-    const northComponent = this.gyroDot(rearNormal, north)
-    return this.wrapGyroAzimuth(Math.atan2(eastComponent, northComponent) * 180 / Math.PI)
+    const eastComponent = gyroDot(rearNormal, east)
+    const northComponent = gyroDot(rearNormal, north)
+    return wrapGyroAzimuth(Math.atan2(eastComponent, northComponent) * 180 / Math.PI)
   }
 
   private gyroCompassDirection(heading: number): string {
     const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北']
-    const index = Math.floor((this.wrapGyroAzimuth(heading) + 22.5) / 45) % directions.length
+    const index = Math.floor((wrapGyroAzimuth(heading) + 22.5) / 45) % directions.length
     return directions[index]
   }
 
@@ -11230,30 +11139,30 @@ private loadPlanetPositions(): void {
       this.callNativeFire('gyroDiagnostic', data.x.toFixed(3) + '|' + data.y.toFixed(3) + '|' +
         data.z.toFixed(3) + '|' + this.gyroRawEventCount.toString())
     }
-    const orientation = this.gyroNormalizeQuaternion([data.x, data.y, data.z, data.w])
-    const screenRight = this.gyroScreenAxisForDisplay([1, 0, 0], this.gyroDisplayRotation)
-    const screenUp = this.gyroScreenAxisForDisplay([0, 1, 0], this.gyroDisplayRotation)
+    const orientation = gyroNormalizeQuaternion([data.x, data.y, data.z, data.w])
+    const screenRight = gyroScreenAxisForDisplay([1, 0, 0], this.gyroDisplayRotation)
+    const screenUp = gyroScreenAxisForDisplay([0, 1, 0], this.gyroDisplayRotation)
     const screenFrontWorld = this.gyroRotateVector(orientation, [0, 0, 1])
     const screenRightWorld = this.gyroRotateVector(orientation, screenRight)
     const screenUpWorld = this.gyroRotateVector(orientation, screenUp)
     // ROTATION_VECTOR is already a device-to-world orientation. The sky ray
     // goes opposite to the screen front normal; the screen basis stays rigid.
     let forward = this.gyroBridgeFromEnu([-screenFrontWorld[0], -screenFrontWorld[1], -screenFrontWorld[2]])
-    forward = this.gyroNormalizeVector(forward)
+    forward = gyroNormalizeVector(forward)
 
     if (this.gyroStore.gyroOffsetAz !== 0) {
-      forward = this.gyroRotateAboutVertical(forward, this.gyroStore.gyroOffsetAz)
+      forward = gyroRotateAboutVertical(forward, this.gyroStore.gyroOffsetAz)
     }
     if (this.gyroStore.gyroOffsetAlt !== 0) {
       const horizontal = Math.sqrt(forward[0] * forward[0] + forward[1] * forward[1])
       if (horizontal > 0.001) {
-        forward = this.gyroRotateAboutAxis(forward, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroStore.gyroOffsetAlt)
-        forward = this.gyroNormalizeVector(forward)
+        forward = gyroRotateAboutAxis(forward, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroStore.gyroOffsetAlt)
+        forward = gyroNormalizeVector(forward)
       }
     }
 
     let up = this.gyroBridgeFromEnu(screenUpWorld)
-    const rightLength = Math.sqrt(this.gyroDot(screenRightWorld, screenRightWorld))
+    const rightLength = Math.sqrt(gyroDot(screenRightWorld, screenRightWorld))
     if (rightLength < 0.5) {
       this.gyroInvalidEventCount += 1
       this.emitGyroPoseProbe('invalid-basis', forward, up)
@@ -11261,12 +11170,12 @@ private loadPlanetPositions(): void {
     }
     this.updateGyroCompassReadout()
     if (this.gyroStore.gyroOffsetAz !== 0) {
-      up = this.gyroRotateAboutVertical(up, this.gyroStore.gyroOffsetAz)
+      up = gyroRotateAboutVertical(up, this.gyroStore.gyroOffsetAz)
     }
     if (this.gyroStore.gyroOffsetAlt !== 0) {
       const horizontal = Math.sqrt(forward[0] * forward[0] + forward[1] * forward[1])
       if (horizontal > 0.001) {
-        up = this.gyroRotateAboutAxis(up, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroStore.gyroOffsetAlt)
+        up = gyroRotateAboutAxis(up, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroStore.gyroOffsetAlt)
       }
     }
     up = this.gyroOrthonormalizeUp(forward, up)
@@ -11292,7 +11201,7 @@ private loadPlanetPositions(): void {
       if (this.gyroStore.gyroscopeSensitivityText === 'Low') { tau = 0.08 }
       else if (this.gyroStore.gyroscopeSensitivityText === 'High') { tau = 0.025 }
       poseSmoothingAmount = 1 - Math.exp(-dt / tau)
-      this.gyroFwd = this.gyroNormalizeVector([
+      this.gyroFwd = gyroNormalizeVector([
         this.gyroFwd[0] + (forward[0] - this.gyroFwd[0]) * poseSmoothingAmount,
         this.gyroFwd[1] + (forward[1] - this.gyroFwd[1]) * poseSmoothingAmount,
         this.gyroFwd[2] + (forward[2] - this.gyroFwd[2]) * poseSmoothingAmount
@@ -11302,7 +11211,7 @@ private loadPlanetPositions(): void {
     if (this.gyroUp.length !== 3) {
       this.gyroUp = up
     } else {
-      if (this.gyroDot(this.gyroUp, up) < 0) {
+      if (gyroDot(this.gyroUp, up) < 0) {
         up = [-up[0], -up[1], -up[2]]
       }
       this.gyroUp = this.gyroOrthonormalizeUp(this.gyroFwd, [
