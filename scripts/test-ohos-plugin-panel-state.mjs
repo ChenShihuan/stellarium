@@ -14,8 +14,10 @@ const texture = method('setNebulaTextureFlag', ['command', 'enabled', 'current']
 
 function state() {
   return {
-    mosaicCameraPending: false, mosaicCameraLoading: false, mosaicCameraEnabled: false,
-    mosaicCameraVisible: false, mosaicCameraCurrent: 'LSSTCam',
+    mosaicStore: {
+      mosaicCameraPending: false, mosaicCameraLoading: false, mosaicCameraEnabled: false,
+      mosaicCameraVisible: false, mosaicCameraCurrent: 'LSSTCam'
+    },
     nebulaTexturePending: false, nebulaTextureLoading: false, nebulaTextureImporting: false,
     nebulaTextureStatus: { enabled: false }, calls: [], reloads: [],
     callInteractive(name, payload, success, failure) { this.calls.push({ name, payload, success, failure }); },
@@ -34,16 +36,16 @@ test('camera ignores same-value toggle feedback and duplicate in-flight writes',
   assert.equal(model.calls.length, 1);
   model.calls[0].success({ ok: true });
   assert.deepEqual(model.reloads, [false]);
-  assert.equal(model.mosaicCameraLoading, false);
+  assert.equal(model.mosaicStore.mosaicCameraLoading, false);
 });
 
 test('camera failure releases the lock without pretending the action succeeded', () => {
   const model = state();
   mosaic.call(model, 'enabled', '1', localization);
   model.calls[0].success({ ok: false, error: 'test failure' });
-  assert.equal(model.mosaicCameraPending, false);
-  assert.equal(model.mosaicCameraEnabled, false);
-  assert.equal(model.mosaicCameraStatus, 'test failure');
+  assert.equal(model.mosaicStore.mosaicCameraPending, false);
+  assert.equal(model.mosaicStore.mosaicCameraEnabled, false);
+  assert.equal(model.mosaicStore.mosaicCameraStatus, 'test failure');
 });
 
 test('texture toggles wait for authoritative state and ignore feedback', () => {
