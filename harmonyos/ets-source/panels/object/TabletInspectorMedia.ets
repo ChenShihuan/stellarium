@@ -29,10 +29,13 @@ export struct TabletInspectorMediaCard {
             this.store.objectInspectorMediaLoadFailed = false
             hilog.info(0x0000, 'StellariumArkUI', '[detail-media-card] image loaded uri=%{public}s', this.store.objectInspectorMediaPath)
           })
-          .onError(() => {
+          .onError((err: ImageError) => {
             this.store.objectInspectorMediaDecoding = false
             this.store.objectInspectorMediaLoadFailed = true
-            hilog.error(0x0000, 'StellariumArkUI', '[detail-media-card] image failed uri=%{public}s', this.store.objectInspectorMediaPath)
+            const code: string = err.error !== undefined ? err.error.code.toString() : ''
+            hilog.error(0x0000, 'StellariumArkUI',
+              '[detail-media-card] image failed uri=%{public}s code=%{public}s message=%{public}s',
+              this.store.objectInspectorMediaPath, code, err.message)
           })
         if (this.store.objectInspectorMediaDecoding) {
           Row({ space: 8 }) {
@@ -129,10 +132,13 @@ export struct TabletInspectorModelBlock {
               hilog.info(0x0000, 'StellariumArkUI',
                 '[detail-media-card] sphere loaded uri=%{public}s', this.store.objectInspectorMediaPath)
             })
-            .onError(() => {
+            .onError((err: ImageError) => {
               this.store.objectInspectorMediaDecoding = false
               this.store.objectInspectorMediaLoadFailed = true
-              hilog.error(0x0000, 'StellariumArkUI', '[detail-media-card] sphere failed uri=%{public}s', this.store.objectInspectorMediaPath)
+              const code: string = err.error !== undefined ? err.error.code.toString() : ''
+              hilog.error(0x0000, 'StellariumArkUI',
+                '[detail-media-card] sphere failed uri=%{public}s code=%{public}s message=%{public}s',
+                this.store.objectInspectorMediaPath, code, err.message)
             })
         }
         if (this.store.objectInspectorMediaDecoding || (this.modelRendering && this.store.objectInspectorModelPixelMap === undefined)) {
