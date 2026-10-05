@@ -52,6 +52,8 @@ import { BookmarkPanel } from '../panels/BookmarkPanel'
 import { SearchStore } from '../state/SearchStore'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
+import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
+import { SearchFilterChips } from '../panels/search/SearchFilterChips'
 import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
 import { QuickChipRow } from '../panels/QuickChipRow'
 import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
@@ -126,7 +128,6 @@ export struct WindowNativeNode {
   @State private selectedObjectType: string = ''
   @State private selectedTemperatureK: number = 0
   private searchHistory: string[] = []
-  @State private searchCategory: string = 'planet'
   @State private pendingPluginCatalogId: string = ''
   @State private categoryObjects: NameItem[] = []
   @State private objectCatalogCategories: CatOption[] = []
@@ -142,9 +143,6 @@ export struct WindowNativeNode {
   @State private categoryCatalogMessage: string = ''
   private searchPanelScroller: Scroller = new Scroller()
   @State private categoryModuleId: string = 'SolarSystem:planet'
-  @State private searchFilterPage: string = ''
-  @State private searchVisibilityFilter: string = 'all'
-  @State private searchInstrumentFilter: string = 'all'
   @State private selectedType: string = ''
   @State private selectedStatus: string = ''
   @State private selectedInfo: string = ''
@@ -2952,7 +2950,7 @@ export struct WindowNativeNode {
       if (panel === 'search') {
         this.loadObjectCatalogCategories()
         this.loadConstellationNavigation()
-        if (this.categoryObjects.length === 0) this.loadCategoryObjects(this.searchCategory)
+        if (this.categoryObjects.length === 0) this.loadCategoryObjects(this.searchStore.searchCategory)
       }
       if (panel === 'time') {
         this.loadTimeExtras()
@@ -10686,8 +10684,8 @@ export struct WindowNativeNode {
     if (route.layerTab !== undefined) this.viewTab = route.layerTab
     if (route.catalogModuleId !== undefined) {
       this.searchStore.searchText = ''
-      this.searchCategory = 'module:' + route.catalogModuleId
-      this.loadCategoryObjects(this.searchCategory, route.catalogModuleId)
+      this.searchStore.searchCategory = 'module:' + route.catalogModuleId
+      this.loadCategoryObjects(this.searchStore.searchCategory, route.catalogModuleId)
       this.pendingPluginCatalogId = route.catalogModuleId
     }
     this.openSubPanel(route.panel)
@@ -11093,7 +11091,7 @@ private loadPlanetPositions(): void {
       const pendingModuleId = this.pendingPluginCatalogId
       if (pendingModuleId.length > 0 && categories.some((item: CatOption) => item.moduleId === pendingModuleId)) {
         this.pendingPluginCatalogId = ''
-        if (this.searchCategory === 'module:' + pendingModuleId || this.categoryModuleId === pendingModuleId) {
+        if (this.searchStore.searchCategory === 'module:' + pendingModuleId || this.categoryModuleId === pendingModuleId) {
           this.loadCategoryObjects('module:' + pendingModuleId, pendingModuleId)
         }
       }
@@ -11158,21 +11156,6 @@ private loadPlanetPositions(): void {
     return 'catalog_plugin'
   }
 
-  @Builder
-  private catalogFilterRow(cat: CatOption) {
-    Row({ space: 12 }) {
-      Image(getIcon(cat.iconKey ?? 'catalog_plugin', false)).width(24).height(24).objectFit(ImageFit.Contain).fillColor(this.nmSub())
-      Text(cat.label).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-      if (this.searchCategory === cat.code) {
-        Text('✓').fontSize(18).fontColor('#8FD3FF').width(24).textAlign(TextAlign.Center)
-      }
-    }
-      .width('100%').height(60).padding({ left: 14, right: 14 }).margin({ bottom: 8 })
-      .backgroundColor(this.searchCategory === cat.code ? 'rgba(91,147,191,0.22)' : this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-      .id('search-category-' + cat.code).clickEffect({ level: ClickEffectLevel.LIGHT })
-      .onClick(() => { this.selectSearchFilterCategory(cat.code) })
-  }
-
   private categoryModuleIdFor(category: string): string {
     for (const option of this.searchCategoryOptions()) {
       if (option.code === category) return option.moduleId ?? ''
@@ -11184,7 +11167,7 @@ private loadPlanetPositions(): void {
   }
 
   private loadCategoryObjects(category: string, moduleIdOverride: string = ''): void {
-    this.searchCategory = category
+    this.searchStore.searchCategory = category
     this.pendingPluginCatalogId = ''
     const moduleId = moduleIdOverride.length > 0 ? moduleIdOverride : this.categoryModuleIdFor(category)
     this.categoryModuleId = moduleId
@@ -11252,10 +11235,10 @@ private loadPlanetPositions(): void {
 
   private searchCategoryLabel(): string {
     for (const option of this.searchCategoryOptions()) {
-      if (option.code === this.searchCategory) return String(option.label)
+      if (option.code === this.searchStore.searchCategory) return String(option.label)
     }
     for (const option of this.objectCatalogCategories) {
-      if (option.code === this.searchCategory) return String(option.label)
+      if (option.code === this.searchStore.searchCategory) return String(option.label)
     }
     return I18n.t('search_browse_categories')
   }
@@ -11275,9 +11258,9 @@ private loadPlanetPositions(): void {
 
   private publishSearchBrowserState(error: string = ''): void {
     AppStorage.setOrCreate('stellariumSearchBrowserState', JSON.stringify({
-      ok: error.length === 0, error: error, page: this.searchFilterPage || 'browse',
-      category: this.searchCategory, moduleId: this.categoryModuleId,
-      visibility: this.searchVisibilityFilter, instrument: this.searchInstrumentFilter,
+      ok: error.length === 0, error: error, page: this.searchStore.searchFilterPage || 'browse',
+      category: this.searchStore.searchCategory, moduleId: this.categoryModuleId,
+      visibility: this.searchStore.searchVisibilityFilter, instrument: this.searchStore.searchInstrumentFilter,
       categories: this.searchAllCategoryOptions(), scrollY: this.searchPanelScroller.currentOffset()?.yOffset ?? 0
     }))
   }
@@ -11293,20 +11276,20 @@ private loadPlanetPositions(): void {
   }
 
   private searchVisibilityLabel(): string {
-    if (this.searchVisibilityFilter === 'above') return I18n.t('search_above_horizon')
-    if (this.searchVisibilityFilter === 'good') return I18n.t('search_good_observing')
+    if (this.searchStore.searchVisibilityFilter === 'above') return I18n.t('search_above_horizon')
+    if (this.searchStore.searchVisibilityFilter === 'good') return I18n.t('search_good_observing')
     return ''
   }
 
   private searchInstrumentLabel(): string {
-    if (this.searchInstrumentFilter === 'naked') return I18n.t('search_naked_eye')
-    if (this.searchInstrumentFilter === 'binocular') return I18n.t('search_binoculars')
-    if (this.searchInstrumentFilter === 'telescope') return I18n.t('search_telescope')
+    if (this.searchStore.searchInstrumentFilter === 'naked') return I18n.t('search_naked_eye')
+    if (this.searchStore.searchInstrumentFilter === 'binocular') return I18n.t('search_binoculars')
+    if (this.searchStore.searchInstrumentFilter === 'telescope') return I18n.t('search_telescope')
     return ''
   }
 
   private refreshSearchFilterResults(): void {
-    this.loadCategoryObjects(this.searchCategory)
+    this.loadCategoryObjects(this.searchStore.searchCategory)
     this.searchPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
   }
 
@@ -11316,7 +11299,7 @@ private loadPlanetPositions(): void {
       return
     }
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
-      this.searchFilterPage = ''
+      this.searchStore.searchFilterPage = ''
       this.loadCategoryObjects(category)
     })
     this.searchPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
@@ -11324,16 +11307,16 @@ private loadPlanetPositions(): void {
 
   private selectSearchVisibilityFilter(filter: string): void {
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
-      this.searchVisibilityFilter = filter
-      this.searchFilterPage = ''
+      this.searchStore.searchVisibilityFilter = filter
+      this.searchStore.searchFilterPage = ''
       this.refreshSearchFilterResults()
     })
   }
 
   private selectSearchInstrumentFilter(filter: string): void {
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
-      this.searchInstrumentFilter = filter
-      this.searchFilterPage = ''
+      this.searchStore.searchInstrumentFilter = filter
+      this.searchStore.searchFilterPage = ''
       this.refreshSearchFilterResults()
     })
   }
@@ -11376,104 +11359,22 @@ private loadPlanetPositions(): void {
   }
 
   private categoryObjectIcon(item: NameItem): string {
-    return this.catalogIconForObjectType(item.type ?? '', this.searchCategoryIcon(this.searchCategory))
+    return this.catalogIconForObjectType(item.type ?? '', this.searchCategoryIcon(this.searchStore.searchCategory))
   }
 
   private searchFilterMenuTitle(): string {
-    if (this.searchFilterPage === 'categories') return I18n.t('search_browse_categories')
-    if (this.searchFilterPage === 'root') return I18n.t('search_filter')
-    if (this.searchFilterPage === 'visibility') return I18n.t('search_visibility')
+    if (this.searchStore.searchFilterPage === 'categories') return I18n.t('search_browse_categories')
+    if (this.searchStore.searchFilterPage === 'root') return I18n.t('search_filter')
+    if (this.searchStore.searchFilterPage === 'visibility') return I18n.t('search_visibility')
     return I18n.t('search_instrument')
   }
 
   private setSearchFilterPage(page: string): void {
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
-      this.searchFilterPage = page
+      this.searchStore.searchFilterPage = page
     })
     this.searchPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
     this.publishSearchBrowserState()
-  }
-
-  @Builder
-  searchFilterChips() {
-    Scroll() {
-      Row({ space: 7 }) {
-        if (this.searchVisibilityLabel().length > 0) {
-          Text(this.searchVisibilityLabel() + '  x')
-            .fontSize(12).fontColor(this.nmText()).padding({ left: 12, right: 10, top: 7, bottom: 7 })
-            .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_PILL)
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            .transition(TransitionEffect.asymmetric(
-              TransitionEffect.OPACITY.animation({ duration: 160, curve: Curve.EaseOut })
-                .combine(TransitionEffect.translate({ x: 8, y: 0 }).animation({ duration: 180, curve: Curve.EaseOut })),
-              TransitionEffect.OPACITY.animation({ duration: 120, curve: Curve.EaseIn })
-            ))
-            .onClick(() => { this.selectSearchVisibilityFilter('all') })
-        }
-        if (this.searchInstrumentLabel().length > 0) {
-          Text(this.searchInstrumentLabel() + '  x')
-            .fontSize(12).fontColor(this.nmText()).padding({ left: 12, right: 10, top: 7, bottom: 7 })
-            .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_PILL)
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            .transition(TransitionEffect.asymmetric(
-              TransitionEffect.OPACITY.animation({ duration: 160, curve: Curve.EaseOut })
-                .combine(TransitionEffect.translate({ x: 8, y: 0 }).animation({ duration: 180, curve: Curve.EaseOut })),
-              TransitionEffect.OPACITY.animation({ duration: 120, curve: Curve.EaseIn })
-            ))
-            .onClick(() => { this.selectSearchInstrumentFilter('all') })
-        }
-      }.padding({ left: 2, right: 8 })
-    }.width('100%').height(38).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-  }
-
-  @Builder
-  searchFilterMenu() {
-    Column({ space: 2 }) {
-      Row({ space: 10 }) {
-        Image(getIcon('chevron_right', false)).width(18).height(18).fillColor(this.nmText()).rotate({ angle: 180 })
-        Text(this.searchFilterMenuTitle())
-          .fontSize(16).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-        .width('100%').height(48).padding({ left: 8, right: 8 }).id('search-browser-back')
-        .onClick(() => {
-          if (this.searchFilterPage === 'root' || this.searchFilterPage === 'categories') this.setSearchFilterPage('')
-          else this.setSearchFilterPage('root')
-        })
-      if (this.searchFilterPage === 'root') {
-        Row() {
-          Text(I18n.t('search_visibility')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.searchVisibilityLabel().length > 0 ? this.searchVisibilityLabel() : I18n.t('search_unlimited')).fontSize(11).fontColor(this.nmSub()).layoutWeight(0.7).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ right: 8 })
-          Image(getIcon('chevron_right', false)).width(16).height(16).fillColor(this.nmSub())
-        }.width('100%').height(48).padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          .onClick(() => { this.setSearchFilterPage('visibility') })
-        Row() {
-          Text(I18n.t('search_instrument')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.searchInstrumentLabel().length > 0 ? this.searchInstrumentLabel() : I18n.t('search_unlimited')).fontSize(11).fontColor(this.nmSub()).layoutWeight(0.7).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ right: 8 })
-          Image(getIcon('chevron_right', false)).width(16).height(16).fillColor(this.nmSub())
-        }.width('100%').height(48).padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          .onClick(() => { this.setSearchFilterPage('instrument') })
-      } else if (this.searchFilterPage === 'categories') {
-        ForEach(this.searchAllCategoryOptions(), (cat: CatOption) => {
-          this.catalogFilterRow(cat)
-        }, (cat: CatOption) => cat.code + '/' + this.languageRevision.toString())
-      } else if (this.searchFilterPage === 'visibility') {
-        Row() { Text(I18n.t('search_unlimited')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }) }.width('100%').height(48).padding({ left: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectSearchVisibilityFilter('all') })
-        Row() { Text(I18n.t('search_above_horizon')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }) }.width('100%').height(48).padding({ left: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectSearchVisibilityFilter('above') })
-        Row() { Text(I18n.t('search_good_observing')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }) }.width('100%').height(48).padding({ left: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectSearchVisibilityFilter('good') })
-      } else {
-        Row() { Text(I18n.t('search_unlimited')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }) }.width('100%').height(48).padding({ left: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectSearchInstrumentFilter('all') })
-        Row() { Text(I18n.t('search_naked_eye')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }) }.width('100%').height(48).padding({ left: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectSearchInstrumentFilter('naked') })
-        Row() { Text(I18n.t('search_binoculars')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }) }.width('100%').height(48).padding({ left: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectSearchInstrumentFilter('binocular') })
-        Row() { Text(I18n.t('search_telescope')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }) }.width('100%').height(48).padding({ left: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectSearchInstrumentFilter('telescope') })
-      }
-    }.width('100%').padding({ left: 4, right: 4, top: 4 })
-      .animation({ duration: 220, curve: curves.springMotion(0.42, 0.86) })
-      .transition(TransitionEffect.asymmetric(
-        TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
-          .combine(TransitionEffect.translate({ x: 0, y: -8 }).animation({ duration: 220, curve: curves.springMotion(0.48, 0.86) })),
-        TransitionEffect.OPACITY.animation({ duration: 130, curve: Curve.EaseIn })
-          .combine(TransitionEffect.translate({ x: 0, y: -4 }).animation({ duration: 150, curve: Curve.EaseIn }))
-      ))
   }
 
   // Catalogs may contain many thousands of entries. Request small pages so the
@@ -11484,10 +11385,10 @@ private loadPlanetPositions(): void {
     }
     const serial = this.categoryRequestSerial
     const offset = this.categoryOffset
-    const category = this.searchCategory
+    const category = this.searchStore.searchCategory
     this.categoryLoading = true
     this.categoryLoadFailed = false
-    this.callNativeWhenReady('listObjects', this.categoryModuleId + '|' + this.CATEGORY_PAGE_SIZE + '|' + offset + '|' + this.searchVisibilityFilter + '|' + this.searchInstrumentFilter, (result) => {
+    this.callNativeWhenReady('listObjects', this.categoryModuleId + '|' + this.CATEGORY_PAGE_SIZE + '|' + offset + '|' + this.searchStore.searchVisibilityFilter + '|' + this.searchStore.searchInstrumentFilter, (result) => {
       if (serial !== this.categoryRequestSerial) { return }
       const items = Array.isArray(result.items) ? result.items as string[] : []
       const keys = Array.isArray(result.keys) ? result.keys as string[] : []
@@ -11775,7 +11676,7 @@ private loadPlanetPositions(): void {
         this.constellationNavigationItems = []
         this.loadObjectCatalogCategories(languageSerial)
         this.loadConstellationNavigation(languageSerial)
-        this.loadCategoryObjects(this.searchCategory, selectedCategoryModuleId)
+        this.loadCategoryObjects(this.searchStore.searchCategory, selectedCategoryModuleId)
         const query = this.searchStore.searchText.trim()
         if (query.length > 0) this.fetchSuggestions(query, languageSerial)
       }, 0, 300, 3)
@@ -13959,7 +13860,7 @@ private loadPlanetPositions(): void {
     }
     const messier = this.messierNumberOf(englishName)
     if (messier.length > 0) { parts.push(I18n.format('search_catalog_number', ['M' + messier])) }
-    if (this.searchCategory === 'asteroid') {
+    if (this.searchStore.searchCategory === 'asteroid') {
       const number = this.minorPlanetNumberOf(englishName)
       if (number.length > 0) { parts.push(I18n.format('search_permanent_number', [number])) }
     }
@@ -22694,8 +22595,21 @@ private loadPlanetPositions(): void {
         .width('100%')
         .padding({ left: 2, right: 2 })
         .margin({ top: 2, bottom: 12 })
-      if (this.searchFilterPage.length > 0) {
-        this.searchFilterMenu()
+      if (this.searchStore.searchFilterPage.length > 0) {
+        SearchFilterMenu({
+          store: this.searchStore,
+          visibilityLabel: this.searchVisibilityLabel(),
+          instrumentLabel: this.searchInstrumentLabel(),
+          categories: this.searchAllCategoryOptions(),
+          languageRevision: this.languageRevision,
+          textColor: this.nmText(),
+          subColor: this.nmSub(),
+          panelColor: this.nmBg(),
+          onSetPage: (page: string) => { this.setSearchFilterPage(page) },
+          onSelectCategory: (code: string) => { this.selectSearchFilterCategory(code) },
+          onSelectVisibility: (filter: string) => { this.selectSearchVisibilityFilter(filter) },
+          onSelectInstrument: (filter: string) => { this.selectSearchInstrumentFilter(filter) }
+        })
       } else if (this.searchStore.searchText.trim().length > 0) {
         SearchSuggestions({
           store: this.searchStore,
@@ -22708,7 +22622,7 @@ private loadPlanetPositions(): void {
       } else {
         Row({ space: 10 }) {
           Row({ space: 10 }) {
-            Image(getIcon(this.searchCategoryIcon(this.searchCategory), false)).width(22).height(22).objectFit(ImageFit.Contain).fillColor('#8FD3FF')
+            Image(getIcon(this.searchCategoryIcon(this.searchStore.searchCategory), false)).width(22).height(22).objectFit(ImageFit.Contain).fillColor('#8FD3FF')
             Column({ space: 3 }) {
               Text(I18n.t('search_browse_categories')).fontSize(11).fontColor(this.nmSub()).width('100%')
               Text(this.searchCategoryLabel()).fontSize(14).fontColor(this.nmText()).width('100%').maxLines(2)
@@ -22725,7 +22639,14 @@ private loadPlanetPositions(): void {
             .onClick(() => { this.setSearchFilterPage('root') })
         }.width('100%').margin({ bottom: 8 })
         if (this.searchVisibilityLabel().length > 0 || this.searchInstrumentLabel().length > 0) {
-          this.searchFilterChips()
+          SearchFilterChips({
+            visibilityLabel: this.searchVisibilityLabel(),
+            instrumentLabel: this.searchInstrumentLabel(),
+            textColor: this.nmText(),
+            panelColor: this.nmBg(),
+            onClearVisibility: () => { this.selectSearchVisibilityFilter('all') },
+            onClearInstrument: () => { this.selectSearchInstrumentFilter('all') }
+          })
         }
         Row() {
           Text(I18n.t('search_catalog_objects')).fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
@@ -22737,7 +22658,7 @@ private loadPlanetPositions(): void {
                   : I18n.format('search_catalog_loaded_count', [this.categoryLoadedCount.toString(), this.categoryObjectCount.toString()]))
                   : I18n.t('search_catalog_empty')))))
             .fontSize(10).fontColor(this.nmSub())
-            .onClick(() => { if (this.categoryLoadFailed) { this.loadCategoryObjects(this.searchCategory) } })
+            .onClick(() => { if (this.categoryLoadFailed) { this.loadCategoryObjects(this.searchStore.searchCategory) } })
         }.width('100%').padding({ left: 2, right: 2 }).margin({ top: 10, bottom: 6 })
         Scroll() {
           Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
@@ -22764,13 +22685,13 @@ private loadPlanetPositions(): void {
                 ))
                 .clickEffect({ level: ClickEffectLevel.LIGHT })
                 .onClick(() => {
-                  if (this.searchCategory === 'constellation') {
+                  if (this.searchStore.searchCategory === 'constellation') {
                     this.openConstellationGuide(item.name ?? '', this.categoryModuleId)
                   } else {
                     this.searchObject(item.name ?? '', this.categoryModuleId)
                   }
                 })
-            }, (item: NameItem) => this.searchCategory + '/' + item.name + '/' + this.languageRevision.toString())
+            }, (item: NameItem) => this.searchStore.searchCategory + '/' + item.name + '/' + this.languageRevision.toString())
             if (this.categoryLoading && this.categoryObjects.length > 0) {
               Text(I18n.t('search_loading_more')).fontSize(11).fontColor(this.nmSub()).padding({ left: 12, right: 12, top: 8, bottom: 8 })
             } else if (this.categoryHasMore) {
@@ -22782,7 +22703,7 @@ private loadPlanetPositions(): void {
       }
 
       // 常见星座快速导航：名称直接使用 Stellarium 当前语言的官方翻译。
-      if (this.searchFilterPage.length === 0) {
+      if (this.searchStore.searchFilterPage.length === 0) {
       Row() {
         Text(I18n.t('constellation_chips_title') + (this.constellationNavigationItems.length > 0 ? ' ' + this.constellationNavigationItems.length.toString() : ''))
           .fontSize(10).fontColor(this.nmSub()).width(68).alignSelf(ItemAlign.Start)
