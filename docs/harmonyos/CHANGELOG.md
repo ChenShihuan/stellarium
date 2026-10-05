@@ -1,3 +1,55 @@
+## [2026-10-04] DevEco Code - M2-A：ObjectModelRenderer（PLAN §15.11 第二批 M2）
+
+> 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.11 **M2-A**（原 M2-1/2 合并为模块级大切片）。
+> 提交：`ab38bd25a9`（refactor）+ 本条目（docs）。工作目录 `E:\code\Stellarium-mobile\stellarium`。
+
+**范围与改动文件（净行数）**
+- 新增 `harmonyos/ets-source/capability/ObjectModelRenderer.ets`（**540 行**；12 个方法 + 22 个逐帧/草稿字段）。
+- `harmonyos/ets-source/bridge/MediaPort.ets` **+8**（接口新增 `createPixelMapFromRgba` / `readPixelMapPixels`）。
+- `harmonyos/ets-source/pages/MainWindowNativeNode.ets` **13,140 → 12,800 行（−340）**；`@State private` **132 不变**（46 store + 86 保留裸字段）；`private` 方法 **521 → 510**（搬走 12 + 新增 1 个惰性构造 getter `objectModelRendererCtl()`）；`^  private ` 声明总数 **782 → 750**（另搬走 22 个字段）。
+- 测试同步：`test-ohos-model-worker.mjs` / `test-ohos-model-scroll.mjs` / `test-ohos-detail-model-geometry.mjs` / `test-ohos-procedural-model.mjs`（断言改读控制器文件；触摸夹具改注入 `mediaStore`）。
+
+**方法清单（12，逐字迁移，仅改 store 前缀 / 端口 / hooks）**
+`clearObjectInspectorModelRenderer`(35) · `failObjectInspectorModelTexture`(11) · `commitObjectInspectorModelTexture`(36) · `decodeObjectInspectorModelTextureFromPng`(46) · `refreshObjectInspectorModelLighting`(11) · `rotateObjectInspectorModel`(4) · `requestObjectInspectorModelRender`(25) · `flushObjectInspectorModelRender`(11) · `renderObjectInspectorModel`(106) · `resetObjectInspectorModelView`(8) · `setObjectInspectorModelImmersive`(19) · `handleObjectInspectorModelTouch`(57)。
+另在控制器新增只读查询 `isRendering()` / `hasTexture()` / `modelReady()` / `resetRotationForNewMedia()` / `setForeground()` / `stop()`（供宿主 `@Prop` 与生命周期调用）。
+
+**字段去向（22 个 `objectInspectorModel*`）**
+- **入 store（本片无新增；M1-A 前已就位）**：`objectInspectorModelPixelMap` / `objectInspectorModelImmersive` / `objectInspectorModelOverlayOpacity` / `objectInspectorModelScale` / `objectInspectorModelInteracting` / `objectInspectorProceduralKind`（`ObjectMediaStore`，组件经 `@ObjectLink`/`@Prop` 消费）。
+- **留控制器（逐帧/草稿，§15.7 规则 2 + §13.3）**：`objectInspectorModelRendering` / `RenderClient` / `OverlaySerial` / `Rotation` / `LastLighting` / `LastRenderTime` / `TouchCount` / `TexturePixels` / `TextureWidth` / `TextureHeight` / `TextureStride` / `RingTexturePixels` / `RingTextureWidth` / `RingTextureHeight` / `RingTextureStride` / `LastX` / `LastY` / `LastPinchDistance` / `RenderGeneration` / `RenderPending` / `RenderHighQuality` / `RenderTimer`。**刻意不入被观察 store**（逐帧写入会触发刷新风暴）。
+- **仍留宿主（媒体管线，经 hooks 回注）**：`objectInspectorProceduralKey` / `objectInspectorProceduralParticles` / `objectInspectorMediaDecodeGeneration`（`refreshObjectInspectorMedia` 持有）。
+
+**端口 / hooks 清单**
+- `MediaPort` 扩展（M1-B 式）：`createPixelMapFromRgba(pixels,w,h,label)`（原 `image.createPixelMap(RGBA_8888/UNPREMUL)`）、`readPixelMapPixels(pixelMap,buffer,label)`（原 `readPixelsToBufferSync`）；`HostMediaPort` 具名实现。
+- `ObjectModelRendererHostHooks`（具名接口，宿主顶层实现）：`publishModelView(json)`（`AppStorage.setOrCreate('stellariumObjectModelView')`）、`animateOverlay(open,body,onFinish)`（`getUIContext().animateTo`）、`mediaDecodeGeneration()`、`proceduralParticles()`、`resetProcedural()`。
+- 控制器依赖：`MediaPort` + 三个 store + 既有 `DetailModelRenderClient` worker（§15.11「经既有 worker」，与 `StartupBridge` 引用 `AudioEngine` 同例）；`image` 仅用作 `PixelMap` 类型（与 `MediaPort` 同源），**不直接调用设备 NAPI**。
+- `ObjectMediaStore.attachHooks` 的 `decodeObjectInspectorModelTextureFromPng` / `commitObjectInspectorModelTexture` / `failObjectInspectorModelTexture` 三个下游改指向控制器（`readRawSidecar` 仍留宿主）。
+
+**定时器 start/stop 调用点对照表（`objectInspectorModelRenderTimer` 为一次性防抖，非周期轮询）**
+| 触发 | 行为 |
+|---|---|
+| `requestObjectInspectorModelRender(false)`（触摸拖动） | 若 timer 为空则 `setTimeout(...,18)` 挂起，合并连续触摸 |
+| timer 到期 | 自清 `=0` 并 `flush...`（一次性，不重排） |
+| `requestObjectInspectorModelRender(true)`（高画质/切换/重置/光照） | `clearTimeout` + 立即 `flush` |
+| `clearObjectInspectorModelRenderer()` / `stop()` | `clearTimeout`（不 dispose，dispose 在 clear） |
+| `aboutToDisappear` | → `clearObjectInspectorDecodedImage()` → 控制器 `clear()`（dispose worker + clearTimeout + 代际++） |
+| 后台（`handleApplicationLifecycle(false)`） | → 控制器 `setForeground(false)` → `DetailModelRenderClient.setSuspended(true)`（停看门狗 16ms pulse + 30s timeout；渲染防抖定时器不涉及） |
+- 因是**一次性防抖**（无 `setInterval`、无周期 `start`），控制器提供 `stop()` 清在途定时器、不提供周期 `start()`；真机证据见下（render 计数随交互起伏、无空转轮询）。
+
+**真机证据（192.168.50.108:36717，Mate 80 Pro）**
+- `install -r` 成功 → `aa force-stop`/`aa start -a QAbility` → `pidof` = **3962**（全程存活）。
+- `searchObject Jupiter` → `getSelectedObjectInfo`：`found=true`、`detailModel.state="available"`（含 `lighting.viewToBody/sunDirectionBody/emissive`）。
+- `setObjectModelView open` / `immersive` / `30|10`（rotate）/ `reset` / `close` 全部 `{"ok":true,"accepted":true}`。
+- hilog 佐证：`[detail-model] render pixel map created kind=object-inspector-model bytes=409600`（新 `HostMediaPort.createPixelMapFromRgba` 日志，CPU 光栅化逐帧提交）+ `[detail-media] released pixel map kind=previous-object-inspector-model` + `[detail-media-card] sphere loaded uri=.../jupiter.png`。
+- 触摸：`devecocli ui drag` 两段落于 `Stack#object-model-inline-stage [252,1445,937,1809]`，无崩溃、`pidof` 仍 3962；`getObjectDetailModel` 交互后仍 `state="available"`。
+- **未走查**：真双指捏合缩放（以单指拖拽 + 程序化 `30|10` rotate 覆盖同一 `handleObjectInspectorModelTouch`/`rotateObjectInspectorModel` 分支；双指分支由 `test-ohos-model-scroll.mjs` 夹具覆盖）。未改持久化设置，无需恢复。
+
+**验证门槛**
+- 预检 `check-ohos-refactor-slice.mjs` 通过；`arkts_check` 3 文件无错；`build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources` **BUILD SUCCESSFUL**；`check-ohos-ui-contract.mjs` **intact（44 锚点）**。
+- 受影响测试全绿：`test-ohos-model-worker` 6/6、`-model-scroll` 5/5、`-detail-model-geometry` 7/7、`-procedural-model` 12/12、`-detail-live-values` 7/7；全量 `test/verify/audit-ohos*.mjs` 扫描**仅 §13.6 的 6 个环境类失败**（4 个 `-pad` + `mist-performance` + `verify-ohos-search`），无回归。
+
+**停下登记**：无。本片未触及 §15.6 保留项（`loadSkyCultureDetails` 美术解码、4 个 A2 热路径、86 保留裸字段、壳层/路由、`floatingPanel`/`compactPanel`/`panelContent` 均未动）；`ObjectMediaStore` 的三处 hooks 仅改指向控制器，未搬其保留语义。
+
+**本片新踩的坑**：`git checkout -- <宿主文件>` 会连同该文件此前的手工编辑（HostMediaPort 端口实现）一并回退。重做时改为「先回滚、再用单个确定性脚本一次性应用全部替换」，避免"回滚 — 重新手改"的中间态丢件。
 ## [2026-10-04] DevEco Code - M1-B：控制器批（SensorController + RecordingController，PLAN §15.11 第一批）
 
 > 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.11 **M1-B**（原 M1-2/3 合并为模块级大切片）。
