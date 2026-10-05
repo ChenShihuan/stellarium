@@ -430,6 +430,45 @@ x86_64 模拟器的 UI-only 通道（见 CHANGELOG 2026-09-30 条目）能验证
 但**星图与引擎相关状态全部不可验**（`libstellarium.so`/`libQt6*.so` 无 x86_64 构建，时间面板显示 `--`）。
 因此 store 与面板阶段的验收矩阵必须包含**真机（Mate 80 Pro）复验**，模拟器只作为快速结构回归。
 
+### 修订 5：时间轮的"交互控制器"留在宿主是刻意取舍，后续按注入式拆分
+
+Phase 3g 把时间转轴/时间轮的**状态与视图**迁出（`TimeWheelStore` + `TimeWheelScrubber`），
+但把**交互逻辑整体留在宿主**，位置与规模（实测）：
+
+- 方法 13 个，`pages/MainWindowNativeNode.ets` **L11910–L12149，约 228 行**：
+  `selectTimeWheelUnit` / `applyTimeWheelDate` / `setTimeWheelStopped` / `startTimeWheelTransition` /
+  `finishTimeWheelTransition` / `stopTimeWheelInertia` / `startTimeWheelInertia` / `advanceTimeWheel` /
+  `timeWheelVelocityMultiplier` / `rebaseTimeWheelTrack` / `rebaseTimeWheelTrackAtCenter` /
+  `handleTimeWheelTouch` / `syncTimeWheelFromSimulation`。
+- 配套**普通（非 `@State`）字段 16 个 + 2 个定时器句柄**，L324–L339（手势草稿量、惯性/过渡状态、定时器）。
+
+**为什么这次必须留在宿主（4 条实证理由）：**
+
+1. **跨域写入**：`setTimeWheelStopped()` 写速度域（`timeStore.timeSpeedIndex` / `pendingTimeRate` / `timeRateText`）→ 搬它需先搬速度域。
+2. **触碰引擎**：`applyTimeWheelDate()` 调 `callNativeFire('setTimeToJD', …)` 且依赖宿主 `utcOffsetHours`；桥是宿主职责（单一出口 `BridgeClient`），store 不应碰 NAPI。
+3. **定时器需生命周期托管**：12 ms 过渡 + 16 ms 惯性两个 `setInterval`，今天搭在宿主既有的「面板关闭 / 后台 / `aboutToDisappear`」收口上；搬走需新增 `start()/stop()` 并重挂这些点，**漏停会导致后台仍在跑定时器并向引擎推时间**。
+4. **草稿量不该可观测**：那 16 个字段每个触摸采样都在变；放进 `@Observed` 会让**每次采样触发通知与重渲染**（性能与语义都不对）。因此"可观测数据在 store、不可观测草稿与行为在宿主"是正确的切分。
+
+**后续拆分方案（推荐在速度域迁移之后执行，作为独立切片）：**
+
+```
+state/TimeWheelStore.ets          ← 只留可观测数据 + 纯计算（现状已达成）
+state/TimeWheelController.ets     ← 新增：普通类（非 @Observed），持有 16 个草稿字段
+                                     + 2 个定时器 + 上述 13 个方法 + start()/stop()
+panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
+```
+
+三个注入点（把跨域依赖从宿主剥出，store 与控制器都不碰引擎）：
+
+| 依赖 | 注入方式 | 今天的落点 |
+|---|---|---|
+| 引擎推送 | `onSeek(jd: number): void` | 宿主 `callNativeFire('setTimeToJD')` |
+| 暂停速度 | `onStopSpeed(): void` | 宿主 `setTimeWheelStopped()` |
+| UTC 偏移 | `utcOffsetHours` 只读传入 / getter | 宿主字段 |
+
+**验收要求**：拖动 + 惯性 + 过渡照旧；面板关闭后无残留定时器；切后台/回前台不丢同步（真机日志确认 `setTimeToJD` 推送已停）。
+**估时/风险**：1 片（约半天），风险集中在定时器生命周期，**不改任何交互逻辑**。
+
 ### 修订 4（已由真机实验定论）：真正的冻结根因是"参数化 @Builder 按值捕获"，`@ObjectLink`/`@Prop` 实时更新正常
 
 2026-09-30 在**真机 Mate 80 Pro（引擎存活）**上做了三版对照实验，同一交互（打开时间面板 → 点「快进」）：
