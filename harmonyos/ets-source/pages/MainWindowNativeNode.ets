@@ -141,6 +141,8 @@ import { TimePanel } from '../panels/panels/TimePanel'
 import { HelpPanel } from '../panels/panels/HelpPanel'
 import { MeteorShowersPanel } from '../panels/panels/MeteorShowersPanel'
 import { NebulaTexturesPanel } from '../panels/panels/NebulaTexturesPanel'
+import { SkyCultureSectionHeader, SkyCultureMetaItem, SkyCultureLabelSettingCard, SkyCultureFilterPicker } from '../panels/skyculture/SkyCultureViewParts'
+import { SatelliteGroupSelector } from '../panels/satellite/SatelliteGroupSelector'
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
   NebulaTextureItem, NebulaTextureStatus, NebulaTextureRefreshResponse, SkyCultureMakerArtworkAnchor, SkyCultureMakerArtwork, SkyCultureMakerConstellation,
@@ -4601,32 +4603,6 @@ export struct WindowNativeNode {
     })
     this.loadSatellites()
   }
-  @Builder
-  private satelliteGroupSelector() {
-    Column({ space: 6 }) {
-      Row() {
-        Text(I18n.t('c_satellite_groups')).fontSize(12).fontColor(this.nmSub()).layoutWeight(1)
-        LoadingProgress().width(18).height(18).color(this.nmAccent())
-          .opacity(this.satelliteListLoading ? 1 : 0)
-      }.width('100%').height(24)
-      Scroll(this.satelliteGroupScroller) {
-        Column({ space: 6 }) {
-          ForEach(this.satGroups, (group: string) => {
-            Row({ space: 8 }) {
-              Text(this.satGroupZh(group)).fontSize(13).fontColor(this.activeSatGroup === group ? this.nmAccent() : this.nmText())
-                .layoutWeight(1).maxLines(2)
-              Text('✓').fontSize(14).fontColor(this.nmAccent()).width(20)
-                .opacity(this.activeSatGroup === group ? 1 : 0)
-            }.width('100%').height(44).padding({ left: 12, right: 12 })
-              .backgroundColor(this.activeSatGroup === group ? 'rgba(107,163,214,0.18)' : this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.selectSatelliteGroup(this.activeSatGroup === group ? '' : group) })
-          }, (group: string) => group)
-        }.width('100%')
-      }.width('100%').height(180).scrollBar(BarState.Auto)
-        .onScroll(() => { this.publishSatellitePanelState() })
-    }.width('100%')
-  }
   private loadSatellites(includeSources: boolean = false, immediate: boolean = false): void {
     const requestId = ++this.satelliteListRequestId
     const flagMutationId = this.satelliteFlagMutationId
@@ -7982,39 +7958,8 @@ export struct WindowNativeNode {
     })
   }
 
-  @Builder
-  private skyCultureSectionHeader(title: ResourceStr, subtitle: ResourceStr) {
-    Row({ space: 8 }) {
-      Row().width(3).height(27).backgroundColor(this.nmAccent()).borderRadius(2)
-      Column({ space: 2 }) {
-        Text(title).fontSize(13).fontColor(this.nmText()).fontWeight(FontWeight.Medium).width('100%')
-        Text(subtitle).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-    }.width('100%').padding({ left: 2, right: 2, top: 4, bottom: 7 })
-  }
 
-  @Builder
-  private skyCultureMetaItem(label: ResourceStr, value: string, accent: boolean = false) {
-    Column({ space: 5 }) {
-      Text(label).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(1)
-      Text(value).fontSize(12).fontColor(accent ? this.nmAccent() : this.nmText()).width('100%')
-        .maxLines(2).lineHeight(17).textOverflow({ overflow: TextOverflow.Ellipsis })
-    }.width('47.5%').height(70).padding({ left: 11, right: 11, top: 10, bottom: 9 })
-      .backgroundColor(this.nmBg()).border({ width: 0.5, color: this.nmBorder() })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .margin({ bottom: 8 })
-  }
 
-  @Builder
-  private skyCultureLabelSettingCard(target: string, title: ResourceStr) {
-    Column() {
-      this.skyCultureLabelModePicker(target, title)
-    }.width('100%')
-      .border({ width: 1, color: this.nmBorder() })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .animation({ duration: 180, curve: Curve.EaseInOut })
-  }
 
   private setSkyCultureLabelModeForTarget(target: string, mode: number): void {
     if (target === 'screen') {
@@ -8035,68 +7980,14 @@ export struct WindowNativeNode {
     return mode >= 0 && mode < this.skyCultureLabelModeOptions(target).length ? mode : 0
   }
 
-  @Builder
-  private skyCultureLabelModePicker(target: string, title: ResourceStr) {
-    Column() {
-      Row() {
-        Column({ space: 1 }) {
-          Text(title).fontSize(9).fontColor(this.nmSub()).width('100%')
-          Text(this.skyCultureLabelModeOptions(target)[this.skyCultureLabelModeForTarget(target)])
-            .fontSize(12).fontColor(this.nmText()).width('100%').maxLines(2).lineHeight(17)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.layoutWeight(1)
-        Text(this.skyCultureLabelPickerOpen === target ? I18n.t('culture_collapse') : I18n.t('culture_expand')).fontSize(10)
-          .fontColor(this.nmText()).padding({ left: 7, right: 7, top: 4, bottom: 4 })
-          .backgroundColor(this.skyCultureLabelPickerOpen === target ? this.nmPickerSelected() : this.nmInput())
-          .border({ width: 1, color: this.skyCultureLabelPickerOpen === target ? this.nmAccent() : this.nmBorder() })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .animation({ duration: 160, curve: Curve.EaseInOut })
-      }.height(52).width('100%').padding({ left: 12, right: 12 })
-        .backgroundColor(this.skyCultureLabelPickerOpen === target ? this.nmPickerHeaderActive() : this.nmPickerHeader())
-        .borderRadius(UI_RADIUS_CONTROL)
-        .animation({ duration: 160, curve: Curve.EaseInOut })
-        .clickEffect({ level: ClickEffectLevel.LIGHT })
-        .hitTestBehavior(HitTestMode.Block)
-        .onClick(() => {
-          this.toggleSkyCultureLabelPicker(target)
-        })
-      if (this.skyCultureLabelPickerOpen === target) {
-        Column({ space: 6 }) {
-          ForEach(this.skyCultureLabelModeOptions(target), (option: string, index: number) => {
-            Row({ space: 10 }) {
-              Stack({ alignContent: Alignment.Center }) {
-                Circle().width(18).height(18).fill(index === this.skyCultureLabelModeForTarget(target) ? this.nmAccent() : 'rgba(255,255,255,0.02)')
-                if (index === this.skyCultureLabelModeForTarget(target)) Text('✓').fontSize(12).fontColor('#FFFFFFFF').fontWeight(FontWeight.Bold)
-              }.width(20).height(20)
-              Text(option).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-                .maxLines(2).lineHeight(17).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }.height(44).width('100%').padding({ left: 12, right: 12 })
-              .backgroundColor(index === this.skyCultureLabelModeForTarget(target) ? this.nmPickerSelected() : this.nmPickerOption())
-              .border({ width: 0.5, color: index === this.skyCultureLabelModeForTarget(target) ? this.nmAccent() : this.nmBorder() })
-              .borderRadius(UI_RADIUS_CONTROL)
-              .animation({ duration: 180, curve: Curve.EaseInOut })
-              .clickEffect({ level: ClickEffectLevel.LIGHT })
-              .hitTestBehavior(HitTestMode.Block)
-              .onClick(() => {
-                this.setSkyCultureLabelModeForTarget(target, index)
-                this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.46, 0.86) }, () => {
-                  this.skyCultureLabelPickerOpen = ''
-                })
-              })
-          }, (option: string) => target + '-' + option)
-        }.width('100%').padding({ left: 7, right: 7, top: 6, bottom: 8 })
-          .transition(TransitionEffect.asymmetric(
-            TransitionEffect.OPACITY.animation({ duration: 150, curve: Curve.EaseOut })
-              .combine(TransitionEffect.translate({ x: 0, y: -7 }).animation({ duration: 180, curve: Curve.EaseOut })),
-            TransitionEffect.OPACITY.animation({ duration: 120, curve: Curve.EaseIn })
-              .combine(TransitionEffect.translate({ x: 0, y: -4 }).animation({ duration: 140, curve: Curve.EaseIn }))
-          ))
-      }
-    }.width('100%').backgroundColor(this.nmPickerSurface())
-      .border({ width: 1, color: this.skyCultureLabelPickerOpen === target ? this.nmAccent() : this.nmBorder() })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .animation({ duration: 180, curve: Curve.EaseInOut })
+  // 选择某个标签模式并收起该卡片的下拉（原 skyCultureLabelModePicker 内联逻辑）。
+  private selectSkyCultureLabelMode(target: string, index: number): void {
+    this.setSkyCultureLabelModeForTarget(target, index)
+    this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.46, 0.86) }, () => {
+      this.skyCultureLabelPickerOpen = ''
+    })
   }
+
 
   private setSkyCultureLabelMode(target: string, mode: number, apply: (value: number) => void): void {
     const styles: string[] = ['Translated', 'Native', 'Pronounce', 'Translit', 'Modern']
@@ -8469,74 +8360,12 @@ export struct WindowNativeNode {
     })
   }
 
-  private skyCultureFilterOptionSelected(kind: string, index: number): boolean {
-    return this.skyCultureFilterValues(kind)[index] === this.skyCultureFilterValue(kind)
+  private skyCultureFilterSelectedIndex(kind: string): number {
+    const index = this.skyCultureFilterValues(kind).indexOf(this.skyCultureFilterValue(kind))
+    return index >= 0 ? index : 0
   }
 
-  @Builder
-  private skyCultureFilterOption(kind: string, index: number, label: string) {
-    Row({ space: 10 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Circle().width(18).height(18).fill(this.skyCultureFilterOptionSelected(kind, index) ? this.nmAccent() : 'rgba(255,255,255,0.02)')
-        if (this.skyCultureFilterOptionSelected(kind, index)) {
-          Text('✓').fontSize(12).fontColor('#FFFFFFFF').fontWeight(FontWeight.Bold)
-        }
-      }.width(20).height(20)
-      Text(label).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-        .maxLines(2).lineHeight(17).textOverflow({ overflow: TextOverflow.Ellipsis })
-      if (this.skyCultureFilterOptionSelected(kind, index)) {
-        Text(I18n.t('culture_current')).fontSize(9).fontColor(this.nmAccent())
-      }
-    }.height(44).width('100%').padding({ left: 12, right: 12 })
-      .backgroundColor(this.skyCultureFilterOptionSelected(kind, index) ? this.nmPickerSelected() : this.nmPickerOption())
-      .border({ width: 0.5, color: this.skyCultureFilterOptionSelected(kind, index) ? this.nmAccent() : this.nmBorder() })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .animation({ duration: 180, curve: curves.springMotion(0.46, 0.88) })
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .onClick(() => { this.setSkyCultureFilterValue(kind, this.skyCultureFilterValues(kind)[index]) })
-  }
 
-  @Builder
-  private skyCultureFilterPicker(kind: string) {
-    Column({ space: 2 }) {
-      Row() {
-        Column({ space: 3 }) {
-          Text(kind === 'classification' ? I18n.t('culture_type') : I18n.t('culture_region'))
-            .fontSize(10).fontColor(this.nmSub()).width('100%')
-          Text(this.skyCultureFilterLabel(kind)).fontSize(12).fontColor(this.nmText()).width('100%')
-            .maxLines(2).lineHeight(17).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Text(this.skyCultureFilterOpen(kind) ? I18n.t('culture_collapse') : I18n.t('culture_choose')).fontSize(10).fontColor(this.nmAccent())
-          .padding({ left: 5, right: 5, top: 3, bottom: 3 })
-          .backgroundColor(this.skyCultureFilterOpen(kind) ? this.nmPickerSelected() : this.nmInput())
-          .border({ width: 1, color: this.skyCultureFilterOpen(kind) ? this.nmAccent() : this.nmBorder() })
-          .borderRadius(UI_RADIUS_CONTROL)
-      }.height(54).width('100%').padding({ left: 12, right: 12 })
-        .backgroundColor(this.skyCultureFilterOpen(kind) ? this.nmPickerHeaderActive() : this.nmPickerHeader())
-        .border({ width: 1, color: this.skyCultureFilterOpen(kind) ? this.nmAccent() : this.nmBorder() })
-        .borderRadius(UI_RADIUS_CONTROL)
-        .animation({ duration: 180, curve: Curve.EaseInOut })
-        .clickEffect({ level: ClickEffectLevel.LIGHT })
-        .onClick(() => { this.toggleSkyCultureFilter(kind) })
-      if (this.skyCultureFilterOpen(kind)) {
-        Column({ space: 6 }) {
-          ForEach(this.skyCultureFilterLabels(kind), (label: string, index: number) => {
-            this.skyCultureFilterOption(kind, index, label)
-          }, (label: string) => kind + '-' + label)
-        }.width('100%').padding({ left: 7, right: 7, top: 6, bottom: 8 })
-          .transition(TransitionEffect.asymmetric(
-            TransitionEffect.OPACITY.animation({ duration: 150, curve: Curve.EaseOut })
-              .combine(TransitionEffect.translate({ x: 0, y: -8 }).animation({ duration: 220, curve: curves.springMotion(0.46, 0.88) })),
-            TransitionEffect.OPACITY.animation({ duration: 120, curve: Curve.EaseIn })
-              .combine(TransitionEffect.translate({ x: 0, y: -4 }).animation({ duration: 150, curve: Curve.EaseIn }))
-          ))
-      }
-    }.width('100%')
-      .backgroundColor(this.skyCultureFilterOpen(kind) ? this.nmPickerSurface() : 'rgba(255,255,255,0.045)')
-      .border({ width: 1, color: this.skyCultureFilterOpen(kind) ? this.nmAccent() : this.nmBorder() })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .animation({ duration: 220, curve: curves.springMotion(0.46, 0.88) })
-  }
 
   private cleanSkyCultureNarration(text: string): string {
     return text.replace(/[\uFEFF\uFFFD\uFFFC]/g, '').replace(/\s*\.\s*\.\s*\.\s*/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
@@ -18327,9 +18156,6 @@ private loadPlanetPositions(): void {
     return I18n.landscapeName(en)
   }
 
-  private satGroupZh(en: string): string {
-    return I18n.satGroup(en)
-  }
 
   // 收起当前页面按钮：把右侧浮动面板收回到左侧栏
   // 「更多」按钮：与搜索、时间、位置和图层共用同一主面板。
@@ -22026,7 +21852,18 @@ private loadPlanetPositions(): void {
             Toggle({ type: ToggleType.Switch, isOn: this.satHideInvisible })
               .onChange((isOn: boolean) => { this.setSatelliteFlag('hideInvisible', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          this.satelliteGroupSelector()
+          SatelliteGroupSelector({
+            groups: this.satGroups,
+            activeGroup: this.activeSatGroup,
+            loading: this.satelliteListLoading,
+            subColor: this.nmSub(),
+            accentColor: this.nmAccent(),
+            textColor: this.nmText(),
+            bgColor: this.nmBg(),
+            scroller: this.satelliteGroupScroller,
+            onGroupScroll: () => { this.publishSatellitePanelState() },
+            onSelect: (group: string) => { this.selectSatelliteGroup(group) }
+          })
           TextInput({ text: this.satQuery, placeholder: '搜索卫星名称或 NORAD 编号' })
             .height(36).fontSize(13).fontColor('#E5FFFFFF').placeholderColor(this.nmSub())
             .backgroundColor(this.nmInput()).border({ width: 1, color: 'rgba(214, 238, 255, 0.14)' }).borderRadius(UI_RADIUS_CONTROL)
@@ -23772,7 +23609,7 @@ private loadPlanetPositions(): void {
 
   // View 面板 Sky Culture 标签页内容
   @Builder viewSkyCultureTab() {
-    this.skyCultureSectionHeader(I18n.t('culture_section_layers'), I18n.t('culture_section_layers_hint'))
+    SkyCultureSectionHeader({ title: I18n.t('culture_section_layers'), subtitle: I18n.t('culture_section_layers_hint'), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent() })
     Column({ space: 2 }) {
       LayerSwitchRow({ label: I18n.t('s0522'), isOn: this.layerStore.constellationLines, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Constellation_Lines', '', value) } })
       LayerSwitchRow({ label: I18n.t('s0523'), isOn: this.layerStore.constellationLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Constellation_Labels', '', value) } })
@@ -23796,7 +23633,7 @@ private loadPlanetPositions(): void {
       .width('100%').height(0.5)
       .backgroundColor(this.nmBorder())
       .margin({ top: 8, bottom: 8 })
-    this.skyCultureSectionHeader(I18n.t('culture_section_current'), I18n.t('culture_section_current_hint'))
+    SkyCultureSectionHeader({ title: I18n.t('culture_section_current'), subtitle: I18n.t('culture_section_current_hint'), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent() })
     Row() {
       Text(this.currentSkyCulture.length > 0 ? this.currentSkyCulture : I18n.t('culture_reading'))
         .fontSize(15).fontColor(this.nmText()).fontWeight(FontWeight.Medium).layoutWeight(1).maxLines(1)
@@ -23820,21 +23657,21 @@ private loadPlanetPositions(): void {
             .padding({ left: 9, right: 9, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
         }
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-          this.skyCultureMetaItem('地区', this.skyCultureRegionText(this.skyCultureRegions))
-          this.skyCultureMetaItem('分类', this.skyCultureClassificationText(this.skyCultureClassification))
-          this.skyCultureMetaItem('适用年代', this.skyCultureTimeRange())
-          this.skyCultureMetaItem('时间匹配', this.skyCultureSimulationTimeStatus(), this.skyCultureSimulationTimeMatches())
-          this.skyCultureMetaItem('星座边界', this.skyCultureBoundaryTypeText(this.skyCultureBoundariesType))
-          this.skyCultureMetaItem('通用名称', this.skyCultureUsesCommonNames ? '已收录' : '未收录')
-          this.skyCultureMetaItem('星座图形', this.skyCultureConstellationCount + ' 个')
+          SkyCultureMetaItem({ label: '地区', value: this.skyCultureRegionText(this.skyCultureRegions), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '分类', value: this.skyCultureClassificationText(this.skyCultureClassification), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '适用年代', value: this.skyCultureTimeRange(), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '时间匹配', value: this.skyCultureSimulationTimeStatus(), accent: this.skyCultureSimulationTimeMatches(), subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '星座边界', value: this.skyCultureBoundaryTypeText(this.skyCultureBoundariesType), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '通用名称', value: this.skyCultureUsesCommonNames ? '已收录' : '未收录', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '星座图形', value: this.skyCultureConstellationCount + ' 个', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
           if (this.skyCultureAsterismCount > 0) {
-            this.skyCultureMetaItem('星群', this.skyCultureAsterismCount + ' 个')
+            SkyCultureMetaItem({ label: '星群', value: this.skyCultureAsterismCount + ' 个', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
           }
           if (this.skyCultureArtCount > 0) {
-            this.skyCultureMetaItem('星座绘图', this.skyCultureArtCount + ' 幅')
+            SkyCultureMetaItem({ label: '星座绘图', value: this.skyCultureArtCount + ' 幅', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
           }
           if (this.skyCultureNativeNameCount > 0) {
-            this.skyCultureMetaItem('本土名称', this.skyCultureNativeNameCount + ' 个')
+            SkyCultureMetaItem({ label: '本土名称', value: this.skyCultureNativeNameCount + ' 个', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
           }
         }.width('100%').padding({ top: 5, bottom: 2 })
         if (this.skyCultureViewStore.artItems.length > 0) {
@@ -24014,9 +23851,27 @@ private loadPlanetPositions(): void {
           Text('资料许可：' + this.skyCultureLicense).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
       }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-      this.skyCultureSectionHeader(I18n.t('culture_section_labels'), I18n.t('culture_section_labels_hint'))
+      SkyCultureSectionHeader({ title: I18n.t('culture_section_labels'), subtitle: I18n.t('culture_section_labels_hint'), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent() })
       Column() {
-        this.skyCultureLabelSettingCard('screen', '星图标注')
+        SkyCultureLabelSettingCard({
+          target: 'screen',
+          title: '星图标注',
+          options: this.skyCultureLabelModeOptions('screen'),
+          mode: this.skyCultureLabelModeForTarget('screen'),
+          isOpen: this.skyCultureLabelPickerOpen === 'screen',
+          subColor: this.nmSub(),
+          textColor: this.nmText(),
+          accentColor: this.nmAccent(),
+          cardBorder: this.nmBorder(),
+          pickerSurface: this.nmPickerSurface(),
+          pickerHeader: this.nmPickerHeader(),
+          pickerHeaderActive: this.nmPickerHeaderActive(),
+          pickerSelected: this.nmPickerSelected(),
+          pickerOption: this.nmPickerOption(),
+          inputColor: this.nmInput(),
+          onToggle: (target: string) => { this.toggleSkyCultureLabelPicker(target) },
+          onSelectMode: (target: string, index: number) => { this.selectSkyCultureLabelMode(target, index) }
+        })
       }.width('100%').padding({ left: 8, right: 8, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       Row() {
         Text('使用星座短名称').fontSize(11).fontColor(this.nmText()).layoutWeight(1)
@@ -24052,7 +23907,7 @@ private loadPlanetPositions(): void {
         Button('清除选择').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(30)
           .layoutWeight(1).onClick(() => { this.applySkyCultureConstellationSelection('actionShow_Constellation_Deselect', '已清除星座选择') })
       }.width('100%').padding({ left: 8, right: 8 }).margin({ bottom: 8 })
-      this.skyCultureSectionHeader(I18n.t('culture_section_readability'), I18n.t('culture_section_readability_hint'))
+      SkyCultureSectionHeader({ title: I18n.t('culture_section_readability'), subtitle: I18n.t('culture_section_readability_hint'), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent() })
       Row() {
         Text('星座标签字号').fontSize(11).fontColor(this.nmText()).width(84)
         Text(this.skyCultureConstellationFontSize.toFixed(0)).fontSize(11).fontColor(this.nmSub()).width(28).textAlign(TextAlign.End)
@@ -24274,16 +24129,70 @@ private loadPlanetPositions(): void {
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
       Column() {
-        this.skyCultureLabelSettingCard('info', '资料中的名称')
+        SkyCultureLabelSettingCard({
+          target: 'info',
+          title: '资料中的名称',
+          options: this.skyCultureLabelModeOptions('info'),
+          mode: this.skyCultureLabelModeForTarget('info'),
+          isOpen: this.skyCultureLabelPickerOpen === 'info',
+          subColor: this.nmSub(),
+          textColor: this.nmText(),
+          accentColor: this.nmAccent(),
+          cardBorder: this.nmBorder(),
+          pickerSurface: this.nmPickerSurface(),
+          pickerHeader: this.nmPickerHeader(),
+          pickerHeaderActive: this.nmPickerHeaderActive(),
+          pickerSelected: this.nmPickerSelected(),
+          pickerOption: this.nmPickerOption(),
+          inputColor: this.nmInput(),
+          onToggle: (target: string) => { this.toggleSkyCultureLabelPicker(target) },
+          onSelectMode: (target: string, index: number) => { this.selectSkyCultureLabelMode(target, index) }
+        })
       }.width('100%').padding({ left: 8, right: 8, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       if (this.skyCultureHasZodiac) {
         Column() {
-          this.skyCultureLabelSettingCard('zodiac', '黄道十二宫名称')
+          SkyCultureLabelSettingCard({
+            target: 'zodiac',
+            title: '黄道十二宫名称',
+            options: this.skyCultureLabelModeOptions('zodiac'),
+            mode: this.skyCultureLabelModeForTarget('zodiac'),
+            isOpen: this.skyCultureLabelPickerOpen === 'zodiac',
+            subColor: this.nmSub(),
+            textColor: this.nmText(),
+            accentColor: this.nmAccent(),
+            cardBorder: this.nmBorder(),
+            pickerSurface: this.nmPickerSurface(),
+            pickerHeader: this.nmPickerHeader(),
+            pickerHeaderActive: this.nmPickerHeaderActive(),
+            pickerSelected: this.nmPickerSelected(),
+            pickerOption: this.nmPickerOption(),
+            inputColor: this.nmInput(),
+            onToggle: (target: string) => { this.toggleSkyCultureLabelPicker(target) },
+            onSelectMode: (target: string, index: number) => { this.selectSkyCultureLabelMode(target, index) }
+          })
         }.width('100%').padding({ left: 8, right: 8, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
       if (this.skyCultureHasLunarSystem) {
         Column() {
-          this.skyCultureLabelSettingCard('lunar', '月宿系统名称')
+          SkyCultureLabelSettingCard({
+            target: 'lunar',
+            title: '月宿系统名称',
+            options: this.skyCultureLabelModeOptions('lunar'),
+            mode: this.skyCultureLabelModeForTarget('lunar'),
+            isOpen: this.skyCultureLabelPickerOpen === 'lunar',
+            subColor: this.nmSub(),
+            textColor: this.nmText(),
+            accentColor: this.nmAccent(),
+            cardBorder: this.nmBorder(),
+            pickerSurface: this.nmPickerSurface(),
+            pickerHeader: this.nmPickerHeader(),
+            pickerHeaderActive: this.nmPickerHeaderActive(),
+            pickerSelected: this.nmPickerSelected(),
+            pickerOption: this.nmPickerOption(),
+            inputColor: this.nmInput(),
+            onToggle: (target: string) => { this.toggleSkyCultureLabelPicker(target) },
+            onSelectMode: (target: string, index: number) => { this.selectSkyCultureLabelMode(target, index) }
+          })
         }.width('100%').padding({ left: 8, right: 8, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
       Row() {
@@ -24324,14 +24233,48 @@ private loadPlanetPositions(): void {
           .onClick(() => { this.callInteractive('reloadSkyCulture', '', () => { this.loadSkyCultureList() }) })
       }.width('100%').padding({ top: 3, bottom: 7 })
     }
-    this.skyCultureSectionHeader(I18n.t('culture_section_select'), I18n.t('culture_section_select_hint'))
+    SkyCultureSectionHeader({ title: I18n.t('culture_section_select'), subtitle: I18n.t('culture_section_select_hint'), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent() })
     Column({ space: 5 }) {
       TextInput({ text: this.skyCultureSearchText, placeholder: I18n.t('culture_search_placeholder') }).fontSize(11).height(38)
         .width('100%').backgroundColor('rgba(255,255,255,0.06)').borderRadius(UI_RADIUS_CONTROL)
         .onChange((value: string) => { this.skyCultureSearchText = value })
       Column({ space: 6 }) {
-        this.skyCultureFilterPicker('classification')
-        this.skyCultureFilterPicker('region')
+        SkyCultureFilterPicker({
+          kind: 'classification',
+          labels: this.skyCultureFilterLabels('classification'),
+          selectedIndex: this.skyCultureFilterSelectedIndex('classification'),
+          isOpen: this.skyCultureFilterOpen('classification'),
+          subColor: this.nmSub(),
+          textColor: this.nmText(),
+          accentColor: this.nmAccent(),
+          cardBorder: this.nmBorder(),
+          pickerSurface: this.nmPickerSurface(),
+          pickerHeader: this.nmPickerHeader(),
+          pickerHeaderActive: this.nmPickerHeaderActive(),
+          pickerSelected: this.nmPickerSelected(),
+          pickerOption: this.nmPickerOption(),
+          inputColor: this.nmInput(),
+          onToggle: (kind: string) => { this.toggleSkyCultureFilter(kind) },
+          onPick: (kind: string, index: number) => { this.setSkyCultureFilterValue(kind, this.skyCultureFilterValues(kind)[index]) }
+        })
+        SkyCultureFilterPicker({
+          kind: 'region',
+          labels: this.skyCultureFilterLabels('region'),
+          selectedIndex: this.skyCultureFilterSelectedIndex('region'),
+          isOpen: this.skyCultureFilterOpen('region'),
+          subColor: this.nmSub(),
+          textColor: this.nmText(),
+          accentColor: this.nmAccent(),
+          cardBorder: this.nmBorder(),
+          pickerSurface: this.nmPickerSurface(),
+          pickerHeader: this.nmPickerHeader(),
+          pickerHeaderActive: this.nmPickerHeaderActive(),
+          pickerSelected: this.nmPickerSelected(),
+          pickerOption: this.nmPickerOption(),
+          inputColor: this.nmInput(),
+          onToggle: (kind: string) => { this.toggleSkyCultureFilter(kind) },
+          onPick: (kind: string, index: number) => { this.setSkyCultureFilterValue(kind, this.skyCultureFilterValues(kind)[index]) }
+        })
       }.width('100%')
     }.width('100%').padding({ bottom: 5 })
     if (this.skyCultureSearchText.trim().length > 0 || this.skyCultureClassificationFilter !== 'all' || this.skyCultureRegionFilter !== 'all' || this.skyCultureTimeFiltering) {

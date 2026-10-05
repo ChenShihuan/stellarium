@@ -28,13 +28,13 @@ test('group selection uses a local non-linear animation and preserves same-value
 
 test('filter rows precede variable results and retain their own bounded scroll container', () => {
   const panel = page.slice(page.indexOf("} else if (this.activePanel === 'satellites')"), page.indexOf("} else if (this.activePanel === 'meteorshowers')"));
-  assert.ok(panel.indexOf('this.satelliteGroupSelector()') < panel.indexOf('ForEach(this.satItems'));
+  assert.ok(panel.indexOf('SatelliteGroupSelector(') < panel.indexOf('ForEach(this.satItems'));
   assert.match(panel, /Scroll\(this.satellitePanelScroller\)/);
-  const selector = page.slice(page.indexOf('private satelliteGroupSelector()'), page.indexOf('private loadSatellites('));
-  assert.match(selector, /Scroll\(this.satelliteGroupScroller\)/);
+  const selector = readFileSync(new URL('../harmonyos/ets-source/panels/satellite/SatelliteGroupSelector.ets', import.meta.url), 'utf8');
+  assert.match(selector, /Scroll\(this\.scroller\)/);
   assert.match(selector, /height\(180\)/);
   assert.match(selector, /\(group: string\) => group/);
-  assert.match(selector, /opacity\(this.activeSatGroup === group \? 1 : 0\)/);
+  assert.match(selector, /opacity\(this\.activeGroup === group \? 1 : 0\)/);
 });
 
 test('queued filtering invalidates previous results before the debounce fires', () => {
