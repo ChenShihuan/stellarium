@@ -23,7 +23,9 @@ export interface CommandPort {
   // 同步请求：宿主 callNative（含录制记录），桥未就绪时返回 { ok: false }。
   request(name: string, payload?: string): StellariumBridgeResponse
   // 启动期重试请求：对应宿主 callNativeWhenReady（默认 200ms × 60）。
-  requestWhenReady(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void): void
+  // attempt / intervalMs / maxAttempts 可选：缺省由宿主适配器填 0 / 200 / 60（与 loadAboutInfo 一致）；
+  // 个别加载器在宿主侧显式传 0 / 100 / 15（如 getOculars），故透传以保函数体逐字语义（B1-1）。
+  requestWhenReady(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, attempt?: number, intervalMs?: number, maxAttempts?: number): void
   // 交互命令（tap-select / search / get-info / move-to）：快速轮询。
   requestInteractive(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void): void
   // 长任务：进度回调 + 最大尝试次数 + 取消判定。

@@ -1,5 +1,7 @@
 import { I18n } from '../pages/I18n'
-import { OcularInstrumentItem, OcularSelInfo, TelescopeProfile, TELESCOPE_SIMULATOR_MODEL } from '../pages/MainWindowModels'
+import { OcularInstrumentItem, OcularSelInfo, OcularsResponse, TelescopeProfile, TELESCOPE_SIMULATOR_MODEL } from '../pages/MainWindowModels'
+import { StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { CommandPort } from '../bridge/CommandPort'
 
 // 「望远镜控制」/「目镜（Oculars）」两面板的状态簇。
 //
@@ -20,8 +22,8 @@ import { OcularInstrumentItem, OcularSelInfo, TelescopeProfile, TELESCOPE_SIMULA
 //     selectOcularInstrument / rotateOcularReticle / resetOcularInstrument / setTelrad /
 //     setCrosshairs / setCCD / getTelescopeProfiles / setTelescopeProfile / testTelescope /
 //     readTelescopePosition …）以及全部 LX200 命令方法；
-//   - 请求序号与轮询状态（ocularLoadRequestId / lx200LivePositionTimer /
-//     lx200LivePositionRequestPending / lx200LivePositionRequestId）——它们不是渲染状态；
+//   - LX200 轮询状态（lx200LivePositionTimer / lx200LivePositionRequestPending /
+//     lx200LivePositionRequestId）——它们不是渲染状态；ocularLoadRequestId 已在 §14 B1-1 作为 seq 迁入本 store。
 //   - 编辑器校验 validateTelescopeEditorStatus()：它读 store 字段写回 lx200Status/Scope/Transport，
 //     由宿主在输入回调里执行，不放进 store（避免 store 内做副作用）。
 //
@@ -154,5 +156,111 @@ export class TelescopeStore {
     else { info.name = '（无）' }
     info.countText = (idx < 0 ? '—' : (idx + 1).toString()) + ' / ' + names.length.toString()
     return info
+  }
+
+  // —— 桥注入（§14.1 AB-0 约定；§14 B1-1 起本域加载器自持） ——
+  // 宿主在 aboutToAppear 用同一个 HostCommandPort 实例调用 attachPort(port, onChanged) 注入；
+  // 请求序号 seq 随加载器搬入 store（§14.8 规则 3，宿主不再持有 ocularLoadRequestId）。
+  // 本域无 publish* 发布点、消费方均为 @ObjectLink（字段赋值即刷新），故 onChanged 为空实现。
+  private port: CommandPort | null = null
+  private seq: number = 0
+  private onChanged: (() => void) | null = null
+
+  attachPort(port: CommandPort, onChanged: () => void): void {
+    this.port = port
+    this.onChanged = onChanged
+  }
+
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  private notifyChanged(): void {
+    if (this.onChanged !== null) {
+      this.onChanged()
+    }
+  }
+
+  // 目镜插件加载（原宿主 loadOculars，函数体逐字搬入；仅 this.callNativeWhenReady → this.port.requestWhenReady，
+  // this.telescopeStore.<f> → this.<f>，this.ocularLoadRequestId → this.seq）。
+  loadOculars(showLoading: boolean = true): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    const requestId = ++this.seq
+    if (showLoading) this.ocularLoading = true
+    port.requestWhenReady('getOculars', '', (r: StellariumBridgeResponse) => {
+      if (requestId !== this.seq) return
+      this.ocularLoading = false
+      const resp = r as OcularsResponse
+      const o = resp.oculars
+      if (!o) {
+        this.ocularStatusMessage = I18n.t('ocular_status_unavailable')
+        return
+      }
+      this.ocularMode = o.ocularMode
+      this.telradOn = o.telrad
+      this.crosshairsOn = o.crosshairs
+      this.ccdOn = o.ccd
+      this.ocularNames = o.ocularNames
+      this.telescopeNames = o.telescopeNames
+      this.lensNames = o.lensNames
+      this.ccdNames = o.ccdNames
+      this.ocularIndex = o.ocularIndex
+      this.telescopeIndex = o.telescopeIndex
+      this.lensIndex = o.lensIndex
+      this.ccdIndex = o.ccdIndex
+      this.ocularItems = o.ocularItems ?? []
+      this.telescopeItems = o.telescopeItems ?? []
+      this.lensItems = o.lensItems ?? []
+      this.ccdItems = o.ccdItems ?? []
+      this.ocularReady = o.ocularReady
+      this.ocularCcdReady = o.ccdReady
+      this.ocularHasSelection = o.hasSelection
+      this.ocularRequireSelection = o.requireSelection
+      this.ocularAutoLimitMagnitude = o.autoLimitMagnitude
+      this.ocularHideGridsLines = o.hideGridsLines
+      this.ocularAutoScaleTelrad = o.autoScaleTelrad
+      this.ocularAutoScaleCcd = o.autoScaleCcd
+      this.ocularSemiTransparentMask = o.semiTransparentMask
+      this.ocularMaskOpacity = o.maskOpacity
+      this.ocularShowResolutionCriteria = o.showResolutionCriteria
+      this.ocularAutoSetMountForCcd = o.autoSetMountForCcd
+      this.ocularHorizontalCoordinates = o.horizontalCoordinates
+      this.ocularSensorCropOverlay = o.sensorCropOverlay
+      this.ocularSensorPixelGrid = o.sensorPixelGrid
+      this.ocularFocuserOverlay = o.focuserOverlay
+      this.ocularScaleImageCircle = o.scaleImageCircle
+      this.ocularMaxExposureTimeForCcd = o.maxExposureTimeForCcd
+      this.ocularShowContour = o.showContour
+      this.ocularShowCardinals = o.showCardinals
+      this.ocularAlignCrosshair = o.alignCrosshair
+      this.ocularSmallFocuserOverlay = o.smallFocuserOverlay
+      this.ocularMediumFocuserOverlay = o.mediumFocuserOverlay
+      this.ocularLargeFocuserOverlay = o.largeFocuserOverlay
+      this.ocularDmsDegrees = o.dmsDegrees
+      this.ocularInitFov = o.initFov
+      this.ocularInitDirection = o.initDirection
+      this.ocularOagLimits = o.oagLimits
+      this.ocularCcdCropHSize = o.ccdCropHSize ?? 250
+      this.ocularCcdCropVSize = o.ccdCropVSize ?? 250
+      this.ocularCcdPrismRotation = o.ccdPrismRotation ?? 0
+      this.ocularGuiPanelEnabled = o.guiPanelEnabled
+      this.ocularMagnification = o.magnification ?? 0
+      this.ocularActualFov = o.actualFov ?? 0
+      this.ocularExitPupil = o.exitPupil ?? 0
+      this.ocularLimitMagnitude = o.limitMagnitude ?? 0
+      this.ocularCcdFovX = o.ccdFovX ?? 0
+      this.ocularCcdFovY = o.ccdFovY ?? 0
+      this.ocularCcdPixelScaleX = o.ccdPixelScaleX ?? 0
+      this.ocularCcdPixelScaleY = o.ccdPixelScaleY ?? 0
+      this.ocularCcdRotation = o.ccdRotation ?? 0
+      this.ocularStatusMessage = this.ocularReady ? '' : I18n.t('ocular_status_no_config')
+      this.notifyChanged()
+    }, () => {
+      if (requestId === this.seq) this.ocularLoading = false
+      this.ocularStatusMessage = I18n.t('ocular_status_unavailable')
+    }, 0, 100, 15)
   }
 }
