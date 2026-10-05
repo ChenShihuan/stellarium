@@ -1,3 +1,23 @@
+## [2026-10-01] DevEco Code - Phase 4b：`panelContent` 次小批次 5 分支抽组件（place / commands / navStars / archaeoLines / mosaicCamera）
+
+- **范围**：Phase 4 第二批 —— 接 Phase 4a，把 `panelContent()` 里**体量次小的 5 个分支**（排除「薄调用既有组件」的 hub 类与 `layers`）下沉为 `panels/panels/` 组件；判定条件 `activePanel === '<name>'` 仍留宿主；**不做表驱动 `PanelHost`**、**不迁 V2**、不新建 store（展示值 `@Prop` 传入、动作回注）。
+- **改动文件**：
+  - 新增 `harmonyos/ets-source/panels/panels/PlacePanel.ets`（117 行）、`CommandsPanel.ets`（93）、`NavStarsPanel.ets`（103）、`ArchaeoLinesPanel.ets`（100）、`MosaicCameraPanel.ets`（88）；
+  - 改 `harmonyos/ets-source/pages/MainWindowNativeNode.ets`：+6 行 import、5 个分支体替换为组件调用（`git diff --stat` = +133/−282，净 −149），**24,945 → 24,796** 行；同时删除随 UI 下沉的 3 个纯助手 `navStarsSetLabel` / `filteredCommandCatalog` / `mosaicCameraValue`。
+- **抽法与注入**：`PlacePanel` 用 3 个 `@ObjectLink`（LocationPickerStore / LocationStore / SessionToolStore）+ `@Prop` + 回调组装既有 7 个子组件（顶层 `Column()` 无 space，与原调用点 `Column() { this.panelContent() }` 间距一致，规避多根）；其余 4 个面板为 `@Prop` 展示值 + 回调，设置动作全部回注宿主（`setMosaicCamera` / `setNavStarsSetting` / `setArchaeoLineSetting`）。`ArchaeoLinesPanel` 线宽滑块保留原「拖动实时预览 + 松手提交」两段语义（`onLineWidthPreview` → 宿主 `archaeoLineWidth`；`onSetLineWidth` → `setArchaeoLineSetting('lineWidth', …)`）。
+- **成员名雷区**：`CommandsPanel` 输入底色用 `inputColor`（避开 `background`）、`ArchaeoLinesPanel` 描边用 `borderTint`（避开 `borderColor`）。
+- **跳过**：本片 5 个分支体内**均无**参数化 `@Builder`、**均无** `this.panelContent()`，无需按规则换分支；原列第 2 小的 `place` 未跳过（含 3 个内联信息行，非纯转发）。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（6 个改动文件）无错 → `devecocli build`（-SkipEngine）BUILD SUCCESSFUL → `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好（149 个 .ets）→ 全量 `*-ohos*.mjs` 扫描失败项与 §13.6 存量**完全一致**（7 个环境/设备类）。
+- **真机（`com.cnchensh.stellarium`，Mate 80 Pro `192.168.3.95:40565`，CLI 显式 `--bundle`，关键步骤后 `aa dump -l` 复核前台）**：全程 `pidof com.cnchensh.stellarium` = 39382（存活，未崩）。
+  - `place`：`openUiPanel place` 渲染「位置/北京·地球/坐标/海拔/观测位置」；点「按地区选」→ 出现大洲列；**点「非洲」→ 实时刷新**（出现 ✓、国家列「乌干达/乍得」、未选择 → 「非洲」）。
+  - `commands`：渲染「统一命令控制」与命令目录（copyTextToClipboard/getGuideState/startGuide）；**在搜索框输入 `guide` → 列表实时过滤为 getGuideState**（实测下沉后的 `filteredCommandCatalog`）。
+  - `navStars`：渲染「导航星/星表方案 57 颗/英法等星表 chips」（chips 文本来自下沉的 `navStarsSetLabel`）；**点「法国航海星」→ 57 颗 → 81 颗**；点回「英美航海星」恢复 57 颗。
+  - `archaeoLines`：经 `openPluginFeature ArchaeoLines` 打开（`archaeoLines` 不在 `openUiPanel` 白名单）；渲染 13 个 `ArchaeoToggleRow`、行星 chips 与线宽滑块；**拖动线宽滑块 →「线宽」数字 1 → 7 实时变化**；再拖回 1。
+  - `mosaicCamera`：渲染「相机拼接视场/相机配置(LSSTCam…LATISS)」；**点「DECam」后 `getMosaicCamera` 回读 `currentCamera=DECam`**；**拖动旋转滑块 → 引擎回读 rotation=200**。
+- **测试同步**：无脚本按文本切这 5 个分支的 UI；`test-ohos-plugin-panel-state.mjs` 仍从宿主正则抽 `setMosaicCamera`（本片未动该方法，仅删 `mosaicCameraValue`），4 用例全绿。
+- **测后恢复的持久化设置**：navStars 星表 = AngloAmerican（57 颗）、archaeoLines lineWidth = 1、mosaicCamera camera = LSSTCam / rotation = 0（均由 CLI 回读确认）。
+- **本片新踩的坑**：真机一度锁屏（开发者模式下 `aa start` 报 `10106102`，注入手势被安全策略拦截，需人工解锁）；「按地区选」后的面板滚动一度把设备拖到断连（`hdc list targets` 变空），重连后桌面在前台，`aa start` 拉回应用即可（进程未崩）。
+
 ## [2026-10-01] DevEco Code - Phase 4a：`panelContent` 首批 4 个分支抽组件（catalogs / angleMeasure / audio / scenery3d）
 
 - **范围**：Phase 4 第一片 —— 把单体 `panelContent()` 里**体量最小的 4 个分支**下沉为组件（判定条件 `activePanel === '<name>'` 留在宿主）；**本片不做表驱动 `PanelHost`**（待分支搬至多数后再统一）。落位沿用 Phase 4 面板宿主目录 `harmonyos/ets-source/panels/panels/`。

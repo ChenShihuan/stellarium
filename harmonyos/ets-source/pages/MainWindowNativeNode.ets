@@ -131,6 +131,11 @@ import { AngleMeasurePanel } from '../panels/panels/AngleMeasurePanel'
 import { AudioPanel } from '../panels/panels/AudioPanel'
 import { Scenery3dPanel } from '../panels/panels/Scenery3dPanel'
 import { CatalogsPanel } from '../panels/panels/CatalogsPanel'
+import { PlacePanel } from '../panels/panels/PlacePanel'
+import { CommandsPanel } from '../panels/panels/CommandsPanel'
+import { NavStarsPanel } from '../panels/panels/NavStarsPanel'
+import { ArchaeoLinesPanel } from '../panels/panels/ArchaeoLinesPanel'
+import { MosaicCameraPanel } from '../panels/panels/MosaicCameraPanel'
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
   NebulaTextureItem, NebulaTextureStatus, NebulaTextureRefreshResponse, SkyCultureMakerArtworkAnchor, SkyCultureMakerArtwork, SkyCultureMakerConstellation,
@@ -4254,10 +4259,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private mosaicCameraValue(key: string): number {
-    return key === 'ra' ? this.mosaicCameraRA : key === 'dec' ? this.mosaicCameraDec : this.mosaicCameraRotation
-  }
-
   private setMosaicCamera(setting: string, value: string = ''): void {
     if (this.mosaicCameraPending || this.mosaicCameraLoading) return
     if (setting === 'enabled' && (value === '1') === this.mosaicCameraEnabled) return
@@ -4480,31 +4481,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private navStarsSetLabel(key: string): ResourceStr {
-    switch (key) {
-      case 'AngloAmerican': return '英美航海星'
-      case 'French': return '法国航海星'
-      case 'British': return '英国航海星'
-      case 'Wrinkles': return '19世纪英国航海星'
-      case 'Russian': return '俄罗斯航海星'
-      case 'USSRAvia': return '苏联航空星'
-      case 'USSRSpace': return '苏联航天星'
-      case 'German': return '德国航海星'
-      case 'GeminiAPS': return 'Gemini 对准星'
-      case 'MeadeLX200': return 'Meade LX200 对准星'
-      case 'MeadeETX': return 'Meade ETX 对准星'
-      case 'MeadeAS494': return 'Meade 494 对准星'
-      case 'MeadeAS497': return 'Meade 497 对准星'
-      case 'CelestronNS': return 'Celestron 对准星'
-      case 'Apollo': return 'Apollo 导航星'
-      case 'SkywatcherSS': return 'Sky-Watcher 对准星'
-      case 'VixenSB': return 'Vixen 对准星'
-      case 'ArgoNavis': return 'Argo Navis 对准星'
-      case 'OrionIS': return 'Orion 对准星'
-      case 'SkyCommander': return 'Sky Commander 对准星'
-      default: return key
-    }
-  }
   private setTelrad(v: boolean): void {
     this.telescopeStore.telradOn = v
     this.callNativeWhenReady('setTelrad', v ? '1' : '0', () => { this.loadOculars(false) })
@@ -10344,13 +10320,6 @@ private loadPlanetPositions(): void {
     }, (r: StellariumBridgeResponse) => {
       this.commandResultText = JSON.stringify({ ok: false, error: r.error ?? '命令目录加载超时' }, null, 2)
     })
-  }
-
-  private filteredCommandCatalog(): Array<CommandCatalogEntry> {
-    const query = this.commandSearchText.trim().toLowerCase()
-    if (query.length === 0) return this.commandCatalog.slice(0, 40)
-    return this.commandCatalog.filter((item: CommandCatalogEntry) =>
-      item.name.toLowerCase().includes(query) || item.category.includes(this.commandSearchText.trim())).slice(0, 40)
   }
 
   private selectCommandEntry(item: CommandCatalogEntry): void {
@@ -18707,24 +18676,24 @@ private loadPlanetPositions(): void {
       if (this.fullInspectorRequested) {
         Divider().color(this.nmBorder()).margin({ top: 8, bottom: 8 })
         TabletInspectorMediaGroup({
-  store: this.objectMediaStore,
-  detailStore: this.objectDetailStore,
-  isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
-  imageHeight: this.objectInspectorImageHeight(),
-  iconName: this.objectInspectorIcon(),
-  inlineModelSize: this.objectInspectorInlineModelSize(),
-  modelReady: this.objectInspectorModelReady(),
-  modelRendering: this.objectInspectorModelRendering,
-  hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-  modelNotice: this.objectInspectorModelNotice(),
-  warmupText: this.objectInspectorMediaWarmupText(),
-  fallbackKind: this.objectInspectorFallbackVisualKind(),
-  starColor: this.objectInspectorStarColor(),
-  onOpen: () => { this.openObjectInspectorMediaPreview() },
-  onRetry: () => { this.retryObjectInspectorMedia() },
-  onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-  onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
-})
+          store: this.objectMediaStore,
+          detailStore: this.objectDetailStore,
+          isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
+          imageHeight: this.objectInspectorImageHeight(),
+          iconName: this.objectInspectorIcon(),
+          inlineModelSize: this.objectInspectorInlineModelSize(),
+          modelReady: this.objectInspectorModelReady(),
+          modelRendering: this.objectInspectorModelRendering,
+          hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+          modelNotice: this.objectInspectorModelNotice(),
+          warmupText: this.objectInspectorMediaWarmupText(),
+          fallbackKind: this.objectInspectorFallbackVisualKind(),
+          starColor: this.objectInspectorStarColor(),
+          onOpen: () => { this.openObjectInspectorMediaPreview() },
+          onRetry: () => { this.retryObjectInspectorMedia() },
+          onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+          onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
+        })
         SatellitePassDetails({ store: this.objectDetailStore, tablet: true, visible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(), onLoad: () => { this.loadSelectedSatellitePasses() } })
         DetailSectionTitle({ title: '坐标参考', tablet: true })
         SelectedCoordinateRows({ store: this.objectDetailStore, tablet: true })
@@ -18853,55 +18822,49 @@ private loadPlanetPositions(): void {
         onReset: () => { this.syncManualTimeFromState(); this.flashHint(I18n.t('i0081')) }
       })
     } else if (this.activePanel === 'place') {
-      Row() {
-        Text(I18n.t('i0014')).fontSize(12).fontColor('#99FFFFFF').width(72)
-        Text(this.locationText).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.height(28).width('100%').padding({ left: 10, right: 10 })
-      Row() {
-        Text(I18n.t('i0015')).fontSize(12).fontColor('#99FFFFFF').width(72)
-        Text(this.coordinateText).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.height(28).width('100%').padding({ left: 10, right: 10 })
-      Row() {
-        Text(I18n.t('i0016')).fontSize(12).fontColor('#99FFFFFF').width(72)
-        Text(this.altitudeText).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.height(28).width('100%').padding({ left: 10, right: 10 })
-      LocationPickerPanel({
-        pickerStore: this.locationPickerStore,
+      PlacePanel({
+        locationPickerStore: this.locationPickerStore,
         locationStore: this.locationStore,
-        observerPlanet: this.sessionToolStore.observerPlanet,
+        sessionToolStore: this.sessionToolStore,
+        locationText: this.locationText,
+        coordinateText: this.coordinateText,
+        altitudeText: this.altitudeText,
+        sessionHint: this.sessionHint,
+        sessionJson: this.sessionJson,
         mapWidth: this.locationMapWidth(),
         mapHeight: this.locationMapHeight(),
+        textColor: this.nmText(),
         subColor: this.nmSub(),
         inputColor: this.nmInput(),
-        textColor: this.nmText(),
         accentColor: this.nmAccent(),
         panelColor: this.nmBg(),
+        borderTint: this.nmBorder(),
+        planetLabel: (en: string) => this.planetZh(en),
+        contextOf: (item: LocSearchItem) => this.locationResultContext(item),
         onUseDeviceLocation: () => { this.useDeviceLocation() },
         onSearchLocations: (query: string) => { this.searchLocations(query) },
-        contextOf: (item: LocSearchItem) => this.locationResultContext(item),
         onPickSearchItem: (item: LocSearchItem) => { this.selectSearchLocation(item) },
         onApply: () => { this.applyPickerLocation() },
         onMapTouch: (event: TouchEvent) => this.handleLocationMapTouch(event),
         onSelectContinent: (c: string) => { this.selectContinent(c) },
         onSelectCountry: (c: string) => { this.selectCountry(c) },
         onSelectRegion: (r: string) => { this.selectRegion(r) },
-        onSelectCity: (c: string) => { this.selectCityByName(c) }
-      })
-      CityChipsRow({
-        store: this.locationStore,
+        onSelectCity: (c: string) => { this.selectCityByName(c) },
         onSaveCurrent: () => { this.saveCurrentLocation() },
         onApplyLocation: (name: string, lat: number, lon: number, alt: number, planet: string) => { this.setLocation(name, lat, lon, alt, planet) },
         onDeleteLocation: (name: string) => { this.deleteSavedLocation(name) },
-        onChip: (id: string) => { this.handleChip(id) }
+        onChip: (id: string) => { this.handleChip(id) },
+        onSelectPlanet: (name: string) => { this.setObserverPlanet(name) },
+        onPoint: () => { this.pointAtSkyTest() },
+        onSend: () => { this.watchGyroSend() },
+        onStart: () => { this.watchGyroStart() },
+        onStop: () => { this.watchGyroStop() },
+        onExport: () => { this.sessionExport() },
+        onSessionApply: () => { this.sessionApply() },
+        onHandoff: () => { this.sessionHandoff() },
+        onRefreshTonight: () => { this.refreshTonight() },
+        onJump: (jd: number, lock: string, title: string) => { this.gotoTonightEvent(jd, lock, title) }
       })
-      ObserverPlanetSection({ store: this.sessionToolStore, textColor: this.nmText(), borderTint: this.nmBorder(), planetLabel: (en: string) => this.planetZh(en), onSelectPlanet: (name: string) => { this.setObserverPlanet(name) } })
-      // These are developer scaffolding screens, not release-ready features.
-      if (!OFFLINE_APPGALLERY_BUILD) {
-        PointingTestSection({ store: this.sessionToolStore, textColor: this.nmText(), borderTint: this.nmBorder(), onPoint: () => { this.pointAtSkyTest() } })
-        WatchGyroSection({ store: this.sessionToolStore, textColor: this.nmText(), onSend: () => { this.watchGyroSend() }, onStart: () => { this.watchGyroStart() }, onStop: () => { this.watchGyroStop() } })
-        ContinuationSection({ hint: this.sessionHint, json: this.sessionJson, textColor: this.nmText(), panelColor: this.nmBorder(), onExport: () => { this.sessionExport() }, onApply: () => { this.sessionApply() }, onHandoff: () => { this.sessionHandoff() } })
-        TonightEventsSection({ store: this.sessionToolStore, textColor: this.nmText(), onRefresh: () => { this.refreshTonight() }, onJump: (jd: number, lock: string, title: string) => { this.gotoTonightEvent(jd, lock, title) } })
-      }
     } else if (this.activePanel === 'layers') {
       Column() {
         LayerPresetBar({ subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), onPreset: (preset: string) => { this.applyLayerPreset(preset) }, onClear: () => { this.clearMarkingLayers() } })
@@ -18941,57 +18904,26 @@ private loadPlanetPositions(): void {
         onSetSetting: (setting: string, value: string) => { this.setPointerCoordinates(setting, value) }
       })
     } else if (this.activePanel === 'commands') {
-      Column({ space: 7 }) {
-        Text('统一命令控制').fontSize(13).fontColor(this.nmText()).width('100%')
-        Text('本机命令').fontSize(10).fontColor(this.nmSub()).width('100%')
-        TextInput({ text: this.commandSearchText, placeholder: '筛选命令或分类' })
-          .height(34).fontSize(11).fontColor(this.nmText()).placeholderColor(this.nmSub())
-          .backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL)
-          .onChange((value: string) => { this.commandSearchText = value })
-        Scroll() {
-          Column({ space: 2 }) {
-            ForEach(this.filteredCommandCatalog(), (item: CommandCatalogEntry) => {
-              Row({ space: 6 }) {
-                Text(item.name).fontSize(11).fontColor(this.nmText()).layoutWeight(1).maxLines(1)
-                Text(item.category).fontSize(9).fontColor(this.nmSub())
-                if (item.requiresConfirmation) Text('需确认').fontSize(8).fontColor('#FFD38A')
-              }
-              .width('100%').height(29).padding({ left: 8, right: 8 })
-              .backgroundColor(this.commandNameInput === item.name ? 'rgba(91,147,191,0.25)' : this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectCommandEntry(item) })
-            }, (item: CommandCatalogEntry) => item.name)
-          }.width('100%')
-        }.width('100%').height(160).scrollBar(BarState.Auto).scrollBarWidth(4)
-        Row({ space: 6 }) {
-          TextInput({ text: this.commandNameInput, placeholder: '命令名，例如 getTimeInfo' })
-            .height(34).fontSize(11).fontColor(this.nmText()).placeholderColor(this.nmSub())
-            .backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).layoutWeight(1)
-            .onChange((value: string) => { this.commandNameInput = value; this.commandPendingConfirmation = '' })
-          Button('刷新').fontSize(10).height(32).padding({ left: 8, right: 8 })
-            .fontColor(this.nmText()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-            .onClick(() => { this.loadCommandCatalog() })
-        }.width('100%')
-        TextInput({ text: this.commandPayloadInput, placeholder: 'payload（可留空；对象请填 JSON 字符串）' })
-          .height(34).fontSize(11).fontColor(this.nmText()).placeholderColor(this.nmSub())
-          .backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL)
-          .onChange((value: string) => { this.commandPayloadInput = value })
-        Row({ space: 6 }) {
-          Button(this.commandBusy ? '执行中…' : '执行命令').fontSize(11).height(32).padding({ left: 12, right: 12 })
-            .fontColor(this.nmText()).backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_CONTROL)
-            .enabled(!this.commandBusy && this.commandPendingConfirmation.length === 0)
-            .onClick(() => { this.executeCommandFromPanel(false) })
-          if (this.commandPendingConfirmation.length > 0) {
-            Button('确认执行').fontSize(11).height(32).padding({ left: 12, right: 12 })
-              .fontColor(this.nmText()).backgroundColor('#9B6E39').borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.executeCommandFromPanel(true) })
-          }
-        }.width('100%')
-        if (this.commandResultText.length > 0) {
-          Scroll() {
-            Text(this.commandResultText).fontSize(9).fontColor(this.nmSub()).fontFamily('monospace').width('100%')
-          }.width('100%').height(150).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).padding(8)
-        }
-      }.width('100%')
+      CommandsPanel({
+        commandSearchText: this.commandSearchText,
+        commandCatalog: this.commandCatalog,
+        commandNameInput: this.commandNameInput,
+        commandPayloadInput: this.commandPayloadInput,
+        commandResultText: this.commandResultText,
+        commandPendingConfirmation: this.commandPendingConfirmation,
+        commandBusy: this.commandBusy,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        inputColor: this.nmInput(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        onSearchTextChange: (value: string) => { this.commandSearchText = value },
+        onNameInputChange: (value: string) => { this.commandNameInput = value; this.commandPendingConfirmation = '' },
+        onPayloadInputChange: (value: string) => { this.commandPayloadInput = value },
+        onSelectEntry: (item: CommandCatalogEntry) => { this.selectCommandEntry(item) },
+        onRefreshCatalog: () => { this.loadCommandCatalog() },
+        onExecute: (force: boolean) => { this.executeCommandFromPanel(force) }
+      })
     } else if (this.activePanel === 'settings_quick_legacy') {
       // 快捷设置面板
       Scroll() {
@@ -22063,112 +21995,52 @@ private loadPlanetPositions(): void {
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else if (this.activePanel === 'mosaicCamera') {
-      Scroll() {
-      Column({ space: 10 }) {
-          Row() {
-            Column({ space: 2 }) {
-              Text(I18n.t('mosaic_camera_title')).fontSize(14).fontColor(this.nmText()).width('100%')
-              Text(I18n.t('mosaic_camera_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2)
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            if (this.mosaicCameraLoading) { LoadingProgress().width(20).height(20).color(this.nmAccent()) }
-            Toggle({ type: ToggleType.Switch, isOn: this.mosaicCameraEnabled })
-              .enabled(!this.mosaicCameraLoading && !this.mosaicCameraPending)
-              .onChange((v: boolean) => { this.setMosaicCamera('enabled', v ? '1' : '0') })
-          }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.mosaicCameraStatus.length > 0) {
-            Text(this.mosaicCameraStatus).fontSize(10).fontColor('#FFD59A').width('100%').padding({ left: 10, right: 10 })
-          }
-            Text(I18n.t('mosaic_camera_device')).fontSize(11).fontColor(this.nmSub()).width('100%')
-            Scroll() {
-              Row({ space: 6 }) {
-                ForEach(this.mosaicCameraNames, (name: string) => {
-                  Text(name).fontSize(11).fontColor(this.mosaicCameraCurrent === name ? '#FFFFFF' : this.nmSub())
-                    .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-                    .backgroundColor(this.mosaicCameraCurrent === name ? this.nmAccent() : this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-                    .onClick(() => { this.setMosaicCamera('camera', name) })
-                }, (name: string) => name)
-              }.padding({ left: 2, right: 2 })
-            }.width('100%').height(42).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-            Row({ space: 10 }) {
-              MosaicCameraMetric({ labelKey: 'mosaic_camera_ra', value: this.mosaicCameraValue('ra'), subColor: this.nmSub(), textColor: this.nmText() })
-              MosaicCameraMetric({ labelKey: 'mosaic_camera_dec', value: this.mosaicCameraValue('dec'), subColor: this.nmSub(), textColor: this.nmText() })
-              MosaicCameraMetric({ labelKey: 'mosaic_camera_rotation', value: this.mosaicCameraValue('rotation'), subColor: this.nmSub(), textColor: this.nmText() })
-            }.width('100%')
-            Row() {
-              Text(I18n.t('mosaic_camera_overlay')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.mosaicCameraVisible })
-                .enabled(!this.mosaicCameraLoading && !this.mosaicCameraPending)
-                .onChange((v: boolean) => { this.setMosaicCamera('visible', v ? '1' : '0') })
-            }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-            Row({ space: 8 }) {
-              Button(I18n.t('mosaic_camera_use_view')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(34).layoutWeight(1).onClick(() => { this.setMosaicCamera('setToView') })
-              Button(I18n.t('mosaic_camera_use_selected')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(34).layoutWeight(1).onClick(() => { this.setMosaicCamera('setToSelected') })
-            }.width('100%')
-            Button(I18n.t('mosaic_camera_view')).fontSize(11).fontColor('#FFFFFF').backgroundColor(this.nmAccent())
-              .borderRadius(UI_RADIUS_CONTROL).height(34).width('100%').onClick(() => { this.setMosaicCamera('viewToCamera') })
-            Text(I18n.t('mosaic_camera_rotation')).fontSize(12).fontColor(this.nmSub()).width('100%')
-            Slider({ value: this.mosaicCameraRotation, min: -360, max: 360, step: 1 })
-              .width('100%').enabled(!this.mosaicCameraPending && !this.mosaicCameraLoading)
-              .onChange((value: number, mode: SliderChangeMode) => {
-                if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) this.setMosaicCamera('rotation', value.toString())
-              })
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto)
+      MosaicCameraPanel({
+        mosaicCameraEnabled: this.mosaicCameraEnabled,
+        mosaicCameraNames: this.mosaicCameraNames,
+        mosaicCameraCurrent: this.mosaicCameraCurrent,
+        mosaicCameraRA: this.mosaicCameraRA,
+        mosaicCameraDec: this.mosaicCameraDec,
+        mosaicCameraRotation: this.mosaicCameraRotation,
+        mosaicCameraVisible: this.mosaicCameraVisible,
+        mosaicCameraLoading: this.mosaicCameraLoading,
+        mosaicCameraPending: this.mosaicCameraPending,
+        mosaicCameraStatus: this.mosaicCameraStatus,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        panelColor: this.nmBg(),
+        accentColor: this.nmAccent(),
+        onSetSetting: (setting: string, value: string) => { this.setMosaicCamera(setting, value) }
+      })
     } else if (this.activePanel === 'archaeoLines') {
-      Scroll() {
-        Column({ space: 8 }) {
-          Row() {
-            Column({ space: 2 }) {
-              Text(I18n.t('archaeo_lines_title')).fontSize(14).fontColor(this.nmText()).width('100%')
-              Text(I18n.t('archaeo_lines_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2)
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            if (this.archaeoLoading) { LoadingProgress().width(20).height(20).color(this.nmAccent()) }
-            Toggle({ type: ToggleType.Switch, isOn: this.archaeoLinesEnabled })
-              .enabled(!this.archaeoLoading)
-              .onChange((v: boolean) => { this.setArchaeoLineSetting('enabled', v ? '1' : '0') })
-          }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.archaeoStatus.length > 0) { Text(this.archaeoStatus).fontSize(10).fontColor('#FFD59A').width('100%').padding({ left: 10, right: 10 }) }
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_equinox'), isOn: this.archaeoEquinox, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('equinox', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_solstices'), isOn: this.archaeoSolstices, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('solstices', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_crossquarters'), isOn: this.archaeoCrossquarters, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('crossquarters', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_major'), isOn: this.archaeoMajorStandstills, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('majorStandstills', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_minor'), isOn: this.archaeoMinorStandstills, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('minorStandstills', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_polar'), isOn: this.archaeoPolarCircles, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('polarCircles', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_zenith'), isOn: this.archaeoZenithPassage, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('zenithPassage', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_nadir'), isOn: this.archaeoNadirPassage, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('nadirPassage', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_selected'), isOn: this.archaeoSelectedObject, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('selectedObject', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_azimuth'), isOn: this.archaeoSelectedObjectAzimuth, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('selectedObjectAzimuth', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_hour_angle'), isOn: this.archaeoSelectedObjectHourAngle, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('selectedObjectHourAngle', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_sun'), isOn: this.archaeoCurrentSun, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('currentSun', v ? '1' : '0') } })
-            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_moon'), isOn: this.archaeoCurrentMoon, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('currentMoon', v ? '1' : '0') } })
-            Text(I18n.t('archaeo_lines_planet')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2, top: 2 })
-            Row({ space: 5 }) {
-              ForEach([
-                { id: 0, label: I18n.t('archaeo_planet_none'), value: 'none' },
-                { id: 1, label: '水星', value: 'Mercury' }, { id: 2, label: '金星', value: 'Venus' },
-                { id: 3, label: '火星', value: 'Mars' }, { id: 4, label: '木星', value: 'Jupiter' },
-                { id: 5, label: '土星', value: 'Saturn' }
-              ] as ArchaeoPlanetOption[], (planet: ArchaeoPlanetOption) => {
-                Text(planet.label).fontSize(10)
-                  .fontColor(this.archaeoCurrentPlanet === planet.id ? '#FFFFFF' : this.nmSub())
-                  .textAlign(TextAlign.Center).layoutWeight(1).height(28).padding({ top: 6 })
-                  .backgroundColor(this.archaeoCurrentPlanet === planet.id ? this.nmAccent() : this.nmBg())
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .onClick(() => { this.setArchaeoLineSetting('currentPlanet', planet.value) })
-              }, (planet: ArchaeoPlanetOption) => planet.id.toString())
-            }.width('100%')
-            Row() {
-              Text(I18n.t('archaeo_lines_width')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-              Text(this.archaeoLineWidth.toString()).fontSize(12).fontColor(this.nmSub())
-            }.width('100%').padding({ left: 10, right: 10 })
-            Slider({ value: this.archaeoLineWidth, min: 1, max: 8, step: 1, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .width('100%').blockColor(this.nmAccent()).selectedColor(this.nmAccent()).trackColor(this.nmBg())
-              .onChange((v: number, mode: SliderChangeMode) => { this.archaeoLineWidth = Math.round(v); if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) this.setArchaeoLineSetting('lineWidth', this.archaeoLineWidth.toString()) })
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+      ArchaeoLinesPanel({
+        archaeoLoading: this.archaeoLoading,
+        archaeoStatus: this.archaeoStatus,
+        archaeoLinesEnabled: this.archaeoLinesEnabled,
+        archaeoEquinox: this.archaeoEquinox,
+        archaeoSolstices: this.archaeoSolstices,
+        archaeoCrossquarters: this.archaeoCrossquarters,
+        archaeoMajorStandstills: this.archaeoMajorStandstills,
+        archaeoMinorStandstills: this.archaeoMinorStandstills,
+        archaeoPolarCircles: this.archaeoPolarCircles,
+        archaeoZenithPassage: this.archaeoZenithPassage,
+        archaeoNadirPassage: this.archaeoNadirPassage,
+        archaeoSelectedObject: this.archaeoSelectedObject,
+        archaeoSelectedObjectAzimuth: this.archaeoSelectedObjectAzimuth,
+        archaeoSelectedObjectHourAngle: this.archaeoSelectedObjectHourAngle,
+        archaeoCurrentSun: this.archaeoCurrentSun,
+        archaeoCurrentMoon: this.archaeoCurrentMoon,
+        archaeoCurrentPlanet: this.archaeoCurrentPlanet,
+        archaeoLineWidth: this.archaeoLineWidth,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        panelColor: this.nmBg(),
+        accentColor: this.nmAccent(),
+        borderTint: this.nmBorder(),
+        onSetSetting: (setting: string, value: string) => { this.setArchaeoLineSetting(setting, value) },
+        onLineWidthPreview: (value: number) => { this.archaeoLineWidth = value },
+        onSetLineWidth: (value: number) => { this.setArchaeoLineSetting('lineWidth', value.toString()) }
+      })
     } else if (this.activePanel === 'angleMeasure') {
       AngleMeasurePanel({
         store: this.tools,
@@ -22180,48 +22052,27 @@ private loadPlanetPositions(): void {
         onReset: () => { this.resetAngleMeasure() }
       })
     } else if (this.activePanel === 'navStars') {
-      Scroll() {
-        Column({ space: 10 }) {
-          Row() {
-            Column({ space: 3 }) {
-              Text(I18n.t('panel_nav_stars')).fontSize(15).fontColor(this.nmText()).width('100%')
-              Text(I18n.t('nav_stars_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2)
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            if (this.navStarsLoading) { LoadingProgress().width(20).height(20).color(this.nmAccent()) }
-            Toggle({ type: ToggleType.Switch, isOn: this.navStarsEnabled })
-              .enabled(!this.navStarsLoading)
-              .onChange((v: boolean) => { this.setNavStarsSetting('enabled', v ? '1' : '0') })
-          }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.navStarsStatus.length > 0) { Text(this.navStarsStatus).fontSize(11).fontColor('#FFD59A').width('100%') }
-            Row() {
-              Text(I18n.t('nav_stars_set')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-              Text(this.navStarsCount.toString() + ' ' + I18n.t('nav_stars_count')).fontSize(11).fontColor(this.nmSub())
-            }.width('100%')
-            Scroll() {
-              Row({ space: 6 }) {
-                ForEach(this.navStarsSetKeys, (key: string) => {
-                  Text(this.navStarsSetLabel(key)).fontSize(10)
-                    .fontColor(this.navStarsSetKey === key ? '#FFFFFF' : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 7, bottom: 7 })
-                    .backgroundColor(this.navStarsSetKey === key ? this.nmAccent() : this.nmBg())
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .onClick(() => { this.setNavStarsSetting('set', key) })
-                }, (key: string) => key)
-              }.padding({ left: 2, right: 2 })
-            }.width('100%').height(42).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-            if (this.navStarsSetDescription.length > 0) {
-              Text(this.navStarsSetDescription.replace(/<[^>]+>/g, '')).fontSize(10).fontColor(this.nmSub())
-                .width('100%').maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            NavStarsToggleRow({ label: I18n.t('nav_stars_highlight'), isOn: this.navStarsHighlight, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('highlightWhenVisible', v ? '1' : '0') } })
-            NavStarsToggleRow({ label: I18n.t('nav_stars_limit_info'), isOn: this.navStarsLimitInfo, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('limitInfo', v ? '1' : '0') } })
-            NavStarsToggleRow({ label: I18n.t('nav_stars_upper_limb'), isOn: this.navStarsUpperLimb, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('upperLimb', v ? '1' : '0') } })
-            NavStarsToggleRow({ label: I18n.t('nav_stars_tabulated'), isOn: this.navStarsTabulated, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('tabulatedDisplay', v ? '1' : '0') } })
-            NavStarsToggleRow({ label: I18n.t('nav_stars_extra_decimals'), isOn: this.navStarsExtraDecimals, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('extraDecimals', v ? '1' : '0') } })
-            NavStarsToggleRow({ label: I18n.t('nav_stars_utc'), isOn: this.navStarsUseUtc, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('useUtc', v ? '1' : '0') } })
-            NavStarsToggleRow({ label: I18n.t('nav_stars_startup'), isOn: this.navStarsStartup, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('enableAtStartup', v ? '1' : '0') } })
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+      NavStarsPanel({
+        navStarsLoading: this.navStarsLoading,
+        navStarsStatus: this.navStarsStatus,
+        navStarsEnabled: this.navStarsEnabled,
+        navStarsSetKey: this.navStarsSetKey,
+        navStarsSetDescription: this.navStarsSetDescription,
+        navStarsSetKeys: this.navStarsSetKeys,
+        navStarsCount: this.navStarsCount,
+        navStarsHighlight: this.navStarsHighlight,
+        navStarsLimitInfo: this.navStarsLimitInfo,
+        navStarsUpperLimb: this.navStarsUpperLimb,
+        navStarsTabulated: this.navStarsTabulated,
+        navStarsExtraDecimals: this.navStarsExtraDecimals,
+        navStarsUseUtc: this.navStarsUseUtc,
+        navStarsStartup: this.navStarsStartup,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        panelColor: this.nmBg(),
+        accentColor: this.nmAccent(),
+        onSetSetting: (setting: string, value: string) => { this.setNavStarsSetting(setting, value) }
+      })
     } else if (this.activePanel === 'satellites') {
       // 卫星：离线数据状态、检索、显示开关与分组
       Scroll(this.satellitePanelScroller) {
