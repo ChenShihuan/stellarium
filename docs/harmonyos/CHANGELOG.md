@@ -1,3 +1,10 @@
+## [2026-10-01] DevEco Code - Phase 3w：详情主卡片"操作"页组件化
+
+- **新增 `panels/object/ObjectDetailActionsTab.ets`**：`unifiedObjectDetailCard()` 中 `bottomCardIndex === 3` 的"目标操作"分支（37 行）下沉为组件，外层 `Column({ space: 8 })` 与原 Scroll 内层容器间距一致。
+- **依赖全部注入**：3 个 `@Prop`（`viewLock` / `speechStatus` / `inObservingList`，后者由宿主算 `observingList.includes(selectedName)`）+ 6 个回调（居中 / 视角锁定 / 观测清单 / 刷新+刷新状态 / 重选上一目标 / 朗读）。**该分支不引用任何参数化 `@Builder`，所以能干净下沉**；主卡片其余三页（观测/坐标/资料）耦合 `objectDataTile`/`objectMetric`/`objectScheduleTile`/`objectDetailTab` 等参数化 UI 函数，须先做 §13.5 队列 3x 的"贴片族组件化"才可搬。
+- **单体行数：** 29,170 → **29,147**。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验（73 个 .ets）/ 安装启动通过；火星详情卡"操作"页六个按钮（居中 / 固定位置 / 添加到列表 / 刷新 / 上一选中 / 朗读文本）全部正常渲染；点"固定位置"→ 文案**实时**变"取消固定"，再点恢复"固定位置"，即 `@Prop` 刷新与回调注入链路可用；测试后已还原该设置。
+- **测试同步：** 无（已核查 `scripts/*.mjs` 无脚本引用该分支符号）。
 ## [2026-10-01] DevEco Code - Phase 3v：详情媒体区拆分 + 媒体/模型状态搬迁
 
 - **新增 `state/ObjectMediaStore.ets`**：原宿主 25 个 `objectInspectorMedia*` / `objectInspectorModel*` `@State` 字段（解码/预热/失败/全屏/预览与模型沉浸、缩放、交互等）整体搬迁，宿主字段 + 声明同片补齐。
