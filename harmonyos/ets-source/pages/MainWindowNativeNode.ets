@@ -72,6 +72,10 @@ import { SkyCultureViewStore } from '../state/SkyCultureViewStore'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
+import { GraphLoadingRow, RtsSelectionGuide, GraphSelectionGuide } from '../panels/astro/GraphGuides'
+import { InfoRow } from '../common/ui/InfoRow'
+import { EphemerisToggleRow, InformationModeButton, InformationSwitchRow, NavigationSwitchRow, NavStarsToggleRow, ArchaeoToggleRow, MosaicCameraMetric } from '../panels/settings/SettingsRows'
+import { LanguageRow, GyroscopeRow, DevicePrivacySection } from '../panels/settings/DeviceAndLanguageRows'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
@@ -1198,26 +1202,8 @@ export struct WindowNativeNode {
     const actions = this.moreActions()
     return actions[index - 1].section !== item.section
   }
-  // @deprecated 旧左侧栏仅为历史 Builder 和旧状态兼容保留，不属于当前 Shell。
-  // 当前入口只能通过 primaryDockActions 与 moreActions 访问，旧 rail/drawer 状态永远不参与布局。
-  private pinnedActions(): ShellAction[] { return this.primaryDockActions() }
-  private drawerActions(): ShellAction[] { return this.moreActions() }
-  private compactDrawerActions(): ShellAction[] { return this.moreActions() }
-  @State private drawerOpen: boolean = false
-  @State private railPinned: boolean = true
-  private readonly RAIL_TOP_PAD: number = 10
-  private readonly RAIL_ITEM_STEP: number = 58
-  private readonly RAIL_MORE_OFFSET: number = 8
-  private readonly RAIL_MUSIC_OFFSET: number = 60
-  private readonly RAIL_GYRO_OFFSET: number = 116
   private railTop(): number { return this.EDGE_MARGIN }
-  private railHeight(): number { return 0 }
-  private drawerWidth(): number { return this.isFoldTabletLayout ? 214 : 206 }
-  private onRailTap(panel: string, keepDrawer: boolean = false): void {
-    this.setPanel(panel)
-  }
   private toggleDrawer(): void {
-    this.drawerOpen = false
     this.setPanel('more')
   }
 
@@ -4287,6 +4273,10 @@ export struct WindowNativeNode {
     })
   }
 
+  private mosaicCameraValue(key: string): number {
+    return key === 'ra' ? this.mosaicCameraRA : key === 'dec' ? this.mosaicCameraDec : this.mosaicCameraRotation
+  }
+
   private setMosaicCamera(setting: string, value: string = ''): void {
     if (this.mosaicCameraPending || this.mosaicCameraLoading) return
     if (setting === 'enabled' && (value === '1') === this.mosaicCameraEnabled) return
@@ -4509,16 +4499,6 @@ export struct WindowNativeNode {
     })
   }
 
-  @Builder
-  private navStarsToggle(label: ResourceStr, enabled: boolean, setting: string) {
-    Row() {
-      Text(label).fontSize(12).fontColor(this.nmText()).layoutWeight(1).maxLines(2)
-      Toggle({ type: ToggleType.Switch, isOn: enabled })
-        .enabled(!this.navStarsLoading)
-        .onChange((value: boolean) => { this.setNavStarsSetting(setting, value ? '1' : '0') })
-    }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-  }
-
   private navStarsSetLabel(key: string): ResourceStr {
     switch (key) {
       case 'AngloAmerican': return '英美航海星'
@@ -4630,18 +4610,6 @@ export struct WindowNativeNode {
       if (r.ok !== true) this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed')
       this.loadPointerCoordinates()
     }, 0, 100, 15, () => { this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed') })
-  }
-  @Builder
-  private archaeoToggleRow(label: ResourceStr, enabled: boolean, setting: string) {
-    Row() {
-      Text(label).fontSize(12).fontColor(this.nmText()).layoutWeight(1).maxLines(2)
-      Toggle({ type: ToggleType.Switch, isOn: enabled })
-        .enabled(!this.archaeoLoading)
-        .onChange((v: boolean) => { this.setArchaeoLineSetting(setting, v ? '1' : '0') })
-    }.width('100%').padding({ left: 10, right: 10, top: 5, bottom: 5 })
-      .backgroundColor(enabled ? 'rgba(107,163,214,0.12)' : this.nmBg())
-      .border({ width: 1, color: enabled ? 'rgba(107,163,214,0.18)' : this.nmBorder() })
-      .borderRadius(UI_RADIUS_CONTROL)
   }
 
   // ===== 卫星（Satellites 插件桥）=====
@@ -6604,14 +6572,6 @@ export struct WindowNativeNode {
     else this.loadAltAzCurve()
   }
 
-  @Builder
-  graphLoadingRow(label: string) {
-    Row({ space: 8 }) {
-      LoadingProgress().width(22).height(22).color(this.nmAccent())
-      Text(label).fontSize(11).fontColor(this.nmSub())
-    }.width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-  }
-
   private openGraphTargetPicker(): void {
     this.graphTargetPickerActive = true
     this.searchStore.searchText = ''
@@ -6654,31 +6614,9 @@ export struct WindowNativeNode {
     ++this.rtsCalendarLoadSequence
   }
 
-  @Builder
-  rtsSelectionGuide() {
-    Column({ space: 5 }) {
-      Text('先选择一个天体，才能按当前观测地点计算它的升起、中天和落下时间。')
-        .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 8 })
-      Button('选择天体').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-        .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 10, right: 10 })
-        .onClick(() => { this.openRtsTargetPicker() })
-    }.width('100%').padding({ left: 4 }).margin({ top: 5, bottom: 6 }).alignItems(HorizontalAlign.Start)
-  }
-
   private graphTargetLabel(): string {
     if (this.objectDetailStore.selectedName.length === 0) return '尚未选择天体'
     return this.zhNameOf(this.objectDetailStore.selectedName)
-  }
-
-  @Builder
-  graphSelectionGuide(error: string) {
-    Column({ space: 5 }) {
-      Text(error.indexOf('超时') >= 0 ? '若尚未选择天体，先选择一个；已选择时可点刷新重试。' : '先选择一个天体，才能按当前观测地点生成曲线。')
-        .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 8 })
-      Button('去选择天体').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-        .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 10, right: 10 })
-        .onClick(() => { this.openGraphTargetPicker() })
-    }.width('100%').padding({ left: 4 }).margin({ top: 5, bottom: 6 }).alignItems(HorizontalAlign.Start)
   }
 
   private updatePlanetTimeSeriesRanges(data: Array<PlanetTimeSeriesPoint>): void {
@@ -18217,16 +18155,6 @@ private loadPlanetPositions(): void {
     return Math.min(200, Math.max(80, this.bottomCardWidth() - 112))
   }
 
-  @Builder
-  tabletInspectorAction(label: string, icon: string, action: () => void) {
-    Row({ space: 10 }) {
-      Image(getIcon(icon, false)).width(17).height(17).fillColor('#A9DAF3')
-      Text(label).fontSize(12).fontColor('#E3F4FC').layoutWeight(1)
-    }
-      .width('100%').height(36).padding({ left: 10, right: 10 }).borderRadius(UI_RADIUS_CONTROL)
-      .onClick(() => { this.objectMediaStore.objectInspectorMoreOpen = false; action() })
-  }
-
   private objectInspectorImageHeight(): number {
     return this.objectMediaStore.objectInspectorMediaViewportHeight > 0
       ? Math.max(72, Math.min(210, this.objectMediaStore.objectInspectorMediaViewportHeight - 88)) : 210
@@ -18266,37 +18194,6 @@ private loadPlanetPositions(): void {
       case 'atmosphere': return this.expandedAtmosphereSummary()
       default: return ''
     }
-  }
-
-  @Builder
-  tabletInspectorRow(label: string, key: string) {
-    if (this.selectedDisplayValue(key).length > 0) {
-      Row({ space: 12 }) {
-        Text(label).fontSize(11).fontColor('#91B8CD').width(92).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.selectedDisplayValue(key) || '--').fontSize(12).fontColor('#E1F2FA').layoutWeight(1).textAlign(TextAlign.End).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-        .width('100%').height(42).alignItems(VerticalAlign.Center)
-    }
-  }
-
-  @Builder
-  expandedSummaryMetric(label: string, key: string) {
-    Column() {
-      Text(label).fontSize(9).fontColor('#8FBBD6').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text(this.selectedDisplayValue(key) || '--').fontSize(13).fontWeight(FontWeight.Medium).fontColor('#E7F7FF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ top: 2 })
-    }
-      .height(40).padding({ left: 8, right: 8, top: 5, bottom: 5 }).layoutWeight(1)
-      .backgroundColor('rgba(91,147,191,0.10)').borderRadius(UI_RADIUS_CONTROL)
-  }
-
-  @Builder
-  expandedSummaryLine(label: string, key: string) {
-    Row({ space: 6 }) {
-      Text(label).fontSize(9).fontColor('#8FBBD6').width(48)
-      Text(this.selectedDisplayValue(key) || '--').fontSize(10).fontColor('#D6EDF7').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-    }
-      .width('100%').height(20).padding({ left: 6, right: 6 })
-      .backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
   }
 
   private expandedAtmosphereSummary(): string {
@@ -18384,75 +18281,6 @@ private loadPlanetPositions(): void {
     // Swiper body 区域也消费触摸，防止详情卡内点击穿透到星图选星。
     // Swiper 的水平滑动仍由 ArkUI 组件自身处理。
     return true
-  }
-
-  @Builder
-  // @deprecated 旧左侧竖栏仅保留给历史布局数据，不得在新 Shell 中调用。
-  verticalRail() {
-  Stack() {
-    // 常用入口（高频操作直接固定）
-    ForEach(this.pinnedActions(), (item: ShellAction, idx: number) => {
-        Stack() { this.iconButton(item) }
-          .width(44)
-          .height(44)
-          .position({ x: 7, y: this.RAIL_TOP_PAD + idx * 58 })
-          .hitTestBehavior(HitTestMode.Block)
-          .onClick(() => {
-            this.onRailTap(item.panel)
-          })
-    }, (item: ShellAction) => item.panel)
-    // 分隔线：常用区与抽屉按钮之间
-    Row()
-      .width(26)
-      .height(0.5)
-      .backgroundColor('rgba(255,255,255,0.12)')
-      .position({ x: 16, y: this.RAIL_TOP_PAD + this.pinnedActions().length * 58 + 1 })
-      .hitTestBehavior(HitTestMode.None)
-    // 更多（抽屉）按钮：展开/收起低频功能抽屉
-    Stack() { this.moreButton() }
-      .width(44)
-      .height(44)
-      .position({ x: 7, y: this.RAIL_TOP_PAD + this.pinnedActions().length * 58 + 8 })
-      .hitTestBehavior(HitTestMode.Block)
-      .onClick(() => {
-        this.toggleDrawer()
-      })
-    // 音乐开关：打开应用即播空灵底噪，点新星体叮一声；可随时静音
-    Stack() { this.musicButton() }
-      .width(44)
-      .height(44)
-      .position({ x: 7, y: this.RAIL_TOP_PAD + this.pinnedActions().length * 58 + 60 })
-      .hitTestBehavior(HitTestMode.Block)
-      .onClick(() => {
-        this.toggleMusic()
-      })
-    // 陀螺仪开关：开启后随设备转动平移星图，长按打开校准面板
-    Stack() { this.gyroButton() }
-      .width(44)
-      .height(44)
-      .position({ x: 7, y: this.RAIL_TOP_PAD + this.pinnedActions().length * this.RAIL_ITEM_STEP + this.RAIL_GYRO_OFFSET })
-      .hitTestBehavior(HitTestMode.Block)
-      .onClick(() => {
-        this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
-        this.flashHint(this.gyroStore.gyroscopeEnabled ? '陀螺仪：开' : '陀螺仪：关')
-      })
-      .gesture(LongPressGesture({ repeat: false, duration: 600 })
-        .onAction(() => {
-          if (this.gyroStore.gyroscopeEnabled) {
-            this.gyroStore.gyroCalibPanelOpen = !this.gyroStore.gyroCalibPanelOpen
-          }
-        }))
-  }
-    .width(58)
-        .height(this.railHeight())
-      .backgroundColor(this.panelIdleGlass ? 'rgba(10, 14, 26, 0.50)' : 'rgba(18, 22, 36, 0.78)')
-      .backdropBlur(this.panelIdleGlass ? 40 : 26)
-      .border({ width: 0.5, color: this.panelIdleGlass ? 'rgba(91, 147, 191, 0.15)' : 'rgba(91, 147, 191, 0.10)' })
-      .borderRadius(UI_RADIUS_PILL)
-      .shadow({ radius: 28, color: 'rgba(0, 0, 0, 0.32)', offsetX: 0, offsetY: 14 })
-      .opacity(this.railPinned ? 1.0 : this.panelIdleOpacity)
-      .scale({ x: (!this.railPinned && this.panelIdleOpacity < 1) ? 0.94 : 1.0, y: (!this.railPinned && this.panelIdleOpacity < 1) ? 0.94 : 1.0 })
-      .animation({ duration: 420, curve: Curve.Friction })
   }
 
   // 左侧栏外壳：承载收起动画与常驻把手
@@ -18803,133 +18631,12 @@ private loadPlanetPositions(): void {
     return I18n.satGroup(en)
   }
 
-  @Builder
-  iconButton(item: ShellAction) {
-    Column() {
-      Image(getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
-        .width(22).height(22)
-        .fillColor(this.activePanel === item.panel && this.panelVisible ? '#FFFFFF' : this.nmText())
-    }
-      .width(44)
-      .height(44)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
-      .backgroundColor(this.activePanel === item.panel && this.panelVisible ? '#5B93BF' : 'rgba(255, 255, 255, 0.06)')
-      .border({ width: 1, color: this.activePanel === item.panel && this.panelVisible ? 'rgba(107, 163, 214, 0.35)' : 'rgba(255, 255, 255, 0.08)' })
-      .borderRadius(UI_RADIUS_PANEL)
-      .margin({ top: 4, bottom: 4 })
-      .scale({ x: this.activePanel === item.panel && this.panelVisible ? 1.08 : 1.0, y: this.activePanel === item.panel && this.panelVisible ? 1.08 : 1.0 })
-      .shadow({
-        radius: this.activePanel === item.panel && this.panelVisible ? 18 : 0,
-        color: this.activePanel === item.panel && this.panelVisible ? 'rgba(107, 163, 214, 0.25)' : 'rgba(0, 0, 0, 0)',
-        offsetX: 0,
-        offsetY: 6
-      })
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .stateStyles({
-        pressed: {
-          .scale({ x: 0.9, y: 0.9 })
-          .backgroundColor('rgba(255, 255, 255, 0.12)')
-        }
-      })
-      .animation({ duration: 260, curve: curves.springMotion(0.42, 0.85) })
-      // 手势由外层 Stack.onClick 统一处理
-  }
-
   // 收起当前页面按钮：把右侧浮动面板收回到左侧栏
   // 「更多」按钮：与搜索、时间、位置和图层共用同一主面板。
-  @Builder
-  moreButton() {
-    Column() {
-      Column({ space: 4 }) {
-        Circle().width(4).height(4).fill(this.morePanelActive() ? '#FFFFFF' : this.nmText())
-        Circle().width(4).height(4).fill(this.morePanelActive() ? '#FFFFFF' : this.nmText())
-        Circle().width(4).height(4).fill(this.morePanelActive() ? '#FFFFFF' : this.nmText())
-      }
-      .width(22).height(22)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
-      .rotate({ angle: this.morePanelActive() ? 90 : 0 })
-      .animation({ duration: 360, curve: curves.springMotion(0.5, 0.8) })
-    }
-      .width(44)
-      .height(44)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
-      .backgroundColor(this.morePanelActive() ? '#5B93BF' : 'rgba(255, 255, 255, 0.06)')
-      .border({ width: 1, color: this.morePanelActive() ? 'rgba(107, 163, 214, 0.35)' : 'rgba(255, 255, 255, 0.08)' })
-      .borderRadius(UI_RADIUS_PANEL)
-      .margin({ top: 4, bottom: 4 })
-      .scale({ x: this.morePanelActive() ? 1.08 : 1.0, y: this.morePanelActive() ? 1.08 : 1.0 })
-      .onClick(() => { this.toggleDrawer() })
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .stateStyles({
-        pressed: {
-          .scale({ x: 0.9, y: 0.9 })
-          .backgroundColor('rgba(255, 255, 255, 0.12)')
-        }
-      })
-      .animation({ duration: 260, curve: curves.springMotion(0.42, 0.85) })
-  }
 
   // 音乐开关按钮（左侧栏底部）：开着时音符亮起，静音时变暗
-  @Builder
-  musicButton() {
-    Stack() {
-      Image(getIcon('audio', this.musicEnabled))
-        .width(22)
-        .height(22)
-        .fillColor(this.musicEnabled ? '#FFFFFF' : this.nmText())
-    }
-      .width(44)
-      .height(44)
-      .alignContent(Alignment.Center)
-      .backgroundColor(this.musicEnabled ? 'rgba(91, 147, 191, 0.22)' : 'rgba(255, 255, 255, 0.06)')
-      .border({ width: 1, color: this.musicEnabled ? 'rgba(107, 163, 214, 0.45)' : 'rgba(255, 255, 255, 0.08)' })
-      .borderRadius(UI_RADIUS_PANEL)
-      .margin({ top: 4, bottom: 4 })
-      .scale({ x: this.musicEnabled ? 1.06 : 1.0, y: this.musicEnabled ? 1.06 : 1.0 })
-      .onClick(() => { this.toggleMusic() })
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .stateStyles({
-        pressed: {
-          .scale({ x: 0.9, y: 0.9 })
-          .backgroundColor('rgba(255, 255, 255, 0.12)')
-        }
-      })
-      .animation({ duration: 260, curve: curves.springMotion(0.42, 0.85) })
-  }
 
   // ── 陀螺仪按钮（平板左侧栏，与手机端 compactQuickButton 共用 ic_gyro.svg）──
-  @Builder
-  gyroButton() {
-    Stack() {
-      Image(getIcon('gyro', this.gyroStore.gyroscopeEnabled))
-        .width(22)
-        .height(22)
-        .fillColor(this.gyroStore.gyroscopeEnabled ? '#FFFFFF' : this.nmText())
-    }
-      .width(44)
-      .height(44)
-      .alignContent(Alignment.Center)
-      .backgroundColor(this.gyroStore.gyroscopeEnabled ? 'rgba(91, 147, 191, 0.22)' : 'rgba(255, 255, 255, 0.06)')
-      .border({ width: 1, color: this.gyroStore.gyroscopeEnabled ? 'rgba(107, 163, 214, 0.45)' : 'rgba(255, 255, 255, 0.08)' })
-      .borderRadius(UI_RADIUS_PANEL)
-      .margin({ top: 4, bottom: 4 })
-      .scale({ x: this.gyroStore.gyroscopeEnabled ? 1.06 : 1.0, y: this.gyroStore.gyroscopeEnabled ? 1.06 : 1.0 })
-      .onClick(() => {
-        this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
-        this.flashHint(this.gyroStore.gyroscopeEnabled ? '陀螺仪：开' : '陀螺仪：关')
-      })
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .stateStyles({
-        pressed: {
-          .scale({ x: 0.9, y: 0.9 })
-          .backgroundColor('rgba(255, 255, 255, 0.12)')
-        }
-      })
-      .animation({ duration: 260, curve: curves.springMotion(0.42, 0.85) })
-  }
 
   // ── 陀螺仪校准面板 ──
 
@@ -19003,177 +18710,6 @@ private loadPlanetPositions(): void {
   }
 
   // 低频功能抽屉：从侧栏右侧滑出，图标(带背景圆) + 名称 + 激活态左边框
-  @Builder
-  // @deprecated 旧侧栏抽屉已由 panelContent('more') 取代。
-  actionDrawer() {
-    Column({ space: 3 }) {
-      Text(I18n.t('c_more_functions'))
-        .fontSize(12)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.panelIdleGlass ? 'rgba(229,255,255,0.58)' : this.nmSub())
-        .width('100%')
-        .padding({ left: 18, top: 10, bottom: 6 })
-      ForEach(this.drawerActions(), (item: ShellAction) => {
-        Row({ space: 12 }) {
-          // 图标背景圆
-          Stack() {
-            Circle()
-              .width(32)
-              .height(32)
-              .fill(this.activePanel === item.panel && this.panelVisible ? 'rgba(91, 147, 191, 0.28)' : 'rgba(255, 255, 255, 0.06)')
-            Image(getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
-              .width(18)
-              .height(18)
-              .fillColor(this.activePanel === item.panel && this.panelVisible ? '#93D7FF' : this.nmText())
-          }
-            .width(32)
-            .height(32)
-          Text(item.label)
-            .fontSize(14)
-            .fontWeight(this.activePanel === item.panel && this.panelVisible ? FontWeight.Medium : FontWeight.Normal)
-            .fontColor(this.activePanel === item.panel && this.panelVisible ? '#E0F4FF' : this.nmText())
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1)
-        }
-          .width('100%')
-          .height(46)
-          .padding({ left: 14, right: 12 })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .backgroundColor(this.activePanel === item.panel && this.panelVisible ? 'rgba(91, 147, 191, 0.14)' : 'rgba(255,255,255,0.03)')
-          .border({
-            width: { left: this.activePanel === item.panel && this.panelVisible ? 3 : 0, right: 0, top: 0, bottom: 0 },
-            color: this.activePanel === item.panel && this.panelVisible ? '#5B93BF' : 'transparent'
-          })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .clickEffect({ level: ClickEffectLevel.LIGHT })
-          .stateStyles({
-            pressed: {
-              .scale({ x: 0.97, y: 0.97 })
-              .backgroundColor('rgba(255,255,255,0.08)')
-            }
-          })
-          .animation({ duration: 200, curve: curves.springMotion(0.42, 0.86) })
-          .onClick(() => {
-            this.onRailTap(item.panel)
-          })
-      }, (item: ShellAction) => item.panel)
-    }
-      .width(this.drawerWidth())
-      .padding({ top: 4, bottom: 10, left: 8, right: 8 })
-      .backgroundColor(this.panelIdleGlass ? 'rgba(10, 14, 26, 0.52)' : 'rgba(18, 22, 36, 0.78)')
-      .backdropBlur(this.panelIdleGlass ? 42 : 30)
-      .border({ width: 0.5, color: this.panelIdleGlass ? 'rgba(91, 147, 191, 0.16)' : 'rgba(255, 255, 255, 0.10)' })
-      .borderRadius(UI_RADIUS_SHEET)
-      .shadow({ radius: 30, color: 'rgba(0, 0, 0, 0.34)', offsetX: 0, offsetY: 14 })
-      .opacity(this.panelIdleOpacity)
-      .scale({ x: this.panelIdleOpacity < 1 ? 0.98 : 1.0, y: this.panelIdleOpacity < 1 ? 0.98 : 1.0 })
-      .transition(TransitionEffect.asymmetric(
-        TransitionEffect.OPACITY.animation({ duration: 240, curve: Curve.EaseOut })
-          .combine(TransitionEffect.translate({ x: -26, y: 0 }).animation({ duration: 420, curve: curves.springMotion(0.5, 0.82) })),
-        TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseIn })
-          .combine(TransitionEffect.translate({ x: -18, y: 0 }).animation({ duration: 200, curve: Curve.EaseIn }))
-      ))
-  }
-
-  @Builder
-  // @deprecated 旧手机独立抽屉已由 compactPanel + panelContent('more') 取代。
-  compactMoreDrawer() {
-    Column() {
-      Row() {
-        Text(I18n.t('c_more_functions'))
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#E5FFFFFF')
-          .layoutWeight(1)
-        this.compactQuickButton('close', true, () => {
-          this.toggleDrawer()
-        })
-      }
-        .width('100%')
-        .padding({ left: 14, right: 2, top: 6, bottom: 6 })
-
-      Scroll() {
-        Column({ space: 2 }) {
-          ForEach(this.compactDrawerActions(), (item: ShellAction) => {
-            Row({ space: 10 }) {
-              // 图标背景圆
-              Stack() {
-                Circle()
-                  .width(30)
-                  .height(30)
-                  .fill(this.activePanel === item.panel && this.panelVisible ? 'rgba(91, 147, 191, 0.26)' : 'rgba(255, 255, 255, 0.06)')
-                Image(getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
-                  .width(17)
-                  .height(17)
-                  .fillColor(this.activePanel === item.panel && this.panelVisible ? '#7FB3DC' : this.nmText())
-              }
-                .width(30)
-                .height(30)
-              Text(item.label)
-                .fontSize(14)
-                .fontWeight(this.activePanel === item.panel && this.panelVisible ? FontWeight.Medium : FontWeight.Normal)
-                .fontColor(this.activePanel === item.panel && this.panelVisible ? '#B8E4FF' : this.nmText())
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .layoutWeight(1)
-            }
-              .height(42)
-              .width('100%')
-              .padding({ left: 10, right: 10 })
-              .borderRadius(UI_RADIUS_CONTROL)
-              .backgroundColor(this.activePanel === item.panel && this.panelVisible ? 'rgba(91, 147, 191, 0.15)' : 'rgba(255,255,255,0.03)')
-              .border({
-                width: { left: this.activePanel === item.panel && this.panelVisible ? 2.5 : 0, right: 0, top: 0, bottom: 0 },
-                color: this.activePanel === item.panel && this.panelVisible ? '#5B93BF' : 'transparent'
-              })
-              .borderRadius(UI_RADIUS_CONTROL)
-              .clickEffect({ level: ClickEffectLevel.LIGHT })
-              .stateStyles({
-                pressed: {
-                  .scale({ x: 0.97, y: 0.97 })
-                  .backgroundColor('rgba(255,255,255,0.08)')
-                }
-              })
-              .animation({ duration: 180, curve: curves.springMotion(0.42, 0.86) })
-              .onClick(() => {
-                if (item.panel === 'gyro') {
-                  this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
-                  this.flashHint(this.gyroStore.gyroscopeEnabled ? '陀螺仪：开' : '陀螺仪：关')
-                  return
-                }
-                this.drawerOpen = false
-                this.onRailTap(item.panel)
-              })
-          }, (item: ShellAction) => item.icon + '/' + item.panel + '/' + this.languageRevision.toString())
-        }
-          .width('100%')
-          .padding({ bottom: 14 })
-      }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.Spring)
-      }
-      .width(this.isFoldHoverLayout ? '42%' : '64%')
-      .height(this.compactPanelHeight())
-      .padding({ top: 8, left: 8, right: 8, bottom: 8 })
-      .backgroundColor(this.panelIdleGlass ? 'rgba(10, 14, 26, 0.55)' : 'rgba(18, 22, 36, 0.82)')
-      .backdropBlur(this.panelIdleGlass ? 45 : 34)
-      .border({ width: 0.5, color: this.panelIdleGlass ? 'rgba(91, 147, 191, 0.18)' : 'rgba(255, 255, 255, 0.10)' })
-      .borderRadius(UI_RADIUS_SHEET)
-      .shadow({ radius: 28, color: 'rgba(0, 0, 0, 0.34)', offsetX: 0, offsetY: 14 })
-      .margin({ right: this.isFoldHoverLayout ? 34 : 18, bottom: 10 })
-      .alignSelf(ItemAlign.End)
-      .hitTestBehavior(HitTestMode.Default)
-      .opacity(this.panelIdleOpacity)
-      .scale({ x: this.panelIdleOpacity < 1 ? 0.98 : 1.0, y: this.panelIdleOpacity < 1 ? 0.98 : 1.0 })
-      .transition(TransitionEffect.asymmetric(
-        TransitionEffect.OPACITY.animation({ duration: 220, curve: Curve.EaseOut })
-          .combine(TransitionEffect.translate({ x: 8, y: 0 }).animation({ duration: 240, curve: curves.springMotion(0.52, 0.86) })),
-          TransitionEffect.OPACITY.animation({ duration: 160, curve: Curve.EaseIn })
-        ))
-    }
 
   @Builder
   floatingPanel() {
@@ -19653,7 +19189,7 @@ private loadPlanetPositions(): void {
         onWheelTouch: (event: TouchEvent) => { this.wheel().handleTouch(event) }
       })
       // 时间控制按钮：[倒带][现在][停止][实时][快进][超快]
-      this.timeSpeedChips()
+      TimeSpeedChips({ store: this.timeStore, onChip: (id: string) => { this.handleChip(id) } })
       QuickChipRow({ items: [
         { id: '-12h', label: '-12h' }, { id: '+12h', label: '+12h' },
         { id: 'sunRise', label: '日出' }, { id: 'sunTransit', label: '中天' },
@@ -19859,7 +19395,7 @@ private loadPlanetPositions(): void {
       // 快捷设置面板
       Scroll() {
         Column({ space: 0 }) {
-          this.deviceAndPrivacySettings()
+          DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.nmText(), subColor: this.nmSub(), onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
           Row()
             .width('100%').height(0.5)
             .backgroundColor(this.nmBorder())
@@ -20175,7 +19711,7 @@ private loadPlanetPositions(): void {
           .margin({ top: 4, bottom: 8 }).id('config-tabs-' + this.i18nLang)
         Column({ space: 0 }) {
           if (this.configTab === -1) {
-            this.deviceAndPrivacySettings()
+            DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.nmText(), subColor: this.nmSub(), onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
             Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 10, bottom: 10 })
           ViewCoordinateSettings({
             store: this.overlayStore,
@@ -20190,13 +19726,13 @@ private loadPlanetPositions(): void {
           })
           } else if (this.configTab === 0) {
             // Main
-            this.languageRow()
+            LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
             Text('行星历表').fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 4 })
             Text('用于行星位置计算的 JPL 数值星历。仅显示设备中已安装的文件。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 5 })
-            this.ephemerisRow('DE430', this.ephemerisDe430Available, this.ephemerisDe430Active, 'de430')
-            this.ephemerisRow('DE431', this.ephemerisDe431Available, this.ephemerisDe431Active, 'de431')
-            this.ephemerisRow('DE440', this.ephemerisDe440Available, this.ephemerisDe440Active, 'de440')
-            this.ephemerisRow('DE441', this.ephemerisDe441Available, this.ephemerisDe441Active, 'de441')
+            EphemerisToggleRow({ label: 'DE430', available: this.ephemerisDe430Available, isEnabled: this.ephemerisDe430Active, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setEphemerisEnabled('de430', this.ephemerisDe430Available, v) } })
+            EphemerisToggleRow({ label: 'DE431', available: this.ephemerisDe431Available, isEnabled: this.ephemerisDe431Active, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setEphemerisEnabled('de431', this.ephemerisDe431Available, v) } })
+            EphemerisToggleRow({ label: 'DE440', available: this.ephemerisDe440Available, isEnabled: this.ephemerisDe440Active, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setEphemerisEnabled('de440', this.ephemerisDe440Available, v) } })
+            EphemerisToggleRow({ label: 'DE441', available: this.ephemerisDe441Available, isEnabled: this.ephemerisDe441Active, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setEphemerisEnabled('de441', this.ephemerisDe441Available, v) } })
             Row() {
               Text(I18n.t('set_distance_units')).fontSize(12).fontColor(this.nmSub()).width(72)
               Row({ space: 6 }) {
@@ -20218,7 +19754,7 @@ private loadPlanetPositions(): void {
                   })
               }
             }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-            this.infoRow(I18n.t('s0350'), 'Stellarium 26.2 for HarmonyOS')
+            InfoRow({ label: I18n.t('s0350'), value: 'Stellarium 26.2 for HarmonyOS' })
             Button(I18n.t('i0251') + '设置').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
               .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 12, right: 12 }).margin({ top: 6, left: 8 })
               .onClick(() => { this.saveAppSettings(); this.flashHint('设置已保存') })
@@ -20228,11 +19764,11 @@ private loadPlanetPositions(): void {
               Text(I18n.t('i0120')).fontSize(12).fontColor(this.nmSub()).width(72)
             }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
             Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
-              this.informationModeButton('all', 'i0247')
-              this.informationModeButton('default', 'i0248')
-              this.informationModeButton('short', 'i0249')
-              this.informationModeButton('none', 'i0250')
-              this.informationModeButton('custom', 'information_custom_mode')
+              InformationModeButton({ labelKey: 'i0247', active: this.informationMode === 'all', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'all') } })
+              InformationModeButton({ labelKey: 'i0248', active: this.informationMode === 'default', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'default') } })
+              InformationModeButton({ labelKey: 'i0249', active: this.informationMode === 'short', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'short') } })
+              InformationModeButton({ labelKey: 'i0250', active: this.informationMode === 'none', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'none') } })
+              InformationModeButton({ labelKey: 'information_custom_mode', active: this.informationMode === 'custom', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'custom') } })
             }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
             Row() {
               Column() {
@@ -20245,21 +19781,21 @@ private loadPlanetPositions(): void {
             }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
             Text('自定义信息字段').fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 4 })
             Text('选择“自定义”后，详情卡和星体信息栏只显示下面勾选的字段。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 5 })
-            this.informationSwitchRow('名称', 'name')
-            this.informationSwitchRow('目录编号', 'catalog')
-            this.informationSwitchRow('视星等', 'magnitude')
-            this.informationSwitchRow('赤经、赤纬（J2000）', 'raJ2000')
-            this.informationSwitchRow('赤经、赤纬（历元）', 'raOfDate')
-            this.informationSwitchRow('方位角、高度角', 'altAz')
-            this.informationSwitchRow('距离', 'distance')
-            this.informationSwitchRow('时角', 'hourAngle')
-            this.informationSwitchRow('升起、中天、落下时间', 'riseTransitSet')
-            this.informationSwitchRow('大小或角直径', 'size')
-            this.informationSwitchRow('轨道与光照信息', 'elongation')
-            this.informationSwitchRow('银河坐标', 'galactic')
-            this.informationSwitchRow('星座信息', 'constellation')
-            this.informationSwitchRow('恒星时', 'siderealTime')
-            this.informationSwitchRow('附加资料', 'extra')
+            InformationSwitchRow({ label: '名称', isOn: this.informationMaskHas('name'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('name', v) } })
+            InformationSwitchRow({ label: '目录编号', isOn: this.informationMaskHas('catalog'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('catalog', v) } })
+            InformationSwitchRow({ label: '视星等', isOn: this.informationMaskHas('magnitude'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('magnitude', v) } })
+            InformationSwitchRow({ label: '赤经、赤纬（J2000）', isOn: this.informationMaskHas('raJ2000'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('raJ2000', v) } })
+            InformationSwitchRow({ label: '赤经、赤纬（历元）', isOn: this.informationMaskHas('raOfDate'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('raOfDate', v) } })
+            InformationSwitchRow({ label: '方位角、高度角', isOn: this.informationMaskHas('altAz'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('altAz', v) } })
+            InformationSwitchRow({ label: '距离', isOn: this.informationMaskHas('distance'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('distance', v) } })
+            InformationSwitchRow({ label: '时角', isOn: this.informationMaskHas('hourAngle'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('hourAngle', v) } })
+            InformationSwitchRow({ label: '升起、中天、落下时间', isOn: this.informationMaskHas('riseTransitSet'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('riseTransitSet', v) } })
+            InformationSwitchRow({ label: '大小或角直径', isOn: this.informationMaskHas('size'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('size', v) } })
+            InformationSwitchRow({ label: '轨道与光照信息', isOn: this.informationMaskHas('elongation'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('elongation', v) } })
+            InformationSwitchRow({ label: '银河坐标', isOn: this.informationMaskHas('galactic'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('galactic', v) } })
+            InformationSwitchRow({ label: '星座信息', isOn: this.informationMaskHas('constellation'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('constellation', v) } })
+            InformationSwitchRow({ label: '恒星时', isOn: this.informationMaskHas('siderealTime'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('siderealTime', v) } })
+            InformationSwitchRow({ label: '附加资料', isOn: this.informationMaskHas('extra'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('extra', v) } })
           } else if (this.configTab === 2) {
             Text('天空显示设置已统一到“图层 > 天空”').fontSize(11).fontColor(this.nmSub())
               .width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).maxLines(2)
@@ -20310,8 +19846,8 @@ private loadPlanetPositions(): void {
               }.padding({ left: 8, right: 8 })
             }.width('100%').height(31).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
             Text('抖动用于低色深屏幕的颜色过渡；通常保持 8/8/8 位。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ top: 4, bottom: 8 })
-            this.infoRow(I18n.t('s0351'), 'Stellarium for HarmonyOS')
-            this.infoRow(I18n.t('s0352'), 'OpenHarmony / HarmonyOS NEXT')
+            InfoRow({ label: I18n.t('s0351'), value: 'Stellarium for HarmonyOS' })
+            InfoRow({ label: I18n.t('s0352'), value: 'OpenHarmony / HarmonyOS NEXT' })
           } else if (this.configTab === 3) {
             TimeSettingsSection({
               store: this.timeSettingsStore,
@@ -20519,12 +20055,12 @@ private loadPlanetPositions(): void {
               .onClick(() => { this.saveCurrentViewAsStartup() })
 
             Text(I18n.t('settings_view_navigation_controls')).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 5 })
-            this.navigationSwitchRow(I18n.t('settings_view_mouse_navigation'), this.navigationMouseEnabled, 'mouseNavigation')
-            this.navigationSwitchRow(I18n.t('settings_view_mouse_zoom'), this.navigationMouseZoomEnabled, 'mouseZooming')
-            this.navigationSwitchRow(I18n.t('settings_view_keyboard_navigation'), this.navigationMoveKeysEnabled, 'moveKeys')
-            this.navigationSwitchRow(I18n.t('settings_view_keyboard_zoom'), this.navigationZoomKeysEnabled, 'zoomKeys')
-            this.navigationSwitchRow(I18n.t('settings_view_gravity_labels'), this.navigationGravityLabelsEnabled, 'gravityLabels')
-            this.navigationSwitchRow(I18n.t('s0302'), this.autoZoomResets, 'autoZoomResets')
+            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_navigation'), isOn: this.navigationMouseEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('mouseNavigation', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_zoom'), isOn: this.navigationMouseZoomEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('mouseZooming', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_navigation'), isOn: this.navigationMoveKeysEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('moveKeys', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_zoom'), isOn: this.navigationZoomKeysEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('zoomKeys', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_gravity_labels'), isOn: this.navigationGravityLabelsEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('gravityLabels', v) } })
+            NavigationSwitchRow({ label: I18n.t('s0302'), isOn: this.autoZoomResets, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('autoZoomResets', v) } })
 
             Text(I18n.t('settings_view_max_fov')).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ top: 4, bottom: 4 })
             Row() {
@@ -21051,7 +20587,7 @@ private loadPlanetPositions(): void {
               .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
               .onClick(() => { this.loadRTS() })
             if (!this.hasSelectedObject()) {
-              this.rtsSelectionGuide()
+              RtsSelectionGuide({ textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openRtsTargetPicker() } })
             } else if (this.rtsLoading) {
               Row({ space: 8 }) {
                 LoadingProgress().width(20).height(20).color(this.nmAccent())
@@ -21060,23 +20596,23 @@ private loadPlanetPositions(): void {
             } else if (this.rtsError.length > 0) {
               Text(this.rtsError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
             } else if (this.rtsData.size > 0) {
-              this.infoRow(I18n.t('s0358'), this.rtsData.get('name') ?? 'N/A')
+              InfoRow({ label: I18n.t('s0358'), value: this.rtsData.get('name') ?? 'N/A' })
               Row()
                 .width('100%').height(0.5)
                 .backgroundColor(this.nmBorder())
                 .margin({ top: 4, bottom: 4 })
               Text(I18n.t('s0370')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              this.infoRow(I18n.t('s0700'), this.jdToDateStr(this.rtsData.get('nextRiseText') ?? '0'))
-              this.infoRow(I18n.t('s0701'), this.jdToDateStr(this.rtsData.get('nextTransitText') ?? '0'))
-              this.infoRow(I18n.t('s0702'), this.jdToDateStr(this.rtsData.get('nextSetText') ?? '0'))
+              InfoRow({ label: I18n.t('s0700'), value: this.jdToDateStr(this.rtsData.get('nextRiseText') ?? '0') })
+              InfoRow({ label: I18n.t('s0701'), value: this.jdToDateStr(this.rtsData.get('nextTransitText') ?? '0') })
+              InfoRow({ label: I18n.t('s0702'), value: this.jdToDateStr(this.rtsData.get('nextSetText') ?? '0') })
               Row()
                 .width('100%').height(0.5)
                 .backgroundColor(this.nmBorder())
                 .margin({ top: 4, bottom: 4 })
               Text(I18n.t('s0371')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              this.infoRow(I18n.t('s0700'), this.jdToDateStr(this.rtsData.get('prevRiseText') ?? '0'))
-              this.infoRow(I18n.t('s0701'), this.jdToDateStr(this.rtsData.get('prevTransitText') ?? '0'))
-              this.infoRow(I18n.t('s0702'), this.jdToDateStr(this.rtsData.get('prevSetText') ?? '0'))
+              InfoRow({ label: I18n.t('s0700'), value: this.jdToDateStr(this.rtsData.get('prevRiseText') ?? '0') })
+              InfoRow({ label: I18n.t('s0701'), value: this.jdToDateStr(this.rtsData.get('prevTransitText') ?? '0') })
+              InfoRow({ label: I18n.t('s0702'), value: this.jdToDateStr(this.rtsData.get('prevSetText') ?? '0') })
             }
             if (this.hasSelectedObject()) {
             Row({ space: 6 }) {
@@ -21449,10 +20985,10 @@ private loadPlanetPositions(): void {
                 .onClick(() => { this.altAzCurve = []; this.altAzError = ''; this.loadAltAzCurve() })
             }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 6 })
             if (this.graphLoading) {
-              this.graphLoadingRow('正在计算' + this.altAzRangeLabel() + '的' + (this.graphMode === 0 ? '高度' : '方位角') + '变化…')
+              GraphLoadingRow({ label: '正在计算' + this.altAzRangeLabel() + '的' + (this.graphMode === 0 ? '高度' : '方位角') + '变化…', accentColor: this.nmAccent(), subColor: this.nmSub() })
             } else if (this.altAzError.length > 0) {
               Text(this.altAzError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              this.graphSelectionGuide(this.altAzError)
+              GraphSelectionGuide({ error: this.altAzError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
             } else if (this.altAzCurve.length === 0) {
               Text('没有可绘制的数据。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
             } else {
@@ -21490,12 +21026,12 @@ private loadPlanetPositions(): void {
               }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
               Text(this.graphMode === 0 ? (this.altAzMinimum <= 0 ? '横线是地平线；主曲线为目标，金色为太阳，银灰色为月亮。' : '曲线仅显示不低于 ' + this.altAzMinimum.toString() + '° 的部分；主曲线为目标，金色为太阳，银灰色为月亮。') : '方位角从北方 0° 起顺时针增加：东 90°、南 180°、西 270°。').fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
               if (this.graphMode === 0) {
-                this.infoRow('当前位置', this.altAzNowLabel())
-                this.infoRow('最高高度', this.altAzMaxLabel())
-                this.infoRow('地平线以上时长', this.altAzVisibleHours())
-                this.infoRow('显示下限', this.altAzMinimum === -90 ? '不限制' : this.altAzMinimum.toString() + '°')
+                InfoRow({ label: '当前位置', value: this.altAzNowLabel() })
+                InfoRow({ label: '最高高度', value: this.altAzMaxLabel() })
+                InfoRow({ label: '地平线以上时长', value: this.altAzVisibleHours() })
+                InfoRow({ label: '显示下限', value: this.altAzMinimum === -90 ? '不限制' : this.altAzMinimum.toString() + '°' })
               } else {
-                this.infoRow('当前方位', this.azimuthNowLabel())
+                InfoRow({ label: '当前方位', value: this.azimuthNowLabel() })
               }
             }
             } else if (this.graphMode === 2) {
@@ -21531,10 +21067,10 @@ private loadPlanetPositions(): void {
                   .onClick(() => { this.loadAnnualElevation() })
               }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
               if (this.graphLoading) {
-                this.graphLoadingRow('正在生成全年高度曲线…')
+                GraphLoadingRow({ label: '正在生成全年高度曲线…', accentColor: this.nmAccent(), subColor: this.nmSub() })
               } else if (this.annualElevationError.length > 0) {
                 Text(this.annualElevationError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-                this.graphSelectionGuide(this.annualElevationError)
+                GraphSelectionGuide({ error: this.annualElevationError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
               } else if (this.annualElevationData.length === 0) {
                 Text('没有可绘制的数据。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
               } else {
@@ -21556,8 +21092,8 @@ private loadPlanetPositions(): void {
                   Text('7月').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Center)
                   Text('10月').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.End)
                 }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
-                this.infoRow('全年最高', this.annualMaxLabel())
-                this.infoRow('显示下限', this.annualElevationMinimum === -90 ? '不限制' : this.annualElevationMinimum.toString() + '°')
+                InfoRow({ label: '全年最高', value: this.annualMaxLabel() })
+                InfoRow({ label: '显示下限', value: this.annualElevationMinimum === -90 ? '不限制' : this.annualElevationMinimum.toString() + '°' })
               }
             } else if (this.graphMode === 3) {
               Text('按天文暗夜（太阳低于地平线 18°）统计；点任一晚可跳到目标最高的时刻。')
@@ -21601,10 +21137,10 @@ private loadPlanetPositions(): void {
                   .onClick(() => { this.loadObservabilityCalendar() })
               }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
               if (this.graphLoading) {
-                this.graphLoadingRow(this.observabilityProgress.length > 0 ? this.observabilityProgress : '正在计算未来多晚的观测窗口…')
+                GraphLoadingRow({ label: this.observabilityProgress.length > 0 ? this.observabilityProgress : '正在计算未来多晚的观测窗口…', accentColor: this.nmAccent(), subColor: this.nmSub() })
               } else if (this.observabilityError.length > 0) {
                 Text(this.observabilityError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-                this.graphSelectionGuide(this.observabilityError)
+                GraphSelectionGuide({ error: this.observabilityError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
               } else if (this.observabilityData.length === 0) {
                 Text('所选时段没有可用观测窗口。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
               } else {
@@ -21684,10 +21220,10 @@ private loadPlanetPositions(): void {
                   .onClick(() => { this.loadLunarElongation() })
               }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
               if (this.graphLoading) {
-                this.graphLoadingRow('正在计算目标与月亮的角距…')
+                GraphLoadingRow({ label: '正在计算目标与月亮的角距…', accentColor: this.nmAccent(), subColor: this.nmSub() })
               } else if (this.lunarElongationError.length > 0) {
                 Text(this.lunarElongationError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-                this.graphSelectionGuide(this.lunarElongationError)
+                GraphSelectionGuide({ error: this.lunarElongationError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
               } else if (this.lunarElongationData.length === 0) {
                 Text('没有可绘制的数据。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
               } else {
@@ -21708,9 +21244,9 @@ private loadPlanetPositions(): void {
                   Text('+' + this.lunarElongationDays.toString() + '天').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.End)
                 }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
                 Text('纵轴 0°-180°；金色横线是 ' + this.lunarElongationLimit.toString() + '° 参考线。').fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-                this.infoRow('当前月距', this.lunarElongationNowLabel())
-                this.infoRow('最接近月亮', this.lunarElongationClosestLabel())
-                this.infoRow('参考线', this.lunarElongationLimit.toString() + '°')
+                InfoRow({ label: '当前月距', value: this.lunarElongationNowLabel() })
+                InfoRow({ label: '最接近月亮', value: this.lunarElongationClosestLabel() })
+                InfoRow({ label: '参考线', value: this.lunarElongationLimit.toString() + '°' })
               }
             } else {
               Text('桌面版“Graphs”双变量时间曲线：左右两条曲线各自缩放，适合比较不同量纲的变化趋势。')
@@ -21789,10 +21325,10 @@ private loadPlanetPositions(): void {
                   .onClick(() => { this.loadPlanetTimeSeries() })
               }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
               if (this.graphLoading) {
-                this.graphLoadingRow('正在计算双变量时间曲线…')
+                GraphLoadingRow({ label: '正在计算双变量时间曲线…', accentColor: this.nmAccent(), subColor: this.nmSub() })
               } else if (this.planetTimeSeriesError.length > 0) {
                 Text(this.planetTimeSeriesError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-                this.graphSelectionGuide(this.planetTimeSeriesError)
+                GraphSelectionGuide({ error: this.planetTimeSeriesError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
               } else if (this.planetTimeSeriesData.length === 0) {
                 Text('没有可绘制的数据。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
               } else {
@@ -21820,8 +21356,8 @@ private loadPlanetPositions(): void {
                 Text('蓝色左轴：' + this.planetTimeSeriesLeftMin.toFixed(1) + ' - ' + this.planetTimeSeriesLeftMax.toFixed(1) + this.planetMetricUnit(this.planetTimeSeriesLeftMetric)
                   + '；金色右轴：' + this.planetTimeSeriesRightMin.toFixed(1) + ' - ' + this.planetTimeSeriesRightMax.toFixed(1) + this.planetMetricUnit(this.planetTimeSeriesRightMetric))
                   .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-                this.infoRow('当前 ' + this.planetMetricLabel(this.planetTimeSeriesLeftMetric), this.planetTimeSeriesValueLabel(this.planetTimeSeriesData[0].left, this.planetTimeSeriesLeftMetric))
-                this.infoRow('当前 ' + this.planetMetricLabel(this.planetTimeSeriesRightMetric), this.planetTimeSeriesValueLabel(this.planetTimeSeriesData[0].right, this.planetTimeSeriesRightMetric))
+                InfoRow({ label: '当前 ' + this.planetMetricLabel(this.planetTimeSeriesLeftMetric), value: this.planetTimeSeriesValueLabel(this.planetTimeSeriesData[0].left, this.planetTimeSeriesLeftMetric) })
+                InfoRow({ label: '当前 ' + this.planetMetricLabel(this.planetTimeSeriesRightMetric), value: this.planetTimeSeriesValueLabel(this.planetTimeSeriesData[0].right, this.planetTimeSeriesRightMetric) })
               }
             }
           } else if (this.astroTab === 5) {
@@ -21837,17 +21373,17 @@ private loadPlanetPositions(): void {
               Text('（正在汇总今晚的观测条件…）').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
             } else {
               Text('太阳与暗夜窗口').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              this.infoRow('日落', this.fmtDateTime(this.tonightAstro!.sun?.set))
-              this.infoRow('天文暮光结束', this.fmtDateTime(this.tonightAstro!.sun?.astroTwilightEnd))
-              this.infoRow('天文暮光开始', this.fmtDateTime(this.tonightAstro!.sun?.astroTwilightStart))
-              this.infoRow('日出', this.fmtDateTime(this.tonightAstro!.sun?.rise))
-              this.infoRow('可用暗夜时长', this.fmtNum(this.tonightAstro!.sun?.darkWindowHours, 1, ' 小时'))
+              InfoRow({ label: '日落', value: this.fmtDateTime(this.tonightAstro!.sun?.set) })
+              InfoRow({ label: '天文暮光结束', value: this.fmtDateTime(this.tonightAstro!.sun?.astroTwilightEnd) })
+              InfoRow({ label: '天文暮光开始', value: this.fmtDateTime(this.tonightAstro!.sun?.astroTwilightStart) })
+              InfoRow({ label: '日出', value: this.fmtDateTime(this.tonightAstro!.sun?.rise) })
+              InfoRow({ label: '可用暗夜时长', value: this.fmtNum(this.tonightAstro!.sun?.darkWindowHours, 1, ' 小时') })
               Text('月亮').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 8, bottom: 2 })
-              this.infoRow('月相', this.tonightAstro!.moon?.phaseName ?? '--')
-              this.infoRow('照亮比例', this.fmtNum(this.tonightAstro!.moon?.illumination, 1, ' %'))
-              this.infoRow('月龄', this.fmtNum(this.tonightAstro!.moon?.age, 1, ' 天'))
-              this.infoRow('月出', this.fmtDateTime(this.tonightAstro!.moon?.rise))
-              this.infoRow('月落', this.fmtDateTime(this.tonightAstro!.moon?.set))
+              InfoRow({ label: '月相', value: this.tonightAstro!.moon?.phaseName ?? '--' })
+              InfoRow({ label: '照亮比例', value: this.fmtNum(this.tonightAstro!.moon?.illumination, 1, ' %') })
+              InfoRow({ label: '月龄', value: this.fmtNum(this.tonightAstro!.moon?.age, 1, ' 天') })
+              InfoRow({ label: '月出', value: this.fmtDateTime(this.tonightAstro!.moon?.rise) })
+              InfoRow({ label: '月落', value: this.fmtDateTime(this.tonightAstro!.moon?.set) })
               Text('今晚可观测目标').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 8, bottom: 2 })
               Button({ type: ButtonType.Normal }) {
                 Row({ space: 8 }) {
@@ -22197,9 +21733,9 @@ private loadPlanetPositions(): void {
                 }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
                 Text(this.planetPairAngularAvailable ? '蓝色线性距离：' + this.planetPairLinearMin.toFixed(3) + ' - ' + this.planetPairLinearMax.toFixed(3) + ' AU；金色角距离：' + this.planetPairAngularMin.toFixed(1) + ' - ' + this.planetPairAngularMax.toFixed(1) + '°' : '蓝色为线性距离；与观测地球比较时，表观角距离不适用。')
                   .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-                this.infoRow('当前线性距离', this.planetPairLinearLabel(this.planetPairDistanceData[this.planetPairCurrentIndex()].linearDistance))
+                InfoRow({ label: '当前线性距离', value: this.planetPairLinearLabel(this.planetPairDistanceData[this.planetPairCurrentIndex()].linearDistance) })
                 if (this.planetPairAngularAvailable) {
-                  this.infoRow('当前角距离', (this.planetPairDistanceData[this.planetPairCurrentIndex()].angularDistance ?? 0).toFixed(1) + '°')
+                  InfoRow({ label: '当前角距离', value: (this.planetPairDistanceData[this.planetPairCurrentIndex()].angularDistance ?? 0).toFixed(1) + '°' })
                 }
               }
             }
@@ -22457,27 +21993,27 @@ private loadPlanetPositions(): void {
                   .margin({ top: 4, bottom: 4 })
               }
               Text(I18n.t('s0372')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              this.infoRow(I18n.t('s0365'), this.jdToDateStr(this.almanacData.get('sunRise') ?? '0'))
-              this.infoRow(I18n.t('s0366'), this.jdToDateStr(this.almanacData.get('sunSet') ?? '0'))
-              this.infoRow(I18n.t('s0701'), this.jdToDateStr(this.almanacData.get('sunTransit') ?? '0'))
-              this.infoRow('昼长', this.almanacHoursLabel('daylightHours'))
-              this.infoRow('夜长', this.almanacHoursLabel('nightHours'))
+              InfoRow({ label: I18n.t('s0365'), value: this.jdToDateStr(this.almanacData.get('sunRise') ?? '0') })
+              InfoRow({ label: I18n.t('s0366'), value: this.jdToDateStr(this.almanacData.get('sunSet') ?? '0') })
+              InfoRow({ label: I18n.t('s0701'), value: this.jdToDateStr(this.almanacData.get('sunTransit') ?? '0') })
+              InfoRow({ label: '昼长', value: this.almanacHoursLabel('daylightHours') })
+              InfoRow({ label: '夜长', value: this.almanacHoursLabel('nightHours') })
               Text('晨昏蒙影').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 8, bottom: 2 })
-              this.infoRow('民用晨光', this.jdToDateStr(this.almanacData.get('civilRise') ?? '0'))
-              this.infoRow('民用昏影', this.jdToDateStr(this.almanacData.get('civilSet') ?? '0'))
-              this.infoRow('航海晨光', this.jdToDateStr(this.almanacData.get('nauticalRise') ?? '0'))
-              this.infoRow('航海昏影', this.jdToDateStr(this.almanacData.get('nauticalSet') ?? '0'))
-              this.infoRow('天文晨光', this.jdToDateStr(this.almanacData.get('astronomicalRise') ?? '0'))
-              this.infoRow('天文昏影', this.jdToDateStr(this.almanacData.get('astronomicalSet') ?? '0'))
+              InfoRow({ label: '民用晨光', value: this.jdToDateStr(this.almanacData.get('civilRise') ?? '0') })
+              InfoRow({ label: '民用昏影', value: this.jdToDateStr(this.almanacData.get('civilSet') ?? '0') })
+              InfoRow({ label: '航海晨光', value: this.jdToDateStr(this.almanacData.get('nauticalRise') ?? '0') })
+              InfoRow({ label: '航海昏影', value: this.jdToDateStr(this.almanacData.get('nauticalSet') ?? '0') })
+              InfoRow({ label: '天文晨光', value: this.jdToDateStr(this.almanacData.get('astronomicalRise') ?? '0') })
+              InfoRow({ label: '天文昏影', value: this.jdToDateStr(this.almanacData.get('astronomicalSet') ?? '0') })
               Row()
                 .width('100%').height(0.5)
                 .backgroundColor(this.nmBorder())
                 .margin({ top: 4, bottom: 4 })
               Text(I18n.t('s0373')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              this.infoRow(I18n.t('s0367'), this.jdToDateStr(this.almanacData.get('moonRise') ?? '0'))
-              this.infoRow(I18n.t('s0368'), this.jdToDateStr(this.almanacData.get('moonSet') ?? '0'))
-              this.infoRow(I18n.t('s0701'), this.jdToDateStr(this.almanacData.get('moonTransit') ?? '0'))
-              this.infoRow(I18n.t('s0369'), parseFloat(this.almanacData.get('moonPhase') ?? '0').toFixed(1) + '%')
+              InfoRow({ label: I18n.t('s0367'), value: this.jdToDateStr(this.almanacData.get('moonRise') ?? '0') })
+              InfoRow({ label: I18n.t('s0368'), value: this.jdToDateStr(this.almanacData.get('moonSet') ?? '0') })
+              InfoRow({ label: I18n.t('s0701'), value: this.jdToDateStr(this.almanacData.get('moonTransit') ?? '0') })
+              InfoRow({ label: I18n.t('s0369'), value: parseFloat(this.almanacData.get('moonPhase') ?? '0').toFixed(1) + '%' })
             }
           } else {
             Text('月相预报').fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 2 })
@@ -23002,9 +22538,9 @@ private loadPlanetPositions(): void {
               }.padding({ left: 2, right: 2 })
             }.width('100%').height(42).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
             Row({ space: 10 }) {
-              this.mosaicCameraMetric('ra')
-              this.mosaicCameraMetric('dec')
-              this.mosaicCameraMetric('rotation')
+              MosaicCameraMetric({ labelKey: 'mosaic_camera_ra', value: this.mosaicCameraValue('ra'), subColor: this.nmSub(), textColor: this.nmText() })
+              MosaicCameraMetric({ labelKey: 'mosaic_camera_dec', value: this.mosaicCameraValue('dec'), subColor: this.nmSub(), textColor: this.nmText() })
+              MosaicCameraMetric({ labelKey: 'mosaic_camera_rotation', value: this.mosaicCameraValue('rotation'), subColor: this.nmSub(), textColor: this.nmText() })
             }.width('100%')
             Row() {
               Text(I18n.t('mosaic_camera_overlay')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
@@ -23042,19 +22578,19 @@ private loadPlanetPositions(): void {
               .onChange((v: boolean) => { this.setArchaeoLineSetting('enabled', v ? '1' : '0') })
           }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           if (this.archaeoStatus.length > 0) { Text(this.archaeoStatus).fontSize(10).fontColor('#FFD59A').width('100%').padding({ left: 10, right: 10 }) }
-            this.archaeoToggleRow(I18n.t('archaeo_lines_equinox'), this.archaeoEquinox, 'equinox')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_solstices'), this.archaeoSolstices, 'solstices')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_crossquarters'), this.archaeoCrossquarters, 'crossquarters')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_major'), this.archaeoMajorStandstills, 'majorStandstills')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_minor'), this.archaeoMinorStandstills, 'minorStandstills')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_polar'), this.archaeoPolarCircles, 'polarCircles')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_zenith'), this.archaeoZenithPassage, 'zenithPassage')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_nadir'), this.archaeoNadirPassage, 'nadirPassage')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_selected'), this.archaeoSelectedObject, 'selectedObject')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_azimuth'), this.archaeoSelectedObjectAzimuth, 'selectedObjectAzimuth')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_hour_angle'), this.archaeoSelectedObjectHourAngle, 'selectedObjectHourAngle')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_sun'), this.archaeoCurrentSun, 'currentSun')
-            this.archaeoToggleRow(I18n.t('archaeo_lines_moon'), this.archaeoCurrentMoon, 'currentMoon')
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_equinox'), isOn: this.archaeoEquinox, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('equinox', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_solstices'), isOn: this.archaeoSolstices, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('solstices', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_crossquarters'), isOn: this.archaeoCrossquarters, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('crossquarters', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_major'), isOn: this.archaeoMajorStandstills, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('majorStandstills', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_minor'), isOn: this.archaeoMinorStandstills, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('minorStandstills', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_polar'), isOn: this.archaeoPolarCircles, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('polarCircles', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_zenith'), isOn: this.archaeoZenithPassage, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('zenithPassage', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_nadir'), isOn: this.archaeoNadirPassage, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('nadirPassage', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_selected'), isOn: this.archaeoSelectedObject, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('selectedObject', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_azimuth'), isOn: this.archaeoSelectedObjectAzimuth, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('selectedObjectAzimuth', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_hour_angle'), isOn: this.archaeoSelectedObjectHourAngle, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('selectedObjectHourAngle', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_sun'), isOn: this.archaeoCurrentSun, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('currentSun', v ? '1' : '0') } })
+            ArchaeoToggleRow({ label: I18n.t('archaeo_lines_moon'), isOn: this.archaeoCurrentMoon, canToggle: !this.archaeoLoading, textColor: this.nmText(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setArchaeoLineSetting('currentMoon', v ? '1' : '0') } })
             Text(I18n.t('archaeo_lines_planet')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2, top: 2 })
             Row({ space: 5 }) {
               ForEach([
@@ -23153,13 +22689,13 @@ private loadPlanetPositions(): void {
               Text(this.navStarsSetDescription.replace(/<[^>]+>/g, '')).fontSize(10).fontColor(this.nmSub())
                 .width('100%').maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis })
             }
-            this.navStarsToggle(I18n.t('nav_stars_highlight'), this.navStarsHighlight, 'highlightWhenVisible')
-            this.navStarsToggle(I18n.t('nav_stars_limit_info'), this.navStarsLimitInfo, 'limitInfo')
-            this.navStarsToggle(I18n.t('nav_stars_upper_limb'), this.navStarsUpperLimb, 'upperLimb')
-            this.navStarsToggle(I18n.t('nav_stars_tabulated'), this.navStarsTabulated, 'tabulatedDisplay')
-            this.navStarsToggle(I18n.t('nav_stars_extra_decimals'), this.navStarsExtraDecimals, 'extraDecimals')
-            this.navStarsToggle(I18n.t('nav_stars_utc'), this.navStarsUseUtc, 'useUtc')
-            this.navStarsToggle(I18n.t('nav_stars_startup'), this.navStarsStartup, 'enableAtStartup')
+            NavStarsToggleRow({ label: I18n.t('nav_stars_highlight'), isOn: this.navStarsHighlight, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('highlightWhenVisible', v ? '1' : '0') } })
+            NavStarsToggleRow({ label: I18n.t('nav_stars_limit_info'), isOn: this.navStarsLimitInfo, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('limitInfo', v ? '1' : '0') } })
+            NavStarsToggleRow({ label: I18n.t('nav_stars_upper_limb'), isOn: this.navStarsUpperLimb, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('upperLimb', v ? '1' : '0') } })
+            NavStarsToggleRow({ label: I18n.t('nav_stars_tabulated'), isOn: this.navStarsTabulated, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('tabulatedDisplay', v ? '1' : '0') } })
+            NavStarsToggleRow({ label: I18n.t('nav_stars_extra_decimals'), isOn: this.navStarsExtraDecimals, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('extraDecimals', v ? '1' : '0') } })
+            NavStarsToggleRow({ label: I18n.t('nav_stars_utc'), isOn: this.navStarsUseUtc, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('useUtc', v ? '1' : '0') } })
+            NavStarsToggleRow({ label: I18n.t('nav_stars_startup'), isOn: this.navStarsStartup, canToggle: !this.navStarsLoading, textColor: this.nmText(), panelColor: this.nmBg(), onToggle: (v: boolean) => { this.setNavStarsSetting('enableAtStartup', v ? '1' : '0') } })
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else if (this.activePanel === 'satellites') {
@@ -23961,13 +23497,13 @@ private loadPlanetPositions(): void {
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else {
-      this.infoRow(I18n.t('i0057'), this.isExpandedLayout ? I18n.t('s0703') : I18n.t('s0704'))
-      this.infoRow(I18n.t('i0058'), 'Stellarium Core')
-      this.infoRow(I18n.t('i0059'), this.fovText)
-      this.infoRow(I18n.t('i0060'), this.gyroStore.gyroscopeStatus)
-      this.infoRow(I18n.t('i0061'), this.sensZh(this.gyroStore.gyroscopeSensitivityText))
-      this.gyroscopeRow()
-      this.languageRow()
+      InfoRow({ label: I18n.t('i0057'), value: this.isExpandedLayout ? I18n.t('s0703') : I18n.t('s0704') })
+      InfoRow({ label: I18n.t('i0058'), value: 'Stellarium Core' })
+      InfoRow({ label: I18n.t('i0059'), value: this.fovText })
+      InfoRow({ label: I18n.t('i0060'), value: this.gyroStore.gyroscopeStatus })
+      InfoRow({ label: I18n.t('i0061'), value: this.sensZh(this.gyroStore.gyroscopeSensitivityText) })
+      GyroscopeRow({ isOn: this.gyroStore.gyroscopeEnabled, onToggle: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) } })
+      LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
       Row() {
         Text(I18n.t('set_distance_units'))
           .fontSize(14)
@@ -24037,7 +23573,7 @@ private loadPlanetPositions(): void {
           }.padding({ left: 4, right: 4 })
         }.width("100%").height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       }
-      this.infoRow(I18n.t('i0062'), I18n.t('s0706'))
+      InfoRow({ label: I18n.t('i0062'), value: I18n.t('s0706') })
       // 分区：方向
       Row()
         .width('100%').height(0.5)
@@ -24181,109 +23717,9 @@ private loadPlanetPositions(): void {
     }
   }
 
-	  @Builder
-  lockRow() {
-    Row() {
-      Text(I18n.t('i0042'))
-        .fontSize(14)
-        .fontColor('#E5FFFFFF')
-        .layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: this.uiLocked })
-        .width(46)
-        .height(28)
-        .selectedColor('#5B93BF')
-        .onChange((value: boolean) => {
-          this.uiLocked = value
-          this.flashHint(value ? I18n.t('s0717') : I18n.t('s0718'))
-        })
-    }
-      .height(40)
-      .width('100%')
-  }
-
-  @Builder
-  languageRow() {
-    Row() {
-      Text(I18n.t('i0029'))
-        .fontSize(14)
-        .fontColor('#E5FFFFFF')
-        .width(72)
-      Scroll() {
-        Row({ space: 6 }) {
-          ForEach(SUPPORTED_LANGUAGES.map((code: string): LangOption => ({
-            code: code,
-            name: LANGUAGE_DISPLAY[code] ?? code
-          })), (lang: LangOption) => {
-            Text(lang.name)
-              .fontSize(12)
-              .fontColor(this.selectedLanguage === lang.code ? '#F4FAFF' : '#C8D4E2')
-              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-              .backgroundColor(this.selectedLanguage === lang.code ? '#5B93BF' : 'rgba(255,255,255,0.06)')
-              .borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.setLanguage(lang.code) })
-          }, (lang: LangOption) => lang.code)
-        }
-        .padding({ left: 4, right: 4 })
-      }
-      .layoutWeight(1)
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
-    }
-    .height(40)
-    .width('100%')
-  }
-
-  @Builder
-	  gyroscopeRow() {
-    Row() {
-      Text(I18n.t('i0043'))
-        .fontSize(14)
-        .fontColor('#E5FFFFFF')
-        .layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: this.gyroStore.gyroscopeEnabled })
-        .width(46)
-        .height(28)
-        .selectedColor('#5B93BF')
-        .onChange((value: boolean) => {
-          this.toggleGyroscope(value)
-          this.flashHint(value ? I18n.t('s0719') : I18n.t('s0720'))
-        })
-    }
-      .height(40)
-      .width('100%')
-  }
-
-  @Builder
-  deviceAndPrivacySettings() {
-    Column({ space: 0 }) {
-      Text(I18n.t('settings_device_privacy')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-      this.gyroscopeRow()
-      Row() {
-        Text(I18n.t('i0230')).fontSize(12).fontColor(this.nmSub()).width(86)
-        Text(this.sensZh(this.gyroStore.gyroscopeSensitivityText)).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-      }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-      Text(I18n.t('settings_gyro_desc'))
-        .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 8 })
-      Button(I18n.t('privacy_revoke'))
-        .fontSize(13).fontColor('#FFD9D9').backgroundColor('rgba(255, 121, 121, 0.12)')
-        .border({ width: 1, color: 'rgba(255, 121, 121, 0.24)' })
-        .borderRadius(UI_RADIUS_CONTROL).height(38).width('100%')
-        .onClick(() => { this.confirmPrivacyRevocation() })
-      Text(I18n.t('privacy_revoke_message'))
-        .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ top: 6 })
-    }.width('100%')
-  }
-
   // 时间速度控制按钮 — 参考 Sky Guide 的交互范式
   // 布局：[倒带] [现在] [停止] [实时] [快进] [超快]
   // 当前档位高亮，点击立即更新速度显示
-  @Builder
-  timeSpeedChips() {
-    TimeSpeedChips({
-      store: this.timeStore,
-      onChip: (id: string) => { this.handleChip(id) }
-    })
-  }
 
   // ===== Sky Guide 风格：按字段选择的时间转轴 =====
   private syncJulianDateFields(response: StellariumBridgeResponse, jd: number): void {
@@ -24463,29 +23899,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-  @Builder
-  infoRow(label: ResourceStr, value: ResourceStr) {
-    Row() {
-      Text(label)
-        .fontSize(11)
-        .fontColor('#99FFFFFF')
-        .width(64)
-        .textAlign(TextAlign.Start)
-      Text(value)
-        .fontSize(13)
-        .fontColor('#E5FFFFFF')
-        .layoutWeight(1)
-        .maxLines(2)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .textAlign(TextAlign.End)
-    }
-      .height(24)
-      .width('100%')
-      .padding({ left: 8, right: 8 })
-      .backgroundColor(Color.Transparent)
-      .margin({ bottom: 2 })
-  }
-
   private selfTestAllActions(): void {
     hilog.info(0x0000, 'StellariumArkUI', 'selftest send %{public}d ids', this.SELFTEST_ACTION_IDS.length)
     // 引擎核心(StelApp)在启动早期尚未就绪，命令会先返回 pending 不入队；
@@ -24494,35 +23907,6 @@ private loadPlanetPositions(): void {
       // 把整包响应(含 total/missing)打在一行里，避免被启动期日志冲掉
       hilog.info(0x0000, 'StellariumArkUI', 'selftest done %{public}s', JSON.stringify(r))
     }, 0, 100, 120)
-  }
-
-  @Builder
-  ephemerisRow(label: string, available: boolean, enabled: boolean, key: string) {
-    Row() {
-      Column({ space: 1 }) {
-        Text(label).fontSize(11).fontColor(available ? this.nmText() : this.nmSub()).width('100%')
-        Text(available ? (enabled ? '已安装 · 使用中' : '已安装 · 未启用') : '未安装').fontSize(9).fontColor(this.nmSub()).width('100%')
-      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-      Toggle({ type: ToggleType.Switch, isOn: enabled }).width(42).height(24).enabled(available)
-        .selectedColor(this.nmAccent()).onChange((value: boolean) => { this.setEphemerisEnabled(key, available, value) })
-    }.width('100%').padding({ left: 10, right: 8, top: 6, bottom: 6 })
-      .backgroundColor(available && enabled ? this.nmBg() : Color.Transparent)
-      .border({ width: 1, color: available ? this.nmBorder() : 'rgba(255,255,255,0.03)' })
-      .borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 4 })
-  }
-
-  @Builder
-  informationModeButton(mode: string, labelKey: string) {
-    SettingsChoiceButton({
-      label: I18n.t(labelKey),
-      active: this.informationMode === mode,
-      canPick: !this.informationSettingPending,
-      textColor: this.nmText(),
-      subColor: this.nmSub(),
-      activeColor: this.nmAccent(),
-      panelColor: this.nmBg(),
-      onPick: () => { this.selectSettingsChoice('information', mode) }
-    })
   }
 
   private settingsChoiceSelected(group: string, value: string): boolean {
@@ -24539,44 +23923,6 @@ private loadPlanetPositions(): void {
     else if (group === 'date') this.setConfigurationDateFormat(value)
     else if (group === 'time') this.setConfigurationTimeFormat(value)
     else if (group === 'startup') this.setStartupTimeSetting('startupMode', value)
-  }
-
-  @Builder
-  informationSwitchRow(label: string, key: string) {
-    Row() {
-      Text(label).fontSize(11).fontColor(this.nmText()).layoutWeight(1).maxLines(2)
-      Toggle({ type: ToggleType.Switch, isOn: this.informationMaskHas(key) }).width(42).height(24).selectedColor(this.nmAccent())
-        .enabled(this.informationMode === 'custom' && !this.informationSettingPending)
-        .onChange((value: boolean) => { this.setInformationField(key, value) })
-    }.width('100%').padding({ left: 10, right: 8, top: 5, bottom: 5 })
-      .backgroundColor(this.informationMode === 'custom' && this.informationMaskHas(key) ? this.nmBg() : Color.Transparent).border({ width: 1, color: this.nmBorder() })
-      .animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-      .borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
-  }
-
-  @Builder
-  mosaicCameraMetric(key: string) {
-    Column({ space: 4 }) {
-      Text(I18n.t('mosaic_camera_' + key)).fontSize(11).fontColor(this.nmSub())
-      Text((key === 'ra' ? this.mosaicCameraRA : key === 'dec' ? this.mosaicCameraDec : this.mosaicCameraRotation).toFixed(2) + '°')
-        .fontSize(14).fontColor(this.nmText())
-    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  navigationSwitchRow(label: ResourceStr, enabled: boolean, setting: string) {
-    Row() {
-      Text(label).fontSize(13).fontColor(this.nmText()).layoutWeight(1).maxLines(2)
-      Toggle({ type: ToggleType.Switch, isOn: enabled })
-        .width(46).height(28).selectedColor(this.nmAccent())
-        .onChange((value: boolean) => { this.setNavigationBoolean(setting, value) })
-    }
-      .width('100%').padding({ left: 10, right: 8, top: 7, bottom: 7 })
-      .backgroundColor(enabled ? 'rgba(107,163,214,0.12)' : this.nmBg())
-      .border({ width: 1, color: enabled ? 'rgba(107,163,214,0.18)' : this.nmBorder() })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .margin({ bottom: 6 })
-      .animation({ duration: 180, curve: Curve.EaseOut })
   }
 
   private panelTitle(): ResourceStr {
@@ -25401,7 +24747,7 @@ private loadPlanetPositions(): void {
     }.height(40).width('100%').padding({ left: 8, right: 6 })
       .backgroundColor('rgba(255,255,255,0.045)').borderRadius(UI_RADIUS_CONTROL).margin({ top: 4, bottom: 4 })
     if (this.skyCultureViewStore.detailsLoading && !this.skyCultureViewStore.detailsReady) {
-      this.graphLoadingRow(I18n.t('culture_loading'))
+      GraphLoadingRow({ label: I18n.t('culture_loading'), accentColor: this.nmAccent(), subColor: this.nmSub() })
     } else if (this.skyCultureViewStore.detailError.length > 0 && !this.skyCultureViewStore.detailsReady) {
       Text(this.skyCultureViewStore.detailError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8, right: 8 }).margin({ top: 6, bottom: 6 })
     } else if (this.skyCultureViewStore.detailsReady && this.currentSkyCultureId.length > 0) {
@@ -25548,7 +24894,7 @@ private loadPlanetPositions(): void {
               .onClick(() => { this.loadSkyCultureTerritoryMap() })
           }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ top: 3, bottom: this.skyCultureTerritoryMapExpanded ? 4 : 2 })
           if (this.skyCultureTerritoryMapLoading) {
-            this.graphLoadingRow('正在绘制文化区域地图…')
+            GraphLoadingRow({ label: '正在绘制文化区域地图…', accentColor: this.nmAccent(), subColor: this.nmSub() })
           } else if (this.skyCultureTerritoryMapError.length > 0) {
             Text(this.skyCultureTerritoryMapError).fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 })
           } else if (this.skyCultureTerritoryMapExpanded) {
@@ -26029,7 +25375,7 @@ private loadPlanetPositions(): void {
       }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(80,140,200,0.08)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 7 })
     }
     if (this.skyCultureListLoading) {
-      this.graphLoadingRow(I18n.t('culture_catalog_reading'))
+      GraphLoadingRow({ label: I18n.t('culture_catalog_reading'), accentColor: this.nmAccent(), subColor: this.nmSub() })
     } else if (this.filteredSkyCultureList().length === 0) {
       Text(I18n.t('culture_no_matching') + '。' + (this.skyCultureTimeFiltering ? '请调整年份、类型或取消年代筛选。' : '请调整搜索或类型筛选。'))
         .fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10, top: 14, bottom: 14 })
