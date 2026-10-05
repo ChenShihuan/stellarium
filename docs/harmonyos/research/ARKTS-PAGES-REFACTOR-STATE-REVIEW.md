@@ -1,9 +1,9 @@
 # pages/ 重构终态架构评审（MainWindowNativeNode.ets 及其拆分结构）
 
 - **状态：** 待用户评审。本文只做分析与评价，未改动任何源码。
-- **日期：** 2026-10-03
-- **评审对象：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets` 当前形态（18,784 行）及
-  `state/`、`panels/`、`bridge/`、`common/` 四个拆分目录的 156 个文件（合计 ≈19,508 行）。
+- **日期：** 2026-10-04（§2.7 域状态下沉完成后首轮复测）
+- **评审对象：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets` 当前形态（**18,582 行**）及
+  `state/`（**48 文件 / 3,075 行**）、`panels/`、`bridge/`、`common/` 拆分目录。
 - **对照基准：** `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md`（§3 目标架构、§13 执行记录）。
 - **数据来源：** 全部数字为本轮在当前 HEAD 上实测（命令见附录），非计划文档转录。
 
@@ -16,20 +16,21 @@
 
 | 指标 | 重构前（计划 §1.2 实测） | 当前实测 | 变化 |
 |---|---:|---:|---|
-| 主文件行数 | 32,774 | **18,784** | −42.7% |
+| 主文件行数 | 32,774 | **18,582** | −43.3% |
 | `@Builder` | 145 | **3** | −97.9% |
-| `@State` 字段 | 1,047 | **333** | −68.2% |
-| `private` 方法 | ≈1,109 | **909** | −18% |
+| `@State` 字段 | 1,047 | **132** | −87.4% |
+| `private` 方法 | ≈1,109 | **940** | −15% |
 | `setInterval` | 20 | **19** | 定时器全部宿主收口 |
-| `panelContent` 体量 | 4,707 | **1,046** | −77.8% |
-| 组件/Store 文件 | 0 | **156**（panels 119 / state 27 / bridge+common 10） | — |
+| `panelContent` 体量 | 4,707 | **898** | −80.9% |
+| 组件/Store 文件 | 0 | **state 48**（+ panels 119 / bridge+common 10） | — |
 
-> 注：计划文档终态记载 18,593 行；当前 18,784 行的 +191 行来自**队列收口之后**的独立 fix 提交
-> （`3b323f764a` 启动字幅收敛、`2e9e05896b` Dock 重建修复、`f3f5d05e87` 详情卡页头同步等），
-> 属于重构完成后在**新结构上**的正常迭代，不是队列回退。
+> 注：计划终态记载 18,593 行。2026-10-04 完成 **§2.7「域状态下沉」**后，宿主 `@State` 由 333 → **132**
+> （46 个 store 实例 + 86 个刻意保留的裸字段，登记于 §2.7.1），`state/` 由 27 → **48** 文件；
+> 其间另有若干 post-queue fix（启动字幅收敛、Dock 重建、详情卡页头同步等）。
+> 这些都属于重构完成后在**新结构上**的正常迭代，不是队列回退。
 
-主文件从「单体上帝组件」转型为**页面壳/胶水层**：状态所有权已下沉到 26 个 `@Observed` store，
-UI 已下沉到 119 个组件文件，宿主保留的是生命周期编排、桥薄委托、面板路由与回调仓库。
+主文件从「单体上帝组件」转型为**页面壳/胶水层**：状态所有权已下沉到 **46 个 `@Observed` store 实例**
+（`state/` 共 48 文件），UI 已下沉到 119 个组件文件，宿主保留的是生命周期编排、桥薄委托、面板路由与回调仓库。
 
 ---
 
@@ -38,22 +39,20 @@ UI 已下沉到 119 个组件文件，宿主保留的是生命周期编排、桥
 ### 2.1 物理分区（实测行号）
 
 ```
-L1–199      import 区 + 文件级常量（SKY_TEXTURE_STATUS_* / BODY_DETAIL_TEXTURE_PATHS）
-L199        @Component struct WindowNativeNode
-L201–1287   字段声明区（≈1,087 行）
-              ├─ @State 333 个：store 实例（27 个）+ 壳层/布局状态 + 面板路由
-              └─ private 字段 333 个：定时器句柄、请求序号、手势草稿、
-                 渲染管线逐帧字段（objectInspectorModel* 等）
-L1288–1295  aboutToAppear：取 createInfo → 隐私门控启动（startPageAfterPrivacyIfNeeded）
-L1297–1386  隐私回调 + CLI UI 事件分发（onCliUiEventChanged：guide/satellite/search 联动）
-L1786       aboutToDisappear：全量定时器/传感器 stop 收口
-L2603–2698  桥薄委托层（callNative / callNativeFire / callNativeWhenReady / callInteractive
+L1–224      import 区 + 文件级常量（SKY_TEXTURE_STATUS_* / BODY_DETAIL_TEXTURE_PATHS）
+L225        @Component struct WindowNativeNode
+L226–1146   字段声明区（≈920 行）
+              ├─ @State 132 个：store 实例（46 个）+ 壳层/布局/路由/逐帧裸字段（86 个，见 §2.7.1）
+              └─ private 字段：定时器句柄、请求序号、手势草稿、渲染管线逐帧字段
+L1147       aboutToAppear：取 createInfo → 隐私门控启动（startPageAfterPrivacyIfNeeded）
+L1642       aboutToDisappear：全量定时器/传感器 stop 收口
+L2471–2566  桥薄委托层（callNative / callNativeFire / callNativeWhenReady / callInteractive
             → 全部转发 bridge/BridgeClient，宿主不 import libentry.so）
-L14291      build()：根 Stack（五类结构，见 2.3）
-L17076      @Builder floatingPanel()（56 行）
-L17133      @Builder compactPanel()（47 行）
-L17181      @Builder panelContent()（1,046 行，33 分支 if/else 组件装配）
-L18295–尾部  残留领域方法（JD 输入处理、handleChip、panelTitle/Subtitle、图层预设、
+L14190      build()：根 Stack（667 行，五类结构见 2.3）
+L17103      @Builder floatingPanel()
+L17160      @Builder compactPanel()
+L17208      @Builder panelContent()（898 行，33 分支 if/else 组件装配）
+L18106–尾部  残留领域方法（JD 输入处理、handleChip、panelTitle/Subtitle、图层预设、
             viewTab/configTab 切换动画）
 ```
 
@@ -97,58 +96,58 @@ Stack（根）
 ### 2.5 总体心智模型：这不是 UI 文件，而是"控制器"
 
 主文件已从「单体上帝组件」转型为 **Composition Root + 事件路由器 + 领域编排层**
-（相当于 Activity 与全部 ViewModel 的合体）。UI 树与状态所有权已搬走（119 组件 + 26 store），
-留下的是**控制器质量**：940 个结构成员方法（含 `build`/生命周期；其中 `private` 909 个）
-服务约 15 个领域。用一句话读它：**"接线层声明 UI，其余全是把外部事件翻译成桥调用与状态写入"**。
+（相当于 Activity 与全部 ViewModel 的合体）。UI 树与状态所有权已搬走（119 组件 + 46 store），
+留下的是**控制器质量**：**940 个 `private` 方法**服务约 15 个领域。
+用一句话读它：**"接线层声明 UI，其余全是把外部事件翻译成桥调用与状态写入"**。
 
-### 2.6 纵向五层解剖（18,784 行的构成，实测）
+### 2.6 纵向五层解剖（18,582 行的构成，实测）
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ L1 接线层        ≈ 2,000 行  11%                             │
-│   import 区(199) + build()(660) + 3 个 @Builder(1,153)       │
+│ L1 接线层        ≈ 1,800 行  10%                             │
+│   import 区(224) + build()(667) + 3 个 @Builder(panelContent 898) │
 │   纯声明式：组件装配、@Prop 参数快照传递，不含业务逻辑          │
 ├──────────────────────────────────────────────────────────────┤
-│ L2 状态表面      ≈ 1,090 行  6%（L201–1287 字段区）           │
-│   27 个 store 实例 + 333 @State + 333 private                 │
+│ L2 状态表面      ≈ 920 行  5%（L226–1146 字段区）             │
+│   46 个 store 实例 + 132 @State + 裸字段                       │
 │   private 字段三类：定时器句柄 / 请求序号 / 手势草稿            │
 ├──────────────────────────────────────────────────────────────┤
 │ L3 事件入口层    ≈ 2,000 行  11%（六条入口通道，见 2.8）       │
 │   lifecycle / touch / CLI / sensor / fold / timer             │
 ├──────────────────────────────────────────────────────────────┤
-│ L4 领域编排层    ≈ 12,500 行  67%  ← 体积的真正来源            │
+│ L4 领域编排层    ≈ 13,800 行  74%  ← 体积的真正来源            │
 │   约 15 个领域簇 × 每簇一套 loader/handler/publisher           │
-│   909 个 private 方法的主体在这里（见 2.9 域地图）             │
+│   940 个 private 方法的主体在这里（见 2.9 域地图）             │
 ├──────────────────────────────────────────────────────────────┤
-│ L5 桥委托层      ≈ 30 行  0.2%（L2603–2698）                  │
+│ L5 桥委托层      ≈ 30 行  0.2%（L2471–2566）                  │
 │   callNative/callNativeFire/callNativeWhenReady/             │
 │   callInteractive → 全部转发 bridge/BridgeClient              │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**核心认知：67% 的行数是 L4，这不是"没拆干净"**，而是 ArkUI V1 的结构性约束——
+**核心认知：约 3/4 的行数是 L4，这不是"没拆干净"**，而是 ArkUI V1 的结构性约束——
 没有 Composition 函数、组件回调必须是宿主方法、`@Builder` 不能传子组件
 （规则 9），因此"控制器代码"在 V1 下**只能**长在宿主 struct 上。
 
-**最大方法 TOP 8（实测）**：`panelContent`(1,047) / `build`(660) / `handleSkyTouch`(282) /
+**最大方法 TOP 8（实测）**：`panelContent`(898) / `build`(667) / `handleSkyTouch`(282) /
 `onCliUiEventChanged`(266) / `applySelectedObject`(230) / `refreshStateNow`(183) /
 `refreshObjectInspectorMedia`(175) / `refreshObjectDetailConnector`(138)。
 前两个是接线，其余全部是领域编排——印证 L4 主导。
 
-### 2.7 两种组件接入风格：Store 风格 vs Prop 风格（解释残留 333 @State）
+### 2.7 两种组件接入风格：Store 风格 vs Prop 风格（历史分类，2026-10-04 已收敛）
 
-拆分后的组件有两种接法，这是理解"为何还有 1.8 万行"的关键：
+拆分期曾并存两种接法；**2026-10-04 的"域状态下沉"把 Prop 风格域全部转为 Store 风格**，
+宿主 `@State` 由 333 → **132**（46 个 store + 86 个刻意保留的裸字段，见 §2.7.1）。下表为历史分类留档：
 
-| 风格 | 机制 | 适用域 | 例子 |
+| 风格 | 机制 | 原适用域 | 现状 |
 |---|---|---|---|
-| **Store 风格** | 状态入 `@Observed` store，组件 `@ObjectLink` 实时订阅 | 队列按体积优先处理过的大域 | `AstroPanel`（`@ObjectLink` ×3）、`LayersPanel`、`TelescopePanel` |
-| **Prop 风格** | 状态**仍留宿主** `@State`，以 `@Prop` 快照 + 回调回注（单向数据流） | 切片时"搬状态会牵动 160+ 处引用"的域 | `SatellitesPanel`（25+ 个 `sat*` 字段留宿主）、`ScriptsPanel`（录制/回放引擎）、navStars / archaeo / mosaic / catalogs / meteorShowers / scenery3d |
+| **Store 风格** | 状态入 `@Observed` store，组件 `@ObjectLink` 实时订阅 | 队列按体积优先处理过的大域（`AstroPanel`/`LayersPanel`/`TelescopePanel`） | 保持 |
+| **Prop 风格** | 状态**仍留宿主** `@State`，`@Prop` 快照 + 回调回注 | 卫星 / 脚本录制 / navStars / archaeo / mosaic / catalogs / meteorShowers / scenery3d | **已建 store**（`SatelliteStore`/`ScriptStore`/`NavStarsStore`/`ArchaeoStore`/`MosaicStore`/`CatalogStore`/`MeteorStore`/`SceneryStore`…），转为 Store 风格 |
 
-组件源码注释自证该取舍：`panels/panels/SatellitesPanel.ets` 头注
+**历史取舍依据**（组件头注）：`panels/panels/SatellitesPanel.ets` 曾注
 "*本片不搬状态（搬动会牵动 160 处引用），全部以 @Prop 快照传入*"。
-
-**架构含义：** Prop 风格域的 **UI 已解耦，但刷新粒度仍是宿主级**（任一状态变更仍触发宿主重渲染），
-且它们的 `@State` 就是 333 个残留字段的主要来源。**这些域是后续继续瘦身（或翻 V2）最明确的目标清单。**
+**收敛后的含义：** 全部域的**状态所有权都已在 store**，"刷新范围=订阅者"覆盖全应用；
+宿主仅剩 §2.7.1 登记的机制类 / 高频逐帧 / 跨域共用裸字段（刻意不搬）。
 
 #### 2.7.1 宿主保留字段登记（不迁移）
 
@@ -240,11 +239,11 @@ handleOverlayTouch → isUiPoint(84) 命中路由
 | **时间** | **6 个 store + Controller**（拆得最彻底） | 仅剩时间轮转发与 JD 输入处理 |
 | **搜索** | SearchStore | `searchObject`(70)、分类分页 `loadMoreCategoryObjects`(51) |
 | **星空文化** | 3 个 store | `loadSkyCultureDetails`(69)、美术资源管线(71) |
-| **卫星** | **无 store，25+ 字段留宿主**（Prop 风格） | `loadSatellites`(55)、`publishSatellitePanelState` |
+| **卫星** | **SatelliteStore**（原 25+ 字段已下沉） | `loadSatellites`(55)、`publishSatellitePanelState` |
 | **望远镜/目镜** | TelescopeStore | `loadOculars`(75)、lx200 goto/sync/abort + 实时位置定时器 |
 | **位置** | LocationStore + LocationPickerStore | `setLocation`(47)、`useDeviceLocation`(43)、增量扫描(74) |
 | **CLI 入口** | — | `onCliUiEventChanged`(266) + `publish*` 系列 |
-| **设置/杂项面板** | 留宿主（Prop 风格） | navStars / archaeo / mosaic / catalogs / meteor / scenery3d 的字段 + loader |
+| **设置/杂项面板** | 各自 store（NavStars/Archaeo/Mosaic/Catalog/Meteor/Scenery…） | 对应 loader（多数已转 B1/B2，见 §2.13） |
 
 ### 2.10 横切机制与阅读导航
 
@@ -333,7 +332,7 @@ private jumpToWutTarget(target: WutTarget): void {
 无桥（`callNative*`/`callInteractive`）、无路由（`openPanel`/`closePanel`/`setPanel`/`activePanel`）、
 无定时器、无 `AppStorage`/`localStorage`、无 `hilog`。命令见附录。
 
-**结果（实测，宿主 941 个 private 方法）：**
+**结果（实测，宿主 940 个 private 方法）：**
 
 | 类别 | 数量 |
 |---|---:|
@@ -392,10 +391,10 @@ touchWindowY, touchScreenX
    即可减少宿主 91 个方法与对应端口项，**不需要 V2、不需要注入**。建议作为独立"低风险瘦身"切片先做。
 2. **A2 的 214 个**是 §7.5 Phase A/C 的标的：几何/布局类随其渲染组件下沉（组件本就持有 `skyWidth`、
    `bottomCardIndex` 等所需数据）；文案/命名类随域 store 下沉。
-3. A/B/C 合计说明：宿主 941 个 private 方法里，**约 1/3 是"本可归组件"的派生逻辑**，
+3. A/B/C 合计说明：宿主 940 个 private 方法里，**约 1/3 是"本可归组件"的派生逻辑**，
    这是"宿主继续瘦身"最明确、最有据的空间（强于 §5 的定性描述）。
 
-### 2.13 B 类（域内加载器）可下沉端口清单：69 个 `load*` 的 V1 可沉性
+### 2.13 B 类（域内加载器）可下沉端口清单：70 个 `load*` 的 V1 可沉性（2026-10-04 复测）
 
 **B 类** = 域内加载器（`load*`）：只做"桥调用 → 解析回包 → 写本域状态"。
 **V1 下沉机制**（计划 §13.1 规则 6 明确授权："跨域/桥/定时器依赖用注入解决，不硬搬"；
@@ -408,35 +407,38 @@ touchWindowY, touchScreenX
 |---|---|
 | 仅桥 + 本域 store | **B1 直接沉** |
 | ＋本域助手 / 他域 store 引用 / CLI `publish*` | **B2 注入依赖** |
-| ＋写宿主 `@State` 字段 / 面板路由 / 定时器 | **B3 暂留**（多为"状态尚未成域"） |
+| ＋写宿主 `@State` 字段 / 面板路由 / 定时器 | **B3 暂留**（多为写"刻意保留"的裸字段） |
 
-**总账（实测 69 个 `private load*`）：**
+**总账（实测 70 个 `private load*`，2026-10-04 §2.7 域状态下沉后复测）：**
 
 | 判定 | 数量 | 含义 |
 |---|---:|---|
-| **B1 直接沉** | **13** | 域 store 已存在，只需注入 `CommandPort` 即可搬 |
-| **B2 注入依赖** | **30** | 需一并注入本域助手/他域引用/publish 回调 |
-| **B3 暂留** | **26** | 加载器直接写宿主 `@State` → **前置：先把该域状态抽成 store**（即 §2.7 的 Prop 风格域） |
+| **B1 直接沉** | **24** | 域 store 已存在，只需注入 `CommandPort` 即可搬 |
+| **B2 注入依赖** | **35** | 需一并注入本域助手/他域引用/publish 回调 |
+| **B3 暂留** | **11** | 加载器写 §2.7.1 保留的裸宿主字段（请求序号/跨域共用/逐帧）→ 需拆分或注入该字段 |
 
-#### B1 直接沉（13 个，无前置，最先做）
+> **变化（vs 上一版 69 = 13/30/26）**：§2.7 把 Prop 风格域的状态抽成 store 后，
+> 原 B3 的 15 个加载器（卫星/考古线/导航星/拼贴/流星/星表/插件/命令台/星云…）已转为 B1/B2；
+> 余下 11 个 B3 只因仍写**刻意保留**的裸宿主字段（§2.7.1）。
 
-| 方法 | 行 | 目标 store |
-|---|---:|---|
-| `loadOculars` | 75 | TelescopeStore |
-| `loadConstellationNavigation` | 27 | SearchStore |
-| `loadPointerCoordinates` | 23 | OverlayStore |
-| `loadSavedLocations` | 20 | LocationStore |
-| `loadEquationOfTime` | 19 | EquationOfTimeStore |
-| `loadLandscapeList` | 12 | LayerViewStore |
-| `loadOrbitDisplaySettings` | 12 | LayerViewStore |
-| `loadTrailDisplaySettings` | 13 | LayerViewStore |
-| `loadPlanetList` | 11 | SessionToolStore |
-| `loadAngleMeasure` | 11 | ToolsStore |
-| `loadAboutInfo` | 9 | ToolsStore |
-| `loadLog` | 7 | ToolsStore |
-| `loadSkyCultureConstellationSelectionFlags` | 8 | SkyCultureSettingsStore |
+#### B1 直接沉（24 个，无前置，最先做）
 
-#### B2 注入依赖（30 个，按簇）
+| 方法 | 行 | 目标 store | 方法 | 行 | 目标 store |
+|---|---:|---|---|---:|---|
+| `loadOculars` | 75 | TelescopeStore | `loadCommandCatalog` | 28 | CommandStore |
+| `loadPluginList` | 34 | PluginStore | `loadConstellationNavigation` | 27 | SearchStore |
+| `loadMeteorShowers` | 33 | MeteorStore | `loadMosaicCamera` | 24 | MosaicStore |
+| `loadNavStars` | 31 | NavStarsStore | `loadPointerCoordinates` | 23 | OverlayStore |
+| `loadArchaeoLines` | 30 | ArchaeoStore | `loadSavedLocations` | 20 | LocationStore |
+| `loadEquationOfTime` | 19 | EquationOfTimeStore | `loadObjectInfo` | 18 | ObjectDetailStore |
+| `loadStarCatalogs` | 18 | CatalogStore | `loadNebulaTextureStatus` | 15 | NebulaTextureStore |
+| `loadTrailDisplaySettings` | 13 | LayerViewStore | `loadLandscapeList` | 12 | LayerViewStore |
+| `loadOrbitDisplaySettings` | 12 | LayerViewStore | `loadAngleMeasure` | 11 | ToolsStore |
+| `loadPlanetList` | 11 | SessionToolStore | `loadSatelliteSources` | 10 | SatelliteStore |
+| `loadAboutInfo` | 9 | ToolsStore | `loadSkyCultureConstellationSelectionFlags` | 8 | SkyCultureSettingsStore |
+| `loadLog` | 7 | ToolsStore | `loadRecordings` | 6 | ScriptStore |
+
+#### B2 注入依赖（35 个，按簇）
 
 **Astro 簇（19 个）**——共同依赖 `AstroStore`/`WutStore` + Astro 域助手
 （`updateAstroCalcSnapshot` / `beginGraphLoad` / `finishGraphLoad` / `resolveGraphStartJD` /
@@ -448,41 +450,45 @@ touchWindowY, touchScreenX
 `loadPlanetaryTransits` `loadPlanetCalc` `loadPlanetPairDistance` `loadPlanetTimeSeries` `loadRTS`
 `loadRtsCalendar` `loadTonightAstro` `loadWutTargets`
 
-**其余（11 个）：**
+**其余（16 个）：**
 
 | 方法 | 行 | 目标 store | 额外注入 |
 |---|---:|---|---|
 | `loadObjectInspectorModelRawTexture` | 72 | （媒体管线） | `commit/fail/decode` 媒体助手 |
+| `loadConfigurationSettings` | 49 | Ephemeris+InfoWindow+Navigation+TimeSettings+ViewSettings（5 store） | `applySelectedInfoMode`、`applyTimeSettings` |
+| `loadSkyCultureList` | 42 | SkyCultureViewStore | `loadSkyCultureDetails` |
+| `loadSkyCultureVisualSettings` | 40 | SkyCultureSettingsStore | `skyCultureActiveColorTarget` |
+| `loadObjectCatalogCategories` | 32 | CatalogStore + SearchStore | `catalogIconForModule`、`loadCategoryObjects`、`publishSearchBrowserState` |
+| `loadSkyCultureTerritoryMap` | 21 | SkyCultureSettingsStore | `drawSkyCultureTerritoryMap` |
+| `loadSkyCultureMakerDraft` | 21 | SkyCultureMakerStore | `applySkyCultureMakerDraft`、`ensurePluginLoaded`、`skyCultureMakerDraftFromResponse` |
+| `loadObservingListFromStorage` | 19 | ObservingListStore | `getUIContext`、`parseObservingList` |
 | `loadObserverInfo` | 17 | LocationPicker + SessionTool + SkyCultureSettings（3 store） | 时区助手 |
-| `loadSelectedSatellitePasses` | 5 | ObjectDetailStore | `requestSatellitePasses`、`selectedObjectIsArtificialSatellite` |
-| `loadTimeExtras` | 9 | TimeStore | `applyAtmosphereResponse`、`syncNightModeFromEngine` |
-| `loadTelescopeControlStatus` | 13 | TelescopeStore | `lx200Payload`、`scheduleTelescopeLivePosition`（**含定时器调度 → store 需自持 start/stop**） |
 | `loadBookmarks` | 15 | BookmarkStore | `saveBookmarksToStorage` |
+| `loadTelescopeControlStatus` | 13 | TelescopeStore | `lx200Payload`、`scheduleTelescopeLivePosition`（**含定时器 → store 需自持 start/stop**） |
 | `loadBookmarksFromStorage` | 13 | BookmarkStore | `getUIContext` |
 | `loadRecordingByName` | 11 | （录制域） | `flashHint` |
-| `loadSkyCultureMakerDraft` | 21 | SkyCultureMakerStore | `applySkyCultureMakerDraft`、`ensurePluginLoaded`、`skyCultureMakerDraftFromResponse` |
-| `loadSkyCultureTerritoryMap` | 21 | SkyCultureSettingsStore | `drawSkyCultureTerritoryMap` |
-| `loadSkyCultureVisualSettings` | 40 | SkyCultureSettingsStore | `skyCultureActiveColorTarget` |
+| `loadTimeExtras` | 9 | TimeStore | `applyAtmosphereResponse`、`syncNightModeFromEngine` |
+| `loadScriptList` | 8 | ScriptStore | `setScriptMetadata` |
+| `loadSelectedSatellitePasses` | 5 | ObjectDetailStore | `requestSatellitePasses`、`selectedObjectIsArtificialSatellite` |
 
-#### B3 暂留（26 个）——**前置：先把域状态抽成 store**，之后自动降为 B1/B2
+#### B3 暂留（11 个）——仍写 §2.7.1 保留的裸宿主字段
 
-| 域（宿主 `@State` 未成 store） | 加载器 |
-|---|---|
-| 卫星（20+ 字段） | `loadSatellites`(55L) `loadSatelliteSources` |
-| 考古线（18 字段） | `loadArchaeoLines` |
-| 导航星（14 字段） | `loadNavStars` |
-| 拼贴（10 字段） | `loadMosaicCamera` |
-| 流星（8 字段） | `loadMeteorShowers` |
-| 地景3D / 星云 / 插件 / 命令台 | `loadScenery3d` `loadNebulaTextureStatus` `loadPluginList` `loadCommandCatalog` |
-| 星表（含健康） | `loadStarCatalogs` `loadCatalogHealth` |
-| 极轴镜 / 视频录制 | `loadPolarScopeData` `loadVideoRecordingState` |
-| 脚本 / 录制列表 | `loadScriptList` `loadRecordings` |
-| 搜索（4） | `loadCategoryObjects` `loadMoreCategoryObjects` `loadObjectCatalogCategories` `loadSearchHistoryFromStorage` |
-| 设置（写 21 个宿主字段） | `loadConfigurationSettings` |
-| Astro 上下文 / 月相 | `loadAstroCalcContext` `loadMoonPhases` |
-| 观测列表 / 星空文化列表·详情 | `loadObservingListFromStorage` `loadSkyCultureList` `loadSkyCultureDetails` |
+| 加载器 | 行 | 目标 store | 仍写的保留裸字段 |
+|---|---:|---|---|
+| `loadSkyCultureDetails` | 69 | SkyCultureView + Settings | `skyCultureArtStates`（渐进写入） |
+| `loadSatellites` | 55 | SatelliteStore | `satelliteListElapsedMs` / `satelliteLoadTimer`（计时器） |
+| `loadMoreCategoryObjects` | 51 | SearchStore | `categoryOffset`（跨页游标） |
+| `loadCategoryObjects` | 35 | SearchStore | `categoryOffset`、`satelliteCatalogReady` |
+| `loadMoonPhases` | 35 | AstroStore | `moonPhaseLoadingDays`（请求进度） |
+| `loadAstroCalcContext` | 35 | AstroStore | `astroContextRequestPending`（进行中标志） |
+| `loadPolarScopeData` | 19 | PolarScopeStore | `polarScopeRequestPending`（进行中标志） |
+| `loadVideoRecordingState` | 14 | ScriptStore | `stopVideoStatePolling`（定时器收口） |
+| `loadSearchHistoryFromStorage` | 13 | （搜索历史） | `searchHistory`（跨域共用） |
+| `loadScenery3d` | 12 | SceneryStore | `scenery3dCurrentId`（引擎自用，已登记约定） |
+| `loadCatalogHealth` | 9 | CatalogStore + SatelliteStore | `catalogHealthLoaded` / `catalogManifestPresent`（跨域共用） |
 
-> B3 与 §2.7 的 Prop 风格域清单**完全吻合**：不是"加载器本身难搬"，而是它们的**状态还压在宿主**。
+> B3 只剩"加载器要写某个**刻意保留**的宿主裸字段"这一类：把该字段一并处理（搬入 store 或注入端口）
+> 即可降为 B1/B2。**已不再是"域状态还没建 store"**——§2.7 已把该前置条件清空。
 
 #### V1 机制（enabler，简短）
 
@@ -502,10 +508,10 @@ store 仍不碰 NAPI（只依赖接口，可用假 port 单测）。
 
 #### 分阶段建议
 
-1. **B1 的 13 个**——无前置，最先（`loadOculars` 75 行收益最大）。
+1. **B1 的 24 个**——无前置，最先（`loadOculars` 75 行收益最大）。
 2. **B2 Astro 簇（19）**——一域一片；Astro 助手多为域内逻辑，同片搬。
-3. **B2 其余（11）**——逐域。
-4. **B3 的 26 个**——先按 §7.5 Phase A 建域 store（卫星域优先），加载器随后自然转 B1/B2。
+3. **B2 其余（16）**——逐域。
+4. **B3 的 11 个**——处理其保留裸字段（搬入 store 或注入端口）后降为 B1/B2。
 
 ---
 
@@ -515,7 +521,7 @@ store 仍不碰 NAPI（只依赖接口，可用假 port 单测）。
 
 | 目录 | 文件数 | 行数 | 内容 |
 |---|---:|---:|---|
-| `state/` | 27 | 2,483 | 26 个 `@Observed` store + `TimeWheelController`（普通类） |
+| `state/` | **48** | **3,075** | `@Observed` store 集合（宿主持有 46 个实例）+ `TimeWheelController`（普通类） |
 | `panels/panels/` | 25 | 3,830 | **一面板一组件**（`panelContent` 分支的落地件，59–548 行/文件） |
 | `panels/shell/` | 13 | 1,707 | 六壳 + Dock/PanelHeader/把手等壳件 |
 | `panels/<domain>/**` | 81 | 11,225 | 领域子组件（astro/object/search/time/layers/skyculture/telescope/tools/overlay/view/location/satellite/sensors/settings/guide/common） |
@@ -554,7 +560,7 @@ store 仍不碰 NAPI（只依赖接口，可用假 port 单测）。
 |---|---|---|---|
 | 1 | `window/shell/`、`window/overlay/`（窗口域独立目录） | `panels/shell/`、`panels/overlay/` | **可接受**。壳层/叠层与面板同属 `panels/` 弱化了"跨面板常驻 vs 一次一个"的语义边界，但避免了一个只有十余文件的新顶层目录；根 `AGENTS.md` 已固化此约定，成本是一次性认知 |
 | 2 | `panels/PanelHost.ets` 表驱动 + 懒加载 | `panelContent()` 保留 if/else（1,046 行），每分支已是组件 | **部分未达**，见 4.2-3 |
-| 3 | `state/` 13 个 store（Time/Panel/Search/Astro/SkyView/Object/SkyCulture/Satellite/Sensor/Script/Telescope/Session/Tool） | 27 个，粒度更细（Gyro/SessionTool/Dock/ObjectMedia/Overlay/LocationPicker/LayerView…） | **优于蓝图**。细粒度匹配"刷新范围=订阅者"的性能论据（如 `DockStore` 12 行让 Dock 高亮不再冻结）；代价是 import 区变长，但可接受 |
+| 3 | `state/` 13 个 store（Time/Panel/Search/Astro/SkyView/Object/SkyCulture/Satellite/Sensor/Script/Telescope/Session/Tool） | **48 文件 / 47 store**，粒度更细（Gyro/SessionTool/Dock/ObjectMedia/Overlay/LocationPicker/LayerView/Satellite/Archaeo/NavStars/Mosaic/Meteor/Catalog/Plugin/Command/Scenery…） | **优于蓝图**。细粒度匹配"刷新范围=订阅者"的性能论据（如 `DockStore` 12 行让 Dock 高亮不再冻结）；代价是 import 区变长，但可接受 |
 | 4 | `panels/<domain>/` 平级领域目录 | 出现 `panels/panels/` 双层目录（Phase 4 面板级组件） | **命名笨拙但语义自洽**：`panels/panels/XxxPanel.ets` = 面板分支本体，`panels/<domain>/` = 面板内/跨面板的领域子组件。见 4.2-1 |
 | 5 | `panels/common/HierColumn.ets` 等通用件 | 实际在 `panels/common/`（1 个）+ `common/ui/`（7 个） | 轻微分裂：通用件在两处。见 4.2-4 |
 | 6 | `bridge/BridgeClient.ets` + 后续 `time.ts/astro.ts` 按域类型化方法 | 仅 `BridgeClient`（51 行，request/send/requestWhenReady/requestInteractive） | 按域类型化未做，但宿主 195 个调用点已全部经薄委托走唯一出口，契约（payload 不变）达成；后续类型化属可选优化 |
@@ -597,11 +603,11 @@ Dock/PanelHeader 等 13 件已全部组件化，`build()` 内只保留"三选一
 （规则 9 约束 `this.panelContent()` 必须留在宿主）。叠层（Phase 5）在 `panels/overlay/`，
 zIndex/HitTestMode 契约由 `specs/UI-ARCHITECTURE.md` §3/§6 锚定。**结构健康。**
 
-**6. 宿主仍是 18,784 行 —— 数字未达"瘦身"直觉，但性质已变。**
-- 909 个 private 方法中，大量是"组件回调实现 + 桥调用编排"，它们**必须**留在
+**6. 宿主仍是 18,582 行 —— 数字未达"瘦身"直觉，但性质已变。**
+- 940 个 private 方法中，大量是"组件回调实现 + 桥调用编排"，它们**必须**留在
   某个地方；ArkUI V1 无 Composition 函数，回调仓库归宿主是模式内代价。
-- 333 个 @State 中 27 个是 store 实例（供 `@ObjectLink` 初始化的必要形态，规则 1），
-  其余是壳层/路由/逐帧快照——均已无法成域下沉（下沉即需要新的注入层）。
+- 132 个 @State 中 46 个是 store 实例（供 `@ObjectLink` 初始化的必要形态，规则 1），
+  余 86 个是壳层/路由/逐帧快照——均已按 §2.7.1 登记为刻意保留（下沉需新的注入层）。
 - **判断：宿主已到"组件化模式下的合理稳态"**。进一步减行需要翻 V2
   （计划 §8.2 已论证：拆分后可按模块逐个翻代，把大爆炸变成十几次小提交），
   属于后续独立决策，不在本队列。
@@ -637,15 +643,15 @@ zIndex/HitTestMode 契约由 `specs/UI-ARCHITECTURE.md` §3/§6 锚定。**结�
 
 1. **拆分方式正确且已闭环**：六条模式（同片搬迁/注入/逐帧隔离/消灭参数化 builder/
    先清死码/高频隔离）全部经真机验证并固化在计划 §13.1，契约护栏全绿。
-2. **路径体系与蓝图三处偏差均为理性取舍**（`window/`→`panels/shell`、13 store→27 store、
+2. **路径体系与蓝图三处偏差均为理性取舍**（`window/`→`panels/shell`、13 store→48 文件 / 47 store、
    平级→`panels/panels` 双层），已由根 `AGENTS.md` 固化为现行约定；无功能性代价。
 3. **唯一未达的目标架构项**是 `PanelHost` 表驱动+懒加载；按当前面板规模与入参异构度，
    维持 if/else 是合理决策，已列入风险登记带触发条件。
-4. **宿主 18,784 行是组件化模式的合理稳态**，继续减行的下一步是"按模块逐个翻 V2"
+4. **宿主 18,582 行是组件化模式的合理稳态**，继续减行的下一步是"按模块逐个翻 V2"
    （计划 §8.2 的既定路线），属独立决策，建议另行立项。
-5. **两种接入风格并存（§2.7）**：Store 风格域已做到"刷新范围=订阅者"；Prop 风格域
-   （卫星 / 脚本录制 / 导航星 / 考古线 / 拼贴相机 / 星表设置）UI 已解耦，但状态与刷新仍集中在宿主，
-   既是残留 333 个 `@State` 的主要来源，也是后续继续瘦身或逐域翻 V2 的**优先目标清单**。
+5. **域状态下沉已完成（§2.7）**：Prop 风格域全部转为 Store 风格，宿主 `@State` 333 → 132
+   （46 store + 86 刻意保留，§2.7.1）；"刷新范围=订阅者"已覆盖全应用。
+   剩余 A 类 305 / B 类 70 的 V1 下沉是**独立于 V2 的可选瘦身项**（§2.12 / §2.13）。
 
 ---
 
@@ -661,29 +667,18 @@ zIndex/HitTestMode 契约由 `specs/UI-ARCHITECTURE.md` §3/§6 锚定。**结�
 
 | 装饰器/模式 | 数量 | 说明 |
 |---|---:|---|
-| `@Component` / `@ComponentV2` | **180 / 0** | 纯 V1 |
-| `@State` | **402** | 宿主 333 + 组件 69 |
-| `@Prop` | **1,324** | 参数快照负担 |
+| `@Component` / `@ComponentV2` | **纯 V1 / 0** | 全工程无 V2 组件 |
+| `@State` | **230** | 宿主 132 + 组件 98 |
+| `@Prop` | **1,183** | 参数快照负担（较 1,324 下降） |
 | 回调型成员（`onX`） | **1,280** | 单个 `LayersPanel` 即 93 个 |
-| `@ObjectLink` / `@Observed` | **197 / 34** | 逐层拆解 |
+| `@ObjectLink` / `@Observed` | **260 / 63** | 较 197 / 34 上升，随 store 化 |
 | `@Watch` | **12** | 宿主 2 |
 | `@BuilderParam` | 16 | 规则 9 的遗留面 |
 | `@Computed` / `@Param` / `@Event` / `@Provider` / `@Consumer` / `Repeat` | **全为 0** | V2 能力零使用 |
 | 宿主 `AppStorage.` / `nm*()` 颜色快照调用 | 26 / **145** | 存储与主题快照 |
 
-**宿主 333 个 `@State` 的领域分布（实测）：**
-
-| 域 | 数量 | 域 | 数量 |
-|---|---:|---|---:|
-| 设置/视图/位置等 | 50 | 卫星 `sat*` | **27** |
-| other 其余 | 41 | 插件/命令 | **19** |
-| 脚本/录制/导览 | **39** | 考古线 `archaeo*` | **18** |
-| 时间 | 35 | 导航星 `navStars*` | **14** |
-| object-ui/叠层 | 33 | 拼贴 `mosaic*` | **10** |
-| shell/布局路由 | 32 | 流星 `ms*` | **8** |
-| | | 星表 `catalog*` | **7** |
-
-→ **Prop 风格域合计 142 个 `@State`**（见 §2.7），是"域标量变更仍经宿主重渲染"的主体。
+**宿主 `@State` 现状（132 = 46 store 实例 + 86 裸字段）：** 域状态已全部转为 store，
+裸字段不再按"域"统计；其类别与保留理由（机制类 / 高频逐帧 / 跨域共用）见 §2.7.1。
 
 **官方 V1→V2 装饰器映射（`arkts-v1-v2-migration-inner-component`）：**
 
@@ -711,9 +706,9 @@ panels/    @ComponentV2 struct XxxPanel {
              @Event onClose: () => void   // 类型化事件（真正的动作）
            }
 host       @ComponentV2 WindowNativeNode {
-             @Local  壳层/路由状态（≈50–80，原 333 的减余）
+             @Local  壳层/路由状态（原 132 中保留的裸字段，见 §2.7.1）
              @Provider appModels / themeModel
-             build() 读 @Computed，不再有 1,324 个 @Prop 转发
+             build() 读 @Computed，不再有 1,183 个 @Prop 转发
            }
 bridge/    BridgeClient 不变；每域新增 Port 适配器注入模型（守住"store 不碰 NAPI"）
 ```
@@ -725,9 +720,9 @@ bridge/    BridgeClient 不变；每域新增 Port 适配器注入模型（守�
 
 | # | V1 现状（本仓库） | V2 机制 | 依据（本地文档） |
 |---|---|---|---|
-| 1 | 宿主 333 `@State` 集中一个 struct，任一变更重跑整棵 `build()`(660 行)+3 builder(1,153 行) | `@Trace` **属性级**刷新 | "被 `@Trace` 装饰的属性变化时，**仅会通知 property 关联的组件**进行刷新" |
+| 1 | 宿主 132 `@State` 集中一个 struct，任一变更重跑整棵 `build()`(667 行)+3 builder | `@Trace` **属性级**刷新 | "被 `@Trace` 装饰的属性变化时，**仅会通知 property 关联的组件**进行刷新" |
 | 2 | 派生值每次重渲染重复计算（`panelTitle` 101 行、尺寸/颜色等） | `@Computed` 缓存，依赖变化才计算一次 | "依赖的状态变量变化时，**只会计算一次**" |
-| 3 | 142 个 Prop 风格域标量变更经宿主重渲染 | 状态入 `@Trace` 模型、宿主不读取 → **变更彻底不过宿主** | 同上 |
+| 3 | 域状态已入 store（§2.7），但宿主仍持 46 store 实例 + 86 裸字段 → 任一写入仍重跑 `build()` | 状态入 `@Trace` 模型、宿主不读取 → **变更彻底不过宿主** | 同上 |
 | 4 | loader 连续写 N 个字段 → N 次重渲染 | `@Monitor` 一次事件合并 + 可取变化前值 | "不仅感知变化后数据，还能获取**变化前**的数据" |
 | 5 | 组件内 `ForEach` 列表 | `Repeat` 键控 diff | "V2 **推荐**使用 `Repeat` 替代 `ForEach`" |
 | 6 | 深度数据需 `@ObjectLink` 逐层拆解（197 处） | `@ObservedV2`+`@Trace` 直接观测嵌套 | "提供对嵌套类对象属性变化**直接观测**的能力" |
@@ -747,7 +742,7 @@ bridge/    BridgeClient 不变；每域新增 Port 适配器注入模型（守�
 | # | 现状（V1） | V2 后 | 规模 |
 |---|---|---|---|
 | 1 | **回调仓库** 1,280 个 `onX`（LayersPanel 93 / CompactShell 48 / ExpandedShell 43 / Hover 35 / SkyCultureViewTab 35 / UnifiedObjectDetailCard 24） | 状态同步型回调**整体消失**（直接改模型）；真动作收敛为**每域一个 Port**（`@Param`） | 1,280 → ≈15 个 Port |
-| 2 | `@Prop` 快照 1,324（壳层 61–67 个/个） | `@Param model`（1 个）+ `@Computed` 读派生 | 数量级下降 |
+| 2 | `@Prop` 快照 1,183（较 1,324 已降；壳层 61–67 个/个） | `@Param model`（1 个）+ `@Computed` 读派生 | 数量级下降 |
 | 3 | 145 处 `nmText()/nmSub()/nmAccent()` 颜色快照逐分支传参 | 1 个 `@ObservedV2 ThemeModel(@Trace nightMode)` 经 `@Consumer` 就地取色 | 145 → ≈1 |
 | 4 | 壳层 61–67 个 `@Prop` 多为把 store/状态**逐层转发** | `@Provider/@Consumer` 后代直读，删除转发链 | 壳层签名大幅收缩 |
 | 5 | `@Watch` 12 处（一事件多变化多次触发） | `@Monitor` 合并 + 前后值 | 12 |
@@ -771,7 +766,7 @@ V2→V1 用 `makeV1Observed(...)`。
 
 | 阶段 | 内容 | 目标域 |
 |---|---|---|
-| **A：V2 叶子 + V2 模型，宿主不动** | 建 `@ObservedV2` 模型，交给 `@ComponentV2` 叶子面板持有；宿主以普通成员持有、不读取 | 自包含 Prop 风格域：**卫星 / 流星 / 星表 / 导航星 / 考古线 / 拼贴 / 插件命令**（合计 142 个宿主 `@State`）+ 叶子域（陀螺仪 / 叠层 / Dock / 对象媒体） |
+| **A：V2 叶子 + V2 模型，宿主不动** | 把现有 `@Observed` store 改为 `@ObservedV2`+`@Trace`、交 `@ComponentV2` 叶子持有；宿主以普通成员持有、不读取 | 已 store 化的域（卫星 / 流星 / 星表 / 导航星 / 考古线 / 拼贴 / 插件命令 / 陀螺仪 / 叠层 / Dock / 对象媒体…）——**§2.7 已完成"先建 store"的前置，A 阶段现在可直接进行** |
 | **B：翻宿主** | `@State`→`@Local`；`@Prop`→`@Param`；`@Watch`→`@Monitor`；`AppStorage`→`AppStorageV2`（经 `enableV2Compatibility` 过渡） | 宿主、`ApplicationRoot`、`QAbility`（启动门控 + CLI 事件通道 + `i18nLang`，共 17 key）——**最高风险，放最后** |
 | **C：收口** | `@Prop` 快照→`@Computed`/`@Consumer`；回调→Port；`ForEach`→`Repeat`；删兼容胶水 | 全量 |
 
@@ -799,11 +794,11 @@ V2→V1 用 `makeV1Observed(...)`。
 
 | 指标 | 现状（V1 实测） | V2 目标 | 收益类型 |
 |---|---|---|---|
-| 触发宿主整树重渲染的状态数 | **333** | ≈50–80（仅壳层/路由） | 性能 |
+| 触发宿主整树重渲染的状态数 | **132**（46 store + 86 裸字段） | ≈50–80（仅壳层/路由） | 性能 |
 | 域标量变更路径 | 经宿主重渲染 | `@Trace` 属性级，不过宿主 | 性能 |
 | 重复派生计算 | 每次 build 重算 | `@Computed` 一次 | 性能 |
 | 回调型成员 | **1,280** | ≈15 个 Port | 可维护性 |
-| `@Prop` 快照 | **1,324** | `@Param` 模型引用 | 可维护性 |
+| `@Prop` 快照 | **1,183** | `@Param` 模型引用 | 可维护性 |
 | 颜色快照调用 | **145** | 1 个 `@Consumer ThemeModel` | 可维护性 |
 | `@ObjectLink` 逐层拆解 | **197** | `@Param`+`@Trace` 直读 | 可维护性 |
 | 列表渲染 | `ForEach` | `Repeat` 键控 diff | 性能 |
@@ -811,7 +806,7 @@ V2→V1 用 `makeV1Observed(...)`。
 ### 7.8 建议
 
 1. **不做全量翻代**。V1 目前正确、契约全绿；V2 是**性能/可维护性投资**，非缺陷修复。
-2. **先做 A 阶段 1–2 个独立域试点**（推荐**卫星域**：142 个 Prop 风格 `@State` 里最大的一块 27 个，
+2. **先做 A 阶段 1–2 个独立域试点**（推荐**卫星域**：`SatelliteStore` 已建、含 20+ 字段，
    且无 `AppStorage` 依赖），用真机量化"属性级刷新"的实际帧率/重排收益，**拿数据再决定是否扩大**。
 3. **B 阶段（`AppStorage` 桥）单独立项**：它触碰隐私门控与 CLI 通道，风险与收益须单独评估。
 4. **`animateTo` 回归列入 A 阶段验收**——这是官方明示的 V2 已知异常点。
@@ -907,11 +902,11 @@ V2→V1 用 `makeV1Observed(...)`。
 
 ```powershell
 # 主文件体量与结构指标
-(Get-Content harmonyos\ets-source\pages\MainWindowNativeNode.ets).Count          # 18784
+(Get-Content harmonyos\ets-source\pages\MainWindowNativeNode.ets).Count          # 18582
 $c = Get-Content harmonyos\ets-source\pages\MainWindowNativeNode.ets -Raw
 ([regex]::Matches($c,'(?m)^  @Builder\s*$')).Count                              # 3
-([regex]::Matches($c,'@State\s+(?:private\s+)?\w+\s*:')).Count                  # 333
-([regex]::Matches($c,'(?m)^  private\s+\w+\(')).Count                           # 909
+([regex]::Matches($c,'@State\s+(?:private\s+)?\w+\s*:')).Count                  # 132
+([regex]::Matches($c,'(?m)^  private\s+(?:async\s+)?\w+\s*\(')).Count           # 940
 ([regex]::Matches($c,'setInterval')).Count                                      # 19
 ([regex]::Matches($c,'callInteractive')).Count                                  # 195（薄委托调用点）
 
@@ -919,13 +914,13 @@ $c = Get-Content harmonyos\ets-source\pages\MainWindowNativeNode.ets -Raw
 Select-String -Path harmonyos\ets-source\pages\MainWindowNativeNode.ets -Pattern '^  @Builder\s*$' -Context 0,1
 
 # 目录总账
-Get-ChildItem harmonyos\ets-source\state -File | Measure-Object                  # 27
+Get-ChildItem harmonyos\ets-source\state -File | Measure-Object                  # 48
 Get-ChildItem harmonyos\ets-source\panels -Recurse -File -Filter *.ets | Measure-Object  # 119
 
 # 逐方法归域（§2.6/§2.9 的五层占比与领域地图）
 #   解析式：以 `^  (private )?(async )?\w+\(` 为方法起、`^  }$` 为方法止，
 #   累加每个方法体行数并按名称前缀归域（bridge/sensor/time/search/object/astro/…）。
-#   实测：940 个方法；L4（load/apply/refresh/handle/publish 类）≈12,500 行、67%。
+#   实测：940 个方法；L4（load/apply/refresh/handle/publish 类）≈13,800 行、74%。
 
 # 全工程装饰器普查（§7.1）
 $all = (Get-ChildItem harmonyos\ets-source -Recurse -File -Filter *.ets |
@@ -942,7 +937,7 @@ foreach($p in '@State\b','@Prop\b','@ObjectLink\b','@Observed\b','@ObservedV2\b'
 #   ③ 体内无 `this.x=`/`this.store.x=`（成员写）、无 fileIo/image/picker/media、
 #      无 callNative*/callInteractive、无 openPanel/closePanel/setPanel/activePanel、
 #      无 setInterval/setTimeout、无 AppStorage/LocalStorage、无 hilog。
-#   实测：941 个 private → A 类 305（几何 112 / 其他派生 88 / 标签 64 / 判断 34 / 颜色 5 / 格式化 2）；
+#   实测：940 个 private → A 类 305（几何 112 / 其他派生 88 / 标签 64 / 判断 34 / 颜色 5 / 格式化 2）；
 #   其中 A1 零宿主状态读取（体不出现 `this.<字段>`）91 个可**直接移出**；
 #   A2 读取宿主字段 214 个；305 个中 218 个已在 build+panelContent 区被引用为端口/参数。
 
@@ -951,7 +946,7 @@ foreach($p in '@State\b','@Prop\b','@ObjectLink\b','@Observed\b','@ObservedV2\b'
 #   写哪些 store（`this.<store>.<field> =`）、写哪些宿主字段（`this.<field> =`）、
 #   调用的其他宿主方法（`this.<name>(`）、定时器、面板路由、publish。
 #   判定：仅桥+本域 store → B1；+助手/他域/publish → B2；+宿主字段写/路由/定时器 → B3。
-#   实测：69 个 load* = B1 13 + B2 30 + B3 26。
+#   实测：70 个 load* = B1 24 + B2 35 + B3 11。
 
 # 契约护栏
 node scripts\check-ohos-ui-contract.mjs
