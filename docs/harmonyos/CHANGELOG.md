@@ -1,3 +1,11 @@
+## [2026-09-30] DevEco Code - Phase 0：固化 UI 契约基线（pages/ 重构）
+
+- **新增文件：** `scripts/check-ohos-ui-contract.mjs`、`docs/harmonyos/json/ui-contract-baseline.json`。
+- **目的：** 落实 `ARKTS-PAGES-REFACTOR-PLAN.md` 的硬性不变式之一——`.id()` 节点 id 与 33 个面板名不得被改动（uitest / dumpLayout / CLI 依赖）。基线把契约固化为可比对数据，`--update` 只在**有意**增删锚点时使用。
+- **基线内容：** 33 个面板名（`activePanel` 比较 + `setPanel` 调用 + `panelId` 三处来源合并）、22 个静态 `.id()` 锚点、17 个动态 id 前缀（如 `panel-content-` + `i18nLang`）、`.id(` 出现总数 41；脚本默认模式会分别报告「被删除/改名」与「新增」的项并以非零码退出。
+- **验证结果：** `node scripts/check-ohos-ui-contract.mjs --update` 生成基线后立即复跑校验，输出 `UI contract intact: 33 panels, 22 static ids, 17 dynamic prefixes, 41 id anchors.`。
+- **范围约束：** 仅新增脚本与基线数据，未改动任何应用源码。
+
 ## [2026-09-30] DevEco Code - 新增 x86_64 模拟器「仅界面」调试通道（debug-only）
 
 - **修改文件：** `harmonyos/ets-source/qability/QAbility.ets`、`harmonyos/ets-source/pages/ApplicationRoot.ets`（镜像；经 `scripts/sync-ohos-build-sources.sh` 同步到生成工程，生成目录不入库）、`docs/harmonyos/CHANGELOG.md`。
