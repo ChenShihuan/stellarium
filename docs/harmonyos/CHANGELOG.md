@@ -1,3 +1,79 @@
+## [2026-10-05] DevEco Code - M3-2：SkyInputController 主路径（handleSkyTouch / emitFluidDrag）（PLAN §15.10/§15.11 第三批 M3，最高风险）
+
+> 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.10/§15.11 **M3-2**（高风险，最后一批）。
+> 提交：`93ae32db15`（refactor）+ 本条目（docs）。工作目录 `E:\code\Stellarium-mobile\stellarium`。
+
+**结论：完成** —— 触屏主路径 `dragFollowAlpha`(6) / `emitFluidDrag`(36) / `handleSkyTouch`(318) 三法整体下沉到 `capability/SkyInputController.ets`，与两者配套的 **26 个逐帧/草稿字段**一并迁移；M3-1 暂转移所有权的 5 个共享草稿字段（`dragVelocityX/Y` / `dragVelocitySampleValid` / `pinchActive` / `nativeSkyInertiaActive`）**收回私有**。宿主与之的全部 15 处 `this.skyInputCtl().<f>` 跨边界访问随之消失。
+**逐字等价（§15.7 规则 5）**：唯一改写是「宿主读数经 hooks 取、宿主动作经 hooks 调、`callNativeFire` → `commandPort.fire`」；比较边界（`totalMove > 16`、`dragLastSampleMs >= 8 && <= 220`、`pinchStartDistance <= 1`、`dt > 90`、`Date.now()-lastInfoWinCloseMs > 320`、`pinchScale` 判定等）、分支顺序、取整（`Math.round`/`toFixed`）、事件类型判定（`TouchType.Down/Move/Up/Cancel`）**一律未动**。`f712b2e517` 修的「拖拽归属泄漏」两处逐字保留：Down 的 UI 分支清 `skyTouchFeedback/skyTouchActive/skyDragging/nativeDragActive`；Move 的拖动条件 `this.touchMoved && !this.hooks.touchStartedOnUi()`。
+
+**改动文件（净行数）**
+- 修改 `harmonyos/ets-source/capability/SkyInputController.ets` **264 → 704（+440）**：新增 3 法（`dragFollowAlpha`/`emitFluidDrag`/`handleSkyTouch`）+ 26 草稿字段，`SkyInputHostHooks` 由 18 法扩到 **63 法**；头部注释更新为 M3 终态。
+- 修改 `harmonyos/ets-source/pages/MainWindowNativeNode.ets` **12640 → 12309（−331）**；`git diff --stat`（两文件）：`534 insertions(+), 425 deletions(-)`。
+- 宿主度量：`private` 方法 **503 → 500**（−3，=搬走 3 法、无新增宿主方法）；裸 `@State private` **132 → 132（不变，不变式保持）**。
+
+**字段清单（26 个 → 控制器；宿主引用数均为 0，可整块迁移）**
+`touchStartX/Y`、`touchLastX/Y`、`touchMoved`；`pinchStartDistance`、`pinchLastScale`、`pinchCenterX/Y`、`pinchStartFov`、`pinchLastNativePushMs`、`pinchNativePushPending`；`lastFovHintMs`；`nativeDragActive`、`lastDragCommandMs`、`dragFilteredX/Y`、`dragLastRawX/Y`、`dragLastSampleMs`、`dragLogCount`；`panelDragging`、`panelDragStartX/Y`、`panelDragStartOffsetX/Y`。
+（开工实测：以上 26 个字段在宿主全文件仅出现在 `handleSkyTouch`/`emitFluidDrag` 体内；其余被点名的 `skyTouchActive`/`skyDragging`/`touchStartedOnUi`/`dockTouchActive` **仍有宿主其他读写点**——见下——因此**不搬**，改为 hooks 读写。）
+
+**不搬（留宿主，控制器经 hooks 读写；§2.7.1 保留裸字段与跨 handler 共用标志）**
+| 字段 | 宿主其他读写点 | hooks |
+|---|---|---|
+| `touchStartedOnUi` | `handleOverlayTouch` Down/Up | `touchStartedOnUi()` / `setTouchStartedOnUi()` |
+| `skyTouchActive` | `handleOverlayTouch` Down、`hideObjectInspector` | `skyTouchActive()` / `setSkyTouchActive()` |
+| `skyDragging` | `startDetailAutoRefresh` 定时器、`scheduleSelectedObjectDetails` | `setSkyDragging()`（只写） |
+| `dockTouchActive` | `handleDockTouch` Down/Up/Cancel | `dockTouchActive()` / `setDockTouchActive()` |
+| `skyTouchFeedback` | `build()` 反馈圈、`handleOverlayTouch`、`hideObjectInspector` | `skyTouchFeedback()` / `setSkyTouchFeedback()` |
+| `skyTouchX/Y`、`skyTouchFeedbackMulti`、`skyTouchX2/Y2` | `build()` 反馈圈（含读 `skyTouchX2/Y2`） | `setSkyTouchPoint()` / `setSkyTouchPoint2()` / `skyTouchX2()` / `skyTouchY2()` / `setSkyTouchFeedbackMulti()` |
+| `currentFovText`（@State，7 处 UI 读） | 面板 FOV 胶囊 | `setCurrentFovText()` |
+| `fovSliderValue`（@State，7 处读） | 设置面板 | `fovSliderValue()` / `setFovSliderValue()` |
+| `lastInfoWinCloseMs` | `hideObjectInspector` 写 | `lastInfoWinCloseMs()`（只读） |
+| `panelOffsetX/Y`（@State） | `build()` 面板几何、多处命中 | `panelOffsetX()` / `panelOffsetY()` / `setPanelOffset()` |
+| `isExpandedLayout`/`isFoldHoverLayout`/`isFoldTabletLayout`、`panelVisible`、`panelWidth`、`skyWidth/Height`、`EDGE_MARGIN` | 宿主 70+ 处 | 对应只读 hooks |
+
+**方法清单（3 个 → 控制器）与逐方法 diff 摘要**
+| 方法 | 行数 | 唯一变化（除 `this.` 前缀） |
+|---|---:|---|
+| `dragFollowAlpha` | 6 | `isFoldTabletLayout`/`isExpandedLayout` → hooks；`clamp` 仍取 `common/derive/astro` |
+| `emitFluidDrag` | 36 | 布局 flags → hooks；`this.skyInputCtl().dragVelocity*` → 私有字段；`callNativeFire('dragView')` → `commandPort.fire` |
+| `handleSkyTouch` | 318 | 面板几何 `panelLeft/panelRight/panelTop`/`isDockPoint`/`touchWindowX/Y` 仍取 `common/derive/geometry`（入参换 hooks 读数）；`skyZoomButtonAt`/`dockActionAt`/`isUiPoint`/`compactTopQuickX`/`isCompactTopQuickPoint`/`compactDockWidthPercent`/`dockTop` → hooks；路由/详情刷新收放/Dock/陀螺/音乐/面板拖动落盘 → hooks；`callNativeFire` → `commandPort.fire`；`callInteractive('getFieldOfView')` → `requestFieldOfView` |
+
+**新增 hooks（45 项，接口 18 → 63）**
+- 几何/布局只读（16）：`isExpandedLayout`、`isFoldHoverLayout`、`isFoldTabletLayout`、`panelVisible`、`panelWidth`、`panelOffsetX`、`panelOffsetY`、`edgeMargin`、`fovSliderValue`、`polarScopeVisible`、`compactDockWidthPercent`、`dockTop`、`compactTopQuickX`、`isCompactTopQuickPoint`、`lastInfoWinCloseMs`、`setFovSliderValue`。
+- 手势归属标志（6）：`touchStartedOnUi`/`setTouchStartedOnUi`、`skyTouchActive`/`setSkyTouchActive`、`setSkyDragging`、`dockTouchActive`/`setDockTouchActive`。
+- 触摸反馈点（8）：`skyTouchFeedback`/`setSkyTouchFeedback`、`setSkyTouchPoint`、`setSkyTouchPoint2`、`skyTouchX2`、`skyTouchY2`、`setSkyTouchFeedbackMulti`、`setCurrentFovText`、`setPanelOffset`。
+- 宿主保留动作（15）：`cancelSelectedObjectUiChange`、`pauseDetailRefreshForSkyDrag`、`resumeDetailRefreshAfterSkyDrag`、`scheduleSelectedObjectForUiChange`、`scheduleSkyTextureStatusCheck`、`scheduleRecordingViewCheckpoint`、`resetPanelIdle`、`toggleMusic`、`musicHintText`、`toggleGyroscope`、`skyZoomButtonAt`、`dockActionAt`、`activateDockAction`、`requestFieldOfView`。（前 4 项 A2 热路径 `isUiPoint` 已存在；`skyZoomButtonAt`/`dockActionAt` 为本片新增 A2 热路径 hooks。）
+
+**定时器 start/stop 调用点对照表**（本片不新增定时器；仅沿用 M3-1 的 `skyInertiaTimer`，并新增 1 处 start 调用点）
+| 角色 | 宿主调用点（改后） | 说明 |
+|---|---|---|
+| stop | `aboutToDisappear` / 应用后台 → `this.skyInputCtl().stop()` | 等价旧 `stopSkyInertia()`（M3-1 已登记） |
+| stop（手势让步） | 视图坐标拖动 Down / 脚本拖动 Down / compactQuick Down / 对象卡拖动 Down / Dock Down → `this.skyInputCtl().stopSkyInertia()` | M3-1 登记的 9 处不变 |
+| start（新增） | `handleSkyTouch` Up（`nativeDragActive` 分支）→ 控制器内 `this.startSkyInertia()` | 与原宿主逐字等价，随主路径迁入控制器 |
+| stop（内部） | `handleSkyTouch` Down、Move 双指、Cancel → 控制器内 `this.stopSkyInertia()` | 逐字等价 |
+
+**真机逐项数值对照（真机 Mate 80 Pro `192.168.50.108:36717`；`pidof`=61542 全程存活；语义命令 `stellarium-cli --bundle com.cnchensh.stellarium`）**
+| 项 | 操作 | 前 → 后 |
+|---|---|---|
+| 星空拖拽（水平） | `devecocli ui drag 540 1400 300 1400` | `getViewDirection` az **0.0006° → 352.31°** |
+| 星空拖拽（竖直） | `devecocli ui drag 540 1400 540 1000` | alt **11.39° → 1.46°**（az 352.31→352.11） |
+| 点选天体 | `devecocli ui click 540 1500` | `getSelectedObjects` **0 → 1**（水委一 Achernar / HIP 7588，Star） |
+| 缩放（`#skyZoomInButton` 142,2118；Down 坐标分派在 `handleSkyTouch` 内） | `devecocli ui click` ×2 | `getFieldOfView` fov **60 → 48 → 38.4** |
+| 缩放（`#skyZoomOutButton` 142,2300） | `devecocli ui click` | fov **38.4 → 48** |
+| 惯性 | `devecocli ui fling 400 500 900 500` | az **10.35° → 20.85°（t+0.5s）→ 21.09°（t+1.2s）→ 21.09°（t+2.2s，收敛）**；hilog 见 `dragView dx=11 dy=-12` 起手的逐帧 fire |
+| **归属回归（面板起手）** | 打开 `图层` 面板 → 面板体内 3 次 `ui drag`（600,2200→1950 竖直 / 300→700 水平 / 1100,2000→2300） | `getViewDirection` az **16.1587868724367 → 16.1587868724382（Δ≈1e-12，浮点噪声；不转星图）** ✅ |
+| **归属回归（星图起手）** | 同上会话 `ui drag 400 800 250 800` | az **21.09° → 16.26°（转动星图）** ✅ |
+
+- **点选链路实证（hilog `StellariumArkUI`）**：`sky touch down at 154,429` → `selectAt payload: 154|429|366|809` → `sky tap interval=2217ms distance=57.5 double=false` → `selectAt result: {...HIP 9095...}`。
+- **未走查（待真机人工）**：① 双击清除选中 —— `devecocli ui doubleclick` 两次 Down 实测间隔 **2.2s（>800ms 阈值）** 且落点漂移，`isSkyDoubleTap` 判 `double=false`，工装无法构造有效双击；但 tap→`isSkyDoubleTap` 链路已由上行 hilog 实证。② 触摸反馈点视觉（`skyTouchFeedback`/`skyTouchX/Y` 反馈圈）—— 需拖拽中截图，工装 `ui layout` 不暴露，记待验。③ 面板标题栏拖动 —— 在 `handleSkyTouch` 内，但 UI 起手已被 `handleOverlayTouch` 的 `isUiPoint` 提前 return 拦下（**改动前后同为死分支**），实测拖标题栏面板不动、星图不动，与迁移前一致。
+- **测后恢复**：本片只改视图朝向/选中/FOV/面板开合（均不落盘），未改持久化设置，无需恢复。
+
+**验证证据**：`check-ohos-refactor-slice.mjs` 通过（单体括号深度 0）；`arkts_check`（2 文件）无错；构建 **BUILD SUCCESSFUL**；`check-ohos-ui-contract.mjs` **44 锚点 intact**（33 面板/24 静态 id/17 动态前缀）；全量 `*ohos*.mjs` 扫描仅 §13.6 的 6 个环境类失败（`-clipboard/-guide/-mist-horizon/-polar-scope -pad`、`mist-performance`、`verify-ohos-search`），无新增回归；`test-ohos-polar-scope.mjs` 4/4 全绿。
+
+**本片新踩的坑**
+1. **`devecocli ui doubleclick` 不能用于验证双击手势**：实测两次 Down 间隔 2.2s、且两 tap 落点不同（工具在慢设备上被节流/丢帧），永远构造不出 ≤800ms 同点的双击；双击清除路径只能真机人工验证。
+2. **`stellarium-cli.mjs` 默认 `hdc` 是 macOS 路径**（`/Applications/DevEco-Studio.app/...`），Windows 上必须显式 `--hdc "D:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe"`，否则 `spawnSync ... ENOENT`。
+3. **`hdc shell hilog` 不带 `-x` 会阻塞流式输出**（工具会 60s 超时）；用 `hilog -x` dump 到本地文件再 grep，且 `hilog -r` 清缓冲后需重新 dump。
+
 ## [2026-10-05] DevEco Code - M3-1：SkyInputController 骨架（PLAN §15.10/§15.11 第三批 M3，高风险）
 
 > 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.10/§15.11 **M3-1**（高风险，最后一批）。
