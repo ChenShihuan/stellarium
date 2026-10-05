@@ -331,6 +331,117 @@ export function timezoneDisplayName(ianaTz: string): string {
   return ianaTz
 }
 
+// 面板标题文本（计划 §14.3 A2-5；原宿主 private panelTitle 逐字迁出）。
+// 读宿主控制器状态（activePanel / configTab / isExpandedLayout）与时间面板实时钟文本，
+// 按 §14.8 规则 6 改为显式入参，其余逐字不变。
+export function panelTitleFor(activePanel: string, configTab: number, isExpandedLayout: boolean, timeText: string): ResourceStr {
+  if (activePanel === 'more') {
+    return I18n.t('c_more_functions')
+  }
+  if (activePanel === 'observeHub') {
+    return I18n.t('more_workspace_observing')
+  }
+  if (activePanel === 'dataHub') {
+    return I18n.t('more_sky_data')
+  }
+  if (activePanel === 'automationHub') {
+    return I18n.t('more_automation')
+  }
+  if (activePanel === 'search') {
+    return isExpandedLayout ? '探索' : I18n.t('i0021')
+  }
+  if (activePanel === 'observing') {
+    return I18n.t('panel_observing_list')
+  }
+  if (activePanel === 'time') {
+    return I18n.t('i0054') + ' ' + timeText
+  }
+  if (activePanel === 'place') {
+    return I18n.t('i0014')
+  }
+  if (activePanel === 'layers') {
+    return I18n.t('i0100')
+  }
+  if (activePanel === 'config') {
+    return I18n.t('i0273')
+  }
+  if (activePanel === 'astro') {
+    return I18n.t('i0274')
+  }
+  if (activePanel === 'help') {
+    return I18n.t('i0217')
+  }
+  if (activePanel === 'settings') {
+    if (configTab === 6) return I18n.t('more_plugins_manage')
+    if (configTab === 7) return I18n.t('settings_view_navigation')
+    if (configTab === 4) return I18n.t('c0004')
+    if (configTab === 5) return I18n.t('c0005')
+    if (configTab === 3) return I18n.t('c0003')
+    if (configTab === 2) return I18n.t('c0002')
+    if (configTab === 1) return I18n.t('c0001')
+    if (configTab === -1) return I18n.t('settings_device_privacy')
+    return I18n.t('i0102')
+  }
+  if (activePanel === 'catalogs') {
+    return I18n.t('p_catalogs')
+  }
+  if (activePanel === 'bookmarks') {
+    return I18n.t('p_bookmarks')
+  }
+  if (activePanel === 'oculars') {
+    return I18n.t('p_oculars')
+  }
+  if (activePanel === 'mosaicCamera') {
+    return I18n.t('p_mosaic_camera')
+  }
+  if (activePanel === 'archaeoLines') {
+    return I18n.t('p_archaeo_lines')
+  }
+  if (activePanel === 'angleMeasure') {
+    return I18n.t('panel_angle_measure')
+  }
+  if (activePanel === 'navStars') {
+    return I18n.t('panel_nav_stars')
+  }
+  if (activePanel === 'satellites') {
+    return I18n.t('p_satellites')
+  }
+  if (activePanel === 'meteorshowers') {
+    return I18n.t('p_meteors')
+  }
+  if (activePanel === 'scenery3d') {
+    return I18n.pluginName('Scenery3d')
+  }
+  if (activePanel === 'nebulaTextures') {
+    return I18n.t('nebula_texture_title')
+  }
+  if (activePanel === 'skyCultureMaker') {
+    return I18n.t('sky_culture_maker_title')
+  }
+  if (activePanel === 'pointerCoordinates') {
+    return I18n.t('p_pointer_coordinates')
+  }
+  if (activePanel === 'scripts') {
+    return I18n.t('p_scripts')
+  }
+  if (activePanel === 'commands') {
+    return I18n.t('panel_commands')
+  }
+  if (activePanel === 'telescope') {
+    return I18n.t('panel_telescope_control')
+  }
+  if (activePanel === 'tools') {
+    return I18n.t('panel_tools_data')
+  }
+  return I18n.t('i0101')
+}
+
+// 天体标题：本地化名非空时优先，否则回退英文名（原宿主 private celestialTitle，逐字迁出）。
+export function celestialTitle(nativeName: string, englishName: string): string {
+  const localizedNative = zhNameOf(nativeName)
+  return localizedNative.length > 0 ? localizedNative : englishName
+}
+
 // 经度 → 粗略时区显示文本（计划 §14.5 B2R-2 时区助手；原宿主 private approximateTimeZoneDisplay，
 // 逐字迁出）。纯函数：只用入参 + clamp，供 LocationPickerStore.loadObserverInfo 与宿主 setLocation 共用。
 export function approximateTimeZoneDisplay(longitude: number): string {
