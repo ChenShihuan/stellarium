@@ -1,3 +1,17 @@
+## [2026-09-30] DevEco Code - Phase 3i：系统性死代码普查并删除 39 个不可达方法（−498 行）
+
+- **普查方法：** 该 struct 的**全部方法都是 `private`**（不可能有外部调用者），因此"文件内零引用 = 不可达"。对 1,090 个 `private` 方法逐个统计三种引用形式：`this.<name>(`、裸引用 `this.<name>`、字符串 `'<name>'`（含 `@Watch('…')` 按名调用、以及可能的字符串分派），并排除框架生命周期方法（`aboutToAppear` / `aboutToDisappear` 等）与 `@Watch` 引用的两个方法（`onPrivacyNativeStartupAllowedChanged`、`onCliUiEventChanged`）。
+- **结果：39 个方法三种引用形式**全部为 0**，合计约 469 行方法体（删除后文件 −498 行，含空行）。按用途分组：**
+  - **陀螺仪（7 个，约 197 行）：** `onRotationVectorData`(119) / `gyroForwardFromGravityAndMagnetic`(22) / `gyroSlerpUnitVector`(21) / `alignGyroToMagneticNorth`(12) / `gyroParallelTransportUp`(10) / `calibrateGyroscopeQuaternionUnused`(10) / `gyroEffectiveAzOffset`(3)
+  - **对象卡片定位（4 个，约 103 行）：** `placeObjectCardAwayFromTarget`(53) / `easeSelectedObjectTo`(36) / `placeSelectedObjectInCompactSafeArea`(7) / `placeSelectedObjectInExpandedSafeArea`(7)
+  - **抽屉/信息窗几何（9 个）：** `isCompactDrawerPoint` / `handleCompactMoreTap` / `handleFloatingPanelTouch` / `isTabletObjectInspectorPoint` / `bottomCardHitHeight` / `bottomCardSwiperHeight` / `drawerLeft`（单行方法） / `infoWinLeft` / `infoWinWidth`
+  - **时间相关（3 个）：** `advanceTimeWheel`(21) / `setTimeNow`(8) / `adjustTime`(6)
+  - **其余杂项（16 个）：** `nm` / `tickPercent` / `runOnTouchUp` / `toggleTracking` / `trackStatusZh` / `triggerAutoLocate` / `cycleOcular` / `pauseScript` / `resumeScript` / `pluginFeaturePanel` / `objectInspectorFileUri` / `isConstellationSelection` / `skyCultureRangeModeIndex` / `skyCultureClassificationFilterIndex` / `skyCultureRegionFilterIndex`(10) / `defaultSkyCultureMakerDraft`(17)
+- **需要产品复核的"疑似漏接线"项（删除不改变行为，但可能掩盖了未接的意图）：** ① `onRotationVectorData` 及整套陀螺仪四元数数学——像是**传感器回调未注册**；② `pauseScript` / `resumeScript`——脚本暂停/继续入口未接；③ `toggleTracking` / `triggerAutoLocate` / `setTimeNow` / `adjustTime`——功能入口未接；④ `placeSelectedObjectIn*SafeArea` / `easeSelectedObjectTo` / `placeObjectCardAwayFromTarget`——对象卡片避让逻辑未接。以上已记入方案文档 §11 修订 6，**若本应接线，应作为功能缺陷单独处理，而不是继续躺在死代码里**。
+- **过程记录（教训）：** 首轮脚本用"下一个 `\n  }\n`"作为方法结束标记，遇到**单行方法**（`private drawerLeft(): number { return this.EDGE_MARGIN }`）时越过其边界，把中间的 `drawerWidth` / `onRailTap` 等一并删除，构建立即报 `Property 'onRailTap' does not exist` 捕获；已还原并对单行方法特判后重做，编译与真机回归均通过。**结论：删除脚本必须处理单行成员，且必须由编译器兜底。**
+- **验证结果：** `arkts_check` 无错误；`BUILD SUCCESSFUL`；契约校验通过；真机安装启动成功；时间面板渲染、刻度轮拖动（速度变「已暂停」）与「实时」恢复（`1x`）回归通过。
+- **单体行数：** 31,377 → **30,879**（本片 −498）。
+
 ## [2026-09-30] DevEco Code - Phase 3h：清理旧转轴死子系统（−126 行，并消除高频链上的无效重渲染）
 
 - **调查结论（可证明死代码）：** 旧滑杆入口 `applyScrubber(secondOffset, mode)` **没有任何调用者**（滑杆 UI 早已被 Sky Guide 风格时间轮取代）；顺着它往下，`beginScrubberInteraction` / `sendScrubberTime` / `updateScrubberLabel` 只被彼此调用，而 `syncScrubberToSimulation` / `resetScrubberToRealtime` 虽被活代码调用，但其**写入目标全是只写不读的字段**（`scrubberValue` / `scrubberLabel` / `scrubberReferenceJd` / `scrubberPendingOffset` / `scrubberAnchorPending` / `scrubberLastSendMs` / `scrubberInteracting` 全部无读取点）。因此整条链是死代码。
