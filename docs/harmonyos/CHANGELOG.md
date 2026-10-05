@@ -1,3 +1,17 @@
+## [2026-10-05] DevEco Code - §15.12 位置域行为下沉：LocationController + LocationPort（D8 新增切片）
+
+- **新增**：`bridge/LocationPort.ets`（18 行，纯接口 + 具名 `LocationFix`）；`capability/LocationController.ets`（194 行，7 法 `useDeviceLocation` / `applyPickerLocation` / `setLocation` / `setObserverPlanet` / `saveObserverLocationToStorage` / `readObserverLocationStorage` / `restoreObserverLocation` + `LocationHostHooks`）。
+- **宿主适配器**：具名 `HostLocationPort implements LocationPort`（`abilityAccessCtrl` + `geoLocationManager` + `@ohos.data.preferences`，store `LOCATION_STORE` / key `location`），`aboutToAppear` 里 `configure`。§15.7 规则 1/4/7。
+- **P2 并入**：`state/LocationStore.ets`（69 → 267 行）新增离线搜索三法（`searchLocations` / `scanLocationSearchChunk` / `selectSearchLocation`）+ 保存点三法（`saveCurrentLocation` / `deleteSavedLocation` / `persistSavedLocations`，**AppStorage 存储方式原样保留**）+ `LocationStoreHostHooks`（跨域助手与 `setLocation` 回注）。
+- **组件内收**：`panels/location/LocationPickerPanel.ets`（+68）内收 `locationMapWidth/Height` / `updatePickerFromMap` / `handleLocationMapTouch` + 触摸草稿字段；`setPickerLocation` 拆为 `LocationPickerStore` 纯 setter 供控制器/组件共用；`PlacePanel` 改传 `expandedLayout` / `skyWidth`。
+- **逐字等价（§15.7 规则 5）**：`setLocation`（高频动作路径）仅「`this.<宿主字段>`→store/hooks/port」，比较边界/分支/三步回退（`setLocation`→`setLocationCoords`→`setLocationByName`）未动；隐私门禁 3 处复检逐字保留（经 hooks）。
+- **度量**：宿主 **12,382 → 12,111 行（−271）**、`private` 方法 **520 → 504（−16）**、`@State private` **132 不变**。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 7 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀）；`test-ohos-privacy-startup.mjs` 19/19 全绿（用例改指 `capability/LocationController.ets` + `HostLocationPort`）；全量 `*-ohos*.mjs` 扫描仅 §13.6 的 6 个环境类失败。
+- **真机（192.168.50.108:36717）**：地图点选 → `command received: "setLocation" "自定义位置|51.748…|-82.668…|0"`（组件内几何/触摸 + `LocationController` + `HostLocationPort` 全链路）；点选后头部坐标实时刷新 `51.75°N / 82.67°W`；**重启后观测点保持**（`[location] restoring persisted observer location` + `setLocation` 重放）；层级模式「大洲/国家」列随选择实时刷新；`pidof` 存活。
+- **未走查（待真机人工）**：GPS 权限弹窗路径（需授予/撤销系统权限）；保存点/删除与城市 chips（嵌套滚动较深）；层级城市落地 `selectCityByName`（内层过滤未变、调用点仅改指向控制器）。
+- **测试同步**：`test-ohos-privacy-startup.mjs` 第 183 项改读控制器与宿主适配器。
+- **文档**：`ARKTS-PAGES-REFACTOR-PLAN.md` 新增 §15.12（普查表 + 完成结论）；`ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §10（D 轨道普查）随本轮落库。
+
 ## [2026-10-05] DevEco Code - M3-3：SelectionService 决策片（登记保留，0 行代码）（PLAN §15.10/§15.11 第三批 M3 收尾）
 
 > 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.10/§15.11 **M3-3**（高风险·决策片，最后一片）。提交：本条（`docs(harmonyos)`）。

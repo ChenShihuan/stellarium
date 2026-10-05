@@ -1371,3 +1371,61 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 
 **仍未变**：§15.6 保留项、§15.7 硬规则、§15.8 度量与验收、§15.9 风险与取舍、M3 的"登记保留"许可（§15.10）。
 
+
+### 15.12 位置域行为下沉（2026-10-05，D8；新增切片）
+
+> **背景**：§15.10/§15.11 的 M 批止于 M3-3（SelectionService 登记保留）。本片继续 §15.10 的
+> 「先普查 → 判定搬或登记」纪律，处理 STATE-REVIEW §10 的 **D8（位置 / 地图 / GPS）** 簇：
+> 原宿主停在 `@Builder` 组件化阶段（Phase 3ai/3aj 只搬了 UI 与纯计算），**动作层仍在宿主**。
+> 本片把行为下沉为控制器（P1）+ 并入既有 store（P2），并新增 `LocationPort`（§15.7 规则 7：端口先行）。
+
+#### 15.12.1 开工普查（基线：宿主 12,382 行 / `private` 方法 520 / `@State private` 132）
+
+| 方法 | 行 | 判定 | 去处 / 依赖 |
+|---|---:|---|---|
+| `useDeviceLocation` | 43 | **搬** | `capability/LocationController`（NAPI→`LocationPort`；隐私门禁→hooks） |
+| `applyPickerLocation` | 5 | **搬** | 同上 |
+| `setLocation` | 51 | **搬** | 同上（桥→`CommandPort`；头部三 `@State`→hooks；观测星球写→hooks） |
+| `setObserverPlanet` | 15 | **搬** | 同上（`CommandPort.requestInteractive`） |
+| `saveObserverLocationToStorage` | 17 | **搬** | 同上（preferences→`LocationPort.writeObserverLocation`） |
+| `readObserverLocationStorage` | 9 | **搬** | 同上（→`LocationPort.readObserverLocation`） |
+| `restoreObserverLocation` | 20 | **搬** | 同上（启动恢复钩子改指向） |
+| `locationMapWidth` / `locationMapHeight` | 6+3 | **搬（几何随组件）** | `panels/location/LocationPickerPanel` |
+| `updatePickerFromMap` / `handleLocationMapTouch` | 8+26 | **搬（组件内触摸）** | 同上（点选后的 apply 走既有 `onApply` 回调） |
+| `setPickerLocation` | 7 | **拆** | `LocationPickerStore.setPickerLocation`（控制器/组件共用纯 setter） |
+| `searchLocations` | 31 | **搬（P2）** | `state/LocationStore`（跨域助手经 `LocationStoreHostHooks`） |
+| `scanLocationSearchChunk` | 74 | **搬（P2）** | 同上 |
+| `selectSearchLocation` | 6 | **搬（P2）** | 同上（`setLocation` 经 hooks） |
+| `saveCurrentLocation` | 19 | **搬（P2）** | 同上 |
+| `deleteSavedLocation` | 4 | **搬（P2）** | 同上 |
+| `persistSavedLocations` | 12 | **搬（P2）** | 同上（**AppStorage 存储方式原样保留**） |
+| `selectCityByName` / `selectContinent` / `selectCountry` / `selectRegion` | — | **登记（薄胶水）** | 层级状态写 `LocationPickerStore` + 一次 `locationCtl().setLocation` 调用点 |
+| `handleUiTap` 的 GPS 命中区 / `handleChip` 城市 chip | — | **登记保留** | 壳层命中/快捷键分发（§15.6-4） |
+
+#### 15.12.2 端口与适配器
+
+- **`bridge/LocationPort.ets`**（18 行，纯接口）：`requestLocationPermissions` / `getCurrentLocation`（返回具名
+  `LocationFix`）/ `readObserverLocation` / `writeObserverLocation`。
+- 宿主具名适配器 **`HostLocationPort implements LocationPort`**（§15.7 规则 4）：承载 `abilityAccessCtrl` +
+  `ohos.permission.APPROXIMATELY_LOCATION|LOCATION`、`geoLocationManager.getCurrentLocation`（ACCURACY /
+  DAILY_LIFE_SERVICE / maxAccuracy 2000 / timeoutMs 5000）、`@ohos.data.preferences`（store `LOCATION_STORE`，
+  key `location`）。`aboutToAppear` 里 `configure(getUIContext)`。
+
+#### 15.12.3 完成结论与度量（2026-10-05）
+
+- 新增：`bridge/LocationPort.ets`（18）、`capability/LocationController.ets`（194）。
+- 修改：`state/LocationStore.ets` 69 → 267（+198）；`state/LocationPickerStore.ets` +11（`setPickerLocation`
+  纯 setter）；`panels/location/LocationPickerPanel.ets` +68（内收地图几何/触摸 + 触摸草稿字段）；
+  `panels/panels/PlacePanel.ets` +11（`mapWidth/mapHeight`→`expandedLayout/skyWidth`）。
+- 宿主：**12,382 → 12,111 行（−271）**、**`private` 方法 520 → 504（−16）**、`@State private` **132 不变**。
+- 验证：`check-ohos-refactor-slice` 通过；`arkts_check` 7 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；
+  `test-ohos-privacy-startup` 19/19 全绿（用例改指 `LocationController` + `HostLocationPort`）；全量脚本扫描仅
+  §13.6 的 6 个环境类失败。
+- 真机（192.168.50.108:36717）：地图点选 → `command received: "setLocation"`（组件内几何/触摸 + 控制器 + 端口全链路）；
+  点选后头部坐标实时刷新 `51.75°N / 82.67°W` 且**重启后观测点保持**（`[location] restoring persisted observer location`
+  + `setLocation` 重放），`pidof` 存活。
+- **未走查（待真机人工）**：GPS 权限弹窗路径（需授予/撤销系统权限）；保存点/删除与城市 chips（嵌套滚动较深）；
+  层级城市落地 `selectCityByName`（内层过滤未变，调用点仅改指向控制器）。
+- 逐字等价（§15.7 规则 5）：`setLocation` 为高频动作路径，仅「`this.<宿主字段>`→store/hooks/port」，
+  比较边界/分支/三步回退（`setLocation`→`setLocationCoords`→`setLocationByName`）未改。
+
