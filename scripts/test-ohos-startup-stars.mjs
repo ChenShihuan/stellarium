@@ -195,7 +195,9 @@ test('only a ready actually presented frame with matching aspect reveals the cha
 
 test('sky-texture loading banner is driven by live status instead of a timer', () => {
 
-  const page = read('pages/MainWindowNativeNode.ets');
+  // D11：状态机（常量 / 三态文案 / updateSkyTextureStatus / pollSkyTextureStatus）已下沉
+  // capability/SkyTextureStatusController.ets，故断言改读控制器文件。
+  const page = read('capability/SkyTextureStatusController.ets');
 
   // 常量：快轮询 24 次后转慢轮询，90 次仍未就绪则升级为可操作的错误态
 

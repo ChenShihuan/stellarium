@@ -3,17 +3,20 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
+// D12：setNebulaTextureFlag 已下沉 capability/NebulaTextureController.ets（桥经 CommandPort.requestInteractive）。
+const nebulaSource = readFileSync(new URL('../harmonyos/ets-source/capability/NebulaTextureController.ets', import.meta.url), 'utf8');
 const localization = { t: key => key };
-function method(name, args) {
-  const match = source.match(new RegExp(`private ${name}\\([^\\n]*\\): void \\{([\\s\\S]*?)\\n  \\}`));
+function methodIn(src, name, args) {
+  const match = src.match(new RegExp(`(?:private )?${name}\\([^\\n]*\\): void \\{([\\s\\S]*?)\\n  \\}`));
   assert.ok(match, name);
   return new Function(...args, 'I18n', match[1].replaceAll(': StellariumBridgeResponse', '').replaceAll(' as NebulaTextureStatus', ''));
 }
-const mosaic = method('setMosaicCamera', ['setting', 'value']);
-const texture = method('setNebulaTextureFlag', ['command', 'enabled', 'current']);
+const mosaic = methodIn(source, 'setMosaicCamera', ['setting', 'value']);
+const texture = methodIn(nebulaSource, 'setNebulaTextureFlag', ['command', 'enabled', 'current']);
 
 function state() {
   const reloads = [];
+  const calls = [];
   return {
     mosaicStore: {
       mosaicCameraPending: false, mosaicCameraLoading: false, mosaicCameraEnabled: false,
@@ -24,8 +27,9 @@ function state() {
       nebulaTexturePending: false, nebulaTextureLoading: false, nebulaTextureImporting: false,
       nebulaTextureActionStatus: '', nebulaTextureStatus: { enabled: false }
     },
-    calls: [], reloads,
-    callInteractive(name, payload, success, failure) { this.calls.push({ name, payload, success, failure }); }
+    calls, reloads,
+    callInteractive(name, payload, success, failure) { calls.push({ name, payload, success, failure }); },
+    port: { requestInteractive(name, payload, success, failure) { calls.push({ name, payload, success, failure }); } }
   };
 }
 

@@ -19,6 +19,12 @@ export enum MediaSaveResult {
   Failed = 2,
 }
 
+// 「导入文件」结果：cancelled = 用户取消选择；path = 已复制到应用目录的落盘路径（未取消时非空）。
+export interface MediaImportResult {
+  cancelled: boolean
+  path: string
+}
+
 // 系统录屏状态（M1-B 子组②，由宿主适配器把 media.AVScreenCaptureStateCode 映射到本枚举）。
 export enum ScreenCaptureState {
   Started = 0,
@@ -49,6 +55,9 @@ export interface MediaPort {
   saveFileAs(sourcePath: string, fileName: string, suffixLabel: string, onDone: (result: MediaSaveResult) => void): void
   // 删除文件（对应 fileIo.unlinkSync，用于截图导出后的临时文件清理）。
   deleteFile(path: string): void
+  // 选择单个文档并复制到 <filesDir>/<dirName>，返回落盘路径；用户取消时 cancelled=true。
+  // 后缀过滤 / 单文件 / 文件名清洗逐字对应宿主 importNebulaTextureFile 的 picker + fileIo 段。
+  pickDocumentToDir(dirName: string, fileSuffixFilters: string[], fallbackFileName: string): Promise<MediaImportResult>
 
   // ── 对象模型渲染（M2-A ObjectModelRenderer）──
   // 由原始 RGBA 字节创建像素图（对应 image.createPixelMap(buffer, { size, RGBA_8888, UNPREMUL })）：
