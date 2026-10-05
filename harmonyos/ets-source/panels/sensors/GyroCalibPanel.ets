@@ -2,8 +2,11 @@ import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 import { GyroStore } from '../../state/GyroStore'
 
-// 陀螺仪校准面板（原宿主 @Builder gyroCalibPanel）。校准/开关/提示仍由宿主执行，以回调注入。
 
+// 陀螺仪校准面板（原宿主 @Builder gyroCalibPanel）。
+//
+// 校准、开关与提示仍由宿主执行，以回调注入；面板内对偏移/灵敏度/开关的写入直接落 store，
+// 与原"直接写宿主 @State"等价（宿主照旧重绘）。
 @Component
 export struct GyroCalibPanel {
   @ObjectLink store: GyroStore
