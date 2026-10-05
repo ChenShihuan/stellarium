@@ -1,3 +1,16 @@
+## [2026-10-01] DevEco Code - Phase 3t：object/detail 域第一片 —— `selected*` 数据簇入 ObjectDetailStore
+
+- **本片范围：** object/detail 域共 **96 字段 / 736 处引用**，按 §13.2 拆片；本片先抽出最大的数据簇（`selected*` + `objectInfo`，**56 字段 / 418 处引用**），它是详情卡、信息行与平板检查器三类 UI 的共同数据源，也是后续组件化的前提。
+- **新增文件：** `state/ObjectDetailStore.ets`（`@Observed`；56 个字段，覆盖名称/编号/坐标族（赤道/黄道/银河/地平/超银河）、距离/星等/消光/高度角、卫星过境、星座文化描述块、详情字段与媒体等；`selectedLanguage` 属语言域、**刻意不迁**，仍留宿主）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 56 行 `@State` 声明删除、**418 处引用**改写为 `this.objectDetailStore.*`（全部使用**词边界**替换，规避 `selectedCoordEq` / `selectedCoordEqJ2000`、`selectedDistance` / `selectedDistanceCompact`、`selectedDetailFields` / `selectedDetailLoaded` 等同前缀陷阱）；新增宿主字段 `@State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()` 与导入。
+- **三个踩坑（本片全部踩到，均记入 §13 手册）：**
+  1. **批量改引用后忘记补宿主字段声明** → `this.objectDetailStore.*` 全部推断为 `any` → 构建报 `arkts-no-any-unknown`（行号散落在 13066/13948/18815… 等业务代码处，不易一眼看出）。**教训：改引用的同一步必须同时落字段声明。**
+  2. **类型导入要找准模块**：`ObjectDetailField` / `ObjectDetailModel` / `SatellitePass` / `SkyCultureDescriptionBlock` 的导出在 **`pages/StellariumTypes.ets`**，而不是 Phase 1c 新建的 `pages/MainWindowModels.ets`（后者只搬了原单体序言区里的声明）。首轮构建报 `declares 'ObjectDetailField' locally, but it is not exported` 后改用正确模块。
+  3. **`arkts_check` 再次漏检**（未定义成员、结构失衡都不报）→ 必须由 `devecocli build` 兜底，§13.2 第 5 步不可省。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验（69 个 .ets）/ 安装启动通过；搜索 `Mars` → 点选候选 → **详情卡正常显示**：`火星`、`星等`、`距离`、`实时高度 / 方位 高度 69°06'09″ 方位 153°20'36″`——`selected*` 数据经 store 的完整链路可用，且坐标为实时值。
+- **单体行数：** 29,380 → **29,325**；`state/ObjectDetailStore.ets` 63 行。
+- **object/detail 域剩余（后续片）：** ① 信息行组件 `structuredObjectDetails`(30 行) + `selectedLiveInfoRows`(19 行)；② 媒体块 `tabletInspectorMedia`(179 行) + `objectInspectorMedia*`(19 字段)；③ 主卡片 `unifiedObjectDetailCard`(183 行)；④ 连接线与模型叠层（`objectDetailConnector*` 9 字段 + `objectInspectorModel*` 5 字段）。
+
 ## [2026-10-01] DevEco Code - Phase 3s：星座快捷导航 + RA/Dec 坐标输入（search 域整体迁完）
 
 - **新增文件：** `panels/search/SearchConstellationChips.ets`（常见星座快捷 chips，`@ObjectLink store` + `@Prop languageRevision` + `onOpen` 回调）、`panels/search/SearchCoordinateInput.ets`（赤经/赤纬两行输入 + 跳转按钮，`@ObjectLink store` 读写输入文本 + `onGo` 回调）。

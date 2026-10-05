@@ -50,6 +50,7 @@ import { TimeWheelController } from '../state/TimeWheelController'
 import { BookmarkStore } from '../state/BookmarkStore'
 import { BookmarkPanel } from '../panels/BookmarkPanel'
 import { SearchStore } from '../state/SearchStore'
+import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
@@ -115,54 +116,10 @@ export struct WindowNativeNode {
   private panelNavigationStack: string[] = []
   private lastPanelBackAt: number = 0
   @State private searchStore: SearchStore = new SearchStore()
-  @State private selectedName: string = ''
-  @State private selectedEnglishName: string = ''
-  @State private selectedCatalogId: string = ''
-  @State private selectedDetailMediaPath: string = ''
-  @State private selectedDetailMediaKind: string = ''
-  @State private selectedDetailMediaLabel: string = ''
-  @State private selectedDetailModel: ObjectDetailModel | undefined = undefined
-  @State private selectedConstellationCultureId: string = ''
-  @State private selectedConstellationCultureName: string = ''
-  @State private selectedConstellationCultureDescription: string = ''
-  @State private selectedConstellationCultureDescriptionBlocks: Array<SkyCultureDescriptionBlock> = []
-  @State private selectedConstellationCultureDescriptionSource: string = ''
-  @State private selectedConstellationCultureDescriptionExpanded: boolean = false
-  @State private selectedObjectType: string = ''
-  @State private selectedTemperatureK: number = 0
+  @State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()
   private searchHistory: string[] = []
   @State private objectCatalogCategories: CatOption[] = []
   private searchPanelScroller: Scroller = new Scroller()
-  @State private selectedType: string = ''
-  @State private selectedStatus: string = ''
-  @State private selectedInfo: string = ''
-  @State private selectedMagnitude: string = ''
-  @State private selectedApparentMagnitude: string = ''
-  @State private selectedAirmass: string = ''
-  @State private selectedExtinction: string = ''
-  @State private selectedDetailFields: Array<ObjectDetailField> = []
-  @State private selectedDetailLoaded: boolean = false
-  @State private selectedSatellitePasses: Array<SatellitePass> = []
-  @State private selectedSatellitePassesLoaded: boolean = false
-  @State private selectedSatellitePassesRequested: boolean = false
-  @State private selectedCoordEq: string = ''
-  @State private selectedCoordEqJ2000: string = ''
-  @State private selectedCoordApparentAltAz: string = ''
-  @State private selectedCoordGeometricAltAz: string = ''
-  @State private selectedCoordEcliptic: string = ''
-  @State private selectedCoordEclipticJ2000: string = ''
-  @State private selectedCoordGalactic: string = ''
-  @State private selectedCoordSupergalactic: string = ''
-  @State private selectedCoordParallactic: string = ''
-  @State private selectedCoordAlt: string = ''
-  @State private selectedHourAngle: string = ''
-  @State private selectedMeanSiderealTime: string = ''
-  @State private selectedApparentSiderealTime: string = ''
-  @State private selectedConstellation: string = ''
-  @State private selectedDistance: string = ''
-  @State private selectedDistanceCompact: string = ''
-  @State private selectedDistanceStatus: string = ''
-  @State private selectedTleOutdated: boolean = false
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   @State private gyroGuideVisible: boolean = false
@@ -205,12 +162,6 @@ export struct WindowNativeNode {
   private objectCardDragStartY: number = 0
   private objectCardDragStartOffsetX: number = 0
   private objectCardDragStartOffsetY: number = 0
-  @State private selectedSize: string = ''
-  @State private selectedRise: string = ''
-  @State private selectedSet: string = ''
-  @State private selectedTransit: string = ''
-  @State private selectedPhase: string = ''
-  @State private selectedElongation: string = ''
   @State private objectInspectorMoreOpen: boolean = false
   @State private objectInspectorMediaPath: string = ''
   @State private objectInspectorMediaKind: string = 'none'
@@ -551,7 +502,6 @@ export struct WindowNativeNode {
   private almanacRequestSequence: number = 0
   @State private almanacSeasons: Array<SeasonEvent> = []
   @State private almanacSeasonYear: string = ''
-  @State private objectInfo: Map<string, string> = new Map()
   @State private dsoTotalCount: number = 0
   @State private dsoGalaxies: number = 0
   @State private dsoClusters: number = 0
@@ -914,7 +864,6 @@ export struct WindowNativeNode {
   private navStarsLoadRequestId: number = 0
   private navStarsMutationId: number = 0
   @State private landscapeDetailOpen: boolean = false
-  @State private selectedLandscapeName: string = ''
   @State private landscapeTransp: number = 0
   @State private landscapeFadeWithZoom: boolean = true
   @State private bortleScale: number = 3
@@ -1340,9 +1289,6 @@ export struct WindowNativeNode {
   private foregroundRefreshPaused: boolean = false
   // Structured details are loaded after a new target is drawn. Keeping this
   // timer separate from the live-value poll prevents it from delaying panning.
-  private selectedDetailTimer: number = 0
-  private selectedDetailRequestPending: boolean = false
-  private selectedUiLayoutTimer: number = 0
   private lastSafeNavigationPayload: string = ''
   private lastSafeNavigationAt: number = 0
   private categoryOffset: number = 0
@@ -1950,7 +1896,7 @@ export struct WindowNativeNode {
         return
       }
       if (commandName === 'setObjectDetailTab') {
-        if (this.selectedName.length > 0) {
+        if (this.objectDetailStore.selectedName.length > 0) {
           this.infoWinVisible = true
           this.selectObjectDetailTab(Number(event['payload']))
         }
@@ -1999,7 +1945,7 @@ export struct WindowNativeNode {
         this.informationMode = response.infoMode ?? this.informationMode
         if (response.customInfoMask !== undefined) this.informationCustomMask = Number(response.customInfoMask)
         this.applySelectedInfoMode(this.informationMode)
-        this.selectedDetailLoaded = false
+        this.objectDetailStore.selectedDetailLoaded = false
         this.refreshSelectedObject()
         return
       }
@@ -2134,7 +2080,7 @@ export struct WindowNativeNode {
       this.applySelectedObject(response, false, 'center')
       hilog.info(0x0000, 'StellariumArkUI',
         '[cli-ui] selection synchronized command=%{public}s name=%{public}s',
-        commandName, this.selectedName)
+        commandName, this.objectDetailStore.selectedName)
     } catch (err) {
       hilog.warn(0x0000, 'StellariumArkUI', '[cli-ui] event ignored: %{public}s', JSON.stringify(err))
     }
@@ -2403,7 +2349,7 @@ export struct WindowNativeNode {
             this.loadTimeExtras()
           }, 3000)
         }
-        if (this.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWinVisible)) {
+        if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWinVisible)) {
           this.startDetailAutoRefresh()
         }
       }
@@ -5993,7 +5939,7 @@ export struct WindowNativeNode {
       this.informationMode = r.infoMode ?? mode
       if (r.customInfoMask !== undefined) this.informationCustomMask = Number(r.customInfoMask)
       this.applySelectedInfoMode(this.informationMode)
-      this.selectedDetailLoaded = false
+      this.objectDetailStore.selectedDetailLoaded = false
       this.refreshSelectedObject()
     }, () => {
       this.informationSettingPending = false
@@ -6013,7 +5959,7 @@ export struct WindowNativeNode {
       this.informationMode = 'custom'
       this.informationCustomMask = r.customInfoMask !== undefined ? Number(r.customInfoMask) : nextMask
       this.infoLevel = 0
-      this.selectedDetailLoaded = false
+      this.objectDetailStore.selectedDetailLoaded = false
       this.refreshSelectedObject()
     }, () => {
       this.informationSettingPending = false
@@ -7044,7 +6990,7 @@ export struct WindowNativeNode {
   }
 
   private hasSelectedObject(): boolean {
-    return this.selectedStatus === 'Selected' && this.selectedName.length > 0
+    return this.objectDetailStore.selectedStatus === 'Selected' && this.objectDetailStore.selectedName.length > 0
   }
 
   private clearRtsSelectionResults(): void {
@@ -7073,8 +7019,8 @@ export struct WindowNativeNode {
   }
 
   private graphTargetLabel(): string {
-    if (this.selectedName.length === 0) return '尚未选择天体'
-    return this.zhNameOf(this.selectedName)
+    if (this.objectDetailStore.selectedName.length === 0) return '尚未选择天体'
+    return this.zhNameOf(this.objectDetailStore.selectedName)
   }
 
   @Builder
@@ -9490,7 +9436,7 @@ export struct WindowNativeNode {
         Column({ space: 0 }) {
         Row() {
           Column({ space: 3 }) {
-            Text(this.zhNameOf(this.selectedName)).fontSize(18).fontWeight(FontWeight.Medium).fontColor('#F0FAFF')
+            Text(this.zhNameOf(this.objectDetailStore.selectedName)).fontSize(18).fontWeight(FontWeight.Medium).fontColor('#F0FAFF')
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
             Text(this.objectInspectorMediaLabel).fontSize(11).fontColor('#9CC7DB').width('100%')
           }
@@ -10724,7 +10670,7 @@ private loadObjectInfo(): void {
         if (obj['alt'] !== undefined) m.set('alt', (obj['alt'] as number).toFixed(2));
         if (obj['az'] !== undefined) m.set('az', (obj['az'] as number).toFixed(2));
         if (obj['magnitude'] !== undefined) m.set('magnitude', (obj['magnitude'] as number).toFixed(2));
-        this.objectInfo = m;
+        this.objectDetailStore.objectInfo = m;
       }
     })
   }
@@ -10834,7 +10780,7 @@ private loadPlanetPositions(): void {
         return
       }
       this.currentLandscapeId = id
-      this.selectedLandscapeName = name
+      this.objectDetailStore.selectedLandscapeName = name
       this.landscapeDetailOpen = false
       this.refreshState()
     })
@@ -12470,7 +12416,7 @@ private loadPlanetPositions(): void {
   }
 
   private updateGyroTargetGuide(force: boolean = false): void {
-    if (!this.gyroscopeEnabled || this.selectedStatus !== 'Selected' ||
+    if (!this.gyroscopeEnabled || this.objectDetailStore.selectedStatus !== 'Selected' ||
       !Number.isFinite(this.gyroGuideTargetAz) || !Number.isFinite(this.gyroGuideTargetAlt) ||
       !Number.isFinite(this.gyroLastAz) || !Number.isFinite(this.gyroLastAlt)) {
       this.gyroGuideVisible = false
@@ -13104,7 +13050,7 @@ private loadPlanetPositions(): void {
         } else {
           this.trackingText = 'Off'
         }
-        const displayName = this.zhNameOf(this.selectedName.length > 0 ? this.selectedName : query)
+        const displayName = this.zhNameOf(this.objectDetailStore.selectedName.length > 0 ? this.objectDetailStore.selectedName : query)
         this.flashHint(I18n.t('i0071').replace('%s', displayName))
       } else {
         this.applySelectedObject(result)
@@ -13118,29 +13064,29 @@ private loadPlanetPositions(): void {
   // callNativeWhenReady 放弃轮询时不会回调，所以配 detailRefreshGuard 兜底复位，防止永久卡死。
   private refreshSelectedObject(): void {
     if (this.detailRefreshing) { return }
-    const expectedName = this.selectedName
+    const expectedName = this.objectDetailStore.selectedName
     const selectionSerial = this.skySelectionRequestSerial
     this.detailRefreshing = true
     if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard) }
     this.detailRefreshGuard = setTimeout(() => { this.detailRefreshing = false }, 1800) as number
-    const detailsNeeded = !this.selectedDetailLoaded && (this.fullInspectorRequested || this.useTabletObjectInspector())
-    if (detailsNeeded && this.selectedDetailRequestPending) {
+    const detailsNeeded = !this.objectDetailStore.selectedDetailLoaded && (this.fullInspectorRequested || this.useTabletObjectInspector())
+    if (detailsNeeded && this.objectDetailStore.selectedDetailRequestPending) {
       this.detailRefreshing = false
       if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard); this.detailRefreshGuard = 0 }
       return
     }
     const details = detailsNeeded ? 'details' : ''
-    if (details === 'details') { this.selectedDetailRequestPending = true }
+    if (details === 'details') { this.objectDetailStore.selectedDetailRequestPending = true }
     this.callInteractive('getSelectedObjectInfo', details, (r) => {
-      if (details === 'details') { this.selectedDetailRequestPending = false }
+      if (details === 'details') { this.objectDetailStore.selectedDetailRequestPending = false }
       this.detailRefreshing = false
       if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard); this.detailRefreshGuard = 0 }
-      if (selectionSerial !== this.skySelectionRequestSerial || expectedName !== this.selectedName) {
+      if (selectionSerial !== this.skySelectionRequestSerial || expectedName !== this.objectDetailStore.selectedName) {
         return
       }
       this.applySelectedObject(r, true)
     }, () => {
-      if (details === 'details') { this.selectedDetailRequestPending = false }
+      if (details === 'details') { this.objectDetailStore.selectedDetailRequestPending = false }
       this.detailRefreshing = false
       if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard); this.detailRefreshGuard = 0 }
     })
@@ -13151,10 +13097,10 @@ private loadPlanetPositions(): void {
     if (this.detailTimer !== 0) { return }
     this.detailTimer = setInterval(() => {
       if (this.skyDragging) { return }
-      if (this.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWinVisible)) {
+      if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWinVisible)) {
         // The one-shot full-details request owns the initial structured card
         // load. Do not race it with a second request from the live-value poll.
-        if (!this.selectedDetailLoaded && this.selectedDetailTimer !== 0) { return }
+        if (!this.objectDetailStore.selectedDetailLoaded && this.objectDetailStore.selectedDetailTimer !== 0) { return }
         this.refreshSelectedObject()
       }
     }, 180) as number
@@ -13170,7 +13116,7 @@ private loadPlanetPositions(): void {
   }
 
   private resumeDetailRefreshAfterSkyDrag(): void {
-    if (this.infoWinVisible && this.selectedStatus === 'Selected') {
+    if (this.infoWinVisible && this.objectDetailStore.selectedStatus === 'Selected') {
       this.startDetailAutoRefresh()
       this.refreshObjectDetailConnector()
       this.scheduleSkyTextureStatusCheck()
@@ -13324,8 +13270,8 @@ private loadPlanetPositions(): void {
   }
 
   private refreshObjectDetailConnector(): void {
-    if (!this.objectDetailConnectorVisible || !this.infoWinVisible || this.selectedStatus !== 'Selected' ||
-      this.selectedName.length === 0) {
+    if (!this.objectDetailConnectorVisible || !this.infoWinVisible || this.objectDetailStore.selectedStatus !== 'Selected' ||
+      this.objectDetailStore.selectedName.length === 0) {
       this.clearObjectDetailConnector()
       return
     }
@@ -13468,16 +13414,16 @@ private loadPlanetPositions(): void {
   }
 
   private requestSelectedDetails(expectedName: string): void {
-    if (this.selectedDetailTimer !== 0) {
-      clearTimeout(this.selectedDetailTimer)
+    if (this.objectDetailStore.selectedDetailTimer !== 0) {
+      clearTimeout(this.objectDetailStore.selectedDetailTimer)
     }
-    this.selectedDetailRequestPending = true
+    this.objectDetailStore.selectedDetailRequestPending = true
     // Let selection, initial layout, and navigation start finish before asking
     // Qt to collect the complete structured field set.
-    this.selectedDetailTimer = setTimeout(() => {
-      this.selectedDetailTimer = 0
-      if (!this.infoWinVisible || this.selectedName !== expectedName) {
-        this.selectedDetailRequestPending = false
+    this.objectDetailStore.selectedDetailTimer = setTimeout(() => {
+      this.objectDetailStore.selectedDetailTimer = 0
+      if (!this.infoWinVisible || this.objectDetailStore.selectedName !== expectedName) {
+        this.objectDetailStore.selectedDetailRequestPending = false
         return
       }
       if (this.skyDragging) {
@@ -13486,39 +13432,39 @@ private loadPlanetPositions(): void {
       }
       this.callInteractive('getSelectedObjectInfo', 'details', (r) => {
         const returnedName = r.name && r.name.length > 0 ? r.name : r.englishName
-        if (r.ok === true && r.found === true && returnedName === this.selectedName) {
+        if (r.ok === true && r.found === true && returnedName === this.objectDetailStore.selectedName) {
           this.applySelectedObject(r, true)
         }
-        this.selectedDetailRequestPending = false
+        this.objectDetailStore.selectedDetailRequestPending = false
       }, () => {
-        this.selectedDetailRequestPending = false
+        this.objectDetailStore.selectedDetailRequestPending = false
       })
     }, 550) as number
   }
 
   private requestSatellitePasses(expectedName: string): void {
-    if (this.selectedName !== expectedName || this.selectedSatellitePassesLoaded) return
+    if (this.objectDetailStore.selectedName !== expectedName || this.objectDetailStore.selectedSatellitePassesLoaded) return
     const payload = JSON.stringify({ hours: 12, limit: 3, minElevation: 10, visibleOnly: false })
     this.callInteractive('getSatellitePasses', payload, (r) => {
-      if (this.selectedName !== expectedName) return
+      if (this.objectDetailStore.selectedName !== expectedName) return
       if (r.ok === true) {
-        this.selectedSatellitePasses = r.satellitePassList ?? []
+        this.objectDetailStore.selectedSatellitePasses = r.satellitePassList ?? []
       } else {
-        this.selectedSatellitePasses = []
+        this.objectDetailStore.selectedSatellitePasses = []
       }
-      this.selectedSatellitePassesLoaded = true
+      this.objectDetailStore.selectedSatellitePassesLoaded = true
     }, () => {
-      if (this.selectedName === expectedName) {
-        this.selectedSatellitePasses = []
-        this.selectedSatellitePassesLoaded = true
+      if (this.objectDetailStore.selectedName === expectedName) {
+        this.objectDetailStore.selectedSatellitePasses = []
+        this.objectDetailStore.selectedSatellitePassesLoaded = true
       }
     })
   }
 
   private loadSelectedSatellitePasses(): void {
-    if (!this.selectedObjectIsArtificialSatellite() || this.selectedName.length === 0 || this.selectedSatellitePassesRequested) return
-    this.selectedSatellitePassesRequested = true
-    this.requestSatellitePasses(this.selectedName)
+    if (!this.selectedObjectIsArtificialSatellite() || this.objectDetailStore.selectedName.length === 0 || this.objectDetailStore.selectedSatellitePassesRequested) return
+    this.objectDetailStore.selectedSatellitePassesRequested = true
+    this.requestSatellitePasses(this.objectDetailStore.selectedName)
   }
 
   private moveToSelectedObject(fromLayoutChange: boolean = false): void {
@@ -13544,7 +13490,7 @@ private loadPlanetPositions(): void {
   private navigateSelectedObjectTo(x: number, y: number, mode: string = 'focus'): void {
     if (this.skyWidth <= 1 || this.skyHeight <= 1) { return }
     const payload = `${Math.round(x)}|${Math.round(y)}|${Math.round(this.skyWidth)}|${Math.round(this.skyHeight)}|${mode}`
-    const navigationKey = this.selectedName + '|' + payload
+    const navigationKey = this.objectDetailStore.selectedName + '|' + payload
     hilog.info(0x0000, 'StellariumArkUI', 'safe-target request mode=%{public}s compact=%{public}s panel=%{public}s drawer=%{public}s info=%{public}s target=%{public}s',
       mode, (!this.isExpandedLayout).toString(), this.panelVisible.toString(), 'false', this.infoWinVisible.toString(), payload)
     const now = Date.now()
@@ -13714,25 +13660,25 @@ private loadPlanetPositions(): void {
   // UI layout changes only refresh the connector. The selected object owns its
   // current sky position; opening a panel must never move the sky behind it.
   private scheduleSelectedObjectForUiChange(delay: number = 360): void {
-    if (this.selectedUiLayoutTimer !== 0) {
-      clearTimeout(this.selectedUiLayoutTimer)
-      this.selectedUiLayoutTimer = 0
+    if (this.objectDetailStore.selectedUiLayoutTimer !== 0) {
+      clearTimeout(this.objectDetailStore.selectedUiLayoutTimer)
+      this.objectDetailStore.selectedUiLayoutTimer = 0
     }
-    if (this.selectedStatus !== 'Selected') {
+    if (this.objectDetailStore.selectedStatus !== 'Selected') {
       return
     }
-    this.selectedUiLayoutTimer = setTimeout(() => {
-      this.selectedUiLayoutTimer = 0
-      if (this.selectedStatus === 'Selected') {
+    this.objectDetailStore.selectedUiLayoutTimer = setTimeout(() => {
+      this.objectDetailStore.selectedUiLayoutTimer = 0
+      if (this.objectDetailStore.selectedStatus === 'Selected') {
         this.refreshObjectDetailConnector()
       }
     }, delay) as number
   }
 
   private cancelSelectedObjectUiChange(): void {
-    if (this.selectedUiLayoutTimer !== 0) {
-      clearTimeout(this.selectedUiLayoutTimer)
-      this.selectedUiLayoutTimer = 0
+    if (this.objectDetailStore.selectedUiLayoutTimer !== 0) {
+      clearTimeout(this.objectDetailStore.selectedUiLayoutTimer)
+      this.objectDetailStore.selectedUiLayoutTimer = 0
     }
   }
 
@@ -13953,39 +13899,39 @@ private loadPlanetPositions(): void {
   private applyCustomInformationMask(): void {
     if (this.informationMode !== 'custom') return
     if (!this.informationMaskHas('magnitude')) {
-      this.selectedMagnitude = ''
-      this.selectedApparentMagnitude = ''
-      this.selectedAirmass = ''
-      this.selectedExtinction = ''
+      this.objectDetailStore.selectedMagnitude = ''
+      this.objectDetailStore.selectedApparentMagnitude = ''
+      this.objectDetailStore.selectedAirmass = ''
+      this.objectDetailStore.selectedExtinction = ''
     }
-    if (!this.informationMaskHas('raOfDate')) this.selectedCoordEq = ''
-    if (!this.informationMaskHas('raJ2000')) this.selectedCoordEqJ2000 = ''
+    if (!this.informationMaskHas('raOfDate')) this.objectDetailStore.selectedCoordEq = ''
+    if (!this.informationMaskHas('raJ2000')) this.objectDetailStore.selectedCoordEqJ2000 = ''
     if (!this.informationMaskHas('altAz')) {
-      this.selectedCoordAlt = ''
-      this.selectedCoordApparentAltAz = ''
-      this.selectedCoordGeometricAltAz = ''
+      this.objectDetailStore.selectedCoordAlt = ''
+      this.objectDetailStore.selectedCoordApparentAltAz = ''
+      this.objectDetailStore.selectedCoordGeometricAltAz = ''
     }
-    if (!this.informationMaskHas('eclipticOfDate')) this.selectedCoordEcliptic = ''
-    if (!this.informationMaskHas('eclipticJ2000')) this.selectedCoordEclipticJ2000 = ''
-    if (!this.informationMaskHas('galactic')) this.selectedCoordGalactic = ''
-    if (!this.informationMaskHas('supergalactic')) this.selectedCoordSupergalactic = ''
-    if (!this.informationMaskHas('otherCoordinates')) this.selectedCoordParallactic = ''
-    if (!this.informationMaskHas('hourAngle')) this.selectedHourAngle = ''
-    if (!this.informationMaskHas('constellation')) this.selectedConstellation = ''
-    if (!this.informationMaskHas('distance')) this.selectedDistance = ''
-    if (!this.informationMaskHas('size')) this.selectedSize = ''
+    if (!this.informationMaskHas('eclipticOfDate')) this.objectDetailStore.selectedCoordEcliptic = ''
+    if (!this.informationMaskHas('eclipticJ2000')) this.objectDetailStore.selectedCoordEclipticJ2000 = ''
+    if (!this.informationMaskHas('galactic')) this.objectDetailStore.selectedCoordGalactic = ''
+    if (!this.informationMaskHas('supergalactic')) this.objectDetailStore.selectedCoordSupergalactic = ''
+    if (!this.informationMaskHas('otherCoordinates')) this.objectDetailStore.selectedCoordParallactic = ''
+    if (!this.informationMaskHas('hourAngle')) this.objectDetailStore.selectedHourAngle = ''
+    if (!this.informationMaskHas('constellation')) this.objectDetailStore.selectedConstellation = ''
+    if (!this.informationMaskHas('distance')) this.objectDetailStore.selectedDistance = ''
+    if (!this.informationMaskHas('size')) this.objectDetailStore.selectedSize = ''
     if (!this.informationMaskHas('siderealTime')) {
-      this.selectedMeanSiderealTime = ''
-      this.selectedApparentSiderealTime = ''
+      this.objectDetailStore.selectedMeanSiderealTime = ''
+      this.objectDetailStore.selectedApparentSiderealTime = ''
     }
     if (!this.informationMaskHas('riseTransitSet')) {
-      this.selectedRise = ''
-      this.selectedSet = ''
-      this.selectedTransit = ''
+      this.objectDetailStore.selectedRise = ''
+      this.objectDetailStore.selectedSet = ''
+      this.objectDetailStore.selectedTransit = ''
     }
     if (!this.informationMaskHas('elongation')) {
-      this.selectedPhase = ''
-      this.selectedElongation = ''
+      this.objectDetailStore.selectedPhase = ''
+      this.objectDetailStore.selectedElongation = ''
     }
     const groups = new Map<string, string>([
       ['designations', 'catalog'], ['designation', 'catalog'], ['catalogNumber', 'catalog'], ['internationalDesignator', 'catalog'], ['culturalNames', 'name'],
@@ -13995,24 +13941,24 @@ private loadPlanetPositions(): void {
       ['parallacticAngle', 'otherCoordinates'], ['blueMagnitude', 'magnitude'], ['surfaceBrightness', 'magnitude'], ['colorIndex', 'magnitude'],
       ['angularAxes', 'size'], ['positionAngle', 'size']
     ])
-    this.selectedDetailFields = this.selectedDetailFields.filter((field: ObjectDetailField) =>
+    this.objectDetailStore.selectedDetailFields = this.objectDetailStore.selectedDetailFields.filter((field: ObjectDetailField) =>
       this.informationMaskHas(groups.get(field.key) ?? 'extra'))
   }
 
   private updateSelectedLiveDetails(fields: Array<ObjectDetailField>): void {
-    const previous = this.selectedDetailFields
+    const previous = this.objectDetailStore.selectedDetailFields
     const updated = previous
       .filter((field: ObjectDetailField) => field.live !== true || fields.some((item: ObjectDetailField) => item.key === field.key))
       .map((field: ObjectDetailField) => field.live === true
         ? (fields.find((item: ObjectDetailField) => item.key === field.key) ?? field) : field)
-    this.selectedDetailFields = updated.concat(fields.filter((field: ObjectDetailField) =>
+    this.objectDetailStore.selectedDetailFields = updated.concat(fields.filter((field: ObjectDetailField) =>
       !previous.some((item: ObjectDetailField) => item.key === field.key)))
   }
 
   // fromRefresh=true 时来自“详情自动刷新”等后台轮询：仅刷新数值，绝不重置展开态、也绝不因瞬时未命中而关窗。
   private applySelectedObject(result: StellariumBridgeResponse, fromRefresh: boolean = false, placement: string = ''): void {
     if (result.ok !== true) {
-      this.selectedStatus = result.error ? result.error : 'Core not ready'
+      this.objectDetailStore.selectedStatus = result.error ? result.error : 'Core not ready'
       return
     }
     if (result.found === true) {
@@ -14024,25 +13970,25 @@ private loadPlanetPositions(): void {
         : ((result.objectType && (result.objectType as string).length > 0) ? (result.objectType as string) : 'Object')
       // 只有真正换了目标才重开详情。用户手动关闭同一目标后，任何后续刷新/误触
       // 都只更新数值，不能把卡片重新弹回来。
-      const targetChanged = (this.selectedName !== incomingName) || (this.selectedType !== incomingType)
+      const targetChanged = (this.objectDetailStore.selectedName !== incomingName) || (this.objectDetailStore.selectedType !== incomingType)
       const preserveClosedDetail = !this.infoWinVisible && !targetChanged && this.dismissedObjectName === incomingName
       const isNewSelection = targetChanged
-      this.selectedName = incomingName
-      this.selectedEnglishName = result.englishName && result.englishName.length > 0 ? result.englishName : ''
-      this.selectedCatalogId = result.catalogId && result.catalogId.length > 0 ? result.catalogId : ''
-      this.selectedDetailMediaPath = result.detailMediaPath && result.detailMediaPath.length > 0 ? result.detailMediaPath : ''
-      this.selectedDetailMediaKind = result.detailMediaKind && result.detailMediaKind.length > 0 ? result.detailMediaKind : ''
-      this.selectedDetailMediaLabel = result.detailMediaLabel && result.detailMediaLabel.length > 0 ? result.detailMediaLabel : ''
-      this.selectedDetailModel = result.detailModel
+      this.objectDetailStore.selectedName = incomingName
+      this.objectDetailStore.selectedEnglishName = result.englishName && result.englishName.length > 0 ? result.englishName : ''
+      this.objectDetailStore.selectedCatalogId = result.catalogId && result.catalogId.length > 0 ? result.catalogId : ''
+      this.objectDetailStore.selectedDetailMediaPath = result.detailMediaPath && result.detailMediaPath.length > 0 ? result.detailMediaPath : ''
+      this.objectDetailStore.selectedDetailMediaKind = result.detailMediaKind && result.detailMediaKind.length > 0 ? result.detailMediaKind : ''
+      this.objectDetailStore.selectedDetailMediaLabel = result.detailMediaLabel && result.detailMediaLabel.length > 0 ? result.detailMediaLabel : ''
+      this.objectDetailStore.selectedDetailModel = result.detailModel
       this.refreshObjectInspectorModelLighting()
-      this.selectedConstellationCultureId = result.constellationCultureId && result.constellationCultureId.length > 0 ? result.constellationCultureId : ''
-      this.selectedConstellationCultureName = result.constellationCultureName && result.constellationCultureName.length > 0 ? result.constellationCultureName : ''
-      this.selectedConstellationCultureDescription = result.constellationCultureDescription && result.constellationCultureDescription.length > 0 ? result.constellationCultureDescription : ''
-      this.selectedConstellationCultureDescriptionBlocks = result.constellationCultureDescriptionBlocks !== undefined ? result.constellationCultureDescriptionBlocks : []
-      this.selectedConstellationCultureDescriptionSource = result.constellationCultureDescriptionSource && result.constellationCultureDescriptionSource.length > 0 ? result.constellationCultureDescriptionSource : ''
-      this.selectedObjectType = result.objectType && result.objectType.length > 0 ? result.objectType : ''
-      this.selectedTemperatureK = typeof result.temperatureK === 'number' ? result.temperatureK : 0
-      this.selectedType = incomingType
+      this.objectDetailStore.selectedConstellationCultureId = result.constellationCultureId && result.constellationCultureId.length > 0 ? result.constellationCultureId : ''
+      this.objectDetailStore.selectedConstellationCultureName = result.constellationCultureName && result.constellationCultureName.length > 0 ? result.constellationCultureName : ''
+      this.objectDetailStore.selectedConstellationCultureDescription = result.constellationCultureDescription && result.constellationCultureDescription.length > 0 ? result.constellationCultureDescription : ''
+      this.objectDetailStore.selectedConstellationCultureDescriptionBlocks = result.constellationCultureDescriptionBlocks !== undefined ? result.constellationCultureDescriptionBlocks : []
+      this.objectDetailStore.selectedConstellationCultureDescriptionSource = result.constellationCultureDescriptionSource && result.constellationCultureDescriptionSource.length > 0 ? result.constellationCultureDescriptionSource : ''
+      this.objectDetailStore.selectedObjectType = result.objectType && result.objectType.length > 0 ? result.objectType : ''
+      this.objectDetailStore.selectedTemperatureK = typeof result.temperatureK === 'number' ? result.temperatureK : 0
+      this.objectDetailStore.selectedType = incomingType
       this.refreshObjectInspectorMedia()
       if (result.infoMode !== undefined) {
         if (result.infoMode === 'custom' && result.customInfoMask !== undefined) {
@@ -14050,38 +13996,38 @@ private loadPlanetPositions(): void {
         }
         this.applySelectedInfoMode(result.infoMode)
       }
-      this.selectedStatus = 'Selected'
+      this.objectDetailStore.selectedStatus = 'Selected'
       const mag = (typeof result.magnitude === 'number') ? (result.magnitude as number) : 99
       const showBasicInfo = this.infoLevel <= 2
       const showObservedInfo = this.infoLevel <= 1
-      this.selectedMagnitude = showBasicInfo && mag < 98 ? mag.toFixed(2) : ''
+      this.objectDetailStore.selectedMagnitude = showBasicInfo && mag < 98 ? mag.toFixed(2) : ''
       const apparentMag = (typeof result.apparentMagnitude === 'number') ? (result.apparentMagnitude as number) : 99
-      this.selectedApparentMagnitude = showObservedInfo && apparentMag < 98 ? apparentMag.toFixed(2) : ''
-      this.selectedAirmass = showObservedInfo && typeof result.airmass === 'number' ? (result.airmass as number).toFixed(2) : ''
-      this.selectedExtinction = showObservedInfo && typeof result.extinction === 'number' ? (result.extinction as number).toFixed(2) : ''
+      this.objectDetailStore.selectedApparentMagnitude = showObservedInfo && apparentMag < 98 ? apparentMag.toFixed(2) : ''
+      this.objectDetailStore.selectedAirmass = showObservedInfo && typeof result.airmass === 'number' ? (result.airmass as number).toFixed(2) : ''
+      this.objectDetailStore.selectedExtinction = showObservedInfo && typeof result.extinction === 'number' ? (result.extinction as number).toFixed(2) : ''
       if (result.detailFields !== undefined) {
-        this.selectedDetailFields = result.detailFields
-        this.selectedDetailLoaded = true
-      } else if (result.liveDetailFields !== undefined && this.selectedDetailLoaded) {
+        this.objectDetailStore.selectedDetailFields = result.detailFields
+        this.objectDetailStore.selectedDetailLoaded = true
+      } else if (result.liveDetailFields !== undefined && this.objectDetailStore.selectedDetailLoaded) {
         this.updateSelectedLiveDetails(result.liveDetailFields)
       }
       if (result.satellitePasses !== undefined) {
-        this.selectedSatellitePasses = result.satellitePasses
-        this.selectedSatellitePassesLoaded = true
+        this.objectDetailStore.selectedSatellitePasses = result.satellitePasses
+        this.objectDetailStore.selectedSatellitePassesLoaded = true
       }
       const ra: string = result.ra ? result.ra : ''
       const dec: string = result.dec ? result.dec : ''
-      this.selectedCoordEq = showBasicInfo && result.equatorialOfDate
+      this.objectDetailStore.selectedCoordEq = showBasicInfo && result.equatorialOfDate
         ? result.equatorialOfDate
         : (showBasicInfo && (ra.length > 0 || dec.length > 0) ? (ra + '  ' + dec).trim() : '')
-      this.selectedCoordEqJ2000 = showBasicInfo && result.equatorialJ2000 ? result.equatorialJ2000 : ''
-      this.selectedCoordApparentAltAz = showObservedInfo && result.apparentAltAz ? result.apparentAltAz : ''
-      this.selectedCoordGeometricAltAz = showObservedInfo && result.geometricAltAz ? result.geometricAltAz : ''
-      this.selectedCoordEcliptic = showBasicInfo && result.eclipticCurrent ? result.eclipticCurrent : ''
-      this.selectedCoordEclipticJ2000 = showBasicInfo && result.eclipticJ2000 ? result.eclipticJ2000 : ''
-      this.selectedCoordGalactic = showBasicInfo && result.galactic ? result.galactic : ''
-      this.selectedCoordSupergalactic = showBasicInfo && result.supergalactic ? result.supergalactic : ''
-      this.selectedCoordParallactic = showObservedInfo && result.parallacticAngle ? result.parallacticAngle : ''
+      this.objectDetailStore.selectedCoordEqJ2000 = showBasicInfo && result.equatorialJ2000 ? result.equatorialJ2000 : ''
+      this.objectDetailStore.selectedCoordApparentAltAz = showObservedInfo && result.apparentAltAz ? result.apparentAltAz : ''
+      this.objectDetailStore.selectedCoordGeometricAltAz = showObservedInfo && result.geometricAltAz ? result.geometricAltAz : ''
+      this.objectDetailStore.selectedCoordEcliptic = showBasicInfo && result.eclipticCurrent ? result.eclipticCurrent : ''
+      this.objectDetailStore.selectedCoordEclipticJ2000 = showBasicInfo && result.eclipticJ2000 ? result.eclipticJ2000 : ''
+      this.objectDetailStore.selectedCoordGalactic = showBasicInfo && result.galactic ? result.galactic : ''
+      this.objectDetailStore.selectedCoordSupergalactic = showBasicInfo && result.supergalactic ? result.supergalactic : ''
+      this.objectDetailStore.selectedCoordParallactic = showObservedInfo && result.parallacticAngle ? result.parallacticAngle : ''
       const hasAlt: boolean = typeof result.altitude === 'number'
       const hasAz: boolean = typeof result.azimuth === 'number'
       this.gyroGuideTargetAlt = hasAlt ? result.altitude as number : Number.NaN
@@ -14092,40 +14038,40 @@ private loadPlanetPositions(): void {
       if (this.gyroscopeEnabled) {
         this.updateGyroTargetGuide(true)
       }
-      this.selectedCoordAlt = showObservedInfo && (hasAlt || hasAz)
+      this.objectDetailStore.selectedCoordAlt = showObservedInfo && (hasAlt || hasAz)
         ? (I18n.t('coord_alt') + ' ' + (hasAlt ? this.fmtDegMin(result.altitude as number) : '--') + '  ' + I18n.t('coord_az') + ' ' + (hasAz ? this.fmtDegMin(result.azimuth as number) : '--'))
         : ''
-      this.selectedHourAngle = showObservedInfo && result.hourAngle && result.hourAngle.length > 0 ? result.hourAngle : ''
-      this.selectedMeanSiderealTime = showObservedInfo && result.meanSiderealTime && result.meanSiderealTime.length > 0 ? result.meanSiderealTime : ''
-      this.selectedApparentSiderealTime = showObservedInfo && result.apparentSiderealTime && result.apparentSiderealTime.length > 0 ? result.apparentSiderealTime : ''
-      this.selectedConstellation = showBasicInfo && result.constellation && result.constellation.length > 0 ? result.constellation : ''
-      this.selectedDistance = showObservedInfo && result.distance && result.distance.length > 0 ? result.distance : ''
-      this.selectedDistanceCompact = result.distanceCompact ?? result.distance ?? ''
-      this.selectedDistanceStatus = result.distanceStatus ?? 'unavailable'
-      this.selectedTleOutdated = result.tleOutdated === true
+      this.objectDetailStore.selectedHourAngle = showObservedInfo && result.hourAngle && result.hourAngle.length > 0 ? result.hourAngle : ''
+      this.objectDetailStore.selectedMeanSiderealTime = showObservedInfo && result.meanSiderealTime && result.meanSiderealTime.length > 0 ? result.meanSiderealTime : ''
+      this.objectDetailStore.selectedApparentSiderealTime = showObservedInfo && result.apparentSiderealTime && result.apparentSiderealTime.length > 0 ? result.apparentSiderealTime : ''
+      this.objectDetailStore.selectedConstellation = showBasicInfo && result.constellation && result.constellation.length > 0 ? result.constellation : ''
+      this.objectDetailStore.selectedDistance = showObservedInfo && result.distance && result.distance.length > 0 ? result.distance : ''
+      this.objectDetailStore.selectedDistanceCompact = result.distanceCompact ?? result.distance ?? ''
+      this.objectDetailStore.selectedDistanceStatus = result.distanceStatus ?? 'unavailable'
+      this.objectDetailStore.selectedTleOutdated = result.tleOutdated === true
       // 过滤接近0的角直径（小行星等天体角直径极小，显示0无意义）
       const rawSize = result.size && result.size.length > 0 ? result.size : ''
       if (showObservedInfo && rawSize.length > 0) {
         const sizeMatch = rawSize.match(/([\d.]+)/)
         if (sizeMatch && parseFloat(sizeMatch[1]) === 0) {
-          this.selectedSize = ''
+          this.objectDetailStore.selectedSize = ''
         } else {
-          this.selectedSize = rawSize
+          this.objectDetailStore.selectedSize = rawSize
         }
       } else {
-        this.selectedSize = ''
+        this.objectDetailStore.selectedSize = ''
       }
-      this.selectedRise = showObservedInfo && result.rise && result.rise.length > 0 ? result.rise : ''
-      this.selectedSet = showObservedInfo && result.set && result.set.length > 0 ? result.set : ''
-      this.selectedTransit = showObservedInfo && result.transit && result.transit.length > 0 ? result.transit : ''
-      this.selectedPhase = showObservedInfo && typeof result.phase === 'number' ? (result.phase as number).toFixed(0) + '%' : ''
-      this.selectedElongation = showObservedInfo && typeof result.elongation === 'number' ? (result.elongation as number).toFixed(1) + '°' : ''
+      this.objectDetailStore.selectedRise = showObservedInfo && result.rise && result.rise.length > 0 ? result.rise : ''
+      this.objectDetailStore.selectedSet = showObservedInfo && result.set && result.set.length > 0 ? result.set : ''
+      this.objectDetailStore.selectedTransit = showObservedInfo && result.transit && result.transit.length > 0 ? result.transit : ''
+      this.objectDetailStore.selectedPhase = showObservedInfo && typeof result.phase === 'number' ? (result.phase as number).toFixed(0) + '%' : ''
+      this.objectDetailStore.selectedElongation = showObservedInfo && typeof result.elongation === 'number' ? (result.elongation as number).toFixed(1) + '°' : ''
       this.applyCustomInformationMask()
       // 选中成功后弹出独立浮动详情窗口（新目标默认收起，不打扰当前菜单；同一目标刷新时保留展开态）
       if (targetChanged) {
         this.dismissedObjectName = ''
         this.objectDetailConnectorLength = 0
-        this.selectedConstellationCultureDescriptionExpanded = false
+        this.objectDetailStore.selectedConstellationCultureDescriptionExpanded = false
       }
       if (!preserveClosedDetail) {
         this.infoWinVisible = true
@@ -14138,12 +14084,12 @@ private loadPlanetPositions(): void {
         this.objectCardPlacementPending = true
         // The lightweight tap/search response deliberately has no detailFields.
         // Never leave the previous target's structured data visible while loading.
-        this.selectedDetailFields = []
-        this.selectedDetailLoaded = false
-        this.selectedDetailRequestPending = false
-        this.selectedSatellitePasses = []
-        this.selectedSatellitePassesLoaded = false
-        this.selectedSatellitePassesRequested = false
+        this.objectDetailStore.selectedDetailFields = []
+        this.objectDetailStore.selectedDetailLoaded = false
+        this.objectDetailStore.selectedDetailRequestPending = false
+        this.objectDetailStore.selectedSatellitePasses = []
+        this.objectDetailStore.selectedSatellitePassesLoaded = false
+        this.objectDetailStore.selectedSatellitePassesRequested = false
         // Sensor tracking owns the camera. A gyro-mode search selects the
         // target and opens its card, but never starts a safe-area fly-to.
         if (!this.gyroscopeEnabled && !this.isObserverPlanetSelection(incomingName)) {
@@ -14154,69 +14100,69 @@ private loadPlanetPositions(): void {
       }
       this.updateGyroTargetGuide(true)
       // 天体名称和资料均来自核心；不再用本地手写别名表覆盖官方名称。
-      this.selectedInfo = ''
+      this.objectDetailStore.selectedInfo = ''
       // 换了新天体 → 按它的"性格"响一声（模仿 Sky Guide 的叮）
       if (isNewSelection) {
         AudioEngine.getInstance().chimeForSelection(result)
       }
       this.startDetailAutoRefresh()
-      if (isNewSelection && !this.selectedDetailLoaded) {
-        this.requestSelectedDetails(this.selectedName)
+      if (isNewSelection && !this.objectDetailStore.selectedDetailLoaded) {
+        this.requestSelectedDetails(this.objectDetailStore.selectedName)
       }
     } else {
-      this.selectedName = ''
-      this.selectedEnglishName = ''
-      this.selectedCatalogId = ''
-      this.selectedDetailMediaPath = ''
-      this.selectedDetailMediaKind = ''
-      this.selectedDetailMediaLabel = ''
-      this.selectedDetailModel = undefined
-      this.selectedConstellationCultureId = ''
-      this.selectedConstellationCultureName = ''
-      this.selectedConstellationCultureDescription = ''
-      this.selectedConstellationCultureDescriptionBlocks = []
-      this.selectedConstellationCultureDescriptionSource = ''
-      this.selectedObjectType = ''
-      this.selectedTemperatureK = 0
-      this.selectedType = ''
-      this.selectedSatellitePasses = []
-      this.selectedSatellitePassesLoaded = false
-      this.selectedSatellitePassesRequested = false
-      this.selectedStatus = result.query && result.query.length > 0 ? 'Try English name' : 'No match'
-      this.selectedMagnitude = ''
-      this.selectedApparentMagnitude = ''
-      this.selectedAirmass = ''
-      this.selectedExtinction = ''
-      this.selectedDetailFields = []
-      this.selectedDetailLoaded = false
-      this.selectedDetailRequestPending = false
-      this.selectedCoordEq = ''
-      this.selectedCoordEqJ2000 = ''
-      this.selectedCoordApparentAltAz = ''
-      this.selectedCoordGeometricAltAz = ''
-      this.selectedCoordEcliptic = ''
-      this.selectedCoordEclipticJ2000 = ''
-      this.selectedCoordGalactic = ''
-      this.selectedCoordSupergalactic = ''
-      this.selectedCoordParallactic = ''
-      this.selectedCoordAlt = ''
-      this.selectedHourAngle = ''
-      this.selectedMeanSiderealTime = ''
-      this.selectedApparentSiderealTime = ''
-      this.selectedConstellation = ''
-      this.selectedDistance = ''
-      this.selectedDistanceCompact = ''
-      this.selectedDistanceStatus = ''
-      this.selectedTleOutdated = false
+      this.objectDetailStore.selectedName = ''
+      this.objectDetailStore.selectedEnglishName = ''
+      this.objectDetailStore.selectedCatalogId = ''
+      this.objectDetailStore.selectedDetailMediaPath = ''
+      this.objectDetailStore.selectedDetailMediaKind = ''
+      this.objectDetailStore.selectedDetailMediaLabel = ''
+      this.objectDetailStore.selectedDetailModel = undefined
+      this.objectDetailStore.selectedConstellationCultureId = ''
+      this.objectDetailStore.selectedConstellationCultureName = ''
+      this.objectDetailStore.selectedConstellationCultureDescription = ''
+      this.objectDetailStore.selectedConstellationCultureDescriptionBlocks = []
+      this.objectDetailStore.selectedConstellationCultureDescriptionSource = ''
+      this.objectDetailStore.selectedObjectType = ''
+      this.objectDetailStore.selectedTemperatureK = 0
+      this.objectDetailStore.selectedType = ''
+      this.objectDetailStore.selectedSatellitePasses = []
+      this.objectDetailStore.selectedSatellitePassesLoaded = false
+      this.objectDetailStore.selectedSatellitePassesRequested = false
+      this.objectDetailStore.selectedStatus = result.query && result.query.length > 0 ? 'Try English name' : 'No match'
+      this.objectDetailStore.selectedMagnitude = ''
+      this.objectDetailStore.selectedApparentMagnitude = ''
+      this.objectDetailStore.selectedAirmass = ''
+      this.objectDetailStore.selectedExtinction = ''
+      this.objectDetailStore.selectedDetailFields = []
+      this.objectDetailStore.selectedDetailLoaded = false
+      this.objectDetailStore.selectedDetailRequestPending = false
+      this.objectDetailStore.selectedCoordEq = ''
+      this.objectDetailStore.selectedCoordEqJ2000 = ''
+      this.objectDetailStore.selectedCoordApparentAltAz = ''
+      this.objectDetailStore.selectedCoordGeometricAltAz = ''
+      this.objectDetailStore.selectedCoordEcliptic = ''
+      this.objectDetailStore.selectedCoordEclipticJ2000 = ''
+      this.objectDetailStore.selectedCoordGalactic = ''
+      this.objectDetailStore.selectedCoordSupergalactic = ''
+      this.objectDetailStore.selectedCoordParallactic = ''
+      this.objectDetailStore.selectedCoordAlt = ''
+      this.objectDetailStore.selectedHourAngle = ''
+      this.objectDetailStore.selectedMeanSiderealTime = ''
+      this.objectDetailStore.selectedApparentSiderealTime = ''
+      this.objectDetailStore.selectedConstellation = ''
+      this.objectDetailStore.selectedDistance = ''
+      this.objectDetailStore.selectedDistanceCompact = ''
+      this.objectDetailStore.selectedDistanceStatus = ''
+      this.objectDetailStore.selectedTleOutdated = false
       this.gyroGuideTargetAz = Number.NaN
       this.gyroGuideTargetAlt = Number.NaN
       this.gyroGuideVisible = false
-      this.selectedSize = ''
-      this.selectedRise = ''
-      this.selectedSet = ''
-      this.selectedTransit = ''
-      this.selectedPhase = ''
-      this.selectedElongation = ''
+      this.objectDetailStore.selectedSize = ''
+      this.objectDetailStore.selectedRise = ''
+      this.objectDetailStore.selectedSet = ''
+      this.objectDetailStore.selectedTransit = ''
+      this.objectDetailStore.selectedPhase = ''
+      this.objectDetailStore.selectedElongation = ''
       this.objectInspectorMoreOpen = false
       this.objectInspectorMediaPath = ''
       this.objectInspectorMediaKind = 'none'
@@ -14236,7 +14182,7 @@ private loadPlanetPositions(): void {
       this.objectInspectorMediaPreviewLoading = false
       this.objectInspectorMediaPreviewFailed = false
       this.infoWinVisible = false
-      this.selectedInfo = '当前位置没有可选天体，请放大或使用搜索'
+      this.objectDetailStore.selectedInfo = '当前位置没有可选天体，请放大或使用搜索'
       this.clearRtsSelectionResults()
     }
   }
@@ -16139,7 +16085,7 @@ private loadPlanetPositions(): void {
       hilog.info(0x0000, 'StellariumArkUI', 'selectAt result: ' + JSON.stringify(result))
       this.applySelectedObject(result)
       this.flashHint(result.found === true
-        ? I18n.t('i0074').replace('%s', this.zhNameOf(this.selectedName))
+        ? I18n.t('i0074').replace('%s', this.zhNameOf(this.objectDetailStore.selectedName))
         : I18n.t('i0075'))
     })
   }
@@ -16251,7 +16197,7 @@ private loadPlanetPositions(): void {
     const now = Date.now()
     if (now - this.lastCenterKeyAt < 220) { return }
     this.lastCenterKeyAt = now
-    if (this.selectedStatus !== 'Selected' || this.selectedName.length === 0) {
+    if (this.objectDetailStore.selectedStatus !== 'Selected' || this.objectDetailStore.selectedName.length === 0) {
       this.flashHint('请先选择天体')
       return
     }
@@ -17513,7 +17459,7 @@ private loadPlanetPositions(): void {
             TransitionEffect.OPACITY.animation({ duration: 160, curve: Curve.EaseIn })
           ))
       }
-      if (this.infoWinVisible && this.selectedName.length > 0) {
+      if (this.infoWinVisible && this.objectDetailStore.selectedName.length > 0) {
         this.objectDetailConnectorLayer()
         Stack() { this.unifiedObjectDetailCard() }
           .position({ x: this.detailCardX(), y: this.detailCardY() })
@@ -17602,7 +17548,7 @@ private loadPlanetPositions(): void {
         .hitTestBehavior(HitTestMode.Block)
         .zIndex(40)
 
-      if (this.infoWinVisible && this.selectedName.length > 0) {
+      if (this.infoWinVisible && this.objectDetailStore.selectedName.length > 0) {
         this.objectDetailConnectorLayer()
         Stack() { this.unifiedObjectDetailCard() }
           .position({ x: this.detailCardX(), y: this.detailCardY() })
@@ -17685,7 +17631,7 @@ private loadPlanetPositions(): void {
             TransitionEffect.OPACITY.animation({ duration: 160, curve: Curve.EaseIn })
           ))
       }
-      if (this.infoWinVisible && this.selectedName.length > 0) {
+      if (this.infoWinVisible && this.objectDetailStore.selectedName.length > 0) {
         this.objectDetailConnectorLayer()
         Stack() { this.unifiedObjectDetailCard() }
           .position({ x: this.detailCardX(), y: this.detailCardY() })
@@ -18065,7 +18011,7 @@ private loadPlanetPositions(): void {
   }
 
   private isObjectDetailCardRendered(): boolean {
-    return this.infoWinVisible && this.selectedName.length > 0
+    return this.infoWinVisible && this.objectDetailStore.selectedName.length > 0
   }
 
   private isObjectDetailCardPoint(x: number, y: number): boolean {
@@ -18129,15 +18075,15 @@ private loadPlanetPositions(): void {
   }
 
   private dismissObjectInspector(): void {
-    if (this.selectedUiLayoutTimer !== 0) {
-      clearTimeout(this.selectedUiLayoutTimer)
-      this.selectedUiLayoutTimer = 0
+    if (this.objectDetailStore.selectedUiLayoutTimer !== 0) {
+      clearTimeout(this.objectDetailStore.selectedUiLayoutTimer)
+      this.objectDetailStore.selectedUiLayoutTimer = 0
     }
     this.infoWinVisible = false
     this.stopObjectDetailConnectorRefresh()
     this.infoWinExpanded = false
     this.objectInspectorMoreOpen = false
-    this.dismissedObjectName = this.selectedName
+    this.dismissedObjectName = this.objectDetailStore.selectedName
     this.lastInfoWinCloseMs = Date.now()
     this.skyTouchActive = false
     this.skyTouchFeedback = false
@@ -18184,9 +18130,9 @@ private loadPlanetPositions(): void {
       if (compact) {
         Row() {
           Text('时角').fontSize(10).fontColor('#8FBBD6').width(34)
-          Text(this.selectedHourAngle.length > 0 ? this.selectedHourAngle : '--')
+          Text(this.objectDetailStore.selectedHourAngle.length > 0 ? this.objectDetailStore.selectedHourAngle : '--')
             .fontSize(11).fontColor('#E2F5FF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.selectedMeanSiderealTime.length > 0 ? '平恒星时 ' + this.selectedMeanSiderealTime : '平恒星时 --')
+          Text(this.objectDetailStore.selectedMeanSiderealTime.length > 0 ? '平恒星时 ' + this.objectDetailStore.selectedMeanSiderealTime : '平恒星时 --')
             .fontSize(10).fontColor('#B9D9E9').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.width('100%').height(24).padding({ left: 16, right: 16 })
       } else {
@@ -18494,10 +18440,10 @@ private loadPlanetPositions(): void {
       Row() {
         Image(getIcon(this.objectInspectorIcon(), false))
           .width(26).height(26).fillColor('#73C8FF').margin({ right: 7 })
-        Text(this.zhNameOf(this.selectedName))
+        Text(this.zhNameOf(this.objectDetailStore.selectedName))
           .fontSize(18).fontWeight(FontWeight.Bold).fontColor('#FFFFFFFF')
           .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.zhType(this.selectedType))
+        Text(this.zhType(this.objectDetailStore.selectedType))
           .fontSize(11).fontColor('#BDE8FF')
           .padding({ left: 9, right: 9, top: 4, bottom: 4 })
           .backgroundColor('rgba(91,147,191,0.18)').borderRadius(UI_RADIUS_CONTROL)
@@ -18518,9 +18464,9 @@ private loadPlanetPositions(): void {
 
       Row() {
         Text('实时高度 / 方位').fontSize(10).fontColor('#8FBBD6').width(72)
-        Text(this.selectedCoordAlt.length > 0 ? this.selectedCoordAlt : '--')
+        Text(this.objectDetailStore.selectedCoordAlt.length > 0 ? this.objectDetailStore.selectedCoordAlt : '--')
           .fontSize(11).fontColor('#E2F5FF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.selectedCoordAlt.length > 0 ? '已定位' : '等待定位')
+        Text(this.objectDetailStore.selectedCoordAlt.length > 0 ? '已定位' : '等待定位')
           .fontSize(10).fontColor('#BDE8FF').margin({ left: 8 })
       }
         .height(24).width('100%').padding({ left: 16, right: 16, bottom: 4 })
@@ -18546,26 +18492,26 @@ private loadPlanetPositions(): void {
               this.objectScheduleTile(I18n.t('s0701'), 'selectedTransit')
               this.objectScheduleTile(I18n.t('s0702'), 'selectedSet')
             }.width('100%')
-            if (this.selectedApparentMagnitude.length > 0 || this.selectedAirmass.length > 0 || this.selectedExtinction.length > 0) {
+            if (this.objectDetailStore.selectedApparentMagnitude.length > 0 || this.objectDetailStore.selectedAirmass.length > 0 || this.objectDetailStore.selectedExtinction.length > 0) {
               Text('大气影响').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%').margin({ top: 3 })
               Row({ space: 8 }) {
-                if (this.selectedApparentMagnitude.length > 0) { this.objectMetric('大气后星等', 'selectedApparentMagnitude') }
-                if (this.selectedExtinction.length > 0) { this.objectMetric('大气衰减', 'extinctionUnits') }
-                if (this.selectedAirmass.length > 0) { this.objectMetric('气团质量', 'selectedAirmass') }
+                if (this.objectDetailStore.selectedApparentMagnitude.length > 0) { this.objectMetric('大气后星等', 'selectedApparentMagnitude') }
+                if (this.objectDetailStore.selectedExtinction.length > 0) { this.objectMetric('大气衰减', 'extinctionUnits') }
+                if (this.objectDetailStore.selectedAirmass.length > 0) { this.objectMetric('气团质量', 'selectedAirmass') }
               }.width('100%')
             }
-            if (this.selectedPhase.length > 0 || this.selectedElongation.length > 0 || this.selectedSize.length > 0) {
+            if (this.objectDetailStore.selectedPhase.length > 0 || this.objectDetailStore.selectedElongation.length > 0 || this.objectDetailStore.selectedSize.length > 0) {
               Row({ space: 8 }) {
-                if (this.selectedPhase.length > 0) { this.objectMetric(I18n.t('i0291'), 'selectedPhase') }
-                if (this.selectedElongation.length > 0) { this.objectMetric(I18n.t('i0255'), 'selectedElongation') }
-                if (this.selectedSize.length > 0) { this.objectMetric(I18n.t('i0290'), 'selectedSize') }
+                if (this.objectDetailStore.selectedPhase.length > 0) { this.objectMetric(I18n.t('i0291'), 'selectedPhase') }
+                if (this.objectDetailStore.selectedElongation.length > 0) { this.objectMetric(I18n.t('i0255'), 'selectedElongation') }
+                if (this.objectDetailStore.selectedSize.length > 0) { this.objectMetric(I18n.t('i0290'), 'selectedSize') }
               }.width('100%').margin({ top: 2 })
             }
-            if (this.selectedDistanceStatus === 'invalid_orbit' || this.selectedTleOutdated) {
+            if (this.objectDetailStore.selectedDistanceStatus === 'invalid_orbit' || this.objectDetailStore.selectedTleOutdated) {
               this.objectDistanceNotice()
             }
-            if (this.selectedInfo.length > 0) {
-              Text(this.selectedInfo).fontSize(12).fontColor('#C3DDEB').lineHeight(18).width('100%')
+            if (this.objectDetailStore.selectedInfo.length > 0) {
+              Text(this.objectDetailStore.selectedInfo).fontSize(12).fontColor('#C3DDEB').lineHeight(18).width('100%')
                 .padding({ top: 8, bottom: 2 })
             }
           } else if (this.bottomCardIndex === 1) {
@@ -18582,20 +18528,20 @@ private loadPlanetPositions(): void {
             this.selectedConstellationCultureDescriptionView(false)
             Row({ space: 8 }) {
               Column({ space: 7 }) {
-                if (this.selectedCoordAlt.length > 0) { this.objectDataTile('实时高度 / 方位', 'selectedCoordAlt') }
-                if (this.selectedMagnitude.length > 0) { this.objectDataTile(I18n.t('i0007'), 'selectedMagnitude') }
-                if (this.selectedSize.length > 0) { this.objectDataTile(I18n.t('i0290'), 'selectedSize') }
-                if (this.selectedApparentMagnitude.length > 0) { this.objectDataTile('大气后星等', 'selectedApparentMagnitude') }
-                if (this.selectedRise.length > 0) { this.objectDataTile(I18n.t('s0700'), 'selectedRise') }
-                if (this.selectedSet.length > 0) { this.objectDataTile(I18n.t('s0702'), 'selectedSet') }
+                if (this.objectDetailStore.selectedCoordAlt.length > 0) { this.objectDataTile('实时高度 / 方位', 'selectedCoordAlt') }
+                if (this.objectDetailStore.selectedMagnitude.length > 0) { this.objectDataTile(I18n.t('i0007'), 'selectedMagnitude') }
+                if (this.objectDetailStore.selectedSize.length > 0) { this.objectDataTile(I18n.t('i0290'), 'selectedSize') }
+                if (this.objectDetailStore.selectedApparentMagnitude.length > 0) { this.objectDataTile('大气后星等', 'selectedApparentMagnitude') }
+                if (this.objectDetailStore.selectedRise.length > 0) { this.objectDataTile(I18n.t('s0700'), 'selectedRise') }
+                if (this.objectDetailStore.selectedSet.length > 0) { this.objectDataTile(I18n.t('s0702'), 'selectedSet') }
               }.layoutWeight(1)
               Column({ space: 7 }) {
-                if (this.selectedCoordEq.length > 0) { this.objectDataTile('赤经 / 赤纬', 'selectedCoordEq') }
-                if (this.selectedDistance.length > 0) { this.objectDataTile(I18n.t('i0011'), 'selectedDistance') }
-                if (this.selectedExtinction.length > 0) { this.objectDataTile('大气衰减', 'extinctionUnits') }
-                if (this.selectedAirmass.length > 0) { this.objectDataTile('气团质量', 'selectedAirmass') }
-                if (this.selectedTransit.length > 0) { this.objectDataTile(I18n.t('s0701'), 'selectedTransit') }
-                if (this.selectedConstellation.length > 0) { this.objectDataTile(I18n.t('i0010'), 'selectedConstellation') }
+                if (this.objectDetailStore.selectedCoordEq.length > 0) { this.objectDataTile('赤经 / 赤纬', 'selectedCoordEq') }
+                if (this.objectDetailStore.selectedDistance.length > 0) { this.objectDataTile(I18n.t('i0011'), 'selectedDistance') }
+                if (this.objectDetailStore.selectedExtinction.length > 0) { this.objectDataTile('大气衰减', 'extinctionUnits') }
+                if (this.objectDetailStore.selectedAirmass.length > 0) { this.objectDataTile('气团质量', 'selectedAirmass') }
+                if (this.objectDetailStore.selectedTransit.length > 0) { this.objectDataTile(I18n.t('s0701'), 'selectedTransit') }
+                if (this.objectDetailStore.selectedConstellation.length > 0) { this.objectDataTile(I18n.t('i0010'), 'selectedConstellation') }
               }.layoutWeight(1)
             }.width('100%').alignItems(VerticalAlign.Top)
             this.structuredObjectDetails(false)
@@ -18613,7 +18559,7 @@ private loadPlanetPositions(): void {
                 .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
                 .onClick(() => { this.toggleViewLock() })
             }.width('100%')
-            Button(this.observingList.includes(this.selectedName) ? I18n.t('s0739') : I18n.t('s0738'))
+            Button(this.observingList.includes(this.objectDetailStore.selectedName) ? I18n.t('s0739') : I18n.t('s0738'))
               .fontSize(12).fontColor('#E8F8FF').backgroundColor('rgba(91,147,191,0.28)').borderRadius(UI_RADIUS_CONTROL).height(34).width('100%')
               .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
               .onClick(() => { this.toggleSelectedObservingList() })
@@ -18669,11 +18615,11 @@ private loadPlanetPositions(): void {
   // Pad 端的详情保持为左侧检查器。它不接管星图，也不会随着实时数据刷新
   // 重新打开或改变位置；长资料和观测数字使用同一个连续滚动区。
   private objectInspectorIcon(): string {
-    return this.catalogIconForObjectType(this.selectedType + ' ' + this.selectedObjectType, 'catalog_star')
+    return this.catalogIconForObjectType(this.objectDetailStore.selectedType + ' ' + this.objectDetailStore.selectedObjectType, 'catalog_star')
   }
 
   private objectInspectorSearchText(): string {
-    return (this.selectedCatalogId + ' ' + this.selectedEnglishName + ' ' + this.selectedName).toLowerCase()
+    return (this.objectDetailStore.selectedCatalogId + ' ' + this.objectDetailStore.selectedEnglishName + ' ' + this.objectDetailStore.selectedName).toLowerCase()
   }
 
   private objectInspectorFilePath(relativePath: string): string {
@@ -18867,7 +18813,7 @@ private loadPlanetPositions(): void {
   }
 
   private objectInspectorPlanetTexturePath(): string {
-    const objectKey = this.selectedEnglishName.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const objectKey = this.objectDetailStore.selectedEnglishName.toLowerCase().replace(/[^a-z0-9]/g, '')
     const textures: Array<[string, string]> = [
       ['sun', 'textures/sun.png'], ['mercury', 'textures/mercury.png'], ['venus', 'textures/venus.png'],
       ['earth', 'textures/earth_cmap.png'], ['moon', 'textures/moon.png'], ['mars', 'textures/mars.png'],
@@ -18896,7 +18842,7 @@ private loadPlanetPositions(): void {
   }
 
   private objectInspectorPlanetRingSpec(): ObjectInspectorRingSpec | undefined {
-    const objectKey = this.selectedEnglishName.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const objectKey = this.objectDetailStore.selectedEnglishName.toLowerCase().replace(/[^a-z0-9]/g, '')
     const specs: Array<[string, ObjectInspectorRingSpec]> = [
       ['saturn', { texturePath: 'textures/saturn_rings_radial.png', innerRadius: 1.24, outerRadius: 2.33, tilt: 0.35, opacity: 0.94 }],
       ['uranus', { texturePath: 'textures/uranus_rings.png', innerRadius: 1.05, outerRadius: 3.82, tilt: 0.55, opacity: 1.0 }],
@@ -18933,7 +18879,7 @@ private loadPlanetPositions(): void {
   }
 
   private objectInspectorFallbackVisualKind(): string {
-    const type = (this.selectedObjectType + ' ' + this.selectedType).toLowerCase()
+    const type = (this.objectDetailStore.selectedObjectType + ' ' + this.objectDetailStore.selectedType).toLowerCase()
     const procedural = proceduralModelKind(type)
     if (procedural.length > 0) return procedural
     if (type.indexOf('comet') >= 0 || type.indexOf('彗') >= 0) return 'comet'
@@ -18951,7 +18897,7 @@ private loadPlanetPositions(): void {
   }
 
   private objectInspectorStarColor(): string {
-    const temperature = this.selectedTemperatureK
+    const temperature = this.objectDetailStore.selectedTemperatureK
     if (temperature >= 11000) return '#A8C8FF'
     if (temperature >= 7500) return '#D6E5FF'
     if (temperature >= 6000) return '#FFF5D8'
@@ -18962,20 +18908,20 @@ private loadPlanetPositions(): void {
 
   private refreshObjectInspectorMedia(): void {
     const planetTexturePath = this.objectInspectorPlanetTexturePath()
-    const deepSkyImageName = planetTexturePath.length === 0 && this.selectedDetailMediaPath.length === 0
+    const deepSkyImageName = planetTexturePath.length === 0 && this.objectDetailStore.selectedDetailMediaPath.length === 0
       ? this.objectInspectorDeepSkyImageName()
       : ''
     const requestedPath = planetTexturePath.length > 0
       ? planetTexturePath
-      : (this.selectedDetailMediaPath.length > 0
-        ? this.selectedDetailMediaPath
+      : (this.objectDetailStore.selectedDetailMediaPath.length > 0
+        ? this.objectDetailStore.selectedDetailMediaPath
         : (deepSkyImageName.length > 0 ? 'nebulae/default/' + deepSkyImageName : ''))
     const proceduralKind = requestedPath.length === 0 || (planetTexturePath.length === 0 &&
       this.objectInspectorMediaResolutionComplete && this.objectInspectorMediaResolvedRequestPath === requestedPath &&
       this.objectInspectorMediaResolvedPath.length === 0)
-      ? proceduralModelKind(this.selectedObjectType + ' ' + this.selectedType) : ''
+      ? proceduralModelKind(this.objectDetailStore.selectedObjectType + ' ' + this.objectDetailStore.selectedType) : ''
     const proceduralKey = proceduralKind.length > 0
-      ? [proceduralKind, this.selectedCatalogId, this.selectedEnglishName, this.selectedTemperatureK.toString()].join('|') : ''
+      ? [proceduralKind, this.objectDetailStore.selectedCatalogId, this.objectDetailStore.selectedEnglishName, this.objectDetailStore.selectedTemperatureK.toString()].join('|') : ''
     if (this.objectInspectorMediaResolvedRequestPath !== requestedPath) {
       this.objectInspectorMediaResolvedRequestPath = ''
       this.objectInspectorMediaResolvedPath = ''
@@ -18989,7 +18935,7 @@ private loadPlanetPositions(): void {
     const path = filePath.length > 0 ? fileUri.getUriFromPath(filePath) : ''
     const kind = planetTexturePath.length > 0 || proceduralKind.length > 0
       ? 'model'
-      : (this.selectedDetailMediaPath.length > 0 ? 'constellation' : (deepSkyImageName.length > 0 ? 'image' : 'visual'))
+      : (this.objectDetailStore.selectedDetailMediaPath.length > 0 ? 'constellation' : (deepSkyImageName.length > 0 ? 'image' : 'visual'))
     const modelRawFilePath = kind === 'model' && resolvedPath.length > 0
       ? this.objectInspectorFilePath(resolvedPath + '.model.rgba')
       : ''
@@ -19022,7 +18968,7 @@ private loadPlanetPositions(): void {
     this.objectInspectorProceduralParticles = proceduralParticles(proceduralKind, proceduralKey)
     this.objectInspectorMediaLabel = kind === 'model'
       ? (proceduralKind.length > 0 ? I18n.t('model_schematic') : I18n.t('model_offline'))
-      : (kind === 'constellation' ? this.selectedDetailMediaLabel : (kind === 'image' ? '离线深空资料图像' : '本地天体类别示意'))
+      : (kind === 'constellation' ? this.objectDetailStore.selectedDetailMediaLabel : (kind === 'image' ? '离线深空资料图像' : '本地天体类别示意'))
     this.objectInspectorMediaFullscreen = false
     this.objectInspectorMediaPreviewPath = ''
     this.objectInspectorMediaPreviewLoading = false
@@ -19042,7 +18988,7 @@ private loadPlanetPositions(): void {
       return
     }
     if (shouldResolve) {
-      const expectedSelection = this.selectedName + '\n' + this.selectedEnglishName + '\n' + this.selectedCatalogId
+      const expectedSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
       const expectedRequestPath = requestedPath
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const warmupStatus: DeepSkyWarmupStatus = getDeepSkyResourceWarmupStatus(context.getApplicationContext())
@@ -19052,7 +18998,7 @@ private loadPlanetPositions(): void {
         warmupStatus.pending.toString(), warmupStatus.failed.toString())
       this.startObjectInspectorMediaWarmup()
       resolveStellariumDetailMediaAsset(context.getApplicationContext(), requestedPath).then((actualPath: string) => {
-        const currentSelection = this.selectedName + '\n' + this.selectedEnglishName + '\n' + this.selectedCatalogId
+        const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
         if (currentSelection !== expectedSelection || this.objectInspectorMediaRequestPath !== expectedRequestPath) { return }
         this.objectInspectorMediaLoading = false
         this.objectInspectorMediaRequestPath = ''
@@ -19066,10 +19012,10 @@ private loadPlanetPositions(): void {
         this.updateObjectInspectorMediaWarmup(kind)
         hilog.info(0x0000, 'StellariumArkUI',
           '[detail-media] selection=%{public}s requested=%{public}s resolved=%{public}s',
-          this.selectedName, expectedRequestPath, actualPath)
+          this.objectDetailStore.selectedName, expectedRequestPath, actualPath)
         this.refreshObjectInspectorMedia()
       }).catch((err: Error) => {
-        const currentSelection = this.selectedName + '\n' + this.selectedEnglishName + '\n' + this.selectedCatalogId
+        const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
         if (currentSelection !== expectedSelection || this.objectInspectorMediaRequestPath !== expectedRequestPath) { return }
         this.objectInspectorMediaLoading = false
         this.objectInspectorMediaRequestPath = ''
@@ -19084,7 +19030,7 @@ private loadPlanetPositions(): void {
       })
     }
     if (shouldDecode) {
-      const expectedSelection = this.selectedName + '\n' + this.selectedEnglishName + '\n' + this.selectedCatalogId
+      const expectedSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
       const expectedPath = path
       const generation = this.objectInspectorMediaDecodeGeneration
       hilog.info(0x0000, 'StellariumArkUI',
@@ -19094,7 +19040,7 @@ private loadPlanetPositions(): void {
         return
       }
       this.decodeLocalImage(filePath, kind, (pixelMap: image.PixelMap) => {
-        const currentSelection = this.selectedName + '\n' + this.selectedEnglishName + '\n' + this.selectedCatalogId
+        const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
         if (currentSelection !== expectedSelection || this.objectInspectorMediaPath !== expectedPath ||
           generation !== this.objectInspectorMediaDecodeGeneration) {
           this.releaseDecodedImage(pixelMap, 'stale-object-inspector')
@@ -19113,7 +19059,7 @@ private loadPlanetPositions(): void {
         hilog.info(0x0000, 'StellariumArkUI',
           '[detail-media] pixel map ready kind=%{public}s uri=%{public}s', kind, expectedPath)
       }, (err: Error) => {
-        const currentSelection = this.selectedName + '\n' + this.selectedEnglishName + '\n' + this.selectedCatalogId
+        const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
         if (currentSelection !== expectedSelection || this.objectInspectorMediaPath !== expectedPath ||
           generation !== this.objectInspectorMediaDecodeGeneration) {
           return
@@ -19150,7 +19096,7 @@ private loadPlanetPositions(): void {
       const bytesRead = fileIo.readSync(file.fd, pixels)
       fileIo.closeSync(file)
       file = undefined
-      const currentSelection = this.selectedName + '\n' + this.selectedEnglishName + '\n' + this.selectedCatalogId
+      const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
       if (currentSelection !== expectedSelection || this.objectInspectorMediaPath !== expectedPath ||
         mediaGeneration !== this.objectInspectorMediaDecodeGeneration) {
         return
@@ -19201,7 +19147,7 @@ private loadPlanetPositions(): void {
       this.objectInspectorMediaLoadFailed = false
       hilog.info(0x0000, 'StellariumArkUI',
         '[detail-model] CPU texture ready path=%{public}s bytes=%{public}s phase=%{public}s',
-        rawFilePath, bytesRead.toString(), this.selectedPhase)
+        rawFilePath, bytesRead.toString(), this.objectDetailStore.selectedPhase)
       this.requestObjectInspectorModelRender(true)
     } catch (err) {
       if (file !== undefined) {
@@ -19223,7 +19169,7 @@ private loadPlanetPositions(): void {
 
   private refreshObjectInspectorModelLighting(): void {
     if (!this.infoWinVisible || this.bottomCardIndex !== 2) return
-    const lighting = this.selectedDetailModel?.lighting
+    const lighting = this.objectDetailStore.selectedDetailModel?.lighting
     if (lighting === undefined || this.objectInspectorModelTexturePixels === undefined) return
     const values = lighting.viewToBody.concat(lighting.sunDirectionBody)
     const changed = values.some((value: number, index: number) =>
@@ -19234,7 +19180,7 @@ private loadPlanetPositions(): void {
   }
 
   private objectInspectorModelTransform(): number[] {
-    return modelMultiply(this.selectedDetailModel?.lighting?.viewToBody ?? modelIdentity(),
+    return modelMultiply(this.objectDetailStore.selectedDetailModel?.lighting?.viewToBody ?? modelIdentity(),
       this.objectInspectorModelRotation)
   }
 
@@ -19291,7 +19237,7 @@ private loadPlanetPositions(): void {
     const renderSize = highQuality ? (immersive ? 640 : 320) : 224
     const transform = this.objectInspectorModelTransform()
     const inspectionRotation = this.objectInspectorModelRotation.slice()
-    const lighting = this.selectedDetailModel?.lighting
+    const lighting = this.objectDetailStore.selectedDetailModel?.lighting
     const started = Date.now()
     let computeMs = 0
     let pixelMapStarted = 0
@@ -19318,7 +19264,7 @@ private loadPlanetPositions(): void {
       ringHeight: this.objectInspectorModelRingTextureHeight,
       ringSpec: renderRing,
       kind: this.objectInspectorProceduralKind,
-      temperature: this.selectedTemperatureK,
+      temperature: this.objectDetailStore.selectedTemperatureK,
       particles: this.objectInspectorProceduralParticles
     }
     const frame: DetailModelFrame = {
@@ -19352,12 +19298,12 @@ private loadPlanetPositions(): void {
       const oldPixelMap = this.objectInspectorModelPixelMap
       this.objectInspectorModelPixelMap = pixelMap
       AppStorage.setOrCreate('stellariumObjectModelView', JSON.stringify({
-        ok: true, selectedEnglishName: this.selectedEnglishName,
+        ok: true, selectedEnglishName: this.objectDetailStore.selectedEnglishName,
         rotation: inspectionRotation, viewToBody: transform,
         lighting: lighting, renderSize: renderSize, renderedAt: this.objectInspectorModelLastRenderTime,
         kind: this.objectInspectorProceduralKind || 'textured-sphere',
         schematic: this.objectInspectorProceduralKind.length > 0,
-        temperatureK: this.selectedTemperatureK > 0 ? this.selectedTemperatureK : null,
+        temperatureK: this.objectDetailStore.selectedTemperatureK > 0 ? this.objectDetailStore.selectedTemperatureK : null,
         immersive: immersive, renderer: 'worker', computeMs: computeMs,
         uiPulseCount: uiPulseCount, uiMaxDelayMs: uiMaxDelayMs,
         pixelMapMs: Date.now() - pixelMapStarted, totalMs: Date.now() - started
@@ -19383,7 +19329,7 @@ private loadPlanetPositions(): void {
       hilog.error(0x0000, 'StellariumArkUI',
         '[detail-model] sphere render failed error=%{public}s', JSON.stringify(err))
       AppStorage.setOrCreate('stellariumObjectModelView', JSON.stringify({
-        ok: false, error: 'model render failed', selectedEnglishName: this.selectedEnglishName
+        ok: false, error: 'model render failed', selectedEnglishName: this.objectDetailStore.selectedEnglishName
       }))
     })
   }
@@ -19440,7 +19386,7 @@ private loadPlanetPositions(): void {
         Column({ space: 12 }) {
           Row({ space: 12 }) {
             Column({ space: 4 }) {
-              Text(this.selectedName).fontSize(20).fontColor('#F2F4F8').maxLines(1)
+              Text(this.objectDetailStore.selectedName).fontSize(20).fontColor('#F2F4F8').maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
               Text(this.objectInspectorProceduralKind.length > 0 ? I18n.t('model_schematic') : I18n.t('model_offline'))
                 .fontSize(12).fontColor('#B8BDC8').width('100%')
@@ -19591,7 +19537,7 @@ private loadPlanetPositions(): void {
         }.width('100%').height(this.objectInspectorImageHeight())
         Row({ space: 6 }) {
           Text(this.objectInspectorMediaLabel + (this.objectInspectorMediaKind === 'constellation' &&
-            this.selectedDetailModel !== undefined && this.selectedDetailModel.state === 'planned'
+            this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned'
             ? ' · ' + I18n.t('detail_model_planned') : ''))
             .fontSize(10).fontColor('#E4F5FC').layoutWeight(1)
           Text('点按查看').fontSize(10).fontColor('#A4D8EF')
@@ -19802,33 +19748,33 @@ private loadPlanetPositions(): void {
 
   private selectedDisplayValue(key: string): string {
     switch (key) {
-      case 'selectedAirmass': return this.selectedAirmass
-      case 'selectedApparentMagnitude': return this.selectedApparentMagnitude
-      case 'selectedApparentSiderealTime': return this.selectedApparentSiderealTime
-      case 'selectedConstellation': return this.zhNameOf(this.selectedConstellation)
-      case 'selectedCoordAlt': return this.selectedCoordAlt
-      case 'selectedCoordApparentAltAz': return this.selectedCoordApparentAltAz || this.selectedCoordAlt
-      case 'selectedCoordEcliptic': return this.selectedCoordEcliptic
-      case 'selectedCoordEclipticJ2000': return this.selectedCoordEclipticJ2000
-      case 'selectedCoordEq': return this.selectedCoordEq
-      case 'selectedCoordEqJ2000': return this.selectedCoordEqJ2000
-      case 'selectedCoordGalactic': return this.selectedCoordGalactic
-      case 'selectedCoordGeometricAltAz': return this.selectedCoordGeometricAltAz
-      case 'selectedCoordParallactic': return this.selectedCoordParallactic
-      case 'selectedCoordSupergalactic': return this.selectedCoordSupergalactic
-      case 'selectedDistance': return this.selectedDistance
-      case 'selectedElongation': return this.selectedElongation
-      case 'selectedEnglishName': return this.selectedEnglishName
-      case 'selectedExtinction': return this.selectedExtinction
-      case 'selectedHourAngle': return this.selectedHourAngle
-      case 'selectedMagnitude': return this.selectedMagnitude
-      case 'selectedMeanSiderealTime': return this.selectedMeanSiderealTime
-      case 'selectedPhase': return this.selectedPhase
-      case 'selectedRise': return this.selectedRise
-      case 'selectedSet': return this.selectedSet
-      case 'selectedSize': return this.selectedSize
-      case 'selectedTransit': return this.selectedTransit
-      case 'extinctionUnits': return this.selectedExtinction.length > 0 ? this.selectedExtinction + ' 等' : ''
+      case 'selectedAirmass': return this.objectDetailStore.selectedAirmass
+      case 'selectedApparentMagnitude': return this.objectDetailStore.selectedApparentMagnitude
+      case 'selectedApparentSiderealTime': return this.objectDetailStore.selectedApparentSiderealTime
+      case 'selectedConstellation': return this.zhNameOf(this.objectDetailStore.selectedConstellation)
+      case 'selectedCoordAlt': return this.objectDetailStore.selectedCoordAlt
+      case 'selectedCoordApparentAltAz': return this.objectDetailStore.selectedCoordApparentAltAz || this.objectDetailStore.selectedCoordAlt
+      case 'selectedCoordEcliptic': return this.objectDetailStore.selectedCoordEcliptic
+      case 'selectedCoordEclipticJ2000': return this.objectDetailStore.selectedCoordEclipticJ2000
+      case 'selectedCoordEq': return this.objectDetailStore.selectedCoordEq
+      case 'selectedCoordEqJ2000': return this.objectDetailStore.selectedCoordEqJ2000
+      case 'selectedCoordGalactic': return this.objectDetailStore.selectedCoordGalactic
+      case 'selectedCoordGeometricAltAz': return this.objectDetailStore.selectedCoordGeometricAltAz
+      case 'selectedCoordParallactic': return this.objectDetailStore.selectedCoordParallactic
+      case 'selectedCoordSupergalactic': return this.objectDetailStore.selectedCoordSupergalactic
+      case 'selectedDistance': return this.objectDetailStore.selectedDistance
+      case 'selectedElongation': return this.objectDetailStore.selectedElongation
+      case 'selectedEnglishName': return this.objectDetailStore.selectedEnglishName
+      case 'selectedExtinction': return this.objectDetailStore.selectedExtinction
+      case 'selectedHourAngle': return this.objectDetailStore.selectedHourAngle
+      case 'selectedMagnitude': return this.objectDetailStore.selectedMagnitude
+      case 'selectedMeanSiderealTime': return this.objectDetailStore.selectedMeanSiderealTime
+      case 'selectedPhase': return this.objectDetailStore.selectedPhase
+      case 'selectedRise': return this.objectDetailStore.selectedRise
+      case 'selectedSet': return this.objectDetailStore.selectedSet
+      case 'selectedSize': return this.objectDetailStore.selectedSize
+      case 'selectedTransit': return this.objectDetailStore.selectedTransit
+      case 'extinctionUnits': return this.objectDetailStore.selectedExtinction.length > 0 ? this.objectDetailStore.selectedExtinction + ' 等' : ''
       case 'atmosphere': return this.expandedAtmosphereSummary()
       default: return ''
     }
@@ -19866,8 +19812,8 @@ private loadPlanetPositions(): void {
   }
 
   private expandedAtmosphereSummary(): string {
-    const apparent = this.selectedApparentMagnitude.length > 0 ? '大气后 ' + this.selectedApparentMagnitude + ' 等' : ''
-    const airmass = this.selectedAirmass.length > 0 ? '气团 ' + this.selectedAirmass : ''
+    const apparent = this.objectDetailStore.selectedApparentMagnitude.length > 0 ? '大气后 ' + this.objectDetailStore.selectedApparentMagnitude + ' 等' : ''
+    const airmass = this.objectDetailStore.selectedAirmass.length > 0 ? '气团 ' + this.objectDetailStore.selectedAirmass : ''
     return (apparent + '  ' + airmass).trim()
   }
 
@@ -19886,8 +19832,8 @@ private loadPlanetPositions(): void {
     Column() {
       Text(I18n.t(metric === 'magnitude' ? 'i0007' : (metric === 'constellation' ? 'i0010' : 'i0011')))
         .fontSize(9).fontColor('#8FBBD6').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text(metric === 'magnitude' ? (this.selectedMagnitude || '--') :
-        (metric === 'constellation' ? (this.zhNameOf(this.selectedConstellation) || '--') : this.objectDistanceSummary()))
+      Text(metric === 'magnitude' ? (this.objectDetailStore.selectedMagnitude || '--') :
+        (metric === 'constellation' ? (this.zhNameOf(this.objectDetailStore.selectedConstellation) || '--') : this.objectDistanceSummary()))
         .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#E7F7FF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ top: 1 })
     }
       .height(46).padding({ left: 8, right: 8, top: 6, bottom: 6 }).layoutWeight(1)
@@ -19900,14 +19846,14 @@ private loadPlanetPositions(): void {
 
   private objectDistanceSummary(): string {
     if (!this.distanceInformationVisible()) return '--'
-    return this.selectedDistance.length > 0 ? (this.selectedDistanceCompact || this.selectedDistance) : I18n.t('distance_missing')
+    return this.objectDetailStore.selectedDistance.length > 0 ? (this.objectDetailStore.selectedDistanceCompact || this.objectDetailStore.selectedDistance) : I18n.t('distance_missing')
   }
 
   private objectDistanceNoticeText(): string {
     if (!this.distanceInformationVisible()) return ''
-    const status = this.selectedDistanceStatus
+    const status = this.objectDetailStore.selectedDistanceStatus
     if (status === 'invalid_orbit') return I18n.t('satellite_propagation_invalid')
-    if (this.selectedTleOutdated) return I18n.t('satellite_tle_stale')
+    if (this.objectDetailStore.selectedTleOutdated) return I18n.t('satellite_tle_stale')
     if (status === 'catalog' || status === 'computed' || status.length === 0) return ''
     const key = ['low_confidence', 'redshift_only', 'invalid_orbit', 'unsupported_unit', 'estimated'].includes(status)
       ? status : 'unavailable'
@@ -20012,12 +19958,12 @@ private loadPlanetPositions(): void {
   }
 
   private toggleSelectedObservingList(): void {
-    const idx = this.observingList.indexOf(this.selectedName)
+    const idx = this.observingList.indexOf(this.objectDetailStore.selectedName)
     if (idx >= 0) {
-      this.observingList = this.observingList.filter((item: string) => item !== this.selectedName)
+      this.observingList = this.observingList.filter((item: string) => item !== this.objectDetailStore.selectedName)
       this.flashHint(I18n.t('i0079'))
     } else {
-      this.observingList = this.observingList.concat([this.selectedName])
+      this.observingList = this.observingList.concat([this.objectDetailStore.selectedName])
       this.flashHint(I18n.t('i0080'))
     }
     this.persistObservingList()
@@ -20405,7 +20351,7 @@ private loadPlanetPositions(): void {
   }
 
   private detailFieldValue(key: string): string {
-    const field = this.selectedDetailFields.find((item: ObjectDetailField) => item.key === key)
+    const field = this.objectDetailStore.selectedDetailFields.find((item: ObjectDetailField) => item.key === key)
     if (field === undefined) return '--'
     switch (field.value) {
       case 'waning': return '亮面渐亏'
@@ -20431,8 +20377,8 @@ private loadPlanetPositions(): void {
   private detailFieldsForSection(section: string): Array<ObjectDetailField> {
     if (section === 'coordinates') return []
     const fields: Array<ObjectDetailField> = []
-    for (let index = 0; index < this.selectedDetailFields.length; index++) {
-      const field = this.selectedDetailFields[index]
+    for (let index = 0; index < this.objectDetailStore.selectedDetailFields.length; index++) {
+      const field = this.objectDetailStore.selectedDetailFields[index]
       if (field.section === section && field.value.length > 0 && this.detailFieldLabel(field.key).length > 0) {
         fields.push(field)
       }
@@ -20441,16 +20387,16 @@ private loadPlanetPositions(): void {
   }
 
   private selectedObjectIsConstellation(): boolean {
-    const type = (this.selectedType + ' ' + this.selectedObjectType).toLowerCase()
+    const type = (this.objectDetailStore.selectedType + ' ' + this.objectDetailStore.selectedObjectType).toLowerCase()
     return type.indexOf('constellation') >= 0 || type.indexOf('星座') >= 0
   }
 
   private selectedObjectIsArtificialSatellite(): boolean {
-    if (this.selectedSatellitePassesLoaded) return true
-    for (let index = 0; index < this.selectedDetailFields.length; index++) {
-      if (this.selectedDetailFields[index].key === 'tleEpoch') return true
+    if (this.objectDetailStore.selectedSatellitePassesLoaded) return true
+    for (let index = 0; index < this.objectDetailStore.selectedDetailFields.length; index++) {
+      if (this.objectDetailStore.selectedDetailFields[index].key === 'tleEpoch') return true
     }
-    const type = (this.selectedType + ' ' + this.selectedObjectType).toLowerCase()
+    const type = (this.objectDetailStore.selectedType + ' ' + this.objectDetailStore.selectedObjectType).toLowerCase()
     return type.indexOf('artificial satellite') >= 0 || type.indexOf('人造卫星') >= 0
   }
 
@@ -20460,8 +20406,8 @@ private loadPlanetPositions(): void {
   }
 
   private selectedSatelliteTleEpoch(): string {
-    if (this.selectedSatellitePasses.length === 0) return ''
-    return this.selectedSatellitePasses[0].tleEpoch ?? ''
+    if (this.objectDetailStore.selectedSatellitePasses.length === 0) return ''
+    return this.objectDetailStore.selectedSatellitePasses[0].tleEpoch ?? ''
   }
 
   private satellitePassAngle(value: number | undefined): string {
@@ -20544,10 +20490,10 @@ private loadPlanetPositions(): void {
         Row() {
           Text(I18n.t('satellite_passes_title')).fontSize(tablet ? 13 : 12).fontWeight(FontWeight.Medium)
             .fontColor('#D9F2FF').layoutWeight(1)
-          Text(this.selectedSatellitePassesLoaded ? this.selectedSatellitePasses.length.toString() : '')
+          Text(this.objectDetailStore.selectedSatellitePassesLoaded ? this.objectDetailStore.selectedSatellitePasses.length.toString() : '')
             .fontSize(10).fontColor('#8FBBD6')
         }.width('100%')
-        if (!this.selectedSatellitePassesRequested) {
+        if (!this.objectDetailStore.selectedSatellitePassesRequested) {
           Row({ space: 8 }) {
             Text(I18n.t('satellite_passes_lazy_hint')).fontSize(11).fontColor('#8FBBD6')
               .layoutWeight(1).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -20558,21 +20504,21 @@ private loadPlanetPositions(): void {
               .padding({ left: 10, right: 10, top: 6, bottom: 6 })
               .onClick(() => { this.loadSelectedSatellitePasses() })
           }.width('100%').alignItems(VerticalAlign.Center).padding({ top: 6, bottom: 6 })
-        } else if (!this.selectedSatellitePassesLoaded) {
+        } else if (!this.objectDetailStore.selectedSatellitePassesLoaded) {
           Row({ space: 7 }) {
             LoadingProgress().width(16).height(16).color('#8FD3FF')
             Text(I18n.t('satellite_pass_preparing')).fontSize(11).fontColor('#8FBBD6')
           }.width('100%').justifyContent(FlexAlign.Center).padding({ top: 8, bottom: 8 })
-        } else if (this.selectedSatellitePasses.length === 0) {
+        } else if (this.objectDetailStore.selectedSatellitePasses.length === 0) {
           Text(I18n.t('satellite_pass_no_data')).fontSize(11).fontColor('#8FBBD6')
             .lineHeight(17).width('100%').padding({ top: 6, bottom: 6 })
         } else {
           Text(I18n.t('satellite_next_pass')).fontSize(10).fontColor('#8FBBD6').width('100%')
-          ForEach(this.selectedSatellitePasses.slice(0, 3), (pass: SatellitePass) => {
+          ForEach(this.objectDetailStore.selectedSatellitePasses.slice(0, 3), (pass: SatellitePass) => {
             this.satellitePassCard(pass, tablet)
           }, (pass: SatellitePass, index: number) => 'satellite-pass-' + index.toString() + '-' + this.satellitePassTime(pass.start))
         }
-        if (this.selectedSatellitePassesLoaded && this.selectedSatelliteTleEpoch().length > 0) {
+        if (this.objectDetailStore.selectedSatellitePassesLoaded && this.selectedSatelliteTleEpoch().length > 0) {
           Text(I18n.format('satellite_pass_offline_source', [this.selectedSatelliteTleEpoch()])).fontSize(9).fontColor('#7599AD')
             .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
@@ -20592,7 +20538,7 @@ private loadPlanetPositions(): void {
           Column({ space: 2 }) {
             Text(I18n.t('culture_constellation_intro')).fontSize(tablet ? 13 : 12).fontWeight(FontWeight.Medium)
               .fontColor('#D9F2FF').width('100%')
-            Text(this.selectedConstellationCultureName.length > 0 ? this.selectedConstellationCultureName : I18n.t('culture_active_sky'))
+            Text(this.objectDetailStore.selectedConstellationCultureName.length > 0 ? this.objectDetailStore.selectedConstellationCultureName : I18n.t('culture_active_sky'))
               .fontSize(10).fontColor('#8FBBD6').width('100%').maxLines(2)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }.layoutWeight(1)
@@ -20601,35 +20547,35 @@ private loadPlanetPositions(): void {
             .backgroundColor('rgba(91,147,191,0.14)').borderRadius(UI_RADIUS_CONTROL)
         }.width('100%')
         Divider().color('rgba(143,211,255,0.14)').margin({ top: 2, bottom: 2 })
-        if (this.selectedConstellationCultureDescription.length > 0) {
-          if (this.selectedConstellationCultureDescriptionBlocks.length > 0) {
+        if (this.objectDetailStore.selectedConstellationCultureDescription.length > 0) {
+          if (this.objectDetailStore.selectedConstellationCultureDescriptionBlocks.length > 0) {
             Column({ space: 4 }) {
               ForEach(
-                this.selectedConstellationCultureDescriptionExpanded
-                  ? this.selectedConstellationCultureDescriptionBlocks
-                  : this.selectedConstellationCultureDescriptionBlocks.slice(0, 5),
+                this.objectDetailStore.selectedConstellationCultureDescriptionExpanded
+                  ? this.objectDetailStore.selectedConstellationCultureDescriptionBlocks
+                  : this.objectDetailStore.selectedConstellationCultureDescriptionBlocks.slice(0, 5),
                 (block: SkyCultureDescriptionBlock) => { this.skyCultureDescriptionBlockView(block) },
                 (block: SkyCultureDescriptionBlock) => 'selected-culture-' + block.index
               )
             }.width('100%')
           } else {
-            Text(this.selectedConstellationCultureDescription).fontSize(tablet ? 12 : 11)
+            Text(this.objectDetailStore.selectedConstellationCultureDescription).fontSize(tablet ? 12 : 11)
               .fontColor('#C9E4F1').width('100%').lineHeight(tablet ? 19 : 18)
-              .maxLines(this.selectedConstellationCultureDescriptionExpanded ? 999 : 7)
+              .maxLines(this.objectDetailStore.selectedConstellationCultureDescriptionExpanded ? 999 : 7)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
-          if (this.selectedConstellationCultureDescriptionBlocks.length > 5 || this.selectedConstellationCultureDescription.length > 280) {
-            Button(this.selectedConstellationCultureDescriptionExpanded ? I18n.t('culture_collapse_intro') : I18n.t('culture_expand_intro'))
+          if (this.objectDetailStore.selectedConstellationCultureDescriptionBlocks.length > 5 || this.objectDetailStore.selectedConstellationCultureDescription.length > 280) {
+            Button(this.objectDetailStore.selectedConstellationCultureDescriptionExpanded ? I18n.t('culture_collapse_intro') : I18n.t('culture_expand_intro'))
               .fontSize(10).fontColor('#8FD3FF').backgroundColor('rgba(0,0,0,0)')
               .height(26).padding({ left: 0, right: 8 })
-              .onClick(() => { this.selectedConstellationCultureDescriptionExpanded = !this.selectedConstellationCultureDescriptionExpanded })
+              .onClick(() => { this.objectDetailStore.selectedConstellationCultureDescriptionExpanded = !this.objectDetailStore.selectedConstellationCultureDescriptionExpanded })
           }
         } else {
           Text(I18n.t('culture_no_constellation_intro')).fontSize(tablet ? 11 : 10)
             .fontColor('#8FBBD6').width('100%').lineHeight(17)
         }
-        if (this.selectedConstellationCultureDescriptionSource.length > 0) {
-          Text(this.selectedConstellationCultureDescriptionSource).fontSize(9).fontColor('#7599AD')
+        if (this.objectDetailStore.selectedConstellationCultureDescriptionSource.length > 0) {
+          Text(this.objectDetailStore.selectedConstellationCultureDescriptionSource).fontSize(9).fontColor('#7599AD')
             .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
       }
@@ -20656,13 +20602,13 @@ private loadPlanetPositions(): void {
 
   @Builder
   structuredObjectDetails(tablet: boolean) {
-    if (!this.selectedDetailLoaded) {
+    if (!this.objectDetailStore.selectedDetailLoaded) {
       Row({ space: 8 }) {
         LoadingProgress().width(18).height(18).color('#8FD3FF')
         Text('正在整理补充资料').fontSize(11).fontColor('#8FBBD6')
       }
         .width('100%').justifyContent(FlexAlign.Center).padding({ top: 12, bottom: 12 })
-    } else if (this.selectedDetailFields.length === 0) {
+    } else if (this.objectDetailStore.selectedDetailFields.length === 0) {
       Text('暂无更多结构化资料').fontSize(11).fontColor('#7FA6BB').width('100%')
         .textAlign(TextAlign.Center).padding({ top: 10, bottom: 10 })
     } else {
@@ -22078,7 +22024,7 @@ private loadPlanetPositions(): void {
     } else if (this.activePanel === 'automationHub') {
       this.hubActionList(this.automationHubActions(), I18n.t('more_automation_desc'))
     } else if (this.activePanel === 'object') {
-      if (this.selectedName.length === 0) {
+      if (this.objectDetailStore.selectedName.length === 0) {
         Column() {
           Text(I18n.t('i0109')).fontSize(14).fontColor('#99FFFFFF').margin({ top: 20 })
           Text(I18n.t('i0110')).fontSize(12).fontColor('#CC8FB6FF').margin({ top: 6 })
@@ -22086,54 +22032,54 @@ private loadPlanetPositions(): void {
       } else {
       // 天体名称突出显示
       Row() {
-        Text(this.zhNameOf(this.selectedName))
+        Text(this.zhNameOf(this.objectDetailStore.selectedName))
           .fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFFFFFFF').layoutWeight(1)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.width('100%').padding({ left: 4, right: 4, top: 2, bottom: 4 }).margin({ bottom: 2 })
       // 类型标签
       Row() {
-        Text(this.zhType(this.selectedType))
+        Text(this.zhType(this.objectDetailStore.selectedType))
           .fontSize(11).fontColor('#7FB3DC')
           .padding({ left: 8, right: 8, top: 2, bottom: 2 })
           .backgroundColor('rgba(91, 147, 191, 0.15)').borderRadius(UI_RADIUS_CONTROL)
         Blank()
-        Text(this.selectedStatus === 'Selected' && this.viewLock ? I18n.t('view_lock_status_on') : this.selectedStatusZh(this.selectedStatus))
+        Text(this.objectDetailStore.selectedStatus === 'Selected' && this.viewLock ? I18n.t('view_lock_status_on') : this.selectedStatusZh(this.objectDetailStore.selectedStatus))
           .fontSize(11).fontColor('#99FFFFFF')
       }.width('100%').padding({ left: 4, right: 4 }).height(20).margin({ bottom: 8 })
 
       // 直接绑定 @State（不要经 infoRow 的 @Builder 参数，参数按值捕获会导致不刷新，详见上方注释）
-      if (this.selectedMagnitude.length > 0) {
+      if (this.objectDetailStore.selectedMagnitude.length > 0) {
         Row() {
           Text(I18n.t('i0007')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.selectedMagnitude).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.objectDetailStore.selectedMagnitude).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.height(28).width('100%').padding({ left: 10, right: 10 })
       }
-      if (this.selectedCoordEq.length > 0) {
+      if (this.objectDetailStore.selectedCoordEq.length > 0) {
         Row() {
           Text(I18n.t('i0008')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.selectedCoordEq).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.objectDetailStore.selectedCoordEq).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.height(28).width('100%').padding({ left: 10, right: 10 })
       }
-      if (this.selectedCoordAlt.length > 0) {
+      if (this.objectDetailStore.selectedCoordAlt.length > 0) {
         Row() {
           Text(I18n.t('i0009')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.selectedCoordAlt).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.objectDetailStore.selectedCoordAlt).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.height(28).width('100%').padding({ left: 10, right: 10 })
       }
-      if (this.selectedConstellation.length > 0) {
+      if (this.objectDetailStore.selectedConstellation.length > 0) {
         Row() {
           Text(I18n.t('i0010')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.zhNameOf(this.selectedConstellation)).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.zhNameOf(this.objectDetailStore.selectedConstellation)).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.height(28).width('100%').padding({ left: 10, right: 10 })
       }
-      if (this.selectedDistance.length > 0) {
+      if (this.objectDetailStore.selectedDistance.length > 0) {
         Row() {
           Text(I18n.t('i0011')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.selectedDistance).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.objectDetailStore.selectedDistance).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.height(28).width('100%').padding({ left: 10, right: 10 })
       }
-      if (this.selectedInfo.length > 0) {
-        Text(this.selectedInfo)
+      if (this.objectDetailStore.selectedInfo.length > 0) {
+        Text(this.objectDetailStore.selectedInfo)
           .fontSize(12)
           .fontColor('#99FFFFFF')
           .lineHeight(18)
@@ -22164,15 +22110,15 @@ private loadPlanetPositions(): void {
         this.structuredObjectDetails(false)
       }
       Row() {
-        Button(this.observingList.includes(this.selectedName) ? I18n.t('s0739') : I18n.t('s0738'))
+        Button(this.observingList.includes(this.objectDetailStore.selectedName) ? I18n.t('s0739') : I18n.t('s0738'))
           .fontSize(13).fontColor("#E5FFFFFF").backgroundColor("rgba(107,163,214,0.25)")
           .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1)
           .onClick(() => {
-            if (this.observingList.includes(this.selectedName)) {
-              this.observingList = this.observingList.filter((item: string) => item !== this.selectedName)
+            if (this.observingList.includes(this.objectDetailStore.selectedName)) {
+              this.observingList = this.observingList.filter((item: string) => item !== this.objectDetailStore.selectedName)
               this.flashHint(I18n.t('i0079'))
             } else {
-              this.observingList = this.observingList.concat([this.selectedName])
+              this.observingList = this.observingList.concat([this.objectDetailStore.selectedName])
               this.flashHint(I18n.t('i0080'))
             }
             this.persistObservingList()
@@ -23385,11 +23331,11 @@ private loadPlanetPositions(): void {
               Row({ space: 8 }) {
                 Column({ space: 1 }) {
                   Text('星历目标').fontSize(9).fontColor(this.nmSub())
-                  Text(this.selectedName.length > 0 ? this.zhNameOf(this.selectedName) : '尚未选择天体')
-                    .fontSize(11).fontColor(this.selectedName.length > 0 ? this.nmText() : this.nmSub())
+                  Text(this.objectDetailStore.selectedName.length > 0 ? this.zhNameOf(this.objectDetailStore.selectedName) : '尚未选择天体')
+                    .fontSize(11).fontColor(this.objectDetailStore.selectedName.length > 0 ? this.nmText() : this.nmSub())
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                Button(this.selectedName.length > 0 ? '更换天体' : '选择天体')
+                Button(this.objectDetailStore.selectedName.length > 0 ? '更换天体' : '选择天体')
                   .fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
                   .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 10, right: 10 })
                   .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
@@ -23819,10 +23765,10 @@ private loadPlanetPositions(): void {
             Row({ space: 8 }) {
               Column({ space: 1 }) {
                 Text('曲线目标').fontSize(9).fontColor(this.nmSub())
-                Text(this.graphTargetLabel()).fontSize(12).fontColor(this.selectedName.length > 0 ? this.nmText() : this.nmSub())
+                Text(this.graphTargetLabel()).fontSize(12).fontColor(this.objectDetailStore.selectedName.length > 0 ? this.nmText() : this.nmSub())
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              Button(this.selectedName.length > 0 ? '更换天体' : '选择天体')
+              Button(this.objectDetailStore.selectedName.length > 0 ? '更换天体' : '选择天体')
                 .fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
                 .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 10, right: 10 })
                 .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
@@ -25186,7 +25132,7 @@ private loadPlanetPositions(): void {
     } else if (this.activePanel === 'bookmarks') {
       BookmarkPanel({
         store: this.bookmarkStore,
-        selectedName: this.selectedName,
+        selectedName: this.objectDetailStore.selectedName,
         cardBorderColor: this.nmBorder(),
         onSaveView: () => { this.addCurrentBookmark() },
         onGoto: (id: string) => { this.gotoBookmark(id) },
