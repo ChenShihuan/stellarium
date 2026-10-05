@@ -4,18 +4,21 @@
 // 信息 / 天空 / 时间 / 数据 / 插件管理 / 视图导航）的原内联 UI 一字未改。
 //
 // 状态体系（§13.1 规则 1/5/6）：
-//   - 实时刷新的六个 @Observed store 走 @ObjectLink（gyroStore / overlayStore /
-//     deltaTStore / timeSettingsStore / ephemerisStore / pluginStore），宿主源均为 @State 实例。
+//   - 实时刷新的八个 @Observed store 走 @ObjectLink（gyroStore / overlayStore /
+//     deltaTStore / timeSettingsStore / ephemerisStore / pluginStore /
+//     navigationStore / viewSettingsStore），宿主源均为 @State 实例。
 //     ephemerisStore 承载 DE430/431/440/441 的可用/启用标志（Phase 4m，原 8 个 @Prop）；
-//     pluginStore 承载插件列表与加载态（Phase 4m，原 2 个 @Prop）。
+//     pluginStore 承载插件列表与加载态（Phase 4m，原 2 个 @Prop）；
+//     navigationStore 承载视图导航设置（9 字段，原 9 个 @Prop）；
+//     viewSettingsStore 承载视图交互偏好（useMetricUnits / viewLock / autoZoomResets，原 3 个 @Prop）。
 //   - 其余标量/字符串状态走 @Prop；主题色由宿主算好后传入（避免组件名与
 //     CustomComponent 基类属性方法冲突，边框色命名为 lineColor）。
 //   - 宿主私有助手（sensZh / configDitheringLabel / informationMaskHas / plugin* /
 //     script* 等纯查表或读宿主字段）与全部动作按规则 6 回注，组件内不改宿主 @State。
 //     `viewTab = 0; openSubPanel('layers')` 与 `openSubPanel('tools')` 合并为
 //     onOpenLayersSky / onOpenTools 两个动作回调。
-//   - 原 `Slider` 直接写宿主 `this.navigationMaxFov`；组件改为本地 @State 草稿
-//     `maxFovDraft`（aboutToAppear 与 @Prop 同步），点“应用”经 setNavigationMaxFov
+//   - 原 `Slider` 直接写宿主导航设置字段；组件改为本地 @State 草稿
+//     `maxFovDraft`（aboutToAppear 与 store 同步），点“应用”经 setNavigationMaxFov
 //     回注宿主 —— 与原“拖动改值、应用才下发生效”的行为一致。
 //   - 列表 Scroller（scriptListScroller）以普通成员传入（宿主仍持同一实例）。
 // 本文件不含 @BuilderParam，不含参数化 @Builder（规则 3/9）。
@@ -31,6 +34,8 @@ import { DeltaTStore } from '../../state/DeltaTStore'
 import { TimeSettingsStore } from '../../state/TimeSettingsStore'
 import { EphemerisStore } from '../../state/EphemerisStore'
 import { PluginStore } from '../../state/PluginStore'
+import { NavigationSettingsStore } from '../../state/NavigationSettingsStore'
+import { ViewSettingsStore } from '../../state/ViewSettingsStore'
 import { InfoRow } from '../../common/ui/InfoRow'
 import { EphemerisToggleRow, InformationModeButton, InformationSwitchRow, NavigationSwitchRow } from '../settings/SettingsRows'
 import { LanguageRow, DevicePrivacySection } from '../settings/DeviceAndLanguageRows'
@@ -46,12 +51,13 @@ export struct SettingsPanel {
   @ObjectLink timeSettingsStore: TimeSettingsStore
   @ObjectLink ephemerisStore: EphemerisStore
   @ObjectLink pluginStore: PluginStore
+  @ObjectLink navigationStore: NavigationSettingsStore
+  @ObjectLink viewSettingsStore: ViewSettingsStore
   @Prop configTab: number
   @Prop configTabContentOpacity: number
   @Prop configTabContentOffsetX: number
   @Prop i18nLang: string
   @Prop selectedLanguage: string
-  @Prop useMetricUnits: boolean
   @Prop isExpandedLayout: boolean
   @Prop informationMode: string
   @Prop informationSettingPending: boolean
@@ -63,17 +69,6 @@ export struct SettingsPanel {
   @Prop scriptLaunchingName: string
   @Prop scriptList: string[]
   @Prop fovText: string
-  @Prop viewLock: boolean
-  @Prop navigationMouseEnabled: boolean
-  @Prop navigationMouseZoomEnabled: boolean
-  @Prop navigationMoveKeysEnabled: boolean
-  @Prop navigationZoomKeysEnabled: boolean
-  @Prop navigationGravityLabelsEnabled: boolean
-  @Prop autoZoomResets: boolean
-  @Prop navigationStartupFov: number
-  @Prop navigationStartupAzimuth: number
-  @Prop navigationStartupAltitude: number
-  @Prop navigationMaxFov: number
   @Prop textColor: string
   @Prop subColor: string
   @Prop accentColor: string
@@ -130,7 +125,7 @@ export struct SettingsPanel {
   onOpenTools: () => void = () => {}
 
   aboutToAppear(): void {
-    this.maxFovDraft = this.navigationMaxFov
+    this.maxFovDraft = this.navigationStore.navigationMaxFov
   }
 
   build() {
@@ -190,17 +185,17 @@ export struct SettingsPanel {
               Text(I18n.t('set_distance_units')).fontSize(12).fontColor(this.subColor).width(72)
               Row({ space: 6 }) {
                 Text(I18n.t('unit_km'))
-                  .fontSize(11).fontColor(this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
+                  .fontSize(11).fontColor(this.viewSettingsStore.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
                   .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                  .backgroundColor(this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
+                  .backgroundColor(this.viewSettingsStore.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
                   .borderRadius(UI_RADIUS_CONTROL)
                   .onClick(() => {
                     this.setDistanceUnit(true)
                   })
                 Text(I18n.t('unit_mile'))
-                  .fontSize(11).fontColor(!this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
+                  .fontSize(11).fontColor(!this.viewSettingsStore.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
                   .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                  .backgroundColor(!this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
+                  .backgroundColor(!this.viewSettingsStore.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
                   .borderRadius(UI_RADIUS_CONTROL)
                   .onClick(() => {
                     this.setDistanceUnit(false)
@@ -488,19 +483,19 @@ export struct SettingsPanel {
             Column({ space: 5 }) {
               Row({ space: 8 }) {
                 Text(I18n.t('set_lock_view')).fontSize(11).fontColor(this.textColor).layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.viewLock })
+                Toggle({ type: ToggleType.Switch, isOn: this.viewSettingsStore.viewLock })
                   .width(42).height(24).selectedColor(this.accentColor)
                   .onChange((enabled: boolean) => { this.setViewLockState(enabled) })
               }.width('100%')
-              Text(this.viewLock ? I18n.t('view_lock_enabled') : I18n.t('settings_view_lock_hint'))
+              Text(this.viewSettingsStore.viewLock ? I18n.t('view_lock_enabled') : I18n.t('settings_view_lock_hint'))
                 .fontSize(9).fontColor(this.subColor).width('100%').maxLines(3)
             }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
               .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
 
             Text(I18n.t('settings_view_startup')).fontSize(12).fontColor(this.subColor).width('100%').margin({ bottom: 5 })
             Column({ space: 2 }) {
-              Text(I18n.format('settings_view_startup_fov', [this.navigationStartupFov.toFixed(1)])).fontSize(11).fontColor(this.textColor).width('100%')
-              Text(I18n.format('settings_view_startup_direction', [this.navigationStartupAzimuth.toFixed(1), this.navigationStartupAltitude.toFixed(1)])).fontSize(10).fontColor(this.subColor).width('100%')
+              Text(I18n.format('settings_view_startup_fov', [this.navigationStore.navigationStartupFov.toFixed(1)])).fontSize(11).fontColor(this.textColor).width('100%')
+              Text(I18n.format('settings_view_startup_direction', [this.navigationStore.navigationStartupAzimuth.toFixed(1), this.navigationStore.navigationStartupAltitude.toFixed(1)])).fontSize(10).fontColor(this.subColor).width('100%')
             }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 })
               .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 6 })
             Button(I18n.t('settings_view_save_current')).fontSize(11).fontColor(this.textColor).backgroundColor(this.accentColor)
@@ -508,12 +503,12 @@ export struct SettingsPanel {
               .onClick(() => { this.saveCurrentViewAsStartup() })
 
             Text(I18n.t('settings_view_navigation_controls')).fontSize(12).fontColor(this.subColor).width('100%').margin({ bottom: 5 })
-            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_navigation'), isOn: this.navigationMouseEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('mouseNavigation', v) } })
-            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_zoom'), isOn: this.navigationMouseZoomEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('mouseZooming', v) } })
-            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_navigation'), isOn: this.navigationMoveKeysEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('moveKeys', v) } })
-            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_zoom'), isOn: this.navigationZoomKeysEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('zoomKeys', v) } })
-            NavigationSwitchRow({ label: I18n.t('settings_view_gravity_labels'), isOn: this.navigationGravityLabelsEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('gravityLabels', v) } })
-            NavigationSwitchRow({ label: I18n.t('s0302'), isOn: this.autoZoomResets, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('autoZoomResets', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_navigation'), isOn: this.navigationStore.navigationMouseEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('mouseNavigation', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_zoom'), isOn: this.navigationStore.navigationMouseZoomEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('mouseZooming', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_navigation'), isOn: this.navigationStore.navigationMoveKeysEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('moveKeys', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_zoom'), isOn: this.navigationStore.navigationZoomKeysEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('zoomKeys', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_gravity_labels'), isOn: this.navigationStore.navigationGravityLabelsEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('gravityLabels', v) } })
+            NavigationSwitchRow({ label: I18n.t('s0302'), isOn: this.viewSettingsStore.autoZoomResets, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('autoZoomResets', v) } })
 
             Text(I18n.t('settings_view_max_fov')).fontSize(12).fontColor(this.subColor).width('100%').margin({ top: 4, bottom: 4 })
             Row() {

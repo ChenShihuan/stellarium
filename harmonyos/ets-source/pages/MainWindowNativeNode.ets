@@ -128,6 +128,9 @@ import { AudioStore } from '../state/AudioStore'
 import { EphemerisStore } from '../state/EphemerisStore'
 import { NebulaTextureStore } from '../state/NebulaTextureStore'
 import { PluginStore } from '../state/PluginStore'
+import { NavigationSettingsStore } from '../state/NavigationSettingsStore'
+import { ViewSettingsStore } from '../state/ViewSettingsStore'
+import { AtmosphereStore } from '../state/AtmosphereStore'
 import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
 import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
@@ -419,29 +422,18 @@ export struct WindowNativeNode {
   @State private timeSettingsPending: boolean = false
   @State private deltaTStore: DeltaTStore = new DeltaTStore()
   @State private presetSkyTime: number = 0
-  @State private navigationMouseEnabled: boolean = true
-  @State private navigationMouseZoomEnabled: boolean = true
-  @State private navigationMoveKeysEnabled: boolean = true
-  @State private navigationZoomKeysEnabled: boolean = true
-  @State private navigationGravityLabelsEnabled: boolean = false
-  @State private navigationStartupFov: number = 60
-  @State private navigationStartupAzimuth: number = 0
-  @State private navigationStartupAltitude: number = 45
-  @State private navigationMaxFov: number = 180
+  // 视图导航设置（9 字段）已下沉 state/NavigationSettingsStore.ets（review §2.7）。
+  @State private navigationStore: NavigationSettingsStore = new NavigationSettingsStore()
   // Open AstroCalc on the observation-first view: it needs no selected object
   // and immediately gives a useful answer for the current location and date.
   private astroTransitionId: number = 0
   private astroRequestedTab: number = -1
   private astroPanelScroller: Scroller = new Scroller()
-  @State private autoZoomResets: boolean = false
-  // 竖直视角限位：默认开。开启后手动上下拖只会在 天顶(+90°)↔天底(-90°) 之间，不会翻过头把天倒过来。
-  // 卡在天顶↔天底：默认开。开启后上下滑只改高度角（到天顶/天底就停，不翻转），
-  // 左右滑只改方位角——即使手指在屏幕偏左/偏右处竖直滑，画面也绝不会旋转。
-  @State private verticalClamp: boolean = true
-  // 固定目标位置：开启后仍可自由拖动，松手时记录当前目标位置供后续缩放保持。
-  @State private viewLock: boolean = false
-  // 画面防弯曲：限制最大视场角(100°)，不能缩到"整个天空变成一个球"，地平线保持基本平直。
-  @State private flatHorizon: boolean = true
+  // 视图交互偏好（autoZoomResets / useMetricUnits / viewLock / verticalClamp / flatHorizon，
+  // 共 5 字段）已下沉 state/ViewSettingsStore.ets（review §2.7）。
+  // 说明：竖直限位默认开（天顶↔天底间拖动不翻转）；viewLock 开启后仍可自由拖动、松手记录位置；
+  // flatHorizon 限制最大视场角、保持地平线平直。
+  @State private viewSettingsStore: ViewSettingsStore = new ViewSettingsStore()
   // 桥接数据
   @State private moduleList: string[] = []
   private rtsRequestSequence: number = 0
@@ -471,10 +463,9 @@ export struct WindowNativeNode {
   private astroContextRequestId: number = 0
   private astroContextRequestPending: boolean = false
   private wutRequestSequence: number = 0
-  @State private atmoPressure: number = 1013
-  @State private atmoTemperature: number = 10
-  @State private atmoExtinction: number = 0.13
-  @State private refractionOn: boolean = true
+  // 大气观测辅助（atmoPressure / atmoTemperature / atmoExtinction / refractionOn，共 4 字段）
+  // 已下沉 state/AtmosphereStore.ets（review §2.7）。
+  @State private atmosphereStore: AtmosphereStore = new AtmosphereStore()
   // 星文化制作器向导状态（Phase 3am，见 state/SkyCultureMakerStore.ets）
   @State private skyCultureMakerStore: SkyCultureMakerStore = new SkyCultureMakerStore()
   private skyCultureMakerArtworkPreviewPath: string = ''
@@ -516,7 +507,6 @@ export struct WindowNativeNode {
   private navStarsMutationId: number = 0
   @State private landscapeDetailOpen: boolean = false
   @State private infoLevel: number = 1
-  @State private useMetricUnits: boolean = true
   // 新增面板控制
   @State private planetLabels: boolean = false
   private applicationInForeground: boolean = true
@@ -1543,7 +1533,7 @@ export struct WindowNativeNode {
         if (r.ok === true && r.current !== undefined) { this.currentProjection = r.current as string }
       }),
       () => this.callNativeWhenReady('getConfigString', 'astronomy/flag_use_km_for_distance', (r) => {
-        if (r.ok) { this.useMetricUnits = r.value === 'true' }
+        if (r.ok) { this.viewSettingsStore.useMetricUnits = r.value === 'true' }
       }),
       () => this.callNativeWhenReady('getLimitMagnitude', '', (r) => {
         const response = r as LimitMagnitudeResponse
@@ -1554,7 +1544,7 @@ export struct WindowNativeNode {
       }),
       () => this.restoreStartupSettings(),
       () => this.callNativeWhenReady("setFlatHorizon", "1", (r: StellariumBridgeResponse) => {
-        if (r.ok === true) { this.flatHorizon = true }
+        if (r.ok === true) { this.viewSettingsStore.flatHorizon = true }
       }),
       () => this.callNativeWhenReady("setActionChecked", "actionShow_Zenith_Nadir|1", (r: StellariumBridgeResponse) => {
         if (r.ok === true) { this.layerStore.zenithNadir = true }
@@ -1598,7 +1588,7 @@ export struct WindowNativeNode {
           }
         }
         if (saved.musicEnabled !== undefined) { this.audioStore.musicEnabled = saved.musicEnabled as boolean }
-        if (saved.useMetricUnits !== undefined) { this.useMetricUnits = saved.useMetricUnits as boolean }
+        if (saved.useMetricUnits !== undefined) { this.viewSettingsStore.useMetricUnits = saved.useMetricUnits as boolean }
         if (saved.viewCoordinatesVisible !== undefined) { this.overlayStore.viewCoordinatesVisible = saved.viewCoordinatesVisible as boolean }
         if (saved.viewCoordinateFamily !== undefined) { this.overlayStore.viewCoordinateFamily = saved.viewCoordinateFamily as string }
         if (saved.viewEquatorialEpoch !== undefined) { this.overlayStore.viewEquatorialEpoch = saved.viewEquatorialEpoch as string }
@@ -1643,7 +1633,7 @@ export struct WindowNativeNode {
       gyroscopeEnabled: this.gyroStore.gyroscopeEnabled,
       gyroscopeSensitivityText: this.gyroStore.gyroscopeSensitivityText,
       selectedLanguage: this.selectedLanguage,
-      useMetricUnits: this.useMetricUnits,
+      useMetricUnits: this.viewSettingsStore.useMetricUnits,
       musicEnabled: this.audioStore.musicEnabled,
       viewCoordinatesVisible: this.overlayStore.viewCoordinatesVisible,
       viewCoordinateFamily: this.overlayStore.viewCoordinateFamily,
@@ -4814,7 +4804,7 @@ export struct WindowNativeNode {
     if (result.meteorZhrMax !== undefined) this.layerViewStore.meteorZhrMax = Math.max(1000, Math.round(result.meteorZhrMax as number))
     if (result.zodiacalLight !== undefined) this.layerStore.zodiacalLight = result.zodiacalLight === true
     if (result.zodiacalIntensity !== undefined) this.layerViewStore.zodiacalIntensity = result.zodiacalIntensity as number
-    this.autoZoomResets = result.autoZoomResets === true
+    this.viewSettingsStore.autoZoomResets = result.autoZoomResets === true
     // The native Stellarium property is authoritative. The QAction is not
     // guaranteed to update when the time-panel uses the direct bridge command.
     if (result.nightMode !== undefined) {
@@ -4863,7 +4853,7 @@ export struct WindowNativeNode {
       this.trackingText = result.tracking ? 'On' : 'Off'
     }
     if (result.viewLock !== undefined) {
-      this.viewLock = result.viewLock === true
+      this.viewSettingsStore.viewLock = result.viewLock === true
     }
       this.stateRefreshRequestPending = false
       if (this.stateRefreshQueued) {
@@ -4989,39 +4979,39 @@ export struct WindowNativeNode {
 
   // 把 cmd 型开关的最新值写回对应的本地 @State，保证 Toggle 重建时显示正确
   private syncBridgeFlagState(cmd: string, enabled: boolean): void {
-    if (cmd === 'setViewLock') { this.viewLock = enabled }
-    else if (cmd === 'setVerticalClamp') { this.verticalClamp = enabled }
-    else if (cmd === 'setFlatHorizon') { this.flatHorizon = enabled }
+    if (cmd === 'setViewLock') { this.viewSettingsStore.viewLock = enabled }
+    else if (cmd === 'setVerticalClamp') { this.viewSettingsStore.verticalClamp = enabled }
+    else if (cmd === 'setFlatHorizon') { this.viewSettingsStore.flatHorizon = enabled }
     else if (cmd === 'setMeteors') { this.layerStore.meteors = enabled }
     else if (cmd === 'setDsoLabels') { this.layerStore.dsoLabels = enabled }
-    else if (cmd === 'setAutoZoomResets') { this.autoZoomResets = enabled }
+    else if (cmd === 'setAutoZoomResets') { this.viewSettingsStore.autoZoomResets = enabled }
   }
 
   private setViewLockState(enabled: boolean): void {
     if (enabled && !this.hasSelectedObject()) {
-      this.viewLock = false
+      this.viewSettingsStore.viewLock = false
       this.flashHint(I18n.t('view_lock_requires_selection'))
       return
     }
-    const previous = this.viewLock
-    this.viewLock = enabled
+    const previous = this.viewSettingsStore.viewLock
+    this.viewSettingsStore.viewLock = enabled
     this.callInteractive('setViewLock', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) {
-        this.viewLock = previous
+        this.viewSettingsStore.viewLock = previous
         this.flashHint(r.selectionRequired === true ? I18n.t('view_lock_requires_selection') : I18n.t('msg_apply_failed'))
         return
       }
-      if (r.viewLock !== undefined) this.viewLock = r.viewLock === true
+      if (r.viewLock !== undefined) this.viewSettingsStore.viewLock = r.viewLock === true
       if (r.tracking !== undefined) this.trackingText = r.tracking === true ? 'On' : 'Off'
-      this.flashHint(this.viewLock ? I18n.t('view_lock_enabled') : I18n.t('view_lock_disabled'))
+      this.flashHint(this.viewSettingsStore.viewLock ? I18n.t('view_lock_enabled') : I18n.t('view_lock_disabled'))
     }, () => {
-      this.viewLock = previous
+      this.viewSettingsStore.viewLock = previous
       this.flashHint(I18n.t('msg_apply_failed'))
     })
   }
 
   private toggleViewLock(): void {
-    this.setViewLockState(!this.viewLock)
+    this.setViewLockState(!this.viewSettingsStore.viewLock)
   }
 
 
@@ -5078,7 +5068,7 @@ export struct WindowNativeNode {
     })
     this.callInteractive('getConfigString', 'astronomy/flag_use_km_for_distance', (r: StellariumBridgeResponse) => {
       if (r.ok === true && r.value !== undefined) {
-        this.useMetricUnits = (r.value as string).toLowerCase() === 'true' || r.value === '1'
+        this.viewSettingsStore.useMetricUnits = (r.value as string).toLowerCase() === 'true' || r.value === '1'
       }
     })
     this.callInteractive('getDitheringMode', '', (r: StellariumBridgeResponse) => {
@@ -5086,16 +5076,16 @@ export struct WindowNativeNode {
     })
     this.callInteractive('getNavigationSettings', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      if (r.mouseNavigation !== undefined) this.navigationMouseEnabled = r.mouseNavigation === true
-      if (r.mouseZooming !== undefined) this.navigationMouseZoomEnabled = r.mouseZooming === true
-      if (r.moveKeys !== undefined) this.navigationMoveKeysEnabled = r.moveKeys === true
-      if (r.zoomKeys !== undefined) this.navigationZoomKeysEnabled = r.zoomKeys === true
-      if (r.gravityLabels !== undefined) this.navigationGravityLabelsEnabled = r.gravityLabels === true
-      if (r.autoZoomResets !== undefined) this.autoZoomResets = r.autoZoomResets === true
-      if (r.startupFov !== undefined) this.navigationStartupFov = Number(r.startupFov)
-      if (r.startupAzimuth !== undefined) this.navigationStartupAzimuth = Number(r.startupAzimuth)
-      if (r.startupAltitude !== undefined) this.navigationStartupAltitude = Number(r.startupAltitude)
-      if (r.maxFov !== undefined) this.navigationMaxFov = Number(r.maxFov)
+      if (r.mouseNavigation !== undefined) this.navigationStore.navigationMouseEnabled = r.mouseNavigation === true
+      if (r.mouseZooming !== undefined) this.navigationStore.navigationMouseZoomEnabled = r.mouseZooming === true
+      if (r.moveKeys !== undefined) this.navigationStore.navigationMoveKeysEnabled = r.moveKeys === true
+      if (r.zoomKeys !== undefined) this.navigationStore.navigationZoomKeysEnabled = r.zoomKeys === true
+      if (r.gravityLabels !== undefined) this.navigationStore.navigationGravityLabelsEnabled = r.gravityLabels === true
+      if (r.autoZoomResets !== undefined) this.viewSettingsStore.autoZoomResets = r.autoZoomResets === true
+      if (r.startupFov !== undefined) this.navigationStore.navigationStartupFov = Number(r.startupFov)
+      if (r.startupAzimuth !== undefined) this.navigationStore.navigationStartupAzimuth = Number(r.startupAzimuth)
+      if (r.startupAltitude !== undefined) this.navigationStore.navigationStartupAltitude = Number(r.startupAltitude)
+      if (r.maxFov !== undefined) this.navigationStore.navigationMaxFov = Number(r.maxFov)
     })
     this.callInteractive('getEphemerisSettings', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
@@ -5256,12 +5246,12 @@ export struct WindowNativeNode {
         this.flashHint(I18n.t('msg_apply_failed'))
         return
       }
-      if (setting === 'mouseNavigation') this.navigationMouseEnabled = enabled
-      else if (setting === 'mouseZooming') this.navigationMouseZoomEnabled = enabled
-      else if (setting === 'moveKeys') this.navigationMoveKeysEnabled = enabled
-      else if (setting === 'zoomKeys') this.navigationZoomKeysEnabled = enabled
-      else if (setting === 'gravityLabels') this.navigationGravityLabelsEnabled = enabled
-      else if (setting === 'autoZoomResets') this.autoZoomResets = enabled
+      if (setting === 'mouseNavigation') this.navigationStore.navigationMouseEnabled = enabled
+      else if (setting === 'mouseZooming') this.navigationStore.navigationMouseZoomEnabled = enabled
+      else if (setting === 'moveKeys') this.navigationStore.navigationMoveKeysEnabled = enabled
+      else if (setting === 'zoomKeys') this.navigationStore.navigationZoomKeysEnabled = enabled
+      else if (setting === 'gravityLabels') this.navigationStore.navigationGravityLabelsEnabled = enabled
+      else if (setting === 'autoZoomResets') this.viewSettingsStore.autoZoomResets = enabled
     })
   }
 
@@ -5269,7 +5259,7 @@ export struct WindowNativeNode {
     const maxFov = Math.max(1, Math.min(360, Math.round(value)))
     this.callInteractive('setNavigationSetting', 'maxFov|' + maxFov.toString(), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.navigationMaxFov = maxFov
+        this.navigationStore.navigationMaxFov = maxFov
         this.flashHint(I18n.t('settings_view_max_fov_updated'))
       } else {
         this.flashHint(I18n.t('msg_apply_failed'))
@@ -5335,7 +5325,7 @@ export struct WindowNativeNode {
   private setDistanceUnit(useMetric: boolean): void {
     this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + (useMetric ? 'true' : 'false'), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.useMetricUnits = useMetric
+        this.viewSettingsStore.useMetricUnits = useMetric
       } else {
         this.flashHint(r.error ?? I18n.t('msg_apply_failed'))
         this.loadConfigurationSettings()
@@ -6569,10 +6559,10 @@ export struct WindowNativeNode {
 
   private applyAtmosphereResponse(r: StellariumBridgeResponse): void {
     if (r.ok !== true) return
-    if (r.pressure !== undefined) this.atmoPressure = r.pressure
-    if (r.temperature !== undefined) this.atmoTemperature = r.temperature
-    if (r.extinction !== undefined) this.atmoExtinction = r.extinction
-    this.refractionOn = (r.refractionOn === true)
+    if (r.pressure !== undefined) this.atmosphereStore.atmoPressure = r.pressure
+    if (r.temperature !== undefined) this.atmosphereStore.atmoTemperature = r.temperature
+    if (r.extinction !== undefined) this.atmosphereStore.atmoExtinction = r.extinction
+    this.atmosphereStore.refractionOn = (r.refractionOn === true)
   }
 
   private applyAtmosphere(pressure: number, temperature: number, extinction: number): void {
@@ -8984,7 +8974,7 @@ private loadDSOCounts(): void {
     })
   }
 
-private loadObjectInfo(): void {
+  private loadObjectInfo(): void {
     this.callInteractive('getObjectInfo', '', (r: StellariumBridgeResponse) => {
       if (r.ok === true && r.objectInfoData !== undefined) {
         const obj = r.objectInfoData as Record<string, Object>;
@@ -14390,7 +14380,7 @@ private loadPlanetPositions(): void {
                 contentTranslateX: this.objectDetailContentTranslateX,
                 cardWidth: this.bottomCardWidth(),
                 cardHeight: this.bottomCardHeight(),
-                viewLock: this.viewLock,
+                viewLock: this.viewSettingsStore.viewLock,
                 speechStatus: this.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectInspectorIcon(),
@@ -14495,7 +14485,7 @@ private loadPlanetPositions(): void {
                 contentTranslateX: this.objectDetailContentTranslateX,
                 cardWidth: this.bottomCardWidth(),
                 cardHeight: this.bottomCardHeight(),
-                viewLock: this.viewLock,
+                viewLock: this.viewSettingsStore.viewLock,
                 speechStatus: this.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectInspectorIcon(),
@@ -14617,7 +14607,7 @@ private loadPlanetPositions(): void {
                 contentTranslateX: this.objectDetailContentTranslateX,
                 cardWidth: this.bottomCardWidth(),
                 cardHeight: this.bottomCardHeight(),
-                viewLock: this.viewLock,
+                viewLock: this.viewSettingsStore.viewLock,
                 speechStatus: this.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectInspectorIcon(),
@@ -15109,7 +15099,7 @@ private loadPlanetPositions(): void {
       // Native tracking owns the camera centre, so it supersedes the optional
       // fixed-screen-position mode. The native response is authoritative and
       // refreshState() will confirm the final toggle state.
-      this.viewLock = false
+      this.viewSettingsStore.viewLock = false
     }
     this.callInteractive('setTracking', enabled ? '1' : '0', (result: StellariumBridgeResponse) => {
       if (requestSerial !== this.trackingRequestSerial) { return }
@@ -15118,7 +15108,7 @@ private loadPlanetPositions(): void {
         this.trackingText = result.tracking === true ? 'On' : 'Off'
       }
       if (result.viewLock !== undefined) {
-        this.viewLock = result.viewLock === true
+        this.viewSettingsStore.viewLock = result.viewLock === true
       }
       this.trackingStateIgnoreUntilMs = Date.now() + 450
       this.flashHint(this.trackingText === 'On' ? I18n.t('tracking_enabled') : I18n.t('tracking_disabled'))
@@ -17277,7 +17267,7 @@ private loadPlanetPositions(): void {
         objectMediaStore: this.objectMediaStore,
         telescopeStore: this.telescopeStore,
         fullInspectorRequested: this.fullInspectorRequested,
-        viewLock: this.viewLock,
+        viewLock: this.viewSettingsStore.viewLock,
         speechStatus: this.speechStatus,
         observingListStore: this.obsListStore,
         isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
@@ -17333,10 +17323,7 @@ private loadPlanetPositions(): void {
         equationOfTimeStore: this.equationOfTimeStore,
         julianStore: this.julianStore,
         nightModeStore: this.nightModeStore,
-        refractionOn: this.refractionOn,
-        atmoPressure: this.atmoPressure,
-        atmoTemperature: this.atmoTemperature,
-        atmoExtinction: this.atmoExtinction,
+        atmosphereStore: this.atmosphereStore,
         manualYear: this.manualYear,
         manualMonth: this.manualMonth,
         manualDay: this.manualDay,
@@ -17511,15 +17498,12 @@ private loadPlanetPositions(): void {
         overlayStore: this.overlayStore,
         nightModeStore: this.nightModeStore,
         telescopeStore: this.telescopeStore,
-        autoZoomResets: this.autoZoomResets,
+        viewSettingsStore: this.viewSettingsStore,
         liveMode: this.liveMode,
-        verticalClamp: this.verticalClamp,
-        flatHorizon: this.flatHorizon,
         fovSliderValue: this.fovSliderValue,
         currentProjection: this.currentProjection,
         selectedLanguage: this.selectedLanguage,
         skyCultureViewStore: this.skyCultureViewStore,
-        useMetricUnits: this.useMetricUnits,
         satelliteCatalogHealth: this.satelliteStore.satelliteCatalogHealth,
         starCatalogHealth: this.starCatalogHealth,
         gyroSensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText),
@@ -17541,7 +17525,7 @@ private loadPlanetPositions(): void {
         onSetProjection: (name: string) => { this.setProjection(name) },
         onSetLanguage: (lang: string) => { this.setLanguage(lang) },
         onSetSkyCulture: (name: string) => { this.setSkyCulture(name) },
-        onSetUnits: (metric: boolean) => { this.useMetricUnits = metric; this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + metric, () => {}) },
+        onSetUnits: (metric: boolean) => { this.viewSettingsStore.useMetricUnits = metric; this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + metric, () => {}) },
         catalogHealthTextOf: (title: string, health: CatalogHealthEntry) => this.catalogHealthText(title, health),
         catalogHealthColorOf: (health: CatalogHealthEntry) => this.catalogHealthColor(health)
       })
@@ -17609,13 +17593,14 @@ private loadPlanetPositions(): void {
         deltaTStore: this.deltaTStore,
         timeSettingsStore: this.timeSettingsStore,
         ephemerisStore: this.ephemerisStore,
+        navigationStore: this.navigationStore,
+        viewSettingsStore: this.viewSettingsStore,
         scroller: this.scriptListScroller,
         configTab: this.configTab,
         configTabContentOpacity: this.configTabContentOpacity,
         configTabContentOffsetX: this.configTabContentOffsetX,
         i18nLang: this.i18nLang,
         selectedLanguage: this.selectedLanguage,
-        useMetricUnits: this.useMetricUnits,
         isExpandedLayout: this.isExpandedLayout,
         informationMode: this.informationMode,
         informationSettingPending: this.informationSettingPending,
@@ -17628,17 +17613,6 @@ private loadPlanetPositions(): void {
         scriptList: this.scriptStore.scriptList,
         pluginStore: this.pluginStore,
         fovText: this.fovText,
-        viewLock: this.viewLock,
-        navigationMouseEnabled: this.navigationMouseEnabled,
-        navigationMouseZoomEnabled: this.navigationMouseZoomEnabled,
-        navigationMoveKeysEnabled: this.navigationMoveKeysEnabled,
-        navigationZoomKeysEnabled: this.navigationZoomKeysEnabled,
-        navigationGravityLabelsEnabled: this.navigationGravityLabelsEnabled,
-        autoZoomResets: this.autoZoomResets,
-        navigationStartupFov: this.navigationStartupFov,
-        navigationStartupAzimuth: this.navigationStartupAzimuth,
-        navigationStartupAltitude: this.navigationStartupAltitude,
-        navigationMaxFov: this.navigationMaxFov,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         accentColor: this.nmAccent(),
@@ -18136,7 +18110,7 @@ private loadPlanetPositions(): void {
         isExpandedLayout: this.isExpandedLayout,
         fovText: this.fovText,
         selectedLanguage: this.selectedLanguage,
-        useMetricUnits: this.useMetricUnits,
+        viewSettingsStore: this.viewSettingsStore,
         observingListStore: this.obsListStore,
         skyCultureViewStore: this.skyCultureViewStore,
         panelColor: this.nmBg(),
@@ -18146,7 +18120,7 @@ private loadPlanetPositions(): void {
         removeObservingTarget: (name: string) => { this.removeObservingTarget(name) },
         clearObservingList: () => { this.obsListStore.observingList = []; this.persistObservingList(); this.flashHint(I18n.t('i0302')) },
         setLegacyDistanceUnit: (useMetric: boolean) => {
-          this.useMetricUnits = useMetric
+          this.viewSettingsStore.useMetricUnits = useMetric
           this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + (useMetric ? 'true' : 'false'), () => {})
         },
         handleChip: (id: string) => { this.handleChip(id) },
