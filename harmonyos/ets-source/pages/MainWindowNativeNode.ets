@@ -51,6 +51,7 @@ import { BookmarkStore } from '../state/BookmarkStore'
 import { BookmarkPanel } from '../panels/BookmarkPanel'
 import { SearchStore } from '../state/SearchStore'
 import { SearchBar } from '../panels/search/SearchBar'
+import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
 import { QuickChipRow } from '../panels/QuickChipRow'
 import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
@@ -22696,36 +22697,14 @@ private loadPlanetPositions(): void {
       if (this.searchFilterPage.length > 0) {
         this.searchFilterMenu()
       } else if (this.searchStore.searchText.trim().length > 0) {
-        Column({ space: 4 }) {
-          Row() {
-            Text(I18n.t('loc_search_results')).fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
-            Text(this.searchStore.searchSuggestions.length > 0 ? I18n.format('search_candidate_count', [this.searchStore.searchSuggestions.length.toString()]) : I18n.t('search_no_candidates'))
-              .fontSize(10).fontColor(this.nmSub())
-          }.width('100%').padding({ left: 4, right: 4 })
-          Scroll() {
-            Column({ space: 4 }) {
-              ForEach(this.searchStore.searchSuggestions, (item: SearchSug) => {
-                Row() {
-                  Image(getIcon('search', false)).width(16).height(16).fillColor('#7FB3DC').margin({ right: 10 })
-                  Column({ space: 1 }) {
-                    Text(item.zh).fontSize(14).fontColor(this.nmText()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    if (item.fuzzy === true || item.crossLanguage === true || (item.type ?? '').length > 0 || this.celestialSubtitle(item.zh, item.en).length > 0) {
-                      Text((item.crossLanguage === true ? I18n.t('search_cross_language_match') + ' · ' : '') + (item.fuzzy === true ? I18n.t('search_approximate_match') + ' · ' : '') + ((item.type ?? '').length > 0 ? item.type + ' · ' : '') + this.celestialSubtitle(item.zh, item.en)).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }
-                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                }
-                  .width('100%').height(52).padding({ left: 12, right: 12 })
-                  .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT })
-                  .onClick(() => this.selectSearchSuggestion(item))
-              }, (item: SearchSug) => item.selection ?? item.en)
-              if (this.searchStore.searchSuggestions.length === 0) {
-                Text(I18n.t('search_no_match_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 4, top: 8, bottom: 8 })
-              }
-            }.width('100%')
-          }.width('100%').height(this.searchStore.searchSuggestions.length > 0 ? 216 : 48).scrollable(ScrollDirection.Vertical).scrollBar(BarState.Auto)
-        }
-          .width('100%').padding(8).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
+        SearchSuggestions({
+          store: this.searchStore,
+          textColor: this.nmText(),
+          subColor: this.nmSub(),
+          panelColor: this.nmBg(),
+          subtitleFor: (title: string, englishName: string) => { return this.celestialSubtitle(title, englishName) },
+          onSelect: (item: SearchSug) => { this.selectSearchSuggestion(item) }
+        })
       } else {
         Row({ space: 10 }) {
           Row({ space: 10 }) {

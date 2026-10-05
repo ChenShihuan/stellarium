@@ -1,3 +1,12 @@
+## [2026-10-01] DevEco Code - Phase 3p：搜索域第二片（候选列表 → SearchSuggestions 组件）
+
+- **新增文件：** `panels/search/SearchSuggestions.ets`（结果计数行 + 候选行：名称 + 副标题；`@ObjectLink store` + `@Prop` 颜色 + `subtitleFor` / `onSelect` 回调）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 搜索分支内的候选块（原 34 行内联 UI）替换为 `SearchSuggestions({...})` 调用。
+- **依赖注入的取舍：** 副标题格式化 `celestialSubtitle(title, englishName)` 被**三处共用**（搜索候选、分类浏览、今晚天象卡片，共 6 个引用点），因此**留在宿主**、以 `subtitleFor` 回调注入组件，避免复制实现或让组件反向依赖宿主状态（该方法还读 `searchCategory`）。
+- **真机验证（`192.168.3.95:40565`）：** 构建、契约校验、安装启动通过；输入 `Vega` → 候选区由新组件渲染「搜索结果 / **5 个候选**」与 `Vega` 行。测后重启应用清除临时输入。
+- **单体行数：** 29,587 → **29,566**。
+- **search 域进度：** 输入栏（3o）与候选列表（本片）已迁；**剩余**：筛选器（`searchFilterPage` 15 / `searchCategory` 19 / `searchVisibilityFilter` 5 / `searchInstrumentFilter` 6，含 3,441 行的 `searchFilterMenu`）与分类浏览（`category*` 10 字段 / 64 处，含 `searchFilterChips`）。
+
 ## [2026-10-01] DevEco Code - Phase 3o：搜索域第一片（搜索输入栏 → SearchStore + SearchBar）
 
 - **背景：** search 域共 19 字段 / 143 处引用，按 §13.2 协议拆片推进；本片取最小的自包含部分——**搜索输入栏**。
