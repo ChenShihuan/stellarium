@@ -206,7 +206,7 @@ import {
   OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
-  CatalogHealthResponse, MeteorShowersData, Scenery3dResponse, LogResponse,
+  MeteorShowersData, LogResponse,
   ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
   RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptStatusResponse, ScriptCaption, ScriptCaptionsResponse,
   CommandCatalogEntry
@@ -1160,7 +1160,20 @@ export struct WindowNativeNode {
       searchCategory: (): string => this.searchStore.searchCategory,
       categoryModuleId: (): string => this.searchStore.categoryModuleId,
       loadCategoryObjects: (category: string, moduleIdOverride: string): void => { this.searchStore.loadCategoryObjects(category, moduleIdOverride) },
-      publishSearchBrowserState: (): void => { this.publishSearchBrowserState() }
+      publishSearchBrowserState: (): void => { this.publishSearchBrowserState() },
+      // §14 B3-5：目录健康加载器 loadCatalogHealth 下沉 CatalogStore；两条 §2.7.1 保留的
+      // 「跨域共用」标志（catalogHealthLoaded / catalogManifestPresent）仍留宿主、经 setter 回注，
+      // satelliteCatalogHealth 归属 SatelliteStore 亦经 setter 回注（store 不 import 他 store）。
+      setCatalogHealthLoaded: (loaded: boolean): void => { this.catalogHealthLoaded = loaded },
+      setCatalogManifestPresent: (present: boolean): void => { this.catalogManifestPresent = present },
+      setSatelliteCatalogHealth: (health: CatalogHealthEntry): void => { this.satelliteStore.satelliteCatalogHealth = health }
+    })
+    // §14 B3-5：3D 场景加载器 loadScenery3d 下沉 SceneryStore，复用同一 HostCommandPort。
+    // §2.7.1 登记的「引擎自用 / 已登记约定」字段 scenery3dCurrentId 仍留宿主，加载器经
+    // SceneryHostHooks.setScenery3dCurrentId 回注（宿主保留字段本身）。
+    this.sceneryStore.attachPort(hostPort)
+    this.sceneryStore.attachHooks({
+      setScenery3dCurrentId: (id: string): void => { this.scenery3dCurrentId = id }
     })
     // §14 B1-4：相机拼接（MosaicCamera）与古天文辅助线（ArchaeoLines）两域复用同一实例。
     // 两者消费方均为 @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，onChanged 传空实现。
@@ -2363,7 +2376,7 @@ export struct WindowNativeNode {
         if (this.viewTab === 4) this.layerViewStore.loadLandscapeList()
       } else if (panel === 'settings') {
         this.refreshState()
-        this.loadCatalogHealth()
+        this.catalogStore.loadCatalogHealth()
         this.timeSettingsStore.loadConfigurationSettings()
         if (this.configTab === 6) this.pluginStore.loadPluginList()
       } else if (panel === 'place') {
@@ -2386,12 +2399,12 @@ export struct WindowNativeNode {
       } else if (panel === 'navStars') {
         this.ensurePluginLoaded('NavStars', () => { this.navStarsStore.loadNavStars(false) })
       } else if (panel === 'satellites') {
-        this.loadCatalogHealth()
+        this.catalogStore.loadCatalogHealth()
         this.ensurePluginLoaded('Satellites', () => { this.satelliteStore.loadSatellites(true, true) })
       } else if (panel === 'meteorshowers') {
         this.ensurePluginLoaded('MeteorShowers', () => { this.meteorStore.loadMeteorShowers() })
       } else if (panel === 'scenery3d') {
-        this.ensurePluginLoaded('Scenery3d', () => { this.loadScenery3d() })
+        this.ensurePluginLoaded('Scenery3d', () => { this.sceneryStore.loadScenery3d() })
       } else if (panel === 'nebulaTextures') {
         this.ensurePluginLoaded('NebulaTextures', () => { this.nebulaTextureStore.loadNebulaTextureStatus() })
       } else if (panel === 'skyCultureMaker') {
@@ -4045,15 +4058,6 @@ export struct WindowNativeNode {
       else if (name == 'hideInvisible') this.satelliteStore.satHideInvisible = previous
     })
   }
-  private loadCatalogHealth(): void {
-    this.callNativeWhenReady('getCatalogHealth', '', (r: StellariumBridgeResponse) => {
-      const health = r as CatalogHealthResponse
-      this.catalogHealthLoaded = true
-      this.catalogManifestPresent = health.manifestPresent === true
-      this.satelliteStore.satelliteCatalogHealth = health.satellites ?? {}
-      this.catalogStore.starCatalogHealth = health.stars ?? {}
-    })
-  }
   private catalogHealthText(title: string, health: CatalogHealthEntry): string {
     if (!this.catalogHealthLoaded) return title + '状态检查中'
     if (!this.catalogManifestPresent || health.status === 'unknown') return title + '状态不可用'
@@ -4123,19 +4127,6 @@ export struct WindowNativeNode {
   // ===== 流星雨（MeteorShowers 插件桥）=====
   // loadMeteorShowers / setMeteorShowersFlag 已随 §14 B3-1 同片搬入 state/MeteorStore.ets。
 
-  private loadScenery3d(): void {
-    this.sceneryStore.scenery3dLoading = true
-    this.callNativeWhenReady('getScenery3dList', '', (r: StellariumBridgeResponse) => {
-      this.sceneryStore.scenery3dLoading = false
-      const response = r as Scenery3dResponse
-      if (response.ok !== true) return
-      this.sceneryStore.scenery3dItems = response.items ?? []
-      this.scenery3dCurrentId = response.current ?? ''
-      this.sceneryStore.scenery3dLoadingId = response.loading ?? ''
-      this.sceneryStore.scenery3dEnabled = response.enabled === true
-    })
-  }
-
   private setScenery3dScene(id: string): void {
     this.sceneryStore.scenery3dLoadingId = id
     this.callInteractive('setScenery3dScene', id, (r: StellariumBridgeResponse) => {
@@ -4144,7 +4135,7 @@ export struct WindowNativeNode {
         this.flashHint('三维地景加载失败')
         return
       }
-      this.loadScenery3d()
+      this.sceneryStore.loadScenery3d()
     }, () => { this.sceneryStore.scenery3dLoadingId = '' })
   }
 
@@ -4152,7 +4143,7 @@ export struct WindowNativeNode {
     this.sceneryStore.scenery3dEnabled = enabled
     this.callInteractive('setScenery3dEnabled', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) this.sceneryStore.scenery3dEnabled = !enabled
-      this.loadScenery3d()
+      this.sceneryStore.loadScenery3d()
     }, () => { this.sceneryStore.scenery3dEnabled = !enabled })
   }
 
