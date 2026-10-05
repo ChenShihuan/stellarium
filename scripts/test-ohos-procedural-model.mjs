@@ -88,14 +88,16 @@ test('procedural models never install timers or fetch remote resources', () => {
 });
 
 test('missing local media follows resolution instead of attempting to decode a nonexistent file', () => {
-  const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
-  const match = source.match(/private objectInspectorFilePath\(relativePath: string\): string \{([\s\S]*?)\n  \}/);
+  // D17：objectInspectorFilePath 随对象媒体行为下沉 capability/ObjectInspectorMediaController.ets；
+  // 路径探测经 MediaPort.fileExists（宿主在端口层调 fileIo.accessSync）。
+  const source = readFileSync(new URL('../harmonyos/ets-source/capability/ObjectInspectorMediaController.ets', import.meta.url), 'utf8');
+  const match = source.match(/objectInspectorFilePath\(relativePath: string\): string \{([\s\S]*?)\n  \}/);
   assert.ok(match);
-  const execute = new Function('fileIo', 'relativePath', match[1]);
-  const context = { stellariumFilesDir: () => '/sandbox' };
-  assert.equal(execute.call(context, { accessSync: () => false }, 'nebulae/default/n7006.png'), '');
-  assert.equal(execute.call(context, { accessSync: () => true }, 'textures/moon.png'), '/sandbox/stellarium/textures/moon.png');
-  assert.equal(execute.call(context, { accessSync: () => { throw new Error('denied'); } }, 'textures/moon.png'), '');
+  const execute = new Function('relativePath', match[1]);
+  const context = { hooks: { filesDir: () => '/sandbox' } };
+  assert.equal(execute.call(Object.assign({ mediaPort: { fileExists: () => false } }, context), 'nebulae/default/n7006.png'), '');
+  assert.equal(execute.call(Object.assign({ mediaPort: { fileExists: () => true } }, context), 'textures/moon.png'), '/sandbox/stellarium/textures/moon.png');
+  assert.equal(execute.call(Object.assign({ mediaPort: { fileExists: () => { throw new Error('denied'); } } }, context), 'textures/moon.png'), '');
 });
 
 test('immersive modal blocks underlying sky hit tests without suppressing its controls', () => {

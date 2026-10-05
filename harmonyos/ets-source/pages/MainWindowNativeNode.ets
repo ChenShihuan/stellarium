@@ -18,7 +18,6 @@ import preferences from '@ohos.data.preferences'
 import { LOCATION_HIERARCHY } from './location_hierarchy'
 import { LOCATION_COUNTRY_NAMES } from './location_countries'
 import { LOCATION_ZH_NAMES } from './location_names_zh'
-import { proceduralModelKind, proceduralParticles } from './ProceduralDetailModel'
 import { ASTRONOMY_GUIDES, AstronomyGuide, GuideState, GuideStep } from './AstronomyGuide'
 
 import { StellariumBridgeResponse, SessionSnapshot, TonightEvents, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, CatOption, NameItem, SearchSug, WindowNativeNodeCreateInfo, ChipItem, LandscapeItem, ScriptMetadata, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass } from './StellariumTypes'
@@ -40,7 +39,7 @@ import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNar
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, objectActionBarY, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
-import { objectInspectorPlanetTexturePath, objectInspectorPlanetRingSpec, objectInspectorDeepSkyImageName, objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
+import { objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { MediaPort, MediaSaveResult, ScreenCaptureState, MediaImportResult } from '../bridge/MediaPort'
@@ -70,6 +69,9 @@ import { ViewCoordinateController, ViewCoordinateHostHooks } from '../capability
 import { SatelliteController, SatelliteHostHooks } from '../capability/SatelliteController'
 import { AstroCalcController, AstroCalcHostHooks } from '../capability/AstroCalcController'
 import { PluginFeatureController, PluginFeatureHostHooks } from '../capability/PluginFeatureController'
+import { ObjectInspectorMediaController, ObjectInspectorMediaHostHooks } from '../capability/ObjectInspectorMediaController'
+import { ScriptPlaybackController, ScriptPlaybackHostHooks } from '../capability/ScriptPlaybackController'
+import { TimeController, TimeHostHooks } from '../capability/TimeController'
 import { BehaviorHostHooks } from '../capability/ControllerHooks'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
@@ -233,7 +235,7 @@ import {
   SatelliteSource, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
   MeteorShowersData, LogResponse,
   ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
-  RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptStatusResponse, ScriptCaption, ScriptCaptionsResponse,
+  RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptCaption,
   CommandCatalogEntry
 } from './MainWindowModels'
 
@@ -245,13 +247,8 @@ import {
 // beyond any plausible load is escalated to an actionable retry state instead of
 // a silent hide, so the note can never stick forever without an affordance.
 // D11：三个轮询常量随 SkyTextureStatusController 下沉 capability/SkyTextureStatusController.ets。
-// The seven planets (without Earth) plus the Moon and the Sun: the bodies whose
-// detail textures are worth resolving before the user opens their cards.
-const BODY_DETAIL_TEXTURE_PATHS: Array<string> = [
-  'textures/sun.png', 'textures/mercury.png', 'textures/venus.png', 'textures/mars.png',
-  'textures/jupiter.png', 'textures/saturn.png', 'textures/uranus.png', 'textures/neptune.png',
-  'textures/moon.png',
-]
+// D17：BODY_DETAIL_TEXTURE_PATHS（七大行星 + 月球 + 太阳的 detail 纹理预热清单）随 body detail
+// 预热行为下沉 capability/ObjectInspectorMediaController.ets。
 
 // 宿主 → CommandPort 的具名适配器（§14.1 AB-0）。把宿主既有的桥方法逐字转发给注入端口，
 // 使域 store 能在不 import NAPI 的前提下调用桥；行为与直接调用宿主方法完全一致
@@ -479,6 +476,59 @@ class HostMediaPort implements MediaPort {
     return run()
   }
 
+  // D10：脚本导入——picker 选择 .ssc + 复制到固定脚本目录（原宿主 importScriptFile 的 picker/fileIo 段
+  // 与 scriptImportFileName 清洗逐字上移到端口适配器；控制器不 import picker/fileIo）。
+  importScriptDocument(): Promise<MediaImportResult> {
+    const factory = this.contextFactory
+    if (factory === null) {
+      const missing: MediaImportResult = { cancelled: true, path: '' }
+      return Promise.resolve(missing)
+    }
+    const run = async (): Promise<MediaImportResult> => {
+      const context = factory()
+      const options = new picker.DocumentSelectOptions()
+      options.fileSuffixFilters = ['Stellarium 脚本|.ssc']
+      options.maxSelectNumber = 1
+      const selectedUris = await new picker.DocumentViewPicker(context).select(options)
+      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
+        const cancelledResult: MediaImportResult = { cancelled: true, path: '' }
+        return cancelledResult
+      }
+      const scriptDir = context.filesDir + '/stellarium_userdir/scripts'
+      fileIo.mkdirSync(scriptDir, true)
+      const baseName = HostMediaPort.scriptImportFileName(selectedUris[0])
+      let fileName = baseName
+      let destinationPath = scriptDir + '/' + fileName
+      if (fileIo.accessSync(destinationPath)) {
+        fileName = baseName.replace(/\.ssc$/i, '') + '-' + Date.now().toString() + '.ssc'
+        destinationPath = scriptDir + '/' + fileName
+      }
+      await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(destinationPath))
+      const imported: MediaImportResult = { cancelled: false, path: destinationPath }
+      return imported
+    }
+    return run()
+  }
+
+  // 原宿主 scriptImportFileName：从 URI 抽取并清洗脚本文件名（D10 随导入逻辑上移端口）。
+  private static scriptImportFileName(uri: string): string {
+    let name = uri.substring(uri.lastIndexOf('/') + 1)
+    const queryIndex = name.indexOf('?')
+    if (queryIndex >= 0) name = name.substring(0, queryIndex)
+    try {
+      name = decodeURIComponent(name)
+    } catch (_error) {
+    }
+    name = name.trim().replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_')
+    if (name.length === 0 || !name.toLowerCase().endsWith('.ssc')) {
+      name = 'imported-' + Date.now().toString() + '.ssc'
+    }
+    if (name.length > 120) {
+      name = name.substring(0, 116) + '.ssc'
+    }
+    return name
+  }
+
   // ── 对象模型渲染（M2-A）：worker 光栅化结果的像素图创建与 PNG 回退读回。 ──
   createPixelMapFromRgba(pixels: ArrayBuffer, width: number, height: number, label: string): Promise<image.PixelMap> {
     return image.createPixelMap(pixels, {
@@ -501,6 +551,30 @@ class HostMediaPort implements MediaPort {
     } catch (err) {
       hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] pixel readback failed kind=%{public}s error=%{public}s',
         label, JSON.stringify(err))
+      throw err as Error
+    }
+  }
+
+  // D17：原始 RGBA 侧车读取（原宿主 readRawSidecar，函数体逐字搬入；ObjectMediaStore 经端口回注，
+  // store/控制器不 import fileIo）。尺寸不符或 IO 失败抛 Error，语义与原地一致。
+  readRawSidecar(path: string, expectedBytes: number, label: string): ArrayBuffer {
+    let file: fileIo.File | undefined = undefined
+    try {
+      const pixels = new ArrayBuffer(expectedBytes)
+      file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY)
+      const bytesRead = fileIo.readSync(file.fd, pixels)
+      fileIo.closeSync(file)
+      file = undefined
+      if (bytesRead !== expectedBytes) {
+        throw new Error(label + ' has unexpected size: ' + bytesRead.toString())
+      }
+      return pixels
+    } catch (err) {
+      if (file !== undefined) {
+        try {
+          fileIo.closeSync(file)
+        } catch (_closeErr) { }
+      }
       throw err as Error
     }
   }
@@ -881,6 +955,12 @@ export struct WindowNativeNode {
   private astroCalcControllerImpl: AstroCalcController | null = null
   // D14：插件功能行为控制器（惰性构造；状态在 PluginStore，跨域路由经 hooks 回注）。
   private pluginFeatureControllerImpl: PluginFeatureController | null = null
+  // D17：对象检查器媒体控制器（惰性构造；媒体渲染器经 hooks 持有，侧车读取上移 MediaPort）。
+  private objectInspectorMediaControllerImpl: ObjectInspectorMediaController | null = null
+  // D10：脚本录制回放 UI 控制器（惰性构造；状态在 ScriptStore/ToolsStore，状态轮询定时器自持）。
+  private scriptPlaybackControllerImpl: ScriptPlaybackController | null = null
+  // D4：时间操作控制器（惰性构造；状态在 time/timeSettings/deltaT store，时间面板定时器自持）。
+  private timeControllerImpl: TimeController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -919,18 +999,8 @@ export struct WindowNativeNode {
   private objectCardDragStartY: number = 0
   private objectCardDragStartOffsetX: number = 0
   private objectCardDragStartOffsetY: number = 0
-  private objectInspectorMediaRequestPath: string = ''
-  private objectInspectorMediaResolvedRequestPath: string = ''
-  private objectInspectorMediaResolvedPath: string = ''
-  private objectInspectorMediaResolutionComplete: boolean = false
-  private objectInspectorMediaWarmupTimer: number = 0
-  private objectInspectorMediaDecodeGeneration: number = 0
-  private bodyDetailWarmupTimer: number = 0
-  private bodyDetailWarmupIndex: number = 0
-  private bodyDetailWarmupPending: Array<string> = []
-  // D11：skyTextureStatus* 定时器/轮询四字段随 SkyTextureStatusController 下沉（不入 @Observed store）。
-  private objectInspectorProceduralKey: string = ''
-  private objectInspectorProceduralParticles: number[][] = []
+  // D17：objectInspectorMedia* 请求路径/预热定时器/解码代际/body detail 预热与 procedural 去重键、
+  // 粒子随行为下沉 capability/ObjectInspectorMediaController.ets（不入被观察 store）。
   // objectInspectorModel* 的 22 个逐帧/草稿字段（纹理三量 + 环纹理三量、旋转/缩放采样、
   // 渲染代际/挂起/播放中标志、一次性防抖定时器）已随 M2-A 搬入 capability/ObjectModelRenderer.ets，
   // 刻意不入被观察 store（§13.3：逐帧写入入 store 会造成重渲染风暴）。
@@ -947,7 +1017,7 @@ export struct WindowNativeNode {
   @State private dockClockText: string = ''
   /** Dock 时钟的独立轻量刷新定时器（1s），不并入时间面板 125ms 高频刷新。 */
   private dockClockTimer: number = 0
-  /** Current speed-step index into TIME_SPEED_STEPS. */
+  /** 时间域状态（速度档位索引/速率文本/恒星时/手工时间选择器）；换挡行为在 capability/TimeController.ets。 */
   @State private timeStore: TimeStore = new TimeStore()
   // 原生命令在下一渲染帧才生效。此窗口内忽略轮询到的旧速率，避免按钮
   // 刚显示“-2x”又被上一帧的“-10x”短暂盖回去而产生闪烁。
@@ -961,7 +1031,7 @@ export struct WindowNativeNode {
   // replace a partially typed number while the user is still entering it.
   @State private julianStore: JulianDateStore = new JulianDateStore()
   // D16：julianDateApplyInFlight 随儒略日行为并入 state/JulianDateStore.ets。
-  private timeMarkLoading: boolean = false
+  // D4：timeMarkLoading 随时间跳转行为下沉 capability/TimeController.ets。
   // manualYear/Month/Day/Hour/Minute 已并入 state/TimeStore.ets（review §2.7）。
   // selectedLanguage / languageRevision 已下沉 state/LanguageStore.ets（review §2.7）。
   @State private languageStore: LanguageStore = new LanguageStore()
@@ -1164,19 +1234,13 @@ export struct WindowNativeNode {
   // ===== 视频帧序列录制（#40）=====
   // lastRecordKey / lastRecordTime / recordStartedAt / recordPausedAt / recordPausedTotal 已随
   // M1-B 子组② 搬入 capability/RecordingController.ets。
-  private scriptStatusTimer: number = -1
-  private scriptStatusRequestPending: boolean = false
-  private scriptCaptionsRequestPending: boolean = false
-  private scriptStartGraceUntil: number = 0
+  // D10：scriptStatusTimer / scriptStatusRequestPending / scriptCaptionsRequestPending /
+  // scriptControlDragging / scriptControlDrag* 随脚本录制回放 UI 行为下沉
+  // capability/ScriptPlaybackController.ets；原宿主死字段 scriptStartGraceUntil 由 ScriptStore 持有，已删除。
   // replayTimer / replayStartedAt / replayPauseStartedAt / replayPausedTotal / replayIndex /
   // replayCommands / recordViewCheckpointTimer 已随 M1-B 子组② 搬入 RecordingController。
   // §14 B3-4：videoStateTimer 已随影片状态轮询收口搬入 ScriptStore。
   // screenCapture / screenCaptureFile 已随 M1-B 子组② 移入顶层 HostMediaPort 适配器。
-  private scriptControlDragging: boolean = false
-  private scriptControlDragStartX: number = 0
-  private scriptControlDragStartY: number = 0
-  private scriptControlDragStartOffsetX: number = 0
-  private scriptControlDragStartOffsetY: number = 0
 
   private hintTimer: number = 0
   // 离线搜索分块扫描草稿（locSearchRequestId / locationSearchScan* / locationSearchLastPublishMs）
@@ -1221,9 +1285,8 @@ export struct WindowNativeNode {
   // loadCategoryObjects / loadMoreCategoryObjects 下沉 state/SearchStore.ets（§14 B3-3）。
   // 时间面板打开时，每 1s 拉一次 getState，让"时间"字段像走动的钟一样实时更新
   // （否则只在打开瞬间刷新一次，点按钮/时间流逝都不会再更新，永远显示 --）
-  private timePanelTimer: number = 0
-  /** 时间面板低频全量状态兜底定时器（3s），与高频轻量时间刷新配合使用 */
-  private timePanelFullTimer: number = 0
+  // D4：timePanelTimer / timePanelFullTimer 随时间面板定时器下沉 capability/TimeController.ets
+  // （控制器自持 startPanelTimers()/stopPanelTimers()；面板路由/生命周期调用，§15.7 规则 3）。
   private skyCultureTimeFollowTimer: number = 0
   private skyCultureTimeFollowRequestPending: boolean = false
   // §10.2 D5：polarScopeTimer 已随行为下沉 capability/PolarScopeController.ets（控制器自持）。
@@ -1365,7 +1428,7 @@ export struct WindowNativeNode {
     hilog.info(0, 'StellariumArkUI', '[startup] presented-frame-ready width=%{public}d height=%{public}d',
       viewportWidth, viewportHeight)
     AppStorage.setOrCreate('stellariumStartupSkyReady', true)
-    this.startBodyDetailWarmup()
+    this.objectInspectorMediaCtl().startBodyDetailWarmup()
   }
 
   private startTwinkle(): void {
@@ -1623,7 +1686,7 @@ export struct WindowNativeNode {
           this.infoWindowStore.infoWinVisible = false
         },
         openScriptsPanel: (): void => { this.setPanel('scripts') },
-        changeScriptRate: (direction: number): void => { this.changeScriptRate(direction) },
+        changeScriptRate: (direction: number): void => { this.scriptPlaybackCtl().changeScriptRate(direction) },
         recordBufferLength: (): number => this.recordBuffer.length,
         recordBufferSnapshot: (): Array<RecordCmd> => this.recordBuffer,
         recordBufferPush: (cmd: RecordCmd): void => { this.recordBuffer.push(cmd) },
@@ -1647,12 +1710,9 @@ export struct WindowNativeNode {
             ? { duration: 220, curve: Curve.EaseOut }
             : { duration: 180, curve: Curve.EaseIn, onFinish: onFinish }, body)
         },
-        mediaDecodeGeneration: (): number => this.objectInspectorMediaDecodeGeneration,
-        proceduralParticles: (): number[][] => this.objectInspectorProceduralParticles,
-        resetProcedural: (): void => {
-          this.objectInspectorProceduralKey = ''
-          this.objectInspectorProceduralParticles = []
-        }
+        mediaDecodeGeneration: (): number => this.objectInspectorMediaCtl().mediaDecodeGeneration(),
+        proceduralParticles: (): number[][] => this.objectInspectorMediaCtl().proceduralParticles(),
+        resetProcedural: (): void => { this.objectInspectorMediaCtl().resetProcedural() }
       }
       this.objectModelRendererImpl = new ObjectModelRenderer(
         this.objectMediaStore, this.objectDetailStore, this.infoWindowStore, this.hostMediaPort, hooks
@@ -2078,6 +2138,106 @@ export struct WindowNativeNode {
     return this.pluginFeatureControllerImpl
   }
 
+  // D17：对象检查器媒体控制器惰性构造。解码经 MediaPort/ImageDecoder；UI 上下文派生量（filesDir /
+  // pathToUri / 预热状态 / 媒体解析 / 准备失败）、三维渲染器实例经宿主 hooks 回注（控制器不 import NAPI/UI）。
+  private objectInspectorMediaCtl(): ObjectInspectorMediaController {
+    if (this.objectInspectorMediaControllerImpl === null) {
+      const hooks: ObjectInspectorMediaHostHooks = {
+        filesDir: (): string => this.stellariumFilesDir(),
+        pathToUri: (path: string): string => fileUri.getUriFromPath(path),
+        warmupStatus: (): DeepSkyWarmupStatus => {
+          const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+          return getDeepSkyResourceWarmupStatus(context.getApplicationContext())
+        },
+        resolveDetailMediaAsset: (relativePath: string): Promise<string> => {
+          const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+          return resolveStellariumDetailMediaAsset(context.getApplicationContext(), relativePath)
+        },
+        isPreparationFailed: (relativePath: string): boolean => {
+          const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+          return isStellariumDetailMediaPreparationFailed(context.getApplicationContext(), relativePath)
+        },
+        objectModelRenderer: (): ObjectModelRenderer => this.objectModelRendererCtl()
+      }
+      this.objectInspectorMediaControllerImpl = new ObjectInspectorMediaController(
+        this.objectMediaStore, this.objectDetailStore, this.hostMediaPort, hooks)
+    }
+    return this.objectInspectorMediaControllerImpl
+  }
+
+  // D10：脚本录制回放 UI 控制器惰性构造。桥经 HostCommandPort；脚本/录制状态在 ScriptStore、录制 UI
+  // 开关在 ToolsStore；控制条几何/拖动落位、UI 动画、收尾重载经宿主 hooks 回注（控制器不 import UI）。
+  private scriptPlaybackCtl(): ScriptPlaybackController {
+    if (this.scriptPlaybackControllerImpl === null) {
+      const hooks: ScriptPlaybackHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        scriptControlSafeTop: (): number => this.scriptControlSafeTop(),
+        isExpandedLayout: (): boolean => this.isExpandedLayout,
+        skyWidth: (): number => this.skyWidth,
+        skyHeight: (): number => this.skyHeight,
+        guideCardWidth: (): number => this.guideCardWidth(),
+        stopSkyInertia: (): void => this.skyInputCtl().stopSkyInertia(),
+        guideActive: (): boolean => this.guideStore.guideState.active,
+        dismissScriptOverlays: (): void => {
+          this.panelVisible = false
+          this.infoWindowStore.infoWinVisible = false
+          this.gyroStore.gyroCalibPanelOpen = false
+        },
+        reloadObserverInfo: (): void => { this.locationPickerStore.loadObserverInfo(true) },
+        loadPlanetList: (): void => { this.sessionToolStore.loadPlanetList() },
+        animateWaiting: (action: () => void): void => {
+          this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.55, 0.90) }, action)
+        },
+        animateCaptions: (action: () => void): void => {
+          this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, action)
+        }
+      }
+      this.scriptPlaybackControllerImpl = new ScriptPlaybackController(
+        this.scriptStore, this.tools, this.commandPort(), this.hostMediaPort, hooks)
+    }
+    return this.scriptPlaybackControllerImpl
+  }
+
+  // D4：时间操作控制器惰性构造。桥经 HostCommandPort；状态在 time/timeSettings/deltaT store；
+  // 时间轮/儒略日同步、utcOffsetHours、timeSettingsPending 门控、UI 动画与 chip 跨域动作经 hooks 回注。
+  private timeCtl(): TimeController {
+    if (this.timeControllerImpl === null) {
+      const hooks: TimeHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        utcOffsetHours: (): number => this.utcOffsetHours,
+        timeSettingsPending: (): boolean => this.timeSettingsPending,
+        setTimeSettingsPending: (value: boolean): void => { this.timeSettingsPending = value },
+        animateOption: (action: () => void): void => {
+          this.getUIContext().animateTo({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }, action)
+        },
+        syncWheelFromSimulation: (jd: number): void => { this.wheel().syncFromSimulation(jd) },
+        syncJulianDateFields: (response: StellariumBridgeResponse, jd: number): void => { this.julianStore.syncJulianDateFields(response, jd) },
+        refreshSelectedObject: (): void => { this.refreshSelectedObject() },
+        moveToSelectedObject: (): void => { this.moveToSelectedObject() },
+        setViewLockState: (locked: boolean): void => { this.setViewLockState(locked) },
+        triggerAction: (actionId: string): void => { this.triggerAction(actionId) },
+        searchObject: (name: string): void => { this.searchObject(name) },
+        stopTracking: (): void => { this.stopTracking() },
+        setLocation: (name: string, lat: number, lon: number, alt: number): void => { this.locationCtl().setLocation(name, lat, lon, alt) }
+      }
+      this.timeControllerImpl = new TimeController(
+        this.timeStore, this.timeSettingsStore, this.deltaTStore, this.commandPort(), hooks)
+    }
+    return this.timeControllerImpl
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
@@ -2161,7 +2321,7 @@ export struct WindowNativeNode {
     this.julianStore.attachPort(hostPort)
     this.julianStore.attachHooks({
       syncWheelFromSimulation: (jd: number): void => { this.wheel().syncFromSimulation(jd) },
-      refreshSimTimeLight: (): void => { this.refreshSimTimeLight() }
+      refreshSimTimeLight: (): void => { this.timeCtl().refreshSimTimeLight() }
     })
     // §14 B1-6：脚本录制 / 观测星球 / 星空文化标志 / 天体资料 / 指针坐标五域复用同一实例，
     // 其消费方均为 @ObjectLink，字段赋值即刷新，五个域都无 publish* 发布点，故 onChanged 传空实现。
@@ -2180,20 +2340,20 @@ export struct WindowNativeNode {
       guideActive: (): boolean => this.guideStore.guideState.active,
       requestStopGuide: (): void => { this.guideStore.executeGuideRequest('guideAction', 'stop') },
       finishReplay: (message: string): void => this.recordingCtl().finishRecordingReplay(message),
-      finishNativeScriptUi: (message: string): void => this.finishNativeScriptUi(message),
+      finishNativeScriptUi: (message: string): void => this.scriptPlaybackCtl().finishNativeScriptUi(message),
       dismissScriptOverlays: (): void => {
         this.panelVisible = false
         this.infoWindowStore.infoWinVisible = false
         this.gyroStore.gyroCalibPanelOpen = false
       },
       stopBackgroundTimers: (): void => {
-        this.stopTimePanelTimers()
+        this.timeCtl().stopPanelTimers()
         this.stopSkyCultureTimeFollowTimer()
         this.polarScopeCtl().stopPolarScopeTimer()
       },
-      startStatusPolling: (): void => this.startScriptStatusPolling(),
-      stopStatusPolling: (): void => this.stopScriptStatusPolling(),
-      refreshStatus: (): void => { this.refreshScriptStatus() },
+      startStatusPolling: (): void => this.scriptPlaybackCtl().startScriptStatusPolling(),
+      stopStatusPolling: (): void => this.scriptPlaybackCtl().stopScriptStatusPolling(),
+      refreshStatus: (): void => { this.scriptPlaybackCtl().refreshScriptStatus() },
       runWaitingAnimation: (action: () => void): void => {
         this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, action)
       },
@@ -2231,7 +2391,7 @@ export struct WindowNativeNode {
       stopSkyInertia: (): void => this.skyInputCtl().stopSkyInertia(),
       stopCompetingTasks: (): void => {
         this.detailConnectorCtl().stopDetailAutoRefresh()
-        this.stopTimePanelTimers()
+        this.timeCtl().stopPanelTimers()
         this.stopSkyCultureTimeFollowTimer()
         this.astroCalcCtl().stopAstroCalcContextTimer()
         this.telescopeStore.stopTelescopeLivePosition(false)
@@ -2350,7 +2510,7 @@ export struct WindowNativeNode {
     // 相关的三个下游（PNG 回退解码 / 纹理提交 / 失败上报）已随 M2-A 移入 capability/ObjectModelRenderer.ets，
     // 故此处三个 hooks 转发给控制器（store 仍不 import NAPI/UI，不走桥、无 publish*，不注入 CommandPort）。
     this.objectMediaStore.attachHooks({
-      readRawSidecar: (path: string, expectedBytes: number, label: string): ArrayBuffer => this.readRawSidecar(path, expectedBytes, label),
+      readRawSidecar: (path: string, expectedBytes: number, label: string): ArrayBuffer => this.hostMediaPort.readRawSidecar(path, expectedBytes, label),
       decodeObjectInspectorModelTextureFromPng: (pngFilePath: string, ringPngFilePath: string, mediaGeneration: number, expectedSelection: string, expectedPath: string): void =>
         this.objectModelRendererCtl().decodeObjectInspectorModelTextureFromPng(pngFilePath, ringPngFilePath, mediaGeneration, expectedSelection, expectedPath),
       commitObjectInspectorModelTexture: (texture: ArrayBuffer, ringTexture: ArrayBuffer | undefined, mediaGeneration: number, expectedSelection: string, expectedPath: string, sourceLabel: string): void =>
@@ -2405,7 +2565,7 @@ export struct WindowNativeNode {
       setInformationMode: (mode: string): void => { this.infoWindowStore.informationMode = mode },
       setInformationCustomMask: (mask: number): void => { this.infoWindowStore.informationCustomMask = mask },
       applySelectedInfoMode: (mode: string): void => this.applySelectedInfoMode(mode),
-      applyTimeSettings: (response: StellariumBridgeResponse): void => this.applyTimeSettings(response)
+      applyTimeSettings: (response: StellariumBridgeResponse): void => this.timeCtl().applyTimeSettings(response)
     })
     // §14 B3-1：航海星 / 流星雨 / 搜索三域分别自持加载器（loadNavStars / loadMeteorShowers /
     // loadConstellationNavigation）与其配对写方；三者复用同一 HostCommandPort 实例，消费方均为
@@ -2580,7 +2740,7 @@ export struct WindowNativeNode {
       }
       if (commandName === 'setTimeSetting' || commandName === 'getTimeSettings' ||
         commandName === 'setDateFormat' || commandName === 'setTimeFormat') {
-        this.applyTimeSettings(response)
+        this.timeCtl().applyTimeSettings(response)
         return
       }
       if (commandName === 'setInformationSetting' || commandName === 'getInformationSettings') {
@@ -2683,7 +2843,7 @@ export struct WindowNativeNode {
         this.scriptStore.scriptStartGraceUntil = Date.now() + 2500
         this.panelVisible = false
         this.infoWindowStore.infoWinVisible = false
-        this.startScriptStatusPolling()
+        this.scriptPlaybackCtl().startScriptStatusPolling()
         return
       }
       if (commandName === 'continueScript' && response.ok === true) {
@@ -2701,7 +2861,7 @@ export struct WindowNativeNode {
         return
       }
       if (commandName === 'stopScript' && response.ok === true && this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active)) {
-        this.finishNativeScriptUi(I18n.t('script_stopped'))
+        this.scriptPlaybackCtl().finishNativeScriptUi(I18n.t('script_stopped'))
         return
       }
       if (commandName === 'backUiPanel') {
@@ -2795,9 +2955,9 @@ export struct WindowNativeNode {
     this.skyInputCtl().stop()
     this.gyroCtl().stopGyroscope(false)
     this.detailConnectorCtl().stop()
-    this.stopObjectInspectorMediaWarmup()
-    this.stopBodyDetailWarmup()
-    this.clearObjectInspectorDecodedImage()
+    this.objectInspectorMediaCtl().stopObjectInspectorMediaWarmup()
+    this.objectInspectorMediaCtl().stopBodyDetailWarmup()
+    this.objectInspectorMediaCtl().clearObjectInspectorDecodedImage()
     this.skyCultureArtDecodeGeneration++
     this.clearSkyCultureArtThumbnails()
     if (this.stateRefreshTimer >= 0) {
@@ -2815,7 +2975,7 @@ export struct WindowNativeNode {
     releaseDecodedImage(this.hostMediaPort, skyCulturePixelMap, 'disappear-sky-culture-art')
     this.clearSkyCultureMakerArtworkPreview('disappear-sky-culture-maker-artwork')
     this.skyTextureStatusCtl().stop()
-    this.stopTimePanelTimers()
+    this.timeCtl().stopPanelTimers()
     this.viewCoordinateCtl().stopViewCoordinateTimer()
     this.stopDockClockTimer()
     if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
@@ -2823,7 +2983,7 @@ export struct WindowNativeNode {
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
-    this.stopScriptStatusPolling()
+    this.scriptPlaybackCtl().stopScriptStatusPolling()
     this.recordingCtl().stop()
     this.unregisterFoldListeners()
     this.unsubscribeApplicationLifecycle()
@@ -2838,11 +2998,7 @@ export struct WindowNativeNode {
         this.foregroundRefreshPaused = false
         if (this.activePanel === 'time' && this.panelVisible) {
           this.timeStore.loadTimeExtras()
-          this.timePanelTimer = setInterval(() => { this.refreshSimTimeLight() }, 125)
-          this.timePanelFullTimer = setInterval(() => {
-            this.refreshState()
-            this.timeStore.loadTimeExtras()
-          }, 3000)
+          this.timeCtl().startPanelTimers()
         }
         if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWindowStore.infoWinVisible)) {
           this.detailConnectorCtl().startDetailAutoRefresh()
@@ -2863,8 +3019,8 @@ export struct WindowNativeNode {
 
     // This app declares no background task. Stop ArkUI polling and audio
     // rendering as soon as the Ability leaves the foreground.
-    this.foregroundRefreshPaused = this.timePanelTimer !== 0 || this.detailConnectorCtl().hasDetailTimer()
-    this.stopTimePanelTimers()
+    this.foregroundRefreshPaused = this.timeCtl().hasPanelTimer() || this.detailConnectorCtl().hasDetailTimer()
+    this.timeCtl().stopPanelTimers()
     this.viewCoordinateCtl().stopViewCoordinateTimer()
     this.stopDockClockTimer()
     if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
@@ -2884,18 +3040,6 @@ export struct WindowNativeNode {
 
   private unsubscribeApplicationLifecycle(): void {
     setLifecycleListener(undefined)
-  }
-
-  /** 停掉时间面板的高频/低频两个刷新定时器 */
-  private stopTimePanelTimers(): void {
-    if (this.timePanelTimer !== 0) {
-      clearInterval(this.timePanelTimer)
-      this.timePanelTimer = 0
-    }
-    if (this.timePanelFullTimer !== 0) {
-      clearInterval(this.timePanelFullTimer)
-      this.timePanelFullTimer = 0
-    }
   }
 
   private shouldFollowSkyCultureSimulationTime(): boolean {
@@ -3023,7 +3167,7 @@ export struct WindowNativeNode {
       this.fullInspectorRequested = false
       this.infoWindowStore.infoWinExpanded = false
     }
-    this.stopTimePanelTimers()
+    this.timeCtl().stopPanelTimers()
     this.stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
@@ -3105,11 +3249,7 @@ export struct WindowNativeNode {
       if (panel === 'time') {
         this.timeStore.loadTimeExtras()
         this.pluginFeatureCtl().ensurePluginLoaded('EquationOfTime', () => { this.equationOfTimeStore.loadEquationOfTime() })
-        this.timePanelTimer = setInterval(() => { this.refreshSimTimeLight() }, 125)
-        this.timePanelFullTimer = setInterval(() => {
-          this.refreshState()
-          this.timeStore.loadTimeExtras()
-        }, 3000)
+        this.timeCtl().startPanelTimers()
       }
       if (panel === 'astro') {
         this.publishAstroPanelState()
@@ -3252,7 +3392,7 @@ export struct WindowNativeNode {
       return
     }
     // 关面板时停掉时间面板定时器，避免后台空转
-    this.stopTimePanelTimers()
+    this.timeCtl().stopPanelTimers()
     this.stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
@@ -3516,211 +3656,12 @@ export struct WindowNativeNode {
   // loadBookmarks 已下沉 BookmarkStore（§14 B2R-4）；addCurrentBookmark / gotoBookmark / deleteBookmark
   // 已随 D15 下沉 BookmarkStore（桥经 CommandPort，UI 提示经 BookmarkHostHooks.flashHint）。
 
-  // ===== 脚本录制 / 回放（#39）=====
-  private toggleRecordingUi(): void {
-    this.tools.recordingUiExpanded = !this.tools.recordingUiExpanded
-    if (!this.tools.recordingUiExpanded) {
-      this.panelVisible = false
-      this.infoWindowStore.infoWinVisible = false
-      this.gyroStore.gyroCalibPanelOpen = false
-    }
-  }
-
   private scriptControlSafeTop(): number {
     const safeTop = this.getUIContext().px2vp(Math.max(0, this.screenSafeTopPixels))
     return Math.max(this.EDGE_MARGIN, safeTop + 12)
   }
 
-  private handleScriptControlDragTouch(event: TouchEvent): void {
-    const points = event.touches.length > 0 ? event.touches : event.changedTouches
-    if (points.length === 0) return
-    const x = touchScreenX(points[0])
-    const y = touchScreenY(points[0])
-    if (event.type === TouchType.Down) {
-      this.scriptControlDragging = true
-      this.scriptControlDragStartX = x
-      this.scriptControlDragStartY = y
-      this.scriptControlDragStartOffsetX = this.scriptStore.scriptControlOffsetX
-      this.scriptControlDragStartOffsetY = this.scriptStore.scriptControlOffsetY
-      this.skyInputCtl().stopSkyInertia()
-      return
-    }
-    if (event.type === TouchType.Move && this.scriptControlDragging) {
-      this.scriptStore.scriptControlOffsetX = this.scriptControlDragStartOffsetX + x - this.scriptControlDragStartX
-      this.scriptStore.scriptControlOffsetY = this.scriptControlDragStartOffsetY + y - this.scriptControlDragStartY
-      return
-    }
-    if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      this.scriptControlDragging = false
-      if (this.guideStore.guideState.active) {
-        this.scriptStore.scriptControlOffsetX = guideCardX(this.isExpandedLayout, this.skyWidth, this.guideCardWidth(), this.scriptStore.scriptControlOffsetX) - (this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2)
-        this.scriptStore.scriptControlOffsetY = guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY) - (this.skyHeight - guideCardHeight(this.skyHeight, this.scriptControlSafeTop()) - 16)
-      } else {
-        this.scriptStore.scriptControlOffsetX = scriptControlX(this.skyWidth, this.scriptStore.replaying, this.scriptStore.scriptControlOffsetX) - 12
-        this.scriptStore.scriptControlOffsetY = scriptControlY(this.skyHeight, this.scriptControlSafeTop(), this.scriptStore.scriptControlHeight(), this.scriptStore.scriptControlOffsetY) - this.scriptControlSafeTop()
-      }
-    }
-  }
-
-  private startScriptStatusPolling(): void {
-    if (this.scriptStatusTimer >= 0) { return }
-    this.refreshScriptStatus()
-    this.scriptStatusTimer = setInterval(() => {
-      this.refreshScriptStatus()
-    }, 250) as number
-  }
-
-  private stopScriptStatusPolling(): void {
-    if (this.scriptStatusTimer >= 0) {
-      clearInterval(this.scriptStatusTimer)
-      this.scriptStatusTimer = -1
-    }
-    this.scriptStatusRequestPending = false
-    this.scriptCaptionsRequestPending = false
-    this.scriptStore.scriptCaptions = []
-  }
-
-  private finishNativeScriptUi(message: string): void {
-    this.scriptStore.scriptRunning = false
-    this.scriptStore.scriptWaiting = false
-    this.scriptStore.scriptWaitMessage = ''
-    this.scriptStore.scriptId = ''
-    this.scriptStore.scriptFocusActive = false
-    this.scriptStore.scriptLaunching = false
-    this.scriptStore.scriptLaunchingName = ''
-    this.scriptStore.scriptStartGraceUntil = 0
-    this.tools.recordingUiExpanded = true
-    this.stopScriptStatusPolling()
-    this.flashHint(message)
-    // Native restoration is applied immediately and again after the nested
-    // script event loop drains. Refresh ArkTS after that second pass so the
-    // location/time controls never retain the script's temporary state.
-    setTimeout(() => {
-      this.refreshState()
-      this.locationPickerStore.loadObserverInfo(true)
-      this.sessionToolStore.loadPlanetList()
-    }, 220)
-  }
-
-  private refreshScriptStatus(): void {
-    if (this.guideStore.guideState.active || this.scriptStatusRequestPending || !this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active)) { return }
-    this.scriptStatusRequestPending = true
-    this.callInteractive('getScriptStatus', '', (r: StellariumBridgeResponse) => {
-      this.scriptStatusRequestPending = false
-      const status = r as ScriptStatusResponse
-      if (status.ok !== true) { return }
-      const running = status.running === true
-      const waiting = running && status.waiting === true
-      const waitMessage = waiting && typeof status.waitMessage === 'string' ? status.waitMessage : ''
-      this.scriptStore.scriptRunning = running
-      if (waiting !== this.scriptStore.scriptWaiting || waitMessage !== this.scriptStore.scriptWaitMessage) {
-        this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.55, 0.90) }, () => {
-          this.scriptStore.scriptWaiting = waiting
-          this.scriptStore.scriptWaitMessage = waitMessage
-        })
-      }
-      this.scriptStore.scriptId = typeof status.scriptId === 'string' ? status.scriptId : ''
-      this.refreshScriptCaptions()
-      if (typeof status.scriptRate === 'number' && Number.isFinite(status.scriptRate)) {
-        this.scriptStore.scriptRate = status.scriptRate
-      }
-      if (!running && !this.scriptStore.scriptLaunching && !this.scriptStore.replaying && Date.now() >= this.scriptStore.scriptStartGraceUntil) {
-        this.finishNativeScriptUi(I18n.t('script_finished'))
-      }
-    }, () => {
-      this.scriptStatusRequestPending = false
-    })
-  }
-
-  private refreshScriptCaptions(): void {
-    if (this.scriptCaptionsRequestPending || !this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active)) return
-    this.scriptCaptionsRequestPending = true
-    this.callInteractive('getScriptCaptions', '', (r: StellariumBridgeResponse) => {
-      this.scriptCaptionsRequestPending = false
-      const response = r as ScriptCaptionsResponse
-      if (response.ok !== true || !Array.isArray(response.captions)) {
-        this.scriptStore.scriptCaptions = []
-        return
-      }
-      const captions = response.captions
-        .filter((item) => item.visible === true && typeof item.text === 'string' && item.text.length > 0)
-        .map((item) => item.text)
-        .slice(-3)
-      if (captions.join('\n') !== this.scriptStore.scriptCaptions.join('\n')) {
-        this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, () => {
-          this.scriptStore.scriptCaptions = captions
-        })
-      }
-    }, () => {
-      this.scriptCaptionsRequestPending = false
-    })
-  }
-
-  private changeScriptRate(direction: number): void {
-    const next = Math.max(0.25, Math.min(16, this.scriptStore.scriptRate * (direction > 0 ? 2 : 0.5)))
-    this.callInteractive('setScriptRate', next.toString(), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.scriptStore.scriptRate = next
-      } else {
-        this.flashHint('调整脚本速度失败')
-      }
-    })
-  }
-
   // loadScriptList / setScriptMetadata 已下沉 ScriptStore（§14 B2R-4）。
-
-  private scriptImportFileName(uri: string): string {
-    let name = uri.substring(uri.lastIndexOf('/') + 1)
-    const queryIndex = name.indexOf('?')
-    if (queryIndex >= 0) name = name.substring(0, queryIndex)
-    try {
-      name = decodeURIComponent(name)
-    } catch (_error) {
-    }
-    name = name.trim().replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_')
-    if (name.length === 0 || !name.toLowerCase().endsWith('.ssc')) {
-      name = 'imported-' + Date.now().toString() + '.ssc'
-    }
-    if (name.length > 120) {
-      name = name.substring(0, 116) + '.ssc'
-    }
-    return name
-  }
-
-  private async importScriptFile(): Promise<void> {
-    if (this.scriptStore.scriptImporting) return
-    this.scriptStore.scriptImporting = true
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const options = new picker.DocumentSelectOptions()
-      options.fileSuffixFilters = ['Stellarium 脚本|.ssc']
-      options.maxSelectNumber = 1
-      const viewPicker = new picker.DocumentViewPicker(context)
-      const selectedUris = await viewPicker.select(options)
-      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
-        this.flashHint(I18n.t('script_import_cancelled'))
-        return
-      }
-      const scriptDir = context.filesDir + '/stellarium_userdir/scripts'
-      fileIo.mkdirSync(scriptDir, true)
-      const baseName = this.scriptImportFileName(selectedUris[0])
-      let fileName = baseName
-      let destinationPath = scriptDir + '/' + fileName
-      if (fileIo.accessSync(destinationPath)) {
-        fileName = baseName.replace(/\.ssc$/i, '') + '-' + Date.now().toString() + '.ssc'
-        destinationPath = scriptDir + '/' + fileName
-      }
-      await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(destinationPath))
-      this.flashHint(I18n.format('script_import_success', [fileName]))
-      hilog.info(0x0000, 'StellariumArkUI', 'Imported offline script %{public}s', fileName)
-      this.scriptStore.loadScriptList()
-    } catch (error) {
-      hilog.error(0x0000, 'StellariumArkUI', 'Script import failed: %{public}s', String(error))
-      this.flashHint(I18n.t('script_import_failed'))
-    } finally {
-      this.scriptStore.scriptImporting = false
-    }
-  }
 
   // loadRecordingByName 已下沉 ScriptStore（§14 B2R-4）。
 
@@ -4044,7 +3985,7 @@ export struct WindowNativeNode {
     this.layerStore.flipHoriz = result.actionHorizontal_Flip === true
     this.layerStore.flipVert = result.actionVertical_Flip === true
     if (result.timeRate !== undefined) {
-      this.syncTimeRateState(result.timeRate as number)
+      this.timeCtl().syncTimeRateState(result.timeRate as number)
     }
     if (result.timeText !== undefined) {
       this.timeStore.observationTimeText = result.formattedTime ?? this.formatObservationTime(result.timeText)
@@ -4299,50 +4240,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private applyTimeSettings(result: StellariumBridgeResponse): void {
-    if (result.ok !== true) return
-    this.getUIContext().animateTo({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }, () => {
-      this.timeSettingsStore.startupTimeMode = result.startupTimeMode ?? this.timeSettingsStore.startupTimeMode
-      this.deltaTStore.deltaTAlgorithm = result.deltaTAlgorithm ?? this.deltaTStore.deltaTAlgorithm
-    })
-    this.timeSettingsStore.startupTimeStop = result.startupTimeStop ?? this.timeSettingsStore.startupTimeStop
-    this.timeSettingsStore.startupTodayTime = result.todayTime ?? this.timeSettingsStore.startupTodayTime
-    this.timeSettingsStore.startupPresetLocalTime = result.presetLocalTime ?? this.timeSettingsStore.startupPresetLocalTime
-    if (result.presetSkyTime !== undefined) this.timeSettingsStore.presetSkyTime = Number(result.presetSkyTime)
-    this.timeSettingsStore.configDateFormat = result.dateFormat ?? this.timeSettingsStore.configDateFormat
-    this.timeSettingsStore.configTimeFormat = result.timeFormat ?? this.timeSettingsStore.configTimeFormat
-    this.timeStore.observationTimeText = result.formattedTime ?? this.timeStore.observationTimeText
-    this.timeSettingsStore.timeSettingsZone = result.timeZone ?? this.timeSettingsStore.timeSettingsZone
-    this.deltaTStore.deltaTDescription = result.deltaTDescription ?? this.deltaTStore.deltaTDescription
-    this.deltaTStore.timeDeltaTAlgorithms = result.deltaTAlgorithms ?? this.deltaTStore.timeDeltaTAlgorithms
-    this.deltaTStore.timeDeltaTCustom = result.deltaTCustom ?? this.deltaTStore.timeDeltaTCustom
-  }
-
-  private saveTimePreference(command: string, payload: string, message: string): void {
-    if (this.timeSettingsPending) return
-    this.timeSettingsPending = true
-    this.callInteractive(command, payload, (result: StellariumBridgeResponse) => {
-      this.timeSettingsPending = false
-      if (result.ok !== true) {
-        this.flashHint(I18n.t('time_settings_invalid') + ' ' + (result.error ?? ''))
-        return
-      }
-      this.applyTimeSettings(result)
-      this.flashHint(I18n.t(message))
-      this.refreshSimTimeLight()
-    }, () => {
-      this.timeSettingsPending = false
-      this.flashHint(I18n.t('msg_apply_failed'))
-    })
-  }
-
-  private setStartupTimeSetting(key: string, value: string): void {
-    if (key === 'startupStop' && (value === '1') === this.timeSettingsStore.startupTimeStop) return
-    if (key === 'startupMode' && value === this.timeSettingsStore.startupTimeMode) return
-    this.saveTimePreference('setTimeSetting', key + '|' + value.trim(),
-      key === 'applyStartup' || key === 'deltaT' || key === 'deltaCustom' ? 'time_settings_applied' : 'time_settings_saved')
-  }
-
   private setNavigationBoolean(setting: string, enabled: boolean): void {
     this.callInteractive('setNavigationSetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) {
@@ -4388,11 +4285,7 @@ export struct WindowNativeNode {
   }
 
   private setConfigurationDateFormat(value: string): void {
-    this.saveTimePreference('setDateFormat', value, 'time_settings_applied')
-  }
-
-  private setConfigurationTimeFormat(value: string): void {
-    this.saveTimePreference('setTimeFormat', value, 'time_settings_applied')
+    this.timeCtl().saveTimePreference('setDateFormat', value, 'time_settings_applied')
   }
 
   private setConfigurationDithering(value: string): void {
@@ -5121,68 +5014,6 @@ export struct WindowNativeNode {
     this.resolveSkyCultureArtPreview(this.skyCultureViewStore.artPreviewRawPath)
   }
 
-  private openObjectInspectorMediaPreview(): void {
-    if (this.objectMediaStore.objectInspectorMediaPath.length === 0) { return }
-    this.objectMediaStore.objectInspectorMediaPreviewLoading = this.objectMediaStore.objectInspectorMediaPixelMap === undefined && !this.objectMediaStore.objectInspectorMediaLoadFailed
-    this.objectMediaStore.objectInspectorMediaPreviewFailed = this.objectMediaStore.objectInspectorMediaLoadFailed
-    this.objectMediaStore.objectInspectorMediaPreviewPath = this.objectMediaStore.objectInspectorMediaPath
-    this.objectMediaStore.objectInspectorMediaFullscreen = true
-    hilog.info(0x0000, 'StellariumArkUI',
-      '[detail-media-preview] open kind=%{public}s request=%{public}s resolved=%{public}s uri=%{public}s',
-      this.objectMediaStore.objectInspectorMediaKind, this.objectInspectorMediaResolvedRequestPath,
-      this.objectInspectorMediaResolvedPath, this.objectMediaStore.objectInspectorMediaPath)
-  }
-
-  private closeObjectInspectorMediaPreview(): void {
-    hilog.info(0x0000, 'StellariumArkUI', '[detail-media-preview] close')
-    this.objectMediaStore.objectInspectorMediaFullscreen = false
-    this.objectMediaStore.objectInspectorMediaPreviewPath = ''
-    this.objectMediaStore.objectInspectorMediaPreviewLoading = false
-    this.objectMediaStore.objectInspectorMediaPreviewFailed = false
-  }
-
-  private retryObjectInspectorMediaPreview(): void {
-    this.objectMediaStore.objectInspectorMediaPreviewFailed = false
-    this.objectMediaStore.objectInspectorMediaPreviewLoading = true
-    this.objectMediaStore.objectInspectorMediaPreviewPath = ''
-    hilog.info(0x0000, 'StellariumArkUI', '[detail-media-preview] retry uri=%{public}s', this.objectMediaStore.objectInspectorMediaPath)
-    this.retryObjectInspectorMedia()
-  }
-
-  private onObjectInspectorMediaPreviewLoaded(): void {
-    if (!this.objectMediaStore.objectInspectorMediaFullscreen) { return }
-    this.objectMediaStore.objectInspectorMediaPreviewLoading = false
-    this.objectMediaStore.objectInspectorMediaPreviewFailed = false
-    hilog.info(0x0000, 'StellariumArkUI', '[detail-media-preview] image loaded uri=%{public}s', this.objectMediaStore.objectInspectorMediaPreviewPath)
-  }
-
-  private onObjectInspectorMediaPreviewError(): void {
-    if (!this.objectMediaStore.objectInspectorMediaFullscreen) { return }
-    this.objectMediaStore.objectInspectorMediaPreviewLoading = false
-    this.objectMediaStore.objectInspectorMediaPreviewFailed = true
-    hilog.error(0x0000, 'StellariumArkUI', '[detail-media-preview] image failed uri=%{public}s', this.objectMediaStore.objectInspectorMediaPreviewPath)
-  }
-
-  private retryObjectInspectorMedia(): void {
-    const retryPath = this.objectInspectorMediaResolvedRequestPath.length > 0
-      ? this.objectInspectorMediaResolvedRequestPath
-      : this.objectInspectorMediaRequestPath
-    hilog.info(0x0000, 'StellariumArkUI',
-      '[detail-media] retry request=%{public}s resolved=%{public}s', retryPath, this.objectInspectorMediaResolvedPath)
-    this.clearObjectInspectorDecodedImage()
-    this.objectMediaStore.objectInspectorMediaPath = ''
-    this.objectInspectorMediaResolvedPath = ''
-    this.objectInspectorMediaResolvedRequestPath = ''
-    this.objectInspectorMediaResolutionComplete = false
-    this.objectInspectorMediaRequestPath = ''
-    this.objectMediaStore.objectInspectorMediaLoading = false
-    this.objectMediaStore.objectInspectorMediaDecoding = false
-    this.objectMediaStore.objectInspectorMediaLoadFailed = false
-    this.objectMediaStore.objectInspectorMediaPreparationFailed = false
-    this.objectMediaStore.objectInspectorMediaNoMatch = false
-    this.refreshObjectInspectorMedia()
-  }
-
   private drawSkyCultureTerritoryMap(): void {
     const width = this.skyCultureMapRenderWidth
     const height = this.skyCultureMapRenderHeight
@@ -5883,12 +5714,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private setTimeRate(rate: number): void {
-    // 速率命令本身不需要结果。此前这里紧跟一次 getState，旧的异步状态会
-    // 短暂覆盖刚刚更新的文本，造成“倒带/快进按钮闪一下”的错觉。
-    this.callNativeFire('setTimeRate', rate.toString())
-  }
-
   // 时间轮交互控制器（普通类，非可观测）：拖动/惯性/轨道重基准/引擎推送。
   // 跨域依赖以回调注入：引擎推送、暂停速度、UTC 偏移。
   private timeWheelController: TimeWheelController | undefined = undefined
@@ -5898,97 +5723,16 @@ export struct WindowNativeNode {
       this.timeWheelController = new TimeWheelController(
         this.timeWheelStore,
         (jd: number) => { this.callNativeFire('setTimeToJD', jd.toFixed(8)) },
-        () => { this.stopTimeWheelSpeed() },
+        () => { this.timeCtl().stopTimeWheelSpeed() },
         () => { return this.utcOffsetHours }
       )
     }
     return this.timeWheelController
   }
 
-  // 时间轮按下即暂停（原 setTimeWheelStopped 的速度域部分，跨域写收在宿主）。
-  private stopTimeWheelSpeed(): void {
-    this.timeStore.timeSpeedIndex = WindowNativeNode.SPEED_IDX_STOP
-    this.timeStore.beginRateChange(0, 500)
-    this.timeStore.timeRateText = formatRate(0)
-  }
-
   // ===== 时间速率档位系统 =====
-  // Stellarium 内部单位：Julian days per second (JD/s)
-  // 1 JD = 86400 ��，所以 1x 实时 = 1/86400 ≈ 1.1574e-5 JD/s
-  // 档位表：索引 0=暂停, 1=1x, 2=2x, 3=10x, 4=1分/秒, 5=1时/秒, 6=1天/秒, 7=10天/秒
-  // 负索引 = 倒带：-1=-1x, -2=-1时/秒, -3=-1天/秒
-  private readonly SPEED_STEPS: number[] = [
-    -864000.0 / 86400.0,   // -10: 倒带 极速(1天/秒反向)
-    -360.0 / 86400.0,      // -9:  倒带 快进(1时/秒反向)
-    -60.0 / 86400.0,       // -8:  倒带(1分/秒反向)
-    -10.0 / 86400.0,       // -7:  倒带 10x
-    -2.0 / 86400.0,        // -6:  倒带 2x
-    -1.0 / 86400.0,        // -5:  倒带 1x
-    0,                      //  0:  停止
-    1.0 / 86400.0,         //  1:  实时 1x
-    2.0 / 86400.0,         //  2:  2x
-    10.0 / 86400.0,        //  3:  10x
-    60.0 / 86400.0,        //  4:  1分/秒
-    360.0 / 86400.0,       //  5:  1时/秒
-    86400.0 / 86400.0,     //  6:  1天/秒
-    864000.0 / 86400.0,    //  7:  10天/秒
-  ]
-  // SPEED_STEPS 的"零点"索引（停止）和"实时"索引
-  private static readonly SPEED_IDX_STOP = 6
-  private static readonly SPEED_IDX_REALTIME = 7
-
-  /** Apply speed at given step index. Clamps to valid range. */
-  private applySpeedStep(index: number): void {
-    const idx: number = Math.max(0, Math.min(this.SPEED_STEPS.length - 1, index))
-    const rate: number = this.SPEED_STEPS[idx]
-    this.timeStore.timeSpeedIndex = idx
-    this.timeStore.beginRateChange(rate, 500)
-    this.setTimeRate(rate)
-    this.timeStore.timeRateText = formatRate(rate)
-  }
-
-  /** 将原生返回的速率映射回时间档位，保证面板重建后按钮状态不会丢失。 */
-  private syncTimeRateState(rate: number): void {
-    // 陈旧/重复回报由 store 统一判定（待定窗口 + 去重），宿主只负责按结果落库。
-    if (this.timeStore.shouldIgnoreEngineRate(rate)) { return }
-
-    this.timeStore.lastSyncedTimeRate = rate
-    this.timeStore.timeRateText = formatRate(rate)
-    let nearestIndex = 0
-    let nearestDistance = Number.MAX_VALUE
-    for (let i = 0; i < this.SPEED_STEPS.length; i++) {
-      const candidate = this.SPEED_STEPS[i]
-      const distance = Math.abs(candidate - rate)
-      if (distance < nearestDistance) {
-        nearestDistance = distance
-        nearestIndex = i
-      }
-    }
-    this.timeStore.timeSpeedIndex = nearestIndex
-  }
-
-  /** Speed up one step. */
-  private speedUp(): void {
-    this.applySpeedStep(this.timeStore.timeSpeedIndex + 1)
-  }
-
-  /** Slow down one step (can go into reverse). */
-  private speedDown(): void {
-    this.applySpeedStep(this.timeStore.timeSpeedIndex - 1)
-  }
-
-  /** Toggle pause: remember current non-zero speed, restore on unpause. */
-  private togglePause(): void {
-    if (this.timeStore.timeSpeedIndex === 6) { // SPEED_IDX_STOP
-      // Resume: restore last speed or default to 1x
-      const resumeIdx = this.timeStore.lastNonZeroSpeedIndex > 0 && this.timeStore.lastNonZeroSpeedIndex !== 6 ? this.timeStore.lastNonZeroSpeedIndex : 7
-      this.applySpeedStep(resumeIdx)
-    } else {
-      // Pause: remember current speed
-      this.timeStore.lastNonZeroSpeedIndex = this.timeStore.timeSpeedIndex
-      this.applySpeedStep(6) // SPEED_IDX_STOP
-    }
-  }
+  // D4：SPEED_STEPS / SPEED_IDX_STOP / SPEED_IDX_REALTIME 与全部换挡逻辑一起下沉
+  // capability/TimeController.ets（模块级常量 TIME_SPEED_STEPS / TIME_SPEED_IDX_*）。
 
   private zoomStep(factor: number): void {
     hilog.info(0x0000, 'StellariumArkUI', 'zoomStep factor=%{public}s', factor.toString())
@@ -6008,47 +5752,6 @@ export struct WindowNativeNode {
         }
       })
     }, 450)
-  }
-
-  private advanceTime(hours: number): void {
-    this.callInteractive('advanceTime', hours.toString(), () => { this.refreshTimeNow() })
-    this.flashHint((hours > 0 ? I18n.t('i0044') : '') + hours.toString() + ' h')
-  }
-
-  private jumpToTimeMark(mark: string): void {
-    if (this.timeMarkLoading) { return }
-    const label = mark === 'sunRise' ? '日出' : (mark === 'sunTransit' ? '太阳中天' : (mark === 'sunSet' ? '日落' : '天文昏影'))
-    this.timeMarkLoading = true
-    this.callInteractive('getAlmanac', '', (response: StellariumBridgeResponse) => {
-      const almanac = response.almanac as Record<string, Object> | undefined
-      const targetJD = almanac !== undefined ? Number(almanac[mark]) : Number.NaN
-      if (response.ok !== true || !Number.isFinite(targetJD) || targetJD <= 0) {
-        this.timeMarkLoading = false
-        this.flashHint('当前日期和地点没有可用的' + label + '时刻。')
-        return
-      }
-      this.applySpeedStep(WindowNativeNode.SPEED_IDX_STOP)
-      this.callInteractive('setJD', targetJD.toFixed(6), () => {
-        this.timeMarkLoading = false
-        this.wheel().syncFromSimulation(targetJD)
-        this.refreshTimeNow()
-        this.flashHint('已定位到' + label + '。')
-      }, () => {
-        this.timeMarkLoading = false
-        this.flashHint(label + '时刻设置失败，请重试。')
-      })
-    }, () => {
-      this.timeMarkLoading = false
-      this.flashHint('获取' + label + '时刻失败，请重试。')
-    })
-  }
-
-  private applyManualTime(): void {
-    const jd = dateToJD(this.timeStore.manualYear, this.timeStore.manualMonth, this.timeStore.manualDay, this.timeStore.manualHour, this.timeStore.manualMinute)
-    this.callInteractive('setJD', jd.toFixed(6), (r: StellariumBridgeResponse) => {
-      this.refreshState()
-      this.flashHint(String(this.timeStore.manualMonth).padStart(2, '0') + '-' + String(this.timeStore.manualDay).padStart(2, '0') + ' ' + String(this.timeStore.manualHour).padStart(2, '0') + ':' + String(this.timeStore.manualMinute).padStart(2, '0'))
-    })
   }
 
   private setLanguage(lang: string): void {
@@ -6096,36 +5799,6 @@ export struct WindowNativeNode {
         if (query.length > 0) this.fetchSuggestions(query, languageSerial)
       }, 0, 300, 3)
     }, 50)
-  }
-
-  private syncManualTimeFromState(): void {
-    this.callInteractive('getState', '', (result) => {
-    if (result.jd !== undefined) {
-      const jd = result.jd as number
-      const z = Math.floor(jd + 0.5)
-      const f = jd + 0.5 - z
-      let A = z
-      if (z >= 2299161) {
-        const alpha = Math.floor((z - 1867216.25) / 36524.25)
-        A = z + 1 + alpha - Math.floor(alpha / 4)
-      }
-      const B = A + 1524
-      const C = Math.floor((B - 122.1) / 365.25)
-      const D = Math.floor(365.25 * C)
-      const E = Math.floor((B - D) / 30.6001)
-      const day = B - D - Math.floor(30.6001 * E)
-      const month = E < 14 ? E - 1 : E - 13
-      const year = month > 2 ? C - 4716 : C - 4715
-      const dayFraction = f * 24
-      const hour = Math.floor(dayFraction)
-      const minute = Math.floor((dayFraction - hour) * 60)
-      this.timeStore.manualYear = year
-      this.timeStore.manualMonth = month
-      this.timeStore.manualDay = day
-      this.timeStore.manualHour = hour
-      this.timeStore.manualMinute = minute
-    }
-    })
   }
 
   private flashHint(text: ResourceStr): void {
@@ -6217,7 +5890,7 @@ export struct WindowNativeNode {
           // Do this in-place instead of closePanel(): that generic helper
           // schedules a later recenter for the closing sheet, which can race
           // the newly opened object card and undo its safe target.
-          this.stopTimePanelTimers()
+          this.timeCtl().stopPanelTimers()
           this.getUIContext().animateTo({ duration: 260, curve: curves.springMotion(0.45, 0.9) }, () => {
             this.panelVisible = false
           })
@@ -6770,7 +6443,7 @@ export struct WindowNativeNode {
       this.objectDetailStore.selectedObjectType = result.objectType && result.objectType.length > 0 ? result.objectType : ''
       this.objectDetailStore.selectedTemperatureK = typeof result.temperatureK === 'number' ? result.temperatureK : 0
       this.objectDetailStore.selectedType = incomingType
-      this.refreshObjectInspectorMedia()
+      this.objectInspectorMediaCtl().refreshObjectInspectorMedia()
       if (result.infoMode !== undefined) {
         if (result.infoMode === 'custom' && result.customInfoMask !== undefined) {
           this.infoWindowStore.informationCustomMask = Number(result.customInfoMask)
@@ -6954,14 +6627,11 @@ export struct WindowNativeNode {
       this.objectMediaStore.objectInspectorMediaLabel = ''
       this.objectMediaStore.objectInspectorMediaLoading = false
       this.objectMediaStore.objectInspectorMediaDecoding = false
-      this.clearObjectInspectorDecodedImage()
+      this.objectInspectorMediaCtl().clearObjectInspectorDecodedImage()
       this.objectMediaStore.objectInspectorMediaLoadFailed = false
       this.objectMediaStore.objectInspectorMediaPreparationFailed = false
-      this.stopObjectInspectorMediaWarmup()
-      this.objectInspectorMediaRequestPath = ''
-      this.objectInspectorMediaResolvedRequestPath = ''
-      this.objectInspectorMediaResolvedPath = ''
-      this.objectInspectorMediaResolutionComplete = false
+      this.objectInspectorMediaCtl().stopObjectInspectorMediaWarmup()
+      this.objectInspectorMediaCtl().clearResolutionState()
       this.objectMediaStore.objectInspectorMediaFullscreen = false
       this.objectMediaStore.objectInspectorMediaPreviewPath = ''
       this.objectMediaStore.objectInspectorMediaPreviewLoading = false
@@ -6970,28 +6640,6 @@ export struct WindowNativeNode {
       this.objectDetailStore.selectedInfo = '当前位置没有可选天体，请放大或使用搜索'
       this.astroStore.clearRtsSelectionResults()
     }
-  }
-
-  /**
-   * 轻量时间刷新：只取 jd + timeRate（getSimulationTime 极轻），不做 getState 全量状态同步。
-   * 用于时间面板的高频（~120ms）流式刷新，让读秒像水一样连续流动而不是每秒跳一大格。
-   * 注意：不要在这里改动除时间/速率以外的任何 @State，否则会引发全局重排、拖动星图变卡。
-   */
-  private refreshSimTimeLight(): void {
-    this.callInteractive('getSimulationTime', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true || r.jd === undefined) { return }
-      const jd: number = r.jd as number
-      // jd 是 UTC；加上观测地 UTC 偏移后再格式化，与 getState 的 timeText 口径保持一致
-      const text: string = r.formattedTime ?? jdToLocalTimeText(jd + this.utcOffsetHours / 24.0)
-      if (text !== this.timeStore.observationTimeText) {
-        this.timeStore.observationTimeText = text
-      }
-      if (r.timeRate !== undefined) {
-        this.syncTimeRateState(r.timeRate as number)
-      }
-      this.wheel().syncFromSimulation(jd)
-      this.julianStore.syncJulianDateFields(r, jd)
-    })
   }
 
   /** 儒略日 -> 'YYYY-MM-DD HH:mm:ss' 本地显示文本（入参需已含 UTC 偏移）。 */
@@ -7353,15 +7001,15 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'time') {
       if (y >= 545 && y <= 595) {
         // 循环升档按钮：倒带 | 停止 | 实时 | 减速 | 快进（快进/倒带可连点升档）
-        if (x >= 1040 && x < 1110) { this.handleChip('rewind'); return true }
-        if (x >= 1110 && x < 1180) { this.handleChip('stop'); return true }
-        if (x >= 1180 && x < 1250) { this.handleChip('realtime'); return true }
-        if (x >= 1250 && x < 1320) { this.handleChip('slower'); return true }
-        if (x >= 1320 && x <= 1400) { this.handleChip('fast'); return true }
+        if (x >= 1040 && x < 1110) { this.timeCtl().handleChip('rewind'); return true }
+        if (x >= 1110 && x < 1180) { this.timeCtl().handleChip('stop'); return true }
+        if (x >= 1180 && x < 1250) { this.timeCtl().handleChip('realtime'); return true }
+        if (x >= 1250 && x < 1320) { this.timeCtl().handleChip('slower'); return true }
+        if (x >= 1320 && x <= 1400) { this.timeCtl().handleChip('fast'); return true }
       }
       if (y >= 610 && y <= 660) {
-        if (x >= 1095 && x < 1220) { this.advanceTime(12); return true }
-        if (x >= 1220 && x <= 1345) { this.advanceTime(-12); return true }
+if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
+    if (x >= 1220 && x <= 1345) { this.timeCtl().advanceTime(-12); return true }
       }
     } else if (this.activePanel === 'object') {
       if (y >= 560 && y <= 615) {
@@ -7570,7 +7218,7 @@ export struct WindowNativeNode {
             cardX: guideCardX(this.isExpandedLayout, this.skyWidth, this.guideCardWidth(), this.scriptStore.scriptControlOffsetX),
             cardY: guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY),
             onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
-            onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
+            onControlDragTouch: (event: TouchEvent) => { this.scriptPlaybackCtl().handleScriptControlDragTouch(event) },
             onAction: (action: string) => { this.guideStore.executeGuideRequest('guideAction', action) }
           })
         } else {
@@ -7589,7 +7237,7 @@ export struct WindowNativeNode {
             controlX: scriptControlX(this.skyWidth, this.scriptStore.replaying, this.scriptStore.scriptControlOffsetX),
             controlY: scriptControlY(this.skyHeight, this.scriptControlSafeTop(), this.scriptStore.scriptControlHeight(), this.scriptStore.scriptControlOffsetY),
             onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
-            onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
+            onControlDragTouch: (event: TouchEvent) => { this.scriptPlaybackCtl().handleScriptControlDragTouch(event) },
             onContinue: () => { this.scriptStore.continueNativeScript() },
             onChangeRate: (delta: number) => { this.recordingCtl().changePlaybackRate(delta) },
             onToggleReplayPause: () => { this.recordingCtl().toggleReplayPause() },
@@ -7681,8 +7329,8 @@ export struct WindowNativeNode {
                 onDismiss: () => { this.dismissObjectInspector() },
                 onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
                 onLoadPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
-                onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
-                onMediaRetry: () => { this.retryObjectInspectorMedia() },
+                onMediaOpen: () => { this.objectInspectorMediaCtl().openObjectInspectorMediaPreview() },
+                onMediaRetry: () => { this.objectInspectorMediaCtl().retryObjectInspectorMedia() },
                 onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
                 onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
@@ -7798,8 +7446,8 @@ export struct WindowNativeNode {
                 onDismiss: () => { this.dismissObjectInspector() },
                 onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
                 onLoadPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
-                onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
-                onMediaRetry: () => { this.retryObjectInspectorMedia() },
+                onMediaOpen: () => { this.objectInspectorMediaCtl().openObjectInspectorMediaPreview() },
+                onMediaRetry: () => { this.objectInspectorMediaCtl().retryObjectInspectorMedia() },
                 onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
                 onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
@@ -7932,8 +7580,8 @@ export struct WindowNativeNode {
                 onDismiss: () => { this.dismissObjectInspector() },
                 onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
                 onLoadPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
-                onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
-                onMediaRetry: () => { this.retryObjectInspectorMedia() },
+                onMediaOpen: () => { this.objectInspectorMediaCtl().openObjectInspectorMediaPreview() },
+                onMediaRetry: () => { this.objectInspectorMediaCtl().retryObjectInspectorMedia() },
                 onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
                 onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
@@ -7994,7 +7642,7 @@ export struct WindowNativeNode {
       if (!this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active) && this.tools.recording) {
         RecordingControlBar({
           store: this.tools, recordCount: this.scriptStore.recordCount, skyWidth: this.skyWidth, safeTop: this.scriptControlSafeTop(),
-          onToggleUi: () => { this.toggleRecordingUi() },
+          onToggleUi: () => { this.scriptPlaybackCtl().toggleRecordingUi() },
           onTogglePause: () => { this.recordingCtl().toggleRecordingPause() },
           onStop: () => { this.recordingCtl().stopRecording() }
         })
@@ -8035,10 +7683,10 @@ export struct WindowNativeNode {
             objectMediaStore: this.objectMediaStore,
             titleText: zhNameOf(this.objectDetailStore.selectedName),
             topInset: this.mediaPreviewTopInset(),
-            closeObjectInspectorMediaPreview: () => { this.closeObjectInspectorMediaPreview() },
-            onObjectInspectorMediaPreviewLoaded: () => { this.onObjectInspectorMediaPreviewLoaded() },
-            onObjectInspectorMediaPreviewError: () => { this.onObjectInspectorMediaPreviewError() },
-            retryObjectInspectorMediaPreview: () => { this.retryObjectInspectorMediaPreview() }
+            closeObjectInspectorMediaPreview: () => { this.objectInspectorMediaCtl().closeObjectInspectorMediaPreview() },
+            onObjectInspectorMediaPreviewLoaded: () => { this.objectInspectorMediaCtl().onObjectInspectorMediaPreviewLoaded() },
+            onObjectInspectorMediaPreviewError: () => { this.objectInspectorMediaCtl().onObjectInspectorMediaPreviewError() },
+            retryObjectInspectorMediaPreview: () => { this.objectInspectorMediaCtl().retryObjectInspectorMediaPreview() }
           })
         }
         if (this.objectMediaStore.objectInspectorModelImmersive) {
@@ -8700,320 +8348,6 @@ export struct WindowNativeNode {
     }
   }
 
-  // Pad 端的详情保持为左侧检查器。它不接管星图，也不会随着实时数据刷新
-  // 重新打开或改变位置；长资料和观测数字使用同一个连续滚动区。
-  private objectInspectorFilePath(relativePath: string): string {
-    const path = this.stellariumFilesDir() + '/stellarium/' + relativePath
-    try {
-      return fileIo.accessSync(path) ? path : ''
-    } catch (_err) {
-      return ''
-    }
-  }
-
-  private clearObjectInspectorDecodedImage(): void {
-    const oldPixelMap = this.objectMediaStore.objectInspectorMediaPixelMap
-    this.objectMediaStore.objectInspectorMediaPixelMap = undefined
-    this.objectInspectorMediaDecodeGeneration++
-    this.objectModelRendererCtl().clearObjectInspectorModelRenderer()
-    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'object-inspector')
-  }
-
-  private updateObjectInspectorMediaWarmup(kind: string): void {
-    if (kind !== 'image') {
-      this.objectMediaStore.objectInspectorMediaWarmupState = 'unknown'
-      this.objectMediaStore.objectInspectorMediaWarmupInstalled = 0
-      this.objectMediaStore.objectInspectorMediaWarmupTotal = 0
-      this.objectMediaStore.objectInspectorMediaWarmupFailed = 0
-      return
-    }
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const status: DeepSkyWarmupStatus = getDeepSkyResourceWarmupStatus(context.getApplicationContext())
-      this.objectMediaStore.objectInspectorMediaWarmupState = status.state
-      this.objectMediaStore.objectInspectorMediaWarmupInstalled = status.installed
-      this.objectMediaStore.objectInspectorMediaWarmupTotal = status.total
-      this.objectMediaStore.objectInspectorMediaWarmupFailed = status.failed
-    } catch (err) {
-      this.objectMediaStore.objectInspectorMediaWarmupState = 'unknown'
-      hilog.warn(0x0000, 'StellariumArkUI',
-        '[detail-media] unable to read warmup status error=%{public}s', JSON.stringify(err))
-    }
-  }
-
-  private startObjectInspectorMediaWarmup(): void {
-    if (this.objectInspectorMediaWarmupTimer !== 0) {
-      return
-    }
-    this.objectInspectorMediaWarmupTimer = setInterval(() => {
-      if (!this.objectMediaStore.objectInspectorMediaLoading || this.objectMediaStore.objectInspectorMediaKind !== 'image') {
-        this.stopObjectInspectorMediaWarmup()
-        return
-      }
-      this.updateObjectInspectorMediaWarmup('image')
-    }, 500) as number
-  }
-
-  private stopObjectInspectorMediaWarmup(): void {
-    if (this.objectInspectorMediaWarmupTimer !== 0) {
-      clearInterval(this.objectInspectorMediaWarmupTimer)
-      this.objectInspectorMediaWarmupTimer = 0
-    }
-  }
-
-  // Resolves the detail textures of the seven planets, the Moon and the Sun once
-  // the sky has presented its first frame, one body per tick, so opening their
-  // cards does not have to copy the packaged texture on demand. This only makes
-  // the existing on-select work happen earlier: it never moves the view, never
-  // shows a dialog and never blocks the UI thread.
-  private startBodyDetailWarmup(): void {
-    if (this.bodyDetailWarmupTimer !== 0) {
-      return
-    }
-    this.bodyDetailWarmupPending = BODY_DETAIL_TEXTURE_PATHS.slice()
-    this.bodyDetailWarmupIndex = 0
-    this.stepBodyDetailWarmup()
-    this.bodyDetailWarmupTimer = setInterval(() => {
-      this.stepBodyDetailWarmup()
-    }, 120) as number
-  }
-
-  private stepBodyDetailWarmup(): void {
-    if (this.bodyDetailWarmupIndex >= this.bodyDetailWarmupPending.length) {
-      hilog.info(0x0000, 'StellariumArkUI', '[body-warmup] completed count=%{public}d',
-        this.bodyDetailWarmupPending.length)
-      this.stopBodyDetailWarmup()
-      return
-    }
-    const relativePath = this.bodyDetailWarmupPending[this.bodyDetailWarmupIndex]
-    this.bodyDetailWarmupIndex++
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      resolveStellariumDetailMediaAsset(context.getApplicationContext(), relativePath).then((resolved: string) => {
-        if (resolved.length === 0) {
-          hilog.warn(0x0000, 'StellariumArkUI', '[body-warmup] unavailable path=%{public}s', relativePath)
-        } else {
-          hilog.info(0x0000, 'StellariumArkUI', '[body-warmup] ready path=%{public}s', resolved)
-        }
-      }).catch((err: Error) => {
-        hilog.warn(0x0000, 'StellariumArkUI', '[body-warmup] failed path=%{public}s error=%{public}s',
-          relativePath, JSON.stringify(err))
-      })
-    } catch (err) {
-      hilog.warn(0x0000, 'StellariumArkUI', '[body-warmup] failed path=%{public}s error=%{public}s',
-        relativePath, JSON.stringify(err))
-    }
-  }
-
-  private stopBodyDetailWarmup(): void {
-    if (this.bodyDetailWarmupTimer !== 0) {
-      clearInterval(this.bodyDetailWarmupTimer)
-      this.bodyDetailWarmupTimer = 0
-    }
-    this.bodyDetailWarmupIndex = 0
-    this.bodyDetailWarmupPending = []
-  }
-
-  private refreshObjectInspectorMedia(): void {
-    const planetTexturePath = objectInspectorPlanetTexturePath(this.objectDetailStore.selectedEnglishName)
-    const deepSkyImageName = planetTexturePath.length === 0 && this.objectDetailStore.selectedDetailMediaPath.length === 0
-      ? objectInspectorDeepSkyImageName(objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType), this.objectDetailStore.objectInspectorSearchText())
-      : ''
-    const requestedPath = planetTexturePath.length > 0
-      ? planetTexturePath
-      : (this.objectDetailStore.selectedDetailMediaPath.length > 0
-        ? this.objectDetailStore.selectedDetailMediaPath
-        : (deepSkyImageName.length > 0 ? 'nebulae/default/' + deepSkyImageName : ''))
-    const proceduralKind = requestedPath.length === 0 || (planetTexturePath.length === 0 &&
-      this.objectInspectorMediaResolutionComplete && this.objectInspectorMediaResolvedRequestPath === requestedPath &&
-      this.objectInspectorMediaResolvedPath.length === 0)
-      ? proceduralModelKind(this.objectDetailStore.selectedObjectType + ' ' + this.objectDetailStore.selectedType) : ''
-    const proceduralKey = proceduralKind.length > 0
-      ? [proceduralKind, this.objectDetailStore.selectedCatalogId, this.objectDetailStore.selectedEnglishName, this.objectDetailStore.selectedTemperatureK.toString()].join('|') : ''
-    if (this.objectInspectorMediaResolvedRequestPath !== requestedPath) {
-      this.objectInspectorMediaResolvedRequestPath = ''
-      this.objectInspectorMediaResolvedPath = ''
-      this.objectInspectorMediaResolutionComplete = false
-    }
-    const resolvedPath = this.objectInspectorMediaResolvedRequestPath === requestedPath &&
-      this.objectInspectorMediaResolvedPath.length > 0
-      ? this.objectInspectorMediaResolvedPath
-      : requestedPath
-    const filePath = resolvedPath.length > 0 ? this.objectInspectorFilePath(resolvedPath) : ''
-    const path = filePath.length > 0 ? fileUri.getUriFromPath(filePath) : ''
-    const kind = planetTexturePath.length > 0 || proceduralKind.length > 0
-      ? 'model'
-      : (this.objectDetailStore.selectedDetailMediaPath.length > 0 ? 'constellation' : (deepSkyImageName.length > 0 ? 'image' : 'visual'))
-    const modelRawFilePath = kind === 'model' && resolvedPath.length > 0
-      ? this.objectInspectorFilePath(resolvedPath + '.model.rgba')
-      : ''
-    const ringSpec = kind === 'model' ? objectInspectorPlanetRingSpec(this.objectDetailStore.selectedEnglishName) : undefined
-    const ringRawFilePath = ringSpec === undefined
-      ? ''
-      : this.objectInspectorFilePath(ringSpec.texturePath + '.model.rgba')
-    const ringPngFilePath = ringSpec === undefined
-      ? ''
-      : this.objectInspectorFilePath(ringSpec.texturePath)
-    const resolutionAlreadyAttempted = this.objectInspectorMediaResolutionComplete &&
-      this.objectInspectorMediaResolvedRequestPath === requestedPath
-    const shouldResolve = requestedPath.length > 0 && path.length === 0 && !resolutionAlreadyAttempted
-    const mediaKeySame = path === this.objectMediaStore.objectInspectorMediaPath && kind === this.objectMediaStore.objectInspectorMediaKind &&
-      proceduralKey === this.objectInspectorProceduralKey
-    if (mediaKeySame && (this.objectMediaStore.objectInspectorMediaDecoding || this.objectModelRendererCtl().isRendering())) {
-      return
-    }
-    const shouldDecode = path.length > 0 && (kind === 'image' || kind === 'constellation' || kind === 'model') &&
-      !(mediaKeySame && this.objectMediaStore.objectInspectorMediaLoadFailed) &&
-      (!mediaKeySame || (kind === 'model'
-        ? !this.objectModelRendererCtl().hasTexture()
-        : this.objectMediaStore.objectInspectorMediaPixelMap === undefined))
-    if (mediaKeySame &&
-      this.objectMediaStore.objectInspectorMediaLoading === (shouldResolve || shouldDecode) &&
-      this.objectMediaStore.objectInspectorMediaDecoding === shouldDecode &&
-      (!shouldResolve || this.objectInspectorMediaRequestPath === requestedPath)) { return }
-    this.clearObjectInspectorDecodedImage()
-    this.objectMediaStore.objectInspectorMediaPath = path
-    this.objectMediaStore.objectInspectorMediaKind = kind
-    this.objectMediaStore.objectInspectorProceduralKind = proceduralKind
-    this.objectInspectorProceduralKey = proceduralKey
-    this.objectInspectorProceduralParticles = proceduralParticles(proceduralKind, proceduralKey)
-    this.objectMediaStore.objectInspectorMediaLabel = kind === 'model'
-      ? (proceduralKind.length > 0 ? I18n.t('model_schematic') : I18n.t('model_offline'))
-      : (kind === 'constellation' ? this.objectDetailStore.selectedDetailMediaLabel : (kind === 'image' ? '离线深空资料图像' : '本地天体类别示意'))
-    this.objectMediaStore.objectInspectorMediaFullscreen = false
-    this.objectMediaStore.objectInspectorMediaPreviewPath = ''
-    this.objectMediaStore.objectInspectorMediaPreviewLoading = false
-    this.objectMediaStore.objectInspectorMediaPreviewFailed = false
-    this.objectMediaStore.objectInspectorModelScale = 1
-    this.objectModelRendererCtl().resetRotationForNewMedia()
-    this.objectMediaStore.objectInspectorMediaLoading = shouldResolve || shouldDecode
-    this.objectMediaStore.objectInspectorMediaDecoding = shouldDecode
-    this.objectMediaStore.objectInspectorMediaLoadFailed = false
-    this.objectMediaStore.objectInspectorMediaPreparationFailed = false
-    this.objectMediaStore.objectInspectorMediaNoMatch = false
-    this.updateObjectInspectorMediaWarmup(kind)
-    this.objectInspectorMediaRequestPath = this.objectMediaStore.objectInspectorMediaLoading ? requestedPath : ''
-    if (proceduralKind.length > 0) {
-      this.objectModelRendererCtl().requestObjectInspectorModelRender(true)
-      return
-    }
-    if (shouldResolve) {
-      const expectedSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-      const expectedRequestPath = requestedPath
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const warmupStatus: DeepSkyWarmupStatus = getDeepSkyResourceWarmupStatus(context.getApplicationContext())
-      hilog.info(0x0000, 'StellariumArkUI',
-        '[detail-media] warmup state=%{public}s installed=%{public}s total=%{public}s pending=%{public}s failed=%{public}s',
-        warmupStatus.state, warmupStatus.installed.toString(), warmupStatus.total.toString(),
-        warmupStatus.pending.toString(), warmupStatus.failed.toString())
-      this.startObjectInspectorMediaWarmup()
-      resolveStellariumDetailMediaAsset(context.getApplicationContext(), requestedPath).then((actualPath: string) => {
-        const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-        if (currentSelection !== expectedSelection || this.objectInspectorMediaRequestPath !== expectedRequestPath) { return }
-        this.objectMediaStore.objectInspectorMediaLoading = false
-        this.objectInspectorMediaRequestPath = ''
-        this.objectInspectorMediaResolvedRequestPath = expectedRequestPath
-        this.objectInspectorMediaResolvedPath = actualPath
-        this.objectInspectorMediaResolutionComplete = true
-        this.objectMediaStore.objectInspectorMediaNoMatch = actualPath.length === 0
-        this.objectMediaStore.objectInspectorMediaLoadFailed = false
-        this.objectMediaStore.objectInspectorMediaPreparationFailed = false
-        this.stopObjectInspectorMediaWarmup()
-        this.updateObjectInspectorMediaWarmup(kind)
-        hilog.info(0x0000, 'StellariumArkUI',
-          '[detail-media] selection=%{public}s requested=%{public}s resolved=%{public}s',
-          this.objectDetailStore.selectedName, expectedRequestPath, actualPath)
-        this.refreshObjectInspectorMedia()
-      }).catch((err: Error) => {
-        const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-        if (currentSelection !== expectedSelection || this.objectInspectorMediaRequestPath !== expectedRequestPath) { return }
-        this.objectMediaStore.objectInspectorMediaLoading = false
-        this.objectInspectorMediaRequestPath = ''
-        this.objectInspectorMediaResolutionComplete = true
-        this.objectMediaStore.objectInspectorMediaNoMatch = false
-        this.objectMediaStore.objectInspectorMediaLoadFailed = false
-        this.objectMediaStore.objectInspectorMediaPreparationFailed =
-          isStellariumDetailMediaPreparationFailed(context.getApplicationContext(), expectedRequestPath)
-        this.stopObjectInspectorMediaWarmup()
-        hilog.error(0x0000, 'StellariumArkUI',
-          '[detail-media] request failed request=%{public}s error=%{public}s', expectedRequestPath, err.message)
-      })
-    }
-    if (shouldDecode) {
-      const expectedSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-      const expectedPath = path
-      const generation = this.objectInspectorMediaDecodeGeneration
-      hilog.info(0x0000, 'StellariumArkUI',
-        '[detail-media] decoding local image kind=%{public}s uri=%{public}s', kind, expectedPath)
-      if (kind === 'model') {
-        this.objectMediaStore.loadObjectInspectorModelRawTexture(modelRawFilePath, ringRawFilePath, generation, expectedSelection, expectedPath,
-          filePath, ringPngFilePath)
-        return
-      }
-      decodeLocalImage(this.hostMediaPort, filePath, kind, (pixelMap: image.PixelMap) => {
-        const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-        if (currentSelection !== expectedSelection || this.objectMediaStore.objectInspectorMediaPath !== expectedPath ||
-          generation !== this.objectInspectorMediaDecodeGeneration) {
-          releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-object-inspector')
-          return
-        }
-        const oldPixelMap = this.objectMediaStore.objectInspectorMediaPixelMap
-        this.objectMediaStore.objectInspectorMediaPixelMap = pixelMap
-        releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'previous-object-inspector')
-        this.objectMediaStore.objectInspectorMediaLoading = false
-        this.objectMediaStore.objectInspectorMediaLoadFailed = false
-        this.objectMediaStore.objectInspectorMediaDecoding = false
-        if (this.objectMediaStore.objectInspectorMediaFullscreen) {
-          this.objectMediaStore.objectInspectorMediaPreviewLoading = false
-          this.objectMediaStore.objectInspectorMediaPreviewFailed = false
-        }
-        hilog.info(0x0000, 'StellariumArkUI',
-          '[detail-media] pixel map ready kind=%{public}s uri=%{public}s', kind, expectedPath)
-      }, (err: Error) => {
-        const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-        if (currentSelection !== expectedSelection || this.objectMediaStore.objectInspectorMediaPath !== expectedPath ||
-          generation !== this.objectInspectorMediaDecodeGeneration) {
-          return
-        }
-        this.objectMediaStore.objectInspectorMediaDecoding = false
-        this.objectMediaStore.objectInspectorMediaLoading = false
-        this.objectMediaStore.objectInspectorMediaLoadFailed = true
-        if (this.objectMediaStore.objectInspectorMediaFullscreen) {
-          this.objectMediaStore.objectInspectorMediaPreviewLoading = false
-          this.objectMediaStore.objectInspectorMediaPreviewFailed = true
-        }
-        hilog.error(0x0000, 'StellariumArkUI',
-          '[detail-media] pixel map decode failed kind=%{public}s uri=%{public}s error=%{public}s',
-          kind, expectedPath, describeDecodeError(err))
-      })
-    }
-  }
-
-  // §14 B2R-1：ObjectMediaStore.loadObjectInspectorModelRawTexture 的原始侧车读取职责
-  //（fileIo 属 NAPI，不下沉 store）——把原地内联的 open/read/close 与尺寸校验提取为本方法，
-  // 经 ObjectMediaHostHooks.readRawSidecar 注入；尺寸不符或 IO 失败抛 Error，语义与原地一致。
-  private readRawSidecar(path: string, expectedBytes: number, label: string): ArrayBuffer {
-    let file: fileIo.File | undefined = undefined
-    try {
-      const pixels = new ArrayBuffer(expectedBytes)
-      file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY)
-      const bytesRead = fileIo.readSync(file.fd, pixels)
-      fileIo.closeSync(file)
-      file = undefined
-      if (bytesRead !== expectedBytes) {
-        throw new Error(label + ' has unexpected size: ' + bytesRead.toString())
-      }
-      return pixels
-    } catch (err) {
-      if (file !== undefined) {
-        try {
-          fileIo.closeSync(file)
-        } catch (_closeErr) { }
-      }
-      throw err as Error
-    }
-  }
-
   private objectInspectorInlineModelSize(): number {
     return Math.min(200, Math.max(80, this.bottomCardWidth() - 112))
   }
@@ -9328,7 +8662,7 @@ export struct WindowNativeNode {
         typeOf: (type: string) => zhType(type),
         statusOf: (en: string) => this.selectedStatusZh(en),
         displayValue: (key: string) => this.selectedDisplayValue(key),
-        onChip: (id: string) => { this.handleChip(id) },
+        onChip: (id: string) => { this.timeCtl().handleChip(id) },
         onToggleObserving: () => {
           if (this.obsListStore.observingList.includes(this.objectDetailStore.selectedName)) {
             this.obsListStore.observingList = this.obsListStore.observingList.filter((item: string) => item !== this.objectDetailStore.selectedName)
@@ -9341,8 +8675,8 @@ export struct WindowNativeNode {
         },
         onGotoReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object') },
         onSpeak: () => { speakSelectedObject(this.commandPort(), { flashHint: (text: ResourceStr): void => this.flashHint(text), setSpeechStatus: (text: string): void => { this.guideStore.speechStatus = text } }) },
-        onOpenMedia: () => { this.openObjectInspectorMediaPreview() },
-        onRetryMedia: () => { this.retryObjectInspectorMedia() },
+        onOpenMedia: () => { this.objectInspectorMediaCtl().openObjectInspectorMediaPreview() },
+        onRetryMedia: () => { this.objectInspectorMediaCtl().retryObjectInspectorMedia() },
         onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
         onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
         onLoadSatPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
@@ -9374,7 +8708,7 @@ export struct WindowNativeNode {
         borderTint: this.nightModeStore.nmBorder(),
         onSelectUnit: (unit: string) => { this.wheel().selectUnit(unit) },
         onWheelTouch: (event: TouchEvent) => { this.wheel().handleTouch(event) },
-        onChip: (id: string) => { this.handleChip(id) },
+        onChip: (id: string) => { this.timeCtl().handleChip(id) },
         onEquationToggle: (setting: string, enabled: boolean) => { this.ocularCtl().setEquationOfTime(setting, enabled) },
         onAdjustJulian: (scale: string, direction: number) => { this.julianStore.adjustJulianDate(scale, direction) },
         onApplyJulian: (scale: string) => { this.julianStore.applyJulianDateInput(scale) },
@@ -9384,8 +8718,8 @@ export struct WindowNativeNode {
           this.timeStore.manualYear = year; this.timeStore.manualMonth = monthIndex + 1; this.timeStore.manualDay = day
         },
         onPickTime: (hour: number, minute: number) => { this.timeStore.manualHour = hour; this.timeStore.manualMinute = minute },
-        onApplyManual: () => { this.applyManualTime() },
-        onResetManual: () => { this.syncManualTimeFromState(); this.flashHint(I18n.t('i0081')) }
+        onApplyManual: () => { this.timeCtl().applyManualTime() },
+        onResetManual: () => { this.timeCtl().syncManualTimeFromState(); this.flashHint(I18n.t('i0081')) }
       })
     } else if (this.activePanel === 'place') {
       PlacePanel({
@@ -9416,7 +8750,7 @@ export struct WindowNativeNode {
         onSaveCurrent: () => { this.locationStore.saveCurrentLocation() },
         onApplyLocation: (name: string, lat: number, lon: number, alt: number, planet: string) => { this.locationCtl().setLocation(name, lat, lon, alt, planet) },
         onDeleteLocation: (name: string) => { this.locationStore.deleteSavedLocation(name) },
-        onChip: (id: string) => { this.handleChip(id) },
+        onChip: (id: string) => { this.timeCtl().handleChip(id) },
         onSelectPlanet: (name: string) => { this.locationCtl().setObserverPlanet(name) },
         onPoint: () => { this.pointAtSkyTest() },
         onSend: () => { this.gyroCtl().watchGyroSend() },
@@ -9552,9 +8886,9 @@ export struct WindowNativeNode {
         onSelectFamily: (family: string) => { this.viewCoordinateCtl().setViewCoordinateFamily(family) },
         onSelectEpoch: (epoch: string) => { this.viewCoordinateCtl().setViewEquatorialEpoch(epoch) },
         onApplyLayerSwitch: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
-        onSpeedDown: () => { this.speedDown() },
-        onTogglePause: () => { this.togglePause() },
-        onSpeedUp: () => { this.speedUp() },
+        onSpeedDown: () => { this.timeCtl().speedDown() },
+        onTogglePause: () => { this.timeCtl().togglePause() },
+        onSpeedUp: () => { this.timeCtl().speedUp() },
         onFovChange: (val: number) => { this.fovSliderValue = Math.round(val); this.changeFovBySlider(val) },
         onSetProjection: (name: string) => { this.setProjection(name) },
         onSetLanguage: (lang: string) => { this.setLanguage(lang) },
@@ -9679,7 +9013,7 @@ export struct WindowNativeNode {
         setNavigationBoolean: (setting: string, enabled: boolean) => { this.setNavigationBoolean(setting, enabled) },
         setNavigationMaxFov: (value: number) => { this.setNavigationMaxFov(value) },
         selectSettingsChoice: (group: string, value: string) => { this.selectSettingsChoice(group, value) },
-        setStartupTimeSetting: (key: string, value: string) => { this.setStartupTimeSetting(key, value) },
+        setStartupTimeSetting: (key: string, value: string) => { this.timeCtl().setStartupTimeSetting(key, value) },
         setInformationField: (key: string, enabled: boolean) => { this.setInformationField(key, enabled) },
         setObjectDetailConnector: (enabled: boolean) => { this.setObjectDetailConnector(enabled) },
         toggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
@@ -9989,7 +9323,7 @@ export struct WindowNativeNode {
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
         onStartGuide: (id: string) => { this.guideStore.executeGuideRequest('startGuide', id) },
         onStopPlayback: () => { this.scriptStore.stopScriptPlayback() },
-        onImportScript: () => { this.importScriptFile() },
+        onImportScript: () => { this.scriptPlaybackCtl().importScriptFile() },
         onPlayScript: (name: string) => { this.scriptStore.playScriptByName(name) },
         onToggleRecording: () => { this.tools.recording ? this.recordingCtl().stopRecording() : this.recordingCtl().startRecording() },
         onSaveRecording: () => { this.recordingCtl().saveCurrentRecording() },
@@ -10127,7 +9461,7 @@ export struct WindowNativeNode {
           this.viewSettingsStore.useMetricUnits = useMetric
           this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + (useMetric ? 'true' : 'false'), () => {})
         },
-        handleChip: (id: string) => { this.handleChip(id) },
+        handleChip: (id: string) => { this.timeCtl().handleChip(id) },
         toggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
         flashHint: (text: ResourceStr) => { this.flashHint(text) },
         setLanguage: (lang: string) => { this.setLanguage(lang) },
@@ -10144,116 +9478,6 @@ export struct WindowNativeNode {
   // 当前档位高亮，点击立即更新速度显示
 
   // ===== Sky Guide 风格：按字段选择的时间转轴 =====
-
-  /**
-   * 时间类操作后刷新「时间/速度」显示。
-   * 立即刷一次（响应快），350ms 后再刷一次（引擎异步应用 JD/timeRate 需要时间窗口）。
-   */
-  private refreshTimeNow(): void {
-    this.refreshState()
-    // 注意：此处必须是 setTimeout(refreshState)，绝不能调 refreshTimeNow 自身（会无限递归栈溢出）
-    setTimeout(() => { this.refreshState() }, 350)
-  }
-
-  private handleChip(id: string): void {
-    if (id === 'refresh') {
-      this.refreshSelectedObject()
-      this.refreshState()
-    } else if (id === 'center') {
-      this.moveToSelectedObject()
-    } else if (id === 'lock-view') {
-      this.setViewLockState(true)
-    } else if (id === 'unlock-view') {
-      this.setViewLockState(false)
-    } else if (id === 'now') {
-      // 现在：回到当前时刻 + 重置为1x
-      this.triggerAction('actionReturn_To_Current_Time')
-      this.applySpeedStep(7) // SPEED_IDX_REALTIME
-      this.timeStore.timeRateText = '1x'
-      this.refreshTimeNow()
-    } else if (id === 'stop') {
-      // 停止按钮是可逆状态：运行时停止，停止后恢复到停止前速度。
-      if (this.timeStore.timeSpeedIndex === 6) {
-        this.applySpeedStep(this.timeStore.lastNonZeroSpeedIndex === 6 ? 7 : this.timeStore.lastNonZeroSpeedIndex)
-      } else {
-        this.timeStore.lastNonZeroSpeedIndex = this.timeStore.timeSpeedIndex
-        this.applySpeedStep(6) // SPEED_IDX_STOP
-      }
-      this.refreshTimeNow()
-    } else if (id === 'realtime') {
-      // 实时：回到当前时刻 + 恢复 1x 正常速度
-      this.triggerAction('actionReturn_To_Current_Time')
-      this.applySpeedStep(7) // SPEED_IDX_REALTIME
-      this.timeStore.timeRateText = '1x'
-      this.refreshTimeNow()
-    } else if (id === 'rewind') {
-      // 倒带：单按钮循环升档 -1x → -2x → -10x → -1分/秒 → -1时/秒 → -1天/秒 → 回到-1x
-      let rewIdx = 5 // 默认从 -1x 起步（非倒带状态按下时）
-      if (this.timeStore.timeSpeedIndex < 6) {
-        // 已在倒带中：再点升一档（索引减小=更快反向）；到底(0)循环回 -1x
-        rewIdx = this.timeStore.timeSpeedIndex === 0 ? 5 : this.timeStore.timeSpeedIndex - 1
-      }
-      this.applySpeedStep(rewIdx)
-      this.flashHint(I18n.t('s0763_rewind') + ' ' + this.timeStore.timeRateText)
-      this.refreshTimeNow()
-    } else if (id === 'faster' || id === 'fast' || id === 'warp') {
-      // 快进：单按钮循环升档 1x → 2x → 10x → 1分/秒 → 1时/秒 → 1天/秒 → 10天/秒 → 回到1x
-      let fwdIdx = 7 // 默认回 1x（停止/倒带状态按下时从 1x 起步）
-      if (this.timeStore.timeSpeedIndex >= 7) {
-        // 已在正向：升一档；到顶(13)循环回 1x
-        fwdIdx = this.timeStore.timeSpeedIndex >= 13 ? 7 : this.timeStore.timeSpeedIndex + 1
-      }
-      this.applySpeedStep(fwdIdx)
-      this.flashHint(I18n.t('s0765_fast') + ' ' + this.timeStore.timeRateText)
-      this.refreshTimeNow()
-    } else if (id === 'slower') {
-      // 减速：向"停止"方向降一档（快进降档、倒带也降档），降到1x再点=停止，不会跨进反向
-      let prevIdx = this.timeStore.timeSpeedIndex
-      if (this.timeStore.timeSpeedIndex > 6) {
-        prevIdx = this.timeStore.timeSpeedIndex - 1
-      } else if (this.timeStore.timeSpeedIndex < 6) {
-        prevIdx = this.timeStore.timeSpeedIndex + 1
-      }
-      this.applySpeedStep(prevIdx)
-      this.flashHint(prevIdx === 6 ? I18n.t('s0761_stop') : I18n.t('s0759_slower') + ' ' + this.timeStore.timeRateText)
-      this.refreshTimeNow()
-    } else if (id === '+12h') {
-      this.advanceTime(12)
-    } else if (id === '-12h') {
-      this.advanceTime(-12)
-    } else if (id === 'sunRise' || id === 'sunTransit' || id === 'sunSet' || id === 'astronomicalSet') {
-      this.jumpToTimeMark(id)
-    } else if (id === 'Moon') {
-      this.searchObject('Moon')
-    } else if (id === 'Mars') {
-      this.searchObject('Mars')
-    } else if (id === 'Jupiter') {
-      this.searchObject('Jupiter')
-    } else if (id.startsWith('city_')) {
-      const cityId = id.substring(5)
-      const preset = getCityPreset(cityId)
-      if (preset !== undefined) {
-        this.locationCtl().setLocation(cityId, preset.lat, preset.lon, preset.alt)
-      }
-    } else if (id === 'Beijing') {
-      this.locationCtl().setLocation('Beijing', 39.9042, 116.4074, 44)
-    } else if (id === 'Sun' || id === 'Mercury' || id === 'Venus' || id === 'Saturn' || id === 'Sirius' || id === 'Vega' || id === 'Betelgeuse' || id === 'Polaris' || id === 'M31' || id === 'M42' || id === 'M45' || id === 'NGC 2244') {
-      this.searchObject(id)
-    // 方向快捷查看
-    } else if (id === 'east') {
-      this.stopTracking(); this.triggerAction('actionLook_Towards_East'); this.refreshState(); this.flashHint(I18n.t('i0084'))
-    } else if (id === 'south') {
-      this.stopTracking(); this.triggerAction('actionLook_Towards_South'); this.refreshState(); this.flashHint(I18n.t('i0085'))
-    } else if (id === 'west') {
-      this.stopTracking(); this.triggerAction('actionLook_Towards_West'); this.refreshState(); this.flashHint(I18n.t('i0086'))
-    } else if (id === 'north') {
-      this.stopTracking(); this.triggerAction('actionLook_Towards_North'); this.refreshState(); this.flashHint(I18n.t('i0087'))
-    } else if (id === 'zenith') {
-      this.stopTracking(); this.triggerAction('actionLook_Towards_Zenith'); this.refreshState(); this.flashHint(I18n.t('i0088'))
-    } else if (id === 'ncp') {
-      this.stopTracking(); this.triggerAction('actionLook_Towards_NCP'); this.refreshState(); this.flashHint(I18n.t('i0089'))
-    }
-  }
 
   private selfTestAllActions(): void {
     hilog.info(0x0000, 'StellariumArkUI', 'selftest send %{public}d ids', this.SELFTEST_ACTION_IDS.length)
@@ -10277,8 +9501,8 @@ export struct WindowNativeNode {
     if (this.settingsChoiceSelected(group, value)) return
     if (group === 'information') this.setInformationMode(value)
     else if (group === 'date') this.setConfigurationDateFormat(value)
-    else if (group === 'time') this.setConfigurationTimeFormat(value)
-    else if (group === 'startup') this.setStartupTimeSetting('startupMode', value)
+    else if (group === 'time') this.timeCtl().setConfigurationTimeFormat(value)
+    else if (group === 'startup') this.timeCtl().setStartupTimeSetting('startupMode', value)
   }
 
   /** 面板标题行的时分秒：从 timeStore.observationTimeText 拆出第一个空格之后的部分。 */

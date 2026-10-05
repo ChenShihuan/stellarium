@@ -1582,3 +1582,35 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **真机（192.168.50.108:36717）**：`Smoke: PASS`；`openUiPanel astro` + `setAstroTab 2`（`transitionId=1`）/ `setAstroGroup 1`（tab→0、`transitionId=2`）/ `setAstroFilter direction|east`（`getAstroPanelState.direction=east`）；`openPluginFeature TelescopeControl`/`Oculars` → hilog `[cli-ui] opened plugin feature=...`（`ensurePluginLoaded` + `openPluginFeatureAfterLoad` 跨域路由存活）；`searchObject Sirius` → `getSelectedObjectInfo found:true`（`searchObject` 经 `astroCalcCtl().*PickerActive()` 回跳分支存活）；`pidof` 存活、无 jscrash；测试后 `setAstroTab 5` 复原持久化 tab。
 
 **未走查（待真机人工）**：目标选择 picker 按钮（`devecocli` 简化树与 `verify_ui` 下均未呈现，需「未选天体且计算报错」态）；`chooseXxxStartDate` 的 DatePickerDialog 弹层；`exportCurrentAstroCsv` 的另存为 picker。
+
+
+#### 15.12.9 D 轨道 D17/D10/D4 完成结论与度量（2026-10-05）
+
+> **背景**：D7/D14 之后续做 STATE-REVIEW §10.2 的 **D17（对象检查器媒体）**、**D10（脚本录制回放 UI）** 与
+> §10.6 队列末位的 **D4（时间操作）**。D4 曾因 `refreshState` 受阻，D0 的 `BehaviorHostHooks` 落地后解锁。
+
+**新增文件**
+
+- `capability/ObjectInspectorMediaController.ets`（约 470 行；15 法 + 11 私有字段；注入 `ObjectMediaStore`/`ObjectDetailStore`/`MediaPort` + `ObjectInspectorMediaHostHooks`；预热/body detail 定时器自持，`stop()` 收口）。
+- `capability/ScriptPlaybackController.ets`（约 230 行；9 法 + 8 私有字段；注入 `ScriptStore`/`ToolsStore`/`CommandPort`/`MediaPort` + `ScriptPlaybackHostHooks extends BehaviorHostHooks`；250ms 状态轮询自持 start/stop）。
+- `capability/TimeController.ets`（约 320 行；21 法 + 3 私有字段；注入 `TimeStore`/`TimeSettingsStore`/`DeltaTStore`/`CommandPort` + `TimeHostHooks extends BehaviorHostHooks`；时间面板 125ms/3000ms 定时器自持 `startPanelTimers()`/`stopPanelTimers()`）。
+
+**修改**
+
+- `bridge/MediaPort.ets` **+2 方法**：新增 `readRawSidecar(path, expectedBytes, label)`（`HostMediaPort` 逐字承载原宿主 fileIo open/read/close；`ObjectMediaStore` 的 `readRawSidecar` hook 改指端口）与 `importScriptDocument()`（脚本 picker/fileIo + 文件名清洗，`HostMediaPort` 具名实现）。
+- 宿主 `MainWindowNativeNode.ets`：删 45 法 + 22 字段声明（含死字段 `scriptStartGraceUntil`）+ 7 个未用导入 + 死常量 `BODY_DETAIL_TEXTURE_PATHS`，增 3 惰性构造器与全部调用点改指向；`ObjectModelRenderer` 三个媒体管线 hook 改指 `objectInspectorMediaCtl()`；`TimeSettingsStore` 的 `applyTimeSettings` hook 与 `JulianDateStore` 的 `refreshSimTimeLight` hook 改指 `timeCtl()`；`ScriptStore` 的脚本 UI hooks 改指 `scriptPlaybackCtl()`。
+- `scripts/test-ohos-settings-choice-motion.mjs`（第 4 用例改读 `TimeController` + `hooks.animateOption`）、`scripts/test-ohos-procedural-model.mjs`（第 11 用例改读控制器 + `mediaPort.fileExists`）、`scripts/test-ohos-startup-stars.mjs`（`dismissSplash` 夹具补 `objectInspectorMediaCtl()`）。
+
+**D17 判定**：STATE-REVIEW §10.1 记 20 法；实测 15 行为法 + 11 字段（多出的含已随 M2-A 下沉 `ObjectModelRenderer` 的渲染/纹理法）。`objectInspectorInlineModelSize` 属几何 A-保留（宿主组件调用），未动；`readRawSidecar` 按"只迁宿主实现并改指向"上移 `MediaPort`（控制器不 import fileIo）。
+
+**D10 判定**：STATE-REVIEW §10.1 记 13 法；实测 9 行为法 + 8 字段。`scriptControlSafeTop`（`getUIContext().px2vp` 属 UI 几何）留宿主经 hook；`scriptImportFileName` 随导入上移 `MediaPort`；`changePlaybackRate`/`toggleReplayPause` 已于 M1-B 在 `RecordingController`；死字段 `scriptStartGraceUntil` 删除（唯一真源在 `ScriptStore`）。
+
+**D4 判定**：STATE-REVIEW §10.1 记 20 法；实测 21 法 + 3 字段（`setEquationOfTime` 已于 D9 迁 `OcularController` 不重复；`setConfigurationDateFormat` 留宿主但改调 `timeCtl().saveTimePreference`）。`fpsTimer` 属启动 splash 闪烁非时间域，留宿主；`utcOffsetHours`（§15.6-1）与 `timeSettingsPending`（§15.6-1 @State，SettingsPanel 消费）留宿主经 hook 回注。
+
+**度量**：宿主 **10,288 → 9,512 行（−776）**、`private` 方法 **378 → 336（−42）**、`@State private` **131 不变**；新增 3 控制器文件、扩展 1 端口。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 5 文件 0 error（首轮构建暴露 2 处漏改 `this.applyManualTime`/`this.syncManualTimeFromState`，修后 `BUILD SUCCESSFUL`）；契约 **44 锚点 intact**；`test-ohos-settings-choice-motion` 4/4 / `test-ohos-procedural-model` 12/12 / `test-ohos-startup-stars` 17/17 全绿；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。
+
+**真机（192.168.50.108:36717）**：`Smoke: PASS`。D4：时间面板 chips 点按实时刷新（快进→2x / 实时→1x / 停止→已暂停），面板时钟 125ms 轮询在跑（21:08:17→21:08:33）。D17：搜索 M4 → 详情卡「离线深空资料图像」→ 打开全屏预览，hilog `[detail-media-preview] open/image loaded/close`；D10：「导入脚本」唤起系统 `DocumentViewPicker`（`HostMediaPort.importScriptDocument`）并取消存活；`pidof` 全程存活、无 jscrash；测试后时间恢复「实时 · 1x」。
+
+**未走查（待真机人工）**：脚本控制条拖动/回放速率/录制 UI 开关（需先进入录制会话，入口深于 3 步）；对象媒体预览「重试」（需解码失败态）；手动时间应用 / 日期选择器 / 时间设置写回（会改持久化设置）。
