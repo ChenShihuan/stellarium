@@ -1,4 +1,4 @@
-import { ASTRONOMY_GUIDES, AstronomyGuide } from '../../pages/AstronomyGuide'
+import { ASTRONOMY_GUIDES, AstronomyGuide } from '../../common/derive/AstronomyGuide'
 import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 

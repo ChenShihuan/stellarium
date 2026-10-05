@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 
-const source = readFileSync(new URL('../harmonyos/ets-source/pages/AstronomyGuide.ts', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../harmonyos/ets-source/common/derive/AstronomyGuide.ts', import.meta.url), 'utf8');
 const { GuidePlayer, ASTRONOMY_GUIDES } = await import(`data:text/javascript,${encodeURIComponent(stripTypeScriptTypes(source))}`);
 const setup = (run = async () => ({ ok: true })) => {
   const calls = [];

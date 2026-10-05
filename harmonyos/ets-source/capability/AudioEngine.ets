@@ -1,4 +1,4 @@
-// StellariumAudio.ets
+// AudioEngine.ets（原 pages/StellariumAudio.ets，M3 纯路径迁移）
 // 程序化（生成式）音乐引擎 —— 模仿 Sky Guide 的"空灵底噪 + 点星体叮一声"。
 //
 // 音色优化（2026-07-26 v3）：
@@ -21,7 +21,7 @@
 
 import { audio } from '@kit.AudioKit'
 import hilog from '@ohos.hilog'
-import type { StellariumBridgeResponse } from './StellariumTypes'
+import type { StellariumBridgeResponse } from '../pages/StellariumTypes'
 
 const TAG: string = 'StellariumAudio'
 const DOMAIN: number = 0xD003
