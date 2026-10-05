@@ -182,8 +182,11 @@ test('reentrant startup is serialized and background return cannot release nativ
 
 test('sensor and location entrypoints gate privacy and location rechecks after awaits', () => {
   const page = read('pages/MainWindowNativeNode.ets');
-  const sensorStart = page.slice(page.indexOf('  private startGyroscope()'), page.indexOf('  private stopGyroscope('));
-  assert.ok(sensorStart.indexOf('hasCurrentPrivacyConsent()') < sensorStart.indexOf('sensor.on('));
+  // M1-B 子组①：startGyroscope/stopGyroscope 已下沉 capability/SensorController.ets；
+  // 隐私门禁经 hooks.canUseSensors() 回注，必须早于任何传感器订阅。
+  const sensor = read('capability/SensorController.ets');
+  const sensorStart = sensor.slice(sensor.indexOf('  startGyroscope()'), sensor.indexOf('  stopGyroscope('));
+  assert.ok(sensorStart.indexOf('canUseSensors()') < sensorStart.indexOf('subscribeRotationVector('));
   const location = page.slice(page.indexOf('  private async useDeviceLocation()'), page.indexOf('  private applyPickerLocation()'));
   assert.equal((location.match(/hasCurrentPrivacyConsent\(\)/g) ?? []).length, 3);
   assert.match(location, /permissionResult.authResults.some/);
@@ -207,10 +210,11 @@ test('incomplete installations are repaired asynchronously, never by full sync e
 });
 
 test('normal sensor probes contain counts rather than raw orientation measurements', () => {
-  const page = read('pages/MainWindowNativeNode.ets');
-  const probe = page.match(/  private emitGyroPoseProbe\([^\n]*\n[\s\S]*?\n  \}/)[0];
+  // M1-B 子组①：emitGyroPoseProbe 已下沉 capability/SensorController.ets。
+  const sensor = read('capability/SensorController.ets');
+  const probe = sensor.match(/  private emitGyroPoseProbe\([^\n]*\n[\s\S]*?\n  \}/)[0];
   assert.doesNotMatch(probe, /rawAz=|rawAlt=|gravity=|magnetic=|qNorm=/);
-  assert.doesNotMatch(page, /\[GYRO_ORIENTATION\]/);
+  assert.doesNotMatch(sensor, /\[GYRO_ORIENTATION\]/);
 });
 
 test('both policy artifacts name the actual sensor types and remain marked as drafts', () => {
