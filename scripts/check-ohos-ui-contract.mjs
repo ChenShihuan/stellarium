@@ -5,18 +5,36 @@
 // the `activePanel` / setPanel names that address the 33 panels. Moving code
 // between files is allowed; renaming or dropping an anchor is not.
 //
+// The scan therefore covers EVERY .ets file under ets-source, not just the
+// monolith: once a panel moves into panels/…, its `.id()` anchors live there
+// and would otherwise look "removed".
+//
 // Usage:
 //   node scripts/check-ohos-ui-contract.mjs           # verify against the baseline
 //   node scripts/check-ohos-ui-contract.mjs --update  # rewrite the baseline
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const mirror = root + 'harmonyos/ets-source/pages/MainWindowNativeNode.ets';
+const sourceRoot = root + 'harmonyos/ets-source';
 const baselinePath = root + 'docs/harmonyos/json/ui-contract-baseline.json';
 
-const source = readFileSync(mirror, 'utf8');
+function collectEtsFiles(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    const full = dir + '/' + entry;
+    if (statSync(full).isDirectory()) {
+      out.push(...collectEtsFiles(full));
+    } else if (entry.endsWith('.ets')) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+const files = collectEtsFiles(sourceRoot).sort();
+const source = files.map(file => readFileSync(file, 'utf8')).join('\n');
 const uniqueSorted = values => [...new Set(values)].sort();
 
 // `.id('literal')` — a literal id used as-is by tests.
@@ -32,8 +50,8 @@ const panels = uniqueSorted([
 ]);
 
 const contract = {
-  note: 'Stable UI contract for the pages/ refactor. Regenerate with --update only when an anchor is intentionally added or renamed.',
-  source: 'harmonyos/ets-source/pages/MainWindowNativeNode.ets',
+  note: 'Stable UI contract for the pages/ refactor. Scanned across every .ets file under harmonyos/ets-source. Regenerate with --update only when an anchor is intentionally added or renamed.',
+  scannedFiles: files.map(file => file.replace(sourceRoot + '/', '')),
   panels,
   staticIds,
   dynamicIdPrefixes,
@@ -51,7 +69,7 @@ if (process.argv.includes('--update')) {
   writeFileSync(baselinePath, JSON.stringify(contract, null, 2) + '\n');
   console.log(`UI contract baseline written: ${contract.count.panels} panels, ` +
     `${contract.count.staticIds} static ids, ${contract.count.dynamicIdPrefixes} dynamic prefixes, ` +
-    `${contract.count.totalIdAnchors} id anchors.`);
+    `${contract.count.totalIdAnchors} id anchors, over ${files.length} files.`);
 } else {
   const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
   const diff = (label, before, after) => {
@@ -66,5 +84,6 @@ if (process.argv.includes('--update')) {
   assert.equal(contract.totalIdAnchors, baseline.totalIdAnchors,
     `total .id() anchors changed: ${baseline.totalIdAnchors} -> ${contract.totalIdAnchors}`);
   console.log(`UI contract intact: ${contract.count.panels} panels, ${contract.count.staticIds} static ids, ` +
-    `${contract.count.dynamicIdPrefixes} dynamic prefixes, ${contract.count.totalIdAnchors} id anchors.`);
+    `${contract.count.dynamicIdPrefixes} dynamic prefixes, ${contract.count.totalIdAnchors} id anchors, ` +
+    `over ${files.length} files.`);
 }

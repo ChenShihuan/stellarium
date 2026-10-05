@@ -1,3 +1,15 @@
+## [2026-10-01] DevEco Code - Phase 3q：搜索筛选器（菜单 + chips + 分类行），契约校验扩到全部组件
+
+- **新增文件：** `panels/search/SearchFilterMenu.ets`（返回行 + 四个页面：根 / 分类 / 可视度 / 器材；`menuTitle()` 由宿主方法搬入，直接读 store）、`panels/search/SearchFilterChips.ets`（已选条件 chips，点击即清除）、`panels/search/CatalogFilterRow.ets`（分类行子组件，替代原**带参数的 UI 函数** `catalogFilterRow(cat)` —— 其参数按值捕获、选中态不会实时刷新）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 4 个筛选字段（`searchFilterPage` / `searchCategory` / `searchVisibilityFilter` / `searchInstrumentFilter`）迁入 `SearchStore`，46 处引用改写；`this.searchFilterMenu()` 与 `this.searchFilterChips()` 两个 builder 调用替换为组件调用（标签由宿主 `searchVisibilityLabel()` / `searchInstrumentLabel()` / `searchAllCategoryOptions()` 计算后以 `@Prop` 传入，因为这些方法在搜索结果与其它面板也用到）；删除两个 builder 与 `catalogFilterRow`。
+- **`scripts/check-ohos-ui-contract.mjs` 扩容（本次必要修正）：** 原先只扫单体文件，导致移到组件的锚点（如 `search-browser-back`、`search-category-*`）被判为"丢失"。现改为**递归扫描 `harmonyos/ets-source` 下全部 `.ets`（当前 65 个文件）**并合并分析；基线的 33 面板 / 22 静态 id / 17 动态前缀全部不变，锚点总数 41 → 42（仅因扫描面扩大），已 `--update` 并写入说明。
+- **三个踩坑记录（都由此片的构建/校验立刻拦下）：**
+  1. **前缀式批量替换会误伤同前缀方法名**：`this.searchCategory` → `this.searchStore.searchCategory` 把 `this.searchCategoryOptions/Icon/Label` 一起改了（与早前 `nightMode` 同型错误）→ 必须按**词边界**替换。
+  2. **删除"带参数的 UI 函数"时其 `@Builder` 装饰器行会残留**（本文件风格为 `@Builder` + `private xxx(...)`），残留行会去装饰下一个普通方法并报 `Only UI component syntax can be written here`。
+  3. **契约校验必须扫描迁移后的组件文件**（见上）。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验 / 安装启动通过；① 点「筛选」→ 菜单由新组件渲染，返回行锚点 `#search-browser-back` 在；② 点「可见度」→ 页面切换、标题**实时**变「可见度」（`menuTitle()` 经 store）；③ 选「地平线上方」→ 菜单关闭且筛选 chip「地平线上方  x」**实时出现**（新 `SearchFilterChips`）；④ 点该 chip → **实时清除**。测后筛选已恢复「不限」。
+- **单体行数：** 29,566 → **29,487**。
+
 ## [2026-10-01] DevEco Code - Phase 3p：搜索域第二片（候选列表 → SearchSuggestions 组件）
 
 - **新增文件：** `panels/search/SearchSuggestions.ets`（结果计数行 + 候选行：名称 + 副标题；`@ObjectLink store` + `@Prop` 颜色 + `subtitleFor` / `onSelect` 回调）。
