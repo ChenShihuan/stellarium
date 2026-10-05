@@ -293,6 +293,7 @@ export struct WindowNativeNode {
   // 刚显示“-2x”又被上一帧的“-10x”短暂盖回去而产生闪烁。
   private pendingTimeRate: number = Number.NaN
   private pendingTimeRateUntilMs: number = 0
+  private lastSyncedTimeRate: number = Number.NaN
   /** 时间轴相对真实当前时刻的偏移秒数（0=此刻，负=过去，正=未来）*/
   @State private scrubberValue: number = 0
   @State private scrubberLabel: string = '此刻'
@@ -11790,6 +11791,13 @@ private loadPlanetPositions(): void {
       this.pendingTimeRate = Number.NaN
       this.pendingTimeRateUntilMs = 0
     }
+    // 换挡瞬间引擎仍会回报上一档速率：同一速率重复回报时不做任何反推，
+    // 否则界面会先跳到旧档位再跳回新档位（真机实测到的「实时→倒带→实时」抖动）。
+    // 只在引擎速率真正发生变化时同步文本与档位。
+    if (!Number.isNaN(this.lastSyncedTimeRate) && Math.abs(rate - this.lastSyncedTimeRate) < 1e-9) {
+      return
+    }
+    this.lastSyncedTimeRate = rate
     this.timeRateText = this.formatRate(rate)
     let nearestIndex = 0
     let nearestDistance = Number.MAX_VALUE
@@ -29495,7 +29503,6 @@ private loadPlanetPositions(): void {
   timeSpeedChips() {
     TimeSpeedChips({
       store: this.timeStore,
-      rateText: this.timeRateText,
       onChip: (id: string) => { this.handleChip(id) }
     })
   }

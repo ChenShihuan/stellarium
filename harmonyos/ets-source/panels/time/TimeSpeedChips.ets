@@ -13,7 +13,6 @@ import { UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 @Component
 export struct TimeSpeedChips {
   @ObjectLink store: TimeStore
-  @Prop rateText: string
   onChip: (id: string) => void = () => {}
 
   build() {
@@ -24,7 +23,7 @@ export struct TimeSpeedChips {
           Image($r('app.media.ic_time_rewind'))
             .width(14).height(14)
             .fillColor(this.store.timeSpeedIndex < 6 ? '#FFFFFF' : '#7FB3DC')
-          Text(this.store.timeSpeedIndex < 6 ? I18n.t('s0763_rewind') + ' ' + this.rateText : I18n.t('s0763_rewind'))
+          Text(I18n.t('s0763_rewind'))
             .fontSize(11.5)
             .fontWeight(this.store.timeSpeedIndex < 6 ? FontWeight.Medium : FontWeight.Normal)
             .fontColor(this.store.timeSpeedIndex < 6 ? '#FFFFFF' : '#B8D4EF')
@@ -71,7 +70,7 @@ export struct TimeSpeedChips {
         // 减速 — 每点降一档；降到1x再点=停止
         Row({ space: 4 }) {
           Image($r('app.media.ic_time_slower')).width(14).height(14).fillColor('#7FB3DC')
-          Text(this.store.timeSpeedIndex < 6 ? I18n.t('s0759_slower') + ' ' + this.rateText : I18n.t('s0759_slower'))
+          Text(I18n.t('s0759_slower'))
             .fontSize(11.5).fontColor('#B8D4EF')
         }.height(32).padding({ left: 7, right: 7 }).borderRadius(UI_RADIUS_PILL)
           .backgroundColor('rgba(107, 163, 214, 0.15)')
@@ -86,7 +85,7 @@ export struct TimeSpeedChips {
         Row({ space: 4 }) {
           Image($r('app.media.ic_time_fast')).width(14).height(14)
             .fillColor(this.store.timeSpeedIndex > 7 ? '#FFFFFF' : '#7FB3DC')
-          Text(this.store.timeSpeedIndex > 7 ? I18n.t('s0765_fast') + ' ' + this.rateText : I18n.t('s0765_fast'))
+          Text(I18n.t('s0765_fast'))
             .fontSize(11.5)
             .fontWeight(this.store.timeSpeedIndex > 7 ? FontWeight.Medium : FontWeight.Normal)
             .fontColor(this.store.timeSpeedIndex > 7 ? '#FFFFFF' : '#B8D4EF')
