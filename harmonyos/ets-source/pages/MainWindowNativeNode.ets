@@ -1097,43 +1097,20 @@ export struct WindowNativeNode {
   private skyCultureAnchorY: number = 0
   private skyCultureAnchorRequestId: number = 0
   private skyCultureAnchorArmed: boolean = false
-  private touchStartX: number = 0
-  private touchStartY: number = 0
-  private touchLastX: number = 0
-  private touchLastY: number = 0
-  private touchMoved: boolean = false
+  // 触屏主路径草稿字段（touchStart*/touchLast*/touchMoved/pinch*/dragFiltered*/dragLast*/
+  // nativeDragActive/skyDragging 的写侧/panelDragging/panelDragStart*）已随 M3-2 搬入
+  // capability/SkyInputController.ets（§15.7 规则 2）；下列跨 handler 共用标志留宿主，
+  // 控制器经 SkyInputHostHooks 读写。
   private skyTouchActive: boolean = false
-  private pinchStartDistance: number = 0
-  private pinchLastScale: number = 1
-  private pinchCenterX: number = 0
-  private pinchCenterY: number = 0
-  private pinchStartFov: number = 60
-  private pinchLastNativePushMs: number = 0
-  private pinchNativePushPending: boolean = false
-  /** 缩放 FOV 胶囊提示的节流时间戳 */
-  private lastFovHintMs: number = 0
-  private nativeDragActive: boolean = false
-  private lastDragCommandMs: number = 0
-  private dragFilteredX: number = 0
-  private dragFilteredY: number = 0
-  private dragLastRawX: number = 0
-  private dragLastRawY: number = 0
-  private dragLastSampleMs: number = 0
   private skyDragging: boolean = false
   // gyro* 订阅/姿态/引导字段已随 M1-B 子组① 搬入 capability/SensorController.ets
   // （M1-B 子组「可观测子集入 GyroStore、逐帧草稿留控制器」，§15.7 规则 2）。
-  private dragLogCount: number = 0
   private touchStartedOnUi: boolean = false
   private skySelectionRequestSerial: number = 0
   private lastCenterKeyAt: number = 0
   private lastDockActionAt: number = 0
   private lastDockActionPanel: string = ''
   private dockTouchActive: boolean = false
-  private panelDragging: boolean = false
-  private panelDragStartX: number = 0
-  private panelDragStartY: number = 0
-  private panelDragStartOffsetX: number = 0
-  private panelDragStartOffsetY: number = 0
 
   // 所有设备共享同一动作模型。布局只决定面板如何呈现，不改变入口和语义。
 
@@ -1545,8 +1522,9 @@ export struct WindowNativeNode {
     return this.objectModelRendererImpl
   }
 
-  // M3-1：天空输入控制器惰性构造。桥 fire 经同一 HostCommandPort；宿主保留动作（isUiPoint 热路径、
-  // 路由/选中/缩放/陀螺退出/夜间模式持久化/模型沉浸态）经 SkyInputHostHooks 具名回注，控制器不 import NAPI/UI。
+  // M3-1/M3-2：天空输入控制器惰性构造。桥 fire 经同一 HostCommandPort；宿主保留动作（isUiPoint /
+  // skyZoomButtonAt / dockActionAt 热路径、路由/选中/缩放/详情刷新收放/Dock/陀螺退出/面板拖动落盘）
+  // 经 SkyInputHostHooks 具名回注，控制器不 import NAPI/UI。
   private skyInputCtl(): SkyInputController {
     if (this.skyInputControllerImpl === null) {
       const hooks: SkyInputHostHooks = {
@@ -1567,7 +1545,58 @@ export struct WindowNativeNode {
         centerSelectedObjectFromKeyboard: (): void => this.centerSelectedObjectFromKeyboard(),
         persistNightMode: (): void => this.persistNightMode(),
         modelImmersive: (): boolean => this.objectMediaStore.objectInspectorModelImmersive,
-        setModelImmersive: (value: boolean): void => this.objectModelRendererCtl().setObjectInspectorModelImmersive(value)
+        setModelImmersive: (value: boolean): void => this.objectModelRendererCtl().setObjectInspectorModelImmersive(value),
+        // ── M3-2：触屏主路径（handleSkyTouch / emitFluidDrag）hooks ──
+        isExpandedLayout: (): boolean => this.isExpandedLayout,
+        isFoldHoverLayout: (): boolean => this.isFoldHoverLayout,
+        isFoldTabletLayout: (): boolean => this.isFoldTabletLayout,
+        panelVisible: (): boolean => this.panelVisible,
+        panelWidth: (): number => this.panelWidth,
+        panelOffsetX: (): number => this.panelOffsetX,
+        panelOffsetY: (): number => this.panelOffsetY,
+        edgeMargin: (): number => this.EDGE_MARGIN,
+        fovSliderValue: (): number => this.fovSliderValue,
+        setFovSliderValue: (value: number): void => { this.fovSliderValue = value },
+        polarScopeVisible: (): boolean => this.polarScopeStore.polarScopeVisible,
+        compactDockWidthPercent: (): number => this.compactDockWidthPercent(),
+        dockTop: (): number => this.dockTop(),
+        compactTopQuickX: (): number => this.compactTopQuickX(),
+        isCompactTopQuickPoint: (x: number, y: number): boolean => this.isCompactTopQuickPoint(x, y),
+        lastInfoWinCloseMs: (): number => this.lastInfoWinCloseMs,
+        touchStartedOnUi: (): boolean => this.touchStartedOnUi,
+        setTouchStartedOnUi: (value: boolean): void => { this.touchStartedOnUi = value },
+        skyTouchActive: (): boolean => this.skyTouchActive,
+        setSkyTouchActive: (value: boolean): void => { this.skyTouchActive = value },
+        setSkyDragging: (value: boolean): void => { this.skyDragging = value },
+        dockTouchActive: (): boolean => this.dockTouchActive,
+        setDockTouchActive: (value: boolean): void => { this.dockTouchActive = value },
+        skyTouchFeedback: (): boolean => this.skyTouchFeedback,
+        setSkyTouchFeedback: (value: boolean): void => { this.skyTouchFeedback = value },
+        setSkyTouchPoint: (x: number, y: number): void => { this.skyTouchX = x; this.skyTouchY = y },
+        setSkyTouchPoint2: (x: number, y: number): void => { this.skyTouchX2 = x; this.skyTouchY2 = y },
+        skyTouchX2: (): number => this.skyTouchX2,
+        skyTouchY2: (): number => this.skyTouchY2,
+        setSkyTouchFeedbackMulti: (value: boolean): void => { this.skyTouchFeedbackMulti = value },
+        setCurrentFovText: (text: string): void => { this.currentFovText = text },
+        setPanelOffset: (offsetX: number, offsetY: number): void => { this.panelOffsetX = offsetX; this.panelOffsetY = offsetY },
+        cancelSelectedObjectUiChange: (): void => this.cancelSelectedObjectUiChange(),
+        pauseDetailRefreshForSkyDrag: (): void => this.pauseDetailRefreshForSkyDrag(),
+        resumeDetailRefreshAfterSkyDrag: (): void => this.resumeDetailRefreshAfterSkyDrag(),
+        scheduleSelectedObjectForUiChange: (delay: number): void => this.scheduleSelectedObjectForUiChange(delay),
+        scheduleSkyTextureStatusCheck: (): void => this.scheduleSkyTextureStatusCheck(),
+        scheduleRecordingViewCheckpoint: (delay: number): void => this.recordingCtl().scheduleRecordingViewCheckpoint(delay),
+        resetPanelIdle: (): void => this.resetPanelIdle(),
+        toggleMusic: (): void => this.toggleMusic(),
+        musicHintText: (): string => this.audioStore.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'),
+        toggleGyroscope: (value: boolean): void => this.gyroCtl().toggleGyroscope(value),
+        skyZoomButtonAt: (x: number, y: number): string => this.skyZoomButtonAt(x, y),
+        dockActionAt: (x: number, y: number): ShellAction | null => this.dockActionAt(x, y),
+        activateDockAction: (item: ShellAction): void => this.activateDockAction(item),
+        requestFieldOfView: (onResult: (fov: number) => void): void => {
+          this.callInteractive('getFieldOfView', '', (r: StellariumBridgeResponse) => {
+            if (r.ok === true && r.fov !== undefined) { onResult(r.fov) }
+          })
+        }
       }
       this.skyInputControllerImpl = new SkyInputController(this.commandPort(), this.nightModeStore, hooks)
     }
@@ -9094,7 +9123,7 @@ private loadPlanetPositions(): void {
       }
       return
     }
-    this.handleSkyTouch(event)
+    this.skyInputCtl().handleSkyTouch(event)
     } catch (e) {
       hilog.error(0x0000, 'StellariumArkUI', 'handleOverlayTouch crash: ' + (e instanceof Error ? e.message : String(e)))
     }
@@ -9148,368 +9177,8 @@ private loadPlanetPositions(): void {
     this.flashHint('已居中')
   }
 
-  private dragFollowAlpha(dtMs: number): number {
-    // Keep only a light stabilizer. The previous low-pass values made the
-    // camera visibly trail behind the finger, especially beside an open menu.
-    const base = this.isFoldTabletLayout ? 0.96 : (this.isExpandedLayout ? 0.97 : 0.94)
-    return clamp(1 - Math.pow(1 - base, Math.max(1, dtMs) / 16.67), 0.88, 0.995)
-  }
 
-  private emitFluidDrag(targetX: number, targetY: number, now: number, sampleVelocity: boolean = true): void {
-    const dt = this.dragLastSampleMs > 0 ? Math.max(1, now - this.dragLastSampleMs) : 16
-    const rawDx = targetX - this.dragLastRawX
-    const rawDy = targetY - this.dragLastRawY
-    // Physical Pads have a large, high-density canvas. A small gain keeps the
-    // sky responsive without changing the geometry of the native renderer.
-    const gain = this.isExpandedLayout ? 1.35 : (this.isFoldHoverLayout ? 1.34 : 1.36)
-    if (sampleVelocity && this.dragLastSampleMs > 0 && dt >= 8 && dt <= 220) {
-      const vx = rawDx * gain / dt
-      const vy = rawDy * gain / dt
-      this.skyInputCtl().dragVelocityX = this.skyInputCtl().dragVelocityX * 0.35 + vx * 0.65
-      this.skyInputCtl().dragVelocityY = this.skyInputCtl().dragVelocityY * 0.35 + vy * 0.65
-      this.skyInputCtl().dragVelocitySampleValid = true
-    }
-    this.dragLastRawX = targetX
-    this.dragLastRawY = targetY
-    this.dragLastSampleMs = now
 
-    const alpha = this.dragFollowAlpha(dt)
-    const desiredX = this.dragFilteredX + rawDx * gain
-    const desiredY = this.dragFilteredY + rawDy * gain
-    const nextX = this.dragFilteredX + (desiredX - this.dragFilteredX) * alpha
-    const nextY = this.dragFilteredY + (desiredY - this.dragFilteredY) * alpha
-    if (Math.abs(nextX - this.dragFilteredX) < 0.25 && Math.abs(nextY - this.dragFilteredY) < 0.25) {
-      return
-    }
-    this.callNativeFire('dragView',
-      Math.round(this.dragFilteredX).toString() + '|' +
-      Math.round(this.dragFilteredY).toString() + '|' +
-      Math.round(nextX).toString() + '|' +
-      Math.round(nextY).toString())
-    this.dragFilteredX = nextX
-    this.dragFilteredY = nextY
-    this.touchLastX = nextX
-    this.touchLastY = nextY
-  }
-
-  private handleSkyTouch(event: TouchEvent): void {
-    const points = event.touches.length > 0 ? event.touches : event.changedTouches
-    if (points.length === 0) {
-      return
-    }
-
-    if (event.type === TouchType.Down) {
-      this.skyInputCtl().stopSkyInertia()
-      const allowTouchFeedback = !this.panelVisible
-      const downX = touchWindowX(points[0])
-      const downY = touchWindowY(points[0])
-      // Panel header drag detection (before isUiPoint sidebar check)
-      if (this.panelVisible) {
-        const pl = panelLeft(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
-        const pr = panelRight(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
-        const pt = panelTop(this.EDGE_MARGIN, this.panelOffsetY)
-        if (downX >= pl && downX <= pr && downY >= pt && downY <= pt + 48) {
-          this.panelDragging = true
-          this.panelDragStartX = downX
-          this.panelDragStartY = downY
-          this.panelDragStartOffsetX = this.panelOffsetX
-          this.panelDragStartOffsetY = this.panelOffsetY
-          return
-        }
-      }
-      // 左侧非手势缩放按钮（+放大 / −缩小）：与右上角快捷区同理，XComponent 吞掉
-      // ArkUI onClick，必须在 Down 上按坐标分派，否则点击会穿到星图变成 selectAt。
-      const zoomHit = this.skyZoomButtonAt(downX, downY)
-      if (zoomHit.length > 0) {
-        this.skyInputCtl().resetSkyTapSequence()
-        this.touchStartedOnUi = true
-        this.skyTouchFeedback = false
-        this.skyTouchActive = false
-        if (zoomHit === 'in') {
-          hilog.info(0x0000, 'StellariumArkUI', '[DIAG] sky zoom in via handleSkyTouch')
-          this.zoomStep(0.8)
-        } else {
-          hilog.info(0x0000, 'StellariumArkUI', '[DIAG] sky zoom out via handleSkyTouch')
-          this.zoomStep(1.25)
-        }
-        return
-      }
-      if (isDockPoint(downX, downY, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop())) {
-        this.skyInputCtl().resetSkyTapSequence()
-        this.dockTouchActive = true
-        this.touchStartedOnUi = true
-        this.skyTouchFeedback = false
-        this.skyTouchActive = false
-        return
-      }
-      if (this.isUiPoint(downX, downY)) {
-        this.skyInputCtl().resetSkyTapSequence()
-        this.touchStartedOnUi = true
-        // A UI touch must never inherit sky-drag ownership. This branch used to
-        // set only touchStartedOnUi, unlike the dock branch below which also
-        // clears the drag state: a gesture that began on the sky and lifted over
-        // a panel left skyTouchActive set, so every later swipe *inside the panel*
-        // cleared the "!skyTouchActive" gate in the move handler and panned the
-        // star map along with the list.
-        this.skyTouchFeedback = false
-        this.skyTouchActive = false
-        this.skyDragging = false
-        this.nativeDragActive = false
-        // 手机端右上角快捷按钮（陀螺仪/音频）：XComponent 同样吞掉了 onClick，
-        // 需要坐标级分派，与上方 tablet rail workaround 同理。
-        if (!this.isExpandedLayout && this.isCompactTopQuickPoint(downX, downY)) {
-          const qx = this.compactTopQuickX()
-          const qy = compactTopQuickY()
-          // 陀螺仪按钮（上方的 44x44，圆心约 qx+22, qy+22）
-          if (downX >= qx && downX <= qx + 44 && downY >= qy && downY <= qy + 44) {
-            hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro tap via handleSkyTouch')
-            this.resetPanelIdle()
-            this.gyroCtl().toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
-            return
-          }
-          // 音频按钮（下方的 44x44，间距 10vp，圆心约 qx+22, qy+54+22）
-          if (downX >= qx && downX <= qx + 44 && downY >= qy + 54 && downY <= qy + 54 + 44) {
-            hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio tap via handleSkyTouch')
-            this.resetPanelIdle()
-            this.toggleMusic()
-            this.flashHint(this.audioStore.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
-            return
-          }
-        }
-        return
-      }
-      this.skyTouchActive = true
-      this.skyDragging = true
-      this.cancelSelectedObjectUiChange()
-      this.callNativeFire('beginSkyGesture')
-      this.pauseDetailRefreshForSkyDrag()
-      this.touchStartX = downX
-      this.touchStartY = downY
-      this.touchLastX = this.touchStartX
-      this.touchLastY = this.touchStartY
-      this.touchMoved = false
-        this.skyInputCtl().pinchActive = false
-        this.callNativeFire('endPinch')
-        this.nativeDragActive = false
-      this.lastDragCommandMs = 0
-      this.dragFilteredX = downX
-      this.dragFilteredY = downY
-      this.dragLastRawX = downX
-      this.dragLastRawY = downY
-      this.dragLastSampleMs = Date.now()
-      this.skyInputCtl().dragVelocityX = 0
-      this.skyInputCtl().dragVelocityY = 0
-      this.skyInputCtl().dragVelocitySampleValid = false
-      this.dragLogCount = 0
-      this.skyTouchFeedback = allowTouchFeedback
-      this.skyTouchX = downX
-      this.skyTouchY = downY
-      this.skyTouchFeedbackMulti = allowTouchFeedback && points.length >= 2
-      hilog.info(0x0000, 'StellariumArkUI', 'sky touch down at ' + Math.round(this.touchStartX).toString() + ',' + Math.round(this.touchStartY).toString() + ' sky=' + this.skyWidth.toString() + 'x' + this.skyHeight.toString())
-      if (points.length >= 2) {
-        this.skyInputCtl().resetSkyTapSequence()
-        this.skyTouchX2 = touchWindowX(points[1])
-        this.skyTouchY2 = touchWindowY(points[1])
-        this.pinchCenterX = (touchWindowX(points[0]) + this.skyTouchX2) / 2
-        this.pinchCenterY = (touchWindowY(points[0]) + this.skyTouchY2) / 2
-        this.pinchStartDistance = distance(
-          touchWindowX(points[0]), touchWindowY(points[0]),
-          touchWindowX(points[1]), touchWindowY(points[1]))
-        this.pinchStartFov = clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
-        this.pinchLastScale = 1
-        this.pinchLastNativePushMs = Date.now()
-        this.pinchNativePushPending = false
-        this.skyInputCtl().pinchActive = true
-        this.callNativeFire('zoomBy', '1|1|' + this.pinchCenterX.toFixed(2) + '|' +
-          this.pinchCenterY.toFixed(2) + '|' + Math.round(this.skyWidth).toString() + '|' +
-          Math.round(this.skyHeight).toString())
-      }
-      return
-    }
-
-    if ((event.type === TouchType.Up || event.type === TouchType.Cancel) && this.dockTouchActive) {
-      const x = touchWindowX(points[0])
-      const y = touchWindowY(points[0])
-      this.dockTouchActive = false
-      this.touchStartedOnUi = false
-      if (event.type === TouchType.Up) {
-        const dockItem = this.dockActionAt(x, y)
-        if (dockItem !== null) { this.activateDockAction(dockItem) }
-      }
-      return
-    }
-    if (!this.skyTouchActive) {
-      return
-    }
-
-    if (event.type === TouchType.Move) {
-      const x = touchWindowX(points[0])
-      const y = touchWindowY(points[0])
-      if (this.skyTouchFeedback) {
-        this.skyTouchX = x
-        this.skyTouchY = y
-      }
-      if (points.length >= 2) {
-        this.skyTouchFeedbackMulti = this.skyTouchFeedback
-        this.skyTouchX2 = touchWindowX(points[1])
-        this.skyTouchY2 = touchWindowY(points[1])
-        this.pinchCenterX = (x + this.skyTouchX2) / 2
-        this.pinchCenterY = (y + this.skyTouchY2) / 2
-        this.nativeDragActive = false
-        this.skyInputCtl().stopSkyInertia()
-        const currentDistance = distance(
-          x, y, touchWindowX(points[1]), touchWindowY(points[1]))
-        if (!this.skyInputCtl().pinchActive || this.pinchStartDistance <= 1) {
-          this.pinchStartDistance = currentDistance
-          this.pinchStartFov = clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
-          this.skyInputCtl().pinchActive = true
-          this.pinchLastScale = 1
-          this.pinchLastNativePushMs = Date.now()
-          this.pinchNativePushPending = false
-          this.callNativeFire('zoomBy', '1|1|' + this.pinchCenterX.toFixed(2) + '|' +
-            this.pinchCenterY.toFixed(2) + '|' + Math.round(this.skyWidth).toString() + '|' +
-            Math.round(this.skyHeight).toString())
-        } else {
-          const scale = currentDistance / this.pinchStartDistance
-          this.pinchLastScale = scale
-          const estimatedFov = clamp(this.pinchStartFov / Math.max(0.25, scale), 4, 180)
-          this.fovSliderValue = estimatedFov
-          this.currentFovText = estimatedFov.toFixed(1) + '°'
-          this.pinchNativePushPending = true
-          const now = Date.now()
-          if (now - this.pinchLastNativePushMs >= 16) {
-            this.callNativeFire('zoomBy', scale.toString() + '|0|' + this.pinchCenterX.toFixed(2) + '|' +
-              this.pinchCenterY.toFixed(2) + '|' + Math.round(this.skyWidth).toString() + '|' +
-              Math.round(this.skyHeight).toString())
-            this.pinchLastNativePushMs = now
-            this.pinchNativePushPending = false
-          }
-          // 缩放时弹小蓝胶囊实时显示 FOV（节流 150ms，避免桥接风暴）
-          const nowMs = Date.now()
-          if (nowMs - this.lastFovHintMs >= 150) {
-            this.lastFovHintMs = nowMs
-            this.callInteractive('getFieldOfView', '', (r: StellariumBridgeResponse) => {
-              if (r.ok === true && r.fov !== undefined) {
-                const fovDeg = r.fov as number
-                this.currentFovText = fovDeg.toFixed(1) + '°'
-              }
-            })
-          }
-        }
-        this.touchMoved = true
-        return
-      }
-      this.skyTouchFeedbackMulti = false
-
-      // Panel drag handling
-      if (this.panelDragging) {
-        this.touchStartedOnUi = false
-        this.panelOffsetX = this.panelDragStartOffsetX + (x - this.panelDragStartX)
-        this.panelOffsetY = this.panelDragStartOffsetY + (y - this.panelDragStartY)
-        return
-      }
-
-      const totalMove = distance(x, y, this.touchStartX, this.touchStartY)
-      // 阈值放宽到 16vp:uitest/mock 注入的触摸常有几像素位移,
-      // 4vp 会把"轻点"误判成"拖动",导致 selectAt 不触发。
-      if (totalMove > 16) {
-        this.skyInputCtl().resetSkyTapSequence()
-        this.cancelSelectedObjectUiChange()
-        // Manual panning and sensor tracking must never drive the native
-        // camera together. Leave gyro mode on the first real sky drag, while
-        // keeping taps and pinch zoom available without changing its state.
-        if (!this.touchMoved && this.gyroStore.gyroscopeEnabled) {
-          this.gyroCtl().stopGyroscope(true)
-          this.flashHint('已退出陀螺仪')
-        }
-        this.touchMoved = true
-      }
-      // Ownership is decided on Down: only a gesture that actually started on the
-      // sky may pan it. Relying on skyTouchActive alone let a stale flag drag the
-      // sky from inside a panel, so the origin is now part of the condition.
-      if (this.touchMoved && !this.touchStartedOnUi) {
-        this.nativeDragActive = true
-        const now = Date.now()
-        if (now - this.lastDragCommandMs >= 16) {
-          if (this.dragLogCount < 5) {
-            hilog.info(0x0000, 'StellariumArkUI', 'dragView dx=' + Math.round(x - this.touchLastX).toString() + ' dy=' + Math.round(y - this.touchLastY).toString() + ' throttle=' + (now - this.lastDragCommandMs).toString() + 'ms')
-            this.dragLogCount += 1
-          }
-          this.emitFluidDrag(x, y, now)
-          this.lastDragCommandMs = now
-        }
-      }
-      return
-    }
-
-    if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      const x = touchWindowX(points[0])
-      const y = touchWindowY(points[0])
-      const endedOnUi = this.isUiPoint(x, y)
-      const recordingViewChanged = this.touchMoved || this.skyInputCtl().pinchActive
-      // End panel drag
-      if (this.panelDragging) {
-        this.panelDragging = false
-        this.scheduleSelectedObjectForUiChange(160)
-        return
-      }
-      // Gesture ownership is decided on Down. A drag that started on the sky
-      // must still finish as a sky gesture even when the finger crosses the
-      // floating object card before it lifts; otherwise the early return leaves
-      // skyDragging set and permanently pauses detail refresh/inertia.
-      if (this.touchStartedOnUi) {
-        if (this.dockTouchActive) {
-          this.dockTouchActive = false
-          if (event.type === TouchType.Up) {
-            const dockItem = this.dockActionAt(x, y)
-            if (dockItem !== null) {
-              this.activateDockAction(dockItem)
-            }
-          }
-        }
-        this.touchStartedOnUi = false
-        // Clear the same drag state the sky branch clears on lift-off: this early
-        // return used to leave it behind for the next gesture to inherit.
-        this.nativeDragActive = false
-        this.skyTouchActive = false
-        this.skyTouchFeedback = false
-        this.skyDragging = false
-        return
-      }
-      if (this.nativeDragActive && event.type === TouchType.Up) {
-        this.emitFluidDrag(x, y, Date.now(), false)
-        this.skyInputCtl().startSkyInertia()
-      } else if (event.type === TouchType.Cancel) {
-        this.skyInputCtl().stopSkyInertia()
-      } else if (!this.touchMoved && !this.skyInputCtl().pinchActive && !endedOnUi && Date.now() - this.lastInfoWinCloseMs > 320) {
-        hilog.info(0x0000, 'StellariumArkUI', 'selectAt payload: ' +
-          Math.round(this.touchStartX).toString() + '|' + Math.round(this.touchStartY).toString() + '|' +
-          Math.round(this.skyWidth).toString() + '|' + Math.round(this.skyHeight).toString())
-        this.skyInputCtl().handleSkyTap(this.touchStartX, this.touchStartY)
-      }
-      if (this.skyInputCtl().pinchActive) {
-        if (this.pinchNativePushPending) {
-          this.callNativeFire('zoomBy', this.pinchLastScale.toString() + '|0|' +
-            this.pinchCenterX.toFixed(2) + '|' + this.pinchCenterY.toFixed(2) + '|' +
-            Math.round(this.skyWidth).toString() + '|' + Math.round(this.skyHeight).toString())
-        }
-        this.callNativeFire('endPinch')
-        this.scheduleSkyTextureStatusCheck()
-      }
-      this.skyInputCtl().pinchActive = false
-      this.pinchNativePushPending = false
-      this.nativeDragActive = false
-      this.skyTouchActive = false
-      this.skyTouchFeedback = false
-      this.skyTouchFeedbackMulti = false
-      this.skyDragging = false
-      if (event.type === TouchType.Cancel) { this.skyInputCtl().resetSkyTapSequence() }
-      this.resumeDetailRefreshAfterSkyDrag()
-      if (event.type === TouchType.Up && recordingViewChanged) {
-        this.recordingCtl().scheduleRecordingViewCheckpoint(this.skyInputCtl().nativeSkyInertiaActive ? 1100 : 180)
-      }
-    }
-  }
 
   build() {
     Stack() {
@@ -9611,7 +9280,7 @@ private loadPlanetPositions(): void {
             cardHeight: guideCardHeight(this.skyHeight, this.scriptControlSafeTop()),
             cardX: guideCardX(this.isExpandedLayout, this.skyWidth, this.guideCardWidth(), this.scriptStore.scriptControlOffsetX),
             cardY: guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY),
-            onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+            onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
             onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
             onAction: (action: string) => { this.guideStore.executeGuideRequest('guideAction', action) }
           })
@@ -9630,7 +9299,7 @@ private loadPlanetPositions(): void {
             controlHeight: this.scriptStore.scriptControlHeight(),
             controlX: scriptControlX(this.skyWidth, this.scriptStore.replaying, this.scriptStore.scriptControlOffsetX),
             controlY: scriptControlY(this.skyHeight, this.scriptControlSafeTop(), this.scriptStore.scriptControlHeight(), this.scriptStore.scriptControlOffsetY),
-            onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+            onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
             onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
             onContinue: () => { this.scriptStore.continueNativeScript() },
             onChangeRate: (delta: number) => { this.recordingCtl().changePlaybackRate(delta) },
@@ -9641,7 +9310,7 @@ private loadPlanetPositions(): void {
         }
       }
       if (!this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active) && this.tools.recording && !this.tools.recordingUiExpanded) {
-        RecordingFocusShell({ onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) } })
+        RecordingFocusShell({ onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) } })
       }
       if (!this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active) && !(this.tools.recording && !this.tools.recordingUiExpanded) && !this.polarScopeStore.polarScopeVisible) {
         Stack() {
@@ -9712,7 +9381,7 @@ private loadPlanetPositions(): void {
                 detailWidth: this.detailCardWidth(),
                 detailHeight: this.detailCardHeight(),
                 scroller: this.objectDetailScroller,
-                onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+                onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
                 onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
                 onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
                 onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) },
@@ -9817,7 +9486,7 @@ private loadPlanetPositions(): void {
                 detailWidth: this.detailCardWidth(),
                 detailHeight: this.detailCardHeight(),
                 scroller: this.objectDetailScroller,
-                onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+                onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
                 onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
                 onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
                 onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) },
@@ -9939,7 +9608,7 @@ private loadPlanetPositions(): void {
                 detailWidth: this.detailCardWidth(),
                 detailHeight: this.detailCardHeight(),
                 scroller: this.objectDetailScroller,
-                onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+                onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
                 onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
                 onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
                 onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) },
@@ -10051,7 +9720,7 @@ private loadPlanetPositions(): void {
             skyWidth: this.skyWidth,
             skyHeight: this.skyHeight,
             isExpandedLayout: this.isExpandedLayout,
-            onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+            onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
             onRecenter: () => { this.recenterPolarScope() },
             onClose: () => { this.closePolarScope() },
             onHorizontalFlipChange: (value: boolean) => { this.setPolarScopeHorizontalFlip(value) },
