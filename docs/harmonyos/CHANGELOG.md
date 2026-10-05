@@ -1,3 +1,20 @@
+## [2026-10-04] DevEco Code - 修复：星图滑动在面板中终止后，面板内滑动会连带拖动星图（手势归属标志泄漏）
+
+- **现象**：打开 dock 面板后，在**星图**上按下开始滑动、并**在面板内部抬起**；此后**仅在面板里**上下滑动，**星图也会被连带平移**。
+- **根因（代码差异定位）**：手势归属标志存在**泄漏**，且同一个文件里两个 UI 分支行为不一致：
+  | 分支 | 行为 |
+  |---|---|
+  | dock 分支 Down（`MainWindowNativeNode.ets:14054-14056`）| `touchStartedOnUi = true` **且清** `skyTouchFeedback / skyTouchActive` |
+  | **`isUiPoint` 分支 Down（`:14074-14076`）** | 只设 `touchStartedOnUi = true`，**不清** `skyTouchActive / skyDragging / nativeDragActive` |
+  | Up 的 `touchStartedOnUi` 提前 return（`:14286-14288`）| 同样**不清**这些标志 |
+  - 于是"Down 在星图（`:14100-14101` 置 `skyTouchActive = true`）→ Up 落在面板上"这一序列会让 `skyTouchActive` **残留为 true**；之后面板内的每次滑动都能通过 Move 开头的 `if (!this.skyTouchActive) return` 关卡，落到 `:14246` 的拖拽逻辑并 `emitFluidDrag`，把星图一起拖走。
+- **修复（`harmonyos/ets-source/pages/MainWindowNativeNode.ets`，+20/−1）**：
+  1. `isUiPoint` 的 Down 分支补齐清理，与 dock 分支对齐（`skyTouchFeedback / skyTouchActive / skyDragging / nativeDragActive` 一并置否）—— UI 触摸不得继承星图拖拽归属。
+  2. Up 的 `touchStartedOnUi` 提前 return 也补齐同样的清理，避免下一个手势继承残留状态。
+  3. 拖拽条件由 `if (this.touchMoved)` 改为 **`if (this.touchMoved && !this.touchStartedOnUi)`**，把"归属在 Down 决定"写成显式条件，不再单独依赖可能陈旧的 `skyTouchActive`。
+- **方案取舍（评审结论）**：用户初提"打开 dock 面板时禁止拖拽星图"。评估后**未采用为唯一手段**，因其（a）只掩盖症状——同类"Down 在星图 / Up 在 UI"的模式还可经天体详情卡、悬浮面板、引导卡等触发；（b）会拿掉"面板打开时在上方露出的星图上平移、把下一个目标拖进视野"的可用操作；（c）`panelVisible` 覆盖面板范围过广。故以**归属修复**为主；如后续仍要"面板打开即禁止星图拖拽"的 UX，只需在星空 Down 分支加 `if (this.panelVisible) { 按 UI 触摸处理并 return }` 两行叠加。
+- **验证**：`arkts_check` 通过；UI 契约 `intact`（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 184 文件）；**BUILD SUCCESSFUL** 并 `install -r` 冷启；**用户界面实测确认**：原 bug 不再复现，且"面板打开时在露出星图上直接拖动仍可平移、点按选星/双指缩放/拖动惯性/详情卡拖动均未受影响"。
+
 ## [2026-10-04] DevEco Code - 修复：观测列表每行"居中"无响应（只选不居中）
 
 - **现象**：观测工作区 · 观测列表（今晚可观测目标）里，点任意一行（如"仙女座星系"）的 **居中**，视野不动、无任何反馈；`添加到列表` 正常。
