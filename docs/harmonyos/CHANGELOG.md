@@ -1,3 +1,11 @@
+## [2026-10-01] DevEco Code - Phase 3ai：位置域起手 —— 搜索 / 已保存位置组件化 + LocationStore
+
+- **新增 `state/LocationStore.ets`（19 行）**：位置域的 search + saved 两簇字段整体迁入 `@Observed` store —— `locSearchQuery` / `locSearchResults` / `locSearching` / `locSearchDebounce` / `savedLocations`（引用改写 2 / 5 / 4 / 0 / 7 处），纯计算 `formatDegrees()` 一并迁入（宿主 6 处调用改写）。**刻意边界**：picker 簇（`locationPickerName` / `locationPickerLatitude` / `locationPickerLongitude` / `locationPickerAltitude` / `locationPickerStatus` / `locationPickMode` / `hier*` / `mapRender*` / `observerTimeZone`）**仍留宿主**，随 `locationPickerPanel` 在下一片一并迁移 —— 该 builder 的分支里调用了参数化 `@Builder hierColumn(kind, onSelect)`，按 §13.1 规则 3 它不能随组件化继续留在 UI 里，必须和层级方法/字段簇同片走。
+- **新增 `panels/location/CityChipsRow.ets`（124 行）**：原 110 行 `@Builder cityChipsRow()` → 组件（`@ObjectLink store` + 4 回调 `onSaveCurrent` / `onApplyLocation` / `onDeleteLocation` / `onChip`）。根容器 `Column({ space: 4 })` 与 `.width('100%').margin({ top: 12 })` 原样（单根）。
+- **新增 `panels/location/LocationSearchPanel.ets`（92 行）**：原 77 行 `@Builder locationSearchPanel()` → 组件（`@ObjectLink store` + `@Prop subColor` / `inputColor` + 4 注入）。「省 · 国」上下文串依赖宿主的翻译缓存，以 `contextOf(item)` 注入；搜索框的草稿名回注宿主 `locationPickerName`（`onNameDraft`）；分块扫描 `searchLocations` 与落地 `selectSearchLocation` 走原生桥，留在宿主。`locationPickerPanel` 内的调用点已换成组件实例。
+- **单体行数：** 28,225 → **28,050**（−175）。
+- **验证：** 预检通过；`arkts_check` 4 文件 0 错；构建成功；契约校验 33 面板 / 42 锚点 / **91** 个 .ets（+3）；全量切片脚本仅剩 §13.6 的 6 个环境类。**真机**（`192.168.3.95:40565`，`pidof`=5542）：打开底部「位置」→ 搜索框输入 `Beijing` 实时出现「搜索结果」标题与结果行「北京 / 39.90°N / 116.41°E」（`store.formatDegrees` + `@ObjectLink` 生效）→ 快捷行渲染「已保存位置 / 暂无保存的位置 / 中国城市 / 世界城市」→ 点「保存当前位置」实时出现 `Beijing` chip → 点 `x` 删除回到「暂无保存的位置」（`prefs.savedLocations` 已复原为原空态）。**未走查** `locationPickerPanel` 的地图选点 / 层级选择（该 builder 本片未改动，属下一片范围）。
+- **本片新踩的坑：** 删 builder 后用 `-replace "(\r\n){3,}"` 收敛空行会**全文生效** —— 一次改掉 18 处，其中 16 处与本次改动无关（纯空白，但污染 diff）。正解：把空行收敛放进删除脚本内部，只处理删除接缝，不做全文正则。
 ## [2026-10-01] DevEco Code - Phase 3ah：今晚观测目标卡片组件化（WutTargetCard + WutMetric）
 
 - **新增 `panels/astro/WutTargetCard.ets`**：`wutTargetCard(target)`（21 行）+ 它依赖的参数化 `wutMetric(label, value)`（6 行）→ `WutTargetCard` 与 `WutMetric` 两个组件。卡片只收 `@Prop target: WutTarget`，标题/副标题/类型名/数值/时刻文本仍由宿主格式化并以回调注入（`titleOf` / `subtitleOf` / `typeOf` / `numberText` / `clockText`），另有夜视三色与 `onJump`，共 9 个入参；贴片组件 4 个入参。
