@@ -1,5 +1,6 @@
 import { image } from '@kit.ImageKit'
 import { SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureItem, SkyCultureRawItem, StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { cleanSkyCultureNarration } from '../common/derive/skycult'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → SkyCultureViewStore 的加载助手（§14.5 B2R-3「额外注入」）。
@@ -152,5 +153,12 @@ export class SkyCultureViewStore {
       if (requestId !== this.seq) return
       this.skyCultureListLoading = false
     })
+  }
+
+  // 文化解说段落（原宿主 skyCultureNarrationParagraphs，§14 A2-3 逐字搬入）。
+  // 读本 store 的 narration，按 §14.3「读本域 store 字段 → 并入该 store 方法」；
+  // cleanSkyCultureNarration 直接 import A1 纯函数模块。
+  skyCultureNarrationParagraphs(): string[] {
+    return cleanSkyCultureNarration(this.narration).split(/\n+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0)
   }
 }

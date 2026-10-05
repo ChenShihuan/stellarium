@@ -59,6 +59,22 @@ export function hecPointAngle(position: HeliocentricPosition): number {
   return position.displayLongitude ?? position.longitude
 }
 
+// 日心点颜色。原宿主 hecPointColor 读 nightModeStore.nightMode（末行的 nmAccent()），
+// 按 §14.8 规则 6 改为显式入参 accentColor（调用点传 nmAccent()），其余逐字不变。
+export function hecPointColor(position: HeliocentricPosition, accentColor: string): string {
+  if (position.isComet) return '#7CC8E8'
+  if (position.isSelectedMinor) return '#C2A36B'
+  if (position.englishName === 'Mercury') return '#AAB5C5'
+  if (position.englishName === 'Venus') return '#DEC18A'
+  if (position.englishName === 'Earth') return '#6BAED6'
+  if (position.englishName === 'Mars') return '#D18467'
+  if (position.englishName === 'Jupiter') return '#D6A06D'
+  if (position.englishName === 'Saturn') return '#D7BF76'
+  if (position.englishName === 'Uranus') return '#82C9D2'
+  if (position.englishName === 'Neptune') return '#6F9EDD'
+  return accentColor
+}
+
 export function hecPlanetOrbitRadius(englishName: string): number {
   for (const orbit of HELIOCENTRIC_PLANET_ORBITS) {
     if (orbit.englishName === englishName) return orbit.visualRadius

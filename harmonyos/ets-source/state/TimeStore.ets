@@ -114,4 +114,24 @@ export class TimeStore {
 
     hooks.applyAtmosphereResponse(port.request('getAtmosphereParams', ''))
   }
+
+  // ==== 时间面板标题的「取值/文案」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  //
+  // 均读本 store 的 observationTimeText / timeRateText，按 §14.3「读本域 store 字段 → 并入该
+  // store 方法（零入参）」下沉；函数体逐字保留。
+
+  // 面板副标题的时钟部分（原宿主 timePanelClockText）。
+  timePanelClockText(): string {
+    const text = this.observationTimeText
+    const idx = text.indexOf(' ')
+    return idx > 0 ? text.substring(idx + 1) : text
+  }
+
+  // 面板副标题的年月日 + 时间速率（原宿主 timePanelDateText）。
+  timePanelDateText(): string {
+    const text = this.observationTimeText
+    const idx = text.indexOf(' ')
+    const date = idx > 0 ? text.substring(0, idx) : ''
+    return date.length > 0 ? date + ' · ' + this.timeRateText : this.timeRateText
+  }
 }

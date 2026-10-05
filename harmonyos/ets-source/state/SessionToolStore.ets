@@ -99,4 +99,10 @@ export class SessionToolStore {
       }
     })
   }
+
+  // 选中天体是否为当前观测星球（原宿主 isObserverPlanetSelection，§14 A2-3 逐字搬入）。
+  // 读本 store 的 observerPlanet，按 §14.3「读本域 store 字段 → 并入该 store 方法」。
+  isObserverPlanetSelection(name: string): boolean {
+    return name.trim().toLowerCase() === this.observerPlanet.trim().toLowerCase()
+  }
 }

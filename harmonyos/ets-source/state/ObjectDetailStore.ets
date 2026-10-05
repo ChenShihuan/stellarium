@@ -1,11 +1,12 @@
 import { StellariumBridgeResponse, ObjectDetailField, ObjectDetailModel, SatellitePass, SkyCultureDescriptionBlock } from '../pages/StellariumTypes'
+import { I18n } from '../pages/I18n'
+import { catalogIconForObjectType } from '../common/derive/catalog'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → ObjectDetailStore 的卫星过境助手注入（§13.1 规则 6 / §14.8 规则 2）。
-// loadSelectedSatellitePasses 复用未随本片下沉的宿主助手（requestSatellitePasses 走交互桥，
-// selectedObjectIsArtificialSatellite 读本 store 字段）；按 §14.5「额外注入」具名回注。
+// loadSelectedSatellitePasses 复用未随本片下沉的宿主助手 requestSatellitePasses（走交互桥）；
+// selectedObjectIsArtificialSatellite 已于 §14 A2-3 下沉为本 store 方法，不再是 hook。
 export interface ObjectDetailHostHooks {
-  selectedObjectIsArtificialSatellite(): boolean
   requestSatellitePasses(expectedName: string): void
 }
 
@@ -132,15 +133,85 @@ export class ObjectDetailStore {
   }
 
   // 选中天体为人工卫星且尚未请求过时触发过境查询（原宿主 loadSelectedSatellitePasses，函数体逐字搬入）。
-  // 差异仅：this.selectedObjectIsArtificialSatellite() → hooks.selectedObjectIsArtificialSatellite()、
-  // this.objectDetailStore.<f> → this.<f>、this.requestSatellitePasses → hooks.requestSatellitePasses。
+  // 差异仅：this.selectedObjectIsArtificialSatellite() → this.selectedObjectIsArtificialSatellite()
+  //（§14 A2-3 起为本 store 方法）、this.objectDetailStore.<f> → this.<f>、
+  // this.requestSatellitePasses → hooks.requestSatellitePasses。
   loadSelectedSatellitePasses(): void {
     const hooks = this.hooks
     if (hooks === null) {
       return
     }
-    if (!hooks.selectedObjectIsArtificialSatellite() || this.selectedName.length === 0 || this.selectedSatellitePassesRequested) return
+    if (!this.selectedObjectIsArtificialSatellite() || this.selectedName.length === 0 || this.selectedSatellitePassesRequested) return
     this.selectedSatellitePassesRequested = true
     hooks.requestSatellitePasses(this.selectedName)
+  }
+
+  // ==== 选中天体的「取值/标签」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  //
+  // 均读本 store 的 selected* 字段（含 selectedSatellitePasses 等），按 §14.3「读本域 store 字段
+  // → 并入该 store 方法（零入参）」下沉；objectDistanceSummary / objectDistanceNoticeText 另需
+  // InfoWindowStore 的距离显示开关，按 §14.8 规则 6 改为显式入参 distanceVisible（调用点传
+  // infoWindowStore.distanceInformationVisible()），避免 store 相互 import。函数体逐字保留。
+
+  // 大气观测摘要（原宿主 expandedAtmosphereSummary）。
+  expandedAtmosphereSummary(): string {
+    const apparent = this.selectedApparentMagnitude.length > 0 ? '大气后 ' + this.selectedApparentMagnitude + ' 等' : ''
+    const airmass = this.selectedAirmass.length > 0 ? '气团 ' + this.selectedAirmass : ''
+    return (apparent + '  ' + airmass).trim()
+  }
+
+  // 距离摘要（原宿主 objectDistanceSummary）。
+  objectDistanceSummary(distanceVisible: boolean): string {
+    if (!distanceVisible) return '--'
+    return this.selectedDistance.length > 0 ? (this.selectedDistanceCompact || this.selectedDistance) : I18n.t('distance_missing')
+  }
+
+  // 距离提示条文案（原宿主 objectDistanceNoticeText）。
+  objectDistanceNoticeText(distanceVisible: boolean): string {
+    if (!distanceVisible) return ''
+    const status = this.selectedDistanceStatus
+    if (status === 'invalid_orbit') return I18n.t('satellite_propagation_invalid')
+    if (this.selectedTleOutdated) return I18n.t('satellite_tle_stale')
+    if (status === 'catalog' || status === 'computed' || status.length === 0) return ''
+    const key = ['low_confidence', 'redshift_only', 'invalid_orbit', 'unsupported_unit', 'estimated'].includes(status)
+      ? status : 'unavailable'
+    return I18n.t('distance_' + key)
+  }
+
+  // 选中天体是否为星座（原宿主 selectedObjectIsConstellation）。
+  selectedObjectIsConstellation(): boolean {
+    const type = (this.selectedType + ' ' + this.selectedObjectType).toLowerCase()
+    return type.indexOf('constellation') >= 0 || type.indexOf('星座') >= 0
+  }
+
+  // 选中天体是否为人工卫星（原宿主 selectedObjectIsArtificialSatellite，§14 B2R-4 曾以 hook 注入）。
+  selectedObjectIsArtificialSatellite(): boolean {
+    if (this.selectedSatellitePassesLoaded) return true
+    for (let index = 0; index < this.selectedDetailFields.length; index++) {
+      if (this.selectedDetailFields[index].key === 'tleEpoch') return true
+    }
+    const type = (this.selectedType + ' ' + this.selectedObjectType).toLowerCase()
+    return type.indexOf('artificial satellite') >= 0 || type.indexOf('人造卫星') >= 0
+  }
+
+  // 首个过境数据的 TLE 历元（原宿主 selectedSatelliteTleEpoch）。
+  selectedSatelliteTleEpoch(): string {
+    if (this.selectedSatellitePasses.length === 0) return ''
+    return this.selectedSatellitePasses[0].tleEpoch ?? ''
+  }
+
+  // 详情卡图标（原宿主 objectInspectorIcon）。
+  objectInspectorIcon(): string {
+    return catalogIconForObjectType(this.selectedType + ' ' + this.selectedObjectType, 'catalog_star')
+  }
+
+  // 详情卡模型检索文本（原宿主 objectInspectorSearchText）。
+  objectInspectorSearchText(): string {
+    return (this.selectedCatalogId + ' ' + this.selectedEnglishName + ' ' + this.selectedName).toLowerCase()
+  }
+
+  // 是否已选中天体且状态为 Selected（原宿主 hasSelectedObject）。
+  hasSelectedObject(): boolean {
+    return this.selectedStatus === 'Selected' && this.selectedName.length > 0
   }
 }

@@ -1,6 +1,8 @@
 import { image } from '@kit.ImageKit'
 import hilog from '@ohos.hilog'
 import { describeDecodeError } from '../common/derive/labels'
+import { I18n } from '../pages/I18n'
+import { modelIdentity, modelDrag } from '../pages/DetailModelGeometry'
 
 // 宿主 → ObjectMediaStore 的媒体管线助手（§13.1 规则 6 / §14.8 规则 2：跨域 / NAPI 依赖用注入解决）。
 // B2R-1 的 loadObjectInspectorModelRawTexture 读写宿主刻意保留的逐帧裸字段
@@ -119,5 +121,29 @@ export class ObjectMediaStore {
       text += ' · ' + this.objectInspectorMediaWarmupFailed.toString() + ' 项失败'
     }
     return text
+  }
+
+  // ==== 详情媒体/模型的「取值/文案」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  //
+  // 均读本 store 的 objectInspectorProceduralKind / objectInspectorMediaViewportHeight，
+  // 按 §14.3「读本域 store 字段 → 并入该 store 方法（零入参）」下沉；函数体逐字保留
+  //（defaultObjectInspectorModelRotation 直接 import 纯几何模块 DetailModelGeometry）。
+
+  // 模型基座/光照提示文案（原宿主 objectInspectorModelNotice）。
+  objectInspectorModelNotice(): string {
+    return this.objectInspectorProceduralKind.length > 0
+      ? I18n.t('model_basis_' + this.objectInspectorProceduralKind)
+      : I18n.t('model_lighting_note')
+  }
+
+  // 模型默认视角（原宿主 defaultObjectInspectorModelRotation）。
+  defaultObjectInspectorModelRotation(): number[] {
+    return this.objectInspectorProceduralKind === 'quasar' ? modelDrag(modelIdentity(), 0, -100) : modelIdentity()
+  }
+
+  // 详情卡内嵌图片高度（原宿主 objectInspectorImageHeight）。
+  objectInspectorImageHeight(): number {
+    return this.objectInspectorMediaViewportHeight > 0
+      ? Math.max(72, Math.min(210, this.objectInspectorMediaViewportHeight - 88)) : 210
   }
 }
