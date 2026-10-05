@@ -23,7 +23,7 @@ import { image } from '@kit.ImageKit'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { InfoWindowStore } from '../state/InfoWindowStore'
-import { MediaPort } from '../bridge/MediaPort'
+import { ObjectModelMediaPort } from '../bridge/MediaPort'
 import { DetailModelRenderClient } from './DetailModelRenderClient'
 import { DetailModelResources, DetailModelFrame, DetailModelResult, DetailModelRing, DetailModelLight } from './DetailModelRenderTypes'
 import { modelIdentity, modelDrag } from '../common/derive/DetailModelGeometry'
@@ -51,7 +51,7 @@ export class ObjectModelRenderer {
   private mediaStore: ObjectMediaStore
   private detailStore: ObjectDetailStore
   private infoStore: InfoWindowStore
-  private mediaPort: MediaPort
+  private mediaPort: ObjectModelMediaPort
   private hooks: ObjectModelRendererHostHooks
 
   // ── 逐帧/草稿字段（留控制器，不入被观察 store）──
@@ -85,7 +85,7 @@ export class ObjectModelRenderer {
     mediaStore: ObjectMediaStore,
     detailStore: ObjectDetailStore,
     infoStore: InfoWindowStore,
-    mediaPort: MediaPort,
+    mediaPort: ObjectModelMediaPort,
     hooks: ObjectModelRendererHostHooks
   ) {
     this.mediaStore = mediaStore

@@ -27,7 +27,7 @@ import { I18n } from '../pages/I18n'
 import { DeepSkyWarmupStatus } from '../qability/StellariumResourceBootstrap'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
-import { MediaPort } from '../bridge/MediaPort'
+import { ImagePort } from '../bridge/MediaPort'
 import { ObjectModelRenderer } from './ObjectModelRenderer'
 import { proceduralModelKind, proceduralParticles } from '../common/derive/ProceduralDetailModel'
 import { objectInspectorPlanetTexturePath, objectInspectorDeepSkyImageName, objectInspectorFallbackVisualKind, objectInspectorPlanetRingSpec } from '../common/derive/media'
@@ -59,7 +59,7 @@ const BODY_DETAIL_TEXTURE_PATHS: Array<string> = [
 export class ObjectInspectorMediaController {
   private mediaStore: ObjectMediaStore
   private detailStore: ObjectDetailStore
-  private mediaPort: MediaPort
+  private mediaPort: ImagePort
   private hooks: ObjectInspectorMediaHostHooks
 
   // ── 草稿/逐帧字段（留控制器，不入被观察 store）──
@@ -78,7 +78,7 @@ export class ObjectInspectorMediaController {
   constructor(
     mediaStore: ObjectMediaStore,
     detailStore: ObjectDetailStore,
-    mediaPort: MediaPort,
+    mediaPort: ImagePort,
     hooks: ObjectInspectorMediaHostHooks
   ) {
     this.mediaStore = mediaStore

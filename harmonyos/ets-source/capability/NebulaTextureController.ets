@@ -12,7 +12,7 @@ import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { NebulaTextureStatus, NebulaTextureRefreshResponse } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
-import { MediaPort, MediaImportResult } from '../bridge/MediaPort'
+import { DocumentImportPort, MediaImportResult } from '../bridge/MediaPort'
 import { NebulaTextureStore } from '../state/NebulaTextureStore'
 import { BehaviorHostHooks } from './ControllerHooks'
 
@@ -20,11 +20,11 @@ export interface NebulaTextureHostHooks extends BehaviorHostHooks {}
 
 export class NebulaTextureController {
   private port: CommandPort
-  private mediaPort: MediaPort
+  private mediaPort: DocumentImportPort
   private nebulaTextureStore: NebulaTextureStore
   private hooks: NebulaTextureHostHooks
 
-  constructor(port: CommandPort, mediaPort: MediaPort, nebulaTextureStore: NebulaTextureStore, hooks: NebulaTextureHostHooks) {
+  constructor(port: CommandPort, mediaPort: DocumentImportPort, nebulaTextureStore: NebulaTextureStore, hooks: NebulaTextureHostHooks) {
     this.port = port
     this.mediaPort = mediaPort
     this.nebulaTextureStore = nebulaTextureStore

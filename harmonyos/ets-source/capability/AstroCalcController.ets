@@ -26,7 +26,7 @@
 // 定时器 `/ astroContextTimer` 由控制器自持（syncAstroCalcContextTimer / stopAstroCalcContextTimer）。
 import { StellariumBridgeResponse, EphemerisRow, RtsCalendarDay, ObservabilityDay, PhenomenonItem, WutTarget, MoonPhaseItem, SeasonEvent, PlanetPosition, TabItem } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
-import { MediaPort, MediaSaveResult } from '../bridge/MediaPort'
+import { FileExportPort, MediaSaveResult } from '../bridge/MediaPort'
 import { AstroStore } from '../state/AstroStore'
 import { EphemerisStore } from '../state/EphemerisStore'
 import { WutStore } from '../state/WutStore'
@@ -62,7 +62,7 @@ export interface AstroCalcHostHooks extends BehaviorHostHooks {
 
 export class AstroCalcController {
   private port: CommandPort
-  private media: MediaPort
+  private media: FileExportPort
   private astroStore: AstroStore
   private ephemerisStore: EphemerisStore
   private wutStore: WutStore
@@ -79,7 +79,7 @@ export class AstroCalcController {
 
   constructor(
     port: CommandPort,
-    media: MediaPort,
+    media: FileExportPort,
     astroStore: AstroStore,
     ephemerisStore: EphemerisStore,
     wutStore: WutStore,

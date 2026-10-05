@@ -1,4 +1,5 @@
-// 媒体能力端口（PLAN §15.1 Enabler，M1-A）。
+// 媒体能力端口（PLAN §15.1 Enabler，M1-A；M6 按接口隔离拆分为 ImagePort / ObjectModelMediaPort /
+// FileExportPort / DocumentImportPort / ScreenCapturePort 五个子接口，MediaPort 组合全部）。
 //
 // 目的：让媒体服务（common/media/ImageDecoder.ets、common/platform/Screenshot.ets、
 // common/platform/Share.ets）能处理 `fileIo` / `image` / `picker` / `media` /
@@ -9,6 +10,9 @@
 // state/ObjectMediaStore.ets 同源的 `image.PixelMap`，多一个 `image.ImageSource`）与应用类型
 // ImageDecodeSize。宿主在 aboutToAppear 注入一个具名适配器（见 MainWindowNativeNode.ets 顶层的
 // HostMediaPort），把下面各方法与宿主的 fileIo/image/picker 调用一一对应转发。
+//
+// M6 接口隔离：各消费者只依赖其**实测调用**的最小接口，避免「只做图片解码的控制器也拿到录屏/
+// 相册/picker 能力」。适配器 HostMediaPort 保持单一、`implements MediaPort` 不变。
 import { image } from '@kit.ImageKit'
 import { ImageDecodeSize } from '../pages/MainWindowModels'
 
@@ -33,7 +37,8 @@ export enum ScreenCaptureState {
   Interrupted = 3,
 }
 
-export interface MediaPort {
+// 本机图片解码 + 文件存在性检查（common/media/ImageDecoder 与详情/星空文化美术缩略图路径依赖）。
+export interface ImagePort {
   // 文件是否存在（对应 fileIo.accessSync）。
   fileExists(path: string): boolean
   // 以只读方式打开文件并返回文件描述符 fd（对应 fileIo.openSync(path, READ_ONLY).fd）。
@@ -49,6 +54,27 @@ export interface MediaPort {
   releaseImageSource(source: image.ImageSource, label: string): void
   // 释放像素图（对应 pixelMap.release()，内部吞异常并记日志；undefined 时静默返回）。
   releasePixelMap(pixelMap: image.PixelMap | undefined, label: string): void
+}
+
+// 对象模型渲染管线（M2-A ObjectModelRenderer）：光栅化结果提交 / 像素回读 / RGBA 侧车读取。
+// **extends ImagePort 的理由**：模型纹理路径必然以「本机图像解码」开场（ObjectModelRenderer 经
+// common/media/ImageDecoder 的 decodeLocalImage/releaseDecodedImage 消费端口），故本接口是其超集，
+// 让 ObjectModelRenderer 只需持有一个字段类型。
+export interface ObjectModelMediaPort extends ImagePort {
+  // ── 对象模型渲染（M2-A ObjectModelRenderer）──
+  // 由原始 RGBA 字节创建像素图（对应 image.createPixelMap(buffer, { size, RGBA_8888, UNPREMUL })）：
+  // 三维模型 worker 光栅化结果的提交。
+  createPixelMapFromRgba(pixels: ArrayBuffer, width: number, height: number, label: string): Promise<image.PixelMap>
+  // 把像素图读回 RGBA 字节缓冲（对应 pixelMap.readPixelsToBufferSync(buffer)，失败抛 Error）：
+  // PNG 回退路径（侧车缺失时）。
+  readPixelMapPixels(pixelMap: image.PixelMap, buffer: ArrayBuffer, label: string): void
+  // 读原始 RGBA 侧车（对应 fileIo.openSync/readSync/closeSync；尺寸不符或 IO 失败抛 Error）：
+  // 供 state/ObjectMediaStore 的原始模型纹理加载器经端口回注（D17；store/控制器不 import fileIo）。
+  readRawSidecar(path: string, expectedBytes: number, label: string): ArrayBuffer
+}
+
+// 文件导出（「另存为」+ 临时文件清理）：AstroCalcController 的 CSV 另存与 common/platform/Screenshot 复用。
+export interface FileExportPort {
   // 另存为：弹出 DocumentViewPicker.save 并把 sourcePath 拷到用户选择的位置。
   // onDone(result) 区分落盘/取消/失败；由调用方决定提示与收尾（对应宿主 exportScreenshotToUserStorage
   // 的 picker + fileIo.copy 段）。
@@ -58,6 +84,10 @@ export interface MediaPort {
   saveTextFileAs(text: string, fileName: string, suffixLabel: string, onDone: (result: MediaSaveResult) => void): void
   // 删除文件（对应 fileIo.unlinkSync，用于截图导出后的临时文件清理）。
   deleteFile(path: string): void
+}
+
+// 文档导入（picker + fileIo）：星云纹理 / 脚本 / 地景 / 星文化制作器配图各自的导入段。
+export interface DocumentImportPort {
   // 选择单个文档并复制到 <filesDir>/<dirName>，返回落盘路径；用户取消时 cancelled=true。
   // 后缀过滤 / 单文件 / 文件名清洗逐字对应宿主 importNebulaTextureFile 的 picker + fileIo 段。
   pickDocumentToDir(dirName: string, fileSuffixFilters: string[], fallbackFileName: string): Promise<MediaImportResult>
@@ -74,18 +104,10 @@ export interface MediaPort {
   // 用户取消时 cancelled=true。后缀过滤（'Stellarium 地景 ZIP|.zip'）/ 单文件 / 名称清洗
   //（landscapeImportFileName 语义）/ 同名碰撞改名逐字对应原宿主 importLandscapeFile 的 picker + fileIo 段（E2）。
   importLandscapeDocument(): Promise<MediaImportResult>
+}
 
-  // ── 对象模型渲染（M2-A ObjectModelRenderer）──
-  // 由原始 RGBA 字节创建像素图（对应 image.createPixelMap(buffer, { size, RGBA_8888, UNPREMUL })）：
-  // 三维模型 worker 光栅化结果的提交。
-  createPixelMapFromRgba(pixels: ArrayBuffer, width: number, height: number, label: string): Promise<image.PixelMap>
-  // 把像素图读回 RGBA 字节缓冲（对应 pixelMap.readPixelsToBufferSync(buffer)，失败抛 Error）：
-  // PNG 回退路径（侧车缺失时）。
-  readPixelMapPixels(pixelMap: image.PixelMap, buffer: ArrayBuffer, label: string): void
-  // 读原始 RGBA 侧车（对应 fileIo.openSync/readSync/closeSync；尺寸不符或 IO 失败抛 Error）：
-  // 供 state/ObjectMediaStore 的原始模型纹理加载器经端口回注（D17；store/控制器不 import fileIo）。
-  readRawSidecar(path: string, expectedBytes: number, label: string): ArrayBuffer
-
+// 屏幕录制（M1-B 子组② RecordingController）：录屏工作目录与文件、录屏对象生命周期、相册保存。
+export interface ScreenCapturePort {
   // ── 屏幕录制（M1-B 子组② RecordingController）──
   // 录屏工作目录（对应宿主 context.filesDir + '/recordings/videos'）。
   screenVideoDir(): string
@@ -105,3 +127,6 @@ export interface MediaPort {
   // 保存 MP4 到相册（对应 photoAccessHelper 的 createVideoAssetRequest + applyChanges）；成功返回 true。
   saveVideoToGallery(path: string): Promise<boolean>
 }
+
+// 组合端口：宿主适配器 HostMediaPort 单一实现该接口（不拆适配器）。
+export interface MediaPort extends ImagePort, ObjectModelMediaPort, FileExportPort, DocumentImportPort, ScreenCapturePort {}
