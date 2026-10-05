@@ -832,7 +832,7 @@ devecocli ui click/drag/text --device 192.168.3.95:40565 ...
 - **已完成（第三批，2026-10-04）**：`archaeo`（`ArchaeoStore` 18 字段 + `ArchaeoLinesPanel`）、`navStars`（`NavStarsStore` 14 字段 + `NavStarsPanel`）、`polarScope`（`PolarScopeStore` 6 字段 + `PolarScopeOverlay`）三域由 Prop 风格转 Store 风格；宿主 `@State` 266 → 231。
 - **viewCoordinate 经核查无字段可迁，不改**：`viewCoordinatePrimaryText/SecondaryText`（50ms 定时器回填）与 `viewCoordinateOffsetX/Y`（拖拽逐帧写）按规则"高频字段不入被观察 store"留宿主；`ViewCoordinateSettings` 早已用 `OverlayStore`，`ViewCenterCoordinateOverlay` 以 `@Prop` 接收读数 —— 故不新建 `ViewCoordinateStore`。
 - **已完成（前序，2026-10-04）**：`satellites`（`SatelliteStore`，28 字段）、`script/recording/video`（`ScriptStore`）、`scenery3d`/`catalogs`/`meteorShowers`/`commandConsole`（四簇同批，共 24 字段）。
-- **仍待处理（review §2.7 剩余 Prop 风格目标）**：`mosaicCamera`（`mosaic*` 字段 + `MosaicCameraPanel`）。注：`test-ohos-satellite-panel.mjs` 在卫星域转 store 时未同步假宿主，HEAD 起即失败，属存量失败。
+- **已完成（第四批，2026-10-04）**：`mosaicCamera`（`MosaicStore` 10 字段 + `MosaicCameraPanel`）、`observingList` 残留（`ObservingListStore` 2 字段 + `ObservingPanel`/`ObjectPanel`/`ConfigFallbackPanel` 改 `@ObjectLink`）、`audio`（`AudioStore` 2 字段 + `AudioPanel`）、`eclipse` 起始日期（并入既有 `AstroStore` 3 字段，宿主自用）。宿主 `@State` 238 → 224。`test-ohos-satellite-panel.mjs` / `test-ohos-plugin-panel-state.mjs` 假宿主已随 store 同步，卫星脚本存量失败清除。
 
 **每个 Phase 4 面板切片前**建议先跑一次第 13.2 步 1 的"零引用扫描"，把死代码清掉再搬迁（§11 修订 6 的四类判据）。
 

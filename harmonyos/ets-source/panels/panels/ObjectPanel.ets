@@ -3,6 +3,7 @@ import { OFFLINE_APPGALLERY_BUILD } from '../../pages/MainWindowModels'
 import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { ObjectMediaStore } from '../../state/ObjectMediaStore'
 import { TelescopeStore } from '../../state/TelescopeStore'
+import { ObservingListStore } from '../../state/ObservingListStore'
 import { ObjectDataRow, DetailSectionTitle } from '../object/DetailRows'
 import { StructuredDetailRows } from '../object/StructuredDetailRows'
 import { SelectedCoordinateRows } from '../object/DetailLiveRows'
@@ -14,8 +15,8 @@ import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
 // 天体详情面板（原宿主 panelContent() 的 `object` 分支，分支体原样下沉）。
 //
-// 判定条件 `activePanel === 'object'` 留在宿主。详情/媒体/望远镜三个 store 走
-// @ObjectLink 实时刷新；`observingList`/`viewLock`/`speechStatus` 与渲染管线逐帧写入的
+// 判定条件 `activePanel === 'object'` 留在宿主。详情/媒体/望远镜/观测列表四个 store 走
+// @ObjectLink 实时刷新；`viewLock`/`speechStatus` 与渲染管线逐帧写入的
 // `objectInspectorModelRendering`/`objectInspectorModelTexturePixels` 仍由宿主持有，
 // 以 @Prop 传入（逐帧字段不入被观察 store，见协议踩坑表）。所有原生桥动作、观测列表
 // 增删、语音与重选动作、媒体/预览开合都回注宿主。文案助手（zhNameOf/zhType/
@@ -29,10 +30,10 @@ export struct ObjectPanel {
   @ObjectLink objectDetailStore: ObjectDetailStore
   @ObjectLink objectMediaStore: ObjectMediaStore
   @ObjectLink telescopeStore: TelescopeStore
+  @ObjectLink observingListStore: ObservingListStore
   @Prop fullInspectorRequested: boolean
   @Prop viewLock: boolean
   @Prop speechStatus: string
-  @Prop observingList: string[]
   @Prop isPlannedModel: boolean
   @Prop imageHeight: number
   @Prop iconName: string
@@ -173,7 +174,7 @@ export struct ObjectPanel {
           StructuredDetailRows({ store: this.objectDetailStore, tablet: false })
         }
         Row() {
-          Button(this.observingList.includes(this.objectDetailStore.selectedName) ? I18n.t('s0739') : I18n.t('s0738'))
+          Button(this.observingListStore.observingList.includes(this.objectDetailStore.selectedName) ? I18n.t('s0739') : I18n.t('s0738'))
             .fontSize(13).fontColor("#E5FFFFFF").backgroundColor("rgba(107,163,214,0.25)")
             .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1)
             .onClick(() => { this.onToggleObserving() })

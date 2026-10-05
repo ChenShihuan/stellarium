@@ -122,6 +122,9 @@ import { OverlayStore } from '../state/OverlayStore'
 import { PolarScopeStore } from '../state/PolarScopeStore'
 import { ArchaeoStore } from '../state/ArchaeoStore'
 import { NavStarsStore } from '../state/NavStarsStore'
+import { MosaicStore } from '../state/MosaicStore'
+import { ObservingListStore } from '../state/ObservingListStore'
+import { AudioStore } from '../state/AudioStore'
 import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
 import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
@@ -325,9 +328,9 @@ export struct WindowNativeNode {
   private objectInspectorModelRenderPending: boolean = false
   private objectInspectorModelRenderHighQuality: boolean = false
   private objectInspectorModelRenderTimer: number = 0
-  @State private audioVolume: number = 0.7
-  // 程序化音乐：默认开（打开应用即播放），可静音并持久化
-  @State private musicEnabled: boolean = false
+  // 音频域状态已下沉 state/AudioStore.ets（review §2.7：Prop 风格 → Store 风格）。
+  // 程序化音乐默认开（打开应用即播放），可静音并持久化。
+  @State private audioStore: AudioStore = new AudioStore()
   private fpsTimer: number = 0
   private stateRefreshTimer: number = -1
   private stateRefreshRequestPending: boolean = false
@@ -397,8 +400,8 @@ export struct WindowNativeNode {
   @State private panelMaxHeight: number = 660
   // 离屏幕边框的安全留白(vp)：约 0.7cm，避免 UI 贴边
   private readonly EDGE_MARGIN: number = 44
-  @State private observingList: string[] = []
-  @State private observingListReady: boolean = false
+  // 观测列表域状态已下沉 state/ObservingListStore.ets（review §2.7：Prop 风格 → Store 风格）。
+  @State private obsListStore: ObservingListStore = new ObservingListStore()
   @State private skyCultures: string[] = []
   @State private isLoading: boolean = true
   @State private splashGone: boolean = false
@@ -471,9 +474,7 @@ export struct WindowNativeNode {
   private graphTargetPickerActive: boolean = false
   private rtsTargetPickerActive: boolean = false
   private ephemerisTargetPickerActive: boolean = false
-  @State private eclipseStartYear: number = new Date().getFullYear()
-  @State private eclipseStartMonth: number = new Date().getMonth() + 1
-  @State private eclipseStartDay: number = new Date().getDate()
+  // eclipseStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7，食相属天文派生域）。
   private moonPhaseRequestId: number = 0
   private moonPhaseLoadingDays: number = 0
   private astroContextTimer: number = 0
@@ -583,16 +584,8 @@ export struct WindowNativeNode {
   private ocularLoadRequestId: number = 0
   // 视图/叠层域（指针坐标插件 + 视图中心坐标叠层 + 天体详情指向线）：状态已迁入 OverlayStore（Phase 3an）
   @State private overlayStore: OverlayStore = new OverlayStore()
-  @State private mosaicCameraEnabled: boolean = false
-  @State private mosaicCameraNames: string[] = []
-  @State private mosaicCameraCurrent: string = ''
-  @State private mosaicCameraRA: number = 0
-  @State private mosaicCameraDec: number = 0
-  @State private mosaicCameraRotation: number = 0
-  @State private mosaicCameraVisible: boolean = false
-  @State private mosaicCameraLoading: boolean = false
-  @State private mosaicCameraPending: boolean = false
-  @State private mosaicCameraStatus: string = ''
+  // 相机拼接视场域状态已下沉 state/MosaicStore.ets（review §2.7：Prop 风格 → Store 风格）。
+  @State private mosaicStore: MosaicStore = new MosaicStore()
   @State private equationOfTimeStore: EquationOfTimeStore = new EquationOfTimeStore()
   // 古天文辅助线域状态已下沉 state/ArchaeoStore.ets（review §2.7：Prop 风格 → Store 风格）。
   // 写回请求序号 archaeoMutationId 仍由宿主自持（见下方）。
@@ -1534,7 +1527,7 @@ export struct WindowNativeNode {
     // Keep the old AppStorage value as a migration fallback while the durable
     // preferences store is opened asynchronously.
     const stored = AppStorage.get<string>("observingList")
-    if (stored) this.observingList = this.parseObservingList(stored)
+    if (stored) this.obsListStore.observingList = this.parseObservingList(stored)
     this.loadObservingListFromStorage()
     this.loadSearchHistoryFromStorage()
     this.loadBookmarksFromStorage()
@@ -1637,7 +1630,7 @@ export struct WindowNativeNode {
             this.setLanguage(language)
           }
         }
-        if (saved.musicEnabled !== undefined) { this.musicEnabled = saved.musicEnabled as boolean }
+        if (saved.musicEnabled !== undefined) { this.audioStore.musicEnabled = saved.musicEnabled as boolean }
         if (saved.useMetricUnits !== undefined) { this.useMetricUnits = saved.useMetricUnits as boolean }
         if (saved.viewCoordinatesVisible !== undefined) { this.overlayStore.viewCoordinatesVisible = saved.viewCoordinatesVisible as boolean }
         if (saved.viewCoordinateFamily !== undefined) { this.overlayStore.viewCoordinateFamily = saved.viewCoordinateFamily as string }
@@ -1670,7 +1663,7 @@ export struct WindowNativeNode {
         if (savedMoonPhaseDays === 30 || savedMoonPhaseDays === 90) this.astroStore.moonPhaseDays = savedMoonPhaseDays
       } catch (_err) { }
     }
-    if (this.musicEnabled) { AudioEngine.getInstance().start() }
+    if (this.audioStore.musicEnabled) { AudioEngine.getInstance().start() }
     I18n.setLanguage(I18n.fromStellariumCode(this.selectedLanguage))
     this.syncViewCoordinateTimer()
     this.syncDockClockTimer()
@@ -1684,7 +1677,7 @@ export struct WindowNativeNode {
       gyroscopeSensitivityText: this.gyroStore.gyroscopeSensitivityText,
       selectedLanguage: this.selectedLanguage,
       useMetricUnits: this.useMetricUnits,
-      musicEnabled: this.musicEnabled,
+      musicEnabled: this.audioStore.musicEnabled,
       viewCoordinatesVisible: this.overlayStore.viewCoordinatesVisible,
       viewCoordinateFamily: this.overlayStore.viewCoordinateFamily,
       viewEquatorialEpoch: this.overlayStore.viewEquatorialEpoch,
@@ -1783,7 +1776,7 @@ export struct WindowNativeNode {
           this.startDetailAutoRefresh()
         }
       }
-      if (this.musicEnabled) {
+      if (this.audioStore.musicEnabled) {
         void AudioEngine.getInstance().start()
       }
       if (this.gyroPausedForBackground) {
@@ -2918,7 +2911,7 @@ export struct WindowNativeNode {
     try {
       const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
       const store = await preferences.getPreferences(ctx, OBSERVING_STORE)
-      await store.put('observingList', JSON.stringify(this.observingList))
+      await store.put('observingList', JSON.stringify(this.obsListStore.observingList))
       await store.flush()
     } catch (e) {
       hilog.warn(0xD002, 'Stellarium', 'save observing list failed: %{public}s', String(e))
@@ -2926,7 +2919,7 @@ export struct WindowNativeNode {
   }
 
   private persistObservingList(): void {
-    AppStorage.setOrCreate('observingList', JSON.stringify(this.observingList))
+    AppStorage.setOrCreate('observingList', JSON.stringify(this.obsListStore.observingList))
     this.saveObservingListToStorage()
   }
 
@@ -2936,17 +2929,17 @@ export struct WindowNativeNode {
       const store = await preferences.getPreferences(ctx, OBSERVING_STORE)
       const jsonStr: Object = await store.get('observingList', '')
       if (typeof jsonStr === 'string' && jsonStr.length > 0) {
-        this.observingList = this.parseObservingList(jsonStr)
-      } else if (this.observingList.length > 0) {
+        this.obsListStore.observingList = this.parseObservingList(jsonStr)
+      } else if (this.obsListStore.observingList.length > 0) {
         // Migrate the pre-existing in-memory value on the first durable read.
-        await store.put('observingList', JSON.stringify(this.observingList))
+        await store.put('observingList', JSON.stringify(this.obsListStore.observingList))
         await store.flush()
       }
-      AppStorage.setOrCreate('observingList', JSON.stringify(this.observingList))
+      AppStorage.setOrCreate('observingList', JSON.stringify(this.obsListStore.observingList))
     } catch (e) {
       hilog.warn(0xD002, 'Stellarium', 'load observing list failed: %{public}s', String(e))
     } finally {
-      this.observingListReady = true
+      this.obsListStore.observingListReady = true
     }
   }
 
@@ -3986,46 +3979,46 @@ export struct WindowNativeNode {
   }
 
   private loadMosaicCamera(initial: boolean = true): void {
-    this.mosaicCameraLoading = initial
+    this.mosaicStore.mosaicCameraLoading = initial
     this.callNativeWhenReady('getMosaicCamera', '', (r: StellariumBridgeResponse) => {
       const data = r.mosaicCamera as MosaicCameraData | undefined
       if (r.ok !== true || data === undefined) {
-        this.mosaicCameraStatus = I18n.t('plugin_status_unavailable')
+        this.mosaicStore.mosaicCameraStatus = I18n.t('plugin_status_unavailable')
       } else {
-        this.mosaicCameraEnabled = data.enabled
-        this.mosaicCameraNames = data.names ?? []
-        this.mosaicCameraCurrent = data.currentCamera
-        this.mosaicCameraRA = data.ra
-        this.mosaicCameraDec = data.dec
-        this.mosaicCameraRotation = data.rotation
-        this.mosaicCameraVisible = Boolean(data.visible)
-        this.mosaicCameraStatus = ''
+        this.mosaicStore.mosaicCameraEnabled = data.enabled
+        this.mosaicStore.mosaicCameraNames = data.names ?? []
+        this.mosaicStore.mosaicCameraCurrent = data.currentCamera
+        this.mosaicStore.mosaicCameraRA = data.ra
+        this.mosaicStore.mosaicCameraDec = data.dec
+        this.mosaicStore.mosaicCameraRotation = data.rotation
+        this.mosaicStore.mosaicCameraVisible = Boolean(data.visible)
+        this.mosaicStore.mosaicCameraStatus = ''
       }
-      this.mosaicCameraLoading = false
-      this.mosaicCameraPending = false
+      this.mosaicStore.mosaicCameraLoading = false
+      this.mosaicStore.mosaicCameraPending = false
     }, 0, 100, 15, () => {
-      this.mosaicCameraLoading = false
-      this.mosaicCameraPending = false
-      this.mosaicCameraStatus = I18n.t('plugin_status_unavailable')
+      this.mosaicStore.mosaicCameraLoading = false
+      this.mosaicStore.mosaicCameraPending = false
+      this.mosaicStore.mosaicCameraStatus = I18n.t('plugin_status_unavailable')
     })
   }
 
   private setMosaicCamera(setting: string, value: string = ''): void {
-    if (this.mosaicCameraPending || this.mosaicCameraLoading) return
-    if (setting === 'enabled' && (value === '1') === this.mosaicCameraEnabled) return
-    if (setting === 'visible' && (value === '1') === this.mosaicCameraVisible) return
-    if (setting === 'camera' && value === this.mosaicCameraCurrent) return
-    this.mosaicCameraPending = true
+    if (this.mosaicStore.mosaicCameraPending || this.mosaicStore.mosaicCameraLoading) return
+    if (setting === 'enabled' && (value === '1') === this.mosaicStore.mosaicCameraEnabled) return
+    if (setting === 'visible' && (value === '1') === this.mosaicStore.mosaicCameraVisible) return
+    if (setting === 'camera' && value === this.mosaicStore.mosaicCameraCurrent) return
+    this.mosaicStore.mosaicCameraPending = true
     this.callInteractive('setMosaicCamera', setting + (value.length > 0 ? '|' + value : ''), (result: StellariumBridgeResponse) => {
       if (result.ok !== true) {
-        this.mosaicCameraPending = false
-        this.mosaicCameraStatus = result.error ?? I18n.t('plugin_action_failed')
+        this.mosaicStore.mosaicCameraPending = false
+        this.mosaicStore.mosaicCameraStatus = result.error ?? I18n.t('plugin_action_failed')
         return
       }
       this.loadMosaicCamera(false)
     }, () => {
-      this.mosaicCameraPending = false
-      this.mosaicCameraStatus = I18n.t('plugin_action_failed')
+      this.mosaicStore.mosaicCameraPending = false
+      this.mosaicStore.mosaicCameraStatus = I18n.t('plugin_action_failed')
     })
   }
 
@@ -6350,7 +6343,7 @@ export struct WindowNativeNode {
 
   private resolveEclipseStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
     if (this.astroStore.eclipseStartOffsetDays < 0) {
-      onReady(this.dateToJD(this.eclipseStartYear, this.eclipseStartMonth, this.eclipseStartDay, 0, 0))
+      onReady(this.dateToJD(this.astroStore.eclipseStartYear, this.astroStore.eclipseStartMonth, this.astroStore.eclipseStartDay, 0, 0))
       return
     }
     if (this.astroStore.eclipseStartOffsetDays === 0) {
@@ -6373,22 +6366,22 @@ export struct WindowNativeNode {
 
   private eclipseStartOptionLabel(offsetDays: number): string {
     if (offsetDays < 0) {
-      return this.eclipseStartYear.toString() + '-' + this.eclipseStartMonth.toString().padStart(2, '0') + '-' + this.eclipseStartDay.toString().padStart(2, '0')
+      return this.astroStore.eclipseStartYear.toString() + '-' + this.astroStore.eclipseStartMonth.toString().padStart(2, '0') + '-' + this.astroStore.eclipseStartDay.toString().padStart(2, '0')
     }
     if (offsetDays === 0) return '当前'
     return '+' + offsetDays.toString() + ' 天'
   }
 
   private chooseEclipseStartDate(): void {
-    this.pickedDate = new Date(this.eclipseStartYear, this.eclipseStartMonth - 1, this.eclipseStartDay)
+    this.pickedDate = new Date(this.astroStore.eclipseStartYear, this.astroStore.eclipseStartMonth - 1, this.astroStore.eclipseStartDay)
     this.getUIContext().showDatePickerDialog({
       start: new Date('1900-01-01'),
       end: new Date('2100-12-31'),
       selected: this.pickedDate,
       onAccept: (value: DatePickerResult) => {
-        this.eclipseStartYear = value.year ?? this.eclipseStartYear
-        this.eclipseStartMonth = (value.month ?? (this.eclipseStartMonth - 1)) + 1
-        this.eclipseStartDay = value.day ?? this.eclipseStartDay
+        this.astroStore.eclipseStartYear = value.year ?? this.astroStore.eclipseStartYear
+        this.astroStore.eclipseStartMonth = (value.month ?? (this.astroStore.eclipseStartMonth - 1)) + 1
+        this.astroStore.eclipseStartDay = value.day ?? this.astroStore.eclipseStartDay
         this.astroStore.eclipseStartOffsetDays = -1
         this.reloadEclipses()
       },
@@ -6566,14 +6559,14 @@ export struct WindowNativeNode {
 
   private addWutTargetToObservingList(target: WutTarget): void {
     const name = (target.englishName ?? '').trim()
-    if (name.length === 0 || this.observingList.includes(name)) { return }
-    this.observingList = this.observingList.concat([name])
+    if (name.length === 0 || this.obsListStore.observingList.includes(name)) { return }
+    this.obsListStore.observingList = this.obsListStore.observingList.concat([name])
     this.persistObservingList()
     this.flashHint(I18n.t('i0080'))
   }
 
   private removeObservingTarget(name: string): void {
-    this.observingList = this.observingList.filter((item: string) => item !== name)
+    this.obsListStore.observingList = this.obsListStore.observingList.filter((item: string) => item !== name)
     this.persistObservingList()
     this.flashHint(I18n.t('i0079'))
   }
@@ -14027,7 +14020,7 @@ private loadPlanetPositions(): void {
             hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio tap via handleSkyTouch')
             this.resetPanelIdle()
             this.toggleMusic()
-            this.flashHint(this.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
+            this.flashHint(this.audioStore.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
             return
           }
         }
@@ -14435,7 +14428,7 @@ private loadPlanetPositions(): void {
                 cardHeight: this.bottomCardHeight(),
                 viewLock: this.viewLock,
                 speechStatus: this.speechStatus,
-                inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+                inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectInspectorIcon(),
                 distanceText: this.objectDistanceNoticeText(),
                 distanceSummaryText: this.objectDistanceSummary(),
@@ -14540,7 +14533,7 @@ private loadPlanetPositions(): void {
                 cardHeight: this.bottomCardHeight(),
                 viewLock: this.viewLock,
                 speechStatus: this.speechStatus,
-                inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+                inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectInspectorIcon(),
                 distanceText: this.objectDistanceNoticeText(),
                 distanceSummaryText: this.objectDistanceSummary(),
@@ -14649,7 +14642,7 @@ private loadPlanetPositions(): void {
                 dockWidth: this.dockWidthPixels(),
                 dockLeft: this.dockLeft(),
                 dockTop: this.dockTop(),
-                musicEnabled: this.musicEnabled,
+                musicEnabled: this.audioStore.musicEnabled,
                 compactQuickPressed: this.compactQuickPressed,
                 quickX: this.compactTopQuickX(),
                 quickY: this.compactTopQuickY(),
@@ -14662,7 +14655,7 @@ private loadPlanetPositions(): void {
                 cardHeight: this.bottomCardHeight(),
                 viewLock: this.viewLock,
                 speechStatus: this.speechStatus,
-                inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+                inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectInspectorIcon(),
                 distanceText: this.objectDistanceNoticeText(),
                 distanceSummaryText: this.objectDistanceSummary(),
@@ -14716,10 +14709,10 @@ private loadPlanetPositions(): void {
                   this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
                 },
                 onAudio: () => {
-                  hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio button CLICKED musicEnabled=%{public}s', this.musicEnabled.toString())
+                  hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio button CLICKED musicEnabled=%{public}s', this.audioStore.musicEnabled.toString())
                   this.resetPanelIdle()
                   this.toggleMusic()
-                  this.flashHint(this.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
+                  this.flashHint(this.audioStore.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
                 },
                 onCompactTopQuickTouch: (event: TouchEvent) => { this.handleCompactTopQuickTouch(event) },
                 onFlashHint: (text: string) => { this.flashHint(text) },
@@ -15102,7 +15095,7 @@ private loadPlanetPositions(): void {
     if (quickId === 'audio') {
       this.resetPanelIdle()
       this.toggleMusic()
-      this.flashHint(this.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
+      this.flashHint(this.audioStore.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
       return true
     }
     return false
@@ -16793,12 +16786,12 @@ private loadPlanetPositions(): void {
 
 
   private toggleSelectedObservingList(): void {
-    const idx = this.observingList.indexOf(this.objectDetailStore.selectedName)
+    const idx = this.obsListStore.observingList.indexOf(this.objectDetailStore.selectedName)
     if (idx >= 0) {
-      this.observingList = this.observingList.filter((item: string) => item !== this.objectDetailStore.selectedName)
+      this.obsListStore.observingList = this.obsListStore.observingList.filter((item: string) => item !== this.objectDetailStore.selectedName)
       this.flashHint(I18n.t('i0079'))
     } else {
-      this.observingList = this.observingList.concat([this.objectDetailStore.selectedName])
+      this.obsListStore.observingList = this.obsListStore.observingList.concat([this.objectDetailStore.selectedName])
       this.flashHint(I18n.t('i0080'))
     }
     this.persistObservingList()
@@ -17114,15 +17107,15 @@ private loadPlanetPositions(): void {
     const now = Date.now()
     if (now - this.lastMusicToggle < 350) { return }
     this.lastMusicToggle = now
-    this.musicEnabled = !this.musicEnabled
+    this.audioStore.musicEnabled = !this.audioStore.musicEnabled
     const engine = AudioEngine.getInstance()
-    if (this.musicEnabled) {
+    if (this.audioStore.musicEnabled) {
       engine.start().then(() => { engine.setMuted(false) })
     } else {
       engine.setMuted(true)
     }
     this.persistMusicEnabled()
-    this.flashHint(this.musicEnabled ? '音乐：开 ♪' : '音乐：静音')
+    this.flashHint(this.audioStore.musicEnabled ? '音乐：开 ♪' : '音乐：静音')
   }
 
   private persistMusicEnabled(): void {
@@ -17131,7 +17124,7 @@ private loadPlanetPositions(): void {
     if (cur) {
       try { obj = JSON.parse(cur) as Record<string, boolean | string> } catch (e) { }
     }
-    obj['musicEnabled'] = this.musicEnabled
+    obj['musicEnabled'] = this.audioStore.musicEnabled
     AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
   }
 
@@ -17322,7 +17315,7 @@ private loadPlanetPositions(): void {
         fullInspectorRequested: this.fullInspectorRequested,
         viewLock: this.viewLock,
         speechStatus: this.speechStatus,
-        observingList: this.observingList,
+        observingListStore: this.obsListStore,
         isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
         imageHeight: this.objectInspectorImageHeight(),
         iconName: this.objectInspectorIcon(),
@@ -17346,11 +17339,11 @@ private loadPlanetPositions(): void {
         displayValue: (key: string) => this.selectedDisplayValue(key),
         onChip: (id: string) => { this.handleChip(id) },
         onToggleObserving: () => {
-          if (this.observingList.includes(this.objectDetailStore.selectedName)) {
-            this.observingList = this.observingList.filter((item: string) => item !== this.objectDetailStore.selectedName)
+          if (this.obsListStore.observingList.includes(this.objectDetailStore.selectedName)) {
+            this.obsListStore.observingList = this.obsListStore.observingList.filter((item: string) => item !== this.objectDetailStore.selectedName)
             this.flashHint(I18n.t('i0079'))
           } else {
-            this.observingList = this.observingList.concat([this.objectDetailStore.selectedName])
+            this.obsListStore.observingList = this.obsListStore.observingList.concat([this.objectDetailStore.selectedName])
             this.flashHint(I18n.t('i0080'))
           }
           this.persistObservingList()
@@ -17925,16 +17918,7 @@ private loadPlanetPositions(): void {
       })
     } else if (this.activePanel === 'mosaicCamera') {
       MosaicCameraPanel({
-        mosaicCameraEnabled: this.mosaicCameraEnabled,
-        mosaicCameraNames: this.mosaicCameraNames,
-        mosaicCameraCurrent: this.mosaicCameraCurrent,
-        mosaicCameraRA: this.mosaicCameraRA,
-        mosaicCameraDec: this.mosaicCameraDec,
-        mosaicCameraRotation: this.mosaicCameraRotation,
-        mosaicCameraVisible: this.mosaicCameraVisible,
-        mosaicCameraLoading: this.mosaicCameraLoading,
-        mosaicCameraPending: this.mosaicCameraPending,
-        mosaicCameraStatus: this.mosaicCameraStatus,
+        mosaicStore: this.mosaicStore,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         panelColor: this.nmBg(),
@@ -18122,8 +18106,7 @@ private loadPlanetPositions(): void {
     } else if (this.activePanel === 'observing') {
       ObservingPanel({
         wutStore: this.wutStore,
-        observingList: this.observingList,
-        observingListReady: this.observingListReady,
+        observingListStore: this.obsListStore,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         panelColor: this.nmBg(),
@@ -18131,7 +18114,7 @@ private loadPlanetPositions(): void {
         accentColor: this.nmAccent(),
         onOpenSearch: () => { this.openSubPanel('search') },
         onClearAll: () => {
-          this.observingList = []
+          this.obsListStore.observingList = []
           this.persistObservingList()
           this.flashHint(I18n.t('i0302'))
         },
@@ -18187,20 +18170,19 @@ private loadPlanetPositions(): void {
       })
     } else if (this.activePanel === 'audio') {
       AudioPanel({
-        musicEnabled: this.musicEnabled,
-        audioVolume: this.audioVolume,
+        audioStore: this.audioStore,
         textColor: this.nmText(),
         panelColor: this.nmBg(),
         accentColor: this.nmAccent(),
         onToggleMusic: (enabled: boolean) => {
-          this.musicEnabled = enabled
+          this.audioStore.musicEnabled = enabled
           const engine = AudioEngine.getInstance()
           if (enabled) { engine.start().then(() => { engine.setMuted(false) }) } else { engine.setMuted(true) }
           this.persistMusicEnabled()
           this.flashHint(enabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
         },
         onVolumeChange: (value: number) => {
-          this.audioVolume = value
+          this.audioStore.audioVolume = value
           AudioEngine.getInstance().setVolume(value)
         }
       })
@@ -18214,7 +18196,7 @@ private loadPlanetPositions(): void {
         fovText: this.fovText,
         selectedLanguage: this.selectedLanguage,
         useMetricUnits: this.useMetricUnits,
-        observingList: this.observingList,
+        observingListStore: this.obsListStore,
         currentSkyCulture: this.currentSkyCulture,
         skyCultures: this.skyCultures,
         panelColor: this.nmBg(),
@@ -18222,7 +18204,7 @@ private loadPlanetPositions(): void {
         observingDisplayName: (name: string) => { return this.observingDisplayName(name) },
         selectObservingTarget: (name: string) => { this.searchObject(name); this.flashHint(I18n.t('i0082')) },
         removeObservingTarget: (name: string) => { this.removeObservingTarget(name) },
-        clearObservingList: () => { this.observingList = []; this.persistObservingList(); this.flashHint(I18n.t('i0302')) },
+        clearObservingList: () => { this.obsListStore.observingList = []; this.persistObservingList(); this.flashHint(I18n.t('i0302')) },
         setLegacyDistanceUnit: (useMetric: boolean) => {
           this.useMetricUnits = useMetric
           this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + (useMetric ? 'true' : 'false'), () => {})

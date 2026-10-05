@@ -1,3 +1,24 @@
+## [2026-10-04] DevEco Code - 重构：Prop 风格域转 Store 第四批（mosaicCamera / observingList 残留 / audio / eclipse；宿主 @State 238 → 224，卫星测试假宿主同步）
+
+- **依据**：review §2.7「Store 风格 vs Prop 风格」。本批把 3 个 Prop 风格域 + 1 个残留簇的宿主 `@State` 下沉为 `@Observed` store（eclipse 并入既有 `AstroStore`），面板改为 `@ObjectLink` 订阅；动作仍由宿主回调注入，store 只承载状态。
+- **每簇明细**：
+  | 簇 | 字段 | store（新建/并入） | 消费面板入参变化 |
+  |---|---|---|---|
+  | `mosaicCamera` | 10 | 新建 `MosaicStore` | `MosaicCameraPanel`：10 个 `@Prop` → 1 个 `@ObjectLink` |
+  | `observingList` 残留 | 2（`observingList`/`observingListReady`） | 新建 `ObservingListStore` | `ObservingPanel` 2 `@Prop` → 1 `@ObjectLink`；`ObjectPanel`/`ConfigFallbackPanel` 各 1 `@Prop` → 1 `@ObjectLink` |
+  | `audio` | 2（`musicEnabled`/`audioVolume`） | 新建 `AudioStore` | `AudioPanel` 2 `@Prop` → 1 `@ObjectLink` |
+  | `eclipse` 起始日期 | 3（`eclipseStartYear/Month/Day`） | 并入既有 `AstroStore` | 无面板入参（宿主自用，经 `eclipseStartOptionLabel` 回调展示） |
+- **新建/并入的理由（写入各 store 头注）**：`observingList` 是跨选中天体的独立用户数据（自有持久化键与增删/清空动作），与 `ObjectDetailStore`（选中天体瞬时详情）、`AstroStore`（天文派生计算）不同域，故新建独立 `ObservingListStore`；`eclipse` 起始日期属天文派生域且 `AstroPanel` 已 `@ObjectLink` 订阅 `AstroStore`，并入该 store；`audio` 无既有同域 store，新建。
+- **刻意留宿主（非本 store 状态）**：`mosaicCamera` 的桥副作用 `loadMosaicCamera`/`setMosaicCamera`；观测列表持久化 `persistObservingList`；音频原生桥 `AudioEngine`（按 §13.1 规则 6 回注）；`eclipseLoadSequence` 等请求序号。
+- **普查确认无原地变更**：`mosaicCamera*`、`observingList`（`= filter/concat/[]/parseObservingList`）、`musicEnabled`/`audioVolume`、`eclipseStart*` 全部为字段整体赋值，无 Array 原地 push/splice、无对象原地改属性。
+- **宿主 @State 计数**：238 → 224（−17 字段、+3 store 实例字段）；单体 18,717 → 18,699 行。新增 `state/MosaicStore.ets`（18 行）/`state/ObservingListStore.ets`（11 行）/`state/AudioStore.ets`（10 行）；`state/AstroStore.ets` +7 行。
+- **测试债务同步（同批）**：
+  - `scripts/test-ohos-satellite-panel.mjs`：假宿主 `activeSatGroup`/`satGroups`/`satLabels` 等改 `satelliteStore.*`，文本断言 `ForEach(this.satItems` → `ForEach(this.satelliteStore.satItems`、`this.satGroups.join` → `this.satelliteStore.satGroups.join`；7/7 全绿（此前的 1 项存量失败清除）。
+  - `scripts/test-ohos-plugin-panel-state.mjs`：`mosaicCamera*` 假宿主改 `mosaicStore.*`；全绿。
+- **验证**：`check-ohos-refactor-slice.mjs` 通过；`arkts_check` 9 文件 0 错；`BUILD SUCCESSFUL`；契约 `intact`（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 197 文件）；受影响 5 个脚本全绿；真机（192.168.50.108:36717）启动存活，右上角音乐开关点两次（开→关，`音乐：开`/`音乐：关` 提示与按钮高亮实时刷新，恢复默认），更多功能→观测工作区→观测列表面板从 `ObservingListStore` 渲染（`已保存在本机` + `已在列表中`）。
+- **本片新踩的坑**：机械替换 `this.eclipseStart` 波及同前缀方法 `this.eclipseStartOptionLabel`（已改回），且漏把 `eclipseStart*` 加入 `AstroStore`，首次构建报 17 个 `Property ... does not exist on type 'AstroStore'`；补齐字段后 `BUILD SUCCESSFUL`。教训：前缀式机械替换对"同前缀方法名"不安全，替换后必须复核同前缀调用点。
+- **真机未走查**：`mosaicCamera`（入口在引擎上报的插件控制列表中）、`eclipse`（在「天文计算」子标签内、需日期选择器）—— 入口需 3 步以上导航且列表弹性回弹，按片协议只做启动 + 相邻界面冒烟。
+- **存量失败（非本批引入）**：`test-ohos-privacy-startup.mjs` 第 13 项 `fileSize is not defined` —— 测试夹具 `hasStartupResourceFiles` 未提供 `fileSize` 形参，而源文件 `qability/StellariumResourceBootstrap.ets` 本批未改动。
 ## [2026-10-04] DevEco Code - 重构：Prop 风格域转 Store 第三批（archaeo / navStars / polarScope；viewCoordinate 经核查无字段可迁；宿主 @State 266 → 231）
 
 - **依据**：review §2.7「Store 风格 vs Prop 风格」。本批把 3 个 Prop 风格域的宿主 `@State` 下沉为 `@Observed` store，面板/叠层改为 `@ObjectLink` 订阅；动作（加载/设置/翻转）仍由宿主回调注入，store 只承载状态。

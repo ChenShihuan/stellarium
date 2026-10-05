@@ -5,8 +5,8 @@
 // 仅当 CLI 用未知面板名打开时才可能渲染。判定条件（无名 else）留在宿主，分支体原样下沉。
 //
 // 状态体系（§13.1 规则 1/5/6）：
-//   - gyroStore / layerStore / nightModeStore / telescopeStore 四个 @Observed store 走
-//     @ObjectLink（宿主源均为 @State 实例）；组件内对其属性的写入会被宿主观测到（规则 4）。
+//   - gyroStore / layerStore / nightModeStore / telescopeStore / observingListStore 五个
+//     @Observed store 走 @ObjectLink（宿主源均为 @State 实例）；组件内对其属性的写入会被宿主观测到（规则 4）。
 //   - 其余标量/数组状态走 @Prop，主题色由宿主算好后传入（panelColor）。
 //   - 宿主私有动作（sensZh / flashHint / handleChip / refreshState / saveScreenshot /
 //     observing* / setLanguage / setSkyCulture / triggerAction 等）按规则 6 回注。
@@ -23,6 +23,7 @@ import { GyroStore } from '../../state/GyroStore'
 import { LayerStore } from '../../state/LayerStore'
 import { NightModeStore } from '../../state/NightModeStore'
 import { TelescopeStore } from '../../state/TelescopeStore'
+import { ObservingListStore } from '../../state/ObservingListStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 import { InfoRow } from '../../common/ui/InfoRow'
 import { GyroscopeRow, LanguageRow } from '../settings/DeviceAndLanguageRows'
@@ -34,11 +35,11 @@ export struct ConfigFallbackPanel {
   @ObjectLink layerStore: LayerStore
   @ObjectLink nightModeStore: NightModeStore
   @ObjectLink telescopeStore: TelescopeStore
+  @ObjectLink observingListStore: ObservingListStore
   @Prop isExpandedLayout: boolean
   @Prop fovText: string
   @Prop selectedLanguage: string
   @Prop useMetricUnits: boolean
-  @Prop observingList: string[]
   @Prop currentSkyCulture: string
   @Prop skyCultures: string[]
   @Prop panelColor: string
@@ -96,9 +97,9 @@ export struct ConfigFallbackPanel {
         .height(40)
         .width('100%')
       // 观测列表
-      if (this.observingList.length > 0) {
+      if (this.observingListStore.observingList.length > 0) {
         Row() {
-          Text(I18n.t('i0022') + ' (' + this.observingList.length + ')')
+          Text(I18n.t('i0022') + ' (' + this.observingListStore.observingList.length + ')')
             .fontSize(12).fontColor("#99FFFFFF")
           Text('').layoutWeight(1)
           Button(I18n.t('i0301'))
@@ -111,7 +112,7 @@ export struct ConfigFallbackPanel {
         .height(34).width("100%").padding({ left: 10, right: 10 }).backgroundColor("rgba(255, 255, 255, 0.04)").borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 4 })
         Scroll() {
           Row({ space: 6 }) {
-            ForEach(this.observingList, (name: string) => {
+            ForEach(this.observingListStore.observingList, (name: string) => {
               Row({ space: 4 }) {
                 Text(this.observingDisplayName(name))
                   .fontSize(11).fontColor("#E5FFFFFF")
