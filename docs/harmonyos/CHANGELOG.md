@@ -1,3 +1,30 @@
+## [2026-10-02] DevEco Code - Phase 4g：`viewSkyCultureTab` 819 行收口 —— `SkyCultureSettingsStore` + `SkyCultureViewTab`
+
+- **背景/范围**：Phase 4f 留下的最后一件 —— `layers` 分支的第 7 个视图标签页 `viewSkyCultureTab`（实测 **819 行**，体内约 **77 个 `skyCulture*` 设置字段**与约 **40 个宿主助手**，且 `currentSkyCulture` / `skyCultureList` / `selectedSkyCultureId` 与详情卡、默认文化设置交叉使用）。按 §5 粒度单独成片，允许多提交。
+- **两个提交（每个提交点独立全绿）**：
+  - `4282a941ed` `refactor(harmonyos): extract SkyCultureSettingsStore from the monolith` —— 只建 store + 宿主字段/助手引用改写，UI 仍在宿主 `@Builder`；
+  - 本提交 `refactor(harmonyos): componentize the sky culture view tab` —— 建组件、删旧 builder、替换调用点。
+- **新增文件**：
+  - `harmonyos/ets-source/state/SkyCultureSettingsStore.ets`（**503 行**）：搬迁原宿主 **82 个 `@State` 字段**（领地档案 11、只读元信息 14、标签模式/组合名称 12、视觉字号/粗细/亮度/过渡 24、配色 3、默认文化 1、目录筛选 15 等）逐条保留类型与默认值，并下沉**纯计算助手**（bridge 风格串→档位、组合名称摘要/取值、标签模式名、配色取值、地区/分类文案、年代筛选、地名/文化名显示、领地档案筛选、年份格式化、`filteredSkyCultureList(list)`、`applySkyCultureVisualSetting(setting,value)`、`setSkyCultureTimeYear` / `setSkyCultureRange` / `applySkyCultureRangeInput` / `applySkyCultureTimeYearInput` / `setSkyCultureTerritoryMapYear` / `applySkyCultureTerritoryMapYearInput` / `syncSkyCultureTerritoryMapYearToSimulation` / `selectSkyCultureColorTarget`）。
+  - `harmonyos/ets-source/panels/skyculture/SkyCultureViewTab.ets`（**940 行**）：单组件，**无 `@BuilderParam`、无参数化 `@Builder`**；原 `@Builder` 的多根并列（section 头 / 分隔线 / 若干 `Row`）整体包一层 `Column({ space: 0 })`（与原调用点外层 `Column({ space: 0 })` 同 space，§13.1 规则 7）。
+- **口径（哪些字段/助手刻意不搬，按 §13.1 规则 5/6）**：
+  - **跨域共享 → `@Prop`**：`currentSkyCulture`→`currentSkyCultureName`、`currentSkyCultureId`、`skyCultureList`、`skyCultureListLoading`；`filteredSkyCultureList` 改为 store 方法接收 `list` 参数，宿主与组件各自传自己的 `skyCultureList`。
+  - **高频写入/解码结果 → 留在宿主、以 `@Prop` 传入**：`skyCultureArtStates`→`artStates`、`skyCultureArtThumbnailPixelMaps`→`artThumbnailPixelMaps`（逐张图片解码渐进写入，避免重渲染风暴）；组件内 `artStatus()` 复刻原 `skyCultureArtStatus()`。
+  - **Canvas 绘图 → 留宿主**：`skyCultureMapContext` / `skyCultureMapContextSettings` / `skyCultureMapRenderWidth|Height` 与 `drawSkyCultureTerritoryMap()` 仍由宿主持有；组件以普通成员 `mapContext` 接收上下文，`.onReady` / `.onAreaChange` 回调宿主重绘（`onMapReady` / `onMapAreaChange`）。
+  - **native 桥 / 定时器 / 解码 → 回调回注（共 24 个）**：`onToggleLayer` / `onLoadList` / `onSelectCulture` / `onRowArea` / `onReloadList` / `onSelectLabelMode` / `onSetShortLabels` / `onSetCommonNames` / `onSetIsolation` / `onSetSinglePick` / `onConstellationSelection` / `onSetStyleOption` / `getColorOptions` / `onSetVisualColor` / `onSetVisualSetting` / `onSetDefault` / `onSyncTimeFollowTimer` / `onRefreshSimulationYear` / `onLoadTerritoryMap` / `onMapReady` / `onMapAreaChange` / `onLoadObserverInfo` / `onArtDecodeError` / `onOpenArtPreview`；纯展开态/筛选态动画（标签选择器、筛选下拉、组合名称展开、颜色输入与预设）在组件内用 `this.getUIContext().animateTo` 直接改 store。
+  - `setSkyCultureVisualSetting(setting, value, apply)` 去掉 `apply` 闭包参数，改为成功后调 `this.skyCultureSettingsStore.applySkyCultureVisualSetting(setting, value)`（20 个滑块的调用点随之简化为两参）。
+- **单体手术**（`pages/MainWindowNativeNode.ets`，**23,632 → 22,451，净 −1,181 行**）：删 82 条 `@State` 声明（合并为 2 行 `skyCultureSettingsStore` 持有 + 注释）、删约 50 个随迁助手定义、删旧 `@Builder viewSkyCultureTab`（含前置注释）与两个已失效宿主助手（`selectedSkyCultureId` / `skyCultureArtStatus`）；新增 5 行 import；`layers` 分支 `this.viewSkyCultureTab()` → `SkyCultureViewTab({...})`（24 个回调 + 22 个状态入参）。字段/方法改名一律用 `this.<name>\b` 正则（含 20 个三参滑块回调的正则收敛），**未用行号算术**；删 builder 用「签名前缀 + 花括号配平扫描」定位，删助手用「`^  private <name>\(…` 非贪婪到 `\r\n  }`」正则。
+- **成员名雷区**：颜色统一 `textColor` / `subColor` / `accentColor` / `panelColor` / `cardBorder` / `inputColor` / `pickerSurface` / `pickerHeader` / `pickerHeaderActive` / `pickerSelected` / `pickerOption`（避开 `borderColor`）；未使用 `scale` / `onTouch` / `background` / `onDragEnd` / `enabled`。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过（组件/store `this` 自洽、单体括号净深度 0）→ `arkts_check`（3 文件 0 错）→ `devecocli build`（`-SkipEngine -SkipDeploy -SkipResources`）BUILD SUCCESSFUL → `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好（**164 个 .ets**）→ 全量 `*-ohos*.mjs` 扫描：失败 8 个，**全部与 §13.6 存量一致**（4 个 `-pad` 需设备、`test-ohos-mist-performance` 需设备、`test-ohos-satellite-panel` test 7 纯 C++、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS hdc 假设），无新增；`test-ohos-skyculture-refresh.mjs` / `test-ohos-skyculture-text.mjs` 全绿。
+- **真机**（`com.cnchensh.stellarium`，`192.168.3.95:40565`；`aa dump -l` 确认 `state #FOREGROUND`；CLI 显式 `--bundle`；`pidof`=40652 全程存活、未崩，**排除规则 9 的运行期退出**）：
+  1. `openUiPanel layers` → `setLayerTab 5`：**星空文化页签就地渲染新组件**（`文化图层 / 选择要显示的星座与辅助图层` + `当前文化 / 查看当前文化及其本地资料` 等节点可见），应用未退出。
+  2. **store 实时刷新实证**：滚动到「组合名称显示」点「设置」→ 按钮变「收起」并**就地展开**「星图标签 / 资料卡标签」两组 toggle（`skyCultureNameCombinationExpanded` 经 `@ObjectLink settings` 驱动重绘）。
+  3. **native 桥往返实证**：点「国际音标」toggle → 摘要行由 `星图：中文译名 · 资料：中文译名` **即时变为** `星图：国际音标、中文译名 · 资料：中文译名`；hilog 实证 `command received: "setSkyCultureLabelStyle" "screen|IPA,Translated"`（组件回调 `onSetStyleOption` → 宿主 `setSkyCultureStyleOption` → 引擎 → 回写 store → 组件重读 `skyCultureStyleSummary`）。
+- **测后恢复**：再点「国际音标」还原（hilog `"screen|Translated"`，摘要行复核回 `星图：中文译名`）；「组合名称显示」已点回「收起」；未保存/导出/覆盖任何文化包、未改默认文化。
+- **本片新踩的坑**：
+  - **不要在 `.ps1` 里内联中文注释再交给 PowerShell 执行**：Windows PowerShell 5.1 无 BOM 时按 ANSI 读取脚本，中文变 mojibake 写回源码（本片 `skyCultureSettingsStore` 声明上方注释曾整行乱码）→ 改为 write 工具写 `.js`/`.md`（Node/`ReadAllText(UTF8)` 读取），或事后用 Node 定点修正；控制台 `Get-Content` 显示乱码只是代码页问题，不代表源码坏（须以 read 工具或 git diff 核对）。
+  - **`@Prop` 承载 `Record<string, image.PixelMap>`**：解码缩略图经 `@Prop artThumbnailPixelMaps` 传入子组件；真机切片验证缩略图逐张出现正常（`Image(... as image.PixelMap)` 未因单向同步丢引用）。
+  - 删 builder 定位不要只依赖 `@Builder` 行号：本片用**从签名 `{` 起的花括号配平扫描**取边界，避免行号漂移（Phase 4f 已记录）；同时把**紧邻其上的注释行**一并纳入删除区间。
 ## [2026-10-02] DevEco Code - Phase 4f：`layers` 分支前置 —— 6 个 `view*Tab` 宿主 `@Builder` 抽组件 + 数值设置 store
 
 - **背景/范围**：Phase 4e 因 `layers` 分支体内调用的 7 个 `view*Tab` 仍是宿主 `@Builder`（行内写法 `@Builder viewSkyTab() {`，故 `^@Builder$` 扫描漏列）而跳过该分支。本片先解决这个前置：把标签页从宿主 `@Builder` 下沉为组件，使 `layers` 分支日后可整体收进 `LayersPanel`。
