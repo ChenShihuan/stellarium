@@ -1,3 +1,17 @@
+## [2026-10-02] DevEco Code - 修复：详情卡页头三枚摘要（星等/星座/距离）切换天体不刷新（Phase 3ad 回归）
+
+- **现象（真机复现）**：搜 `Mars` 选中 → 页头摘要 星等 `1.09` / 星座 `巨蟹座` / 距离 `1.6550 AU`；再搜 `Saturn` 选中 → 同屏标题 `土星`、类型、实时高度、时角、模型均更新，但这三枚摘要仍是火星旧值。上一片 ffmpeg 专项已记为“附带观察”，本片修复。
+- **A/B 定位（回归，非既有）**：在分支 `feat/api26-pages-refactor` 上临时 `git checkout --detach d7b64736ad`（即 Phase 3ad “详情卡页头抽组件 `ObjectDetailCardHeader`”的**父提交**；`build/` 生成物与引擎 `.so` 是未跟踪文件故仍留在原地），`-SkipEngine` 重建并安装，同法走 Mars→Saturn：三枚摘要分别变为 `0.34 / 鲸鱼座 / 8.4349 AU`（正确跟随）。切回分支 HEAD（`c2187a192c`）后同一序列冻结在火星旧值。**结论：Phase 3ad 引入的回归。**
+- **根因**：ArkUI V1 的局部刷新按**元素**记录依赖。`ObjectDetailCardHeader` 的三枚 `ObjectCompactMetric` 取值原本只经普通成员回调 `resolve('selectedMagnitude'/'selectedConstellation')` / `distanceSummary()` 求值 —— 回调闭包读的是**宿主**的 `objectDetailStore`，该依赖不会登记到页头组件内这三个元素上，于是 `store.selectedName` 变化只标脏标题元素（故标题会变），摘要元素永不重绘。抽成组件前它们是宿主无参 `@Builder` 的内联子树，依赖登记在宿主元素上，故正常。
+- **改动（最小根治，遵循“让取值随可观察状态变化”既有模式）**：
+  - `harmonyos/ets-source/panels/object/ObjectDetailCardChrome.ets`（88 → 91 行）：星等改为 `value: this.store.selectedMagnitude`（与 `selectedDisplayValue('selectedMagnitude')` 等价）；星座改为 `value: this.nameOf(this.store.selectedConstellation)`（`nameOf` 即宿主 `zhNameOf`，与 `resolve('selectedConstellation')` 等价）；`distanceSummary` 形参由 `() => string` 改为 `(distance, compact) => string`，调用处传 `this.store.selectedDistance` / `this.store.selectedDistanceCompact` —— 可见性与“距离未知”回退仍由宿主 `objectDistanceSummary()` 决定，两个实参仅用于在页头内**直接读 `@ObjectLink store`**、建立元素级依赖。删除页头内已无引用的 `resolve` 成员。
+  - `harmonyos/ets-source/panels/object/UnifiedObjectDetailCard.ets`（141 → 143 行）：页头调用点去除 `resolve: this.resolve`，`distanceSummary` 改为 `(_distance, _compact) => this.distanceSummaryText`（`resolve` 仍供三个页组件使用）。
+  - `scripts/test-ohos-detail-live-values.mjs`：断言由“摘要经宿主 resolve 求值”改为断言三项直接读 `@ObjectLink store`（改写 1 条、新增 2 条）。
+- **范围复核**：同病灶只波及页头三枚摘要。`ObjectDetailTabs`（观测/坐标/资料页）里的 `resolve` 调用点由 `if (this.store.X.length > 0)` 或页签切换时的**重建**驱动（新选目标会把卡片切回 `资料` 页并整体重建），故不会被内容冻结；`SelectedLiveInfoRows` / 坐标行 / 类型标签本就直读 store，无风险。
+- **真机验收**（Mate 80 Pro `192.168.50.108:40565`）：Mars → `1.09 / 巨蟹座 / 1.6549 AU`；Saturn → `0.34 / 鲸鱼座 / 8.4349 AU`；再回 Mars → `1.09 / 巨蟹座 / 1.6549 AU`（往返各一次，`devecocli ui layout` 文本取证，标题同步为 `土星`/`火星`）。`pidof com.cnchensh.stellarium` 全程存活（41712）；未改动任何持久化设置。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check` 两文件 No errors → 构建 **BUILD SUCCESSFUL**（签名 HAP 708.8 MB）→ `check-ohos-ui-contract.mjs`（33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点）全绿 → 全量 `*ohos*.mjs` 扫描仅 §13.6 的 7 个存量环境类失败（4 个 `-pad` 需设备、`mist-performance` 需设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS 假设），`audit-ohos-resource-coverage.mjs` 重写的审计文档已 `git checkout` 还原 → `test-ohos-detail-live-values.mjs` 7/7、`verify-ohos-object-details.mjs` 5/5、`test-ohos-detail-image-layout.mjs` 5/5。
+- **本片新踩的坑 / 固化结论**：**ArkUI V1 中“组件内以普通成员回调求值”不会为元素登记依赖** —— 即使回调闭包每次被调用都能读到最新宿主状态，该元素仍不会因宿主/被观察对象变化而重绘；组件模板里凡是“动态值”都应以表达式形式**直接读某个装饰变量**（`@ObjectLink`/`@Prop`/`@State`），或把结果作为 `@Prop` 由父方重绘时下发。已把该结论补注释到 `ObjectDetailCardChrome.ets` 头部。
+
 ## [2026-10-02] DevEco Code - 构建侧：Windows 侧车生成改为“优先 ffmpeg、缺省回退 System.Drawing”
 
 - **背景**：上一片 `e92ac23726` 用 System.Drawing 在 Windows 上生成了 50 行星 + 3 环的 `.model.rgba` 侧车，真机已验证 `source=sidecar`。用户装好 ffmpeg 后，本片让 Windows 侧车生成与 bash 版对齐：**优先 ffmpeg（逐字同参数），缺省才回退 System.Drawing**。

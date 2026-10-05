@@ -10,14 +10,17 @@ import { SelectedLiveInfoRows } from './DetailLiveRows'
 // 页头 = 拖拽柄 + 标题行（图标/名/类型/关闭）+ 紧凑指标 + 实时高度方位行 + 时角行；
 // 页签栏 = 四个 ``ObjectDetailTab``。动态查值与名称本地化仍留在宿主，以回调注入。
 // 外层 ``Column()`` 与卡片根容器一致（无间距），保持原布局。
+//
+// 三枚摘要（星等/星座/距离）必须**直接读 ``@ObjectLink store``**：ArkUI 的局部刷新按元素
+// 记录依赖，若取值只经普通成员回调（``resolve``/``distanceSummary``）而不触碰被观察对象，
+// 切换天体时该元素不会被标脏，会一直显示上一颗天体的旧值（Phase 3ad 引入的回归）。
 
 @Component
 export struct ObjectDetailCardHeader {
   @ObjectLink store: ObjectDetailStore
   @Prop iconName: string
   @Prop liveInfoVisible: boolean
-  resolve: (key: string) => string = () => ''
-  distanceSummary: () => string = () => ''
+  distanceSummary: (distance: string, compact: string) => string = () => ''
   nameOf: (name: string) => string = () => ''
   typeOf: (type: string) => string = () => ''
   onDragTouch: (event: TouchEvent) => void = () => {}
@@ -51,9 +54,9 @@ export struct ObjectDetailCardHeader {
       .width('100%').padding({ left: 16, right: 14, top: 10, bottom: 6 })
 
       Row({ space: 4 }) {
-        ObjectCompactMetric({ label: I18n.t('i0007'), value: this.resolve('selectedMagnitude') })
-        ObjectCompactMetric({ label: I18n.t('i0010'), value: this.resolve('selectedConstellation') })
-        ObjectCompactMetric({ label: I18n.t('i0011'), value: this.distanceSummary() })
+        ObjectCompactMetric({ label: I18n.t('i0007'), value: this.store.selectedMagnitude })
+        ObjectCompactMetric({ label: I18n.t('i0010'), value: this.nameOf(this.store.selectedConstellation) })
+        ObjectCompactMetric({ label: I18n.t('i0011'), value: this.distanceSummary(this.store.selectedDistance, this.store.selectedDistanceCompact) })
       }
         .width('100%').padding({ left: 16, right: 16, top: 3, bottom: 7 })
 
