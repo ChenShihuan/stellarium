@@ -38,11 +38,12 @@ import {
   chromeZoomButtonTop
 } from '../common/ui/ChromeGeometry'
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot } from '../common/derive/gyro'
-import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
-import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute } from '../common/derive/labels'
+import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
+import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, timezoneDisplayName } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, csvCell, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, normalizeLocationSearchText, officialLocationAliases, sessionSignature } from '../common/derive/actions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary } from '../common/derive/geometry'
+import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
@@ -6296,18 +6297,6 @@ export struct WindowNativeNode {
     return body === 'all' ? '全部行星' : planetPairBodyName(body)
   }
 
-  private phenomenonCaption(type: string): string {
-    if (type === '合') return '合 · 同向接近'
-    if (type === '冲') return '冲 · 日地星共线'
-    if (type.indexOf('方照') >= 0) return type + ' · 与太阳90°'
-    if (type.indexOf('东大距') >= 0) return '东大距 · 傍晚最远离日'
-    if (type.indexOf('西大距') >= 0) return '西大距 · 清晨最远离日'
-    if (type.indexOf('近日点') >= 0) return '近日点 · 绕日最近'
-    if (type.indexOf('远日点') >= 0) return '远日点 · 绕日最远'
-    if (type.indexOf('逆行') >= 0) return '留 · 改为逆行'
-    if (type.indexOf('顺行') >= 0) return '留 · 改为顺行'
-    return type
-  }
 
 
   private jumpToPhenomenon(item: PhenomenonItem): void {
@@ -8978,7 +8967,7 @@ private loadPlanetPositions(): void {
           code: 'module:' + moduleId,
           label: label,
           moduleId: moduleId,
-          iconKey: this.catalogIconForModule(moduleId),
+          iconKey: catalogIconForModule(moduleId),
           group: item['group'] !== undefined ? String(item['group']) : moduleId.split(':')[0],
           isCoreSubset: item['isCoreSubset'] === true,
           isPluginCatalog: item['isPluginCatalog'] === true
@@ -9031,28 +9020,6 @@ private loadPlanetPositions(): void {
     return fallback
   }
 
-  private catalogIconForModule(moduleId: string): string {
-    const module = moduleId.toLowerCase()
-    if (module.indexOf('planes') >= 0 || module.indexOf('aircraft') >= 0) return 'catalog_aircraft'
-    if (module.indexOf('satellite') >= 0 || module.indexOf('artificial') >= 0) return 'catalog_satellite'
-    if (module.indexOf('exoplanet') >= 0) return 'catalog_exoplanet'
-    if (module.indexOf('pulsar') >= 0) return 'catalog_pulsar'
-    if (module.indexOf('quasar') >= 0) return 'catalog_quasar'
-    if (module.indexOf('supernova') >= 0) return 'catalog_supernova'
-    if (module.indexOf('nova') >= 0) return 'catalog_nova'
-    if (module.indexOf('meteor') >= 0) return 'meteor'
-    if (module.indexOf('telescope') >= 0) return 'telescope'
-    if (module.indexOf('solarsystem:moon') >= 0) return 'catalog_moon'
-    if (module.indexOf('solarsystem:planet') >= 0 || module.indexOf('dwarf planet') >= 0) return 'catalog_planet'
-    if (module.indexOf('solarsystem:comet') >= 0) return 'catalog_comet'
-    if (module.indexOf('solarsystem:') >= 0) return 'catalog_asteroid'
-    if (module.indexOf('nebulamgr:0') >= 0 || module.indexOf('nebulamgr:1') >= 0 || module.indexOf('nebulamgr:2') >= 0 || module.indexOf('nebulamgr:3') >= 0) return 'catalog_galaxy'
-    if (module.indexOf('nebulamgr:4') >= 0) return 'catalog_quasar'
-    if (module.indexOf('nebulamgr:5') >= 0 || module.indexOf('nebulamgr:6') >= 0 || module.indexOf('nebulamgr:7') >= 0 || module.indexOf('nebulamgr:8') >= 0) return 'catalog_cluster'
-    if (module.indexOf('nebulamgr:') >= 0) return 'catalog_nebula'
-    if (module.indexOf('constellation') >= 0 || module.indexOf('asterism') >= 0) return 'catalog_constellation'
-    return 'catalog_plugin'
-  }
 
   private categoryModuleIdFor(category: string): string {
     for (const option of this.searchCategoryOptions()) {
@@ -9235,29 +9202,9 @@ private loadPlanetPositions(): void {
     return parts.join(' · ')
   }
 
-  private catalogIconForObjectType(rawType: string, fallback: string): string {
-    const type = rawType.toLowerCase()
-    if (type.indexOf('aircraft') >= 0 || type.indexOf('flight') >= 0 || type.indexOf('飞机') >= 0) return 'catalog_aircraft'
-    if (type.indexOf('supernova') >= 0 || type.indexOf('超新星') >= 0) return 'catalog_supernova'
-    if (type.indexOf('nova') >= 0 || type.indexOf('新星') >= 0) return 'catalog_nova'
-    if (type.indexOf('pulsar') >= 0 || type.indexOf('脉冲星') >= 0) return 'catalog_pulsar'
-    if (type.indexOf('quasar') >= 0 || type.indexOf('类星体') >= 0) return 'catalog_quasar'
-    if (type.indexOf('exoplanet') >= 0 || type.indexOf('系外行星') >= 0) return 'catalog_exoplanet'
-    if (type.indexOf('satellite') >= 0 || type.indexOf('artificial') >= 0 || type.indexOf('人造') >= 0) return 'catalog_satellite'
-    if (type.indexOf('meteor shower') >= 0 || type.indexOf('流星雨') >= 0) return 'meteor'
-    if (type.indexOf('galaxy') >= 0 || type.indexOf('星系') >= 0) return 'catalog_galaxy'
-    if (type.indexOf('nebula') >= 0 || type.indexOf('星云') >= 0) return 'catalog_nebula'
-    if (type.indexOf('cluster') >= 0 || type.indexOf('星团') >= 0) return 'catalog_cluster'
-    if (type.indexOf('comet') >= 0 || type.indexOf('彗') >= 0) return 'catalog_comet'
-    if (type.indexOf('asteroid') >= 0 || type.indexOf('小行星') >= 0) return 'catalog_asteroid'
-    if (type.indexOf('planet') >= 0 || type.indexOf('行星') >= 0) return 'catalog_planet'
-    if (type.indexOf('moon') >= 0 || type.indexOf('卫星') >= 0) return 'catalog_moon'
-    if (type.indexOf('constellation') >= 0 || type.indexOf('星座') >= 0) return 'catalog_constellation'
-    return fallback
-  }
 
   private categoryObjectIcon(item: NameItem): string {
-    return this.catalogIconForObjectType(item.type ?? '', this.searchCategoryIcon(this.searchStore.searchCategory))
+    return catalogIconForObjectType(item.type ?? '', this.searchCategoryIcon(this.searchStore.searchCategory))
   }
 
   private setSearchFilterPage(page: string): void {
@@ -11621,43 +11568,15 @@ private loadPlanetPositions(): void {
   }
 
   private wutCategoryTitle(): string {
-    const options = this.wutCategoryOptions()
+    const options = wutCategoryOptions()
     for (const option of options) {
-      if (this.wutCategoryKey(option.id) === this.wutStore.wutCategory) return String(option.label)
+      if (wutCategoryKey(option.id) === this.wutStore.wutCategory) return String(option.label)
     }
     return '天体'
   }
 
-  private wutCategoryKey(id: number): string {
-    const keys = ['planets', 'stars', 'brightNebulae', 'darkNebulae', 'galaxies', 'openClusters', 'asteroids', 'comets', 'plutinos', 'dwarfPlanets', 'cubewanos', 'scatteredDisc', 'oortCloud', 'sednoids', 'planetaryNebulae', 'doubleStars', 'variableStars', 'highProperMotion', 'symbioticStars', 'emissionLineStars', 'supernovaCandidates', 'snrCandidates', 'supernovaRemnants', 'galaxyClusters', 'interstellar', 'globularClusters', 'skyRegions', 'activeGalaxies', 'pulsars', 'exoplanets', 'novae', 'supernovae', 'interactingGalaxies', 'deepSky', 'messier', 'ngcic', 'caldwell', 'herschel400', 'algolVariables', 'cepheidVariables', 'carbonStars', 'bariumStars']
-    return id >= 0 && id < keys.length ? keys[id] : 'planets'
-  }
 
-  private wutDirectionLabel(direction: string): string {
-    if (direction === 'north') return '北'
-    if (direction === 'east') return '东'
-    if (direction === 'south') return '南'
-    if (direction === 'west') return '西'
-    return '全部'
-  }
 
-  private wutCategoryOptions(): Array<TabItem> {
-    return [
-      { id: 0, label: '行星' }, { id: 1, label: '亮星' }, { id: 2, label: '亮星云' },
-      { id: 3, label: '暗星云' }, { id: 4, label: '星系' }, { id: 5, label: '疏散星团' },
-      { id: 6, label: '小行星' }, { id: 7, label: '彗星' }, { id: 8, label: '冥族小天体' },
-      { id: 9, label: '矮行星' }, { id: 10, label: '经典柯伊伯带天体' }, { id: 11, label: '散射盘天体' },
-      { id: 12, label: '奥尔特云天体' }, { id: 13, label: '塞德娜类天体' }, { id: 14, label: '行星状星云' },
-      { id: 15, label: '亮双星' }, { id: 16, label: '亮变星' }, { id: 17, label: '高自行亮星' },
-      { id: 18, label: '共生星' }, { id: 19, label: '发射线星' }, { id: 20, label: '超新星候选体' },
-      { id: 21, label: '超新星遗迹候选体' }, { id: 22, label: '超新星遗迹' }, { id: 23, label: '星系团' },
-      { id: 25, label: '球状星团' }, { id: 26, label: '天区' }, { id: 27, label: '活动星系' },
-      { id: 32, label: '交互星系' }, { id: 33, label: '深空天体' }, { id: 34, label: '梅西耶天体' },
-      { id: 35, label: 'NGC/IC 天体' }, { id: 36, label: 'Caldwell 天体' }, { id: 37, label: 'Herschel 400 天体' },
-      { id: 38, label: 'Algol 型食变星' }, { id: 39, label: '经典造父变星' }, { id: 40, label: '碳星' },
-      { id: 41, label: '钡星' }
-    ]
-  }
 
   private wutTargetSubtitle(target: WutTarget): string {
     return this.celestialSubtitle(this.wutTargetTitle(target), target.englishName ?? '')
@@ -12374,56 +12293,6 @@ private loadPlanetPositions(): void {
   }
 
   // ===== 时区获取 =====
-  private timezoneDisplayName(ianaTz: string): string {
-    if (!ianaTz || ianaTz === 'system_default') return I18n.t('tz_system')
-    // Translate common IANA timezone names
-    const tzMap: Record<string, string> = {
-      'Asia/Shanghai': I18n.t('tz_asia_shanghai'),
-      'Asia/Hong_Kong': I18n.t('tz_asia_hongkong'),
-      'Asia/Tokyo': I18n.t('tz_asia_tokyo'),
-      'Asia/Seoul': I18n.t('tz_asia_seoul'),
-      'Asia/Singapore': I18n.t('tz_asia_singapore'),
-      'Asia/Taipei': I18n.t('tz_asia_taipei'),
-      'Asia/Bangkok': I18n.t('tz_asia_bangkok'),
-      'Asia/Kolkata': I18n.t('tz_asia_kolkata'),
-      'Asia/Dubai': I18n.t('tz_asia_dubai'),
-      'Europe/London': I18n.t('tz_europe_london'),
-      'Europe/Paris': I18n.t('tz_europe_paris'),
-      'Europe/Berlin': I18n.t('tz_europe_berlin'),
-      'Europe/Madrid': I18n.t('tz_europe_madrid'),
-      'Europe/Moscow': I18n.t('tz_europe_moscow'),
-      'America/New_York': I18n.t('tz_america_newyork'),
-      'America/Chicago': I18n.t('tz_america_chicago'),
-      'America/Los_Angeles': I18n.t('tz_america_losangeles'),
-      'America/Sao_Paulo': I18n.t('tz_america_saopaulo'),
-      'Australia/Sydney': I18n.t('tz_australia_sydney'),
-      'Pacific/Auckland': I18n.t('tz_pacific_auckland'),
-      'UTC': 'UTC',
-      'GMT': 'GMT',
-    }
-    const mapped = tzMap[ianaTz]
-    if (mapped) return mapped
-    // For unmapped, try to translate the region/city names
-    const parts = ianaTz.split('/')
-    if (parts.length >= 2) {
-      const regionMap: Record<string, string> = {
-        'Asia': I18n.t('tz_region_asia'),
-        'Europe': I18n.t('tz_region_europe'),
-        'America': I18n.t('tz_region_america'),
-        'Africa': I18n.t('tz_region_africa'),
-        'Pacific': I18n.t('tz_region_pacific'),
-        'Australia': I18n.t('tz_region_australia'),
-        'Antarctica': I18n.t('tz_region_antarctica'),
-        'Atlantic': I18n.t('tz_region_atlantic'),
-        'Indian': I18n.t('tz_region_indian'),
-        'Arctic': I18n.t('tz_region_arctic'),
-      }
-      const region = regionMap[parts[0]] ?? parts[0]
-      const city = parts[parts.length - 1].replace(/_/g, ' ')
-      return region + ' / ' + city
-    }
-    return ianaTz
-  }
 
   private approximateTimeZoneDisplay(longitude: number): string {
     const offset = clamp(Math.round(longitude / 15), -12, 14)
@@ -12440,7 +12309,7 @@ private loadPlanetPositions(): void {
           this.skyCultureSettingsStore.skyCultureObserverLatitude = Number(r.latitude)
         }
         if (updateTimeZone && r.timeZone !== undefined && r.timeZone.length > 0 && r.timeZone !== 'system_default') {
-          this.locationPickerStore.observerTimeZone = this.timezoneDisplayName(r.timeZone)
+          this.locationPickerStore.observerTimeZone = timezoneDisplayName(r.timeZone)
         } else if (updateTimeZone && this.locationPickerStore.observerTimeZone.length === 0 && r.longitude !== undefined) {
           this.locationPickerStore.observerTimeZone = this.approximateTimeZoneDisplay(Number(r.longitude))
         }
@@ -15071,7 +14940,7 @@ private loadPlanetPositions(): void {
   // Pad 端的详情保持为左侧检查器。它不接管星图，也不会随着实时数据刷新
   // 重新打开或改变位置；长资料和观测数字使用同一个连续滚动区。
   private objectInspectorIcon(): string {
-    return this.catalogIconForObjectType(this.objectDetailStore.selectedType + ' ' + this.objectDetailStore.selectedObjectType, 'catalog_star')
+    return catalogIconForObjectType(this.objectDetailStore.selectedType + ' ' + this.objectDetailStore.selectedObjectType, 'catalog_star')
   }
 
   private objectInspectorSearchText(): string {
@@ -16940,7 +16809,6 @@ private loadPlanetPositions(): void {
           openGraphTargetPicker: () => { this.openGraphTargetPicker() },
           openRtsTargetPicker: () => { this.openRtsTargetPicker() },
           phenomenaBodyName: (body: string) => this.phenomenaBodyName(body),
-          phenomenonCaption: (type: string) => this.phenomenonCaption(type),
           planetPairBarWidth: () => this.planetPairBarWidth(),
           planetPairCurrentIndex: () => this.planetPairCurrentIndex(),
           planetPairSegmentWidth: () => this.planetPairSegmentWidth(),
@@ -16955,10 +16823,7 @@ private loadPlanetPositions(): void {
           selectAstroFilter: (key: string, value: string) => { this.selectAstroFilter(key, value) },
           selectAstroGroup: (group: number) => { this.selectAstroGroup(group) },
           selectAstroTab: (tab: number) => { this.selectAstroTab(tab) },
-          wutCategoryKey: (id: number) => this.wutCategoryKey(id),
-          wutCategoryOptions: () => this.wutCategoryOptions(),
           wutCategoryTitle: () => this.wutCategoryTitle(),
-          wutDirectionLabel: (direction: string) => this.wutDirectionLabel(direction),
           wutTargetSubtitle: (target: WutTarget) => this.wutTargetSubtitle(target),
           wutTargetTitle: (target: WutTarget) => this.wutTargetTitle(target),
         }

@@ -277,3 +277,55 @@ export function pluginFeatureRoute(id: string): PluginFeatureRoute {
   }
   return { panel: '', kind: 'unavailable' }
 }
+
+// IANA 时区名 → 本地化显示文本（计划 §14.2 A1-7 迁入；只依赖静态 I18n 查表）。
+export function timezoneDisplayName(ianaTz: string): string {
+  if (!ianaTz || ianaTz === 'system_default') return I18n.t('tz_system')
+  // Translate common IANA timezone names
+  const tzMap: Record<string, string> = {
+    'Asia/Shanghai': I18n.t('tz_asia_shanghai'),
+    'Asia/Hong_Kong': I18n.t('tz_asia_hongkong'),
+    'Asia/Tokyo': I18n.t('tz_asia_tokyo'),
+    'Asia/Seoul': I18n.t('tz_asia_seoul'),
+    'Asia/Singapore': I18n.t('tz_asia_singapore'),
+    'Asia/Taipei': I18n.t('tz_asia_taipei'),
+    'Asia/Bangkok': I18n.t('tz_asia_bangkok'),
+    'Asia/Kolkata': I18n.t('tz_asia_kolkata'),
+    'Asia/Dubai': I18n.t('tz_asia_dubai'),
+    'Europe/London': I18n.t('tz_europe_london'),
+    'Europe/Paris': I18n.t('tz_europe_paris'),
+    'Europe/Berlin': I18n.t('tz_europe_berlin'),
+    'Europe/Madrid': I18n.t('tz_europe_madrid'),
+    'Europe/Moscow': I18n.t('tz_europe_moscow'),
+    'America/New_York': I18n.t('tz_america_newyork'),
+    'America/Chicago': I18n.t('tz_america_chicago'),
+    'America/Los_Angeles': I18n.t('tz_america_losangeles'),
+    'America/Sao_Paulo': I18n.t('tz_america_saopaulo'),
+    'Australia/Sydney': I18n.t('tz_australia_sydney'),
+    'Pacific/Auckland': I18n.t('tz_pacific_auckland'),
+    'UTC': 'UTC',
+    'GMT': 'GMT',
+  }
+  const mapped = tzMap[ianaTz]
+  if (mapped) return mapped
+  // For unmapped, try to translate the region/city names
+  const parts = ianaTz.split('/')
+  if (parts.length >= 2) {
+    const regionMap: Record<string, string> = {
+      'Asia': I18n.t('tz_region_asia'),
+      'Europe': I18n.t('tz_region_europe'),
+      'America': I18n.t('tz_region_america'),
+      'Africa': I18n.t('tz_region_africa'),
+      'Pacific': I18n.t('tz_region_pacific'),
+      'Australia': I18n.t('tz_region_australia'),
+      'Antarctica': I18n.t('tz_region_antarctica'),
+      'Atlantic': I18n.t('tz_region_atlantic'),
+      'Indian': I18n.t('tz_region_indian'),
+      'Arctic': I18n.t('tz_region_arctic'),
+    }
+    const region = regionMap[parts[0]] ?? parts[0]
+    const city = parts[parts.length - 1].replace(/_/g, ' ')
+    return region + ' / ' + city
+  }
+  return ianaTz
+}

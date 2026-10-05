@@ -19,9 +19,10 @@ import { AstroSelectionGuide, PhenomenonRelationMark } from './AstroGuides'
 import { GraphLoadingRow, RtsSelectionGuide, GraphSelectionGuide } from './GraphGuides'
 import { WutTargetCard } from './WutTargetCard'
 import { getIcon } from '../../common/ui/ShellIcons'
-import { astroGroupItems, astroTabItemsForGroup, rtsCalendarDurationLabel, graphStartOptionLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, planetPairLinearLabel, hecPointSize, hecDistanceLabel, lunarElongationBarHeight, planetTimeSeriesBarHeight, planetPairBarHeight } from '../../common/derive/astro'
+import { astroGroupItems, astroTabItemsForGroup, rtsCalendarDurationLabel, graphStartOptionLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, planetPairLinearLabel, hecPointSize, hecDistanceLabel, lunarElongationBarHeight, planetTimeSeriesBarHeight, planetPairBarHeight, phenomenonCaption } from '../../common/derive/astro'
 import { planetZh, zhNameOf, zhType } from '../../common/derive/labels'
 import { azBarHeight } from '../../common/derive/geometry'
+import { wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../../common/derive/catalog'
 
 export interface AstroPanelHost {
   almanacHoursLabel: (key: string) => string
@@ -100,7 +101,6 @@ export interface AstroPanelHost {
   openGraphTargetPicker: () => void
   openRtsTargetPicker: () => void
   phenomenaBodyName: (body: string) => string
-  phenomenonCaption: (type: string) => string
   planetPairBarWidth: () => number
   planetPairCurrentIndex: () => number
   planetPairSegmentWidth: () => number
@@ -115,10 +115,7 @@ export interface AstroPanelHost {
   selectAstroFilter: (key: string, value: string) => void
   selectAstroGroup: (group: number) => void
   selectAstroTab: (tab: number) => void
-  wutCategoryKey: (id: number) => string
-  wutCategoryOptions: () => Array<TabItem>
   wutCategoryTitle: () => string
-  wutDirectionLabel: (direction: string) => string
   wutTargetSubtitle: (target: WutTarget) => string
   wutTargetTitle: (target: WutTarget) => string
 }
@@ -201,7 +198,6 @@ function noopAstroPanelHost(): AstroPanelHost {
     openGraphTargetPicker: () => {},
     openRtsTargetPicker: () => {},
     phenomenaBodyName: () => '',
-    phenomenonCaption: () => '',
     planetPairBarWidth: () => 0,
     planetPairCurrentIndex: () => 0,
     planetPairSegmentWidth: () => 0,
@@ -216,10 +212,7 @@ function noopAstroPanelHost(): AstroPanelHost {
     selectAstroFilter: () => {},
     selectAstroGroup: () => {},
     selectAstroTab: () => {},
-    wutCategoryKey: () => '',
-    wutCategoryOptions: () => [],
     wutCategoryTitle: () => '',
-    wutDirectionLabel: () => '',
     wutTargetSubtitle: () => '',
     wutTargetTitle: () => ''
   }
@@ -986,7 +979,7 @@ export struct AstroPanel {
                     PhenomenonRelationMark({ type: p.type ?? '' })
                   }.width(52).height(44).backgroundColor(this.panelColor).border({ width: 1, color: this.lineColor }).borderRadius(UI_RADIUS_CONTROL)
                   Column({ space: 3 }) {
-                    Text(this.host.phenomenonCaption(p.type ?? '')).fontSize(9).fontColor(this.subColor).fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    Text(phenomenonCaption(p.type ?? '')).fontSize(9).fontColor(this.subColor).fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     Text((p.bodyA ?? '天体') + ' 与 ' + (p.bodyB ?? '太阳'))
                       .fontSize(12).fontColor(this.textColor).fontWeight(FontWeight.Medium).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     Text(this.host.fmtDateTime(p.date)).fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1555,15 +1548,15 @@ export struct AstroPanel {
                   })
                 if (this.wutStore.wutCategoriesExpanded) {
                   Flex({ wrap: FlexWrap.Wrap }) {
-                    ForEach(this.host.wutCategoryOptions(), (option: TabItem) => {
+                    ForEach(wutCategoryOptions(), (option: TabItem) => {
                       Text(option.label).fontSize(12).width('48%')
-                        .fontColor(this.wutStore.wutCategory === this.host.wutCategoryKey(option.id) ? this.textColor : this.subColor)
+                        .fontColor(this.wutStore.wutCategory === wutCategoryKey(option.id) ? this.textColor : this.subColor)
                         .padding(10).margin({ right: '2%', bottom: 6 })
-                        .backgroundColor(this.wutStore.wutCategory === this.host.wutCategoryKey(option.id) ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
+                        .backgroundColor(this.wutStore.wutCategory === wutCategoryKey(option.id) ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
                         .borderRadius(UI_RADIUS_CONTROL)
                         .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                         .onClick(() => {
-                          const category = this.host.wutCategoryKey(option.id)
+                          const category = wutCategoryKey(option.id)
                           this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseInOut }, () => {
                             this.wutStore.wutCategoriesExpanded = false
                           })
@@ -1616,7 +1609,7 @@ export struct AstroPanel {
                     Flex({ wrap: FlexWrap.Wrap }) {
                       Text('方向').fontSize(12).fontColor(this.subColor).width('100%').margin({ bottom: 6 })
                       ForEach(['all', 'north', 'east', 'south', 'west'], (direction: string) => {
-                        Text(this.host.wutDirectionLabel(direction)).fontSize(12).fontColor(this.wutStore.wutDirection === direction ? this.textColor : this.subColor)
+                        Text(wutDirectionLabel(direction)).fontSize(12).fontColor(this.wutStore.wutDirection === direction ? this.textColor : this.subColor)
                           .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
                           .backgroundColor(this.wutStore.wutDirection === direction ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
                           .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
