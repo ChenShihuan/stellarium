@@ -1,6 +1,7 @@
 import { I18n } from '../pages/I18n'
-import { SkyCultureItem, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon } from '../pages/StellariumTypes'
+import { StellariumBridgeResponse, SkyCultureItem, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon } from '../pages/StellariumTypes'
 import { ConfigurationOption, SkyCultureVisualColors } from '../pages/MainWindowModels'
+import { CommandPort } from '../bridge/CommandPort'
 
 // 「星空文化」面板（`activePanel === 'layers'` 的第 7 个视图标签页 `viewSkyCultureTab`）的
 // **设置字段簇 + 纯计算**。
@@ -123,6 +124,46 @@ export class SkyCultureSettingsStore {
   skyCultureRangeEndInput: string = new Date().getFullYear().toString()
   skyCultureSimulationYear: number = new Date().getFullYear()
   skyCultureTimeFollowSimulation: boolean = false
+
+  // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadSkyCultureConstellationSelectionFlags） ——
+  private port: CommandPort | null = null
+  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  private seq: number = 0
+  private onChanged: (() => void) | null = null
+
+  // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
+  attachPort(port: CommandPort, onChanged: () => void): void {
+    this.port = port
+    this.onChanged = onChanged
+  }
+
+  // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  private notifyChanged(): void {
+    if (this.onChanged !== null) {
+      this.onChanged()
+    }
+  }
+
+  // 星空文化面板：桥读星座选择标志（隔离选中 / 单选）（原宿主
+  // loadSkyCultureConstellationSelectionFlags，函数体逐字搬入；仅
+  // this.callInteractive → this.port.requestInteractive、this.skyCultureSettingsStore.<f> → this.<f>）。
+  loadSkyCultureConstellationSelectionFlags(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    port.requestInteractive('getConstellationFlags', '', (r: StellariumBridgeResponse) => {
+      if (r.ok !== true || r.flags === undefined) return
+      const flags = r.flags as Record<string, Object>
+      this.skyCultureIsolateSelected = flags['isolateSelected'] === true
+      this.skyCultureSinglePick = flags['constellationPick'] === true
+      this.notifyChanged()
+    })
+  }
 
   // —— 纯计算：bridge 风格串 → 档位 ——
   skyCultureScreenLabelModeFromBridge(style: string | undefined): number {

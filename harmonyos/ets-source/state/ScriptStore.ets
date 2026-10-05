@@ -1,5 +1,6 @@
-import { RecordingEntry } from '../pages/MainWindowModels'
-import { ScriptMetadata } from '../pages/StellariumTypes'
+import { RecordingEntry, RecordingsResponse } from '../pages/MainWindowModels'
+import { ScriptMetadata, StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { CommandPort } from '../bridge/CommandPort'
 
 // 脚本 / 录制 / 视频导出域中"面板可见"的状态（原宿主的 21 个 @State）。
 //
@@ -20,6 +21,9 @@ import { ScriptMetadata } from '../pages/StellariumTypes'
 //
 // 字段名沿用宿主原名，以便与既有 124 处引用机械对应；动作仍走宿主注入的回调。
 // 所有更新都必须是对字段整体赋值（本片已确认 recordings / scriptList 等数组无原地变更）。
+//
+// §14 B1-6：`loadRecordings` 随桥注入搬入本 store（宿主不再持有同名方法）；本域无 publish*
+// 发布点，故宿主注入的 onChanged 为等价空实现，notifyChanged() 为无副作用调用。
 @Observed
 export class ScriptStore {
   scriptList: string[] = []
@@ -61,4 +65,41 @@ export class ScriptStore {
   replayName: string = ''
   videoArchiveFileName: string = ''
   screenVideoFileName: string = ''
+
+  // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadRecordings） ——
+  private port: CommandPort | null = null
+  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  private seq: number = 0
+  private onChanged: (() => void) | null = null
+
+  // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
+  attachPort(port: CommandPort, onChanged: () => void): void {
+    this.port = port
+    this.onChanged = onChanged
+  }
+
+  // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  private notifyChanged(): void {
+    if (this.onChanged !== null) {
+      this.onChanged()
+    }
+  }
+
+  // 脚本面板「已保存录制」列表：桥拉取录制条目（原宿主 loadRecordings，函数体逐字搬入；
+  // 仅 this.callInteractive → this.port.requestInteractive、this.scriptStore.<f> → this.<f>）。
+  loadRecordings(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    port.requestInteractive('listRecordings', '', (r: StellariumBridgeResponse) => {
+      const resp = r as RecordingsResponse
+      this.recordings = resp.items ?? []
+      this.notifyChanged()
+    })
+  }
 }

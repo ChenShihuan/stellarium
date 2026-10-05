@@ -1,4 +1,7 @@
 import { I18n } from '../pages/I18n'
+import { StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { PointerCoordinatesResponse } from '../pages/MainWindowModels'
+import { CommandPort } from '../bridge/CommandPort'
 
 // 「视图中心坐标」叠层、「指针坐标」插件面板与「天体详情指向线」开关的状态簇。
 //
@@ -46,6 +49,29 @@ export class OverlayStore {
 
   // —— 天体详情指向线（设置） ——
   objectDetailConnectorVisible: boolean = true
+
+  // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadPointerCoordinates） ——
+  private port: CommandPort | null = null
+  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  private seq: number = 0
+  private onChanged: (() => void) | null = null
+
+  // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
+  attachPort(port: CommandPort, onChanged: () => void): void {
+    this.port = port
+    this.onChanged = onChanged
+  }
+
+  // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  private notifyChanged(): void {
+    if (this.onChanged !== null) {
+      this.onChanged()
+    }
+  }
 
   // 叠层标题：赤道坐标会带历元后缀（原宿主私有方法，逐字搬运）。
   viewCoordinateTitle(): string {
@@ -96,5 +122,39 @@ export class OverlayStore {
       case 'Custom': return I18n.t('pointer_coord_place_custom')
       default: return key
     }
+  }
+
+  // 指针坐标插件：桥读全部设置项与请求态（原宿主 loadPointerCoordinates，函数体逐字搬入；
+  // 仅 this.callNativeWhenReady → this.port.requestWhenReady、this.overlayStore.<f> → this.<f>；
+  // 启动期重试档 0/100/15 逐字保留）。本域无 publish* 发布点，onChanged 为等价空实现。
+  loadPointerCoordinates(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    this.pointerCoordinatesLoading = true
+    port.requestWhenReady('getPointerCoordinates', '', (r: StellariumBridgeResponse) => {
+      this.pointerCoordinatesLoading = false
+      const data = (r as PointerCoordinatesResponse).pointerCoordinates
+      if (r.ok !== true || data === undefined) {
+        this.pointerCoordinatesStatus = I18n.t('plugin_status_unavailable')
+        this.notifyChanged()
+        return
+      }
+      this.pointerCoordinatesEnabled = data.enabled
+      this.pointerCoordinatesStartup = data.enableAtStartup
+      this.pointerCoordinatesButton = data.showCoordinatesButton
+      this.pointerCoordinatesConstellation = data.showConstellation
+      this.pointerCoordinatesCrossedLines = data.showCrossedLines
+      this.pointerCoordinatesElongation = data.showElongation
+      this.pointerCoordinatesSystem = data.coordinateSystem
+      this.pointerCoordinatesPlace = data.coordinatesPlace
+      this.pointerCoordinatesStatus = ''
+      this.notifyChanged()
+    }, () => {
+      this.pointerCoordinatesLoading = false
+      this.pointerCoordinatesStatus = I18n.t('plugin_status_unavailable')
+      this.notifyChanged()
+    }, 0, 100, 15)
   }
 }
