@@ -1,3 +1,10 @@
+## [2026-10-01] DevEco Code - Phase 3z2a：卫星过境段组件化（SatellitePassDetails）
+
+- **新增 `panels/object/SatellitePassDetails.ets`**：三个参数化 UI 函数改为组件 —— `satellitePassesDetails(tablet)`（45 行）→ `SatellitePassDetails`、`satellitePassCard(pass, tablet)`（36）→ `SatellitePassCard`、`satellitePassTimelineRow(label, time, tablet)`（14）→ `SatellitePassTimelineRow`；并把只服务于这一段的四个纯文本助手（`satellitePassTime` / `satellitePassVisibility` / `satellitePassAltitude` / `satellitePassAngle`）搬出宿主，改为**文件作用域函数**（过境的 `ForEach` 与 key 一并内收，宿主不再接触单条过境的格式化细节）。
+- **入参**：`SatellitePassDetails` 用 `@ObjectLink store` 观察过境状态 + `@Prop tablet / visible / tleEpoch / accent`（`visible` 来自宿主判定 `selectedObjectIsArtificialSatellite()`，`accent` 来自夜视强调色 `nmAccent()`，`tleEpoch` 来自 `selectedSatelliteTleEpoch()`）+ `onLoad` 回调；卡片接收 `@Prop pass: SatellitePass`（过境数组整体替换、不做原地修改，故 `@Prop` 深拷贝安全）。
+- **单体行数：** 28,832 → **28,715**（−117；7 个旧定义删除 + 2 处调用点改写）。
+- **真机验证（`192.168.3.95:40565`，搜 `ISS` 选中人造卫星）：** 构建 / 契约校验（77 个 .ets）/ 安装启动通过；"资料"页出现 `卫星过境` 段与懒加载提示；点 **加载过境** 后标题计数变为 `3`、出现 `下一次过境`，卡片正确渲染 `观测者处于白昼`（`satellitePassVisibility` 分支）/ `m 17.0`（星等）/ `出现 2026-10-01 10:17:22`（`SatellitePassTimelineRow` + `satellitePassTime` 格式化），即 `onLoad` 回调 → store 更新 → 组件刷新全链路可用。
+- **测试同步：** 无（已核查 `scripts/*.mjs` 无脚本引用本片符号）。
 ## [2026-10-01] DevEco Code - Phase 3z：结构化资料段整体迁出（StructuredDetailRows）
 
 - **新增 `panels/object/StructuredDetailRows.ets`**：`structuredObjectDetails(tablet)`（28 行）改为组件，并把它的**五个段落助手**（`detailSectionIds` 3 行 / `detailSectionTitle` 16 / `detailFieldLabel` 128 / `detailFieldValue` 23 / `detailFieldsForSection` 11，共 185 行）一并搬出宿主 —— 它们此前只被这一个界面使用，且只依赖 `ObjectDetailStore`。
