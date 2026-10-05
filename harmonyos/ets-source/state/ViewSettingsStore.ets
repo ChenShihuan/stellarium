@@ -13,6 +13,11 @@
 // 动作（setDistanceUnit / setViewLockState / syncBridgeFlagState / setNavigationBoolean
 // 内的 autoZoomResets 分支）与桥调用留在宿主（§13.1 规则 6），组件只读字段。
 //
+// 2026-10-04 追加两字段（review §2.7 残留并入）：
+//   - configDitheringMode —— 抖动/渲染质量档（Color888…），SettingsPanel 经既有 @ObjectLink 消费；
+//   - liveMode —— 实时模式开关显示值，SettingsQuickLegacyPanel 经 @Prop 快照消费。
+//   二者消费方都已持有本 store，故并入而不新建。
+//
 // 约束：均为标量，只做整体赋值，无原地变更。
 @Observed
 export class ViewSettingsStore {
@@ -21,4 +26,6 @@ export class ViewSettingsStore {
   viewLock: boolean = false
   verticalClamp: boolean = true
   flatHorizon: boolean = true
+  configDitheringMode: string = 'Color888'
+  liveMode: boolean = true
 }

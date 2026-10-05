@@ -25,8 +25,6 @@ export struct PlacePanel {
   @Prop locationText: string
   @Prop coordinateText: string
   @Prop altitudeText: string
-  @Prop sessionHint: string
-  @Prop sessionJson: string
   @Prop mapWidth: number
   @Prop mapHeight: number
   @Prop textColor: string
@@ -109,7 +107,7 @@ export struct PlacePanel {
       if (!OFFLINE_APPGALLERY_BUILD) {
         PointingTestSection({ store: this.sessionToolStore, textColor: this.textColor, borderTint: this.borderTint, onPoint: () => { this.onPoint() } })
         WatchGyroSection({ store: this.sessionToolStore, textColor: this.textColor, onSend: () => { this.onSend() }, onStart: () => { this.onStart() }, onStop: () => { this.onStop() } })
-        ContinuationSection({ hint: this.sessionHint, json: this.sessionJson, textColor: this.textColor, panelColor: this.borderTint, onExport: () => { this.onExport() }, onApply: () => { this.onSessionApply() }, onHandoff: () => { this.onHandoff() } })
+        ContinuationSection({ hint: this.sessionToolStore.sessionHint, json: this.sessionToolStore.sessionJson, textColor: this.textColor, panelColor: this.borderTint, onExport: () => { this.onExport() }, onApply: () => { this.onSessionApply() }, onHandoff: () => { this.onHandoff() } })
         TonightEventsSection({ store: this.sessionToolStore, textColor: this.textColor, onRefresh: () => { this.onRefreshTonight() }, onJump: (jd: number, lock: string, title: string) => { this.onJump(jd, lock, title) } })
       }
     }.width('100%')
