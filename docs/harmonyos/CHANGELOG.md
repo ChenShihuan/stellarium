@@ -1,3 +1,62 @@
+## [2026-10-04] DevEco Code - M1-A：端口 + 服务层 + 启动/会话 + P2 并入（PLAN §15.11 第一批）
+
+> 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.11 **M1-A**（原 M1-1/4/5/6 合并为模块级大切片）。
+> 片内 **4 次提交**，每个提交点均跑过 预检 / `arkts_check` / 构建 / 契约；工作目录 `E:\code\Stellarium-mobile\stellarium`。
+> 提交：`333f51e23d`（端口+媒体服务）→ `88dab09304`（启动/会话）→ `c61a693eb5`（脚本播放）→ `bf5b6b6ede`（导览）。
+
+**子组① 三个端口（纯接口 + 宿主具名适配器）**
+- 新增 `harmonyos/ets-source/bridge/MediaPort.ets`（覆盖 `fileIo`/`image`/`picker`，纯接口不 import `@ohos.*`）：
+  `fileExists` / `openReadOnlyFile` / `closeFile` / `createImageSource` / `createPixelMap` / `releaseImageSource` / `releasePixelMap` / `saveFileAs` / `deleteFile`（`MediaSaveResult` 枚举区分 落盘/取消/失败）。
+- 新增 `bridge/PlatformPort.ets`（`systemShare`/pasteboard/TTS）：`writeClipboardText` / `shareFile` / `speak`。
+- 新增 `bridge/SensorPort.ets`（`sensor.*`）：`probeSensor` + `subscribe/unsubscribe` 四路（RotationVector/Orientation/Gravity/MagneticField）。
+- 宿主顶层 `class HostMediaPort / HostPlatformPort / HostSensorPort implements …`（照 `HostCommandPort` 写法；**禁匿名对象字面量越界、禁 `as`**）。因适配器在字段初始化期构造（此时 `getUIContext` 不可用），改用字段 + 惰性 `configure`。
+- 宿主桥端口改为惰性单例 `commandPort()`（原 `aboutToAppear` 内的局部 `const hostPort` 构造迁入，行为逐字不变），供 `saveScreenshot`/`speakSelectedObject` 等 UI 回调复用。
+- 最小试点：`MediaPort`→`releaseDecodedImage`(11)+`decodeLocalImage`(70)；`PlatformPort`→`copyTextToClipboard`(13)；`SensorPort`→`probeGyroSensor`。**偏差说明**：计划写的 `watchGyro*` 实为桥驱动的「虚拟指星笔」（`pointAtSky` 命令），**不走 `sensor.*`**，故试点改用真实传感器查询 `probeGyroSensor`（`sensor.getSingleSensorSync`）并删除该宿主方法；`SensorPort` 的 subscribe/unsubscribe 面已按现有回调类型补齐，供 M1-B `SensorController` 整块搬迁。
+
+**子组② 服务层（新增 NAPI-free 服务，逻辑逐字搬入，只改取值/端口调用）**
+- 新增 `common/media/ImageDecoder.ets`：`decodeLocalImage`(70) / `releaseDecodedImage`(11)（依赖 `MediaPort`；`[detail-media]` 逐帧日志留在适配器）。
+- 新增 `common/platform/Clipboard.ets`：`copyTextToClipboard`(13)（`PlatformPort` + `ClipboardHints.flashHint`）。
+- 新增 `common/platform/Share.ets`：`shareFile`(22)（`MediaPort.fileExists` + `PlatformPort.shareFile`）。
+- 新增 `common/platform/Screenshot.ets`：`saveScreenshot`(17) / `exportScreenshotToUserStorage`(25)（`CommandPort` + `MediaPort`）。
+- 新增 `common/SpeechService.ets`：`speakSelectedObject`(11)（`CommandPort`；当前基础 SDK 无 CoreSpeechKit，`PlatformPort.speak` 留空槽位）。
+- 宿主 `saveFileAs` 改为委托 `HostMediaPort.saveFileAs`（去重 picker 逻辑；3 处调用点不变）。
+- **登记保留**：`decodeSkyCultureArtThumbnail`(33) / `decodeSkyCultureArtPreview`(27) —— 与 §15.6 第 3 条永久登记的 `loadSkyCultureDetails` 同属星空文化美术管线（跨序号 `skyCultureDetailsRequestId`/`skyCultureArtThumbnailGeneration` + 渐进写 §2.7.1 保留逐帧字段 + `setSkyCultureArtStatus` 收口），故未随本片下沉。
+
+**子组③ 启动 / 会话**
+- 新增 `capability/StartupBridge.ets`：`startupBridgeSync`(11) / `runStartupBridgeTasks`(37) / `restoreStartupSettings`(65) / `saveCurrentViewAsStartup`(10)。持有跨域 store **实例引用** + `StartupHooks`（dismissSplash / setLanguage / syncViewCoordinateTimer / syncDockClockTimer / setCurrentProjection / bridgeSyncStarted / selftest 共 10 项）具名注入；桥命令经 `CommandPort`。
+- `state/SessionToolStore.ets` 并入 `sessionSummary`(6) / `sessionExport`(20) / `sessionApply`(24) / `sessionHandoff`(14)，新增 `SessionToolHooks`（flashHint / copySessionJson / sessionImportText / setSessionExportText / canUseDistributed）。**并入既有 store 而不新建 `SessionStore`**：会话三字段早已在本 store，避免状态双持有。
+- **登记保留**：`onPrivacyNativeStartupAllowedChanged` / `startPageAfterPrivacyIfNeeded` / `dismissSplash` / `startTwinkle` / `registerFoldListeners` / `subscribeApplicationLifecycle` / `unsubscribeApplicationLifecycle` / `confirmPrivacyRevocation` / `revokePrivacyConsent` / `selfTestAllActions`（§15.6 第 4 条「生命周期/回调」，涉 `getUIContext`/`terminateSelf`/渲染时机，逐字等价需注入 UI 上下文）。
+
+**子组④ P2 并入既有 store**
+- `state/ScriptStore.ets`：并入 `playScriptByName`(44) / `continueNativeScript`(11) / `stopScriptPlayback`(11) / `sendScriptKey`(7)；新增 `ScriptPlaybackHooks`（13 项具名回注）与 `scriptStartGraceUntil` 字段。
+- `state/GuideStore.ets`：并入 `executeGuideRequest`(63) + 导览引擎/请求/定时器（`guidePlayer` / `guideTimer` / `guideLastRequest` / `guideLastResult` / `guideGyroWasEnabled` / `guidePanelWasVisible`），**定时器 store 自持** `startGuideTimer()` / `stopGuideTimer()`，`GuideHostHooks`（17 项）注入；宿主 `aboutToDisappear` 与前台切换改调 `guideStore.stopGuideTimer()/stopPlayer()/pausePlayer()` 收口。
+- **登记保留（属 M1-B）**：`toggleReplayPause`(20) / `changePlaybackRate` —— 回放引擎（`replayTimer`/`replayIndex`/`replayCommands`/`replayStartedAt` 等宿主瞬时量）归 M1-B `RecordingController`，本片搬会双持有，故登记。
+- **登记保留（引擎/相机强耦合，§15.9 明列合法结局）**：`setTrackingState`(37) —— 与陀螺仪引擎 `updateGyroTargetGuide` 及 `refreshState` 的跟踪状态回填（`trackingRequestPending`/`trackingStateIgnoreUntilMs`/`trackingRequestSerial`）强耦合；`toggleTracking` 不存在（0 引用）。为不破坏「86 保留裸 @State」不变式，`trackingText`/`trackingRequestPending` 两个 `@State` 保持宿主、方法留宿主。
+
+**定时器调用点对照（子组④）**
+- `GuideStore.guideTimer`：**起** → `executeGuideRequest('startGuide')` 内 `startGuideTimer()`；**止** → 导览结束回调内 `stopGuideTimer()`、宿主 `aboutToDisappear` → `guideStore.stopGuideTimer()`、`startGuideTimer()` 自身先 `stop`（幂等自愈）。**无新增/遗留宿主 `guideTimer`**。
+- `ScriptStore.scriptStartGraceUntil`：**写** → `ScriptStore.playScriptByName` 与宿主 CLI `playScript` 事件；**读** → 宿主 `refreshScriptStatus`。
+
+**度量（宿主 `MainWindowNativeNode.ets`，Get-Content 计法）**
+- 行数 **14,357 → 14,161**（**−196**）。
+- `private` 方法 **594 → 575**（**−19**；协议基线计法 593 → ≈574）。
+- `@State` **132 不变**（46 store 实例 + 86 保留裸字段）——片内无状态漂移。
+- 新增文件 **9 个**：3 端口 + 4 服务 + `capability/StartupBridge.ets`（另改写 `ScriptStore.ets`/`GuideStore.ets`/`SessionToolStore.ets`）。
+
+**验证（每个提交点均执行）**
+- `node scripts/check-ohos-refactor-slice.mjs` 通过；`arkts_check`（该提交点全部改动 .ets 一次性）No errors；构建 `scripts\build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources` **BUILD SUCCESSFUL**；`node scripts/check-ohos-ui-contract.mjs` **intact（44 锚点不变）**。
+- 测试：全量 ohos 扫描仅剩 **§13.6 的 6 个环境类失败**（`test-ohos-clipboard-pad` / `-guide-pad` / `-mist-horizon-pad` / `-mist-performance` / `-polar-scope-pad` / `verify-ohos-search`），**无新增回归**。同步 2 处按文本切片夹具：`test-ohos-privacy-startup.mjs`（`probeGyroSensor` 已删 → 切片终点改 `stopGyroscope`）、`test-ohos-guide.mjs`（`this.guideLastRequest` → `this.guideStore.guideLastRequest`）。
+- 真机（HUAWEI Mate 80 Pro `192.168.50.108:36717`）：
+  - 提交①/②/③：装包 + `aa start` + `pidof` **存活**（19519 / 23740）；`openUiPanel tools/object/place/settings` 正常；选中 M31 后 hilog 出现 `[detail-media] create image source kind=sky-culture-art-thumbnail … fd=…` 与 `… nebulae/default/m31.png fd=32`，**实证 `HostMediaPort.openReadOnlyFile` + `ImageDecoder` 链路在真机运行**。
+  - 提交④：装包 + 启动 + `pidof` **存活**（30712）、`openUiPanel scripts` 正常。
+  - **待真机补验**：导览启动/停止的定时器收口 —— 点击 `#guide-start-solar-neighbours` 前设备 WiFi 掉线（`hdc list targets` 为空、`hdc tconn` 重连失败），属**环境故障非回归**；下次续作优先补验。
+  - **未走查（深入口/系统对话框）**：`saveScreenshot`（触发系统保存对话框）、`shareFile`（系统分享面板）、剪贴板导出 UI 入口（需滚动到列表下方）、TTS（本 SDK 无真实语音合成）。
+
+**本片新踩的坑**
+- **端口接口与具名适配器必须逐字对齐**：`SensorPort.probeSensor` 接口漏了适配器多出的 `label` 形参 → 构建报 `10505001 ArkTS Compiler Error`（`Property 'probeSensor' … not assignable`）；`arkts_check` 未拦住，构建拦住。
+- **切片预检的字段声明正则不认 `field?: Type`**：`([A-Za-z_$][\w$]*)[ \t]*[:=]` 在 `?` 处断链 → 误报「`this.<field>` 未声明」。store 里的可选引擎字段须写成 `field: Type | undefined = undefined`。
+- **`@State` 计数不变式**：把纯引擎 `@State`（`trackingText`/`trackingRequestPending`）搬进 store 会破坏「86 保留裸字段」，故跟踪域只登记、字段留宿主。
+
 ## [2026-10-04] DevEco Code - 修复：再次点选已选中天体时重新弹出详情卡
 
 **问题**：关闭详情卡不取消选中（设计如此）；此后再次点选**同一**天体时，`applySelectedObject` 中的 `preserveClosedDetail`（`!infoWinVisible && !targetChanged && dismissedObjectName === incomingName`）会抑制显示，导致详情卡无法重新弹出。

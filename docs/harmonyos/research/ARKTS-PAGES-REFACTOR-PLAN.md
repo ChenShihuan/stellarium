@@ -1359,7 +1359,7 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 
 | ID | 批次 | 组成 | 前置 | 状态 |
 |---|---|---|---|---|
-| **M1-A** | M1 | 端口组 + 服务层 + 启动/会话 + P2 并入（原 M1-1/4/5/6） | — | 待做 |
+| **M1-A** | M1 | 端口组 + 服务层 + 启动/会话 + P2 并入（原 M1-1/4/5/6） | — | **已完成（2026-10-04）**：新增 3 端口（`MediaPort`/`PlatformPort`/`SensorPort` + 具名适配器）、4 服务（`common/media/ImageDecoder`、`common/platform/{Clipboard,Share,Screenshot}`、`common/SpeechService`）、`capability/StartupBridge`；`SessionToolStore` 并入会话四法；`ScriptStore`（脚本播放四法）/`GuideStore`（导览 + 自持定时器）并入。宿主 **14,357 → 14,161 行**、`private` **594 → 575**、`@State` **132 不变**；4 次提交 `333f51e23d`/`88dab09304`/`c61a693eb5`/`bf5b6b6ede`；登记保留：skyCulture 美术解码二法（§15.6-3）、启动隐私生命周期杂项（§15.6-4）、`toggleReplayPause`/`changePlaybackRate`（归 M1-B）、`setTrackingState`（引擎耦合） |
 | **M1-B** | M1 | `SensorController` + `RecordingController`（原 M1-2/3） | M1-A | 待做 |
 | **M2-A** | M2 | `ObjectModelRenderer` 整体（原 M2-1/2） | M1-A | 待做 |
 | **M3-1** | M3 | `SkyInputController` 骨架（89 字段 + 鼠标/键盘/轴/惯性） | — | 待做（最后） |
