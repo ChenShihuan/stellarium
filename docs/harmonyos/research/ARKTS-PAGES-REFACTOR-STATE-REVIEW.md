@@ -192,6 +192,9 @@ Stack（根）
 >
 > **判据固定**：`reads(m) ⊆ §2.7.1 保留集合 ∧ reads(m) ∩ stores = ∅`（`reads` 为含被调宿主方法的
 > 传递闭包）。A2-3 开工逐名重测得 **49 个 / 210 行**（原 §14.3.1 占位值 31 系估值且有误抄，以本表为准）。
+>
+> **A2-4 补登记（2026-10-04）**：+2 —— `dockTop`（只读 `isExpandedLayout`+`skyHeight`）、`guideCardWidth`（只读 `skyWidth`），
+> 均为布局/几何族重测时发现的"全部读取项 ⊆ 保留集合且零 store"方法，**合计 51 个**。
 
 | # | 方法 | 读取的保留字段 | 判据命中说明 |
 |---:|---|---|---|
@@ -244,6 +247,8 @@ Stack（根）
 | 47 | `objectInspectorInlineModelSize` | `isExpandedLayout` `isFoldHoverLayout` `skyWidth` | 布局分发 |
 | 48 | `phoneChromeOpacity` | `isExpandedLayout` `isFoldHoverLayout` `panelIdleOpacity` | 布局 + D 类空闲淡出瞬态 |
 | 49 | `phoneChromeIsGlass` | `isExpandedLayout` `isFoldHoverLayout` `panelIdleGlass` | 布局 + D 类空闲淡出瞬态 |
+| 50 | `dockTop` | `isExpandedLayout` `skyHeight` | 布局分发 + 画布高（A2-4 补登记） |
+| 51 | `guideCardWidth` | `skyWidth` | 画布宽（A2-4 补登记） |
 
 > **与 §14.3.1 A2-4/A2-6 目标表的关系**：A2-4/A2-6 示例中的 `bottomCardWidth` `objectActionBarY`（读 `EDGE_MARGIN`，非本组）
 > `locationMapWidth` `responsiveFoldAngle` `compactPanelUsableHeight` `expandedUiAllowed` `isCompactMorePoint` `dragFollowAlpha`
