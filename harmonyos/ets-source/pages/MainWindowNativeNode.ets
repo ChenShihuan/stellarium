@@ -1191,6 +1191,18 @@ export struct WindowNativeNode {
     // §14 B2A：今晚观测目标（WUT）簇的 loadWutTargets 下沉 state/WutStore.ets；onChanged 走
     // publishAstroPanelState，保持 CLI 侧 astroPanelState 的 wut 字段同步。
     this.wutStore.attachPort(hostPort, () => { this.publishAstroPanelState() })
+    // §14 B2R-1：对象检查器原始模型纹理加载器 loadObjectInspectorModelRawTexture 下沉
+    // ObjectMediaStore。其读写的宿主逐帧裸字段（objectInspectorModelTexturePixels / RingTexture*）
+    // 与 image / fileIo / decodeLocalImage 职责经 ObjectMediaHostHooks 具名注入（store 不 import
+    // NAPI/UI）；该加载器不走桥、无 publish* 发布点，故不注入 CommandPort。
+    this.objectMediaStore.attachHooks({
+      readRawSidecar: (path: string, expectedBytes: number, label: string): ArrayBuffer => this.readRawSidecar(path, expectedBytes, label),
+      decodeObjectInspectorModelTextureFromPng: (pngFilePath: string, ringPngFilePath: string, mediaGeneration: number, expectedSelection: string, expectedPath: string): void =>
+        this.decodeObjectInspectorModelTextureFromPng(pngFilePath, ringPngFilePath, mediaGeneration, expectedSelection, expectedPath),
+      commitObjectInspectorModelTexture: (texture: ArrayBuffer, ringTexture: ArrayBuffer | undefined, mediaGeneration: number, expectedSelection: string, expectedPath: string, sourceLabel: string): void =>
+        this.commitObjectInspectorModelTexture(texture, ringTexture, mediaGeneration, expectedSelection, expectedPath, sourceLabel),
+      failObjectInspectorModelTexture: (mediaGeneration: number, reason: string): void => this.failObjectInspectorModelTexture(mediaGeneration, reason)
+    })
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -14207,7 +14219,7 @@ private loadPlanetPositions(): void {
       hilog.info(0x0000, 'StellariumArkUI',
         '[detail-media] decoding local image kind=%{public}s uri=%{public}s', kind, expectedPath)
       if (kind === 'model') {
-        this.loadObjectInspectorModelRawTexture(modelRawFilePath, ringRawFilePath, generation, expectedSelection, expectedPath,
+        this.objectMediaStore.loadObjectInspectorModelRawTexture(modelRawFilePath, ringRawFilePath, generation, expectedSelection, expectedPath,
           filePath, ringPngFilePath)
         return
       }
@@ -14349,76 +14361,28 @@ private loadPlanetPositions(): void {
     }, { width: 512, height: 256 })
   }
 
-  private loadObjectInspectorModelRawTexture(
-    rawFilePath: string,
-    ringRawFilePath: string,
-    mediaGeneration: number,
-    expectedSelection: string,
-    expectedPath: string,
-    pngFilePath: string,
-    ringPngFilePath: string,
-  ): void {
-    const expectedBytes = 512 * 256 * 4
-    if (rawFilePath.length === 0) {
-      hilog.warn(0x0000, 'StellariumArkUI',
-        '[detail-model] sidecar missing, decoding PNG fallback uri=%{public}s png=%{public}s',
-        expectedPath, pngFilePath)
-      this.decodeObjectInspectorModelTextureFromPng(pngFilePath, ringPngFilePath, mediaGeneration, expectedSelection, expectedPath)
-      return
-    }
+  // §14 B2R-1：ObjectMediaStore.loadObjectInspectorModelRawTexture 的原始侧车读取职责
+  //（fileIo 属 NAPI，不下沉 store）——把原地内联的 open/read/close 与尺寸校验提取为本方法，
+  // 经 ObjectMediaHostHooks.readRawSidecar 注入；尺寸不符或 IO 失败抛 Error，语义与原地一致。
+  private readRawSidecar(path: string, expectedBytes: number, label: string): ArrayBuffer {
     let file: fileIo.File | undefined = undefined
     try {
       const pixels = new ArrayBuffer(expectedBytes)
-      file = fileIo.openSync(rawFilePath, fileIo.OpenMode.READ_ONLY)
+      file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY)
       const bytesRead = fileIo.readSync(file.fd, pixels)
       fileIo.closeSync(file)
       file = undefined
       if (bytesRead !== expectedBytes) {
-        throw new Error('CPU texture sidecar has unexpected size: ' + bytesRead.toString())
+        throw new Error(label + ' has unexpected size: ' + bytesRead.toString())
       }
-      let ringTexture: ArrayBuffer | undefined = undefined
-      if (ringRawFilePath.length > 0) {
-        const ringExpectedBytes = 512 * 2 * 4
-        let ringFile: fileIo.File | undefined = undefined
-        try {
-          const ringPixels = new ArrayBuffer(ringExpectedBytes)
-          ringFile = fileIo.openSync(ringRawFilePath, fileIo.OpenMode.READ_ONLY)
-          const ringBytesRead = fileIo.readSync(ringFile.fd, ringPixels)
-          fileIo.closeSync(ringFile)
-          ringFile = undefined
-          if (ringBytesRead !== ringExpectedBytes) {
-            throw new Error('ring sidecar has unexpected size: ' + ringBytesRead.toString())
-          }
-          ringTexture = ringPixels
-          hilog.info(0x0000, 'StellariumArkUI',
-            '[detail-model] ring texture ready path=%{public}s bytes=%{public}s',
-            ringRawFilePath, ringBytesRead.toString())
-        } catch (ringErr) {
-          if (ringFile !== undefined) {
-            try {
-              fileIo.closeSync(ringFile)
-            } catch (_ringCloseErr) { }
-          }
-          hilog.warn(0x0000, 'StellariumArkUI',
-            '[detail-model] ring texture unavailable path=%{public}s error=%{public}s',
-            ringRawFilePath, describeDecodeError(ringErr as Error))
-        }
-      }
-      this.commitObjectInspectorModelTexture(pixels, ringTexture, mediaGeneration, expectedSelection, expectedPath, 'sidecar')
+      return pixels
     } catch (err) {
       if (file !== undefined) {
         try {
           fileIo.closeSync(file)
         } catch (_closeErr) { }
       }
-      hilog.warn(0x0000, 'StellariumArkUI',
-        '[detail-model] sidecar load failed path=%{public}s error=%{public}s',
-        rawFilePath, describeDecodeError(err as Error))
-      if (pngFilePath.length > 0) {
-        this.decodeObjectInspectorModelTextureFromPng(pngFilePath, ringPngFilePath, mediaGeneration, expectedSelection, expectedPath)
-        return
-      }
-      this.failObjectInspectorModelTexture(mediaGeneration, 'sidecar failed: ' + describeDecodeError(err as Error))
+      throw err as Error
     }
   }
 
