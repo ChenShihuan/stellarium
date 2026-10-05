@@ -1,3 +1,12 @@
+## [2026-10-01] DevEco Code - Phase 3r：搜索分类浏览（分类网格 + 目录状态），search 域主体迁完
+
+- **新增文件：** `panels/search/SearchCategoryBrowse.ets`（分类选择行 + 筛选入口 + 已选条件 chips + 「目录天体」状态文本 + 分类对象网格；`@ObjectLink store` + 8 个 `@Prop` + 9 个回调）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 12 个分类字段（`categoryObjects` / `categoryObjectCount` / `categoryLoadedCount` / `categoryLoading` / `categoryLoadFailed` / `categoryHasMore` / `categoryListKind` / `categoryCatalogTotal` / `categoryCatalogReady` / `categoryCatalogMessage` / `categoryModuleId` / `pendingPluginCatalogId`）迁入 `SearchStore`，**64 处引用**改写（用词边界替换以免误伤 `categoryModuleIdFor()` 等方法名）；浏览块（约 125 行内联 UI）替换为 `SearchCategoryBrowse({...})` 调用；**顺带删除因迁移而失去调用者的 `searchFilterMenuTitle()`**（其 UI 已随 `SearchFilterMenu` 组件化，`menuTitle()` 在组件内实现）。
+- **宿主保留的注入项：** `searchCategoryIcon()` / `searchCategoryLabel()`（图标键与标签，宿主内另有使用）、`categoryObjectIcon()` / `categoryObservationSubtitle()`（在其它面板也用到，以 `iconFor` / `subtitleFor` 回调注入避免复制实现）、目录状态文本的嵌套判断改为组件私有 `catalogStatusText()`（只读 store + I18n）。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验 / 安装启动通过；① 浏览块由新组件渲染，`#search-category-picker`、`#search-filter-picker` 锚点在，状态文本「已加载 8 / 8 个」；② 打开分类页 → 分类行由 `CatalogFilterRow` 渲染且**选中 ✓ 正确显示**（正是本方案修掉的"参数化 builder 冻结"类问题）；③ 切到「卫星」→ 分类标签**实时**变「卫星」、状态**实时**变「已加载 60 / 66 个」（无需重开面板）；④ 已切回「行星」恢复原状。
+- **单体行数：** 29,487 → **29,415**。
+- **search 域进度：** 输入栏 / 候选列表 / 筛选器 / 分类浏览**已迁完**；仅剩搜索面板尾部的**星座快速导航 chips**（`constellationNavigationItems`）与 **RA/Dec 坐标输入**（`coordInputRA/Dec`、`goToCoordinates`）两小块未迁。
+
 ## [2026-10-01] DevEco Code - Phase 3q：搜索筛选器（菜单 + chips + 分类行），契约校验扩到全部组件
 
 - **新增文件：** `panels/search/SearchFilterMenu.ets`（返回行 + 四个页面：根 / 分类 / 可视度 / 器材；`menuTitle()` 由宿主方法搬入，直接读 store）、`panels/search/SearchFilterChips.ets`（已选条件 chips，点击即清除）、`panels/search/CatalogFilterRow.ets`（分类行子组件，替代原**带参数的 UI 函数** `catalogFilterRow(cat)` —— 其参数按值捕获、选中态不会实时刷新）。
