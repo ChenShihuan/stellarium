@@ -59,6 +59,8 @@ import { SensorController, GyroGuideLayout, SensorHostHooks } from '../capabilit
 import { RecordingController, RecordingHostHooks } from '../capability/RecordingController'
 import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
 import { SkyInputController, SkyInputHostHooks } from '../capability/SkyInputController'
+import { DetailConnectorController, DetailConnectorHostHooks } from '../capability/DetailConnectorController'
+import { BehaviorHostHooks } from '../capability/ControllerHooks'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
@@ -783,6 +785,8 @@ export struct WindowNativeNode {
   private objectModelRendererImpl: ObjectModelRenderer | null = null
   // M3-1：天空输入控制器骨架（惰性构造；鼠标/键盘/滚轮轴/点按序列/惯性方法 + 16 个草稿字段）。
   private skyInputControllerImpl: SkyInputController | null = null
+  // D1：详情连接线 / 详情刷新定时器控制器（惰性构造；指向线几何 @State 留宿主经 hooks 逐帧写入）。
+  private detailConnectorControllerImpl: DetailConnectorController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -815,7 +819,7 @@ export struct WindowNativeNode {
   @State private objectDetailContentOpacity: number = 1
   @State private objectDetailContentTranslateX: number = 0
   private objectCardDragging: boolean = false
-  private objectCardPlacementPending: boolean = false
+  // objectCardPlacementPending 已随 D1 下沉 capability/DetailConnectorController.ets（唯一读取点在连接线刷新）。
   private objectDetailTabTransitionId: number = 0
   private objectCardDragStartX: number = 0
   private objectCardDragStartY: number = 0
@@ -1126,17 +1130,11 @@ export struct WindowNativeNode {
   }
 
   // 目标详情自动刷新：选中天体后每 180ms 重新拉一次坐标，让“地平坐标”随地球自转实时变化。
-  // detailTimer 为 setInterval 句柄；detailRefreshing 防重入；detailRefreshGuard 是兜底定时器，
-  // 因为 callNativeWhenReady 在放弃轮询时【不】回调 onOk，必须靠它复位，否则会卡死不再刷新。
-  private detailTimer: number = 0
-  private detailRefreshing: boolean = false
-  private detailRefreshGuard: number = 0
-  private objectDetailConnectorTimer: number = 0
+  // detailTimer / detailRefreshing / detailRefreshGuard / objectDetailConnectorTimer /
+  // objectDetailConnectorAnimationTimer / objectDetailConnectorLast* 已随 D1 下沉
+  // capability/DetailConnectorController.ets（定时器自持 start()/stop()，§15.7 规则 3）。
+  // objectDetailConnectorAnimateGeometry 是宿主 @State（指向线过渡开关），控制器经 hooks 写入。
   @State private objectDetailConnectorAnimateGeometry: boolean = false
-  private objectDetailConnectorAnimationTimer: number = 0
-  private objectDetailConnectorLastPanelVisible: boolean = false
-  private objectDetailConnectorLastActivePanel: string = ''
-  private objectDetailConnectorLastClippedByUi: boolean = false
   private foregroundRefreshPaused: boolean = false
   // Structured details are loaded after a new target is drawn. Keeping this
   // timer separate from the live-value poll prevents it from delaying panning.
@@ -1644,8 +1642,8 @@ export struct WindowNativeNode {
         setCurrentFovText: (text: string): void => { this.currentFovText = text },
         setPanelOffset: (offsetX: number, offsetY: number): void => { this.panelOffsetX = offsetX; this.panelOffsetY = offsetY },
         cancelSelectedObjectUiChange: (): void => this.cancelSelectedObjectUiChange(),
-        pauseDetailRefreshForSkyDrag: (): void => this.pauseDetailRefreshForSkyDrag(),
-        resumeDetailRefreshAfterSkyDrag: (): void => this.resumeDetailRefreshAfterSkyDrag(),
+        pauseDetailRefreshForSkyDrag: (): void => this.detailConnectorCtl().pauseDetailRefreshForSkyDrag(),
+        resumeDetailRefreshAfterSkyDrag: (): void => this.detailConnectorCtl().resumeDetailRefreshAfterSkyDrag(),
         scheduleSelectedObjectForUiChange: (delay: number): void => this.scheduleSelectedObjectForUiChange(delay),
         scheduleSkyTextureStatusCheck: (): void => this.scheduleSkyTextureStatusCheck(),
         scheduleRecordingViewCheckpoint: (delay: number): void => this.recordingCtl().scheduleRecordingViewCheckpoint(delay),
@@ -1690,6 +1688,74 @@ export struct WindowNativeNode {
       )
     }
     return this.locationControllerImpl
+  }
+
+  // D0：行为控制器共享宿主 hook（STATE-REVIEW §10.3；后续 D 轨道控制器接口 extends BehaviorHostHooks）。
+  private behaviorHooks(): BehaviorHostHooks {
+    return {
+      refreshState: (): void => { this.refreshState() },
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+      panelChange: (panel: string, visible: boolean): void => {
+        this.activePanel = panel
+        this.panelVisible = visible
+        this.syncDockClockTimer()
+      }
+    }
+  }
+
+  // D1：详情连接线 / 详情刷新定时器控制器惰性构造。指向线几何 9 个 @State 与过渡开关留宿主、
+  // 经 hooks 逐帧 get/set（§15.7 规则 2）；面板/星图状态、几何派生、宿主保留控制器
+  // （objectDetailConnectorObstacles / refreshSelectedObject / scheduleSkyTextureStatusCheck）经 hooks 回注。
+  private detailConnectorCtl(): DetailConnectorController {
+    if (this.detailConnectorControllerImpl === null) {
+      const hooks: DetailConnectorHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        activePanel: (): string => this.activePanel,
+        panelVisible: (): boolean => this.panelVisible,
+        skyDragging: (): boolean => this.skyDragging,
+        skyWidth: (): number => this.skyWidth,
+        skyHeight: (): number => this.skyHeight,
+        isFoldHoverLayout: (): boolean => this.isFoldHoverLayout,
+        bottomCardY: (): number => this.bottomCardY(),
+        hoverBottomCardY: (): number => this.hoverBottomCardY(),
+        detailCardX: (): number => this.detailCardX(),
+        detailCardY: (): number => this.detailCardY(),
+        detailCardWidth: (): number => this.detailCardWidth(),
+        detailCardHeight: (): number => this.detailCardHeight(),
+        objectDetailConnectorObstacles: (): SkyUiObstacle[] => this.objectDetailConnectorObstacles(),
+        refreshSelectedObject: (): void => { this.refreshSelectedObject() },
+        scheduleSkyTextureStatusCheck: (): void => { this.scheduleSkyTextureStatusCheck() },
+        gyroGuideProjection: (): GyroGuideProjection => this.callNative('getGyroGuidePosition') as GyroGuideProjection,
+        connectorVisible: (): boolean => this.overlayStore.objectDetailConnectorVisible,
+        connectorX: (): number => this.objectDetailConnectorX,
+        setConnectorX: (value: number): void => { this.objectDetailConnectorX = value },
+        connectorY: (): number => this.objectDetailConnectorY,
+        setConnectorY: (value: number): void => { this.objectDetailConnectorY = value },
+        connectorLength: (): number => this.objectDetailConnectorLength,
+        setConnectorLength: (value: number): void => { this.objectDetailConnectorLength = value },
+        connectorAngle: (): number => this.objectDetailConnectorAngle,
+        setConnectorAngle: (value: number): void => { this.objectDetailConnectorAngle = value },
+        connectorEndX: (): number => this.objectDetailConnectorEndX,
+        setConnectorEndX: (value: number): void => { this.objectDetailConnectorEndX = value },
+        connectorEndY: (): number => this.objectDetailConnectorEndY,
+        setConnectorEndY: (value: number): void => { this.objectDetailConnectorEndY = value },
+        connectorTargetX: (): number => this.objectDetailConnectorTargetX,
+        setConnectorTargetX: (value: number): void => { this.objectDetailConnectorTargetX = value },
+        connectorTargetY: (): number => this.objectDetailConnectorTargetY,
+        setConnectorTargetY: (value: number): void => { this.objectDetailConnectorTargetY = value },
+        connectorTargetOnScreen: (): boolean => this.objectDetailConnectorTargetOnScreen,
+        setConnectorTargetOnScreen: (value: boolean): void => { this.objectDetailConnectorTargetOnScreen = value },
+        setConnectorAnimateGeometry: (value: boolean): void => { this.objectDetailConnectorAnimateGeometry = value }
+      }
+      this.detailConnectorControllerImpl = new DetailConnectorController(this.objectDetailStore, this.infoWindowStore, hooks)
+    }
+    return this.detailConnectorControllerImpl
   }
 
   aboutToAppear(): void {
@@ -1834,7 +1900,7 @@ export struct WindowNativeNode {
       stopGyroscope: (updateStatus: boolean): void => this.gyroCtl().stopGyroscope(updateStatus),
       stopSkyInertia: (): void => this.skyInputCtl().stopSkyInertia(),
       stopCompetingTasks: (): void => {
-        this.stopDetailAutoRefresh()
+        this.detailConnectorCtl().stopDetailAutoRefresh()
         this.stopTimePanelTimers()
         this.stopSkyCultureTimeFollowTimer()
         this.stopAstroCalcContextTimer()
@@ -2392,8 +2458,7 @@ export struct WindowNativeNode {
     this.saveAppSettings()
     this.skyInputCtl().stop()
     this.gyroCtl().stopGyroscope(false)
-    this.stopDetailAutoRefresh()
-    this.stopObjectDetailConnectorRefresh()
+    this.detailConnectorCtl().stop()
     this.stopObjectInspectorMediaWarmup()
     this.stopBodyDetailWarmup()
     this.clearObjectInspectorDecodedImage()
@@ -2444,7 +2509,7 @@ export struct WindowNativeNode {
           }, 3000)
         }
         if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWindowStore.infoWinVisible)) {
-          this.startDetailAutoRefresh()
+          this.detailConnectorCtl().startDetailAutoRefresh()
         }
       }
       if (this.audioStore.musicEnabled) {
@@ -2462,7 +2527,7 @@ export struct WindowNativeNode {
 
     // This app declares no background task. Stop ArkUI polling and audio
     // rendering as soon as the Ability leaves the foreground.
-    this.foregroundRefreshPaused = this.timePanelTimer !== 0 || this.detailTimer !== 0
+    this.foregroundRefreshPaused = this.timePanelTimer !== 0 || this.detailConnectorCtl().hasDetailTimer()
     this.stopTimePanelTimers()
     this.stopViewCoordinateTimer()
     this.stopDockClockTimer()
@@ -2471,7 +2536,7 @@ export struct WindowNativeNode {
     this.stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
-    this.stopDetailAutoRefresh()
+    this.detailConnectorCtl().stopDetailAutoRefresh()
     this.skyInputCtl().stop()
     void AudioEngine.getInstance().stop()
     this.gyroCtl().pauseForBackground()
@@ -7477,158 +7542,32 @@ private loadPlanetPositions(): void {
   // 拉取当前选中天体的信息并刷新详情面板。
   // 加防重入：避免自动刷新(1Hz)与手动“刷新”按钮重叠，导致 consume-on-read 结果被互相冲掉。
   // callNativeWhenReady 放弃轮询时不会回调，所以配 detailRefreshGuard 兜底复位，防止永久卡死。
+  // detailRefreshing / detailRefreshGuard 的所有权随 D1 移交 capability/DetailConnectorController.ets。
   private refreshSelectedObject(): void {
-    if (this.detailRefreshing) { return }
+    if (this.detailConnectorCtl().isDetailRefreshing()) { return }
     const expectedName = this.objectDetailStore.selectedName
     const selectionSerial = this.skySelectionRequestSerial
-    this.detailRefreshing = true
-    if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard) }
-    this.detailRefreshGuard = setTimeout(() => { this.detailRefreshing = false }, 1800) as number
+    this.detailConnectorCtl().beginDetailRefresh()
     const detailsNeeded = !this.objectDetailStore.selectedDetailLoaded && (this.fullInspectorRequested || useTabletObjectInspector())
     if (detailsNeeded && this.objectDetailStore.selectedDetailRequestPending) {
-      this.detailRefreshing = false
-      if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard); this.detailRefreshGuard = 0 }
+      this.detailConnectorCtl().endDetailRefresh()
       return
     }
     const details = detailsNeeded ? 'details' : ''
     if (details === 'details') { this.objectDetailStore.selectedDetailRequestPending = true }
     this.callInteractive('getSelectedObjectInfo', details, (r) => {
       if (details === 'details') { this.objectDetailStore.selectedDetailRequestPending = false }
-      this.detailRefreshing = false
-      if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard); this.detailRefreshGuard = 0 }
+      this.detailConnectorCtl().endDetailRefresh()
       if (selectionSerial !== this.skySelectionRequestSerial || expectedName !== this.objectDetailStore.selectedName) {
         return
       }
       this.applySelectedObject(r, true)
     }, () => {
       if (details === 'details') { this.objectDetailStore.selectedDetailRequestPending = false }
-      this.detailRefreshing = false
-      if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard); this.detailRefreshGuard = 0 }
+      this.detailConnectorCtl().endDetailRefresh()
     })
   }
 
-  // 启动“详情自动刷新”：仅在【目标详情面板打开 + 有已选中天体 + 未在拖动星图】时才拉数据，避免无谓的桥调用。
-  private startDetailAutoRefresh(): void {
-    if (this.detailTimer !== 0) { return }
-    this.detailTimer = setInterval(() => {
-      if (this.skyDragging) { return }
-      if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWindowStore.infoWinVisible)) {
-        // The one-shot full-details request owns the initial structured card
-        // load. Do not race it with a second request from the live-value poll.
-        if (!this.objectDetailStore.selectedDetailLoaded && this.objectDetailStore.selectedDetailTimer !== 0) { return }
-        this.refreshSelectedObject()
-      }
-    }, 180) as number
-    this.startObjectDetailConnectorRefresh()
-  }
-
-  private pauseDetailRefreshForSkyDrag(): void {
-    // Object-info polling uses the same ArkTS-to-Qt queue as panning. Stop it
-    // for the duration of a gesture so an open detail card cannot make the sky
-    // lag behind the finger. The connector is only a lightweight projection
-    // read and must keep running so its line follows the native sky gesture.
-    this.stopDetailAutoRefresh()
-  }
-
-  private resumeDetailRefreshAfterSkyDrag(): void {
-    if (this.infoWindowStore.infoWinVisible && this.objectDetailStore.selectedStatus === 'Selected') {
-      this.startDetailAutoRefresh()
-      this.refreshObjectDetailConnector()
-      this.scheduleSkyTextureStatusCheck()
-    }
-  }
-
-  private stopDetailAutoRefresh(): void {
-    if (this.detailTimer !== 0) { clearInterval(this.detailTimer); this.detailTimer = 0 }
-    if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard); this.detailRefreshGuard = 0 }
-    this.detailRefreshing = false
-  }
-
-  private startObjectDetailConnectorRefresh(): void {
-    if (this.objectDetailConnectorTimer !== 0) { return }
-    this.objectDetailConnectorTimer = setInterval(() => {
-      this.refreshObjectDetailConnector()
-    }, 32) as number
-    this.refreshObjectDetailConnector()
-  }
-
-  private stopObjectDetailConnectorRefresh(): void {
-    if (this.objectDetailConnectorTimer !== 0) {
-      clearInterval(this.objectDetailConnectorTimer)
-      this.objectDetailConnectorTimer = 0
-    }
-    if (this.objectDetailConnectorAnimationTimer !== 0) {
-      clearTimeout(this.objectDetailConnectorAnimationTimer)
-      this.objectDetailConnectorAnimationTimer = 0
-    }
-    this.objectDetailConnectorAnimateGeometry = false
-  }
-
-  private armObjectDetailConnectorTransition(): void {
-    this.objectDetailConnectorAnimateGeometry = true
-    if (this.objectDetailConnectorAnimationTimer !== 0) {
-      clearTimeout(this.objectDetailConnectorAnimationTimer)
-    }
-    this.objectDetailConnectorAnimationTimer = setTimeout(() => {
-      this.objectDetailConnectorAnimateGeometry = false
-      this.objectDetailConnectorAnimationTimer = 0
-    }, 190) as number
-  }
-
-  private objectDetailCardY(): number {
-    return this.isFoldHoverLayout ? this.hoverBottomCardY() : this.bottomCardY()
-  }
-
-  private rayRectIntersection(originX: number, originY: number, targetX: number, targetY: number,
-    left: number, top: number, right: number, bottom: number): number[] {
-    const dx = targetX - originX
-    const dy = targetY - originY
-    const intersections: number[][] = []
-    if (Math.abs(dx) > 0.0001) {
-      const leftT = (left - originX) / dx
-      const leftY = originY + leftT * dy
-      if (leftT > 0 && leftY >= top - 0.5 && leftY <= bottom + 0.5) intersections.push([leftT, left, leftY])
-      const rightT = (right - originX) / dx
-      const rightY = originY + rightT * dy
-      if (rightT > 0 && rightY >= top - 0.5 && rightY <= bottom + 0.5) intersections.push([rightT, right, rightY])
-    }
-    if (Math.abs(dy) > 0.0001) {
-      const topT = (top - originY) / dy
-      const topX = originX + topT * dx
-      if (topT > 0 && topX >= left - 0.5 && topX <= right + 0.5) intersections.push([topT, topX, top])
-      const bottomT = (bottom - originY) / dy
-      const bottomX = originX + bottomT * dx
-      if (bottomT > 0 && bottomX >= left - 0.5 && bottomX <= right + 0.5) intersections.push([bottomT, bottomX, bottom])
-    }
-    if (intersections.length === 0) return []
-    intersections.sort((a: number[], b: number[]) => a[0] - b[0])
-    return [intersections[0][1], intersections[0][2]]
-  }
-
-  private segmentRectEntryFraction(startX: number, startY: number, endX: number, endY: number,
-    left: number, top: number, right: number, bottom: number): number {
-    const dx = endX - startX
-    const dy = endY - startY
-    const p: number[] = [-dx, dx, -dy, dy]
-    const q: number[] = [startX - left, right - startX, startY - top, bottom - startY]
-    let entry = 0
-    let exit = 1
-    for (let index = 0; index < 4; index++) {
-      if (Math.abs(p[index]) < 0.0001) {
-        if (q[index] < 0) return -1
-        continue
-      }
-      const fraction = q[index] / p[index]
-      if (p[index] < 0) {
-        if (fraction > exit) return -1
-        if (fraction > entry) entry = fraction
-      } else {
-        if (fraction < entry) return -1
-        if (fraction < exit) exit = fraction
-      }
-    }
-    return entry >= 0 && entry <= 1 && entry <= exit ? entry : -1
-  }
 
   private objectDetailConnectorObstacles(): SkyUiObstacle[] {
     const obstacles: SkyUiObstacle[] = []
@@ -7674,149 +7613,6 @@ private loadPlanetPositions(): void {
         right: quickX + 52, bottom: quickY + 106 })
     }
     return obstacles
-  }
-
-  private clearObjectDetailConnector(): void {
-    this.objectDetailConnectorLength = 0
-  }
-
-  private refreshObjectDetailConnector(): void {
-    if (!this.overlayStore.objectDetailConnectorVisible || !this.infoWindowStore.infoWinVisible || this.objectDetailStore.selectedStatus !== 'Selected' ||
-      this.objectDetailStore.selectedName.length === 0) {
-      this.clearObjectDetailConnector()
-      return
-    }
-    const projection = this.callNative('getGyroGuidePosition') as GyroGuideProjection
-    if (projection.ok !== true || projection.valid !== true ||
-      typeof projection.xRatio !== 'number' || typeof projection.yRatio !== 'number') {
-      this.clearObjectDetailConnector()
-      return
-    }
-    const targetX = (projection.xRatio as number) * this.skyWidth
-    const targetY = (projection.yRatio as number) * this.skyHeight
-    if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
-      this.clearObjectDetailConnector()
-      return
-    }
-    const targetOnScreen = projection.visible === true && targetX >= 0 && targetX <= this.skyWidth && targetY >= 0 && targetY <= this.skyHeight
-    if (this.objectCardPlacementPending) {
-      this.objectCardPlacementPending = false
-    }
-    const left = this.detailCardX()
-    const top = this.detailCardY()
-    const right = left + this.detailCardWidth()
-    const bottom = top + this.detailCardHeight()
-    if (targetOnScreen && pointInsideRect(targetX, targetY, left, top, right, bottom, 2)) {
-      this.clearObjectDetailConnector()
-      return
-    }
-    const centerX = (left + right) / 2
-    const centerY = (top + bottom) / 2
-    const cardIntersection = this.rayRectIntersection(centerX, centerY, targetX, targetY, left, top, right, bottom)
-    if (cardIntersection.length !== 2) {
-      this.clearObjectDetailConnector()
-      return
-    }
-    let endX = targetX
-    let endY = targetY
-    if (!targetOnScreen) {
-      const screenIntersection = this.rayRectIntersection(centerX, centerY, targetX, targetY, 12, 12, this.skyWidth - 12, this.skyHeight - 12)
-      if (screenIntersection.length !== 2) {
-        this.clearObjectDetailConnector()
-        return
-      }
-      endX = screenIntersection[0]
-      endY = screenIntersection[1]
-    }
-    const directionX = endX - centerX
-    const directionY = endY - centerY
-    const directionLength = Math.sqrt(directionX * directionX + directionY * directionY)
-    if (!Number.isFinite(directionLength) || directionLength < 1) {
-      return
-    }
-    const unitX = directionX / directionLength
-    const unitY = directionY / directionLength
-    const anchorX = cardIntersection[0] + unitX * 5
-    const anchorY = cardIntersection[1] + unitY * 5
-    if (targetOnScreen) {
-      endX -= unitX * 16
-      endY -= unitY * 16
-    }
-
-    let clippedByUi = false
-    let clipFraction = 1
-    const connectorUiGap = 6
-    const connectorObstacles = this.objectDetailConnectorObstacles()
-    for (let index = 0; index < connectorObstacles.length; index++) {
-      const obstacle = connectorObstacles[index]
-      const fraction = this.segmentRectEntryFraction(anchorX, anchorY, endX, endY,
-        obstacle.left - connectorUiGap, obstacle.top - connectorUiGap,
-        obstacle.right + connectorUiGap, obstacle.bottom + connectorUiGap)
-      if (fraction < 0) continue
-      if (fraction <= 0.015) {
-        this.clearObjectDetailConnector()
-        return
-      }
-      if (fraction < clipFraction) {
-        clipFraction = fraction
-        clippedByUi = true
-      }
-    }
-    const menuStateChanged = this.objectDetailConnectorLength > 0 &&
-      (this.objectDetailConnectorLastPanelVisible !== this.panelVisible ||
-        this.objectDetailConnectorLastActivePanel !== this.activePanel)
-    const avoidanceStateChanged = this.objectDetailConnectorLength > 0 &&
-      this.objectDetailConnectorLastClippedByUi !== clippedByUi
-    if (menuStateChanged || avoidanceStateChanged) {
-      this.armObjectDetailConnectorTransition()
-    }
-    this.objectDetailConnectorLastPanelVisible = this.panelVisible
-    this.objectDetailConnectorLastActivePanel = this.activePanel
-    this.objectDetailConnectorLastClippedByUi = clippedByUi
-    if (clippedByUi) {
-      const fullDistance = Math.sqrt(Math.pow(endX - anchorX, 2) + Math.pow(endY - anchorY, 2))
-      const safeFraction = Math.max(0, clipFraction - connectorUiGap / Math.max(1, fullDistance))
-      endX = anchorX + (endX - anchorX) * safeFraction
-      endY = anchorY + (endY - anchorY) * safeFraction
-    }
-    const dx = endX - anchorX
-    const dy = endY - anchorY
-    const length = Math.sqrt(dx * dx + dy * dy)
-    if (!Number.isFinite(length) || length < 18) {
-      this.clearObjectDetailConnector()
-      return
-    }
-    const nextX = (endX + anchorX) / 2
-    const nextY = (endY + anchorY) / 2
-    const nextLength = Math.min(length, Math.max(this.skyWidth, this.skyHeight) * 1.5)
-    let nextAngle = Math.atan2(dy, dx) * 180 / Math.PI
-    while (nextAngle - this.objectDetailConnectorAngle > 180) nextAngle -= 360
-    while (nextAngle - this.objectDetailConnectorAngle < -180) nextAngle += 360
-    const nextEndX = endX
-    const nextEndY = endY
-    const nextTargetOnScreen = targetOnScreen && !clippedByUi
-    const nextTargetX = nextTargetOnScreen ? targetX : endX
-    const nextTargetY = nextTargetOnScreen ? targetY : endY
-    const geometryChanged = this.objectDetailConnectorLength <= 0 ||
-      Math.abs(nextX - this.objectDetailConnectorX) >= 0.75 ||
-      Math.abs(nextY - this.objectDetailConnectorY) >= 0.75 ||
-      Math.abs(nextLength - this.objectDetailConnectorLength) >= 0.75 ||
-      Math.abs(nextAngle - this.objectDetailConnectorAngle) >= 0.35 ||
-      Math.abs(nextEndX - this.objectDetailConnectorEndX) >= 0.75 ||
-      Math.abs(nextEndY - this.objectDetailConnectorEndY) >= 0.75 ||
-      Math.abs(nextTargetX - this.objectDetailConnectorTargetX) >= 0.75 ||
-      Math.abs(nextTargetY - this.objectDetailConnectorTargetY) >= 0.75 ||
-      nextTargetOnScreen !== this.objectDetailConnectorTargetOnScreen
-    if (!geometryChanged) { return }
-    this.objectDetailConnectorX = nextX
-    this.objectDetailConnectorY = nextY
-    this.objectDetailConnectorLength = nextLength
-    this.objectDetailConnectorAngle = nextAngle
-    this.objectDetailConnectorEndX = nextEndX
-    this.objectDetailConnectorEndY = nextEndY
-    this.objectDetailConnectorTargetX = nextTargetX
-    this.objectDetailConnectorTargetY = nextTargetY
-    this.objectDetailConnectorTargetOnScreen = nextTargetOnScreen
   }
 
   private objectDetailMarkerSize(): number {
@@ -8072,7 +7868,7 @@ private loadPlanetPositions(): void {
     this.objectDetailStore.selectedUiLayoutTimer = setTimeout(() => {
       this.objectDetailStore.selectedUiLayoutTimer = 0
       if (this.objectDetailStore.selectedStatus === 'Selected') {
-        this.refreshObjectDetailConnector()
+        this.detailConnectorCtl().refreshObjectDetailConnector()
       }
     }, delay) as number
   }
@@ -8364,7 +8160,7 @@ private loadPlanetPositions(): void {
         this.fullInspectorRequested = true
         this.objectMediaStore.objectInspectorMoreOpen = false
         this.objectDetailStore.bottomCardIndex = 2
-        this.objectCardPlacementPending = true
+        this.detailConnectorCtl().markObjectCardPlacementPending()
         // The lightweight tap/search response deliberately has no detailFields.
         // Never leave the previous target's structured data visible while loading.
         this.objectDetailStore.selectedDetailFields = []
@@ -8388,7 +8184,7 @@ private loadPlanetPositions(): void {
       if (isNewSelection) {
         AudioEngine.getInstance().chimeForSelection(result)
       }
-      this.startDetailAutoRefresh()
+      this.detailConnectorCtl().startDetailAutoRefresh()
       if (isNewSelection && !this.objectDetailStore.selectedDetailLoaded) {
         this.requestSelectedDetails(this.objectDetailStore.selectedName)
       }
@@ -8952,8 +8748,7 @@ private loadPlanetPositions(): void {
   private clearSkySelectionFromDoubleTap(x: number, y: number): void {
     const requestSerial = ++this.skySelectionRequestSerial
     this.skyInputCtl().resetSkyTapSequence()
-    this.stopDetailAutoRefresh()
-    this.stopObjectDetailConnectorRefresh()
+    this.detailConnectorCtl().stop()
     this.applySelectedObject({ ok: true, found: false } as StellariumBridgeResponse)
     hilog.info(0x0000, 'StellariumArkUI', 'double tap cleared sky selection at ' +
       Math.round(x).toString() + ',' + Math.round(y).toString())
@@ -9813,7 +9608,7 @@ private loadPlanetPositions(): void {
 
   private setObjectDetailConnector(enabled: boolean, syncNative: boolean = true): void {
     this.overlayStore.objectDetailConnectorVisible = enabled
-    this.refreshObjectDetailConnector()
+    this.detailConnectorCtl().refreshObjectDetailConnector()
     this.saveAppSettings()
     if (syncNative) {
       this.callInteractive('setObjectDetailConnector', enabled ? '1' : '0', () => {})
@@ -9838,7 +9633,7 @@ private loadPlanetPositions(): void {
   }
 
   private detailCardY(): number {
-    return this.objectDetailCardY()
+    return this.detailConnectorCtl().objectDetailCardY()
   }
 
   private detailCardWidth(): number {
@@ -9993,7 +9788,7 @@ private loadPlanetPositions(): void {
       this.objectDetailStore.selectedUiLayoutTimer = 0
     }
     this.infoWindowStore.infoWinVisible = false
-    this.stopObjectDetailConnectorRefresh()
+    this.detailConnectorCtl().stopObjectDetailConnectorRefresh()
     this.infoWindowStore.infoWinExpanded = false
     this.objectMediaStore.objectInspectorMoreOpen = false
     this.dismissedObjectName = this.objectDetailStore.selectedName
@@ -10044,11 +9839,11 @@ private loadPlanetPositions(): void {
     this.fullInspectorRequested = true
     this.objectMediaStore.objectInspectorMoreOpen = false
     this.objectDetailStore.bottomCardIndex = 2
-    this.objectCardPlacementPending = true
+    this.detailConnectorCtl().markObjectCardPlacementPending()
     this.dismissedObjectName = ''
     this.resetPanelIdle()
     this.refreshSelectedObject()
-    this.startObjectDetailConnectorRefresh()
+    this.detailConnectorCtl().startObjectDetailConnectorRefresh()
     this.scheduleSelectedObjectForUiChange(320)
   }
 
