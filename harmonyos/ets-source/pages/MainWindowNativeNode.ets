@@ -116,6 +116,7 @@ import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordin
 import { ObjectDetailConnectorLayer } from '../panels/overlay/ObjectDetailConnectorLayer'
 import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
 import { ObjectInspectorMediaPreviewOverlay } from '../panels/overlay/ObjectInspectorMediaPreviewOverlay'
+import { SkyCultureArtPreviewOverlay } from '../panels/overlay/SkyCultureArtPreviewOverlay'
 import { ToolsStore } from '../state/ToolsStore'
 import { ToolsPanel } from '../panels/tools/ToolsPanel'
 import { RecordingControlBar } from '../panels/tools/RecordingControlBar'
@@ -461,7 +462,6 @@ export struct WindowNativeNode {
   // 星文化只读详情视图状态（Phase 3am，见 state/SkyCultureViewStore.ets）
   @State private skyCultureViewStore: SkyCultureViewStore = new SkyCultureViewStore()
   @State private skyCultureArtStates: Record<string, string> = {}
-  @State private skyCultureArtPreviewPixelMap: image.PixelMap | undefined = undefined
   @State private skyCultureArtThumbnailPixelMaps: Record<string, image.PixelMap> = {}
   private skyCultureArtDecodeGeneration: number = 0
   private skyCultureArtThumbnailGeneration: number = 0
@@ -1797,8 +1797,8 @@ export struct WindowNativeNode {
     }
     this.stateRefreshRequestPending = false
     this.stateRefreshQueued = false
-    const skyCulturePixelMap = this.skyCultureArtPreviewPixelMap
-    this.skyCultureArtPreviewPixelMap = undefined
+    const skyCulturePixelMap = this.skyCultureViewStore.artPreviewPixelMap
+    this.skyCultureViewStore.artPreviewPixelMap = undefined
     this.releaseDecodedImage(skyCulturePixelMap, 'disappear-sky-culture-art')
     this.clearSkyCultureMakerArtworkPreview('disappear-sky-culture-maker-artwork')
     this.stopSkyTextureStatusObserver()
@@ -8115,8 +8115,8 @@ export struct WindowNativeNode {
   private openSkyCultureArtPreview(art: SkyCultureArtItem): void {
     this.skyCultureViewStore.artPreviewOpen = true
     this.skyCultureArtDecodeGeneration++
-    const oldPixelMap = this.skyCultureArtPreviewPixelMap
-    this.skyCultureArtPreviewPixelMap = undefined
+    const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
+    this.skyCultureViewStore.artPreviewPixelMap = undefined
     this.releaseDecodedImage(oldPixelMap, 'switch-sky-culture-art')
     this.skyCultureViewStore.artPreviewRawPath = art.rawPath
     this.skyCultureViewStore.artPreviewName = art.name !== undefined && art.name.length > 0 ? art.name : '星座绘图 ' + art.index
@@ -8159,8 +8159,8 @@ export struct WindowNativeNode {
   private closeSkyCultureArtPreview(): void {
     this.skyCultureViewStore.artPreviewOpen = false
     this.skyCultureArtDecodeGeneration++
-    const oldPixelMap = this.skyCultureArtPreviewPixelMap
-    this.skyCultureArtPreviewPixelMap = undefined
+    const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
+    this.skyCultureViewStore.artPreviewPixelMap = undefined
     this.releaseDecodedImage(oldPixelMap, 'sky-culture-art')
     this.skyCultureViewStore.artPreviewPath = ''
     this.skyCultureViewStore.artPreviewName = ''
@@ -8185,8 +8185,8 @@ export struct WindowNativeNode {
         this.releaseDecodedImage(pixelMap, 'stale-sky-culture-art')
         return
       }
-      const oldPixelMap = this.skyCultureArtPreviewPixelMap
-      this.skyCultureArtPreviewPixelMap = pixelMap
+      const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
+      this.skyCultureViewStore.artPreviewPixelMap = pixelMap
       this.releaseDecodedImage(oldPixelMap, 'previous-sky-culture-art')
       this.skyCultureViewStore.artPreviewLoading = false
       this.skyCultureViewStore.artPreviewFailed = false
@@ -8213,66 +8213,14 @@ export struct WindowNativeNode {
     hilog.error(0x0000, 'StellariumArkUI', '[sky-culture-art] preview decode failed path=%{public}s', this.skyCultureViewStore.artPreviewRawPath)
   }
 
-  @Builder
-  private skyCultureArtPreviewOverlay() {
-    if (this.skyCultureViewStore.artPreviewOpen) {
-      Stack() {
-        Stack() { }
-          .width('100%').height('100%')
-          .backgroundColor('rgba(3,7,15,0.94)')
-          .hitTestBehavior(HitTestMode.Block)
-        Column({ space: 10 }) {
-          Row() {
-            Text(this.skyCultureViewStore.artPreviewName.length > 0 ? this.skyCultureViewStore.artPreviewName : '星座绘图')
-              .fontSize(15).fontColor(this.nmText()).fontWeight(FontWeight.Medium)
-              .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Button() {
-              Image(getIcon('close', false)).width(20).height(20).fillColor(this.nmText())
-            }
-              .width(44).height(44).borderRadius(UI_RADIUS_PILL).backgroundColor('rgba(255,255,255,0.10)')
-              .padding(0)
-              .zIndex(10).hitTestBehavior(HitTestMode.Block)
-              .onClick(() => { this.closeSkyCultureArtPreview() })
-          }.width('100%').height(54)
-          Stack({ alignContent: Alignment.Center }) {
-            if (this.skyCultureArtPreviewPixelMap !== undefined) {
-              Image(this.skyCultureArtPreviewPixelMap).width('100%').height('100%').objectFit(ImageFit.Contain)
-                .backgroundColor('rgba(0,0,0,0.28)').borderRadius(UI_RADIUS_CONTROL)
-                .onComplete(() => { this.onSkyCultureArtLoaded() })
-                .onError(() => { this.onSkyCultureArtError() })
-            }
-            if (this.skyCultureViewStore.artPreviewLoading) {
-              Column({ space: 10 }) {
-                LoadingProgress().width(34).height(34).color(this.nmAccent())
-                Text('正在打开离线绘图').fontSize(12).fontColor(this.nmSub())
-              }
-            } else if (this.skyCultureViewStore.artPreviewFailed) {
-              Column({ space: 10 }) {
-                Text('绘图资源无法显示').fontSize(13).fontColor(this.nmText())
-                Text('资源缺失或设备解码失败').fontSize(11).fontColor(this.nmSub())
-                Button('重新加载').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_CONTROL).height(32)
-                  .onClick(() => {
-                    this.skyCultureViewStore.artPreviewFailed = false
-                    this.skyCultureViewStore.artPreviewLoading = true
-                    const oldPixelMap = this.skyCultureArtPreviewPixelMap
-                    this.skyCultureArtPreviewPixelMap = undefined
-                    this.releaseDecodedImage(oldPixelMap, 'retry-sky-culture-art')
-                    this.skyCultureViewStore.artPreviewPath = ''
-                    this.resolveSkyCultureArtPreview(this.skyCultureViewStore.artPreviewRawPath)
-                  })
-              }
-            }
-          }.width('100%').layoutWeight(1)
-          Text('离线文化绘图').fontSize(10).fontColor(this.nmSub())
-        }
-        .width('100%').height('100%')
-        .padding({ left: 24, right: 24, top: this.mediaPreviewTopInset(), bottom: 18 })
-        .zIndex(1)
-      }
-      .width('100%').height('100%').backgroundColor('rgba(3,7,15,0.94)')
-      .zIndex(101).hitTestBehavior(HitTestMode.Transparent)
-    }
+  private retrySkyCultureArtPreview(): void {
+    this.skyCultureViewStore.artPreviewFailed = false
+    this.skyCultureViewStore.artPreviewLoading = true
+    const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
+    this.skyCultureViewStore.artPreviewPixelMap = undefined
+    this.releaseDecodedImage(oldPixelMap, 'retry-sky-culture-art')
+    this.skyCultureViewStore.artPreviewPath = ''
+    this.resolveSkyCultureArtPreview(this.skyCultureViewStore.artPreviewRawPath)
   }
 
   private openObjectInspectorMediaPreview(): void {
@@ -14510,7 +14458,20 @@ private loadPlanetPositions(): void {
             onVerticalFlipChange: (value: boolean) => { this.setPolarScopeVerticalFlip(value) }
           })
         }
-        this.skyCultureArtPreviewOverlay()
+        if (this.skyCultureViewStore.artPreviewOpen) {
+          SkyCultureArtPreviewOverlay({
+            skyCultureViewStore: this.skyCultureViewStore,
+            textColor: this.nmText(),
+            subColor: this.nmSub(),
+            accentColor: this.nmAccent(),
+            bgColor: this.nmBg(),
+            topInset: this.mediaPreviewTopInset(),
+            closeSkyCultureArtPreview: () => { this.closeSkyCultureArtPreview() },
+            onSkyCultureArtLoaded: () => { this.onSkyCultureArtLoaded() },
+            onSkyCultureArtError: () => { this.onSkyCultureArtError() },
+            onRetrySkyCultureArtPreview: () => { this.retrySkyCultureArtPreview() }
+          })
+        }
         if (this.objectMediaStore.objectInspectorMediaFullscreen) {
           ObjectInspectorMediaPreviewOverlay({
             objectMediaStore: this.objectMediaStore,

@@ -1,3 +1,17 @@
+## [2026-10-02] DevEco Code - Phase 5c：抽取 `skyCultureArtPreviewOverlay` 叠层
+
+- **背景/范围**：Phase 5（overlay，每片只做一个）第三片。把 `pages/MainWindowNativeNode.ets` 的 `@Builder private skyCultureArtPreviewOverlay()`（60 行）下沉到 `harmonyos/ets-source/panels/overlay/SkyCultureArtPreviewOverlay.ets`（88 行）。**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 3/9），不迁 V2。
+- **归属确认（量化）**：`skyCultureArtPreviewPixelMap` 原为宿主 `@State`；写入点仅 4 处（open 清零 / close 清零 / 解码回调写入 / 重试清零），均由用户动作或单次解码驱动、**非逐帧**，不构成"高频写入"。本片把它收进 `state/SkyCultureViewStore.ets`（新增 1 字段 + `import { image }`），宿主与叠层共用同一实例。
+- **分工（§13.1 规则 4/6）**：`artPreviewOpen` 判定留在宿主调用点；标题/加载失败三态/`artPreviewName`/`artPreviewPixelMap` 经 `@ObjectLink skyCultureViewStore` 读取；主题色 `nmText/nmSub/nmAccent/nmBg` 与顶部安全区 `mediaPreviewTopInset()` 由宿主算好以 `@Prop`（textColor/subColor/accentColor/bgColor/topInset）传入；关闭/加载完成/解码失败/重新加载四个动作回注宿主（前三个成员名与宿主方法一致），新增宿主方法 `retrySkyCultureArtPreview()`（承接原行内重试体）。
+- **单容器根（规则 7）**：根为全屏 `Stack`（`zIndex(101)` + `hitTestBehavior(HitTestMode.Transparent)` 逐字保留），内含背景拦截层与内容 `Column`；`Image(...).objectFit(ImageFit.Contain)`、`rgba(0,0,0,0.28)`、`UI_RADIUS_PILL` / `UI_RADIUS_CONTROL`、`Button('重新加载')` 逐字保留。该 overlay 无 `.id(...)` 锚点（42 锚点不变）。
+- **单体手术**（`pages/MainWindowNativeNode.ets`）：**19,173 → 19,134 行，净 −39**：删 `@Builder`（按边界签名正则删除，非行号算术）、删宿主 `@State skyCultureArtPreviewPixelMap` 声明、`this.skyCultureArtPreviewPixelMap`（10 处）改写为 `this.skyCultureViewStore.artPreviewPixelMap`、调用点改为 `if (artPreviewOpen) { SkyCultureArtPreviewOverlay({...}) }`、新增 1 行 import 与 1 个宿主方法。提取后 `grep` 新文件 `this.` 残留：仅 store、5 个 @Prop、4 个回调，全为组件自身成员。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（3 文件 0 错）→ `devecocli build`（`-SkipEngine -SkipDeploy -SkipResources`）**BUILD SUCCESSFUL**（55 s）→ `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好（176 文件）→ 全量 `*-ohos*.mjs` 扫描：失败 7 个，**全部为 §13.6 存量环境类**（4 个 `-pad` 与 `mist-performance` 需设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS hdc 假设）。
+- **真机**（`com.cnchensh.stellarium`，`192.168.50.108:40565`，1280×2832；`aa dump -l` 确认 `QAbility` 前台；`pidof` 全程存活）：
+  1. `图层` → `文化` 页签 → 展开「文化星座绘图（85 本地绘图）」→ 点首张缩略图 → **全屏叠层渲染**：`devecocli ui layout` 看到标题 `Text [84,190,1042,252] "天鹰座"`、关闭 `Button [1042,144,1196,298]`、页脚 `"离线文化绘图"`；截图确认 Aquila 绘图按 `ImageFit.Contain` 完整显示。
+  2. **点按后实时刷新（hilog 实证）**：打开瞬间 `[detail-media] create image source kind=sky-culture-art path=.../aquila.png` → `[sky-culture-art] pixel map ready` → `[sky-culture-art] preview loaded`（`Image.onComplete` 驱动，证明异步解码结果经 `@ObjectLink` 实时到达组件）；`pidof`=35432 存活，排除规则 9 运行期退出。
+  3. 点关闭按钮 → 叠层消失、`pidof`=35432 仍存活（关闭回调正确）。
+- **测后恢复**：真机当前文化由原先的 `modern`（85 绘图；`getSkyCultureState` 回读 `id=modern`、`artCount=85`）确认并保持；未改动其它持久化设置。
+- **本片新踩的坑（重要）**：**`@Prop` 不能承载 `image.PixelMap`**——初版按 5a 风格用 `@Prop artPreviewPixelMap` 传解码结果，真机 `[sky-culture-art] pixel map ready` 后立即 `preview decode failed`、`Image.onError` 显示「绘图资源无法显示」（同一现象：列表缩略图的 `@Prop` PixelMap 亦不渲染）。原因是 `@Prop` 对类对象做深拷贝，PixelMap 拷贝后不可用。改为把结果收进 `@Observed` store、组件以 `@ObjectLink` 引用语义读取后，`Image.onComplete` 正常、绘图完整渲染。结论：跨组件传 PixelMap 一律走 `@ObjectLink` store（与 Phase 5b `objectMediaStore`、Phase 3am `SkyCultureMakerStore.artworkPixelMap` 同法），**禁止 `@Prop`**。
 ## [2026-10-02] DevEco Code - Phase 5b：抽取 `objectInspectorMediaPreviewOverlay` 叠层
 
 - **背景/范围**：Phase 5（overlay，每片只做一个）第二片。把 `pages/MainWindowNativeNode.ets` 的 `@Builder private objectInspectorMediaPreviewOverlay()`（66 行）下沉为 `harmonyos/ets-source/panels/overlay/ObjectInspectorMediaPreviewOverlay.ets`（88 行）。**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 3/9），不迁 V2。
