@@ -56,6 +56,7 @@ import { shareFile } from '../common/platform/Share'
 import { saveScreenshot, exportScreenshotToUserStorage } from '../common/platform/Screenshot'
 import { speakSelectedObject } from '../common/SpeechService'
 import { StartupBridge, StartupHooks } from '../capability/StartupBridge'
+import { SensorController, GyroGuideLayout, SensorHostHooks } from '../capability/SensorController'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
@@ -460,7 +461,16 @@ class HostPlatformPort implements PlatformPort {
 
 // 宿主 → SensorPort 的具名适配器（PLAN §15.1 AB2-0b / M1-A）。转发 sensor.* 查询/订阅/退订。
 class HostSensorPort implements SensorPort {
-  probeSensor(sensorType: sensor.SensorId, label: string): SensorProbeInfo | undefined {
+  // 控制器只给 label（不 import sensor 命名空间），适配器在此映射到 SensorId。
+  private static sensorIdForLabel(label: string): sensor.SensorId {
+    if (label === 'gravity') return sensor.SensorId.GRAVITY
+    if (label === 'magnetic-field') return sensor.SensorId.MAGNETIC_FIELD
+    if (label === 'orientation-fallback') return sensor.SensorId.ORIENTATION
+    return sensor.SensorId.ROTATION_VECTOR
+  }
+
+  probeSensor(label: string): SensorProbeInfo | undefined {
+    const sensorType = HostSensorPort.sensorIdForLabel(label)
     try {
       const info = sensor.getSingleSensorSync(sensorType)
       hilog.info(0x0000, 'StellariumArkUI', '[gyro-probe] sensor=%{public}s supported=true name=%{public}s vendor=%{public}s',
@@ -551,6 +561,8 @@ export struct WindowNativeNode {
   private hostSensorPort: HostSensorPort = new HostSensorPort()
   // M1-A：启动桥服务（惰性构造，持有跨域 store 引用与宿主生命周期 hooks）。
   private startupBridgeImpl: StartupBridge | null = null
+  // M1-B 子组①：传感器/陀螺仪控制器（惰性构造；注入 SensorPort/CommandPort/store 与宿主 hooks）。
+  private sensorControllerImpl: SensorController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -775,7 +787,7 @@ export struct WindowNativeNode {
   // 新增面板控制
   @State private planetLabels: boolean = false
   private applicationInForeground: boolean = true
-  private gyroPausedForBackground: boolean = false
+  // gyroPausedForBackground 已随 M1-B 子组① 搬入 capability/SensorController.ets。
   // The gyro control itself becomes a live compass while it is enabled.
   // liveMode 已并入 state/ViewSettingsStore.ets（review §2.7）。
   @State private currentFovText: string = '--'
@@ -998,54 +1010,8 @@ export struct WindowNativeNode {
   // velocity, avoiding a stream of cross-thread drag commands after lift-off.
   private nativeSkyInertiaActive: boolean = false
   private skyDragging: boolean = false
-  private gyroLastTimeMs: number = 0
-  private gyroGuideTargetAz: number = Number.NaN
-  private gyroGuideTargetAlt: number = Number.NaN
-  private gyroGuideLastUpdateMs: number = 0
-  private gyroGuideReachedAtMs: number = 0
-  private gyroLastCompassUiUpdateMs: number = 0
-  private gyroMagneticHeading: number = Number.NaN
-  private gyroRawAzimuth: number = Number.NaN
-  private gyroRawAltitude: number = Number.NaN
-  // Automatic, session-local alignment from the physical magnetic compass to
-  // Stellarium's Alt/Az frame. The visible slider remains a separate manual
-  // fine adjustment, so it stays predictable for the user.
-  private gyroAbsolutePoseReady: boolean = false
-  private gyroAbsoluteUp: number[] = [0, 1, 0]
-  private gyroDisplayRotation: number = 0
-  private gyroLastDisplayRotationCheckMs: number = 0
-  // alpha is not a stable world heading while a tablet lies flat. Establish
-  // this reference only after the display normal has a usable horizontal part.
-  private gyroHeadingReferenceReady: boolean = false
-  private gyroHeadingSensorAz: number = 0
-  private gyroHeadingViewAz: number = 0
-  private gyroEventCount: number = 0
-  private gyroRawEventCount: number = 0
-  private gyroCallbackCount: number = 0
-  private gyroInvalidEventCount: number = 0
-  private gyroDispatchCount: number = 0
-  private gyroGravityEventCount: number = 0
-  private gyroMagneticEventCount: number = 0
-  private gyroStartMs: number = 0
-  private gyroLastProbeMs: number = 0
-  private gyroLastProbeSensor: string = ''
-  private gyroRotationSubscribed: boolean = false
-  private gyroOrientationSubscribed: boolean = false
-  private gyroGravitySubscribed: boolean = false
-  private gyroMagneticSubscribed: boolean = false
-  private gyroCallback: ((data: sensor.OrientationResponse) => void) | undefined = undefined
-  private gyroRotationCallback: ((data: sensor.RotationVectorResponse) => void) | undefined = undefined
-  private gyroGravityCallback: ((data: sensor.GravityResponse) => void) | undefined = undefined
-  private gyroMagneticCallback: ((data: sensor.MagneticFieldResponse) => void) | undefined = undefined
-  private gyroUsingRotationVector: boolean = false
-  // These are intentionally kept in device coordinates. Gravity and magnetic
-  // samples remain available for compass, calibration and diagnostics. They
-  // must not be mixed into only one camera axis because their callbacks are
-  // asynchronous relative to ROTATION_VECTOR.
-  private gyroGravityDevice: number[] = []
-  private gyroMagneticDevice: number[] = []
-  private gyroFilteredGravityDevice: number[] = []
-  private gyroFilteredMagneticDevice: number[] = []
+  // gyro* 订阅/姿态/引导字段已随 M1-B 子组① 搬入 capability/SensorController.ets
+  // （M1-B 子组「可观测子集入 GyroStore、逐帧草稿留控制器」，§15.7 规则 2）。
   private dragLogCount: number = 0
   private touchStartedOnUi: boolean = false
   private lastSkyTapAt: number = 0
@@ -1385,6 +1351,50 @@ export struct WindowNativeNode {
     return this.startupBridgeImpl
   }
 
+  // M1-B 子组①：传感器/陀螺仪控制器惰性构造。端口/桥/store 与宿主 hooks 在此注入，
+  // 控制器不 import NAPI/UI（§15.7 规则 1）。watchLastSend 属 §2.7.1 保留字段，经 hooks 读写。
+  private gyroCtl(): SensorController {
+    if (this.sensorControllerImpl === null) {
+      const hooks: SensorHostHooks = {
+        canUseSensors: (): boolean => this.privacyNativeStartupAllowed && this.applicationInForeground && hasCurrentPrivacyConsent(),
+        flashHint: (text: ResourceStr): void => this.flashHint(text),
+        displayRotation: (): number => {
+          try {
+            return Number(display.getDefaultDisplaySync().rotation)
+          } catch (error) {
+            hilog.warn(0x0000, 'StellariumArkUI', '[gyro-probe] displayRotation unavailable')
+            return -1
+          }
+        },
+        objectSelected: (): boolean => this.objectDetailStore.selectedStatus === 'Selected',
+        guideLayout: (): GyroGuideLayout => {
+          const layout: GyroGuideLayout = {
+            isExpandedLayout: this.isExpandedLayout,
+            panelVisible: this.panelVisible,
+            panelOffsetX: this.panelOffsetX,
+            panelWidth: this.panelWidth,
+            edgeMargin: this.EDGE_MARGIN,
+            skyWidth: this.skyWidth,
+            skyHeight: this.skyHeight,
+            isFoldHoverLayout: this.isFoldHoverLayout,
+            fovSliderValue: this.fovSliderValue
+          }
+          return layout
+        },
+        guideProjection: (): GyroGuideProjection | undefined => {
+          const projection = this.callNative('getGyroGuidePosition') as GyroGuideProjection
+          return projection
+        },
+        watchLastSend: (): number => this.watchLastSend,
+        setWatchLastSend: (value: number): void => { this.watchLastSend = value }
+      }
+      this.sensorControllerImpl = new SensorController(
+        this.gyroStore, this.hostSensorPort, this.commandPort(), this.sessionToolStore, hooks
+      )
+    }
+    return this.sensorControllerImpl
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
@@ -1521,8 +1531,8 @@ export struct WindowNativeNode {
       applicationInForeground: (): boolean => this.applicationInForeground,
       gyroscopeEnabled: (): boolean => this.gyroStore.gyroscopeEnabled,
       setGyroscopeEnabled: (value: boolean): void => { this.gyroStore.gyroscopeEnabled = value },
-      startGyroscope: (): void => this.startGyroscope(),
-      stopGyroscope: (updateStatus: boolean): void => this.stopGyroscope(updateStatus),
+      startGyroscope: (): void => this.gyroCtl().startGyroscope(),
+      stopGyroscope: (updateStatus: boolean): void => this.gyroCtl().stopGyroscope(updateStatus),
       stopSkyInertia: (): void => this.stopSkyInertia(),
       stopCompetingTasks: (): void => {
         this.stopDetailAutoRefresh()
@@ -1903,10 +1913,10 @@ export struct WindowNativeNode {
       if (commandName === 'setGyroscopeEnabled') {
         const value = String(event['payload'] ?? '').trim().toLowerCase()
         if (value === '1' || value === 'true' || value === 'on') {
-          this.toggleGyroscope(true)
+          this.gyroCtl().toggleGyroscope(true)
           hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] gyroscope enabled=true')
         } else if (value === '0' || value === 'false' || value === 'off') {
-          this.toggleGyroscope(false)
+          this.gyroCtl().toggleGyroscope(false)
           hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] gyroscope enabled=false')
         } else {
           hilog.warn(0x0000, 'StellariumArkUI', '[cli-ui] rejected gyroscope value=%{public}s', value)
@@ -2056,7 +2066,7 @@ export struct WindowNativeNode {
     }
     this.saveAppSettings()
     this.stopSkyInertia()
-    this.stopGyroscope(false)
+    this.gyroCtl().stopGyroscope(false)
     this.stopDetailAutoRefresh()
     this.stopObjectDetailConnectorRefresh()
     this.stopObjectInspectorMediaWarmup()
@@ -2119,11 +2129,7 @@ export struct WindowNativeNode {
       if (this.audioStore.musicEnabled) {
         void AudioEngine.getInstance().start()
       }
-      if (this.gyroPausedForBackground) {
-        this.gyroPausedForBackground = false
-        this.startGyroscope()
-        hilog.info(0x0000, 'StellariumArkUI', 'foreground: gyroscope subscriptions restored')
-      }
+      this.gyroCtl().resumeAfterForeground()
       this.syncViewCoordinateTimer()
       this.syncDockClockTimer()
       this.syncSkyCultureTimeFollowTimer()
@@ -2147,11 +2153,7 @@ export struct WindowNativeNode {
     this.stopDetailAutoRefresh()
     this.stopSkyInertia()
     void AudioEngine.getInstance().stop()
-    if (this.gyroStore.gyroscopeEnabled) {
-      this.gyroPausedForBackground = true
-      this.stopGyroscope(false)
-      hilog.info(0x0000, 'StellariumArkUI', 'background: gyroscope subscriptions released')
-    }
+    this.gyroCtl().pauseForBackground()
   }
 
   private subscribeApplicationLifecycle(): void {
@@ -7432,34 +7434,7 @@ private loadPlanetPositions(): void {
 	})
   }
 
-  private toggleGyroscope(enabled: boolean): void {
-    hilog.info(0x0000, 'StellariumArkUI', 'toggleGyroscope enabled=%{public}s current=%{public}s', enabled.toString(), this.gyroStore.gyroscopeEnabled.toString())
-    if (enabled) {
-      this.startGyroscope()
-    } else {
-      this.stopGyroscope(true)
-    }
-  }
-
-  private refreshGyroDisplayRotation(source: string): void {
-    try {
-      const rotation = Number(display.getDefaultDisplaySync().rotation)
-      if (!Number.isInteger(rotation) || rotation < 0 || rotation > 3) {
-        return
-      }
-      if (rotation !== this.gyroDisplayRotation) {
-        this.gyroDisplayRotation = rotation
-        this.gyroFwd = []
-        this.gyroUp = []
-        this.gyroSentFwd = []
-        this.gyroLastDispatchMs = 0
-        hilog.info(0x0000, 'StellariumArkUI', '[gyro-probe] displayRotation source=%{public}s value=%{public}s', source, rotation.toString())
-      }
-      this.gyroLastDisplayRotationCheckMs = Date.now()
-    } catch (error) {
-      hilog.warn(0x0000, 'StellariumArkUI', '[gyro-probe] displayRotation unavailable source=%{public}s', source)
-    }
-  }
+  // toggleGyroscope / refreshGyroDisplayRotation 已随 M1-B 子组① 搬入 capability/SensorController.ets。
 
   private confirmPrivacyRevocation(): void {
     this.getUIContext().showAlertDialog({
@@ -7479,7 +7454,7 @@ private loadPlanetPositions(): void {
 
   private revokePrivacyConsent(): void {
     try {
-      this.stopGyroscope(false)
+      this.gyroCtl().stopGyroscope(false)
       privacyManager.disableService()
       AppStorage.setOrCreate('stellariumPrivacyHostReady', false)
       this.privacyNativeStartupAllowed = false
@@ -7493,696 +7468,8 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private startGyroscope(): void {
-    if (!this.privacyNativeStartupAllowed || !this.applicationInForeground || !hasCurrentPrivacyConsent()) {
-      return
-    }
-    if (this.gyroStore.gyroscopeEnabled) {
-      hilog.info(0x0000, 'StellariumArkUI', 'startGyroscope ignored already enabled')
-      return
-    }
-    if (this.gyroCallback === undefined) {
-      this.gyroCallback = (data: sensor.OrientationResponse) => {
-        this.onOrientationData(data)
-      }
-    }
-    if (this.gyroRotationCallback === undefined) {
-      this.gyroRotationCallback = (data: sensor.RotationVectorResponse) => {
-        this.onRotationVectorDirect(data)
-      }
-    }
-    if (this.gyroGravityCallback === undefined) {
-      this.gyroGravityCallback = (data: sensor.GravityResponse) => {
-        this.onGravityData(data)
-      }
-    }
-    if (this.gyroMagneticCallback === undefined) {
-      this.gyroMagneticCallback = (data: sensor.MagneticFieldResponse) => {
-        this.onMagneticFieldData(data)
-      }
-    }
-    this.gyroLastTimeMs = 0
-    this.gyroEventCount = 0
-    this.gyroRawEventCount = 0
-    this.gyroCallbackCount = 0
-    this.gyroInvalidEventCount = 0
-    this.gyroDispatchCount = 0
-    this.gyroGravityEventCount = 0
-    this.gyroMagneticEventCount = 0
-    this.gyroStartMs = Date.now()
-    this.gyroLastProbeMs = 0
-    this.gyroLastProbeSensor = ''
-    this.gyroRotationSubscribed = false
-    this.gyroOrientationSubscribed = false
-    this.gyroGravitySubscribed = false
-    this.gyroMagneticSubscribed = false
-    this.gyroFirstReading = true
-    this.gyroCalibrated = false
-    this.gyroLastDispatchMs = 0
-    this.gyroDisplayRotation = 0
-    this.gyroLastDisplayRotationCheckMs = 0
-    this.gyroAbsolutePoseReady = false
-    this.gyroHeadingReferenceReady = false
-    this.gyroFwd = []
-    this.gyroUp = []
-    this.gyroSentFwd = []
-    this.gyroGravityDevice = []
-    this.gyroMagneticDevice = []
-    this.gyroFilteredGravityDevice = []
-    this.gyroFilteredMagneticDevice = []
-    this.gyroMagneticHeading = Number.NaN
-    this.gyroStore.gyroCompassAzAlignment = 0
-    this.gyroStore.gyroCompassText = '罗盘 --'
-    this.gyroStore.gyroCompassAngle = 0
-    this.gyroUsingRotationVector = false
-    this.gyroStore.gyroscopeEnabled = true
-    this.refreshGyroDisplayRotation('start')
-    this.gyroStore.gyroscopeStatus = '正在校准'
-    this.callNativeFire('beginGyroViewTransition')
-
-    const rotationSupported = this.hostSensorPort.probeSensor(sensor.SensorId.ROTATION_VECTOR, 'rotation-vector') !== undefined
-    if (rotationSupported) {
-      try {
-        sensor.on(sensor.SensorId.ROTATION_VECTOR, this.gyroRotationCallback, { interval: 16666667 })
-        this.gyroRotationSubscribed = true
-        this.gyroUsingRotationVector = true
-        hilog.info(0x0000, 'StellariumArkUI', '[gyro-probe] subscribed sensor=rotation-vector intervalNs=16666667')
-      } catch (error) {
-        hilog.error(0x0000, 'StellariumArkUI', '[gyro-probe] subscribe failed sensor=rotation-vector error=%{public}s', JSON.stringify(error))
-      }
-    }
-
-    if (this.gyroRotationSubscribed) {
-      if (this.hostSensorPort.probeSensor(sensor.SensorId.GRAVITY, 'gravity') !== undefined) {
-        try {
-          sensor.on(sensor.SensorId.GRAVITY, this.gyroGravityCallback, { interval: 16666667 })
-          this.gyroGravitySubscribed = true
-          hilog.info(0x0000, 'StellariumArkUI', '[gyro-probe] subscribed sensor=gravity intervalNs=16666667')
-        } catch (error) {
-          hilog.warn(0x0000, 'StellariumArkUI', '[gyro-probe] subscribe failed sensor=gravity error=%{public}s', JSON.stringify(error))
-        }
-      }
-      if (this.hostSensorPort.probeSensor(sensor.SensorId.MAGNETIC_FIELD, 'magnetic-field') !== undefined) {
-        try {
-          sensor.on(sensor.SensorId.MAGNETIC_FIELD, this.gyroMagneticCallback, { interval: 33333333 })
-          this.gyroMagneticSubscribed = true
-          hilog.info(0x0000, 'StellariumArkUI', '[gyro-probe] subscribed sensor=magnetic-field intervalNs=33333333')
-        } catch (error) {
-          hilog.warn(0x0000, 'StellariumArkUI', '[gyro-probe] subscribe failed sensor=magnetic-field error=%{public}s', JSON.stringify(error))
-        }
-      }
-      hilog.info(0x0000, 'StellariumArkUI', '[gyro-probe] start mode=rotation-vector gravity=%{public}s magnetic=%{public}s',
-        this.gyroGravitySubscribed.toString(), this.gyroMagneticSubscribed.toString())
-      return
-    }
-
-    if (this.hostSensorPort.probeSensor(sensor.SensorId.ORIENTATION, 'orientation-fallback') !== undefined) {
-      try {
-        sensor.on(sensor.SensorId.ORIENTATION, this.gyroCallback, { interval: 16666667 })
-        this.gyroOrientationSubscribed = true
-        this.gyroStore.gyroscopeStatus = '正在校准'
-        hilog.warn(0x0000, 'StellariumArkUI', '[gyro-probe] start mode=orientation-fallback')
-        return
-      } catch (error) {
-        hilog.error(0x0000, 'StellariumArkUI', '[gyro-probe] subscribe failed sensor=orientation-fallback error=%{public}s', JSON.stringify(error))
-      }
-    }
-
-    this.gyroStore.gyroscopeEnabled = false
-    this.callNativeFire('cancelGyroViewTransition')
-    this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_unavailable')
-    this.flashHint(I18n.t('m_gyro_unavailable'))
-    hilog.error(0x0000, 'StellariumArkUI', '[gyro-probe] start failed no supported orientation sensor')
-  }
-
-  private stopGyroscope(updateStatus: boolean): void {
-    this.callNativeFire('cancelGyroViewTransition')
-    const mode = this.gyroUsingRotationVector ? 'rotation-vector' : (this.gyroOrientationSubscribed ? 'orientation-fallback' : 'none')
-    const elapsedMs = this.gyroStartMs > 0 ? Math.max(1, Date.now() - this.gyroStartMs) : 1
-    hilog.info(0x0000, 'StellariumArkUI', '[gyro-probe] stop mode=%{public}s callbacks=%{public}s valid=%{public}s dispatch=%{public}s invalid=%{public}s gravity=%{public}s magnetic=%{public}s elapsedMs=%{public}s',
-      mode, this.gyroCallbackCount.toString(), this.gyroRawEventCount.toString(), this.gyroDispatchCount.toString(),
-      this.gyroInvalidEventCount.toString(), this.gyroGravityEventCount.toString(), this.gyroMagneticEventCount.toString(), elapsedMs.toString())
-    if (this.gyroOrientationSubscribed && this.gyroCallback !== undefined) {
-      try {
-        sensor.off(sensor.SensorId.ORIENTATION, this.gyroCallback)
-      } catch (error) {
-      }
-    }
-    if (this.gyroRotationSubscribed && this.gyroRotationCallback !== undefined) {
-      try {
-        sensor.off(sensor.SensorId.ROTATION_VECTOR, this.gyroRotationCallback)
-      } catch (error) {
-      }
-    }
-    if (this.gyroGravitySubscribed && this.gyroGravityCallback !== undefined) {
-      try {
-        sensor.off(sensor.SensorId.GRAVITY, this.gyroGravityCallback)
-      } catch (error) {
-      }
-    }
-    if (this.gyroMagneticSubscribed && this.gyroMagneticCallback !== undefined) {
-      try {
-        sensor.off(sensor.SensorId.MAGNETIC_FIELD, this.gyroMagneticCallback)
-      } catch (error) {
-      }
-    }
-    this.gyroOrientationSubscribed = false
-    this.gyroRotationSubscribed = false
-    this.gyroGravitySubscribed = false
-    this.gyroMagneticSubscribed = false
-    this.gyroLastTimeMs = 0
-    this.gyroCalibrated = false
-    this.gyroFirstReading = true
-    this.gyroLastDispatchMs = 0
-    this.gyroAbsolutePoseReady = false
-    this.gyroHeadingReferenceReady = false
-    this.gyroUsingRotationVector = false
-    this.gyroGravityDevice = []
-    this.gyroMagneticDevice = []
-    this.gyroFilteredGravityDevice = []
-    this.gyroFilteredMagneticDevice = []
-    this.gyroMagneticHeading = Number.NaN
-    this.gyroStore.gyroCompassAzAlignment = 0
-    this.gyroStore.gyroCompassText = '罗盘 --'
-    this.gyroStore.gyroCompassAngle = 0
-    this.gyroStore.gyroGuideVisible = false
-    this.gyroStore.gyroscopeEnabled = false
-    if (updateStatus) {
-      this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_off')
-    }
-  }
-
-  // Device-pose tracking.
-  //
-  // Only the *heading* is calibrated against the current sky view. Pitch and
-  // roll come from gravity and are already absolute, so re-basing them would
-  // tilt the horizon. The heading, by contrast, depends on the magnetometer
-  // and is either arbitrary or drifting, which is what made the sky jump
-  // sideways when the fusion filter re-converged.
-  private gyroLastAz: number = 0
-  private gyroLastAlt: number = 0
-  private gyroFirstReading: boolean = true
-  private gyroCalibrated: boolean = false
-  private gyroRawAz: number = 0
-  private gyroRawAlt: number = 0
-  // Smoothed pose, expressed in the bridge's alt-az frame.
-  private gyroFwd: number[] = []
-  private gyroUp: number[] = []
-  private gyroSentFwd: number[] = []
-  private gyroLastSampleMs: number = 0
-  private gyroLastDispatchMs: number = 0
-  // Last raw sensor quaternion (x,y,z,w) — kept for the diagnostic log so the
-  // exact mapping can be reconstructed and verified offline.
-  private gyroLastRawQ: number[] = [0, 0, 0, 1]
-  // Anchored-pose model: we capture the device orientation and the engine's
-  // current sky view once, then track only the *relative* tablet rotation from
-  // that anchor. This is immune to landscape/portrait screen rotation and to
-  // Stellarium's internal azimuth-sign convention (we read the live view back
-  // from the engine instead of guessing an ENU->alt-az mapping).
-
-  // Keep the guide's heading continuous. Native projection supplies angles in
-  // [-180, 180], but animating that value directly can make a one-degree turn
-  // across the boundary look like a full-circle spin.
-  private setGyroGuidePose(x: number, y: number, targetAngle: number): void {
-    let angle = targetAngle
-    if (this.gyroStore.gyroGuideVisible) {
-      let delta = (targetAngle - this.gyroStore.gyroGuideAngle) % 360
-      if (delta > 180) { delta -= 360 }
-      if (delta < -180) { delta += 360 }
-      angle = this.gyroStore.gyroGuideAngle + delta
-    }
-    this.gyroStore.gyroGuideX = x
-    this.gyroStore.gyroGuideY = y
-    this.gyroStore.gyroGuideAngle = angle
-    this.gyroStore.gyroGuideVisible = true
-  }
-
-  private updateGyroTargetGuide(force: boolean = false): void {
-    if (!this.gyroStore.gyroscopeEnabled || this.objectDetailStore.selectedStatus !== 'Selected' ||
-      !Number.isFinite(this.gyroGuideTargetAz) || !Number.isFinite(this.gyroGuideTargetAlt) ||
-      !Number.isFinite(this.gyroLastAz) || !Number.isFinite(this.gyroLastAlt)) {
-      this.gyroStore.gyroGuideVisible = false
-      this.gyroGuideReachedAtMs = 0
-      return
-    }
-    const now = Date.now()
-    // The guide is an informational ArkUI overlay, not part of the camera
-    // feedback loop. Updating it at 20 Hz keeps it responsive without making
-    // every 60 Hz sensor sample perform a synchronous native projection query.
-    if (!force && now - this.gyroGuideLastUpdateMs < 50) { return }
-    this.gyroGuideLastUpdateMs = now
-
-    const left = this.isExpandedLayout && this.panelVisible
-      ? expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX) + this.panelWidth + 18
-      : (this.isExpandedLayout ? this.EDGE_MARGIN + 24 : 18)
-    const right = this.isExpandedLayout ? this.skyWidth - this.EDGE_MARGIN : this.skyWidth - 18
-    const top = this.isFoldHoverLayout ? 46 : 64
-    const bottom = this.skyHeight - (this.isFoldHoverLayout ? 104 : 96)
-    const centerX = Math.max(left + 24, (left + right) / 2)
-    const centerY = Math.max(top + 24, (top + bottom) / 2)
-
-    // The C++ render loop projects the selected object with the active
-    // Stellarium projector. This remains correct for every FOV and projection
-    // type, unlike deriving a screen vector from separate alt/az deltas.
-    const projection = this.callNative('getGyroGuidePosition') as GyroGuideProjection
-    if (projection.ok === true && projection.valid === true &&
-      typeof projection.xRatio === 'number' && typeof projection.yRatio === 'number') {
-      const targetX = (projection.xRatio as number) * this.skyWidth
-      const targetY = (projection.yRatio as number) * this.skyHeight
-      const targetInClearSky = projection.visible === true &&
-        targetX >= left + 24 && targetX <= right - 24 && targetY >= top + 24 && targetY <= bottom - 24
-      if (targetInClearSky) {
-        if (this.gyroGuideReachedAtMs === 0) {
-          this.gyroGuideReachedAtMs = now
-        }
-        // The arrow confirms that the target has arrived, then gets out of
-        // the way. It reappears only after the object leaves the clear sky.
-        if (now - this.gyroGuideReachedAtMs >= 1800) {
-          this.gyroStore.gyroGuideVisible = false
-          return
-        }
-        // The guide sits above its target and points down. At the very top,
-        // place it below instead so it stays fully reachable and visible.
-        const placeAbove = targetY - 58 >= top
-        this.setGyroGuidePose(
-          clamp(targetX - 22, left, Math.max(left, right - 44)),
-          clamp(targetY + (placeAbove ? -58 : 14) - 22, top, Math.max(top, bottom - 44)),
-          placeAbove ? 90 : -90
-        )
-        return
-      }
-      this.gyroGuideReachedAtMs = 0
-      // If the native projection is outside the usable sky area, its true
-      // screen-space vector still gives an accurate edge direction.
-      const dx = targetX - centerX
-      const dy = targetY - centerY
-      if (Number.isFinite(dx) && Number.isFinite(dy) && Math.abs(dx) + Math.abs(dy) > 0.5) {
-        const angle = Math.atan2(dy, dx) * 180 / Math.PI
-        const radians = angle * Math.PI / 180
-        const halfW = Math.max(1, (right - left) / 2 - 24)
-        const halfH = Math.max(1, (bottom - top) / 2 - 24)
-        const edgeScaleX = Math.abs(Math.cos(radians)) > 0.0001 ? halfW / Math.abs(Math.cos(radians)) : Number.POSITIVE_INFINITY
-        const edgeScaleY = Math.abs(Math.sin(radians)) > 0.0001 ? halfH / Math.abs(Math.sin(radians)) : Number.POSITIVE_INFINITY
-        const edgeScale = Math.min(edgeScaleX, edgeScaleY)
-        this.setGyroGuidePose(
-          clamp(centerX + Math.cos(radians) * edgeScale - 22, left, Math.max(left, right - 44)),
-          clamp(centerY + Math.sin(radians) * edgeScale - 22, top, Math.max(top, bottom - 44)),
-          angle
-        )
-        return
-      }
-    }
-
-    // Project the target's local tangent-plane direction around the current
-    // view. Cos(altitude) prevents a small azimuth change near zenith from
-    // looking like an enormous horizontal turn.
-    const horizontal = shortestGyroAzimuthDelta(this.gyroGuideTargetAz, this.gyroLastAz) *
-      Math.cos(this.gyroLastAlt * Math.PI / 180)
-    const vertical = this.gyroGuideTargetAlt - this.gyroLastAlt
-    const separation = Math.sqrt(horizontal * horizontal + vertical * vertical)
-    const fov = Math.max(5, this.fovSliderValue > 0 ? this.fovSliderValue : 60)
-    if (separation <= fov * 0.48) {
-      this.gyroStore.gyroGuideVisible = false
-      this.gyroGuideReachedAtMs = 0
-      return
-    }
-
-    // The forward icon points right at 0 degrees. Negative vertical is up on
-    // screen, so a target above the view produces a -90 degree arrow.
-    const angle = Math.atan2(-vertical, horizontal) * 180 / Math.PI
-    const radians = angle * Math.PI / 180
-    const dx = Math.cos(radians)
-    const dy = Math.sin(radians)
-    // Intersect the direction vector with the usable viewport rectangle.
-    // This puts the guide on its edge rather than on an arbitrary inner ring.
-    const halfW = Math.max(1, (right - left) / 2 - 24)
-    const halfH = Math.max(1, (bottom - top) / 2 - 24)
-    const edgeScaleX = Math.abs(dx) > 0.0001 ? halfW / Math.abs(dx) : Number.POSITIVE_INFINITY
-    const edgeScaleY = Math.abs(dy) > 0.0001 ? halfH / Math.abs(dy) : Number.POSITIVE_INFINITY
-    const edgeScale = Math.min(edgeScaleX, edgeScaleY)
-    this.setGyroGuidePose(
-      clamp(centerX + dx * edgeScale - 22, left, Math.max(left, right - 44)),
-      clamp(centerY + dy * edgeScale - 22, top, Math.max(top, bottom - 44)),
-      angle
-    )
-  }
-
-  // The Orientation sensor already reports a world-referenced pose. Do not
-  // anchor it to the existing sky view: doing so makes "flat" retain an
-  // arbitrary altitude instead of consistently looking at the nadir.
-  private calibrateGyroscope(): void {
-    if (!this.gyroStore.gyroscopeEnabled || this.gyroFirstReading) { return }
-    this.gyroAbsolutePoseReady = false
-    this.gyroHeadingReferenceReady = false
-    this.gyroLastDispatchMs = 0
-    this.gyroCalibrated = true
-    this.gyroStore.gyroscopeStatus = '已校准'
-  }
-
-  private onOrientationData(data: sensor.OrientationResponse): void {
-    if (!this.gyroStore.gyroscopeEnabled) { return }
-    this.gyroCallbackCount += 1
-    let smoothFactor: number = 0.18
-    if (this.gyroStore.gyroscopeSensitivityText === 'Low') { smoothFactor = 0.10 }
-    else if (this.gyroStore.gyroscopeSensitivityText === 'High') { smoothFactor = 0.28 }
-
-    if (!Number.isFinite(data.alpha) || !Number.isFinite(data.beta) || !Number.isFinite(data.gamma)) {
-      this.gyroInvalidEventCount += 1
-      this.emitGyroPoseProbe('invalid')
-      return
-    }
-    this.gyroRawEventCount += 1
-    const alpha = data.alpha * Math.PI / 180
-    const beta = data.beta * Math.PI / 180
-    const gamma = data.gamma * Math.PI / 180
-    const cosAlpha = Math.cos(alpha)
-    const sinAlpha = Math.sin(alpha)
-    const cosBeta = Math.cos(beta)
-    const sinBeta = Math.sin(beta)
-    const cosGamma = Math.cos(gamma)
-    const sinGamma = Math.sin(gamma)
-    // World-space normal of the display front. The observer looks through the
-    // back of the device, hence the sky-forward vector is its inverse.
-    const normalX = cosAlpha * sinGamma + sinAlpha * sinBeta * cosGamma
-    const normalY = sinAlpha * sinGamma - cosAlpha * sinBeta * cosGamma
-    const normalZ = cosBeta * cosGamma
-    const forwardX = -normalX
-    const forwardY = -normalY
-    const forwardZ = -normalZ
-    const targetAlt = clamp(Math.asin(clamp(forwardZ, -1, 1)) * 180 / Math.PI + this.gyroStore.gyroOffsetAlt, -90, 90)
-    // A display pointing near the zenith or nadir has no meaningful heading:
-    // tiny sensor noise can map to any azimuth and makes the horizon slide
-    // sideways while lifting the Pad. alpha is the fused compass heading and
-    // remains stable when the Pad is vertical, so use it for yaw; retain the
-    // last heading in the polar dead zone and restore it progressively.
-    const horizontalStrength = Math.sqrt(forwardX * forwardX + forwardY * forwardY)
-    // In landscape, the reported alpha rotates in the opposite direction to
-    // Stellarium's azimuth frame. More importantly, it becomes ambiguous when
-    // the Pad is flat. Anchor only once the display has a real horizontal aim;
-    // after that use its delta, not its changing Euler-angle zero point.
-    const rawHeading = wrapGyroAzimuth(-data.alpha + this.gyroStore.gyroOffsetAz)
-    let targetAz = rawHeading
-    if (this.gyroAbsolutePoseReady) {
-      if (!this.gyroHeadingReferenceReady && horizontalStrength >= 0.42) {
-        this.gyroHeadingSensorAz = rawHeading
-        this.gyroHeadingViewAz = this.gyroLastAz
-        this.gyroHeadingReferenceReady = true
-      }
-      targetAz = this.gyroHeadingReferenceReady
-        ? wrapGyroAzimuth(this.gyroHeadingViewAz + shortestGyroAzimuthDelta(this.gyroHeadingSensorAz, rawHeading))
-        : this.gyroLastAz
-    }
-    // Device Y is the top edge of the screen. Keeping it as the camera up
-    // basis removes the otherwise undefined roll at zenith and nadir.
-    const rawUp: number[] = [-sinAlpha * cosBeta, cosAlpha * cosBeta, sinBeta]
-
-    this.gyroRawAz = targetAz
-    this.gyroRawAlt = targetAlt
-    this.emitGyroPoseProbe('sample', [forwardX, forwardY, forwardZ], rawUp, targetAz, targetAlt)
-    if (this.gyroFirstReading) {
-      this.gyroFirstReading = false
-      this.calibrateGyroscope()
-      return
-    }
-    if (!this.gyroCalibrated) { return }
-
-    let initialPose = false
-    if (!this.gyroAbsolutePoseReady) {
-      this.gyroLastAz = targetAz
-      this.gyroLastAlt = targetAlt
-      this.gyroAbsoluteUp = rawUp
-      this.gyroAbsolutePoseReady = true
-      initialPose = true
-    }
-    const headingFactor = this.gyroHeadingReferenceReady ? smoothFactor : 0
-    const smoothAz = wrapGyroAzimuth(this.gyroLastAz +
-      shortestGyroAzimuthDelta(this.gyroLastAz, targetAz) * headingFactor)
-    const smoothAlt = this.gyroLastAlt + (targetAlt - this.gyroLastAlt) * smoothFactor
-
-    const azDelta = shortestGyroAzimuthDelta(this.gyroLastAz, smoothAz)
-    const altDelta = smoothAlt - this.gyroLastAlt
-    // The first valid pose must always reach the native view. Without this,
-    // enabling the sensor while the Pad is held still leaves Stellarium at
-    // the old horizon because the normal dead-zone returns before dispatch.
-    if (!initialPose && Math.abs(azDelta) < 0.25 && Math.abs(altDelta) < 0.25) { return }
-
-    this.gyroLastAz = smoothAz
-    this.gyroLastAlt = smoothAlt
-    const aimX = Math.cos(smoothAlt * Math.PI / 180) * Math.cos(smoothAz * Math.PI / 180)
-    const aimY = Math.cos(smoothAlt * Math.PI / 180) * Math.sin(smoothAz * Math.PI / 180)
-    const aimZ = Math.sin(smoothAlt * Math.PI / 180)
-    let upX = this.gyroAbsoluteUp[0] + (rawUp[0] - this.gyroAbsoluteUp[0]) * smoothFactor
-    let upY = this.gyroAbsoluteUp[1] + (rawUp[1] - this.gyroAbsoluteUp[1]) * smoothFactor
-    let upZ = this.gyroAbsoluteUp[2] + (rawUp[2] - this.gyroAbsoluteUp[2]) * smoothFactor
-    const upDotAim = upX * aimX + upY * aimY + upZ * aimZ
-    upX -= aimX * upDotAim
-    upY -= aimY * upDotAim
-    upZ -= aimZ * upDotAim
-    const upLength = Math.sqrt(upX * upX + upY * upY + upZ * upZ)
-    this.gyroAbsoluteUp = upLength > 0.0001 ? [upX / upLength, upY / upLength, upZ / upLength] : rawUp
-    const now = Date.now()
-    this.updateGyroTargetGuide()
-    if (now - this.gyroLastDispatchMs < 20) { return }
-    this.gyroLastDispatchMs = now
-    this.callNativeFire('setGyroView', smoothAz.toFixed(3) + '|' + smoothAlt.toFixed(3) + '|'
-      + this.gyroAbsoluteUp[0].toFixed(5) + '|' + this.gyroAbsoluteUp[1].toFixed(5) + '|' + this.gyroAbsoluteUp[2].toFixed(5))
-    this.gyroEventCount += 1
-    this.gyroDispatchCount += 1
-    if (this.gyroEventCount % 20 === 0) {
-      this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_working')
-    }
-  }
-
-  private gyroRotateVector(q: number[], v: number[]): number[] {
-    const vectorQuaternion = [v[0], v[1], v[2], 0]
-    const rotated = gyroMultiplyQuaternions(gyroMultiplyQuaternions(q, vectorQuaternion), gyroConjugateQuaternion(q))
-    return [rotated[0], rotated[1], rotated[2]]
-  }
-
-  private gyroVectorAltAz(v: number[]): number[] {
-    const n = gyroNormalizeVector(v)
-    let azimuth = Math.atan2(n[1], n[0]) * 180 / Math.PI
-    if (azimuth < 0) { azimuth += 360 }
-    return [azimuth, Math.asin(n[2]) * 180 / Math.PI]
-  }
-
-  // Keep the up vector perpendicular to the view direction. Without this the
-  // two drift apart after repeated smoothing and the roll becomes unstable
-  // near the zenith.
-  private gyroOrthonormalizeUp(fwd: number[], up: number[]): number[] {
-    const d = fwd[0] * up[0] + fwd[1] * up[1] + fwd[2] * up[2]
-    let o: number[] = [up[0] - fwd[0] * d, up[1] - fwd[1] * d, up[2] - fwd[2] * d]
-    if (o[0] * o[0] + o[1] * o[1] + o[2] * o[2] < 0.000001) {
-      const dz = fwd[2]
-      o = [-fwd[0] * dz, -fwd[1] * dz, 1 - fwd[2] * dz]
-      if (o[0] * o[0] + o[1] * o[1] + o[2] * o[2] < 0.000001) { return [1, 0, 0] }
-    }
-    return gyroNormalizeVector(o)
-  }
-
-  // Interpolate directly on the unit sphere. Linear interpolation of the
-  // forward and screen-up vectors independently makes a non-rigid camera and
-  // is the source of the apparent jump when the view crosses the zenith.
-  // Parallel-transport the screen's up axis along the celestial sphere from
-  // one look direction to the next. This provides a continuous tangent-plane
-  // basis at zenith and nadir instead of rebuilding one from an Euler angle.
-  // The rotation-vector sensor reports in the ENU (east/north/up) world frame,
-  // while the engine view direction and setGyroView use the bridge alt-az frame
-  // (azimuth = atan2(y, x), x points south). The two frames differ only by a
-  // 90 deg rotation about the vertical, but applying an ENU-frame relative
-  // rotation directly to a bridge-frame vector silently swaps pitch and roll.
-  // These helpers keep the math in one frame at a time.
-  private gyroBridgeFromEnu(v: number[]): number[] { // ENU -> bridge
-    return [-v[1], v[0], v[2]]
-  }
-
-  // Legacy quaternion implementation retained temporarily only to keep this
-  // restoration narrowly scoped. It is not subscribed or called.
-  // Capture the engine's current sky view plus the device pose as the anchor.
-  // After this, the gyro tracks only the *relative* tablet rotation from the
-  // anchor, which is independent of landscape/portrait and of the engine's
-  // internal azimuth convention. `q` is the device->world quaternion.
-  // Direct rotation-vector path. The system fusion already combines gravity,
-  // gyroscope and magnetometer into a complete pose, which avoids the Euler
-  // alpha/beta/gamma discontinuity at the horizon. The separate gravity and
-  // magnetic callbacks remain active for compass/calibration data, but never
-  // replace only one axis of this high-frequency camera pose.
-  private onGravityData(data: sensor.GravityResponse): void {
-    this.gyroGravityEventCount += 1
-    if (Number.isFinite(data.x) && Number.isFinite(data.y) && Number.isFinite(data.z)) {
-      const sample = [data.x, data.y, data.z]
-      this.gyroGravityDevice = sample
-      this.gyroFilteredGravityDevice = gyroFilterDeviceVector(this.gyroFilteredGravityDevice, sample, 0.22)
-    }
-  }
-
-  private onMagneticFieldData(data: sensor.MagneticFieldResponse): void {
-    this.gyroMagneticEventCount += 1
-    if (Number.isFinite(data.x) && Number.isFinite(data.y) && Number.isFinite(data.z)) {
-      const sample = [data.x, data.y, data.z]
-      this.gyroMagneticDevice = sample
-      this.gyroFilteredMagneticDevice = gyroFilterDeviceVector(this.gyroFilteredMagneticDevice, sample, 0.16)
-    }
-  }
-
-  // Derive the world basis directly from the two physical references. On this
-  // HarmonyOS device the gravity response is the support vector pointing up.
-  // Magnetic x up points east; up x east points north.
-  // This gives a true device pose without applying a second correction to an
-  // already fused rotation quaternion.
-  private gyroCompassDirection(heading: number): string {
-    const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北']
-    const index = Math.floor((wrapGyroAzimuth(heading) + 22.5) / 45) % directions.length
-    return directions[index]
-  }
-
-  private updateGyroCompassReadout(): void {
-    const heading = gyroMagneticHeadingFromDeviceVectors(this.gyroGravityDevice, this.gyroMagneticDevice, this.gyroFilteredGravityDevice, this.gyroFilteredMagneticDevice)
-    if (!Number.isFinite(heading)) { return }
-    this.gyroMagneticHeading = heading
-    // Keep the needle continuous through 359 -> 0 rather than animating a
-    // full revolution in the opposite direction.
-    let delta = (heading - this.gyroStore.gyroCompassAngle) % 360
-    if (delta > 180) { delta -= 360 }
-    if (delta < -180) { delta += 360 }
-    this.gyroStore.gyroCompassAngle += delta
-    const now = Date.now()
-    if (now - this.gyroLastCompassUiUpdateMs < 120) { return }
-    this.gyroLastCompassUiUpdateMs = now
-    this.gyroStore.gyroCompassText = '磁北 ' + this.gyroCompassDirection(heading) + ' ' + Math.round(heading).toString().padStart(3, '0') + '°'
-  }
-
-  private emitGyroPoseProbe(reason: string, rawForward: number[] = [], rawUp: number[] = [], rawAz: number = Number.NaN, rawAlt: number = Number.NaN): void {
-    const now = Date.now()
-    if (now - this.gyroLastProbeMs < 1000) { return }
-    this.gyroLastProbeMs = now
-    hilog.info(0x0000, 'StellariumArkUI',
-      '[GYRO_PROBE] reason=%{public}s callbacks=%{public}d dispatch=%{public}d invalid=%{public}d',
-      reason, this.gyroCallbackCount, this.gyroDispatchCount, this.gyroInvalidEventCount)
-  }
-
-  private onRotationVectorDirect(data: sensor.RotationVectorResponse): void {
-    if (!this.gyroStore.gyroscopeEnabled) { return }
-    this.gyroCallbackCount += 1
-    if (!Number.isFinite(data.x) || !Number.isFinite(data.y) ||
-      !Number.isFinite(data.z) || !Number.isFinite(data.w)) {
-      this.gyroInvalidEventCount += 1
-      this.emitGyroPoseProbe('invalid')
-      return
-    }
-    this.gyroLastRawQ = [data.x, data.y, data.z, data.w]
-    const rawQuaternionNorm = Math.sqrt(data.x * data.x + data.y * data.y + data.z * data.z + data.w * data.w)
-    if (!Number.isFinite(rawQuaternionNorm) || rawQuaternionNorm < 0.000001) {
-      this.gyroInvalidEventCount += 1
-      this.emitGyroPoseProbe('invalid')
-      return
-    }
-    this.gyroRawEventCount += 1
-    const sampleNow = Date.now()
-    if (sampleNow - this.gyroLastDisplayRotationCheckMs >= 500) {
-      this.refreshGyroDisplayRotation('sample')
-    }
-    if (this.gyroRawEventCount % 120 === 0) {
-      this.callNativeFire('gyroDiagnostic', data.x.toFixed(3) + '|' + data.y.toFixed(3) + '|' +
-        data.z.toFixed(3) + '|' + this.gyroRawEventCount.toString())
-    }
-    const orientation = gyroNormalizeQuaternion([data.x, data.y, data.z, data.w])
-    const screenRight = gyroScreenAxisForDisplay([1, 0, 0], this.gyroDisplayRotation)
-    const screenUp = gyroScreenAxisForDisplay([0, 1, 0], this.gyroDisplayRotation)
-    const screenFrontWorld = this.gyroRotateVector(orientation, [0, 0, 1])
-    const screenRightWorld = this.gyroRotateVector(orientation, screenRight)
-    const screenUpWorld = this.gyroRotateVector(orientation, screenUp)
-    // ROTATION_VECTOR is already a device-to-world orientation. The sky ray
-    // goes opposite to the screen front normal; the screen basis stays rigid.
-    let forward = this.gyroBridgeFromEnu([-screenFrontWorld[0], -screenFrontWorld[1], -screenFrontWorld[2]])
-    forward = gyroNormalizeVector(forward)
-
-    if (this.gyroStore.gyroOffsetAz !== 0) {
-      forward = gyroRotateAboutVertical(forward, this.gyroStore.gyroOffsetAz)
-    }
-    if (this.gyroStore.gyroOffsetAlt !== 0) {
-      const horizontal = Math.sqrt(forward[0] * forward[0] + forward[1] * forward[1])
-      if (horizontal > 0.001) {
-        forward = gyroRotateAboutAxis(forward, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroStore.gyroOffsetAlt)
-        forward = gyroNormalizeVector(forward)
-      }
-    }
-
-    let up = this.gyroBridgeFromEnu(screenUpWorld)
-    const rightLength = Math.sqrt(gyroDot(screenRightWorld, screenRightWorld))
-    if (rightLength < 0.5) {
-      this.gyroInvalidEventCount += 1
-      this.emitGyroPoseProbe('invalid-basis', forward, up)
-      return
-    }
-    this.updateGyroCompassReadout()
-    if (this.gyroStore.gyroOffsetAz !== 0) {
-      up = gyroRotateAboutVertical(up, this.gyroStore.gyroOffsetAz)
-    }
-    if (this.gyroStore.gyroOffsetAlt !== 0) {
-      const horizontal = Math.sqrt(forward[0] * forward[0] + forward[1] * forward[1])
-      if (horizontal > 0.001) {
-        up = gyroRotateAboutAxis(up, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroStore.gyroOffsetAlt)
-      }
-    }
-    up = this.gyroOrthonormalizeUp(forward, up)
-    const rawAltAz = this.gyroVectorAltAz(forward)
-    this.gyroRawAzimuth = rawAltAz[0]
-    this.gyroRawAltitude = rawAltAz[1]
-
-    const now = Date.now()
-    let poseSmoothingAmount = 1
-    if (this.gyroFwd.length !== 3) {
-      this.gyroFwd = forward
-      this.gyroLastSampleMs = now
-    } else {
-      let dt = this.gyroLastSampleMs > 0 ? (now - this.gyroLastSampleMs) / 1000 : 1 / 60
-      this.gyroLastSampleMs = now
-      if (dt <= 0) { dt = 1 / 60 }
-      if (dt > 0.25) { dt = 0.25 }
-      // ROTATION_VECTOR is already sensor-fused. A long second low-pass filter
-      // made the sky trail the Pad by roughly 100 ms, which felt like dropped
-      // frames even when rendering was healthy. Keep only enough damping for
-      // hand tremor and use the same time-based amount for forward and up.
-      let tau = 0.045
-      if (this.gyroStore.gyroscopeSensitivityText === 'Low') { tau = 0.08 }
-      else if (this.gyroStore.gyroscopeSensitivityText === 'High') { tau = 0.025 }
-      poseSmoothingAmount = 1 - Math.exp(-dt / tau)
-      this.gyroFwd = gyroNormalizeVector([
-        this.gyroFwd[0] + (forward[0] - this.gyroFwd[0]) * poseSmoothingAmount,
-        this.gyroFwd[1] + (forward[1] - this.gyroFwd[1]) * poseSmoothingAmount,
-        this.gyroFwd[2] + (forward[2] - this.gyroFwd[2]) * poseSmoothingAmount
-      ])
-    }
-
-    if (this.gyroUp.length !== 3) {
-      this.gyroUp = up
-    } else {
-      if (gyroDot(this.gyroUp, up) < 0) {
-        up = [-up[0], -up[1], -up[2]]
-      }
-      this.gyroUp = this.gyroOrthonormalizeUp(this.gyroFwd, [
-        this.gyroUp[0] + (up[0] - this.gyroUp[0]) * poseSmoothingAmount,
-        this.gyroUp[1] + (up[1] - this.gyroUp[1]) * poseSmoothingAmount,
-        this.gyroUp[2] + (up[2] - this.gyroUp[2]) * poseSmoothingAmount
-      ])
-    }
-    this.emitGyroPoseProbe('sample', forward, up, rawAltAz[0], rawAltAz[1])
-
-    if (now - this.gyroLastDispatchMs < 16) { return }
-    this.gyroLastDispatchMs = now
-    const altAz = this.gyroVectorAltAz(this.gyroFwd)
-    this.gyroLastAz = altAz[0]
-    this.gyroLastAlt = altAz[1]
-    this.updateGyroTargetGuide()
-    this.callNativeFire('setGyroView', this.gyroLastAz.toFixed(3) + '|' + this.gyroLastAlt.toFixed(3) + '|'
-      + this.gyroUp[0].toFixed(5) + '|' + this.gyroUp[1].toFixed(5) + '|' + this.gyroUp[2].toFixed(5))
-    this.gyroEventCount += 1
-    this.gyroDispatchCount += 1
-    if (this.gyroEventCount % 20 === 0 && this.gyroStore.gyroscopeStatus !== I18n.t('m_gyro_working')) {
-      this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_working')
-    }
-  }
+  // Device-pose tracking / 目标引导 / 姿态解算方法与全部 gyro* 字段已随 M1-B 子组①
+  // 搬入 capability/SensorController.ets（本处仅保留宿主调用点）。
 
   // Retained as a reference implementation for diagnosing sensor-fusion
   // differences. The active implementation above intentionally does not
@@ -8667,7 +7954,7 @@ private loadPlanetPositions(): void {
     // second auto-move here creates a visible jump when the next pose sample
     // correctly takes control back, so center/track only refresh the guide.
     if (this.gyroStore.gyroscopeEnabled) {
-      this.updateGyroTargetGuide(true)
+      this.gyroCtl().updateGyroTargetGuide(true)
       this.flashHint(I18n.t('center_unavailable_gyro'))
       return
     }
@@ -9092,13 +8379,12 @@ private loadPlanetPositions(): void {
       this.objectDetailStore.selectedCoordParallactic = showObservedInfo && result.parallacticAngle ? result.parallacticAngle : ''
       const hasAlt: boolean = typeof result.altitude === 'number'
       const hasAz: boolean = typeof result.azimuth === 'number'
-      this.gyroGuideTargetAlt = hasAlt ? result.altitude as number : Number.NaN
-      this.gyroGuideTargetAz = hasAz ? result.azimuth as number : Number.NaN
+      this.gyroCtl().setGuideTarget(hasAz ? result.azimuth as number : Number.NaN, hasAlt ? result.altitude as number : Number.NaN)
       // A stationary device may not pass the sensor movement threshold again
       // after a search. Recalculate the edge guide at selection time instead
       // of waiting for the next meaningful orientation delta.
       if (this.gyroStore.gyroscopeEnabled) {
-        this.updateGyroTargetGuide(true)
+        this.gyroCtl().updateGyroTargetGuide(true)
       }
       this.objectDetailStore.selectedCoordAlt = showObservedInfo && (hasAlt || hasAz)
         ? (I18n.t('coord_alt') + ' ' + (hasAlt ? fmtDegMin(result.altitude as number) : '--') + '  ' + I18n.t('coord_az') + ' ' + (hasAz ? fmtDegMin(result.azimuth as number) : '--'))
@@ -9166,7 +8452,7 @@ private loadPlanetPositions(): void {
           }
         }
       }
-      this.updateGyroTargetGuide(true)
+      this.gyroCtl().updateGyroTargetGuide(true)
       // 天体名称和资料均来自核心；不再用本地手写别名表覆盖官方名称。
       this.objectDetailStore.selectedInfo = ''
       // 换了新天体 → 按它的"性格"响一声（模仿 Sky Guide 的叮）
@@ -9222,8 +8508,7 @@ private loadPlanetPositions(): void {
       this.objectDetailStore.selectedDistanceCompact = ''
       this.objectDetailStore.selectedDistanceStatus = ''
       this.objectDetailStore.selectedTleOutdated = false
-      this.gyroGuideTargetAz = Number.NaN
-      this.gyroGuideTargetAlt = Number.NaN
+      this.gyroCtl().clearGuideTarget()
       this.gyroStore.gyroGuideVisible = false
       this.objectDetailStore.selectedSize = ''
       this.objectDetailStore.selectedRise = ''
@@ -9677,28 +8962,8 @@ private loadPlanetPositions(): void {
     })
   }
 
-  // 虚拟指星笔 —— 手表当陀螺仪（发射端模拟）
-  // 手表 IMU(加速度/陀螺仪/方向传感器) 实时算出 alt|az，通过软总线发给大屏；大屏用
-  // pointAtSky track=1 每帧平滑跟随。这里用滑块模拟手腕转动当发射端，验证整条链路。
-  private watchGyroSend(): void {
-    if (!this.sessionToolStore.watchTracking) return
-    const now = Date.now()
-    if (now - this.watchLastSend < 70) return // 节流，避免拖动时刷爆命令队列
-    this.watchLastSend = now
-    const alt = this.sessionToolStore.watchAlt
-    const az = this.sessionToolStore.watchAz
-    this.callNativeWhenReady('pointAtSky', alt + '|' + az + '|1', (r: StellariumBridgeResponse) => {
-      if (!r.ok) { this.sessionToolStore.watchResult = '手表指向未响应'; return }
-      // 跟踪模式只负责跟随，不刷文本，避免抖动
-    })
-  }
-
-  private watchGyroStart(): void {
-    this.sessionToolStore.watchTracking = true
-    this.sessionToolStore.watchResult = '手表指向中：拖动滑块，大屏实时跟随（像陀螺仪追手）'
-    this.flashHint(I18n.t('msg_watch_pointing_started'))
-    this.watchGyroSend()
-  }
+  // 虚拟指星笔（watchGyroSend/Start/Stop）已随 M1-B 子组① 搬入 capability/SensorController.ets
+  // （M1-A 实测：该路径为桥驱动 pointAtSky，归 CommandPort）。
 
   // Jump to specific RA/Dec coordinates (J2000 equatorial).
   private goToCoordinates(): void {
@@ -9735,27 +9000,7 @@ private loadPlanetPositions(): void {
     })
   }
 
-  private watchGyroStop(): void {
-    this.sessionToolStore.watchTracking = false
-    this.callNativeWhenReady('pointAtSkyStop', '', (r: StellariumBridgeResponse) => {
-      if (!r.ok) { this.sessionToolStore.watchResult = I18n.t('m_lock_failed'); return }
-      this.sessionToolStore.watchResult = I18n.t('m_locking_center')
-      setTimeout(() => {
-        this.callNativeWhenReady('getSelectedObjectInfo', '', (r2: StellariumBridgeResponse) => {
-          if (!r2.ok) return
-          if (r2.found) {
-            const nm = (r2.name !== undefined && r2.name !== null) ? String(r2.name) : I18n.t('m_unknown')
-            const tp = (r2.type !== undefined && r2.type !== null) ? String(r2.type) : ''
-            this.sessionToolStore.watchResult = I18n.t('m_lock_hit') + ': ' + nm + (tp ? ' (' + I18n.objectType(tp) + ')' : '')
-            this.flashHint(I18n.t('m_lock_hit') + ': ' + nm)
-          } else {
-            this.sessionToolStore.watchResult = I18n.t('m_no_target_dir')
-            this.flashHint(I18n.t('m_no_target_dir'))
-          }
-        })
-      }, 400)
-    })
-  }
+  // watchGyroStop 已随 M1-B 子组① 搬入 capability/SensorController.ets。
 
   // 多设备接续 / 无缝流转（能力 A 的"会话搬运"目标端 + 脚手架）
   // 把当前星图会话(视线/FOV/时间/位置/选中星)导出成 JSON，可在另一台鸿蒙设备导入接续；
@@ -10164,7 +9409,7 @@ private loadPlanetPositions(): void {
       if (moveDistance > 3) {
         this.resetSkyTapSequence()
         if (!this.mouseSkyMoved && this.gyroStore.gyroscopeEnabled) {
-          this.stopGyroscope(true)
+          this.gyroCtl().stopGyroscope(true)
           this.flashHint('已退出陀螺仪')
         }
         this.mouseSkyMoved = true
@@ -10229,7 +9474,7 @@ private loadPlanetPositions(): void {
       return
     }
     if (this.gyroStore.gyroscopeEnabled) {
-      this.updateGyroTargetGuide(true)
+      this.gyroCtl().updateGyroTargetGuide(true)
       return
     }
     this.navigateSelectedObjectTo(this.skyWidth / 2, this.skyHeight / 2, 'keyboard-center')
@@ -10413,7 +9658,7 @@ private loadPlanetPositions(): void {
           if (downX >= qx && downX <= qx + 44 && downY >= qy && downY <= qy + 44) {
             hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro tap via handleSkyTouch')
             this.resetPanelIdle()
-            this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
+            this.gyroCtl().toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
             return
           }
           // 音频按钮（下方的 44x44，间距 10vp，圆心约 qx+22, qy+54+22）
@@ -10568,7 +9813,7 @@ private loadPlanetPositions(): void {
         // camera together. Leave gyro mode on the first real sky drag, while
         // keeping taps and pinch zoom available without changing its state.
         if (!this.touchMoved && this.gyroStore.gyroscopeEnabled) {
-          this.stopGyroscope(true)
+          this.gyroCtl().stopGyroscope(true)
           this.flashHint('已退出陀螺仪')
         }
         this.touchMoved = true
@@ -10980,8 +10225,8 @@ private loadPlanetPositions(): void {
                 chromeRowPosXRight: chromeRowPosXRight(this.isExpandedLayout, this.skyWidth, this.EDGE_MARGIN, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()),
                 chromeZoomHorizontal: this.chromeZoomHorizontal(),
                 onFlashHint: (text: string) => { this.flashHint(text) },
-                onCalibrate: () => { this.calibrateGyroscope() },
-                onToggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
+                onCalibrate: () => { this.gyroCtl().calibrateGyroscope() },
+                onToggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
                 resolve: (key: string) => this.selectedDisplayValue(key),
                 nameOf: (name: string) => zhNameOf(name),
                 typeOf: (type: string) => zhType(type),
@@ -11104,7 +10349,7 @@ private loadPlanetPositions(): void {
                 onGyro: () => {
                   hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
                   this.resetPanelIdle()
-                  this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
+                  this.gyroCtl().toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
                 },
                 onAudio: () => {
                   hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio button CLICKED musicEnabled=%{public}s', this.audioStore.musicEnabled.toString())
@@ -11114,8 +10359,8 @@ private loadPlanetPositions(): void {
                 },
                 onCompactTopQuickTouch: (event: TouchEvent) => { this.handleCompactTopQuickTouch(event) },
                 onFlashHint: (text: string) => { this.flashHint(text) },
-                onCalibrate: () => { this.calibrateGyroscope() },
-                onToggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
+                onCalibrate: () => { this.gyroCtl().calibrateGyroscope() },
+                onToggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
                 resolve: (key: string) => this.selectedDisplayValue(key),
                 nameOf: (name: string) => zhNameOf(name),
                 typeOf: (type: string) => zhType(type),
@@ -11410,7 +10655,7 @@ private loadPlanetPositions(): void {
     const quickId = this.compactQuickIdAt(x, y)
     if (quickId === 'gyro') {
       this.resetPanelIdle()
-      this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
+      this.gyroCtl().toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
       this.flashHint(this.gyroStore.gyroscopeEnabled ? '陀螺仪已开启，正在校准' : '陀螺仪已关闭')
       return true
     }
@@ -11456,7 +10701,7 @@ private loadPlanetPositions(): void {
       return
     }
     if (this.gyroStore.gyroscopeEnabled) {
-      this.updateGyroTargetGuide(true)
+      this.gyroCtl().updateGyroTargetGuide(true)
       this.flashHint(I18n.t('tracking_unavailable_gyro'))
       return
     }
@@ -13083,9 +12328,9 @@ private loadPlanetPositions(): void {
         onChip: (id: string) => { this.handleChip(id) },
         onSelectPlanet: (name: string) => { this.setObserverPlanet(name) },
         onPoint: () => { this.pointAtSkyTest() },
-        onSend: () => { this.watchGyroSend() },
-        onStart: () => { this.watchGyroStart() },
-        onStop: () => { this.watchGyroStop() },
+        onSend: () => { this.gyroCtl().watchGyroSend() },
+        onStart: () => { this.gyroCtl().watchGyroStart() },
+        onStop: () => { this.gyroCtl().watchGyroStop() },
         onExport: () => { this.sessionToolStore.sessionExport() },
         onSessionApply: () => { this.sessionToolStore.sessionApply() },
         onHandoff: () => { this.sessionToolStore.sessionHandoff() },
@@ -13210,7 +12455,7 @@ private loadPlanetPositions(): void {
         accentColor: this.nightModeStore.nmAccent(),
         panelColor: this.nightModeStore.nmBg(),
         lineColor: this.nightModeStore.nmBorder(),
-        onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) },
+        onToggleGyroscope: (v: boolean) => { this.gyroCtl().toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) },
         onRevoke: () => { this.confirmPrivacyRevocation() },
         onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
         onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
@@ -13346,7 +12591,7 @@ private loadPlanetPositions(): void {
         setStartupTimeSetting: (key: string, value: string) => { this.setStartupTimeSetting(key, value) },
         setInformationField: (key: string, enabled: boolean) => { this.setInformationField(key, enabled) },
         setObjectDetailConnector: (enabled: boolean) => { this.setObjectDetailConnector(enabled) },
-        toggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
+        toggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
         confirmPrivacyRevocation: () => { this.confirmPrivacyRevocation() },
         loadPluginList: () => { this.pluginStore.loadPluginList() },
         openPluginFeature: (id: string) => { this.openPluginFeature(id) },
@@ -13792,7 +13037,7 @@ private loadPlanetPositions(): void {
           this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + (useMetric ? 'true' : 'false'), () => {})
         },
         handleChip: (id: string) => { this.handleChip(id) },
-        toggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
+        toggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
         flashHint: (text: ResourceStr) => { this.flashHint(text) },
         setLanguage: (lang: string) => { this.setLanguage(lang) },
         setSkyCulture: (culture: string) => { this.setSkyCulture(culture) },
