@@ -802,7 +802,6 @@ export interface StellariumBridgeResponse {
   rts?: Object
   almanac?: Object
   objectInfoData?: Object
-  dsoCounts?: Object
   simTime?: Object
   // 视频录制（帧序列方案，#40）
   dir?: string
