@@ -1141,3 +1141,134 @@ export interface CommandPort {
 - **B 轨道定时器**：`loadTelescopeControlStatus`、`loadVideoRecordingState`、`loadSatellites` 需 store 自持 start/stop，须测"面板关闭后定时器停止"。
 - **与 §7（V1 → V2）的关系**：本计划是 **V1 期瘦身**，其中 A2-G 与 §7.5 Phase A 目标重叠。**建议先做 A1 + B1**（零风险、收益明确、与 V2 无冲突），A2 的几何类可等 §7 的 V2 试点结论再决定"随组件下沉"还是"随 V2 模型下沉"，避免重复劳动。
 - **回滚**：每片独立提交；A2 热路径若真机回归，`git revert` 单片即可（不牵动 store 结构）。
+
+---
+
+## 15. 续作计划三：剩余功能模块下沉（依据 STATE-REVIEW §9，2026-10-04 立）
+
+> **前置已完成**：§2.7 域状态下沉（宿主 `@State` 132 = 46 store 实例 + 86 保留登记）、§14 A/B 方法下沉
+> （`private` 940 → **593**、`private load*` 70 → **3**、单体 18,582 → **14,347** 行；`bridge/CommandPort.ets`
+> 与 `common/derive/*`（8 模块 / 1,769 行）已建成）。
+> 本节把 STATE-REVIEW **§9**（A/B 之后剩余功能模块普查）整理为可执行队列。协议与硬规则沿用
+> §13.1（硬规则）/§13.2（八步）/§13.3（陷阱）与 **§14.8（A/B 专属规则）**；本节只补 §15 专属规则（§15.7）。
+
+### 15.0 目标与基线（2026-10-04，取自 593-方法文件）
+
+| 指标 | 现状（实测） | 终态目标 | 依据 |
+|---|---:|---:|---|
+| 宿主行数 | **14,347** | ≈9,000–10,000 | §9.1 可下沉 ≈4,300 行 |
+| 宿主 `private` 方法 | **593** | ≈440–470 | §9.2 P1 ≈105 + §9.3 P4 ≈50 + §9.4 P2 ≈10 |
+| 宿主裸 `@State` | 86（保留登记） | 86（**不再动**） | §2.7.1 / §9.6 |
+| 控制器类（普通类 + 注入端口 + 自持定时器） | 1（`TimeWheelController`） | ＋5 | §9.2 |
+| 端口接口（纯接口，不 import NAPI） | 1（`CommandPort`） | ＋3（`MediaPort`/`SensorPort`/`PlatformPort`） | §9.5 |
+| `common/` 模块 | `ui/`+`derive/*`(8) | ＋`media/`、`platform/`、`SpeechService` | §9.3 |
+
+**轨道命名**（与 §9 一致）：**P1**＝控制器类（普通类 + 注入端口 + 自持 `start()/stop()`，形如既有 `TimeWheelController`）；
+**P2**＝并入既有域 store 的方法；**P4**＝跨域服务（`common/` 或 `capability/`）。
+**口径**：所有数字取自 STATE-REVIEW §9.0–§9.4 的普查；**每片开工前必须重测该片的方法/字段/行数边界**，不照抄本节表格。
+
+### 15.1 Enabler：三个新端口（3 片，P1/P4 的硬前置）
+
+A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需同形态端口（§14.8 规则 2）：
+纯接口 + 宿主 `aboutToAppear` 具名适配器（同 `HostCommandPort` 先例）。
+
+| 片 | 端口 | 覆盖 NAPI | 供哪些后续片 |
+|---|---|---|---|
+| **AB2-0a** | `bridge/MediaPort.ets` | `fileIo` / `image` / `picker` / `media` / `photoAccessHelper` | P4-1 `ImageDecoder`、P1-2 `RecordingController`、P4-2 `PlatformServices` |
+| **AB2-0b** | `bridge/SensorPort.ets` | `sensor.*`（订阅 / 退订 / 上报） | P1-1 `SensorController` |
+| **AB2-0c** | `bridge/PlatformPort.ets` | `systemShare` / pasteboard / TTS | P4-2 `PlatformServices`、P4-3 `SpeechService` |
+
+每片含：**纯接口**（不 import `@ohos.*`）+ 宿主具名适配器 + **最小方法试点**——
+`MediaPort` 试点 `releaseDecodedImage`(11)、`SensorPort` 试点 `watchGyro*` 退订、`PlatformPort` 试点 `copyTextToClipboard`(13)——
+并跑通 构建 / 契约 / 真机冒烟后，再放量对应控制器。
+
+### 15.2 轨道 P1：控制器类（5 个控制器，8 片，按 §9.7 低→高风险排序）
+
+| 片 | 控制器 | 代表方法（行） | 私有字段 | 定时器 | 落点 | 风险 |
+|---|---|---|---:|---|---|---|
+| **P1-1a** | `SensorController` ①（订阅与数据回调） | `onRotationVectorDirect`(122) `onOrientationData`(113) `startGyroscope`(121) `stopGyroscope`(56) `watchGyro*` | **48** | — | `capability/SensorController.ets` + 扩充 `state/GyroStore.ets` | 中 |
+| **P1-1b** | `SensorController` ②（姿态解算与目标引导） | `updateGyroTargetGuide`(109) `emitGyroPoseProbe` + 姿态解算助手 | （同上） | — | 同上 | 中 |
+| **P1-2** | `RecordingController` | `startScreenVideoRecording`(51) `playRecording`(25) `saveCurrentRecording`(22) `replayNextCommand`(22) `startRecording`(21) `finalizeScreenVideo`(21) `stopScreenCapture` / `saveScreenshot` | 13 | `videoStateTimer` / `recordViewCheckpointTimer` | `capability/RecordingController.ets`（`ScriptStore` 已含部分） | 中 |
+| **P1-3a** | `ObjectModelRenderer` ①（触摸/光照/请求） | `requestObjectInspectorModelRender`(25) `handleObjectInspectorModelTouch`(57) `refreshObjectInspectorModelLighting`(11) | ~25 | `objectInspectorModelRenderTimer` | `capability/ObjectModelRenderer.ets`（经既有 `DetailModelRenderClient` worker） | 中高 |
+| **P1-3b** | `ObjectModelRenderer` ②（渲染/纹理提交） | `renderObjectInspectorModel`(106) `decodeObjectInspectorModelTextureFromPng`(46) `commitObjectInspectorModelTexture`(36) `clearObjectInspectorModelRenderer`(35) | （同上） | — | 同上 | 中高 |
+| **P1-4** | `StartupBridge` | `restoreStartupSettings`(65) `runStartupBridgeTasks`(37) `startupBridgeSync`(11) `saveCurrentViewAsStartup`(10) | — | — | `capability/StartupBridge.ets`（`CommandPort` + Preferences） | 低 |
+| **P1-5a** | `SkyInputController` ①（鼠标/键盘/轴/惯性） | `handleSkyMouse`(51) `handleSkyKey`(31) `handleSkyAxis`(23) `handleSkyTap`(11) `startSkyInertia` / `stopSkyInertia`(25) | **89** | `skyInertiaTimer` | `capability/SkyInputController.ets` | **高** |
+| **P1-5b** | `SkyInputController` ②（触摸主路径） | `handleSkyTouch`(318) `emitFluidDrag`(36) | （同上） | （同上） | 同上 | **高** |
+
+> **P1-5 是当前宿主最大未拆控制器**（独占 89 个字段 + `handleSkyTouch` 318 行）；**必须最后做**，
+> 每片"语义逐字 + 真机命中/拖动对照"（命中失效不报编译错）；无法保证逐字等价 → 停下登记保留（§15.6）。
+> **P1-1 `SensorController`** 独占 48 字段 + 22 方法，是第二大整块，且**无定时器、边界清晰**，故列为首做。
+
+### 15.3 轨道 P4：跨域服务（5 片）
+
+| 片 | 服务 | 代表方法（行） | 端口 | 落点 |
+|---|---|---|---|---|
+| **P4-1** | `ImageDecoder` | `decodeLocalImage`(70) `decodeSkyCultureArtThumbnail`(33) `decodeSkyCultureArtPreview`(27) `releaseDecodedImage`(11) | `MediaPort` | `common/media/ImageDecoder.ets` |
+| **P4-2** | `PlatformServices` | `shareFile`(22) `copyTextToClipboard`(13) `saveScreenshot`(17) `exportScreenshotToUserStorage`(25) | `PlatformPort` / `MediaPort` | `common/platform/{Share,Clipboard,Screenshot}.ets` |
+| **P4-3** | `SpeechService` | `speakSelectedObject`(11) | `PlatformPort`(TTS) | `common/SpeechService.ets`（或并入 `GuideStore`） |
+| **P4-4** | `SessionStore` | `sessionApply`(24) `sessionExport`(20) `sessionHandoff`(14) `sessionSummary`(6) | `CommandPort` + AppStorage | `state/SessionStore.ets`（并入 `SessionToolStore` 或新建） |
+| **P4-5** | `SelectionService`（**决策片**） | `applySelectedObject`(230) `refreshSelectedObject`(29) `requestSelectedDetails`(28) `navigateSelectedObjectTo`(33) `moveToSelectedObject`(19) `scheduleSelectedObjectForUiChange`(15) | 多个域 store + `CommandPort` | 先**普查**：能整片搬 → `capability/SelectionService.ets`；含热路径/多入口无法逐字等价 → **登记保留**并写明理由（§9.3 已给此选项） |
+
+> P4-5 与 P1-5 同属**高风险**（全应用选中管线、多入口），放最后；"登记保留"是合法结局。
+> P4-1/P4-3 行数小、边界清晰，适合在 AB2-0a/0c 之后紧接着做。
+
+### 15.4 轨道 P2：并入既有 store（3 片）
+
+| 片 | 域 | 方法 | 目标 store |
+|---|---|---|---|
+| **P2-1** | 脚本播放 | `playScriptByName`(44) `continueNativeScript` `toggleReplayPause`(20) `changePlaybackRate` `stopScriptPlayback` `sendScriptKey` | `ScriptStore`（+ `ScriptHostHooks` 注入） |
+| **P2-2** | 交互导览 | `executeGuideRequest`(63) + guide 请求/定时器 | `GuideStore`（guide 请求与定时器自持） |
+| **P2-3** | 跟踪 | `setTrackingState`(37) `toggleTracking` 相关 | `ViewSettingsStore` 或登记保留 |
+
+### 15.5 队列总表（19 片，建议顺序）
+
+| ID | 轨道 | 内容 | 前置 | 估规模 | 状态 |
+|---|---|---|---:|---:|---|
+| **AB2-0a/0b/0c** | 端口 | `MediaPort` / `SensorPort` / `PlatformPort`（各含最小试点） | — | 3×~60 行 | 待做 |
+| **P1-1a/P1-1b** | P1 | `SensorController`（22 方法 + 48 字段） | AB2-0b | ~700 行 | 待做 |
+| **P1-2** | P1 | `RecordingController`（23 方法 + 13 字段 + 2 定时器） | AB2-0a | ~450 行 | 待做 |
+| **P4-1** | P4 | `ImageDecoder` | AB2-0a | ~150 行 | 待做 |
+| **P4-2** | P4 | `PlatformServices` | AB2-0c | ~80 行 | 待做 |
+| **P4-3** | P4 | `SpeechService` | AB2-0c | ~20 行 | 待做 |
+| **P1-3a/P1-3b** | P1 | `ObjectModelRenderer`（~29 方法 + ~25 字段） | AB2-0a | ~650 行 | 待做 |
+| **P1-4** | P1 | `StartupBridge`（~18 方法 / ~330 行） | — | ~330 行 | 待做 |
+| **P4-4** | P4 | `SessionStore` | — | ~70 行 | 待做 |
+| **P2-1/P2-2/P2-3** | P2 | 脚本播放 / 导览 / 跟踪 并入 store | — | ~270 行 | 待做 |
+| **P1-5a/P1-5b** | P1 | `SkyInputController`（31 方法 + 89 字段，热路径） | — | ~800 行 | 待做（**最后**） |
+| **P4-5** | P4 | `SelectionService` 决策片（搬或登记） | — | ~1,200 行 | 待做（**最后**） |
+
+**建议首序**：`AB2-0a/0c/0b` → `P1-2` / `P1-1a` / `P1-1b` → `P4-1` / `P4-2` / `P4-3` → `P1-3a` / `P1-3b` / `P1-4` / `P4-4` → `P2-1` / `P2-2` / `P2-3` → `P1-5a` / `P1-5b` → `P4-5`。
+
+### 15.6 保留项（勿再动；引自 STATE-REVIEW §9.6）
+
+1. **§2.7.1 的 86 个保留裸字段**（机制类 / 高频逐帧 / 跨域共用 / 引擎自用）；
+2. A2 的 **51 个 A-保留** + **4 个热路径登记**（`isUiPoint` / `skyZoomButtonAt` / `dockActionAt` / `expandedSafeTargetPoint`）+ **13 个宿主控制器**（`objectDetailConnectorObstacles` 等）；
+3. **`loadSkyCultureDetails`**（跨序号线 + 美术管线 + 逐帧字段，永久登记）；
+4. **壳层/路由**（`setPanel`/`updateResponsiveLayout`/`closePanel`/`open*` 族；§9.1：壳层 57 方法/734 行）、**刷新/同步/收口**（`publish*`/`schedule*`；25/567）、**生命周期/回调**（10/543）；
+5. `floatingPanel` / `compactPanel` / `panelContent` 三个 `@Builder`（§13.1 规则 9）。
+
+### 15.7 P1/P4 专属硬规则（叠加在 §13.1 与 §14.8 之上）
+
+1. **控制器/服务不 import NAPI/UI**：`capability/*` 与 `common/*` 只依赖端口接口（`CommandPort`/`MediaPort`/`SensorPort`/`PlatformPort`）；不得 import `@ohos.*` 设备能力模块。
+2. **可观测数据入 `@Observed` store，草稿/逐帧字段留控制器**：手势采样、逐帧写入等**不可观测**字段**不得**放进 store（否则每帧触发刷新）；store 只放组件要消费的数据。
+3. **定时器由控制器 `start()/stop()` 自持**，并在宿主生命周期（面板关闭 / 应用后台）收口；每片必须给出 **start/stop 调用点对照表**，并实测"关闭后定时器停止"（参照 §14 B3-4 的 hilog 计数法）。
+4. **端口适配器具名实现**（同 `HostCommandPort`）：禁匿名对象字面量越界、禁 `as`。
+5. **热路径逐字等价**：`handleSkyTouch`/`isUiPoint` 相关（P1-5）与 `applySelectedObject` 相关（P4-5）只允许"参数化 + 所有权转移"，**不得改比较边界/分支**；须真机命中 + 截图对照；真机不可用时只做构建级并记"待真机验证"。
+6. **不搬 §15.6 保留项**：遇到即停下登记（并写明属哪一条）。
+7. **端口先行**：任何需要新 NAPI 的片，其端口必须在 AB2-0x 中先落地并在最小方法上试点通过。
+
+### 15.8 度量与验收
+
+- 每片记录四组数字：**宿主行数** / **宿主 `private` 方法数** / **宿主裸 `@State` 数（应恒为 86）** / **新增控制器或服务文件数**；写入 CHANGELOG。
+- 门槛同 §14.9：`arkts_check` → 构建（`scripts\build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources`）→ `node scripts/check-ohos-ui-contract.mjs`（**44 锚点不变**）→ 受影响测试 → 真机（优先语义命令 `openUiPanel` / `stellarium-cli --batch`；`CHANGELOG` 为 LF 索引，改它需与索引一致）→ CHANGELOG → 独立提交。
+- 累计目标：宿主 **14,347 → ≈9,000–10,000 行**；`private` **593 → ≈440–470**。
+
+### 15.9 风险与取舍
+
+- **两块高风险放最后**：`SkyInputController`（89 字段 + `handleSkyTouch` 318 行，命中/拖动热路径）与 `SelectionService`（`applySelectedObject` 230 行、多入口选中管线）。**两者"登记保留"都是合法结局**，不得为凑指标强行搬迁。
+- **端口先行、单片试点**：`MediaPort`/`SensorPort`/`PlatformPort` 必须先于其控制器落地并用最小方法（`releaseDecodedImage` / `watchGyro*` / `copyTextToClipboard`）验证，避免一次性大改。
+- **`SensorController` 的字段最多（48）且与 `GyroStore` 现有 19 行高度相关**：先扩 store 再搬控制器，避免中间态。
+- **与 §7（V1→V2）的关系**：本计划仍是 **V1 期瘦身**；控制器/服务内部用**普通类**（非 `@Observed`），与 V2 迁移不冲突（V2 只影响可观测 store 与组件）。
+- **回滚**：每片独立提交，且以**新增控制器/服务文件**为主、宿主只做"调用点改指向 + 删方法"，单文件回归面最小；高风险片若真机回归，`git revert` 单片即可。
+- **`P1-2 RecordingController` 与 `ScriptStore` 已有部分重叠**（录制/回放状态已在 store）：本片只搬**行为与定时器**，不重复搬状态；若发现状态冗余，先登记再定。
+
