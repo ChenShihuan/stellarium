@@ -63,7 +63,7 @@ for (const domain of upstreamDomains) {
   }
 }
 
-const countryNames = fs.readFileSync(path.join(root, 'harmonyos/ets-source/pages/location_countries.ts'), 'utf8')
+const countryNames = fs.readFileSync(path.join(root, 'harmonyos/ets-source/common/location/countries.ts'), 'utf8')
 for (const [code, name] of [['TW', '中国台湾地区'], ['HK', '中国香港特别行政区'], ['MO', '中国澳门特别行政区']]) {
   if (!countryNames.includes(`"${code}": {\n  "zh": "${name}"`)) {
     errors.push(`Chinese location catalog must name ${code} as ${name}`)

@@ -4,8 +4,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
-const hierarchySource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/pages/location_hierarchy.ts'), 'utf8')
-const nameSource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/pages/location_names_zh.ts'), 'utf8')
+const hierarchySource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/common/location/hierarchy.ts'), 'utf8')
+const nameSource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/common/location/names_zh.ts'), 'utf8')
 const mainSource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/pages/MainWindowNativeNode.ets'), 'utf8')
 const locationStoreSource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/state/LocationPickerStore.ets'), 'utf8')
 const actionsSource = fs.readFileSync(path.join(root, 'harmonyos/ets-source/common/derive/actions.ets'), 'utf8')

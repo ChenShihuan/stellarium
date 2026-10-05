@@ -16,8 +16,8 @@
 | 文件 | 行数 | 说明 |
 |---|---:|---|
 | `pages/MainWindowNativeNode.ets` | **32,774** | 唯一主界面实现，占业务 ArkTS 的 **80.8%** |
-| `pages/location_hierarchy.ts` | 74,611 | 数据表（行政区划），不参与重构 |
-| `pages/location_names_zh.ts` | 7,350 | 数据表 |
+| `pages/location_hierarchy.ts` | 74,611 | 数据表（行政区划），不参与重构；**M2 已迁 `common/location/hierarchy.ts`**，见 §15.12.17 |
+| `pages/location_names_zh.ts` | 7,350 | 数据表；**M2 已迁 `common/location/names_zh.ts`** |
 | `pages/I18n.ets` | 2,354 | 翻译表 + 语言切换 |
 | `pages/StellariumTypes.ets` | 1,122 | 桥接协议类型集合 |
 | `qability/StellariumResourceBootstrap.ets` | 943 | 资源预热 |
@@ -1802,3 +1802,23 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **度量**：宿主 `MainWindowNativeNode.ets` **7,573 → 7,573 行**（本片不动宿主）；无 store / 端口新增；净 15 文件、+36 / −23 行。
 
 **验证**：预检通过；`arkts_check` 11 文件 0 error；`BUILD SUCCESSFUL`；契约 44 锚点 intact（249 文件）；受影响 3 测试全绿（12/12、6/6、7/7）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败。真机（192.168.50.108:36717）：`Smoke: PASS`；`searchObject Mars` → hilog `[detail-model] CPU texture ready … source=sidecar` → `[detail-model] render pixel map created kind=object-inspector-model bytes=409600` → `[detail-media-card] sphere loaded`（worker 链路实证）；`pidof` 存活、无 jscrash。
+
+#### 15.12.17 M 轨道 M2：位置参考数据三文件迁入 `common/location/`（2026-10-06，纯路径迁移）
+
+> **依据**：STATE-REVIEW §11.2.4 的最终决定（三文件由同一脚本生成、被同两个 store 消费，故保持同目录；目录只放参考数据、不放逻辑，文件名去 `location_` 前缀）。本片为 M 轨道第 2 片，**纯路径迁移**（`git mv` + 同步消费者相对深度），**不改任何数据内容 / 运行逻辑**；开工 `git log -1` = `9bc9992c4b`，宿主 `MainWindowNativeNode.ets` 基线 8,017 行。
+
+**文件移动清单（旧 → 新，`git mv` 保留历史，git 识别为 R100）**
+
+| 旧路径 | 新路径 | 行 |
+|---|---|---:|
+| `pages/location_hierarchy.ts` | `common/location/hierarchy.ts` | 74,611 |
+| `pages/location_names_zh.ts` | `common/location/names_zh.ts` | 7,350 |
+| `pages/location_countries.ts` | `common/location/countries.ts` | 986 |
+
+**消费者 import（3 文件 / 9 行）**：宿主 `pages/MainWindowNativeNode.ets`（3 行：`./location_*` → `../common/location/{hierarchy,countries,names_zh}`）；`state/LocationStore.ets`、`state/LocationPickerStore.ets`（各 3 行：`../pages/location_*` → `../common/location/*`）。导出名 `LOCATION_HIERARCHY` / `LOCATION_COUNTRY_NAMES` / `LOCATION_ZH_NAMES` 不变。
+
+**生成器 / 夹具输出路径同步（4 脚本 / 7 处）**：`scripts/generate-ohos-location-hierarchy.mjs`（2）、`scripts/generate-ohos-location-zh.mjs`（2）、`scripts/check-ohos-i18n.mjs`（1）、`scripts/verify-ohos-location-search.mjs`（2）——否则下次生成会重新落回 `pages/`。
+
+**度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（本片不动宿主）；无 store / 端口新增；净 7 个跟踪文件改动（3 重命名 + 3 消费者 import + 4 脚本内 7 处路径）。
+
+**验证**：预检通过；`arkts_check` 3 文件 0 error；`BUILD SUCCESSFUL in 30s`；契约 44 锚点 intact（249 文件）；受影响 `verify-ohos-location-search` 全绿（7,387 地点中文名齐全 + 12 项本地化/归一化检索）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败。真机（192.168.50.108:36717）：`pidof` 存活、无 jscrash；位置面板「按地区选」层级四列实证数据运行期可加载（大洲「亚洲」→ 国家/地区「不丹/东帝汶/中国」→ 地区「上海市/中国台湾地区/中国澳门特别行政区」→ 城市「上海」），点「上海」后坐标实时刷新为 `31.22°N / 121.46°E`、位置名「上海 · 地球」，`setLocation` 全链生效；测试改动的持久化观测点已恢复到测试前显示值。
