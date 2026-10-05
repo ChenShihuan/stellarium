@@ -1,5 +1,6 @@
 import { I18n } from '../../pages/I18n'
 import { LocSearchItem } from '../../pages/StellariumTypes'
+import { clamp } from '../../common/derive/astro'
 import { LocationStore } from '../../state/LocationStore'
 import { LocationPickerStore } from '../../state/LocationPickerStore'
 import { LocationSearchPanel } from './LocationSearchPanel'
@@ -47,8 +48,9 @@ export struct LocationPickerPanel {
   @ObjectLink pickerStore: LocationPickerStore
   @ObjectLink locationStore: LocationStore
   @Prop observerPlanet: string
-  @Prop mapWidth: number
-  @Prop mapHeight: number
+  // §15.12：地图几何随组件（A2-G）——由宿主布局态算出，不再由宿主预算 mapWidth/mapHeight。
+  @Prop expandedLayout: boolean
+  @Prop skyWidth: number
   @Prop subColor: string
   @Prop inputColor: string
   @Prop textColor: string
@@ -59,17 +61,71 @@ export struct LocationPickerPanel {
   contextOf: (item: LocSearchItem) => string = () => ''
   onPickSearchItem: (item: LocSearchItem) => void = () => {}
   onApply: () => void = () => {}
-  onMapTouch: (event: TouchEvent) => boolean = () => false
   onSelectContinent: (c: string) => void = () => {}
   onSelectCountry: (c: string) => void = () => {}
   onSelectRegion: (r: string) => void = () => {}
   onSelectCity: (c: string) => void = () => {}
 
   private columnScrollers: Array<Scroller> = [new Scroller(), new Scroller(), new Scroller(), new Scroller()]
+  // §15.12：地图触摸草稿（随组件走，非可观测）。
+  private mapTouchStartX: number = 0
+  private mapTouchStartY: number = 0
+  private mapTouchMoved: boolean = false
 
   private columnScroller(kind: string): Scroller {
     const index = kind === 'continent' ? 0 : (kind === 'country' ? 1 : (kind === 'region' ? 2 : 3))
     return this.columnScrollers[index]
+  }
+
+  // §15.12：地图渲染宽度/高度（原宿主 locationMapWidth/locationMapHeight，逐字搬入）。
+  private locationMapWidth(): number {
+    if (this.expandedLayout) {
+      return 292
+    }
+    return clamp(this.skyWidth * 0.92 - 32, 276, 620)
+  }
+
+  private locationMapHeight(): number {
+    return this.expandedLayout ? 146 : 156
+  }
+
+  // §15.12：地图点选 → 反算经纬度并写入 picker（原宿主 updatePickerFromMap，逐字搬入）。
+  private updatePickerFromMap(x: number, y: number): void {
+    const width = this.pickerStore.mapRenderWidth
+    const height = this.pickerStore.mapRenderHeight
+    const latitude = 90 - clamp(y, 0, height) / height * 180
+    const longitude = clamp(x, 0, width) / width * 360 - 180
+    this.pickerStore.setPickerLocation(I18n.t('custom_location'), latitude, longitude, this.pickerStore.locationPickerAltitude, I18n.t('m_map_selected'))
+    this.locationStore.locSearchQuery = ''
+  }
+
+  // §15.12：地图触摸（原宿主 handleLocationMapTouch，逐字搬入；点选后的 apply 走既有 onApply 回调）。
+  private handleLocationMapTouch(event: TouchEvent): boolean {
+    const points = event.touches.length > 0 ? event.touches : event.changedTouches
+    if (points.length < 1) {
+      return false
+    }
+    const point = points[0]
+    if (event.type === TouchType.Down) {
+      this.mapTouchStartX = point.x
+      this.mapTouchStartY = point.y
+      this.mapTouchMoved = false
+    } else if (event.type === TouchType.Move) {
+      const deltaX = point.x - this.mapTouchStartX
+      const deltaY = point.y - this.mapTouchStartY
+      if (Math.sqrt(deltaX * deltaX + deltaY * deltaY) > 10) this.mapTouchMoved = true
+    } else if (event.type === TouchType.Up) {
+      if (!this.mapTouchMoved) {
+        this.updatePickerFromMap(point.x, point.y)
+        this.onApply()
+      }
+      this.mapTouchMoved = false
+    } else if (event.type === TouchType.Cancel) {
+      this.mapTouchMoved = false
+    }
+    // Do not take ownership of a vertical panel scroll. A deliberate stationary
+    // tap still chooses the map point, while swiping across the map scrolls the panel.
+    return false
   }
 
   build() {
@@ -134,8 +190,8 @@ export struct LocationPickerPanel {
             .textShadow({ radius: 8, color: 'rgba(159, 232, 255, 0.75)', offsetX: 0, offsetY: 0 })
             .position({ x: this.pickerStore.pickerPinX(), y: this.pickerStore.pickerPinY() })
         }
-          .width(this.mapWidth)
-          .height(this.mapHeight)
+          .width(this.locationMapWidth())
+          .height(this.locationMapHeight())
           .alignSelf(ItemAlign.Center)
           .clip(true)
           .backgroundColor('rgba(11, 24, 43, 0.46)')
@@ -146,7 +202,7 @@ export struct LocationPickerPanel {
             this.pickerStore.mapRenderWidth = Number(newArea.width)
             this.pickerStore.mapRenderHeight = Number(newArea.height)
           })
-          .onTouch((event: TouchEvent) => this.onMapTouch(event))
+          .onTouch((event: TouchEvent) => this.handleLocationMapTouch(event))
         Text(this.pickerStore.pickerCoordinateText())
           .fontSize(12)
           .fontColor('#99FFFFFF')

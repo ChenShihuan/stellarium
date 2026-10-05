@@ -46,6 +46,9 @@ import { CommandPort } from '../bridge/CommandPort'
 import { MediaPort, MediaSaveResult, ScreenCaptureState } from '../bridge/MediaPort'
 import { PlatformPort } from '../bridge/PlatformPort'
 import { SensorPort, SensorProbeInfo } from '../bridge/SensorPort'
+import { LocationPort, LocationFix } from '../bridge/LocationPort'
+import { LocationController, LocationHostHooks } from '../capability/LocationController'
+import { LocationStoreHostHooks, LocationDraft } from '../state/LocationStore'
 import { decodeLocalImage, releaseDecodedImage } from '../common/media/ImageDecoder'
 import { copyTextToClipboard } from '../common/platform/Clipboard'
 import { shareFile } from '../common/platform/Share'
@@ -659,6 +662,69 @@ class HostSensorPort implements SensorPort {
   }
 }
 
+// 宿主 → LocationPort 的具名适配器（PLAN §15.12）。承载 abilityAccessCtrl / geoLocationManager /
+// @ohos.data.preferences 三处 NAPI，使 LocationController 不 import NAPI（§15.7 规则 1）。
+// UI 上下文工厂经 configure 惰性注入（适配器在字段初始化时构造，此时 getUIContext 尚不可用）。
+class HostLocationPort implements LocationPort {
+  private contextFactory: (() => common.UIAbilityContext) | null = null
+
+  configure(contextFactory: () => common.UIAbilityContext): void {
+    this.contextFactory = contextFactory
+  }
+
+  private context(): common.UIAbilityContext {
+    const factory = this.contextFactory
+    if (factory === null) {
+      throw new Error('HostLocationPort not configured')
+    }
+    return factory()
+  }
+
+  async requestLocationPermissions(): Promise<boolean> {
+    const context = this.context()
+    const atManager = abilityAccessCtrl.createAtManager()
+    const permissions: Array<Permissions> = [
+      'ohos.permission.APPROXIMATELY_LOCATION',
+      'ohos.permission.LOCATION'
+    ]
+    const permissionResult = await atManager.requestPermissionsFromUser(context, permissions)
+    return permissionResult.authResults.some((result: number) => result === 0)
+  }
+
+  async getCurrentLocation(): Promise<LocationFix> {
+    const current = await geoLocationManager.getCurrentLocation({
+      priority: geoLocationManager.LocationRequestPriority.ACCURACY,
+      scenario: geoLocationManager.LocationRequestScenario.DAILY_LIFE_SERVICE,
+      maxAccuracy: 2000,
+      timeoutMs: 5000
+    })
+    return {
+      latitude: current.latitude,
+      longitude: current.longitude,
+      altitude: Number.isFinite(current.altitude) ? current.altitude : 0
+    }
+  }
+
+  async readObserverLocation(): Promise<string> {
+    try {
+      const store = await preferences.getPreferences(this.context(), LOCATION_STORE)
+      return (await store.get('location', '')) as string
+    } catch (e) {
+      return ''
+    }
+  }
+
+  async writeObserverLocation(json: string): Promise<void> {
+    try {
+      const store = await preferences.getPreferences(this.context(), LOCATION_STORE)
+      await store.put('location', json)
+      await store.flush()
+    } catch (e) {
+      hilog.warn(0xD002, 'Stellarium', 'save observer location failed: %{public}s', String(e))
+    }
+  }
+}
+
 @Component
 export struct WindowNativeNode {
   @State private createInfo: WindowNativeNodeCreateInfo | undefined = undefined
@@ -703,6 +769,10 @@ export struct WindowNativeNode {
   private hostMediaPort: HostMediaPort = new HostMediaPort()
   private hostPlatformPort: HostPlatformPort = new HostPlatformPort()
   private hostSensorPort: HostSensorPort = new HostSensorPort()
+  // PLAN §15.12：位置域端口适配器（aboutToAppear 里 configure UI 上下文）。
+  private hostLocationPort: HostLocationPort = new HostLocationPort()
+  // §15.12：位置域控制器（惰性构造；NAPI 经 LocationPort，跨域写经 LocationHostHooks）。
+  private locationControllerImpl: LocationController | null = null
   // M1-A：启动桥服务（惰性构造，持有跨域 store 引用与宿主生命周期 hooks）。
   private startupBridgeImpl: StartupBridge | null = null
   // M1-B 子组①：传感器/陀螺仪控制器（惰性构造；注入 SensorPort/CommandPort/store 与宿主 hooks）。
@@ -812,9 +882,7 @@ export struct WindowNativeNode {
   // 位置选择器状态簇（picker 坐标/名称/状态、层级选择、地图渲染尺寸、时区、选点方式 + 层级翻译纯计算）
   // 随 locationPickerPanel 组件化迁移到 LocationPickerStore（Phase 3aj）。
   @State private locationPickerStore: LocationPickerStore = new LocationPickerStore()
-  private mapTouchStartX: number = 0
-  private mapTouchStartY: number = 0
-  private mapTouchMoved: boolean = false
+  // mapTouchStartX/Y/Moved 已随 §15.12 地图触摸下沉 panels/location/LocationPickerPanel.ets。
   // 观测/会话工具区块状态（观测星球切换、指星笔、手表陀螺仪模拟、今晚天象）—— Phase 3as 组件化。
   @State private sessionToolStore: SessionToolStore = new SessionToolStore()
   @State private watchLastSend: number = 0
@@ -1030,17 +1098,8 @@ export struct WindowNativeNode {
   private scriptControlDragStartOffsetY: number = 0
 
   private hintTimer: number = 0
-  private locSearchRequestId: number = 0
-  private locationSearchScanContinents: Array<string> = []
-  private locationSearchScanRegions: Array<string> = []
-  private locationSearchScanContinentIndex: number = 0
-  private locationSearchScanRegionIndex: number = 0
-  private locationSearchScanCityIndex: number = 0
-  private locationSearchScanQuery: string = ''
-  private locationSearchScanResults: Array<LocSearchItem> = []
-  private locationSearchScanKeys: Set<string> = new Set<string>()
-  private locationSearchScanTimer: number = -1
-  private locationSearchLastPublishMs: number = 0
+  // 离线搜索分块扫描草稿（locSearchRequestId / locationSearchScan* / locationSearchLastPublishMs）
+  // 已随 §15.12 离线搜索三法下沉 state/LocationStore.ets。
   private searchSuggestionTimer: number = -1
   private panelIdleTimer: number = -1
   private lastOverlayActivityMs: number = 0
@@ -1422,7 +1481,7 @@ export struct WindowNativeNode {
           setBridgeSyncStarted: (value: boolean): void => { this.bridgeSyncStarted = value },
           selftestEnabled: (): boolean => this.SELFTEST,
           runSelftest: (): void => this.selfTestAllActions(),
-          restoreObserverLocation: (): void => { this.restoreObserverLocation() }
+          restoreObserverLocation: (): void => { this.locationCtl().restoreObserverLocation() }
         },
         this.skyCultureViewStore, this.pluginStore, this.nightModeStore, this.telescopeStore,
         this.gyroStore, this.languageStore, this.audioStore, this.viewSettingsStore,
@@ -1608,6 +1667,31 @@ export struct WindowNativeNode {
     return this.skyInputControllerImpl
   }
 
+  // §15.12 位置域控制器惰性构造。NAPI（权限/定位/preferences）经 HostLocationPort；跨域写
+  // （SessionToolStore.observerPlanet、位置头部三 @State）与 GPS 门禁经 LocationHostHooks 回注。
+  private locationCtl(): LocationController {
+    if (this.locationControllerImpl === null) {
+      const hooks: LocationHostHooks = {
+        flashHint: (text: ResourceStr): void => this.flashHint(text),
+        refreshState: (): void => { this.refreshState() },
+        loadObserverInfo: (): void => { this.locationPickerStore.loadObserverInfo(true) },
+        setObserverPlanetCrossStore: (name: string): void => { this.sessionToolStore.observerPlanet = name },
+        setLocationTexts: (location: string, coordinate: string, altitude: string): void => {
+          this.locationText = location
+          this.coordinateText = coordinate
+          this.altitudeText = altitude
+        },
+        privacyAllowed: (): boolean => this.privacyNativeStartupAllowed,
+        inForeground: (): boolean => this.applicationInForeground,
+        hasPrivacyConsent: (): boolean => hasCurrentPrivacyConsent()
+      }
+      this.locationControllerImpl = new LocationController(
+        this.commandPort(), this.hostLocationPort, this.locationPickerStore, this.locationStore, this.sessionToolStore, hooks
+      )
+    }
+    return this.locationControllerImpl
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
@@ -1620,6 +1704,8 @@ export struct WindowNativeNode {
       (): common.UIAbilityContext => this.getUIContext().getHostContext() as common.UIAbilityContext,
       (): boolean => this.isExpandedLayout
     )
+    // §15.12：配置位置端口适配器（权限/定位/preferences NAPI 在此收口）。
+    this.hostLocationPort.configure((): common.UIAbilityContext => this.getUIContext().getHostContext() as common.UIAbilityContext)
     // §14.1：把宿主桥注入 ToolsStore。ToolsStore 消费方均为 @ObjectLink，字段赋值即刷新，
     // 故此处 onChanged 注入等价空实现（该域无 publish* 发布点）。
     const hostPort = this.commandPort()
@@ -1809,6 +1895,29 @@ export struct WindowNativeNode {
     this.satelliteStore.attachPort(hostPort, (error: string) => { this.publishSatellitePanelState(error) })
     // §14 B1-6：位置域的 loadSavedLocations 读 AppStorage 而非桥，port 暂未使用（预留）。
     this.locationStore.attachPort(hostPort, () => {})
+    // §15.12：离线搜索 / 保存点的跨域读（LocationPickerStore 助手 + SessionToolStore.observerPlanet）
+    // 与跨 store 动作（setLocation / pickerMode）经具名 hooks 回注，store 不 import 他 store。
+    this.locationStore.attachHooks({
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+      currentDraft: (): LocationDraft => {
+        return {
+          name: this.locationPickerStore.locationPickerName,
+          latitude: this.locationPickerStore.locationPickerLatitude,
+          longitude: this.locationPickerStore.locationPickerLongitude,
+          altitude: this.locationPickerStore.locationPickerAltitude,
+          planet: this.sessionToolStore.observerPlanet
+        }
+      },
+      observerPlanet: (): string => this.sessionToolStore.observerPlanet,
+      quickLocationSearch: (query: string, observerPlanet: string): Array<LocSearchItem> => this.locationPickerStore.quickLocationSearch(query, observerPlanet),
+      isCurrentObserverPlanet: (city: HierCity, observerPlanet: string): boolean => this.locationPickerStore.isCurrentObserverPlanet(city, observerPlanet),
+      locationDisplayName: (name: string): string => this.locationPickerStore.locationDisplayName(name),
+      locationSearchCountryName: (countryCode: string, observerPlanet: string): string => this.locationPickerStore.locationSearchCountryName(countryCode, observerPlanet),
+      translateProvince: (name: string): string => this.locationPickerStore.translateProvince(name),
+      locationPlanet: (city: HierCity): string => this.locationPickerStore.locationPlanet(city),
+      applyLocation: (name: string, lat: number, lon: number, alt: number, planet: string): void => { this.locationCtl().setLocation(name, lat, lon, alt, planet) },
+      setPickerMode: (mode: string): void => { this.locationPickerStore.locationPickMode = mode }
+    })
     // §14 B2A：Astro 簇加载器下沉。astroStore 复用同一 HostCommandPort；onChanged 走
     // publishAstroPanelState，保持 CLI 侧 stellariumAstroPanelState 同步；跨 store
     // （objectDetailStore / wutStore / ephemerisStore）与未随本片下沉的宿主加载器
@@ -1857,8 +1966,8 @@ export struct WindowNativeNode {
       setObserverPlanet: (value: string): void => { this.sessionToolStore.observerPlanet = value }
     })
     // 启动恢复上次观测点（含 GPS 定点）：不再每次重启回退引擎默认北京。引擎未就绪由
-    // setLocation 内的 callNativeWhenReady 重试兜底。
-    this.restoreObserverLocation()
+    // setLocation 内的 callNativeWhenReady 重试兜底（§15.12 起经位置控制器）。
+    this.locationCtl().restoreObserverLocation()
     this.timeStore.attachPort(hostPort, () => {})
     this.timeStore.attachHooks({
       syncNightModeFromEngine: (engineNight: boolean): void => this.syncNightModeFromEngine(engineNight),
@@ -3311,58 +3420,9 @@ export struct WindowNativeNode {
     await store.flush()
   }
 
-  // ===== 观测点持久化（@ohos.data.preferences）：GPS / 选点后的位置跨重启保留 =====
-  // 原实现只把位置推给引擎、不落本地存储，重启后引擎回退默认（北京）。这里在每次 setLocation
-  // 后落盘，并在启动时静默重建。
-  private async saveObserverLocationToStorage(): Promise<void> {
-    try {
-      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const store = await preferences.getPreferences(ctx, LOCATION_STORE)
-      const rec: ObserverLocationRecord = {
-        name: this.locationPickerStore.locationPickerName,
-        latitude: this.locationPickerStore.locationPickerLatitude,
-        longitude: this.locationPickerStore.locationPickerLongitude,
-        altitude: this.locationPickerStore.locationPickerAltitude,
-        planet: this.sessionToolStore.observerPlanet
-      }
-      await store.put('location', JSON.stringify(rec))
-      await store.flush()
-    } catch (e) {
-      hilog.warn(0xD002, 'Stellarium', 'save observer location failed: %{public}s', String(e))
-    }
-  }
-
-  private async readObserverLocationStorage(): Promise<string> {
-    try {
-      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const store = await preferences.getPreferences(ctx, LOCATION_STORE)
-      return (await store.get('location', '')) as string
-    } catch (e) {
-      return ''
-    }
-  }
-
-  // 启动恢复：读持久化观测点并静默重建（引擎就绪由 setLocation 内的 callNativeWhenReady 重试兜底）。
-  private async restoreObserverLocation(): Promise<void> {
-    const json = await this.readObserverLocationStorage()
-    if (json.length === 0) {
-      return
-    }
-    let rec: ObserverLocationRecord | undefined = undefined
-    try {
-      rec = JSON.parse(json) as ObserverLocationRecord
-    } catch (e) {
-      return
-    }
-    if (rec === undefined || !Number.isFinite(rec.latitude) || !Number.isFinite(rec.longitude)) {
-      return
-    }
-    const planet = typeof rec.planet === 'string' && rec.planet.length > 0 ? rec.planet : 'Earth'
-    const name = typeof rec.name === 'string' && rec.name.length > 0 ? rec.name : I18n.t('m_current_location')
-    const altitude = Number.isFinite(rec.altitude) ? rec.altitude : 0
-    hilog.info(0x0000, 'StellariumArkUI', '[location] restoring persisted observer location')
-    this.setLocation(name, rec.latitude, rec.longitude, altitude, planet, true)
-  }
+  // ===== 观测点持久化：saveObserverLocationToStorage / readObserverLocationStorage /
+  // restoreObserverLocation 已随 §15.12 下沉 capability/LocationController.ets（preferences NAPI 收在
+  // 顶层 HostLocationPort 适配器）。
 
   // ===== 书签（C++ 桥：addBookmark / getBookmarks / deleteBookmark / gotoBookmark）=====
   // loadBookmarks 已下沉 BookmarkStore（§14 B2R-4）。
@@ -8456,353 +8516,23 @@ private loadPlanetPositions(): void {
   }
 
 
-  private locationMapWidth(): number {
-    if (this.isExpandedLayout) {
-      return 292
-    }
-    return clamp(this.skyWidth * 0.92 - 32, 276, 620)
-  }
+  // 地图几何 / 点选 / 触摸（locationMapWidth/Height、setPickerLocation、updatePickerFromMap、
+  // handleLocationMapTouch）已随 §15.12 下沉 panels/location/LocationPickerPanel.ets 与
+  // state/LocationPickerStore.ets（setPickerLocation 为两处共用的纯 setter）。
 
-  private locationMapHeight(): number {
-    return this.isExpandedLayout ? 146 : 156
-  }
+  // GPS 定位 / 应用 / 落地（useDeviceLocation、applyPickerLocation、setLocation）与请求中标志
+  // 已随 §15.12 下沉 capability/LocationController.ets（NAPI 经 HostLocationPort，跨域写经 LocationHostHooks）。
 
-  private setPickerLocation(name: string, latitude: number, longitude: number, altitude: number, status: ResourceStr): void {
-    this.locationPickerStore.locationPickerName = name
-    this.locationPickerStore.locationPickerLatitude = clamp(latitude, -90, 90)
-    this.locationPickerStore.locationPickerLongitude = clamp(longitude, -180, 180)
-    this.locationPickerStore.locationPickerAltitude = Math.round(altitude)
-    this.locationPickerStore.locationPickerStatus = status
-  }
-
-  private updatePickerFromMap(x: number, y: number): void {
-    const width = this.locationPickerStore.mapRenderWidth
-    const height = this.locationPickerStore.mapRenderHeight
-    const latitude = 90 - clamp(y, 0, height) / height * 180
-    const longitude = clamp(x, 0, width) / width * 360 - 180
-    this.setPickerLocation(I18n.t('custom_location'), latitude, longitude, this.locationPickerStore.locationPickerAltitude, I18n.t('m_map_selected'))
-    this.locationStore.locSearchQuery = ''
-  }
-
-  private handleLocationMapTouch(event: TouchEvent): boolean {
-    const points = event.touches.length > 0 ? event.touches : event.changedTouches
-    if (points.length < 1) {
-      return false
-    }
-    const point = points[0]
-    if (event.type === TouchType.Down) {
-      this.mapTouchStartX = point.x
-      this.mapTouchStartY = point.y
-      this.mapTouchMoved = false
-    } else if (event.type === TouchType.Move) {
-      const deltaX = point.x - this.mapTouchStartX
-      const deltaY = point.y - this.mapTouchStartY
-      if (Math.sqrt(deltaX * deltaX + deltaY * deltaY) > 10) this.mapTouchMoved = true
-    } else if (event.type === TouchType.Up) {
-      if (!this.mapTouchMoved) {
-        this.updatePickerFromMap(point.x, point.y)
-        this.applyPickerLocation()
-      }
-      this.mapTouchMoved = false
-    } else if (event.type === TouchType.Cancel) {
-      this.mapTouchMoved = false
-    }
-    // Do not take ownership of a vertical panel scroll. A deliberate stationary
-    // tap still chooses the map point, while swiping across the map scrolls the panel.
-    return false
-  }
-
-  private deviceLocationRequestInProgress: boolean = false
-
-  private async useDeviceLocation(): Promise<void> {
-    if (this.deviceLocationRequestInProgress || !this.privacyNativeStartupAllowed ||
-      !this.applicationInForeground || !hasCurrentPrivacyConsent()) return
-    this.deviceLocationRequestInProgress = true
-    hilog.info(0x0000, 'StellariumArkUI', 'useDeviceLocation() called')
-    this.locationPickerStore.locationPickerStatus = I18n.t('m_req_location_perm')
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const atManager = abilityAccessCtrl.createAtManager()
-      const permissions: Array<Permissions> = [
-        'ohos.permission.APPROXIMATELY_LOCATION',
-        'ohos.permission.LOCATION'
-      ]
-      const permissionResult = await atManager.requestPermissionsFromUser(context, permissions)
-      if (!this.privacyNativeStartupAllowed || !this.applicationInForeground || !hasCurrentPrivacyConsent()) return
-      if (!permissionResult.authResults.some((result: number) => result === 0)) {
-        this.locationPickerStore.locationPickerStatus = I18n.t('m_gps_unavailable')
-        return
-      }
-      this.locationPickerStore.locationPickerStatus = I18n.t('m_getting_location')
-      const current = await geoLocationManager.getCurrentLocation({
-        priority: geoLocationManager.LocationRequestPriority.ACCURACY,
-        scenario: geoLocationManager.LocationRequestScenario.DAILY_LIFE_SERVICE,
-        maxAccuracy: 2000,
-        timeoutMs: 5000
-      })
-      if (!this.privacyNativeStartupAllowed || !this.applicationInForeground || !hasCurrentPrivacyConsent()) return
-      const altitude = Number.isFinite(current.altitude) ? current.altitude : 0
-      this.setPickerLocation(I18n.t('m_current_location'), current.latitude, current.longitude, altitude, I18n.t('m_device_loc_synced'))
-      this.applyPickerLocation()
-      this.locationPickerStore.locationPickMode = 'map'
-      this.locationPickerStore.hierContinent = ''
-      this.locationPickerStore.hierCountry = ''
-      this.locationPickerStore.hierRegion = ''
-      this.locationPickerStore.hierCity = ''
-    } catch (err) {
-      const errMsg: string = err instanceof Error ? err.message : JSON.stringify(err)
-      hilog.warn(0x0000, 'StellariumArkUI', 'device location failed: %{public}s', errMsg)
-      this.locationPickerStore.locationPickerStatus = I18n.t('m_gps_unavailable')
-    } finally {
-      this.deviceLocationRequestInProgress = false
-    }
-  }
-
-  private applyPickerLocation(): void {
-    this.setLocation(this.locationPickerStore.locationPickerName, this.locationPickerStore.locationPickerLatitude, this.locationPickerStore.locationPickerLongitude, this.locationPickerStore.locationPickerAltitude)
-    // 延迟刷新时区信息（等C++侧location切换完成）
-    setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 500)
-  }
-
-
-
-  private setLocation(name: string, latitude: number, longitude: number, altitude: number, planet: string = 'Earth', silent: boolean = false): void {
-    const targetPlanet = planet.length > 0 ? planet : 'Earth'
-    const currentPlanet = this.sessionToolStore.observerPlanet
-    // Update picker UI immediately (non-blocking, gives instant feedback)
-    this.setPickerLocation(name, latitude, longitude, altitude, I18n.t('m_synced_to_sky'))
-    this.sessionToolStore.observerPlanet = targetPlanet
-    // 持久化观测点：GPS / 选点后的位置跨重启保留（否则重启回退引擎默认北京）。
-    this.saveObserverLocationToStorage()
-    this.locationText = this.locationPickerStore.locationDisplayName(name) + ' · ' + planetZh(targetPlanet)
-    this.coordinateText = this.locationStore.formatDegrees(latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(longitude, 'E', 'W')
-    this.altitudeText = altitude.toFixed(0) + ' m'
-    this.locationPickerStore.observerTimeZone = targetPlanet === 'Earth' ? approximateTimeZoneDisplay(longitude) : I18n.t('tz_system')
-    if (!silent) {
-      this.flashHint(I18n.t('i0073').replace('%s', this.locationPickerStore.locationDisplayName(name)))
-    }
-    if (targetPlanet !== currentPlanet || targetPlanet !== 'Earth') {
-      this.callNativeWhenReady('setObserverPlanet', `${targetPlanet}|${latitude}|${longitude}|${altitude}`, (r: StellariumBridgeResponse) => {
-        if (r.ok === true) {
-          this.refreshState()
-          setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 300)
-        } else {
-          this.sessionToolStore.observerPlanet = currentPlanet
-          this.flashHint('切换观测星球失败')
-        }
-      }, 0, 100, 10)
-      return
-    }
-    // 经纬度是地图选点和层级城市的共同事实源，先写坐标，避免名称查库失败或读回旧位置。
-    this.callNativeWhenReady('setLocation', `${name}|${latitude}|${longitude}|${altitude}`, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.refreshState()
-        setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 300)
-      } else {
-        hilog.info(0x0000, 'StellariumArkUI', 'setLocation failed, fallback to setLocationCoords')
-        this.callNativeWhenReady('setLocationCoords', `${latitude},${longitude},${altitude}`, (r2: StellariumBridgeResponse) => {
-          if (r2.ok === true) {
-            this.refreshState()
-            setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 300)
-          } else {
-            hilog.info(0x0000, 'StellariumArkUI', 'setLocationCoords failed, fallback to setLocationByName')
-            this.callNativeWhenReady('setLocationByName', name, (r3: StellariumBridgeResponse) => {
-              if (r3.ok === true) {
-                this.refreshState()
-                setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 300)
-              }
-            })
-          }
-        })
-      }
-    }, 0, 100, 10)
-  }
-
-  // ===== 位置搜索（离线数据，按查询分块扫描）=====
-
-
-
-
-
-
-
-
-
-
-
-
-  private searchLocations(query: string): void {
-    const q = query.trim()
-    const requestId = ++this.locSearchRequestId
-    if (this.locationSearchScanTimer >= 0) {
-      clearTimeout(this.locationSearchScanTimer)
-      this.locationSearchScanTimer = -1
-    }
-    if (q.length < 1) {
-      this.locationStore.locSearchResults = []
-      this.locationStore.locSearching = false
-      return
-    }
-    const quickResults = this.locationPickerStore.quickLocationSearch(q, this.sessionToolStore.observerPlanet)
-    if (quickResults.length > 0) {
-      this.locationStore.locSearchResults = quickResults.slice(0, 20)
-      this.locationStore.locSearching = false
-      return
-    }
-    this.locationStore.locSearching = true
-    this.locationSearchScanQuery = q
-    this.locationSearchScanResults = []
-    this.locationSearchScanKeys = new Set<string>()
-    this.locationSearchScanContinents = Object.keys(LOCATION_HIERARCHY)
-    this.locationSearchScanRegions = []
-    this.locationSearchScanContinentIndex = 0
-    this.locationSearchScanRegionIndex = 0
-    this.locationSearchScanCityIndex = 0
-    this.locationSearchLastPublishMs = 0
-    this.locationStore.locSearchResults = []
-    this.locationSearchScanTimer = setTimeout(() => { this.scanLocationSearchChunk(requestId) }, 0)
-  }
-
-  private scanLocationSearchChunk(requestId: number): void {
-    if (requestId !== this.locSearchRequestId) return
-    const startedAt = Date.now()
-    let changed = false
-    while (this.locationSearchScanContinentIndex < this.locationSearchScanContinents.length && Date.now() - startedAt < 5) {
-      const continent = this.locationSearchScanContinents[this.locationSearchScanContinentIndex]
-      if (this.locationSearchScanRegions.length === 0) {
-        this.locationSearchScanRegions = Object.keys(LOCATION_HIERARCHY[continent])
-      }
-      if (this.locationSearchScanRegionIndex >= this.locationSearchScanRegions.length) {
-        this.locationSearchScanContinentIndex++
-        this.locationSearchScanRegions = []
-        this.locationSearchScanRegionIndex = 0
-        this.locationSearchScanCityIndex = 0
-        continue
-      }
-      const region = this.locationSearchScanRegions[this.locationSearchScanRegionIndex]
-      const cities = LOCATION_HIERARCHY[continent][region]
-      if (this.locationSearchScanCityIndex >= cities.length) {
-        this.locationSearchScanRegionIndex++
-        this.locationSearchScanCityIndex = 0
-        continue
-      }
-      const city = cities[this.locationSearchScanCityIndex++]
-      if (!this.locationPickerStore.isCurrentObserverPlanet(city, this.sessionToolStore.observerPlanet)) continue
-      const chinese = LOCATION_ZH_NAMES[city.n] ?? ''
-      const displayName = this.locationPickerStore.locationDisplayName(city.n)
-      const countryCode = city.country
-      const country = this.locationPickerStore.locationSearchCountryName(countryCode, this.sessionToolStore.observerPlanet)
-      const province = this.locationPickerStore.translateProvince(city.province ?? '')
-      // Search accepts the source name, official Chinese name, and the name
-      // rendered for the active language. Display itself remains single-language.
-      const sourceCountry = LOCATION_COUNTRY_NAMES[countryCode]
-      const text = city.n + ' ' + chinese + ' ' + displayName + ' ' +
-        (city.province ?? '') + ' ' + province + ' ' + region + ' ' + country + ' ' +
-        (sourceCountry?.zh ?? '') + ' ' + (sourceCountry?.en ?? '') + officialLocationAliases(countryCode)
-      const matchScore = locationSearchMatchScore(this.locationSearchScanQuery,
-        [city.n, chinese, displayName, city.province ?? '', province, region, country], text)
-      if (matchScore <= 0) continue
-      const item: LocSearchItem = {
-        name: city.n,
-        displayName: displayName,
-        lat: city.la,
-        lon: city.lo,
-        alt: city.al,
-        planet: this.locationPickerStore.locationPlanet(city),
-        country: countryCode,
-        region: region,
-        province: city.province ?? '',
-        searchScore: matchScore,
-      }
-      const key = city.n + '|' + city.la.toFixed(4) + '|' + city.lo.toFixed(4)
-      if (this.locationSearchScanKeys.has(key)) continue
-      this.locationSearchScanKeys.add(key)
-      this.locationSearchScanResults.push(item)
-      this.locationSearchScanResults.sort((left: LocSearchItem, right: LocSearchItem) =>
-        (right.searchScore ?? 0) - (left.searchScore ?? 0))
-      if (this.locationSearchScanResults.length > 20) this.locationSearchScanResults.pop()
-      changed = true
-    }
-    if (requestId !== this.locSearchRequestId) return
-    const finished = this.locationSearchScanContinentIndex >= this.locationSearchScanContinents.length
-    const now = Date.now()
-    if (changed && (finished || now - this.locationSearchLastPublishMs >= 120)) {
-      this.locationStore.locSearchResults = this.locationSearchScanResults.slice()
-      this.locationSearchLastPublishMs = now
-    }
-    if (finished) {
-      this.locationStore.locSearching = false
-      this.locationSearchScanTimer = -1
-      return
-    }
-    this.locationSearchScanTimer = setTimeout(() => { this.scanLocationSearchChunk(requestId) }, 16)
-  }
-
-  private selectSearchLocation(item: LocSearchItem): void {
-    this.setLocation(item.name, item.lat, item.lon, item.alt, item.planet)
-    this.locationStore.locSearchQuery = ''
-    this.locationStore.locSearchResults = []
-      this.locationPickerStore.locationPickMode = 'map'
-  }
+  // 离线搜索三法（searchLocations / scanLocationSearchChunk / selectSearchLocation）已随 §15.12 下沉
+  // state/LocationStore.ets（跨域助手与 setLocation 经 LocationStoreHostHooks 回注）。
 
   // ===== 时区获取 =====
   // approximateTimeZoneDisplay 与 loadObserverInfo 已随 §14 B2R-2 下沉：
   // 前者迁至 common/derive/labels.ets（纯函数），后者迁至 LocationPickerStore。
 
-  // ===== 已保存位置管理（持久化到 preferences）=====
-  private saveCurrentLocation(): void {
-    const name = this.locationPickerStore.locationPickerName
-    // 检查是否已存在
-    const exists = this.locationStore.savedLocations.some((s: SavedLocation) => s.name === name)
-    if (exists) {
-      this.flashHint(I18n.t('loc_already_saved'))
-      return
-    }
-    const item: SavedLocation = {
-      name: name,
-      lat: this.locationPickerStore.locationPickerLatitude,
-      lon: this.locationPickerStore.locationPickerLongitude,
-      alt: this.locationPickerStore.locationPickerAltitude,
-      planet: this.sessionToolStore.observerPlanet,
-    }
-    this.locationStore.savedLocations = [...this.locationStore.savedLocations, item]
-    this.persistSavedLocations()
-    this.flashHint(I18n.t('loc_saved_success'))
-  }
-
-  private deleteSavedLocation(name: string): void {
-    this.locationStore.savedLocations = this.locationStore.savedLocations.filter((s: SavedLocation) => s.name !== name)
-    this.persistSavedLocations()
-  }
-
-  private persistSavedLocations(): void {
-    try {
-      let prefs = AppStorage.get<Record<string, Object>>('stellariumPrefs')
-      if (!prefs) {
-        prefs = {} as Record<string, Object>
-      }
-      prefs['savedLocations'] = this.locationStore.savedLocations
-      AppStorage.setOrCreate<Record<string, Object>>('stellariumPrefs', prefs)
-    } catch (e) {
-      hilog.info(0x0000, 'StellariumArkUI', 'persistSavedLocations error: %{public}s', (e as Error).message ?? '')
-    }
-  }
-
-  private setObserverPlanet(name: string): void {
-    this.callInteractive('setObserverPlanet', name, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.sessionToolStore.observerPlanet = name
-        this.locationPickerStore.hierContinent = ''
-        this.locationPickerStore.hierCountry = ''
-        this.locationPickerStore.hierRegion = ''
-        this.locationPickerStore.hierCity = ''
-        this.refreshState()
-        this.flashHint('已切换观测星球：' + name)
-      } else {
-        this.flashHint('切换失败：' + (r.error ?? 'unknown'))
-      }
-    })
-  }
+  // 已保存位置三法（saveCurrentLocation / deleteSavedLocation / persistSavedLocations）已随 §15.12
+  // 下沉 state/LocationStore.ets（保持 AppStorage 持久化方式原样）；setObserverPlanet 已下沉
+  // capability/LocationController.ets。
 
   // 虚拟指星笔（多设备联动）目标端测试入口：输入高度角/方位角，调 pointAtSky
   // 把星图中心转到该方向并选中那颗星。手表/分布式未来只是另一种触发方式。
@@ -8969,7 +8699,7 @@ private loadPlanetPositions(): void {
     const found = this.locationPickerStore.hierCities(this.sessionToolStore.observerPlanet).find((c: HierCity) => c.n === name)
     if (found) {
       // Auto-apply the selected city immediately
-      this.setLocation(found.n, found.la, found.lo, found.al, this.locationPickerStore.locationPlanet(found))
+      this.locationCtl().setLocation(found.n, found.la, found.lo, found.al, this.locationPickerStore.locationPlanet(found))
     }
   }
 
@@ -9155,7 +8885,7 @@ private loadPlanetPositions(): void {
         if (x >= 1245 && x <= 1320) { this.lx200Abort(); return true }
       }
     } else if (this.activePanel === 'place') {
-      if (y >= 455 && y <= 505 && x >= 1300 && x <= right) { this.useDeviceLocation(); return true }
+      if (y >= 455 && y <= 505 && x >= 1300 && x <= right) { this.locationCtl().useDeviceLocation(); return true }
     }
 
     return true
@@ -11279,8 +11009,8 @@ private loadPlanetPositions(): void {
         locationText: this.locationText,
         coordinateText: this.coordinateText,
         altitudeText: this.altitudeText,
-        mapWidth: this.locationMapWidth(),
-        mapHeight: this.locationMapHeight(),
+        expandedLayout: this.isExpandedLayout,
+        skyWidth: this.skyWidth,
         textColor: this.nightModeStore.nmText(),
         subColor: this.nightModeStore.nmSub(),
         inputColor: this.nightModeStore.nmInput(),
@@ -11289,20 +11019,19 @@ private loadPlanetPositions(): void {
         borderTint: this.nightModeStore.nmBorder(),
         planetLabel: (en: string) => planetZh(en),
         contextOf: (item: LocSearchItem) => this.locationPickerStore.locationResultContext(item, this.sessionToolStore.observerPlanet),
-        onUseDeviceLocation: () => { this.useDeviceLocation() },
-        onSearchLocations: (query: string) => { this.searchLocations(query) },
-        onPickSearchItem: (item: LocSearchItem) => { this.selectSearchLocation(item) },
-        onApply: () => { this.applyPickerLocation() },
-        onMapTouch: (event: TouchEvent) => this.handleLocationMapTouch(event),
+        onUseDeviceLocation: () => { this.locationCtl().useDeviceLocation() },
+        onSearchLocations: (query: string) => { this.locationStore.searchLocations(query) },
+        onPickSearchItem: (item: LocSearchItem) => { this.locationStore.selectSearchLocation(item) },
+        onApply: () => { this.locationCtl().applyPickerLocation() },
         onSelectContinent: (c: string) => { this.selectContinent(c) },
         onSelectCountry: (c: string) => { this.selectCountry(c) },
         onSelectRegion: (r: string) => { this.selectRegion(r) },
         onSelectCity: (c: string) => { this.selectCityByName(c) },
-        onSaveCurrent: () => { this.saveCurrentLocation() },
-        onApplyLocation: (name: string, lat: number, lon: number, alt: number, planet: string) => { this.setLocation(name, lat, lon, alt, planet) },
-        onDeleteLocation: (name: string) => { this.deleteSavedLocation(name) },
+        onSaveCurrent: () => { this.locationStore.saveCurrentLocation() },
+        onApplyLocation: (name: string, lat: number, lon: number, alt: number, planet: string) => { this.locationCtl().setLocation(name, lat, lon, alt, planet) },
+        onDeleteLocation: (name: string) => { this.locationStore.deleteSavedLocation(name) },
         onChip: (id: string) => { this.handleChip(id) },
-        onSelectPlanet: (name: string) => { this.setObserverPlanet(name) },
+        onSelectPlanet: (name: string) => { this.locationCtl().setObserverPlanet(name) },
         onPoint: () => { this.pointAtSkyTest() },
         onSend: () => { this.gyroCtl().watchGyroSend() },
         onStart: () => { this.gyroCtl().watchGyroStart() },
@@ -12165,10 +11894,10 @@ private loadPlanetPositions(): void {
       const cityId = id.substring(5)
       const preset = getCityPreset(cityId)
       if (preset !== undefined) {
-        this.setLocation(cityId, preset.lat, preset.lon, preset.alt)
+        this.locationCtl().setLocation(cityId, preset.lat, preset.lon, preset.alt)
       }
     } else if (id === 'Beijing') {
-      this.setLocation('Beijing', 39.9042, 116.4074, 44)
+      this.locationCtl().setLocation('Beijing', 39.9042, 116.4074, 44)
     } else if (id === 'Sun' || id === 'Mercury' || id === 'Venus' || id === 'Saturn' || id === 'Sirius' || id === 'Vega' || id === 'Betelgeuse' || id === 'Polaris' || id === 'M31' || id === 'M42' || id === 'M45' || id === 'NGC 2244') {
       this.searchObject(id)
     // 方向快捷查看
