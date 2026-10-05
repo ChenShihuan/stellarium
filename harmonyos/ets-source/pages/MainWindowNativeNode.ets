@@ -114,6 +114,7 @@ import { OverlayStore } from '../state/OverlayStore'
 import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
 import { ObjectDetailConnectorLayer } from '../panels/overlay/ObjectDetailConnectorLayer'
+import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
 import { ToolsStore } from '../state/ToolsStore'
 import { ToolsPanel } from '../panels/tools/ToolsPanel'
 import { RecordingControlBar } from '../panels/tools/RecordingControlBar'
@@ -2184,6 +2185,28 @@ export struct WindowNativeNode {
     if (this.polarScopeTransitionPending) return
     this.callInteractive('centerPolarScope', '', () => {
       this.callInteractive('setFOV', '4', () => { this.loadPolarScopeData(false) })
+    })
+  }
+
+  private setPolarScopeHorizontalFlip(value: boolean): void {
+    if (value === this.polarScopeHorizontalFlip) return
+    this.polarScopeHorizontalFlip = value
+    this.syncNativePolarScopeOverlay(true)
+    this.callInteractive('setActionChecked', 'actionHorizontal_Flip|' + (value ? '1' : '0'), () => {
+      this.loadPolarScopeData(false)
+    }, () => {
+      this.polarScopeHorizontalFlip = !value
+    })
+  }
+
+  private setPolarScopeVerticalFlip(value: boolean): void {
+    if (value === this.polarScopeVerticalFlip) return
+    this.polarScopeVerticalFlip = value
+    this.syncNativePolarScopeOverlay(true)
+    this.callInteractive('setActionChecked', 'actionVertical_Flip|' + (value ? '1' : '0'), () => {
+      this.loadPolarScopeData(false)
+    }, () => {
+      this.polarScopeVerticalFlip = !value
     })
   }
 
@@ -8456,134 +8479,6 @@ export struct WindowNativeNode {
     }
   }
 
-  @Builder
-  private polarScopeOverlay() {
-    if (this.polarScopeVisible) {
-      Stack() {
-          Stack() { }
-            .width('100%').height('100%')
-            .hitTestBehavior(HitTestMode.Default)
-            .onTouch((event: TouchEvent) => { this.handleSkyTouch(event) })
-          Row({ space: 8 }) {
-            Text(I18n.t('polar_scope_title'))
-              .fontSize(18).fontWeight(FontWeight.Medium).fontColor('#F7F7F8')
-              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              .layoutWeight(1).margin({ left: 12 })
-              .hitTestBehavior(HitTestMode.None)
-            Button({ type: ButtonType.Circle }) {
-              Image(getIcon('polar_scope', false)).width(22).height(22).fillColor('#F4A7A1')
-            }.width(48).height(48).backgroundColor('rgba(244,111,107,0.12)')
-              .accessibilityText(I18n.t('btn_center'))
-              .id('polar-scope-center').onClick(() => { this.recenterPolarScope() })
-            Button({ type: ButtonType.Circle }) {
-                Image(getIcon('close', false)).width(22).height(22).fillColor('#F4F4F5')
-            }
-                .width(48).height(48)
-                .backgroundColor('rgba(255,255,255,0.12)')
-                .clickEffect({ level: ClickEffectLevel.LIGHT })
-                .hitTestBehavior(HitTestMode.Block)
-                .id('polar-scope-close').accessibilityText(I18n.t('polar_scope_close'))
-                .onClick(() => { this.closePolarScope() })
-          }
-            .width(this.polarScopeControlWidth()).height(60)
-            .padding({ left: 8, right: 6 })
-            .position({ x: (this.skyWidth - this.polarScopeControlWidth()) / 2, y: this.polarScopeTopInset() })
-            .backgroundColor('rgba(15, 20, 30, 0.82)')
-            .backdropBlur(16).borderRadius(UI_RADIUS_PANEL)
-            .border({ width: 1, color: 'rgba(255,255,255,0.10)' })
-            .hitTestBehavior(HitTestMode.Default)
-
-          if (this.polarScopeLoading) {
-            Column({ space: 10 }) {
-              LoadingProgress().width(34).height(34).color('#F46F6B')
-              Text(I18n.t('polar_scope_aligning')).fontSize(12).fontColor('#FFE1DF')
-            }
-              .padding(16)
-              .backgroundColor('rgba(24, 6, 10, 0.68)')
-              .backdropBlur(16)
-              .borderRadius(UI_RADIUS_PANEL)
-              .hitTestBehavior(HitTestMode.Block)
-          } else if (this.polarScopeError.length > 0) {
-            Text(this.polarScopeError)
-              .fontSize(13).fontColor('#FFE1DF').textAlign(TextAlign.Center)
-              .padding({ left: 18, right: 18, top: 14, bottom: 14 })
-              .backgroundColor('rgba(56, 8, 12, 0.78)')
-              .borderRadius(UI_RADIUS_PANEL)
-              .hitTestBehavior(HitTestMode.Block)
-          }
-
-          Column({ space: this.isExpandedLayout ? 5 : 8 }) {
-            Text(I18n.t(this.polarScopeData?.hemisphere === 'south' ? 'polar_scope_south_position' : 'polar_scope_north_position'))
-              .fontSize(this.isExpandedLayout ? 13 : 16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#F3F3F5')
-              .width('100%')
-            Row() {
-              Text(I18n.t('polar_scope_hour_angle')).fontSize(11).fontColor('rgba(255, 255, 255, 0.60)')
-                .width(this.isExpandedLayout ? 120 : 92)
-              Text(this.polarScopeData?.hourAngleText ?? '--')
-                .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#F7F7F8').fontFamily('monospace')
-            }.width('100%')
-            Row() {
-              Text(I18n.t('polar_scope_view_angle')).fontSize(11).fontColor('rgba(255, 255, 255, 0.60)')
-                .width(this.isExpandedLayout ? 120 : 92)
-              Text(this.polarScopeData?.viewAngleText ?? '--')
-                .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#F7F7F8').fontFamily('monospace')
-            }.width('100%')
-            Row({ space: 18 }) {
-              Row({ space: 8 }) {
-                Text(I18n.t('polar_scope_flip_horizontal')).fontSize(12).fontColor('rgba(255, 221, 219, 0.82)').layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.polarScopeHorizontalFlip })
-                  .width(42).height(24).selectedColor('#C44949')
-                  .id('polar-scope-flip-horizontal')
-                  .onChange((value: boolean) => {
-                    if (value === this.polarScopeHorizontalFlip) return
-                    this.polarScopeHorizontalFlip = value
-                    this.syncNativePolarScopeOverlay(true)
-                    this.callInteractive('setActionChecked', 'actionHorizontal_Flip|' + (value ? '1' : '0'), () => {
-                      this.loadPolarScopeData(false)
-                    }, () => {
-                      this.polarScopeHorizontalFlip = !value
-                    })
-                  })
-              }.layoutWeight(1)
-              Row({ space: 8 }) {
-                Text(I18n.t('polar_scope_flip_vertical')).fontSize(12).fontColor('rgba(255, 221, 219, 0.82)').layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.polarScopeVerticalFlip })
-                  .width(42).height(24).selectedColor('#C44949')
-                  .id('polar-scope-flip-vertical')
-                  .onChange((value: boolean) => {
-                    if (value === this.polarScopeVerticalFlip) return
-                    this.polarScopeVerticalFlip = value
-                    this.syncNativePolarScopeOverlay(true)
-                    this.callInteractive('setActionChecked', 'actionVertical_Flip|' + (value ? '1' : '0'), () => {
-                      this.loadPolarScopeData(false)
-                    }, () => {
-                      this.polarScopeVerticalFlip = !value
-                    })
-                  })
-              }.layoutWeight(1)
-            }.width('100%')
-          }
-            .width('100%')
-            .height(this.polarScopeFooterHeight())
-            .padding({ left: this.isExpandedLayout ? 28 : 18, right: this.isExpandedLayout ? 28 : 18,
-              top: this.isExpandedLayout ? 10 : 14, bottom: this.isExpandedLayout ? 10 : 16 })
-            .width(this.polarScopeControlWidth())
-            .position({ x: (this.skyWidth - this.polarScopeControlWidth()) / 2,
-              y: this.skyHeight - this.polarScopeFooterHeight() - 12 })
-            .backgroundColor('rgba(15, 20, 30, 0.82)')
-            .backdropBlur(16).borderRadius(UI_RADIUS_PANEL)
-            .border({ width: 1, color: 'rgba(255,255,255,0.10)' })
-            .hitTestBehavior(HitTestMode.Default)
-      }
-        .width('100%').height('100%')
-        .backgroundColor('rgba(0,0,0,0)')
-        .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
-        .zIndex(101)
-    }
-  }
-
   private skyCultureMakerDraftFromResponse(response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined {
     const values = response as Record<string, Object>
     if (values['draft'] === undefined) return undefined
@@ -14660,7 +14555,28 @@ private loadPlanetPositions(): void {
         })
       }
       if (!this.scriptPlaybackVisible() && (!this.tools.recording || this.tools.recordingUiExpanded)) {
-        this.polarScopeOverlay()
+        if (this.polarScopeVisible) {
+          PolarScopeOverlay({
+            controlWidth: this.polarScopeControlWidth(),
+            topInset: this.polarScopeTopInset(),
+            footerHeight: this.polarScopeFooterHeight(),
+            skyWidth: this.skyWidth,
+            skyHeight: this.skyHeight,
+            isExpandedLayout: this.isExpandedLayout,
+            loading: this.polarScopeLoading,
+            errorText: this.polarScopeError,
+            isSouthHemisphere: this.polarScopeData?.hemisphere === 'south',
+            hourAngleText: this.polarScopeData?.hourAngleText ?? '--',
+            viewAngleText: this.polarScopeData?.viewAngleText ?? '--',
+            horizontalFlip: this.polarScopeHorizontalFlip,
+            verticalFlip: this.polarScopeVerticalFlip,
+            onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+            onRecenter: () => { this.recenterPolarScope() },
+            onClose: () => { this.closePolarScope() },
+            onHorizontalFlipChange: (value: boolean) => { this.setPolarScopeHorizontalFlip(value) },
+            onVerticalFlipChange: (value: boolean) => { this.setPolarScopeVerticalFlip(value) }
+          })
+        }
         this.skyCultureArtPreviewOverlay()
         this.objectInspectorMediaPreviewOverlay()
         this.objectInspectorModelOverlay()
