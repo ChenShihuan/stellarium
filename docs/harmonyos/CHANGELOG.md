@@ -1,3 +1,18 @@
+## [2026-09-30] DevEco Code - Phase 3g：时间转轴 + 时间轮整体迁移（真机调试：点字段、拖动、切单位、引擎同步全部通过）
+
+- **新增文件：** `state/TimeWheelStore.ets`（11 个原 `@State` 字段 + `timeWheelTrackBaseMs` + 两个刻度常量 + 纯计算方法：`majorInterval` / `isCalendar` / `shiftDate` / `dateAtOffset` / `dateAtFraction` / `tickValue` / `tickLabel` / `refreshTicks` / `visibleTickOffset` / `isVisibleMajorTick`）、`panels/time/TimeWheelScrubber.ets`（字段行 6 个按钮 + 刻度条 + 触摸层；刻度几何 `tickDistance/visibleTickLabel/tickScale/tickOpacity/tickBlur/tickHeight` 内联为组件私有方法）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 11 个 `@State` 合并为 `@State private timeWheelStore`；两个 `readonly` 刻度常量与 `timeWheelTrackBaseMs` 字段移入 store；**88 处引用**改写为 `this.timeWheelStore.*`（含 `tickSpacing` / `centerTick`）；搬出 9 个纯计算方法与 7 个 builder（`timeScrubberSlider` + 6 个字段 builder）；调用点换成 `TimeWheelScrubber({ store, onSelectUnit, onWheelTouch })`；顺带删除**无调用者**的 `timeWheelCurrentLabel()`。
+- **边界取舍（关键，保证行为路径零改写）：** store 只放"数据 + 纯计算"；**手势拖动、惯性、过渡、轨道重基准、引擎推送（`handleTimeWheelTouch` / `startTimeWheelInertia` / `startTimeWheelTransition` / `rebaseTimeWheelTrack*` / `applyTimeWheelDate` / `syncTimeWheelFromSimulation` / `selectTimeWheelUnit` 等约 400 行逻辑与它们的定时器/普通字段）全部留在宿主**，只把字段引用改为 store。这样这次迁移**没有重写任何一条交互逻辑**，只是状态归属与视图位置改变。
+- **第四次命中同名冲突：** `onTouch` 与 `CustomComponent` 内置属性方法冲突（编译报 `Property 'onTouch' ... is not assignable to the same property in base type 'CustomComponent'`），改名 `onWheelTouch`。累记：`borderColor`、`scale`、`onTouch` 均不可作组件成员名。
+- **真机调试（`192.168.3.95:40565`，全部通过）：**
+  1. 渲染：字段行与刻度条节点坐标与迁移前**逐像素一致**（`2026 / 09月 / 30日 / 22: / 53: / 03`，刻度 `19时…01时`）。
+  2. 点字段：点「2026」后刻度条**实时**切成 `2023 / 2024 / 2025 / 2026 / 2027 / 2028`，选中字段字号放大 → 组件→回调→store→@ObjectLink 实时链路成立。
+  3. 拖动：左拖刻度条后日期**实时**变为 `2026-12-10`（字段行 12月/10日 同步、副标题与速度状态同步为「已暂停」），引擎推送生效。
+  4. 切单位：点「22:」刻度条实时切回 `19时…`；点「实时」恢复现场为 `2026-09-30 · 1x`。
+- **构建结果：** `arkts_check` 三文件无错误；`BUILD SUCCESSFUL`（一次同名冲突修正后）；契约校验通过。
+- **单体行数：** 31,786 → **31,132**（本片净减 654 行）。
+- **范围约束：** 状态归属 + 视图位置迁移，交互逻辑零改写；除"字段/刻度现在实时刷新"外无行为变更。
+
 ## [2026-09-30] DevEco Code - Phase 3f：ΔT 算法块迁移（真机验证选择实时生效）
 
 - **新增文件：** `state/DeltaTStore.ets`（`deltaTAlgorithm` / `timeDeltaTAlgorithms` / `timeDeltaTCustom` / `deltaTDescription`，字段名沿用原 `@State` 名）、`panels/time/DeltaTSettingsBlock.ets`（当前算法 + 算法列表 + 自定义系数输入 + 说明；`deltaTLabel()` 从单体方法搬入组件，store 保持无 UI 逻辑）。

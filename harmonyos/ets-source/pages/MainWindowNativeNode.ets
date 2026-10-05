@@ -42,6 +42,8 @@ import { EquationOfTimeBlock } from '../panels/time/EquationOfTimeBlock'
 import { EquationOfTimeStore } from '../state/EquationOfTimeStore'
 import { DeltaTStore } from '../state/DeltaTStore'
 import { DeltaTSettingsBlock } from '../panels/time/DeltaTSettingsBlock'
+import { TimeWheelStore } from '../state/TimeWheelStore'
+import { TimeWheelScrubber } from '../panels/time/TimeWheelScrubber'
 
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
@@ -312,27 +314,17 @@ export struct WindowNativeNode {
   private scrubberLastSendMs: number = 0
   private scrubberInteracting: boolean = false
   // 时间转轴：顶部选择要调整的字段，底部同一条刻度轴只控制该字段。
-  @State private timeWheelUnit: string = 'hour'
-  @State private timeWheelYear: number = 2026
-  @State private timeWheelMonth: number = 8
-  @State private timeWheelDay: number = 11
-  @State private timeWheelHour: number = 20
-  @State private timeWheelMinute: number = 0
-  @State private timeWheelSecond: number = 0
+  @State private timeWheelStore: TimeWheelStore = new TimeWheelStore()
 
   // JD/MJD are edited explicitly, so the periodic native time poll does not
   // replace a partially typed number while the user is still entering it.
   @State private julianStore: JulianDateStore = new JulianDateStore()
   private julianDateApplyInFlight: boolean = false
-  @State private timeWheelTickLabels: string[] = []
-  @State private timeWheelVisualOffset: number = 0
-  @State private timeWheelDragging: boolean = false
   @State private timeMarkLoading: boolean = false
   private timeWheelLastInputMs: number = 0
   private timeWheelLastTouchX: number = 0
   private timeWheelLastTouchMs: number = 0
   private timeWheelDragCarry: number = 0
-  @State private timeWheelAppliedSteps: number = 0
   private timeWheelTransitionTimer: number = 0
   private timeWheelTargetMs: number = 0
   private timeWheelLastNativePushMs: number = 0
@@ -345,9 +337,6 @@ export struct WindowNativeNode {
   private timeWheelInertiaStartedAt: number = 0
   private timeWheelInertiaActive: boolean = false
   private timeWheelLastVisualVelocity: number = 0
-  private timeWheelTrackBaseMs: number = 0
-  private readonly timeWheelTickSpacing: number = 42
-  private readonly timeWheelCenterTick: number = 20
   @State private manualYear: number = 2026
   @State private manualMonth: number = 7
   @State private manualDay: number = 20
@@ -11918,154 +11907,22 @@ private loadPlanetPositions(): void {
     this.updateScrubberLabel(0)
   }
 
-  private timeWheelDateAtOffset(offset: number): Date {
-    const baseMs = this.timeWheelTrackBaseMs > 0
-      ? this.timeWheelTrackBaseMs
-      : Date.UTC(this.timeWheelYear, this.timeWheelMonth - 1, this.timeWheelDay,
-        this.timeWheelHour, this.timeWheelMinute, this.timeWheelSecond)
-    const local = new Date(baseMs)
-    this.shiftTimeWheelDate(local, offset)
-    return local
-  }
-
-  private shiftTimeWheelDate(local: Date, steps: number): void {
-    if (this.timeWheelUnit === 'year') { local.setUTCFullYear(local.getUTCFullYear() + steps) }
-    else if (this.timeWheelUnit === 'month') { local.setUTCMonth(local.getUTCMonth() + steps) }
-    else if (this.timeWheelUnit === 'day') { local.setUTCDate(local.getUTCDate() + steps) }
-    else if (this.timeWheelUnit === 'hour') { local.setUTCHours(local.getUTCHours() + steps) }
-    else if (this.timeWheelUnit === 'minute') { local.setUTCMinutes(local.getUTCMinutes() + steps) }
-    else { local.setUTCSeconds(local.getUTCSeconds() + steps) }
-  }
-
-  private timeWheelDateAtFraction(baseMs: number, steps: number): Date {
-    const wholeSteps = steps >= 0 ? Math.floor(steps) : Math.ceil(steps)
-    const fractionalSteps = steps - wholeSteps
-    const local = new Date(baseMs)
-    this.shiftTimeWheelDate(local, wholeSteps)
-    if (fractionalSteps === 0) { return local }
-    const next = new Date(local.getTime())
-    this.shiftTimeWheelDate(next, fractionalSteps > 0 ? 1 : -1)
-    if (this.isCalendarTimeWheel()) {
-      const localDateMs = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate())
-      const nextDateMs = Date.UTC(next.getUTCFullYear(), next.getUTCMonth(), next.getUTCDate())
-      const dayOffset = Math.round((nextDateMs - localDateMs) * Math.abs(fractionalSteps) / 86400000.0)
-      local.setUTCDate(local.getUTCDate() + dayOffset)
-      return local
-    }
-    return new Date(local.getTime() + (next.getTime() - local.getTime()) * Math.abs(fractionalSteps))
-  }
-
-  private isCalendarTimeWheel(): boolean {
-    return this.timeWheelUnit === 'year' || this.timeWheelUnit === 'month' || this.timeWheelUnit === 'day'
-  }
-
-  private timeWheelMajorInterval(): number {
-    if (this.timeWheelUnit === 'year') { return 5 }
-    if (this.timeWheelUnit === 'month') { return 3 }
-    return 5
-  }
-
-  private timeWheelTickValue(offset: number): string {
-    const local = this.timeWheelDateAtOffset(offset)
-    if (this.timeWheelUnit === 'year') { return local.getUTCFullYear().toString() }
-    if (this.timeWheelUnit === 'month') { return (local.getUTCMonth() + 1).toString().padStart(2, '0') + '月' }
-    if (this.timeWheelUnit === 'day') { return local.getUTCDate().toString().padStart(2, '0') + '日' }
-    if (this.timeWheelUnit === 'hour') { return local.getUTCHours().toString().padStart(2, '0') + '时' }
-    if (this.timeWheelUnit === 'minute') { return local.getUTCMinutes().toString().padStart(2, '0') + '分' }
-    return local.getUTCSeconds().toString().padStart(2, '0') + '秒'
-  }
-
-  private timeWheelTickLabel(offset: number): string {
-    if (offset % this.timeWheelMajorInterval() !== 0) { return '' }
-    return this.timeWheelTickValue(offset)
-  }
-
-  private timeWheelCurrentLabel(): string {
-    if (this.timeWheelUnit === 'year') { return this.timeWheelYear.toString() }
-    if (this.timeWheelUnit === 'month') { return this.timeWheelMonth.toString().padStart(2, '0') + '月' }
-    if (this.timeWheelUnit === 'day') { return this.timeWheelDay.toString().padStart(2, '0') + '日' }
-    if (this.timeWheelUnit === 'hour') { return this.timeWheelHour.toString().padStart(2, '0') + '时' }
-    if (this.timeWheelUnit === 'minute') { return this.timeWheelMinute.toString().padStart(2, '0') + '分' }
-    return this.timeWheelSecond.toString().padStart(2, '0') + '秒'
-  }
-
-  private refreshTimeWheelTicks(): void {
-    const labels: string[] = []
-    for (let index = 0; index <= this.timeWheelCenterTick * 2; index++) {
-      labels.push(this.timeWheelTickLabel(index - this.timeWheelCenterTick))
-    }
-    this.timeWheelTickLabels = labels
-  }
-
-  private isTimeWheelMajorTick(index: number): boolean {
-    return (index - this.timeWheelCenterTick) % this.timeWheelMajorInterval() === 0
-  }
-
-  private timeWheelVisibleTickOffset(index: number): number {
-    return index - this.timeWheelCenterTick + this.timeWheelAppliedSteps
-  }
-
-  private timeWheelVisibleTickLabel(index: number): string {
-    const offset = this.timeWheelVisibleTickOffset(index)
-    if (!this.isTimeWheelVisibleMajorTick(index) &&
-      this.timeWheelTickDistance(index) > this.timeWheelTickSpacing * 4.5) {
-      return ''
-    }
-    return this.timeWheelTickValue(offset)
-  }
-
-  private isTimeWheelVisibleMajorTick(index: number): boolean {
-    return this.timeWheelVisibleTickOffset(index) % this.timeWheelMajorInterval() === 0
-  }
-
-  private timeWheelTickDistance(index: number): number {
-    return Math.abs((index - this.timeWheelCenterTick) * this.timeWheelTickSpacing + this.timeWheelVisualOffset)
-  }
-
-  private isTimeWheelTickCentered(index: number): boolean {
-    const closestIndex = this.timeWheelCenterTick - Math.round(this.timeWheelVisualOffset / this.timeWheelTickSpacing)
-    return index === closestIndex
-  }
-
-  private timeWheelTickScale(index: number): number {
-    const focus = Math.max(0, 1 - this.timeWheelTickDistance(index) / (this.timeWheelTickSpacing * 3))
-    return 1 + focus * 0.22
-  }
-
-  private timeWheelTickOpacity(index: number): number {
-    const focus = Math.max(0, 1 - this.timeWheelTickDistance(index) / (this.timeWheelTickSpacing * 4.5))
-    const baseOpacity = this.isTimeWheelVisibleMajorTick(index) ? 0.12 : 0.04
-    return focus * (baseOpacity + (1 - baseOpacity) * focus)
-  }
-
-  private timeWheelTickBlur(index: number): number {
-    const distance = this.timeWheelTickDistance(index)
-    if (distance <= this.timeWheelTickSpacing / 2) { return 0 }
-    return Math.min(1.2, (distance / this.timeWheelTickSpacing - 0.5) * 0.42)
-  }
-
-  private timeWheelTickHeight(index: number): number {
-    const focus = Math.max(0, 1 - this.timeWheelTickDistance(index) / (this.timeWheelTickSpacing * 3))
-    const baseHeight = this.isTimeWheelVisibleMajorTick(index) ? 17 : 8
-    return baseHeight + (31 - baseHeight) * focus
-  }
-
   private selectTimeWheelUnit(unit: string): void {
     this.finishTimeWheelTransition()
-    this.timeWheelUnit = unit
-    this.timeWheelDragging = false
+    this.timeWheelStore.timeWheelUnit = unit
+    this.timeWheelStore.timeWheelDragging = false
     this.rebaseTimeWheelTrack()
   }
 
   private applyTimeWheelDate(local: Date, refreshTicks: boolean, sendNative: boolean): void {
     this.timeWheelLastInputMs = Date.now()
-    this.timeWheelYear = local.getUTCFullYear()
-    this.timeWheelMonth = local.getUTCMonth() + 1
-    this.timeWheelDay = local.getUTCDate()
-    this.timeWheelHour = local.getUTCHours()
-    this.timeWheelMinute = local.getUTCMinutes()
-    this.timeWheelSecond = local.getUTCSeconds()
-    if (refreshTicks) { this.refreshTimeWheelTicks() }
+    this.timeWheelStore.timeWheelYear = local.getUTCFullYear()
+    this.timeWheelStore.timeWheelMonth = local.getUTCMonth() + 1
+    this.timeWheelStore.timeWheelDay = local.getUTCDate()
+    this.timeWheelStore.timeWheelHour = local.getUTCHours()
+    this.timeWheelStore.timeWheelMinute = local.getUTCMinutes()
+    this.timeWheelStore.timeWheelSecond = local.getUTCSeconds()
+    if (refreshTicks) { this.timeWheelStore.refreshTicks() }
     if (sendNative) {
       const targetJd = local.getTime() / 86400000.0 + 2440587.5 - this.utcOffsetHours / 24.0
       this.callNativeFire('setTimeToJD', targetJd.toFixed(8))
@@ -12083,8 +11940,8 @@ private loadPlanetPositions(): void {
   private startTimeWheelTransition(refreshTicks: boolean): void {
     if (this.timeWheelTransitionTimer !== 0) { return }
     this.timeWheelTransitionTimer = setInterval(() => {
-      const current = new Date(Date.UTC(this.timeWheelYear, this.timeWheelMonth - 1, this.timeWheelDay,
-        this.timeWheelHour, this.timeWheelMinute, this.timeWheelSecond))
+      const current = new Date(Date.UTC(this.timeWheelStore.timeWheelYear, this.timeWheelStore.timeWheelMonth - 1, this.timeWheelStore.timeWheelDay,
+        this.timeWheelStore.timeWheelHour, this.timeWheelStore.timeWheelMinute, this.timeWheelStore.timeWheelSecond))
       const target = new Date(this.timeWheelTargetMs)
       const deltaMs = target.getTime() - current.getTime()
       if (Math.abs(deltaMs) <= 1000) {
@@ -12095,7 +11952,7 @@ private loadPlanetPositions(): void {
         return
       }
       const next = new Date(current.getTime())
-      if (this.isCalendarTimeWheel()) {
+      if (this.timeWheelStore.isCalendar()) {
         const days = Math.ceil(Math.abs(deltaMs) / 86400000.0 / 3.0)
         next.setUTCDate(next.getUTCDate() + (deltaMs > 0 ? days : -days))
       } else {
@@ -12124,7 +11981,7 @@ private loadPlanetPositions(): void {
     this.timeWheelInertiaActive = false
     this.timeWheelInertiaVelocity = 0
     if (shouldApply) {
-      this.applyTimeWheelDate(this.timeWheelDateAtFraction(this.timeWheelGestureBaseMs, this.timeWheelGestureSteps), false, true)
+      this.applyTimeWheelDate(this.timeWheelStore.dateAtFraction(this.timeWheelGestureBaseMs, this.timeWheelGestureSteps), false, true)
     }
   }
 
@@ -12137,7 +11994,7 @@ private loadPlanetPositions(): void {
     this.timeWheelInertiaLastMs = Date.now()
     this.timeWheelInertiaStartedAt = this.timeWheelInertiaLastMs
     this.timeWheelInertiaTimer = setInterval(() => {
-      if (!this.timeWheelInertiaActive || this.timeWheelDragging) {
+      if (!this.timeWheelInertiaActive || this.timeWheelStore.timeWheelDragging) {
         this.stopTimeWheelInertia()
         return
       }
@@ -12146,13 +12003,13 @@ private loadPlanetPositions(): void {
       this.timeWheelInertiaLastMs = now
       const frameMs = Math.min(34, elapsed)
       const visualDelta = this.timeWheelInertiaVelocity * frameMs
-      this.timeWheelVisualOffset += visualDelta
-      this.timeWheelDragCarry = this.timeWheelVisualOffset
-      this.timeWheelGestureSteps -= visualDelta / this.timeWheelTickSpacing
-      const local = this.timeWheelDateAtFraction(this.timeWheelGestureBaseMs, this.timeWheelGestureSteps)
+      this.timeWheelStore.timeWheelVisualOffset += visualDelta
+      this.timeWheelDragCarry = this.timeWheelStore.timeWheelVisualOffset
+      this.timeWheelGestureSteps -= visualDelta / this.timeWheelStore.tickSpacing
+      const local = this.timeWheelStore.dateAtFraction(this.timeWheelGestureBaseMs, this.timeWheelGestureSteps)
       const sendNative = now - this.timeWheelLastNativePushMs >= 64
       this.applyTimeWheelDate(local, false, sendNative)
-      if (Math.abs(this.timeWheelVisualOffset) >= this.timeWheelTickSpacing * 8) {
+      if (Math.abs(this.timeWheelStore.timeWheelVisualOffset) >= this.timeWheelStore.tickSpacing * 8) {
         this.rebaseTimeWheelTrackAtCenter()
       }
       this.timeWheelInertiaVelocity *= Math.pow(0.90, frameMs / 16.0)
@@ -12166,17 +12023,17 @@ private loadPlanetPositions(): void {
     if (steps === 0) { return }
     const local = this.timeWheelTargetMs > 0
       ? new Date(this.timeWheelTargetMs)
-      : new Date(Date.UTC(this.timeWheelYear, this.timeWheelMonth - 1, this.timeWheelDay,
-      this.timeWheelHour, this.timeWheelMinute, this.timeWheelSecond))
-    if (this.timeWheelUnit === 'year') { local.setUTCFullYear(local.getUTCFullYear() + steps) }
-    else if (this.timeWheelUnit === 'month') { local.setUTCMonth(local.getUTCMonth() + steps) }
-    else if (this.timeWheelUnit === 'day') { local.setUTCDate(local.getUTCDate() + steps) }
-    else if (this.timeWheelUnit === 'hour') { local.setUTCHours(local.getUTCHours() + steps) }
-    else if (this.timeWheelUnit === 'minute') { local.setUTCMinutes(local.getUTCMinutes() + steps) }
+      : new Date(Date.UTC(this.timeWheelStore.timeWheelYear, this.timeWheelStore.timeWheelMonth - 1, this.timeWheelStore.timeWheelDay,
+      this.timeWheelStore.timeWheelHour, this.timeWheelStore.timeWheelMinute, this.timeWheelStore.timeWheelSecond))
+    if (this.timeWheelStore.timeWheelUnit === 'year') { local.setUTCFullYear(local.getUTCFullYear() + steps) }
+    else if (this.timeWheelStore.timeWheelUnit === 'month') { local.setUTCMonth(local.getUTCMonth() + steps) }
+    else if (this.timeWheelStore.timeWheelUnit === 'day') { local.setUTCDate(local.getUTCDate() + steps) }
+    else if (this.timeWheelStore.timeWheelUnit === 'hour') { local.setUTCHours(local.getUTCHours() + steps) }
+    else if (this.timeWheelStore.timeWheelUnit === 'minute') { local.setUTCMinutes(local.getUTCMinutes() + steps) }
     else { local.setUTCSeconds(local.getUTCSeconds() + steps) }
     this.setTimeWheelStopped()
-    if (this.timeWheelUnit === 'year' || this.timeWheelUnit === 'month' ||
-      this.timeWheelUnit === 'hour' || this.timeWheelUnit === 'minute') {
+    if (this.timeWheelStore.timeWheelUnit === 'year' || this.timeWheelStore.timeWheelUnit === 'month' ||
+      this.timeWheelStore.timeWheelUnit === 'hour' || this.timeWheelStore.timeWheelUnit === 'minute') {
       this.timeWheelTargetMs = local.getTime()
       this.startTimeWheelTransition(refreshTicks)
       return
@@ -12186,11 +12043,11 @@ private loadPlanetPositions(): void {
 
   private timeWheelVelocityMultiplier(speed: number): number {
     let baseMultiplier = 1.0
-    if (this.timeWheelUnit === 'year') { baseMultiplier = 0.07 }
-    else if (this.timeWheelUnit === 'month') { baseMultiplier = 0.08 }
-    else if (this.timeWheelUnit === 'day') { baseMultiplier = 0.2 }
-    else if (this.timeWheelUnit === 'hour') { baseMultiplier = 0.06 }
-    else if (this.timeWheelUnit === 'minute') { baseMultiplier = 0.25 }
+    if (this.timeWheelStore.timeWheelUnit === 'year') { baseMultiplier = 0.07 }
+    else if (this.timeWheelStore.timeWheelUnit === 'month') { baseMultiplier = 0.08 }
+    else if (this.timeWheelStore.timeWheelUnit === 'day') { baseMultiplier = 0.2 }
+    else if (this.timeWheelStore.timeWheelUnit === 'hour') { baseMultiplier = 0.06 }
+    else if (this.timeWheelStore.timeWheelUnit === 'minute') { baseMultiplier = 0.25 }
     if (speed < 0.35) { return baseMultiplier }
     if (speed < 0.8) { return baseMultiplier * 2.0 }
     if (speed < 1.4) { return baseMultiplier * 4.0 }
@@ -12199,20 +12056,20 @@ private loadPlanetPositions(): void {
 
   private rebaseTimeWheelTrack(): void {
     this.timeWheelDragCarry = 0
-    this.timeWheelAppliedSteps = 0
+    this.timeWheelStore.timeWheelAppliedSteps = 0
     this.timeWheelGestureTickOffset = 0
-    this.timeWheelVisualOffset = 0
-    this.timeWheelTrackBaseMs = Date.UTC(this.timeWheelYear, this.timeWheelMonth - 1,
-      this.timeWheelDay, this.timeWheelHour, this.timeWheelMinute, this.timeWheelSecond)
-    this.refreshTimeWheelTicks()
+    this.timeWheelStore.timeWheelVisualOffset = 0
+    this.timeWheelStore.timeWheelTrackBaseMs = Date.UTC(this.timeWheelStore.timeWheelYear, this.timeWheelStore.timeWheelMonth - 1,
+      this.timeWheelStore.timeWheelDay, this.timeWheelStore.timeWheelHour, this.timeWheelStore.timeWheelMinute, this.timeWheelStore.timeWheelSecond)
+    this.timeWheelStore.refreshTicks()
   }
 
   private rebaseTimeWheelTrackAtCenter(): void {
-    const tickShift = Math.round(this.timeWheelVisualOffset / this.timeWheelTickSpacing)
+    const tickShift = Math.round(this.timeWheelStore.timeWheelVisualOffset / this.timeWheelStore.tickSpacing)
     if (tickShift === 0) { return }
-    this.timeWheelVisualOffset -= tickShift * this.timeWheelTickSpacing
-    this.timeWheelDragCarry = this.timeWheelVisualOffset
-    this.timeWheelAppliedSteps -= tickShift
+    this.timeWheelStore.timeWheelVisualOffset -= tickShift * this.timeWheelStore.tickSpacing
+    this.timeWheelDragCarry = this.timeWheelStore.timeWheelVisualOffset
+    this.timeWheelStore.timeWheelAppliedSteps -= tickShift
     this.timeWheelGestureTickOffset -= tickShift
   }
 
@@ -12223,46 +12080,46 @@ private loadPlanetPositions(): void {
     if (event.type === TouchType.Down) {
       this.stopTimeWheelInertia()
       this.finishTimeWheelTransition()
-      this.timeWheelDragging = true
+      this.timeWheelStore.timeWheelDragging = true
       this.timeWheelLastTouchX = point.x
       this.timeWheelLastTouchMs = Date.now()
       this.timeWheelLastInputMs = Date.now()
-      this.timeWheelGestureBaseMs = Date.UTC(this.timeWheelYear, this.timeWheelMonth - 1,
-        this.timeWheelDay, this.timeWheelHour, this.timeWheelMinute, this.timeWheelSecond)
+      this.timeWheelGestureBaseMs = Date.UTC(this.timeWheelStore.timeWheelYear, this.timeWheelStore.timeWheelMonth - 1,
+        this.timeWheelStore.timeWheelDay, this.timeWheelStore.timeWheelHour, this.timeWheelStore.timeWheelMinute, this.timeWheelStore.timeWheelSecond)
       this.timeWheelGestureSteps = 0
-      this.timeWheelGestureTickOffset = this.timeWheelAppliedSteps
-      this.timeWheelDragCarry = this.timeWheelVisualOffset
+      this.timeWheelGestureTickOffset = this.timeWheelStore.timeWheelAppliedSteps
+      this.timeWheelDragCarry = this.timeWheelStore.timeWheelVisualOffset
       this.timeWheelLastVisualVelocity = 0
       this.rebaseTimeWheelTrackAtCenter()
       this.setTimeWheelStopped()
       return
     }
-    if (event.type === TouchType.Move && this.timeWheelDragging) {
+    if (event.type === TouchType.Move && this.timeWheelStore.timeWheelDragging) {
       const now = Date.now()
       const delta = point.x - this.timeWheelLastTouchX
       const elapsedMs = Math.max(1, now - this.timeWheelLastTouchMs)
       this.timeWheelLastTouchX = point.x
       this.timeWheelLastTouchMs = now
       const speed = Math.abs(delta) / elapsedMs
-      const requestedStepDelta = -delta * this.timeWheelVelocityMultiplier(speed) / this.timeWheelTickSpacing
+      const requestedStepDelta = -delta * this.timeWheelVelocityMultiplier(speed) / this.timeWheelStore.tickSpacing
       const stepDelta = requestedStepDelta
-      const effectiveDelta = -stepDelta * this.timeWheelTickSpacing
+      const effectiveDelta = -stepDelta * this.timeWheelStore.tickSpacing
       this.timeWheelDragCarry += effectiveDelta
       this.timeWheelGestureSteps += stepDelta
-      this.timeWheelVisualOffset = this.timeWheelDragCarry
+      this.timeWheelStore.timeWheelVisualOffset = this.timeWheelDragCarry
       this.timeWheelLastVisualVelocity = effectiveDelta / elapsedMs
-      const local = this.timeWheelDateAtFraction(this.timeWheelGestureBaseMs, this.timeWheelGestureSteps)
+      const local = this.timeWheelStore.dateAtFraction(this.timeWheelGestureBaseMs, this.timeWheelGestureSteps)
       const sendNative = now - this.timeWheelLastNativePushMs >= 64
       this.applyTimeWheelDate(local, false, sendNative)
-      if (Math.abs(this.timeWheelVisualOffset) >= this.timeWheelTickSpacing * 8) {
+      if (Math.abs(this.timeWheelStore.timeWheelVisualOffset) >= this.timeWheelStore.tickSpacing * 8) {
         this.rebaseTimeWheelTrackAtCenter()
       }
       return
     }
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      this.timeWheelDragging = false
+      this.timeWheelStore.timeWheelDragging = false
       if (this.timeWheelGestureBaseMs > 0) {
-        this.applyTimeWheelDate(this.timeWheelDateAtFraction(this.timeWheelGestureBaseMs,
+        this.applyTimeWheelDate(this.timeWheelStore.dateAtFraction(this.timeWheelGestureBaseMs,
           this.timeWheelGestureSteps), false, true)
       }
       if (event.type === TouchType.Up) {
@@ -12277,17 +12134,17 @@ private loadPlanetPositions(): void {
     // ArkUI may emit Begin without a matching End while the panel is built.
     // Guard only a short interval after actual user input so the display never
     // becomes permanently detached from the simulated clock.
-    if (this.timeWheelDragging || this.timeWheelInertiaActive || Date.now() - this.timeWheelLastInputMs < 800) { return }
+    if (this.timeWheelStore.timeWheelDragging || this.timeWheelInertiaActive || Date.now() - this.timeWheelLastInputMs < 800) { return }
     const local = new Date((jd + this.utcOffsetHours / 24.0 - 2440587.5) * 86400000.0)
-    this.timeWheelYear = local.getUTCFullYear()
-    this.timeWheelMonth = local.getUTCMonth() + 1
-    this.timeWheelDay = local.getUTCDate()
-    this.timeWheelHour = local.getUTCHours()
-    this.timeWheelMinute = local.getUTCMinutes()
-    this.timeWheelSecond = local.getUTCSeconds()
-    if (Math.abs(this.timeWheelVisualOffset) < 0.1) {
-      this.timeWheelTrackBaseMs = local.getTime()
-      this.refreshTimeWheelTicks()
+    this.timeWheelStore.timeWheelYear = local.getUTCFullYear()
+    this.timeWheelStore.timeWheelMonth = local.getUTCMonth() + 1
+    this.timeWheelStore.timeWheelDay = local.getUTCDate()
+    this.timeWheelStore.timeWheelHour = local.getUTCHours()
+    this.timeWheelStore.timeWheelMinute = local.getUTCMinutes()
+    this.timeWheelStore.timeWheelSecond = local.getUTCSeconds()
+    if (Math.abs(this.timeWheelStore.timeWheelVisualOffset) < 0.1) {
+      this.timeWheelStore.timeWheelTrackBaseMs = local.getTime()
+      this.timeWheelStore.refreshTicks()
     }
   }
 
@@ -23893,7 +23750,11 @@ private loadPlanetPositions(): void {
       // 观测时间/速率已移入面板标题栏副标题（panelSubtitle() 在 Builder 内直接读 @State，
       // 不经参数传递，变化可正常触发重建）；面板首屏直接给时间转轴与时间控制按钮
       // Sky Guide 风格时间拖动滑块（-365天 ~ +365天）：置于面板最前，手机端打开即可直接拖动
-      this.timeScrubberSlider()
+      TimeWheelScrubber({
+        store: this.timeWheelStore,
+        onSelectUnit: (unit: string) => { this.selectTimeWheelUnit(unit) },
+        onWheelTouch: (event: TouchEvent) => { this.handleTimeWheelTouch(event) }
+      })
       // 时间控制按钮：[倒带][现在][停止][实时][快进][超快]
       this.timeSpeedChips()
       this.quickChips([
@@ -29425,74 +29286,6 @@ private loadPlanetPositions(): void {
   }
 
   // ===== Sky Guide 风格：按字段选择的时间转轴 =====
-  @Builder
-  timeScrubberSlider() {
-    Column({ space: 8 }) {
-      // 顶部字段即视频中的日期时间条：先点字段，再用下方单一转轴调节。
-      Row({ space: 1 }) {
-        this.timeWheelYearField()
-        this.timeWheelMonthField()
-        this.timeWheelDayField()
-        this.timeWheelHourField()
-        this.timeWheelMinuteField()
-        this.timeWheelSecondField()
-      }
-      .width('100%').height(40).justifyContent(FlexAlign.Center).padding({ left: 4, right: 4 })
-      .backgroundColor('rgba(7, 12, 20, 0.74)')
-      .border({ width: 1, color: 'rgba(190, 220, 240, 0.18)' })
-      .borderRadius(UI_RADIUS_PILL)
-
-      Stack({ alignContent: Alignment.Center }) {
-        Row() {
-          ForEach(this.timeWheelTickLabels, (_label: string, index: number) => {
-            Column({ space: 2 }) {
-              Text(this.timeWheelVisibleTickLabel(index)).maxLines(1).minFontSize(8)
-                .fontSize(this.timeWheelUnit === 'year' ? 10 : 12)
-                .fontWeight(FontWeight.Medium)
-                .fontColor('#E7F3FC')
-                .textAlign(TextAlign.Center).width(42).height(16)
-                .opacity(this.timeWheelTickOpacity(index))
-                .scale({ x: this.timeWheelTickScale(index), y: this.timeWheelTickScale(index) })
-              Stack({ alignContent: Alignment.Bottom }) {
-                Column()
-                  .width(1)
-                  .height(this.timeWheelTickHeight(index))
-                  .backgroundColor('#D9EDFA')
-                  .opacity(this.timeWheelTickOpacity(index))
-              }
-                .width(2)
-                .height(31)
-            }
-              .width(this.timeWheelTickSpacing)
-              .height(56)
-              .justifyContent(FlexAlign.Center)
-              .alignItems(HorizontalAlign.Center)
-              .blur(this.timeWheelTickBlur(index))
-          }, (_label: string, index: number) => 'time-wheel-tick-' + index.toString())
-        }
-        .width(this.timeWheelTickSpacing * (this.timeWheelCenterTick * 2 + 1))
-        .translate({ x: this.timeWheelVisualOffset, y: 0 })
-        .align(Alignment.Center)
-        .hitTestBehavior(HitTestMode.None)
-
-        Column()
-          .width('100%')
-          .height(56)
-          .backgroundColor('rgba(0, 0, 0, 0)')
-          .onTouch((event: TouchEvent) => { this.handleTimeWheelTouch(event) })
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: 10, right: 10 })
-      .backgroundColor('rgba(12, 18, 29, 0.76)')
-      .border({ width: 1, color: 'rgba(190, 220, 240, 0.24)' })
-      .borderRadius(UI_RADIUS_SHEET)
-      .clip(true)
-    }
-    .width('100%')
-    .padding({ left: 12, right: 12, top: 6, bottom: 8 })
-  }
-
   private syncJulianDateFields(response: StellariumBridgeResponse, jd: number): void {
     const mjd = response.mjd !== undefined ? Number(response.mjd) : jd - 2400000.5
     this.julianStore.julianCalendarSystem = response.calendarSystem === 'julian' ? 'julian' : 'gregorian'
@@ -29540,82 +29333,6 @@ private loadPlanetPositions(): void {
     if (scale === 'mjd') this.julianStore.modifiedJulianDayInput = adjusted.toFixed(5)
     else this.julianStore.julianDayInput = adjusted.toFixed(5)
     this.applyJulianDateInput(scale)
-  }
-
-  @Builder
-  timeWheelYearField() {
-    Button() {
-      Row() {
-        Text(this.timeWheelYear.toString()).maxLines(1).minFontSize(10).fontSize(this.timeWheelUnit === 'year' ? 14 : 12)
-          .fontWeight(this.timeWheelUnit === 'year' ? FontWeight.Medium : FontWeight.Normal)
-          .fontColor(this.timeWheelUnit === 'year' ? '#FFFFFF' : '#BDD1E1')
-      }.justifyContent(FlexAlign.Center).width('100%')
-    }
-      .width(47).height(32)
-      .padding({ left: 1, right: 1 })
-      .backgroundColor(this.timeWheelUnit === 'year' ? 'rgba(185, 204, 220, 0.34)' : 'rgba(0, 0, 0, 0)')
-      .borderRadius(UI_RADIUS_PILL)
-      .onClick(() => { this.selectTimeWheelUnit('year') })
-  }
-
-  @Builder
-  timeWheelMonthField() {
-    Button() {
-      Text(this.timeWheelMonth.toString().padStart(2, '0') + '月').maxLines(1).minFontSize(10).fontSize(this.timeWheelUnit === 'month' ? 14 : 12)
-        .fontWeight(this.timeWheelUnit === 'month' ? FontWeight.Medium : FontWeight.Normal)
-        .fontColor(this.timeWheelUnit === 'month' ? '#FFFFFF' : '#BDD1E1').textAlign(TextAlign.Center).width('100%')
-    }
-      .width(34).height(32).padding({ left: 1, right: 1 })
-      .backgroundColor(this.timeWheelUnit === 'month' ? 'rgba(185, 204, 220, 0.34)' : 'rgba(0, 0, 0, 0)')
-      .borderRadius(UI_RADIUS_PILL).onClick(() => { this.selectTimeWheelUnit('month') })
-  }
-
-  @Builder
-  timeWheelDayField() {
-    Button() {
-      Text(this.timeWheelDay.toString().padStart(2, '0') + '日').maxLines(1).minFontSize(10).fontSize(this.timeWheelUnit === 'day' ? 14 : 12)
-        .fontWeight(this.timeWheelUnit === 'day' ? FontWeight.Medium : FontWeight.Normal)
-        .fontColor(this.timeWheelUnit === 'day' ? '#FFFFFF' : '#BDD1E1').textAlign(TextAlign.Center).width('100%')
-    }
-      .width(34).height(32).padding({ left: 1, right: 1 })
-      .backgroundColor(this.timeWheelUnit === 'day' ? 'rgba(185, 204, 220, 0.34)' : 'rgba(0, 0, 0, 0)')
-      .borderRadius(UI_RADIUS_PILL).onClick(() => { this.selectTimeWheelUnit('day') })
-  }
-
-  @Builder
-  timeWheelHourField() {
-    Button() {
-      Text(this.timeWheelHour.toString().padStart(2, '0') + ':').maxLines(1).minFontSize(10).fontSize(this.timeWheelUnit === 'hour' ? 14 : 12)
-        .fontWeight(this.timeWheelUnit === 'hour' ? FontWeight.Medium : FontWeight.Normal)
-        .fontColor(this.timeWheelUnit === 'hour' ? '#FFFFFF' : '#BDD1E1').textAlign(TextAlign.Center).width('100%')
-    }
-      .width(30).height(32).padding({ left: 1, right: 1 })
-      .backgroundColor(this.timeWheelUnit === 'hour' ? 'rgba(185, 204, 220, 0.34)' : 'rgba(0, 0, 0, 0)')
-      .borderRadius(UI_RADIUS_PILL).onClick(() => { this.selectTimeWheelUnit('hour') })
-  }
-
-  @Builder
-  timeWheelMinuteField() {
-    Button() {
-      Text(this.timeWheelMinute.toString().padStart(2, '0') + ':').maxLines(1).minFontSize(10).fontSize(this.timeWheelUnit === 'minute' ? 14 : 12)
-        .fontWeight(this.timeWheelUnit === 'minute' ? FontWeight.Medium : FontWeight.Normal)
-        .fontColor(this.timeWheelUnit === 'minute' ? '#FFFFFF' : '#BDD1E1').textAlign(TextAlign.Center).width('100%')
-    }
-      .width(30).height(32).padding({ left: 1, right: 1 })
-      .backgroundColor(this.timeWheelUnit === 'minute' ? 'rgba(185, 204, 220, 0.34)' : 'rgba(0, 0, 0, 0)')
-      .borderRadius(UI_RADIUS_PILL).onClick(() => { this.selectTimeWheelUnit('minute') })
-  }
-
-  @Builder
-  timeWheelSecondField() {
-    Button() {
-      Text(this.timeWheelSecond.toString().padStart(2, '0')).maxLines(1).minFontSize(10).fontSize(this.timeWheelUnit === 'second' ? 14 : 12)
-        .fontWeight(this.timeWheelUnit === 'second' ? FontWeight.Medium : FontWeight.Normal)
-        .fontColor(this.timeWheelUnit === 'second' ? '#FFFFFF' : '#BDD1E1').textAlign(TextAlign.Center).width('100%')
-    }
-      .width(26).height(32).padding({ left: 1, right: 1 })
-      .backgroundColor(this.timeWheelUnit === 'second' ? 'rgba(185, 204, 220, 0.34)' : 'rgba(0, 0, 0, 0)')
-      .borderRadius(UI_RADIUS_PILL).onClick(() => { this.selectTimeWheelUnit('second') })
   }
 
 
