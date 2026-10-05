@@ -1,3 +1,15 @@
+## [2026-09-30] DevEco Code - Phase 3f：ΔT 算法块迁移（真机验证选择实时生效）
+
+- **新增文件：** `state/DeltaTStore.ets`（`deltaTAlgorithm` / `timeDeltaTAlgorithms` / `timeDeltaTCustom` / `deltaTDescription`，字段名沿用原 `@State` 名）、`panels/time/DeltaTSettingsBlock.ets`（当前算法 + 算法列表 + 自定义系数输入 + 说明；`deltaTLabel()` 从单体方法搬入组件，store 保持无 UI 逻辑）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 4 个 `@State` 合并为 `@State private deltaTStore`；8 处引用改写；`configTab === 3` 内的整段 ΔT UI（原 L24919–L24956）替换为 `DeltaTSettingsBlock({...})` 调用；删除 `deltaTLabel()`。
+- **边界取舍（重要）：** `timeSettingsPending` **刻意不并入本 store**——它同时被「启动时间设置」区（同一标签页）与**其他面板**（`configTab` 之外的 L30057/L30089）读取；若并入 store，宿主体内那些读取将无法观测、`enabled` 状态会失去刷新。因此改由 `@Prop pending` 传入本组件，宿主保留该 `@State`。
+- **验证结果（真机 `192.168.3.95:40565`）：** `arkts_check` 三文件无错误；`BUILD SUCCESSFUL`；契约校验通过；安装启动成功。
+  - 路径：更多功能 → 设置 → 「时间」标签页 → 下滑至 ΔT 区块；区块由新组件渲染（`ΔT 算法` 标题 + 提示 + 当前算法「修订的 Espenak-Meeus（推荐）」+ 可选择列表）。
+  - **实时联动：** 点选列表中的「不进行修正」后，上方「当前算法」行**立即**由「修订的 Espenak-Meeus（推荐）」变为「不进行修正」——子组件写 store 经 `@ObjectLink` 实时驱动。
+  - 验证后已把算法**恢复原值**（列表行重新带 ✓）。
+- **验证操作教训（已记）：** 在可点击列表上用 `ui swipe` 滑动会被判为点选（本次误触改了两次算法）。此后在列表内滚动统一用 `deveco ui drag`（按压—移动—释放），且任何会写引擎设置的验证都必须在测后恢复原值。
+- **范围约束：** 纯搬移 + 状态归属迁移，行为零变更。
+
 ## [2026-09-30] DevEco Code - Phase 3e：恒星时行 + 时间方程块迁移（真机验证数值实时与开关联动）
 
 - **新增文件：** `state/EquationOfTimeStore.ets`（7 字段：`equationOfTimeEnabled/MsFormat/Inverted/Startup/Minutes/Loading/Status`，字段名沿用原 `@State` 名）、`panels/time/SiderealTimeRow.ets`（恒星时行 + 说明，`@ObjectLink TimeStore`）、`panels/time/EquationOfTimeBlock.ets`（标题开关 + 当前值 + 三个显示选项 + 失败提示；格式化逻辑 `displayText()` 从单体方法搬入组件，store 保持不含 UI 逻辑）。
