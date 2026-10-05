@@ -21,6 +21,7 @@ import { WutTargetCard } from './WutTargetCard'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { astroGroupItems, astroTabItemsForGroup, rtsCalendarDurationLabel, graphStartOptionLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, planetPairLinearLabel, hecPointSize, hecDistanceLabel, lunarElongationBarHeight, planetTimeSeriesBarHeight, planetPairBarHeight } from '../../common/derive/astro'
 import { planetZh, zhNameOf, zhType } from '../../common/derive/labels'
+import { azBarHeight } from '../../common/derive/geometry'
 
 export interface AstroPanelHost {
   almanacHoursLabel: (key: string) => string
@@ -37,7 +38,6 @@ export interface AstroPanelHost {
   annualBarWidth: () => number
   annualMaxLabel: () => string
   astroNeedsSelectedObject: () => boolean
-  azBarHeight: (azimuth: number | undefined) => number
   azimuthNowLabel: () => string
   callNative: (name: string, payload?: string) => void
   celestialPositionSubtitle: (position: CelestialPosition) => string
@@ -139,7 +139,6 @@ function noopAstroPanelHost(): AstroPanelHost {
     annualBarWidth: () => 0,
     annualMaxLabel: () => '',
     astroNeedsSelectedObject: () => false,
-    azBarHeight: () => 0,
     azimuthNowLabel: () => '',
     callNative: () => {},
     celestialPositionSubtitle: () => '',
@@ -1163,7 +1162,7 @@ export struct AstroPanel {
                           }
                         }.width(this.host.altBarWidth()).height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
                       } else {
-                        Column().width(this.host.altBarWidth()).height(this.host.azBarHeight(r.azimuth))
+                        Column().width(this.host.altBarWidth()).height(azBarHeight(r.azimuth))
                           .backgroundColor(this.accentColor).borderRadius(1)
                       }
                     }, (r: AltAzPoint, index: number) => index.toString())

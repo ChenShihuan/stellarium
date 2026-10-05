@@ -63,7 +63,10 @@ function touchHarness() {
   const start = source.indexOf('  private handleObjectInspectorModelTouch(');
   const method = source.slice(start, source.indexOf('\n  }', start) + 4);
   const TouchType = { Down: 0, Move: 1, Up: 2, Cancel: 3 };
-  const Controller = new Function('TouchType', stripTypeScriptTypes('class Controller {\n' + method + '\n}') + ';return Controller;')(TouchType);
+  // touchScreenX/Y 已直连 common/derive/geometry（§14.2 A1-6），故以函数入参注入模板。
+  const touchScreenX = point => point.x;
+  const touchScreenY = point => point.y;
+  const Controller = new Function('TouchType', 'touchScreenX', 'touchScreenY', stripTypeScriptTypes('class Controller {\n' + method + '\n}') + ';return Controller;')(TouchType, touchScreenX, touchScreenY);
   const controller = new Controller();
   const moves = [];
   const renders = [];
@@ -72,7 +75,6 @@ function touchHarness() {
   controller.objectInspectorModelTouchCount = 0;
   controller.objectInspectorModelLastPinchDistance = 0;
   Object.assign(controller, {
-    touchScreenX: point => point.x, touchScreenY: point => point.y,
     rotateObjectInspectorModel: (...values) => moves.push(values),
     requestObjectInspectorModelRender: quality => renders.push(quality) });
   const touch = (type, points) => controller.handleObjectInspectorModelTouch({ type: TouchType[type],

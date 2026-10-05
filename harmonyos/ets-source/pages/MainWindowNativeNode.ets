@@ -42,6 +42,7 @@ import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, g
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, csvCell, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, normalizeLocationSearchText, officialLocationAliases, sessionSignature } from '../common/derive/actions'
+import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary } from '../common/derive/geometry'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
@@ -2668,8 +2669,8 @@ export struct WindowNativeNode {
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
     if (points.length === 0) { return }
     const point = points[0]
-    const x = this.touchScreenX(point)
-    const y = this.touchScreenY(point)
+    const x = touchScreenX(point)
+    const y = touchScreenY(point)
     if (event.type === TouchType.Down) {
       this.viewCoordinateDragging = true
       this.viewCoordinateDragStartX = x
@@ -3179,8 +3180,8 @@ export struct WindowNativeNode {
   private handleScriptControlDragTouch(event: TouchEvent): void {
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
     if (points.length === 0) return
-    const x = this.touchScreenX(points[0])
-    const y = this.touchScreenY(points[0])
+    const x = touchScreenX(points[0])
+    const y = touchScreenY(points[0])
     if (event.type === TouchType.Down) {
       this.scriptControlDragging = true
       this.scriptControlDragStartX = x
@@ -6501,11 +6502,6 @@ export struct WindowNativeNode {
     if (this.astroStore.altAzShowSun) count++
     if (this.astroStore.altAzShowMoon) count++
     return Math.max(1, (this.altBarWidth() - Math.max(0, count - 1)) / count)
-  }
-
-  private azBarHeight(azimuth: number | undefined): number {
-    const value: number = azimuth !== undefined ? azimuth : 0
-    return Math.max(1, Math.min(96, value / 360 * 96))
   }
 
   private annualBarHeight(altitude: number | undefined): number {
@@ -10933,7 +10929,7 @@ private loadPlanetPositions(): void {
     this.detailRefreshing = true
     if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard) }
     this.detailRefreshGuard = setTimeout(() => { this.detailRefreshing = false }, 1800) as number
-    const detailsNeeded = !this.objectDetailStore.selectedDetailLoaded && (this.fullInspectorRequested || this.useTabletObjectInspector())
+    const detailsNeeded = !this.objectDetailStore.selectedDetailLoaded && (this.fullInspectorRequested || useTabletObjectInspector())
     if (detailsNeeded && this.objectDetailStore.selectedDetailRequestPending) {
       this.detailRefreshing = false
       if (this.detailRefreshGuard !== 0) { clearTimeout(this.detailRefreshGuard); this.detailRefreshGuard = 0 }
@@ -11028,10 +11024,6 @@ private loadPlanetPositions(): void {
     return this.isFoldHoverLayout ? this.hoverBottomCardY() : this.bottomCardY()
   }
 
-  private pointInsideRect(x: number, y: number, left: number, top: number, right: number, bottom: number, margin: number = 0): boolean {
-    return x >= left - margin && x <= right + margin && y >= top - margin && y <= bottom + margin
-  }
-
   private rayRectIntersection(originX: number, originY: number, targetX: number, targetY: number,
     left: number, top: number, right: number, bottom: number): number[] {
     const dx = targetX - originX
@@ -11120,9 +11112,9 @@ private loadPlanetPositions(): void {
         right: calibrationLeft + (this.isExpandedLayout ? 320 : Math.min(360, this.skyWidth - 32)) + 8,
         bottom: calibrationTop + 270 })
     }
-    if (!this.isExpandedLayout && this.isCompactTopQuickPoint(this.compactTopQuickX(), this.compactTopQuickY())) {
+    if (!this.isExpandedLayout && this.isCompactTopQuickPoint(this.compactTopQuickX(), compactTopQuickY())) {
       const quickX = this.compactTopQuickX()
-      const quickY = this.compactTopQuickY()
+      const quickY = compactTopQuickY()
       obstacles.push({ label: 'compact-quick', left: quickX - 8, top: quickY - 8,
         right: quickX + 52, bottom: quickY + 106 })
     }
@@ -11159,7 +11151,7 @@ private loadPlanetPositions(): void {
     const top = this.detailCardY()
     const right = left + this.detailCardWidth()
     const bottom = top + this.detailCardHeight()
-    if (targetOnScreen && this.pointInsideRect(targetX, targetY, left, top, right, bottom, 2)) {
+    if (targetOnScreen && pointInsideRect(targetX, targetY, left, top, right, bottom, 2)) {
       this.clearObjectDetailConnector()
       return
     }
@@ -11412,16 +11404,16 @@ private loadPlanetPositions(): void {
         })
       }
       if (this.infoWindowStore.infoWinVisible) {
-        if (this.useTabletObjectInspector()) {
+        if (useTabletObjectInspector()) {
           obstacles.push({
             label: 'object-inspector', left: this.tabletInspectorX(), top: this.tabletInspectorY(),
             right: this.tabletInspectorX() + this.tabletInspectorWidth(), bottom: this.tabletInspectorY() + this.tabletInspectorHeight()
           })
-        } else if (this.useExpandedDetailSummary() && this.canShowExpandedDetailSummary()) {
+        } else if (useExpandedDetailSummary() && this.canShowExpandedDetailSummary()) {
           obstacles.push({
             label: 'summary', left: this.expandedDetailSummaryX(), top: this.expandedDetailSummaryY(),
             right: this.expandedDetailSummaryX() + this.expandedDetailSummaryWidth(),
-            bottom: this.expandedDetailSummaryY() + this.expandedDetailSummaryHeight()
+            bottom: this.expandedDetailSummaryY() + expandedDetailSummaryHeight()
           })
         } else {
           obstacles.push({
@@ -11439,7 +11431,7 @@ private loadPlanetPositions(): void {
       obstacles.push({ label: 'sheet', left: 0, top: sheetTop, right: this.skyWidth, bottom: this.skyHeight - 90 })
     }
     if (!this.panelVisible && this.infoWindowStore.infoWinVisible) {
-      if (this.isPhoneDetailPeek()) {
+      if (isPhoneDetailPeek()) {
         obstacles.push({
           label: 'object-peek', left: this.compactObjectPeekX(), top: this.compactObjectPeekY(),
           right: this.compactObjectPeekX() + this.compactObjectPeekWidth(), bottom: this.compactObjectPeekY() + 64
@@ -11454,11 +11446,6 @@ private loadPlanetPositions(): void {
     return obstacles
   }
 
-  private pointOverlapsUiObstacle(x: number, y: number, obstacle: SkyUiObstacle, margin: number = 10): boolean {
-    return x >= obstacle.left - margin && x <= obstacle.right + margin &&
-      y >= obstacle.top - margin && y <= obstacle.bottom + margin
-  }
-
   private selectedObjectLayoutAvoidanceTarget(fallback: number[]): number[] {
     const projection = this.callNative('getGyroGuidePosition') as GyroGuideProjection
     if (projection.ok !== true || projection.valid !== true || projection.visible !== true ||
@@ -11471,7 +11458,7 @@ private loadPlanetPositions(): void {
     const obstacles = this.selectedObjectUiObstacles()
     let collision: SkyUiObstacle | undefined = undefined
     for (let index = 0; index < obstacles.length; index++) {
-      if (this.pointOverlapsUiObstacle(currentX, currentY, obstacles[index])) {
+      if (pointOverlapsUiObstacle(currentX, currentY, obstacles[index])) {
         collision = obstacles[index]
         break
       }
@@ -11498,7 +11485,7 @@ private loadPlanetPositions(): void {
       const candidateY = clamp(candidates[index][1], minY, maxY)
       let clear = true
       for (let obstacleIndex = 0; obstacleIndex < obstacles.length; obstacleIndex++) {
-        if (this.pointOverlapsUiObstacle(candidateX, candidateY, obstacles[obstacleIndex], 12)) {
+        if (pointOverlapsUiObstacle(candidateX, candidateY, obstacles[obstacleIndex], 12)) {
           clear = false
           break
         }
@@ -11558,7 +11545,7 @@ private loadPlanetPositions(): void {
     // Compact panels replace the detailed object card. Reserving the hidden
     // card's area made a 9/10 sheet calculate a target underneath itself.
     if (this.infoWindowStore.infoWinVisible && !this.panelVisible) {
-      if (this.isPhoneDetailPeek()) {
+      if (isPhoneDetailPeek()) {
         top = Math.max(top, this.compactObjectPeekY() + 72 + 28)
       } else {
         top = Math.max(top, this.bottomCardY() + this.bottomCardHeight() + 28)
@@ -11588,8 +11575,8 @@ private loadPlanetPositions(): void {
     let top = this.EDGE_MARGIN + 24
     // With both cards open, keep the target below the compact object summary
     // and inside the unobstructed sky to the right of the Pad panel.
-    if (this.panelVisible && this.infoWindowStore.infoWinVisible && this.useExpandedDetailSummary()) {
-      top = this.expandedDetailSummaryY() + this.expandedDetailSummaryHeight() + 28
+    if (this.panelVisible && this.infoWindowStore.infoWinVisible && useExpandedDetailSummary()) {
+      top = this.expandedDetailSummaryY() + expandedDetailSummaryHeight() + 28
     }
     const bottom = this.skyHeight - this.EDGE_MARGIN
     if (right - left < 120 || bottom - top < 120) {
@@ -12144,22 +12131,6 @@ private loadPlanetPositions(): void {
   }
 
 
-
-  private touchWindowX(point: TouchObject): number {
-    return point.x ?? point.windowX ?? 0
-  }
-
-  private touchWindowY(point: TouchObject): number {
-    return point.y ?? point.windowY ?? 0
-  }
-
-  private touchScreenX(point: TouchObject): number {
-    return point.windowX ?? point.x ?? 0
-  }
-
-  private touchScreenY(point: TouchObject): number {
-    return point.windowY ?? point.y ?? 0
-  }
 
   private setLocation(name: string, latitude: number, longitude: number, altitude: number, planet: string = 'Earth'): void {
     const targetPlanet = planet.length > 0 ? planet : 'Earth'
@@ -12975,7 +12946,7 @@ private loadPlanetPositions(): void {
 	    // 顶部搜索栏已移除，搜索功能通过左侧图标进入分类面板
     // 浮动详情窗优先处理（其区域内已由 isUiPoint 拦截，不会落到星图选星）
       if (this.isExpandedLayout && this.handleExpandedDetailSummaryTap(x, y)) { return true }
-      if ((!this.panelVisible || !this.useExpandedDetailSummary()) && this.handleInfoWinTap(x, y)) { return true }
+      if ((!this.panelVisible || !useExpandedDetailSummary()) && this.handleInfoWinTap(x, y)) { return true }
 
     if (!this.panelVisible) {
 		      return false
@@ -13050,8 +13021,8 @@ private loadPlanetPositions(): void {
     if (points.length === 0) {
       return
     }
-    const x = this.touchWindowX(points[0])
-    const y = this.touchWindowY(points[0])
+    const x = touchWindowX(points[0])
+    const y = touchWindowY(points[0])
     // Do not rebuild the whole ArkUI shell for every Move event. Refresh the
     // chrome idle timers on gesture start/end, and at most twice per second
     // while a long drag is in progress.
@@ -13355,8 +13326,8 @@ private loadPlanetPositions(): void {
     if (event.type === TouchType.Down) {
       this.stopSkyInertia()
       const allowTouchFeedback = !this.panelVisible
-      const downX = this.touchWindowX(points[0])
-      const downY = this.touchWindowY(points[0])
+      const downX = touchWindowX(points[0])
+      const downY = touchWindowY(points[0])
       // Panel header drag detection (before isUiPoint sidebar check)
       if (this.panelVisible) {
         const pl = this.panelLeft()
@@ -13413,7 +13384,7 @@ private loadPlanetPositions(): void {
         // 需要坐标级分派，与上方 tablet rail workaround 同理。
         if (!this.isExpandedLayout && this.isCompactTopQuickPoint(downX, downY)) {
           const qx = this.compactTopQuickX()
-          const qy = this.compactTopQuickY()
+          const qy = compactTopQuickY()
           // 陀螺仪按钮（上方的 44x44，圆心约 qx+22, qy+22）
           if (downX >= qx && downX <= qx + 44 && downY >= qy && downY <= qy + 44) {
             hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro tap via handleSkyTouch')
@@ -13462,13 +13433,13 @@ private loadPlanetPositions(): void {
       hilog.info(0x0000, 'StellariumArkUI', 'sky touch down at ' + Math.round(this.touchStartX).toString() + ',' + Math.round(this.touchStartY).toString() + ' sky=' + this.skyWidth.toString() + 'x' + this.skyHeight.toString())
       if (points.length >= 2) {
         this.resetSkyTapSequence()
-        this.skyTouchX2 = this.touchWindowX(points[1])
-        this.skyTouchY2 = this.touchWindowY(points[1])
-        this.pinchCenterX = (this.touchWindowX(points[0]) + this.skyTouchX2) / 2
-        this.pinchCenterY = (this.touchWindowY(points[0]) + this.skyTouchY2) / 2
+        this.skyTouchX2 = touchWindowX(points[1])
+        this.skyTouchY2 = touchWindowY(points[1])
+        this.pinchCenterX = (touchWindowX(points[0]) + this.skyTouchX2) / 2
+        this.pinchCenterY = (touchWindowY(points[0]) + this.skyTouchY2) / 2
         this.pinchStartDistance = distance(
-          this.touchWindowX(points[0]), this.touchWindowY(points[0]),
-          this.touchWindowX(points[1]), this.touchWindowY(points[1]))
+          touchWindowX(points[0]), touchWindowY(points[0]),
+          touchWindowX(points[1]), touchWindowY(points[1]))
         this.pinchStartFov = clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
         this.pinchLastScale = 1
         this.pinchLastNativePushMs = Date.now()
@@ -13482,8 +13453,8 @@ private loadPlanetPositions(): void {
     }
 
     if ((event.type === TouchType.Up || event.type === TouchType.Cancel) && this.dockTouchActive) {
-      const x = this.touchWindowX(points[0])
-      const y = this.touchWindowY(points[0])
+      const x = touchWindowX(points[0])
+      const y = touchWindowY(points[0])
       this.dockTouchActive = false
       this.touchStartedOnUi = false
       if (event.type === TouchType.Up) {
@@ -13497,22 +13468,22 @@ private loadPlanetPositions(): void {
     }
 
     if (event.type === TouchType.Move) {
-      const x = this.touchWindowX(points[0])
-      const y = this.touchWindowY(points[0])
+      const x = touchWindowX(points[0])
+      const y = touchWindowY(points[0])
       if (this.skyTouchFeedback) {
         this.skyTouchX = x
         this.skyTouchY = y
       }
       if (points.length >= 2) {
         this.skyTouchFeedbackMulti = this.skyTouchFeedback
-        this.skyTouchX2 = this.touchWindowX(points[1])
-        this.skyTouchY2 = this.touchWindowY(points[1])
+        this.skyTouchX2 = touchWindowX(points[1])
+        this.skyTouchY2 = touchWindowY(points[1])
         this.pinchCenterX = (x + this.skyTouchX2) / 2
         this.pinchCenterY = (y + this.skyTouchY2) / 2
         this.nativeDragActive = false
         this.stopSkyInertia()
         const currentDistance = distance(
-          x, y, this.touchWindowX(points[1]), this.touchWindowY(points[1]))
+          x, y, touchWindowX(points[1]), touchWindowY(points[1]))
         if (!this.pinchActive || this.pinchStartDistance <= 1) {
           this.pinchStartDistance = currentDistance
           this.pinchStartFov = clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
@@ -13597,8 +13568,8 @@ private loadPlanetPositions(): void {
     }
 
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      const x = this.touchWindowX(points[0])
-      const y = this.touchWindowY(points[0])
+      const x = touchWindowX(points[0])
+      const y = touchWindowY(points[0])
       const endedOnUi = this.isUiPoint(x, y)
       const recordingViewChanged = this.touchMoved || this.pinchActive
       // End panel drag
@@ -14048,7 +14019,7 @@ private loadPlanetPositions(): void {
                 musicEnabled: this.audioStore.musicEnabled,
                 compactQuickPressed: this.compactQuickPressed,
                 quickX: this.compactTopQuickX(),
-                quickY: this.compactTopQuickY(),
+                quickY: compactTopQuickY(),
                 infoWinVisible: this.infoWindowStore.infoWinVisible,
                 bottomCardIndex: this.objectDetailStore.bottomCardIndex,
                 liveInfoVisible: this.selectedLiveInfoVisible(),
@@ -14428,14 +14399,10 @@ private loadPlanetPositions(): void {
     return this.skyWidth - 18 - 44
   }
 
-  private compactTopQuickY(): number {
-    return 50
-  }
-
   private isCompactTopQuickPoint(x: number, y: number): boolean {
     if (this.isExpandedLayout) { return false }
     const qx = this.compactTopQuickX()
-    const qy = this.compactTopQuickY()
+    const qy = compactTopQuickY()
     return x >= qx - 8 && x <= qx + 52 && y >= qy - 8 && y <= qy + 108
   }
 
@@ -14474,7 +14441,7 @@ private loadPlanetPositions(): void {
   private compactQuickIdAt(x: number, y: number): string {
     if (this.isExpandedLayout) { return '' }
     const qx = this.compactTopQuickX()
-    const qy = this.compactTopQuickY()
+    const qy = compactTopQuickY()
     if (x < qx || x > qx + 44) { return '' }
     if (y >= qy && y <= qy + 44) { return 'gyro' }
     if (y >= qy + 54 && y <= qy + 98) { return 'audio' }
@@ -14514,7 +14481,7 @@ private loadPlanetPositions(): void {
     const windowX = points[0].windowX
     const windowY = points[0].windowY
     const x = typeof windowX === 'number' ? windowX : this.compactTopQuickX() + (points[0].x ?? 0)
-    const y = typeof windowY === 'number' ? windowY : this.compactTopQuickY() + (points[0].y ?? 0)
+    const y = typeof windowY === 'number' ? windowY : compactTopQuickY() + (points[0].y ?? 0)
     if (event.type === TouchType.Down) {
       this.stopSkyInertia()
       this.skyTouchFeedback = false
@@ -14653,11 +14620,6 @@ private loadPlanetPositions(): void {
     return this.skyWidth - this.EDGE_MARGIN - detailLeft
   }
 
-  // 平板展开布局 + 搜索面板打开时，始终用紧凑摘要（不挤完整大卡片）。
-  private useExpandedDetailSummary(): boolean {
-    return false
-  }
-
   private expandedDetailSummaryWidth(): number {
     return clamp(this.expandedDetailAvailableWidth(), 140, 300)
   }
@@ -14678,15 +14640,11 @@ private loadPlanetPositions(): void {
   private expandedDetailSummaryY(): number {
     // 上移：原先 +84 使小详情卡偏中，遮挡视野中心；贴近顶部留出更多星空可视区
     const base = this.baseExpandedDetailSummaryY()
-    return base + this.clampedObjectCardOffsetY(base, this.expandedDetailSummaryHeight())
+    return base + this.clampedObjectCardOffsetY(base, expandedDetailSummaryHeight())
   }
 
   private baseExpandedDetailSummaryY(): number {
     return Math.max(this.EDGE_MARGIN + 16, 48)
-  }
-
-  private expandedDetailSummaryHeight(): number {
-    return 230
   }
 
   // 平板检查器固定贴在左侧：保留大部分星图，并给底部 Dock 留出触控空间。
@@ -14716,31 +14674,27 @@ private loadPlanetPositions(): void {
     return Math.max(360, this.skyHeight - this.baseTabletInspectorY() - 84)
   }
 
-  private useTabletObjectInspector(): boolean {
-    return false
-  }
-
   private showObjectActionBar(): boolean {
     return false
   }
 
   private objectActionBarX(): number {
-    if (this.useExpandedDetailSummary()) { return this.expandedDetailSummaryX() }
-    if (this.isPhoneDetailPeek()) { return this.compactObjectPeekX() }
+    if (useExpandedDetailSummary()) { return this.expandedDetailSummaryX() }
+    if (isPhoneDetailPeek()) { return this.compactObjectPeekX() }
     return this.bottomCardX()
   }
 
   private objectActionBarWidth(): number {
-    if (this.useExpandedDetailSummary()) { return this.expandedDetailSummaryWidth() }
-    if (this.isPhoneDetailPeek()) { return this.compactObjectPeekWidth() }
+    if (useExpandedDetailSummary()) { return this.expandedDetailSummaryWidth() }
+    if (isPhoneDetailPeek()) { return this.compactObjectPeekWidth() }
     return this.bottomCardWidth()
   }
 
   private objectActionBarY(): number {
     let cardY = this.bottomCardY()
-    if (this.useExpandedDetailSummary()) { cardY = this.expandedDetailSummaryY() }
-    if (this.isPhoneDetailPeek()) { cardY = this.compactObjectPeekY() }
-    if (this.isFoldHoverLayout && !this.useExpandedDetailSummary()) { cardY = this.hoverBottomCardY() }
+    if (useExpandedDetailSummary()) { cardY = this.expandedDetailSummaryY() }
+    if (isPhoneDetailPeek()) { cardY = this.compactObjectPeekY() }
+    if (this.isFoldHoverLayout && !useExpandedDetailSummary()) { cardY = this.hoverBottomCardY() }
     return Math.max(8, cardY - 44)
   }
 
@@ -14752,10 +14706,10 @@ private loadPlanetPositions(): void {
   }
 
   private isExpandedDetailSummaryPoint(x: number, y: number): boolean {
-    if (!this.useExpandedDetailSummary() || !this.canShowExpandedDetailSummary()) { return false }
+    if (!useExpandedDetailSummary() || !this.canShowExpandedDetailSummary()) { return false }
     const sx = this.expandedDetailSummaryX()
     const sy = this.expandedDetailSummaryY()
-    return x >= sx - 8 && x <= sx + this.expandedDetailSummaryWidth() + 8 && y >= sy - 8 && y <= sy + this.expandedDetailSummaryHeight() + 8
+    return x >= sx - 8 && x <= sx + this.expandedDetailSummaryWidth() + 8 && y >= sy - 8 && y <= sy + expandedDetailSummaryHeight() + 8
   }
 
   private isObjectDetailCardRendered(): boolean {
@@ -14782,10 +14736,6 @@ private loadPlanetPositions(): void {
     return true
   }
 
-  private isPhoneDetailPeek(): boolean {
-    return false
-  }
-
   private compactObjectPeekWidth(): number {
     // Keep the selected-object peek entirely clear of the right-side gyro and
     // audio controls.  On narrow phones the old 250vp minimum overlapped them.
@@ -14805,12 +14755,8 @@ private loadPlanetPositions(): void {
   }
 
   private compactObjectPeekY(): number {
-    const base = this.baseCompactObjectPeekY()
+    const base = baseCompactObjectPeekY()
     return base + this.clampedObjectCardOffsetY(base, 72)
-  }
-
-  private baseCompactObjectPeekY(): number {
-    return 92
   }
 
   private hoverBottomCardY(): number {
@@ -14844,8 +14790,8 @@ private loadPlanetPositions(): void {
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
     if (points.length === 0) { return }
     const point = points[0]
-    const x = this.touchScreenX(point)
-    const y = this.touchScreenY(point)
+    const x = touchScreenX(point)
+    const y = touchScreenY(point)
     if (event.type === TouchType.Down) {
       this.objectCardDragging = true
       this.objectCardDragStartX = x
@@ -15100,8 +15046,8 @@ private loadPlanetPositions(): void {
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
     if (points.length === 0) { return }
     this.notePanelTouch(event)
-    const x = this.touchScreenX(points[0])
-    const y = this.touchScreenY(points[0])
+    const x = touchScreenX(points[0])
+    const y = touchScreenY(points[0])
     if (event.type === TouchType.Down) {
       this.dockTouchActive = true
       this.stopSkyInertia()
@@ -16038,16 +15984,16 @@ private loadPlanetPositions(): void {
     }
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
     if (points.length === 0) { return }
-    const x = this.touchScreenX(points[0])
-    const y = this.touchScreenY(points[0])
+    const x = touchScreenX(points[0])
+    const y = touchScreenY(points[0])
     if (event.type === TouchType.Down || this.objectInspectorModelTouchCount !== points.length) {
       this.objectInspectorModelTouchCount = points.length
       this.objectMediaStore.objectInspectorModelInteracting = true
       this.objectInspectorModelLastX = x
       this.objectInspectorModelLastY = y
       if (points.length > 1) {
-        const secondX = this.touchScreenX(points[1])
-        const secondY = this.touchScreenY(points[1])
+        const secondX = touchScreenX(points[1])
+        const secondY = touchScreenY(points[1])
         const deltaX = secondX - x
         const deltaY = secondY - y
         this.objectInspectorModelLastPinchDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
@@ -16058,8 +16004,8 @@ private loadPlanetPositions(): void {
     }
     if (event.type === TouchType.Move) {
       if (points.length > 1) {
-        const secondX = this.touchScreenX(points[1])
-        const secondY = this.touchScreenY(points[1])
+        const secondX = touchScreenX(points[1])
+        const secondY = touchScreenY(points[1])
         const deltaX = secondX - x
         const deltaY = secondY - y
         const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
@@ -16932,7 +16878,6 @@ private loadPlanetPositions(): void {
           annualBarWidth: () => this.annualBarWidth(),
           annualMaxLabel: () => this.annualMaxLabel(),
           astroNeedsSelectedObject: () => this.astroNeedsSelectedObject(),
-          azBarHeight: (azimuth: number | undefined) => this.azBarHeight(azimuth),
           azimuthNowLabel: () => this.azimuthNowLabel(),
           callNative: (name: string, payload?: string) => { this.callNative(name, payload) },
           celestialPositionSubtitle: (position: CelestialPosition) => this.celestialPositionSubtitle(position),
