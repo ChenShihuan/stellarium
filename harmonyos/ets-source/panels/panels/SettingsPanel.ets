@@ -4,8 +4,10 @@
 // 信息 / 天空 / 时间 / 数据 / 插件管理 / 视图导航）的原内联 UI 一字未改。
 //
 // 状态体系（§13.1 规则 1/5/6）：
-//   - 实时刷新的四个 @Observed store 走 @ObjectLink（gyroStore / overlayStore /
-//     deltaTStore / timeSettingsStore），宿主源均为 @State 实例。
+//   - 实时刷新的六个 @Observed store 走 @ObjectLink（gyroStore / overlayStore /
+//     deltaTStore / timeSettingsStore / ephemerisStore / pluginStore），宿主源均为 @State 实例。
+//     ephemerisStore 承载 DE430/431/440/441 的可用/启用标志（Phase 4m，原 8 个 @Prop）；
+//     pluginStore 承载插件列表与加载态（Phase 4m，原 2 个 @Prop）。
 //   - 其余标量/字符串状态走 @Prop；主题色由宿主算好后传入（避免组件名与
 //     CustomComponent 基类属性方法冲突，边框色命名为 lineColor）。
 //   - 宿主私有助手（sensZh / configDitheringLabel / informationMaskHas / plugin* /
@@ -27,6 +29,8 @@ import { GyroStore } from '../../state/GyroStore'
 import { OverlayStore } from '../../state/OverlayStore'
 import { DeltaTStore } from '../../state/DeltaTStore'
 import { TimeSettingsStore } from '../../state/TimeSettingsStore'
+import { EphemerisStore } from '../../state/EphemerisStore'
+import { PluginStore } from '../../state/PluginStore'
 import { InfoRow } from '../../common/ui/InfoRow'
 import { EphemerisToggleRow, InformationModeButton, InformationSwitchRow, NavigationSwitchRow } from '../settings/SettingsRows'
 import { LanguageRow, DevicePrivacySection } from '../settings/DeviceAndLanguageRows'
@@ -40,6 +44,8 @@ export struct SettingsPanel {
   @ObjectLink overlayStore: OverlayStore
   @ObjectLink deltaTStore: DeltaTStore
   @ObjectLink timeSettingsStore: TimeSettingsStore
+  @ObjectLink ephemerisStore: EphemerisStore
+  @ObjectLink pluginStore: PluginStore
   @Prop configTab: number
   @Prop configTabContentOpacity: number
   @Prop configTabContentOffsetX: number
@@ -51,21 +57,11 @@ export struct SettingsPanel {
   @Prop informationSettingPending: boolean
   @Prop currentProjection: string
   @Prop configDitheringMode: string
-  @Prop ephemerisDe430Available: boolean
-  @Prop ephemerisDe430Active: boolean
-  @Prop ephemerisDe431Available: boolean
-  @Prop ephemerisDe431Active: boolean
-  @Prop ephemerisDe440Available: boolean
-  @Prop ephemerisDe440Active: boolean
-  @Prop ephemerisDe441Available: boolean
-  @Prop ephemerisDe441Active: boolean
   @Prop timeSettingsPending: boolean
   @Prop observationTimeText: string
   @Prop scriptLaunching: boolean
   @Prop scriptLaunchingName: string
   @Prop scriptList: string[]
-  @Prop pluginList: PluginItem[]
-  @Prop pluginListLoading: boolean
   @Prop fovText: string
   @Prop viewLock: boolean
   @Prop navigationMouseEnabled: boolean
@@ -186,10 +182,10 @@ export struct SettingsPanel {
             LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
             Text('行星历表').fontSize(12).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 4 })
             Text('用于行星位置计算的 JPL 数值星历。仅显示设备中已安装的文件。').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 5 })
-            EphemerisToggleRow({ label: 'DE430', available: this.ephemerisDe430Available, isEnabled: this.ephemerisDe430Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de430', this.ephemerisDe430Available, v) } })
-            EphemerisToggleRow({ label: 'DE431', available: this.ephemerisDe431Available, isEnabled: this.ephemerisDe431Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de431', this.ephemerisDe431Available, v) } })
-            EphemerisToggleRow({ label: 'DE440', available: this.ephemerisDe440Available, isEnabled: this.ephemerisDe440Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de440', this.ephemerisDe440Available, v) } })
-            EphemerisToggleRow({ label: 'DE441', available: this.ephemerisDe441Available, isEnabled: this.ephemerisDe441Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de441', this.ephemerisDe441Available, v) } })
+            EphemerisToggleRow({ label: 'DE430', available: this.ephemerisStore.ephemerisDe430Available, isEnabled: this.ephemerisStore.ephemerisDe430Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de430', this.ephemerisStore.ephemerisDe430Available, v) } })
+            EphemerisToggleRow({ label: 'DE431', available: this.ephemerisStore.ephemerisDe431Available, isEnabled: this.ephemerisStore.ephemerisDe431Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de431', this.ephemerisStore.ephemerisDe431Available, v) } })
+            EphemerisToggleRow({ label: 'DE440', available: this.ephemerisStore.ephemerisDe440Available, isEnabled: this.ephemerisStore.ephemerisDe440Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de440', this.ephemerisStore.ephemerisDe440Available, v) } })
+            EphemerisToggleRow({ label: 'DE441', available: this.ephemerisStore.ephemerisDe441Available, isEnabled: this.ephemerisStore.ephemerisDe441Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de441', this.ephemerisStore.ephemerisDe441Available, v) } })
             Row() {
               Text(I18n.t('set_distance_units')).fontSize(12).fontColor(this.subColor).width(72)
               Row({ space: 6 }) {
@@ -406,7 +402,7 @@ export struct SettingsPanel {
                 .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
                 .onClick(() => { this.loadPluginList() })
             }.width('100%').padding({ left: 8, right: 8, top: 4, bottom: 8 })
-            if (this.pluginListLoading && this.pluginList.length === 0) {
+            if (this.pluginStore.pluginListLoading && this.pluginStore.pluginList.length === 0) {
               Row({ space: 8 }) {
                 LoadingProgress().width(18).height(18).color(this.accentColor)
                 Text(I18n.t('msg_loading')).fontSize(11).fontColor(this.subColor)
@@ -414,7 +410,7 @@ export struct SettingsPanel {
             }
             Scroll() {
               Column({ space: 6 }) {
-                ForEach(this.pluginList, (pl: PluginItem) => {
+                ForEach(this.pluginStore.pluginList, (pl: PluginItem) => {
                   Column({ space: 5 }) {
                     Row() {
                       Text(this.pluginZh(pl.name)).fontSize(12).fontColor(this.textColor)
