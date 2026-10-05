@@ -429,7 +429,6 @@ export struct WindowNativeNode {
   // flatHorizon 限制最大视场角、保持地平线平直。
   @State private viewSettingsStore: ViewSettingsStore = new ViewSettingsStore()
   // 桥接数据
-  @State private moduleList: string[] = []
   private rtsRequestSequence: number = 0
   // rtsCalendarStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7）。
   private almanacRequestSequence: number = 0
@@ -1512,9 +1511,6 @@ export struct WindowNativeNode {
       () => this.loadLandscapeList(),
       () => this.callNativeWhenReady("getScriptList", "", (r) => {
         if (r.ok === true && Array.isArray(r.items)) { this.scriptStore.scriptList = r.items as string[]; this.setScriptMetadata(r.details) }
-      }),
-      () => this.callNativeWhenReady("getLoadedModuleNames", "", (r) => {
-        if (r.ok === true && Array.isArray(r.items)) { this.moduleList = r.items as string[] }
       }),
       () => this.callNativeWhenReady('getProjectionList', '', (r) => {
         if (r.ok === true && r.current !== undefined) { this.currentProjection = r.current as string }
