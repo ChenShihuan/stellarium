@@ -1,3 +1,57 @@
+## [2026-10-04] DevEco Code - M1-B：控制器批（SensorController + RecordingController，PLAN §15.11 第一批）
+
+> 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.11 **M1-B**（原 M1-2/3 合并为模块级大切片）。
+> 片内 **2 次提交**，每个提交点均跑过 预检 / `arkts_check` / 构建 / 契约；工作目录 `E:\code\Stellarium-mobile\stellarium`。
+> 提交：`f452b228bf`（SensorController）→ `7355472cfc`（RecordingController）。
+
+**子组① `capability/SensorController.ets`（21 方法 + 52 私有字段）**
+- 从宿主整块下沉：`startGyroscope` / `stopGyroscope` / `toggleGyroscope` / `refreshGyroDisplayRotation` / `onOrientationData` / `onRotationVectorDirect` / `onGravityData` / `onMagneticFieldData` / `updateGyroCompassReadout` / `gyroCompassDirection` / `calibrateGyroscope` / `setGyroGuidePose` / `updateGyroTargetGuide` / `emitGyroPoseProbe` / `gyroRotateVector` / `gyroVectorAltAz` / `gyroOrthonormalizeUp` / `gyroBridgeFromEnu` / `watchGyroSend` / `watchGyroStart` / `watchGyroStop`。
+- **真传感器路径 → `SensorPort`**：`probeSensor(label)` + `subscribe/unsubscribe` 四路（RotationVector/Orientation/Gravity/MagneticField）。`SensorPort` 由 M1-A 的 `probeSensor(SensorId,label)` 细化为 **label 入参** + 四个响应类型短别名；控制器只从端口导入类型、不 import 设备能力命名空间。
+- **桥路径 → `CommandPort`**：`callNativeFire('setGyroView'|'beginGyroViewTransition'|'cancelGyroViewTransition'|'gyroDiagnostic')` → `fire`；`watchGyro*`（M1-A 已实测为**桥驱动虚拟指星笔**，走 `pointAtSky`/`pointAtSkyStop`）→ `requestWhenReady`。
+- `GyroStore` 可观测子集（使能/状态/罗盘/引导 13 字段）**M1-A 已齐备，本片复核无需扩充**；手势采样/逐帧草稿（事件计数、姿态四元数、滤波向量、订阅回调、显示旋转快照…）全部留控制器普通类（§15.7 规则 2）。
+- `SensorHostHooks` 具名回注：`canUseSensors`（隐私同意+前台+启动允许）/ `flashHint` / `displayRotation`（`display.getDefaultDisplaySync` 收在宿主）/ `objectSelected` / `guideLayout` / `guideProjection`（native 投影查询+强转收在宿主）/ `watchLastSend`。
+- **`watchLastSend` 属 §2.7.1 保留字段（引擎自用/已登记约定），不搬入控制器**，经 hooks 读写。
+
+**子组② `capability/RecordingController.ets`（21 方法 + 12 私有字段 + 2 自持定时器）**
+- 下沉：`recordAcceptedCommand` / `cancelRecordingViewCheckpoint` / `scheduleRecordingViewCheckpoint` / `startRecording` / `toggleRecordingPause` / `stopRecording` / `saveCurrentRecording` / `playRecording` / `replayNextCommand` / `finishRecordingReplay` / `toggleReplayPause` / `changePlaybackRate` / `deleteRecording` / `startVideoRecording` / `stopVideoRecording` / `startScreenVideoRecording` / `onScreenCaptureState` / `finalizeScreenVideo` / `stopScreenVideoRecording` / `saveScreenVideoToGallery` / `stop`。
+- **状态在 `ScriptStore`（§15.9）**：`recordings`/`video*`/`screenVideo*`/`replaying`/`replayPaused`/`replayRate` 不重复搬，只搬行为与定时器。
+- **`recordBuffer` 属 §2.7.1 保留字段（追加型录制缓冲）**：仍留宿主 `@State`，经 `RecordingHostHooks.recordBufferLength/Snapshot/Push/Clear` 读写（§15.7 规则 6）。宿主 `@State` 132 不变。
+- **NAPI 收在 `HostMediaPort` 适配器**：`MediaPort` 新增 `screenVideoDir`/`makeDir`/`fileSize`/`hasActiveScreenCapture`/`beginScreenCapture`/`stopScreenCapture`/`releaseScreenCapture`/`saveVideoToGallery` + `ScreenCaptureState` 枚举；`fileIo`/`display`/`media`/`photoAccessHelper` 全部留在宿主具名适配器，控制器不 import NAPI。
+- `RecordingHostHooks` 具名回注：`flashHint` / `sessionBusy` / `hidePanelAndInfo` / `openScriptsPanel` / `changeScriptRate` / recordBuffer 四法。
+- 纳入 M1-A 遗留：`toggleReplayPause` / `changePlaybackRate`（同一回放引擎归属）。
+
+**定时器调用点对照表**
+| 定时器 | 归属 | 起（start） | 止（stop/归零） |
+|---|---|---|---|
+| `RecordingController.recordViewCheckpointTimer` | 控制器自持（一次性） | `scheduleRecordingViewCheckpoint`（`startRecording`、`handleSkyTouch` view 变化触发） | `cancelRecordingViewCheckpoint`（暂停 / `stopRecording` / `stop()` / 自身重排前） |
+| `RecordingController.replayTimer` | 控制器自持（逐命令） | `replayNextCommand`（`playRecording` / 恢复 / `changePlaybackRate` 触发） | `finishRecordingReplay` / 暂停 / 重排前 置 `-1` |
+| `ScriptStore.videoStateTimer` | ScriptStore 自持（§14 B3-4 已下沉，非本片） | `startVideoRecording` → `startVideoStatePolling` | `stopVideoRecording` / 录制结束回调 → `stopVideoStatePolling` |
+
+- 宿主生命周期收口：`aboutToDisappear` → `this.recordingCtl().stop()`（清 checkpoint 定时器、结束在途回放、复位 `tools.recording`）；后台切换沿用既有 `stopVideoRecording` hooks。
+- **注意**：本控制器两个定时器均为**一次性/逐命令**，非周期轮询；§14 B3-4 的「计数→归零」周期计数法不适用（周期轮询属 `ScriptStore.videoStateTimer`，本片未改）。
+
+**度量（宿主 `MainWindowNativeNode.ets`，Get-Content 计法）**
+- 行数 **14,161 → 13,140**（**−1,021**）：子组① 14,161 → 13,406（−755）、子组② 13,406 → 13,140（−266）。
+- `private` 方法 **574 → 536**（**−38**；本片删除宿主 21 + 21 = 42 个方法，其中 2 个 `gyro` 辅助并入控制器、`toggleGyroscope` 等计数口径微差）。
+- `@State` **132 不变**（46 store 实例 + 86 保留裸字段）——`watchLastSend`/`recordBuffer` 两个保留 `@State` 留宿主。
+- 新增文件 **2 个**：`capability/SensorController.ets`、`capability/RecordingController.ets`；另改写 `bridge/SensorPort.ets`/`bridge/MediaPort.ets`。
+
+**验证（每个提交点均执行）**
+- 预检通过；`arkts_check` No errors；构建 **BUILD SUCCESSFUL**；`check-ohos-ui-contract.mjs` **intact（44 锚点不变）**。
+- 测试：全量 ohos 扫描仅剩 **§13.6 的 6 个环境类失败**（`test-ohos-clipboard-pad` / `-guide-pad` / `-mist-horizon-pad` / `-mist-performance` / `-polar-scope-pad` / `verify-ohos-search`），**无新增回归**。同步 `test-ohos-privacy-startup.mjs` 两处文本切片夹具（`startGyroscope` 切片改读 `capability/SensorController.ets`、断言 `canUseSensors()` 早于 `subscribeRotationVector`；`emitGyroPoseProbe` 改读控制器）。
+- 真机（HUAWEI Mate 80 Pro `192.168.50.108:36717`）：装包 + `aa start` + `pidof` **存活（51511 全程）**。
+  - **SensorController 实证**（`setGyroscopeEnabled true/false` 走 `[cli-ui]` → 控制器）：`[gyro-probe] sensor=rotation-vector/gravity/magnetic-field supported=true` 三路订阅成功；`[GYRO_PROBE] callbacks=1→64→126→190→252`、`dispatch` 同步增长；停止 `mode=rotation-vector callbacks=301 valid=301 dispatch=220 invalid=0 gravity=301 magnetic=160 elapsedMs=4839`。
+  - **RecordingController 视频帧序列（桥）**：`getVideoRecordingState(recording=false)` → `startVideoRecording 1|1`（maxFrames=1）→ `stopVideoRecording`（`archiveReady=true, diskFrames=1`）→ `listRecordings` 正常。
+  - **RecordingController 脚本录制（UI）**：`openUiPanel scripts` 后经 UI 自动化点击「开始录制」→界面显示「录制中」→点击「停止录制」，全程 `pidof` 存活（`verify_ui` id `57ed098c`）。
+  - **未走查（原因）**：(a) 回放 UI —— 脚本面板「已保存的录制」区被内层脚本列表滚动容器捕获，自动化滑动无法到达（3 次尝试），需人工；回放引擎桥命令面已由 M1-A 覆盖。(b) 系统录屏 MP4 授权对话框 —— 需真实用户授权，交由人工。(c) 陀螺目标引导 `GyroTargetGuide` 叠层 —— 需选中天体 + 设备朝向变化，未走查。
+  - 测试中创建的 `m1b-smoke` 录制已 `deleteRecording` 清除；`setGyroscopeEnabled` 末态为 false（且启动时 `restoreStartupSettings` 恒置 false）。
+
+**本片新踩的坑**
+- **换行归一**：`write` 工具新建/改写 `.ets` 为 LF，须在提交前统一为 CRLF（`SensorController`/`SensorPort`/`RecordingController` 均出现，已归一；宿主经 `ReadAllText/WriteAllText` 保持 CRLF）。
+- **跨类调用的方法不能是 `private`**：`SensorController.stopGyroscope`/`startGyroscope` 初版写成 `private`，构建报 `Property '…' is private and only accessible within class`（`arkts_check` 未拦）。跨出类边界的方法必须 public。
+- **大段删除用 ASCII 锚点正则**：删 21+21 个宿主方法时，起点用 ASCII 方法签名、终点用 ASCII 下一条注释/签名 lookahead，避免 PowerShell 命令行内联 CJK 被代码页改写。
+- **文本切片夹具随搬迁同步**：`test-ohos-privacy-startup.mjs` 两处直接读宿主的断言随方法下沉改读控制器文件。
+
 ## [2026-10-04] DevEco Code - M1-A：端口 + 服务层 + 启动/会话 + P2 并入（PLAN §15.11 第一批）
 
 > 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.11 **M1-A**（原 M1-1/4/5/6 合并为模块级大切片）。
