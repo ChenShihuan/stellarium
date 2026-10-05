@@ -1,35 +1,44 @@
 import { curves } from '@kit.ArkUI'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { getIcon } from '../../common/ui/ShellIcons'
+import { DockStore } from '../../state/DockStore'
 
 // 底部 Dock 的单个入口按钮（原宿主参数化 ``@Builder dockButton(item)``）。
 //
 // 展开/紧凑两档只影响图标尺寸、标签字号与行高，宿主算好后以 ``@Prop`` 传入；
 // 触摸与点按分别回注 ``handleDockTouch`` / ``activateDockAction``。
 // 参数化 @Builder 不能保留（简单类型参数按值捕获，首帧后冻结），故下沉为组件。
+//
+// 激活态经 @ObjectLink 共享 ``DockStore`` 就地求值：ForEach 复用子项时 @Prop 会被
+// 冻结，而改变键值又会重建入口，故都不能用于高亮（详见 ``BottomDock`` 头注）。
 
 @Component
 export struct DockButton {
   @Prop icon: string
   @Prop label: ResourceStr
-  @Prop active: boolean
+  @Prop panelId: string
+  @ObjectLink activeState: DockStore
   @Prop iconSize: number
   @Prop labelFontSize: number
   @Prop itemHeight: number
   onTouchEvent: (event: TouchEvent) => void = () => {}
   onTap: () => void = () => {}
 
+  private isActive(): boolean {
+    return this.activeState.panelVisible && this.activeState.activePanel === this.panelId
+  }
+
   build() {
     Column() {
-      Image(getIcon(this.icon, this.active))
+      Image(getIcon(this.icon, this.isActive()))
         .width(this.iconSize)
         .height(this.iconSize)
         .objectFit(ImageFit.Contain)
-        .fillColor(this.active ? '#70C8FF' : '#E5FFFFFF')
-        .opacity(this.active ? 1 : 0.78)
+        .fillColor(this.isActive() ? '#70C8FF' : '#E5FFFFFF')
+        .opacity(this.isActive() ? 1 : 0.78)
       Text(this.label)
         .fontSize(this.labelFontSize)
-        .fontColor(this.active ? '#70C8FF' : '#99FFFFFF')
+        .fontColor(this.isActive() ? '#70C8FF' : '#99FFFFFF')
         .margin({ top: 2 })
     }
       .layoutWeight(1)
