@@ -61,9 +61,20 @@ test('live merging preserves row order and static records while removing expired
 });
 
 // objectDataRow / tabletInspectorRow 已改为组件（ObjectDataRow / StructuredDetailRow：由父方解析好数值后以 @Prop 传入），
-// 因此这条“只传稳定 key、不传字符串快照”的守卫只覆盖仍然是“传 key”的宿主 builder。
-test('coordinate, observation and data builders receive stable keys, not string snapshots', () => {
-  const calls = source.split('\n').filter(line => /this\.(selectedCoordinateRow|objectDataTile|objectScheduleTile|objectMetric|expandedSummaryMetric|expandedSummaryLine)\(/.test(line));
-  assert.ok(calls.length > 20, `call sites found: ${calls.length}`);
+// 贴片族（objectDataTile / objectMetric / objectScheduleTile / objectDetailTab / objectCompactMetric）同样已改为
+// DetailTiles.ets 里的组件，因此这条“只传稳定 key、不传字符串快照”的守卫只覆盖仍然是“传 key”的宿主 builder。
+test('coordinate and summary builders receive stable keys, not string snapshots', () => {
+  const calls = source.split('\n').filter(line => /this\.(selectedCoordinateRow|expandedSummaryMetric|expandedSummaryLine)\(/.test(line));
+  assert.ok(calls.length > 5, `call sites found: ${calls.length}`);
   for (const line of calls) assert.doesNotMatch(line, /, this\.selected\w+|, this\.zhNameOf/, line);
+});
+
+test('tile components receive resolved values while the host keeps the lookups', () => {
+  for (const tile of ['ObjectDataTile', 'ObjectMetric', 'ObjectScheduleTile']) {
+    assert.ok(source.includes(`${tile}({ label: `), tile);
+  }
+  assert.ok(source.includes("value: this.selectedDisplayValue('selectedRise')"));
+  assert.ok(source.includes('ObjectDetailTab({ label:'), 'the tab bar comes from the component');
+  assert.ok(source.includes('active: this.bottomCardIndex ==='), 'the active tab is derived from live state');
+  assert.ok(source.includes("ObjectCompactMetric({ label: I18n.t('i0007')"), 'compact metrics resolve their value in the host');
 });

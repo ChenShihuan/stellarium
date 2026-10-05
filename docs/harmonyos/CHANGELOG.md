@@ -1,3 +1,15 @@
+## [2026-10-01] DevEco Code - Phase 3x：详情贴片族组件化（DetailTiles）
+
+- **新增 `panels/object/DetailTiles.ets`**：把五个**参数化 UI 函数**改为组件 —— `objectDataTile`（8 行）→ `ObjectDataTile`、`objectMetric`（8）→ `ObjectMetric`、`objectScheduleTile`（8）→ `ObjectScheduleTile`、`objectDetailTab`（12）→ `ObjectDetailTab`、`objectCompactMetric`（11）→ `ObjectCompactMetric`。它们原先按值捕获参数，导致"实时高度 / 方位"这类随天体变化的数值**首帧后冻结**（§13.1 规则 3）。
+- **值由宿主解析后以 `@Prop` 传入**：`selectedDisplayValue(key)` / `objectDistanceSummary()` 等动态查值仍留宿主（多处共用），组件只负责显示规则（空值 `--`）；`ObjectDetailTab` 改用 `active: boolean` + `onSelect` 回调，不再需要 `index` 参数。共 28 处调用点改写，5 个旧函数删除。
+- **单体行数：** 29,147 → **29,096**（−51）。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验（74 个 .ets）/ 安装启动通过；火星卡三页全部正常 —— 观测页（`升起 0h35m` / `中天 7h52m` / `落下 15h09m` + `大气后星等 1.23` / `大气衰减 0.14 等` / `气团质量 1.06` 三列布局正确）、坐标页（地平/几何地平/赤道/J2000 赤道/当日黄道）、资料页（12 个贴片 + 媒体区），页头紧凑指标（`星等 1.09` / `星座 巨蟹座` / `距离 1.6655 AU`）正常；**切页时页签高亮与缩放实时跟随**（`ObjectDetailTab` 的 `@Prop active` 路径生效，页签 bounds 随 1.02 缩放变化）。
+- **踩坑记录（新增）：**
+  - **PowerShell 的 `String.Split("
+")` 会把参数当字符数组**（按 `\r` 与 `\n` 各切一次）→ 行数翻倍、拼接出成片空行。必须用 `-split "
+"`（运算符按正则处理）。
+  - 用 `[regex]::Replace` 匹配**含括号的源码签名**前必须 `[regex]::Escape()`，否则 `(...)` 被当作分组 → 0 匹配（表现为"删了 0 字符"）。
+- **测试同步：** `test-ohos-detail-live-values.mjs` 第 6 条改名 "coordinate and summary builders receive stable keys"（贴片族已组件化，阈值 20 → 5），并新增 "tile components receive resolved values while the host keeps the lookups" 守卫；全量 23 个切片脚本复跑，仅剩 §13.6 的 3 处**既有失败**。
 ## [2026-10-01] DevEco Code - Phase 3w：详情主卡片"操作"页组件化
 
 - **新增 `panels/object/ObjectDetailActionsTab.ets`**：`unifiedObjectDetailCard()` 中 `bottomCardIndex === 3` 的"目标操作"分支（37 行）下沉为组件，外层 `Column({ space: 8 })` 与原 Scroll 内层容器间距一致。
