@@ -178,15 +178,23 @@ import {
   CommandCatalogEntry, CommandCatalogResponse
 } from './MainWindowModels'
 
-// Sky-texture status banner cadence. Poll fast while a fresh view settles, then
-// keep a slow background poll so the banner still clears when the textures land
-// late; after the settle window retract it with an honest final note instead of
-// leaving a stale "N 项待完成" loading state on screen forever (which happened
-// when the fast poll stopped at its cap while textures were still missing).
+// Sky-texture status banner. Its visibility is driven purely by the live
+// deep-sky texture state reported by getDeepSkyImageStatus: pending>0 or a
+// "loading" status shows "N 项待完成", an error status shows a retry action,
+// and a ready view hides it immediately. It is never retracted on a timer while
+// textures are still loading. A view that keeps reporting pending textures far
+// beyond any plausible load is escalated to an actionable retry state instead of
+// a silent hide, so the note can never stick forever without an affordance.
 const SKY_TEXTURE_STATUS_FAST_POLLS: number = 24
-const SKY_TEXTURE_STATUS_SETTLE_POLLS: number = 40
 const SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS: number = 2000
-const SKY_TEXTURE_STATUS_FINAL_HIDE_MS: number = 5000
+const SKY_TEXTURE_STATUS_STALL_POLLS: number = 90
+// The seven planets (without Earth) plus the Moon and the Sun: the bodies whose
+// detail textures are worth resolving before the user opens their cards.
+const BODY_DETAIL_TEXTURE_PATHS: Array<string> = [
+  'textures/sun.png', 'textures/mercury.png', 'textures/venus.png', 'textures/mars.png',
+  'textures/jupiter.png', 'textures/saturn.png', 'textures/uranus.png', 'textures/neptune.png',
+  'textures/moon.png',
+]
 
 @Component
 export struct WindowNativeNode {
@@ -271,11 +279,13 @@ export struct WindowNativeNode {
   private objectInspectorMediaResolutionComplete: boolean = false
   private objectInspectorMediaWarmupTimer: number = 0
   private objectInspectorMediaDecodeGeneration: number = 0
+  private bodyDetailWarmupTimer: number = 0
+  private bodyDetailWarmupIndex: number = 0
+  private bodyDetailWarmupPending: Array<string> = []
   private skyTextureStatusTimer: number = 0
   private skyTextureStatusDelayTimer: number = 0
   private skyTextureStatusPolls: number = 0
   private skyTextureStatusSlow: boolean = false
-  private skyTextureStatusFinalTimer: number = 0
   private objectInspectorProceduralKey: string = ''
   private objectInspectorProceduralParticles: number[][] = []
   private objectInspectorModelOverlaySerial: number = 0
@@ -1122,6 +1132,7 @@ export struct WindowNativeNode {
     hilog.info(0, 'StellariumArkUI', '[startup] presented-frame-ready width=%{public}d height=%{public}d',
       viewportWidth, viewportHeight)
     AppStorage.setOrCreate('stellariumStartupSkyReady', true)
+    this.startBodyDetailWarmup()
   }
 
   private startTwinkle(): void {
@@ -1793,6 +1804,7 @@ export struct WindowNativeNode {
     this.stopDetailAutoRefresh()
     this.stopObjectDetailConnectorRefresh()
     this.stopObjectInspectorMediaWarmup()
+    this.stopBodyDetailWarmup()
     this.clearObjectInspectorDecodedImage()
     this.skyCultureArtDecodeGeneration++
     this.clearSkyCultureArtThumbnails()
@@ -10056,10 +10068,6 @@ private loadPlanetPositions(): void {
       clearTimeout(this.skyTextureStatusDelayTimer)
       this.skyTextureStatusDelayTimer = 0
     }
-    if (this.skyTextureStatusFinalTimer !== 0) {
-      clearTimeout(this.skyTextureStatusFinalTimer)
-      this.skyTextureStatusFinalTimer = 0
-    }
     this.skyTextureStatusPolls = 0
     this.skyTextureStatusSlow = false
   }
@@ -10082,48 +10090,46 @@ private loadPlanetPositions(): void {
       ? result.activeTextureErrorCount as number : 0
     const status = result.activeTextureStatus ?? ''
     if (errors > 0 || status === 'error' || status === 'partial-error') {
+      hilog.warn(0x0000, 'StellariumArkUI', '[sky-banner] error count=%{public}d status=%{public}s',
+        errors, status)
       this.tools.skyTextureStatusVisible = true
       this.tools.skyTextureStatusError = true
       this.tools.skyTextureStatusText = '当前视野有 ' + errors.toString() + ' 项资料图加载失败'
       return
     }
     if (pending > 0 || status === 'loading') {
+      hilog.info(0x0000, 'StellariumArkUI', '[sky-banner] loading pending=%{public}d status=%{public}s',
+        pending, status)
       this.tools.skyTextureStatusVisible = true
       this.tools.skyTextureStatusError = false
-      this.tools.skyTextureStatusText = this.skyTextureStatusSlow
-        ? '仍在后台准备当前视野资料图，完成后会自动显示'
-        : '正在载入当前视野资料图 · ' + pending.toString() + ' 项待完成'
+      this.tools.skyTextureStatusText = '正在载入当前视野资料图 · ' + pending.toString() + ' 项待完成'
       return
     }
     this.hideSkyTextureStatus()
   }
 
   private pollSkyTextureStatus(): void {
-    if (this.skyTextureStatusSlow) {
-      if (this.skyTextureStatusPolls >= SKY_TEXTURE_STATUS_SETTLE_POLLS) {
-        // The remaining textures never arrived. Retract the banner with an
-        // explicit final note, then take it down, so the UI converges honestly
-        // instead of showing a loading state that can never finish.
-        this.tools.skyTextureStatusVisible = true
-        this.tools.skyTextureStatusError = false
-        this.tools.skyTextureStatusText = '当前视野资料图暂未就绪，稍后自动重试'
-        this.stopSkyTextureStatusObserver()
-        this.skyTextureStatusFinalTimer = setTimeout(() => {
-          this.skyTextureStatusFinalTimer = 0
-          this.tools.skyTextureStatusVisible = false
-          this.tools.skyTextureStatusText = ''
-        }, SKY_TEXTURE_STATUS_FINAL_HIDE_MS) as number
-        return
-      }
-    } else if (this.skyTextureStatusPolls >= SKY_TEXTURE_STATUS_FAST_POLLS) {
-      this.skyTextureStatusSlow = true
-      if (this.tools.skyTextureStatusVisible && !this.tools.skyTextureStatusError) {
-        this.tools.skyTextureStatusText = '仍在后台准备当前视野资料图，完成后会自动显示'
-      }
-    }
     this.skyTextureStatusPolls++
+    if (this.skyTextureStatusPolls >= SKY_TEXTURE_STATUS_FAST_POLLS) {
+      this.skyTextureStatusSlow = true
+    }
+    // A stall far past any plausible load is surfaced as an actionable error so
+    // the banner can never sit on a loading state that will never finish. This
+    // is an escalation, not a silent hide: the user keeps a retry affordance.
+    if (this.skyTextureStatusSlow && this.skyTextureStatusPolls >= SKY_TEXTURE_STATUS_STALL_POLLS) {
+      this.tools.skyTextureStatusVisible = true
+      this.tools.skyTextureStatusError = true
+      this.tools.skyTextureStatusText = '当前视野资料图仍在准备，可稍后重试'
+      this.stopSkyTextureStatusObserver()
+      return
+    }
     this.callInteractive('getDeepSkyImageStatus', '', (result: StellariumBridgeResponse) => {
       this.updateSkyTextureStatus(result)
+      // updateSkyTextureStatus already retracts the banner and stops polling
+      // when the bridge reports a failure.
+      if (result.ok !== true) {
+        return
+      }
       const pending = typeof result.activeTexturePendingCount === 'number'
         ? result.activeTexturePendingCount as number : 0
       if (pending <= 0 || result.activeTextureStatus === 'error' || result.activeTextureStatus === 'partial-error') {
@@ -10137,6 +10143,7 @@ private loadPlanetPositions(): void {
         this.pollSkyTextureStatus()
       }, delay) as number
     }, () => {
+      // The bridge did not answer; sample again later without inventing a state.
       const delay = this.skyTextureStatusSlow ? SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS : 900
       this.skyTextureStatusTimer = setTimeout(() => {
         this.skyTextureStatusTimer = 0
@@ -15868,6 +15875,59 @@ private loadPlanetPositions(): void {
       clearInterval(this.objectInspectorMediaWarmupTimer)
       this.objectInspectorMediaWarmupTimer = 0
     }
+  }
+
+  // Resolves the detail textures of the seven planets, the Moon and the Sun once
+  // the sky has presented its first frame, one body per tick, so opening their
+  // cards does not have to copy the packaged texture on demand. This only makes
+  // the existing on-select work happen earlier: it never moves the view, never
+  // shows a dialog and never blocks the UI thread.
+  private startBodyDetailWarmup(): void {
+    if (this.bodyDetailWarmupTimer !== 0) {
+      return
+    }
+    this.bodyDetailWarmupPending = BODY_DETAIL_TEXTURE_PATHS.slice()
+    this.bodyDetailWarmupIndex = 0
+    this.stepBodyDetailWarmup()
+    this.bodyDetailWarmupTimer = setInterval(() => {
+      this.stepBodyDetailWarmup()
+    }, 120) as number
+  }
+
+  private stepBodyDetailWarmup(): void {
+    if (this.bodyDetailWarmupIndex >= this.bodyDetailWarmupPending.length) {
+      hilog.info(0x0000, 'StellariumArkUI', '[body-warmup] completed count=%{public}d',
+        this.bodyDetailWarmupPending.length)
+      this.stopBodyDetailWarmup()
+      return
+    }
+    const relativePath = this.bodyDetailWarmupPending[this.bodyDetailWarmupIndex]
+    this.bodyDetailWarmupIndex++
+    try {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+      resolveStellariumDetailMediaAsset(context.getApplicationContext(), relativePath).then((resolved: string) => {
+        if (resolved.length === 0) {
+          hilog.warn(0x0000, 'StellariumArkUI', '[body-warmup] unavailable path=%{public}s', relativePath)
+        } else {
+          hilog.info(0x0000, 'StellariumArkUI', '[body-warmup] ready path=%{public}s', resolved)
+        }
+      }).catch((err: Error) => {
+        hilog.warn(0x0000, 'StellariumArkUI', '[body-warmup] failed path=%{public}s error=%{public}s',
+          relativePath, JSON.stringify(err))
+      })
+    } catch (err) {
+      hilog.warn(0x0000, 'StellariumArkUI', '[body-warmup] failed path=%{public}s error=%{public}s',
+        relativePath, JSON.stringify(err))
+    }
+  }
+
+  private stopBodyDetailWarmup(): void {
+    if (this.bodyDetailWarmupTimer !== 0) {
+      clearInterval(this.bodyDetailWarmupTimer)
+      this.bodyDetailWarmupTimer = 0
+    }
+    this.bodyDetailWarmupIndex = 0
+    this.bodyDetailWarmupPending = []
   }
 
   private objectInspectorPlanetTexturePath(): string {
