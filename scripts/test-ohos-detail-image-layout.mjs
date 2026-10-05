@@ -7,6 +7,9 @@ const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/obj
 // 媒体卡片已下沉为 TabletInspectorMediaCard 组件（本轮搬迁），宿主只保留分支判定并向组件传参。
 const card = mediaComponents.slice(mediaComponents.indexOf('export struct TabletInspectorMediaCard {'), mediaComponents.indexOf('export struct TabletInspectorNoticeRow {'));
 const preview = source.slice(source.indexOf('  private objectInspectorMediaPreviewOverlay() {'), source.indexOf('  private openObjectInspectorMediaPreview(): void'));
+// 天体详情分支已下沉为 ObjectPanel 组件（Phase 4e）：媒体卡片的调用点现在组件内，
+// 但视口高度仍由宿主按实时视口状态算好后以 @Prop 传入。
+const objectPanel = readFileSync(new URL('../harmonyos/ets-source/panels/panels/ObjectPanel.ets', import.meta.url), 'utf8');
 
 test('detail images preserve their entire frame instead of covering the viewport', () => {
   assert.match(card, /Image\(this\.store\.objectInspectorMediaPixelMap\)[\s\S]*?objectFit\(ImageFit\.Contain\)/);
@@ -20,9 +23,10 @@ test('caption follows the image viewport, with no fixed height on the outer colu
 });
 
 test('host still feeds the media card the viewport height computed from the live viewport state', () => {
-  const call = source.slice(source.indexOf('      TabletInspectorMediaGroup({'), source.indexOf('    } else if (this.objectDetailStore'))
-  assert.match(call, /imageHeight: this\.objectInspectorImageHeight\(\)/);
+  const call = objectPanel.slice(objectPanel.indexOf('TabletInspectorMediaGroup({'), objectPanel.indexOf('SatellitePassDetails({'));
   assert.match(call, /store: this\.objectMediaStore/);
+  assert.match(call, /imageHeight: this\.imageHeight/);
+  assert.match(source, /imageHeight: this\.objectInspectorImageHeight\(\)/);
 });
 
 test('preview shrinks to the available detail viewport without growing beyond 210vp', () => {

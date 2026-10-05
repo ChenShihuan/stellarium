@@ -1,3 +1,26 @@
+## [2026-10-02] DevEco Code - Phase 4e：`panelContent` 第四批 4 个实分支抽组件（search / observing / satellites / object）
+
+- **范围**：Phase 4 第四批 —— 按 §6.2 口径重扫 `panelContent()` 剩余分支，排除「薄调用既有组件」的 hub/尾件（`tools`/`audio`/`telescope`/`skyCultureMaker`/`help`/`catalogs`/`bookmarks`/`commands`/`navStars`/`archaeoLines`/`mosaicCamera`/`meteorshowers`/`scenery3d`/`nebulaTextures`/`pointerCoordinates` 等）与 `layers`（其 7 个 `view*Tab` 仍是宿主 `@Builder`，非组件调用，按 4e 指令**跳过 layers**，留待叶件先行），取**剩下最小的 4 个实分支**：`search`(110) / `observing`(112) / `object`(145) / `satellites`(179) 行。判定条件 `activePanel === '<name>'` 仍留宿主，**不迁 V2**、不新建 store。
+- **改动文件**：
+  - 新增 `harmonyos/ets-source/panels/panels/SearchPanel.ets`（139 行）：`@ObjectLink store: SearchStore` + 派生标签/分类选项 `@Prop` + 20 个回调；`SearchBar`/`SearchFilterMenu`/`SearchSuggestions`/`SearchCategoryBrowse`/`SearchConstellationChips`/`SearchCoordinateInput` 原样组装；`searchPanelScroller` 以普通成员传入（宿主 `selectSearchFilterCategory` 仍要 `scrollTo` 同一实例）；防抖定时器、软键盘避让动画与 `AppStorage` 滚动位置回写回注宿主。
+  - 新增 `harmonyos/ets-source/panels/panels/ObservingPanel.ets`（136 行）：`@ObjectLink wutStore` + `observingList`/`observingListReady` `@Prop` + 12 个回调；分类 chip 切换、刷新目标、加/删观测项、点按搜索与居中全部回注；`wutTargetTitle`/`wutTargetSubtitle`/`zhType`/`observingDisplayName` 仍在宿主算好后回调返回。
+  - 新增 `harmonyos/ets-source/panels/panels/SatellitesPanel.ets`（238 行）：**不搬状态**（该域实测 35 字段 / 160 处引用，搬 store 会牵动逻辑方法），30 个 `@Prop` 快照 + 两个 `Scroller` 普通成员 + 19 个回调；`catalogHealthText`/`catalogHealthColor` 依赖宿主 `catalogHealthLoaded`/`catalogManifestPresent`，以回调返回；联网/引擎读写全留宿主。
+  - 新增 `harmonyos/ets-source/panels/panels/ObjectPanel.ets`（201 行）：`@ObjectLink` 三个 store（`objectDetailStore`/`objectMediaStore`/`telescopeStore`）+ 渲染管线逐帧写入的 `objectInspectorModelRendering`/`objectInspectorModelTexturePixels` 按踩坑表**留宿主**、以 `modelRendering`/`hasModelTexture` `@Prop` 传入；`zhNameOf`/`zhType`/`selectedStatusZh`/`selectedDisplayValue` 读宿主状态，以回调返回；`TabletInspectorMediaGroup`/`SatellitePassDetails`/`SelectedCoordinateRows`/`ObjectDataRow`/`StructuredDetailRows`/`QuickChipRow`/`Lx200ObjectControls` 原样组装；根为 `if/else` 多根 → 包 `Column()`（与原调用点 `Column() { this.panelContent() }` 同 space）。
+  - 改 `harmonyos/ets-source/pages/MainWindowNativeNode.ets`：4 行 import + 4 个分支体替换为组件调用；**24,440 → 24,098（净 −342）**；删除 4 段旧分支（共 −535 行，含分支判定与内联 UI）。
+- **成员名雷区**：颜色/边框沿用 `textColor`/`subColor`/`panelColor`/`borderTint`/`inputColor`/`accentColor`（避开 `borderColor`/`background`）；未使用 `scale`/`onTouch`。`SatellitesPanel` 的 `satUpdateSettings` 用 `@Prop` 传接口对象（ArkUI V1 支持对象/数组 `@Prop` 单向同步）。
+- **跳过**：`layers` —— 体内 7 个 `view{...}Tab` 仍是宿主 `@Builder`（`MainWindowNativeNode.ets` 内），不是组件调用，按 4e 指令跳过并在此记录。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（4 新件 + 宿主，5 文件 0 错）→ `devecocli build`（`-SkipEngine -SkipDeploy -SkipResources`）BUILD SUCCESSFUL → `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好 → 全量 `*-ohos*.mjs` 扫描，失败项与 §13.6 存量一致（8 个环境/设备类）。
+- **测试同步**（3 个脚本被搬迁打断，已改读新组件/新调用点）：
+  - `test-ohos-search-browser.mjs`：`align(TopStart).id('search-browser-scroll')` 断言改读 `panels/panels/SearchPanel.ets`。
+  - `test-ohos-detail-image-layout.mjs`：媒体卡调用点改读 `ObjectPanel.ets`（断言 `store: this.objectMediaStore` + `imageHeight: this.imageHeight`），并补一条「宿主仍以 `imageHeight: this.objectInspectorImageHeight()` 计算实时视口高度」。
+  - `verify-ohos-object-details.mjs`：共享行组件计数并入 `ObjectPanel.ets`（仍 ≥2）。
+- **真机**（`com.cnchensh.stellarium`，`192.168.3.95:40565`，CLI 显式 `--bundle`；全程 `pidof`=33564 存活、未崩）：
+  1. `search`：`openUiPanel search` → 渲染 `Scroll#search-browser-scroll` + `Row#search-category-picker「浏览分类」`/`Button#search-filter-picker「筛选」`；点「筛选」→ 浏览区**就地**换成筛选菜单（出现「可见度」分组、分类选择器消失）——实时刷新实证。
+  2. `observing`：`openUiPanel observing` → 渲染观测列表 + `行星/恒星/梅西耶` 分类 chip + 引擎返回的「土星 / 天王星」目标；点「恒星」→ 列表清空并出现「正在筛选 344 / 118205」——`@ObjectLink wutStore` 实时刷新实证。
+  3. `satellites`：`openUiPanel satellites` → 渲染离线目录信息块、若干开关与分组选择器；点「自动显示新卫星」开关 → CLI `getSatelliteSources` 的 `autoDisplayEnabled` **true → false**（引擎状态实证），**再点回 true 恢复**。
+  4. `object`：本机为 expanded 布局，`setPanel('object')` 恒早退到浮动详情卡 `toggleObjectInspector()`（`MainWindowNativeNode.ets:2504`），`panelContent()` 的 `object` 分支在当前入口**不可达**（历史路径），故**未走查**；该分支行为不变（已抽出，编译/脚本全绿）。
+- **测后恢复**：卫星「自动显示新卫星」已点回 `true`（`getSatelliteSources` 复核）；未改动观测列表（`observingList` 仍空）、未保存/导入任何来源或 TLE。
+- **本片新踩的坑**：`openUiPanel object` 应答 `accepted:true`，但 `setPanel` 对 `'object'` 直接早退到浮动详情卡（且 `isCliPanelName` 列表也不含 `'object'`）——即它只切了顶层详情卡、没切底部面板；以后走查 `object` 面板前先确认 `activePanel === 'object'` 是否真的可达。
 ## [2026-10-02] DevEco Code - Phase 4d：先搬 skyCulture 叶件（7 个 private @Builder）
 
 - **目标**：把挡着 `skyCultureMaker` / `layers` 分支的一批 skyCulture / satellite 叶件先下沉为组件（参数化 `@Builder` 参数按值捕获、子树首帧后冻结，§13.1 规则 3）。本片搬 7 个（`skyCultureArtPreviewOverlay` 属 Phase 5 叠层，未动）。

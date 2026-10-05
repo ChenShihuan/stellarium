@@ -141,6 +141,10 @@ import { TimePanel } from '../panels/panels/TimePanel'
 import { HelpPanel } from '../panels/panels/HelpPanel'
 import { MeteorShowersPanel } from '../panels/panels/MeteorShowersPanel'
 import { NebulaTexturesPanel } from '../panels/panels/NebulaTexturesPanel'
+import { ObservingPanel } from '../panels/panels/ObservingPanel'
+import { SearchPanel } from '../panels/panels/SearchPanel'
+import { ObjectPanel } from '../panels/panels/ObjectPanel'
+import { SatellitesPanel } from '../panels/panels/SatellitesPanel'
 import { SkyCultureSectionHeader, SkyCultureMetaItem, SkyCultureLabelSettingCard, SkyCultureFilterPicker } from '../panels/skyculture/SkyCultureViewParts'
 import { SatelliteGroupSelector } from '../panels/satellite/SatelliteGroupSelector'
 import {
@@ -18370,150 +18374,57 @@ private loadPlanetPositions(): void {
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'object') {
-      if (this.objectDetailStore.selectedName.length === 0) {
-        Column() {
-          Text(I18n.t('i0109')).fontSize(14).fontColor('#99FFFFFF').margin({ top: 20 })
-          Text(I18n.t('i0110')).fontSize(12).fontColor('#CC8FB6FF').margin({ top: 6 })
-        }.width('100%').height(100).justifyContent(FlexAlign.Center)
-      } else {
-      // 天体名称突出显示
-      Row() {
-        Text(this.zhNameOf(this.objectDetailStore.selectedName))
-          .fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFFFFFFF').layoutWeight(1)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%').padding({ left: 4, right: 4, top: 2, bottom: 4 }).margin({ bottom: 2 })
-      // 类型标签
-      Row() {
-        Text(this.zhType(this.objectDetailStore.selectedType))
-          .fontSize(11).fontColor('#7FB3DC')
-          .padding({ left: 8, right: 8, top: 2, bottom: 2 })
-          .backgroundColor('rgba(91, 147, 191, 0.15)').borderRadius(UI_RADIUS_CONTROL)
-        Blank()
-        Text(this.objectDetailStore.selectedStatus === 'Selected' && this.viewLock ? I18n.t('view_lock_status_on') : this.selectedStatusZh(this.objectDetailStore.selectedStatus))
-          .fontSize(11).fontColor('#99FFFFFF')
-      }.width('100%').padding({ left: 4, right: 4 }).height(20).margin({ bottom: 8 })
-
-      // 直接绑定 @State（不要经 infoRow 的 @Builder 参数，参数按值捕获会导致不刷新，详见上方注释）
-      if (this.objectDetailStore.selectedMagnitude.length > 0) {
-        Row() {
-          Text(I18n.t('i0007')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.objectDetailStore.selectedMagnitude).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.height(28).width('100%').padding({ left: 10, right: 10 })
-      }
-      if (this.objectDetailStore.selectedCoordEq.length > 0) {
-        Row() {
-          Text(I18n.t('i0008')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.objectDetailStore.selectedCoordEq).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.height(28).width('100%').padding({ left: 10, right: 10 })
-      }
-      if (this.objectDetailStore.selectedCoordAlt.length > 0) {
-        Row() {
-          Text(I18n.t('i0009')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.objectDetailStore.selectedCoordAlt).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.height(28).width('100%').padding({ left: 10, right: 10 })
-      }
-      if (this.objectDetailStore.selectedConstellation.length > 0) {
-        Row() {
-          Text(I18n.t('i0010')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.zhNameOf(this.objectDetailStore.selectedConstellation)).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.height(28).width('100%').padding({ left: 10, right: 10 })
-      }
-      if (this.objectDetailStore.selectedDistance.length > 0) {
-        Row() {
-          Text(I18n.t('i0011')).fontSize(12).fontColor('#99FFFFFF').width(72)
-          Text(this.objectDetailStore.selectedDistance).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.height(28).width('100%').padding({ left: 10, right: 10 })
-      }
-      if (this.objectDetailStore.selectedInfo.length > 0) {
-        Text(this.objectDetailStore.selectedInfo)
-          .fontSize(12)
-          .fontColor('#99FFFFFF')
-          .lineHeight(18)
-          .width('100%')
-          .maxLines(4)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .padding({ left: 10, right: 10, top: 9, bottom: 9 })
-          .backgroundColor('rgba(107, 163, 214, 0.12)')
-          .border({ width: 1, color: this.nmBorder() })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .margin({ top: 8, bottom: 8 })
-      }
-      if (this.fullInspectorRequested) {
-        Divider().color(this.nmBorder()).margin({ top: 8, bottom: 8 })
-        TabletInspectorMediaGroup({
-          store: this.objectMediaStore,
-          detailStore: this.objectDetailStore,
-          isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
-          imageHeight: this.objectInspectorImageHeight(),
-          iconName: this.objectInspectorIcon(),
-          inlineModelSize: this.objectInspectorInlineModelSize(),
-          modelReady: this.objectInspectorModelReady(),
-          modelRendering: this.objectInspectorModelRendering,
-          hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-          modelNotice: this.objectInspectorModelNotice(),
-          warmupText: this.objectInspectorMediaWarmupText(),
-          fallbackKind: this.objectInspectorFallbackVisualKind(),
-          starColor: this.objectInspectorStarColor(),
-          onOpen: () => { this.openObjectInspectorMediaPreview() },
-          onRetry: () => { this.retryObjectInspectorMedia() },
-          onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-          onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
-        })
-        SatellitePassDetails({ store: this.objectDetailStore, tablet: true, visible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(), onLoad: () => { this.loadSelectedSatellitePasses() } })
-        DetailSectionTitle({ title: '坐标参考', tablet: true })
-        SelectedCoordinateRows({ store: this.objectDetailStore, tablet: true })
-        DetailSectionTitle({ title: '实时观测', tablet: true })
-        ObjectDataRow({ label: '时角', value: this.selectedDisplayValue('selectedHourAngle') })
-        ObjectDataRow({ label: '平恒星时', value: this.selectedDisplayValue('selectedMeanSiderealTime') })
-        ObjectDataRow({ label: '视恒星时', value: this.selectedDisplayValue('selectedApparentSiderealTime') })
-        ObjectDataRow({ label: I18n.t('s0700'), value: this.selectedDisplayValue('selectedRise') })
-        ObjectDataRow({ label: I18n.t('s0701'), value: this.selectedDisplayValue('selectedTransit') })
-        ObjectDataRow({ label: I18n.t('s0702'), value: this.selectedDisplayValue('selectedSet') })
-        ObjectDataRow({ label: I18n.t('i0291'), value: this.selectedDisplayValue('selectedPhase') })
-        ObjectDataRow({ label: I18n.t('i0255'), value: this.selectedDisplayValue('selectedElongation') })
-        StructuredDetailRows({ store: this.objectDetailStore, tablet: false })
-      }
-      Row() {
-        Button(this.observingList.includes(this.objectDetailStore.selectedName) ? I18n.t('s0739') : I18n.t('s0738'))
-          .fontSize(13).fontColor("#E5FFFFFF").backgroundColor("rgba(107,163,214,0.25)")
-          .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1)
-          .onClick(() => {
-            if (this.observingList.includes(this.objectDetailStore.selectedName)) {
-              this.observingList = this.observingList.filter((item: string) => item !== this.objectDetailStore.selectedName)
-              this.flashHint(I18n.t('i0079'))
-            } else {
-              this.observingList = this.observingList.concat([this.objectDetailStore.selectedName])
-              this.flashHint(I18n.t('i0080'))
-            }
-            this.persistObservingList()
-          })
-      }
-      .width("100%").margin({ top: 4, bottom: 4 })
-      QuickChipRow({ items: [
-        { id: 'refresh', label: I18n.t('s0721') },
-        { id: 'center', label: I18n.t('s0741') },
-        { id: this.viewLock ? 'unlock-view' : 'lock-view', label: this.viewLock ? I18n.t('btn_unlock_view') : I18n.t('btn_lock_view') }
-      ], onChip: (id: string) => { this.handleChip(id) } })
-      Row({ space: 6 }) {
-        Button(I18n.t('i0134')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object') })
-        Button(I18n.t('s0760')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.speakSelectedObject() })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ top: 4, bottom: 4 })
-      if (this.speechStatus.length > 0) {
-        Text(this.speechStatus).fontSize(10).fontColor('#FFAA00').width('100%').padding({ left: 4, right: 4 })
-      }
-		      if (!OFFLINE_APPGALLERY_BUILD) {
-		        Lx200ObjectControls({
-          store: this.telescopeStore,
-          onGoto: () => { this.lx200GotoSelected() },
-          onSync: () => { this.lx200SyncSelected() },
-          onAbort: () => { this.lx200Abort() }
-        })
-		      }
-      } // end object selectedName else
+      ObjectPanel({
+        objectDetailStore: this.objectDetailStore,
+        objectMediaStore: this.objectMediaStore,
+        telescopeStore: this.telescopeStore,
+        fullInspectorRequested: this.fullInspectorRequested,
+        viewLock: this.viewLock,
+        speechStatus: this.speechStatus,
+        observingList: this.observingList,
+        isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
+        imageHeight: this.objectInspectorImageHeight(),
+        iconName: this.objectInspectorIcon(),
+        inlineModelSize: this.objectInspectorInlineModelSize(),
+        modelReady: this.objectInspectorModelReady(),
+        modelRendering: this.objectInspectorModelRendering,
+        hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+        modelNotice: this.objectInspectorModelNotice(),
+        warmupText: this.objectInspectorMediaWarmupText(),
+        fallbackKind: this.objectInspectorFallbackVisualKind(),
+        starColor: this.objectInspectorStarColor(),
+        satVisible: this.selectedObjectIsArtificialSatellite(),
+        tleEpoch: this.selectedSatelliteTleEpoch(),
+        textColor: this.nmText(),
+        panelColor: this.nmBg(),
+        borderTint: this.nmBorder(),
+        accentColor: this.nmAccent(),
+        nameOf: (raw: string) => this.zhNameOf(raw),
+        typeOf: (type: string) => this.zhType(type),
+        statusOf: (en: string) => this.selectedStatusZh(en),
+        displayValue: (key: string) => this.selectedDisplayValue(key),
+        onChip: (id: string) => { this.handleChip(id) },
+        onToggleObserving: () => {
+          if (this.observingList.includes(this.objectDetailStore.selectedName)) {
+            this.observingList = this.observingList.filter((item: string) => item !== this.objectDetailStore.selectedName)
+            this.flashHint(I18n.t('i0079'))
+          } else {
+            this.observingList = this.observingList.concat([this.objectDetailStore.selectedName])
+            this.flashHint(I18n.t('i0080'))
+          }
+          this.persistObservingList()
+        },
+        onGotoReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object') },
+        onSpeak: () => { this.speakSelectedObject() },
+        onOpenMedia: () => { this.openObjectInspectorMediaPreview() },
+        onRetryMedia: () => { this.retryObjectInspectorMedia() },
+        onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+        onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+        onLoadSatPasses: () => { this.loadSelectedSatellitePasses() },
+        onGoto: () => { this.lx200GotoSelected() },
+        onSync: () => { this.lx200SyncSelected() },
+        onAbort: () => { this.lx200Abort() }
+      })
     } else if (this.activePanel === 'time') {
       // 观测时间/速率已移入面板标题栏副标题（panelSubtitle() 在 Builder 内直接读 @State，
       // 不经参数传递，变化可正常触发重建）；面板首屏直接给时间转轴与时间控制按钮
@@ -18838,115 +18749,62 @@ private loadPlanetPositions(): void {
       }
       .width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else if (this.activePanel === 'search') {
-      Scroll(this.searchPanelScroller) {
-        Column({ space: 0 }) {
-      Column() {
-        SearchBar({
-          store: this.searchStore,
-          onInput: (value: string) => { this.scheduleSuggestions(value.trim()) },
-          onSubmit: (text: string) => {
-            if (this.searchSuggestionTimer >= 0) {
-              clearTimeout(this.searchSuggestionTimer)
-              this.searchSuggestionTimer = -1
-            }
-            this.searchObject(text)
-            this.searchStore.searchSuggestions = []
-          },
-          onInputFocus: () => {
-            // 手机上把候选结果留在软键盘之上；用户仍可把面板拖回 6/10 吸附点。
-            if (!this.isExpandedLayout && !this.isFoldHoverLayout && this.compactPanelSnapRatio < 0.9) {
-              this.getUIContext().animateTo({ duration: 260, curve: curves.springMotion(0.48, 0.90) }, () => {
-                this.compactPanelSnapRatio = 0.9
-                this.compactPanelDragOffsetY = 0
-              })
-              this.scheduleSelectedObjectForUiChange(300)
-            }
-          }
-        })
-      }
-        .width('100%')
-        .padding({ left: 2, right: 2 })
-        .margin({ top: 2, bottom: 12 })
-      if (this.searchStore.searchFilterPage.length > 0) {
-        SearchFilterMenu({
-          store: this.searchStore,
-          visibilityLabel: this.searchVisibilityLabel(),
-          instrumentLabel: this.searchInstrumentLabel(),
-          categories: this.searchAllCategoryOptions(),
-          languageRevision: this.languageRevision,
-          textColor: this.nmText(),
-          subColor: this.nmSub(),
-          panelColor: this.nmBg(),
-          onSetPage: (page: string) => { this.setSearchFilterPage(page) },
-          onSelectCategory: (code: string) => { this.selectSearchFilterCategory(code) },
-          onSelectVisibility: (filter: string) => { this.selectSearchVisibilityFilter(filter) },
-          onSelectInstrument: (filter: string) => { this.selectSearchInstrumentFilter(filter) }
-        })
-      } else if (this.searchStore.searchText.trim().length > 0) {
-        SearchSuggestions({
-          store: this.searchStore,
-          textColor: this.nmText(),
-          subColor: this.nmSub(),
-          panelColor: this.nmBg(),
-          subtitleFor: (title: string, englishName: string) => { return this.celestialSubtitle(title, englishName) },
-          onSelect: (item: SearchSug) => { this.selectSearchSuggestion(item) }
-        })
-      } else {
-        SearchCategoryBrowse({
-          store: this.searchStore,
-          categoryIconKey: this.searchCategoryIcon(this.searchStore.searchCategory),
-          categoryLabel: this.searchCategoryLabel(),
-          visibilityLabel: this.searchVisibilityLabel(),
-          instrumentLabel: this.searchInstrumentLabel(),
-          languageRevision: this.languageRevision,
-          textColor: this.nmText(),
-          subColor: this.nmSub(),
-          panelColor: this.nmBg(),
-          iconFor: (item: NameItem) => { return this.categoryObjectIcon(item) },
-          subtitleFor: (item: NameItem) => { return this.categoryObservationSubtitle(item) },
-          onOpenCategories: () => { this.setSearchFilterPage('categories') },
-          onOpenFilters: () => { this.setSearchFilterPage('root') },
-          onRetry: () => { this.loadCategoryObjects(this.searchStore.searchCategory) },
-          onLoadMore: () => { this.loadMoreCategoryObjects() },
-          onSelectObject: (item: NameItem) => {
-            if (this.searchStore.searchCategory === 'constellation') {
-              this.openConstellationGuide(item.name ?? '', this.searchStore.categoryModuleId)
-            } else {
-              this.searchObject(item.name ?? '', this.searchStore.categoryModuleId)
-            }
-          },
-          onClearVisibility: () => { this.selectSearchVisibilityFilter('all') },
-          onClearInstrument: () => { this.selectSearchInstrumentFilter('all') }
-        })
-      }
-
-      if (this.searchStore.searchFilterPage.length === 0) {
-      // 常见星座快速导航 + RA/Dec 坐标跳转（均为独立组件）
-      SearchConstellationChips({
+      SearchPanel({
         store: this.searchStore,
         languageRevision: this.languageRevision,
+        visibilityLabel: this.searchVisibilityLabel(),
+        instrumentLabel: this.searchInstrumentLabel(),
+        categories: this.searchAllCategoryOptions(),
+        categoryIconKey: this.searchCategoryIcon(this.searchStore.searchCategory),
+        categoryLabel: this.searchCategoryLabel(),
         textColor: this.nmText(),
         subColor: this.nmSub(),
         panelColor: this.nmBg(),
-        onOpen: (item: ConstellationNavigationItem) => { this.openConstellationGuide(item.englishName, 'ConstellationMgr', item.localizedName) }
-      })
-      SearchCoordinateInput({
-        store: this.searchStore,
-        textColor: this.nmText(),
-        subColor: this.nmSub(),
         inputColor: this.nmInput(),
-        onGo: () => { this.goToCoordinates() }
+        scroller: this.searchPanelScroller,
+        onInput: (value: string) => { this.scheduleSuggestions(value.trim()) },
+        onSubmit: (text: string) => {
+          if (this.searchSuggestionTimer >= 0) {
+            clearTimeout(this.searchSuggestionTimer)
+            this.searchSuggestionTimer = -1
+          }
+          this.searchObject(text)
+          this.searchStore.searchSuggestions = []
+        },
+        onInputFocus: () => {
+          // 手机上把候选结果留在软键盘之上；用户仍可把面板拖回 6/10 吸附点。
+          if (!this.isExpandedLayout && !this.isFoldHoverLayout && this.compactPanelSnapRatio < 0.9) {
+            this.getUIContext().animateTo({ duration: 260, curve: curves.springMotion(0.48, 0.90) }, () => {
+              this.compactPanelSnapRatio = 0.9
+              this.compactPanelDragOffsetY = 0
+            })
+            this.scheduleSelectedObjectForUiChange(300)
+          }
+        },
+        onSetPage: (page: string) => { this.setSearchFilterPage(page) },
+        onSelectCategory: (code: string) => { this.selectSearchFilterCategory(code) },
+        onSelectVisibility: (filter: string) => { this.selectSearchVisibilityFilter(filter) },
+        onSelectInstrument: (filter: string) => { this.selectSearchInstrumentFilter(filter) },
+        suggestionSubtitle: (title: string, englishName: string) => { return this.celestialSubtitle(title, englishName) },
+        onSelectSuggestion: (item: SearchSug) => { this.selectSearchSuggestion(item) },
+        iconFor: (item: NameItem) => { return this.categoryObjectIcon(item) },
+        categorySubtitle: (item: NameItem) => { return this.categoryObservationSubtitle(item) },
+        onOpenCategories: () => { this.setSearchFilterPage('categories') },
+        onOpenFilters: () => { this.setSearchFilterPage('root') },
+        onRetry: () => { this.loadCategoryObjects(this.searchStore.searchCategory) },
+        onLoadMore: () => { this.loadMoreCategoryObjects() },
+        onSelectCategoryObject: (item: NameItem) => {
+          if (this.searchStore.searchCategory === 'constellation') {
+            this.openConstellationGuide(item.name ?? '', this.searchStore.categoryModuleId)
+          } else {
+            this.searchObject(item.name ?? '', this.searchStore.categoryModuleId)
+          }
+        },
+        onClearVisibility: () => { this.selectSearchVisibilityFilter('all') },
+        onClearInstrument: () => { this.selectSearchInstrumentFilter('all') },
+        onOpenConstellation: (item: ConstellationNavigationItem) => { this.openConstellationGuide(item.englishName, 'ConstellationMgr', item.localizedName) },
+        onGoCoordinates: () => { this.goToCoordinates() }
       })
-      }
-        }.width('100%')
-      }
-      .width('100%').layoutWeight(1).scrollable(ScrollDirection.Vertical)
-      .scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-      .align(Alignment.TopStart)
-      .id('search-browser-scroll').onScroll(() => {
-        AppStorage.setOrCreate('stellariumSearchBrowserScrollY', this.searchPanelScroller.currentOffset()?.yOffset ?? 0)
-      })
-
     } else if (this.activePanel === 'settings') {
       Column() {
         Scroll() {
@@ -21721,185 +21579,65 @@ private loadPlanetPositions(): void {
         onSetSetting: (setting: string, value: string) => { this.setNavStarsSetting(setting, value) }
       })
     } else if (this.activePanel === 'satellites') {
-      // 卫星：离线数据状态、检索、显示开关与分组
-      Scroll(this.satellitePanelScroller) {
-        Column({ space: 10 }) {
-          Column({ space: 3 }) {
-            Text(this.satOffline ? '离线内置轨道数据' : '在线轨道数据')
-              .fontSize(13).fontColor(this.satOffline ? '#B7D8F0' : '#FFE5A6').fontWeight(FontWeight.Medium)
-            if (this.satNewestUpdate.length > 0) {
-              Text('目录更新时间：' + this.satNewestUpdate.replace('T', ' ').replace('Z', ' UTC'))
-                .fontSize(11).fontColor('#99FFFFFF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            if (this.satCatalogCreator.length > 0) {
-              Text('原版目录：' + this.satCatalogCreator).fontSize(10).fontColor('#88FFFFFF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            if (this.satCatalogSnapshot.length > 0) {
-              Text('内置快照：' + this.satCatalogSnapshot.replace('T', ' ').replace('Z', ' UTC')).fontSize(10).fontColor('#88FFFFFF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            if (this.satCatalogSource.length > 0) {
-              Text(I18n.t('resource_source') + ': ' + this.satCatalogSource).fontSize(9).fontColor('#66FFFFFF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            Text(this.catalogHealthText('卫星目录', this.satelliteCatalogHealth))
-              .fontSize(11).fontColor(this.catalogHealthColor(this.satelliteCatalogHealth)).maxLines(2)
-            if (this.satOutdatedCount > 0 || !this.satDateInRange || !this.satObserverIsEarth) {
-              Text(!this.satObserverIsEarth ? '人造卫星仅支持地球观测位置' : (!this.satDateInRange ? '当前模拟日期超出内置轨道数据范围' : '部分轨道历元可能已过期'))
-                .fontSize(11).fontColor('#FFE1A6').maxLines(2)
-            }
-          }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor('rgba(111, 168, 207, 0.12)').borderRadius(UI_RADIUS_CONTROL)
-          Column({ space: 7 }) {
-            Row() {
-              Text(I18n.t('sat_sources_title')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-              Text(this.satSources.length.toString()).fontSize(11).fontColor('#99FFFFFF')
-            }.width('100%')
-            Text(I18n.t('sat_sources_offline_hint')).fontSize(10).fontColor('#99FFFFFF').width('100%').maxLines(3)
-            if (this.satSources.length > 0) {
-              ForEach(this.satSources, (source: SatelliteSource, sourceIndex: number) => {
-                Row({ space: 6 }) {
-                  Column({ space: 2 }) {
-                    Text((source.local ? I18n.t('sat_source_local') : I18n.t('sat_source_remote')) + ' · ' + source.scheme.toUpperCase())
-                      .fontSize(11).fontColor(source.valid ? '#DCEEFF' : '#FFE1A6').maxLines(1)
-                    Text(source.url).fontSize(9).fontColor('#88FFFFFF').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-                  }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                  if (source.addNew) Text(I18n.t('sat_source_add_new')).fontSize(9).fontColor('#B7D8F0')
-                  Button(I18n.t('sat_source_delete')).fontSize(10).fontColor('#FFE1A6').backgroundColor('rgba(180,60,50,0.22)')
-                    .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
-                    .onClick(() => { this.deleteSatelliteSource(sourceIndex) })
-                }.width('100%').padding({ left: 8, right: 8, top: 6, bottom: 6 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-              }, (source: SatelliteSource) => source.index.toString() + ':' + source.url)
-            }
-            TextInput({ text: this.satSourceInput, placeholder: I18n.t('sat_source_placeholder') })
-              .height(36).fontSize(11).fontColor('#E5FFFFFF').placeholderColor(this.nmSub()).width('100%')
-              .backgroundColor(this.nmInput()).border({ width: 1, color: 'rgba(214, 238, 255, 0.14)' }).borderRadius(UI_RADIUS_CONTROL)
-              .onChange((value: string) => { this.satSourceInput = value })
-            Row({ space: 6 }) {
-              Toggle({ type: ToggleType.Switch, isOn: this.satSourceAddNew }).width(42).height(24)
-                .onChange((value: boolean) => { this.satSourceAddNew = value })
-              Text(I18n.t('sat_source_add_new')).fontSize(10).fontColor('#B7D8F0').layoutWeight(1)
-              Button(I18n.t('sat_source_add')).fontSize(11).fontColor('#E1F2FA').backgroundColor('rgba(91,147,191,0.34)')
-                .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.addSatelliteSource() })
-            }.width('100%')
-            Row({ space: 6 }) {
-              Button(I18n.t('sat_refresh')).fontSize(10).fontColor('#E1F2FA').backgroundColor('rgba(91,147,191,0.25)')
-                .borderRadius(UI_RADIUS_CONTROL).height(30).layoutWeight(1).onClick(() => { this.refreshSatelliteCatalog() })
-              TextInput({ text: this.satTleFileInput, placeholder: I18n.t('sat_tle_path_placeholder') }).height(30).fontSize(10)
-                .fontColor('#E5FFFFFF').placeholderColor(this.nmSub()).backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).layoutWeight(2)
-                .onChange((value: string) => { this.satTleFileInput = value })
-              Button(I18n.t('sat_tle_import')).fontSize(10).fontColor('#E1F2FA').backgroundColor('rgba(91,147,191,0.25)')
-                .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 8, right: 8 }).onClick(() => { this.importSatelliteTleFile() })
-            }.width('100%')
-            Row() {
-              Text(I18n.t('sat_auto_add')).fontSize(11).fontColor('#E5FFFFFF').layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.satUpdateSettings.autoAddEnabled }).width(42).height(24)
-                .onChange((value: boolean) => { this.setSatelliteUpdateSetting('autoAddEnabled', value) })
-            }.width('100%')
-            Row() {
-              Text(I18n.t('sat_auto_remove')).fontSize(11).fontColor('#E5FFFFFF').layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.satUpdateSettings.autoRemoveEnabled }).width(42).height(24)
-                .onChange((value: boolean) => { this.setSatelliteUpdateSetting('autoRemoveEnabled', value) })
-            }.width('100%')
-            Row() {
-              Text(I18n.t('sat_auto_display')).fontSize(11).fontColor('#E5FFFFFF').layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.satUpdateSettings.autoDisplayEnabled }).width(42).height(24)
-                .onChange((value: boolean) => { this.setSatelliteUpdateSetting('autoDisplayEnabled', value) })
-            }.width('100%')
-            Row({ space: 6 }) {
-              Text(I18n.t('sat_update_frequency')).fontSize(11).fontColor('#E5FFFFFF').layoutWeight(1)
-              TextInput({ text: this.satUpdateFrequencyInput, placeholder: '72' }).height(30).fontSize(11)
-                .fontColor('#E5FFFFFF').backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).width(66)
-                .onChange((value: string) => { this.satUpdateFrequencyInput = value })
-                .onSubmit(() => {
-                  const hours = Number(this.satUpdateFrequencyInput)
-                  if (Number.isFinite(hours)) this.setSatelliteUpdateSetting('updateFrequencyHours', Math.round(hours))
-                })
-              Text(I18n.t('sat_hours')).fontSize(10).fontColor('#99FFFFFF')
-            }.width('100%')
-            Row() {
-              Text(I18n.t('sat_online_updates')).fontSize(11).fontColor('#E5FFFFFF').layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.satUpdateSettings.updatesEnabled })
-                .enabled(!this.satOffline).width(42).height(24)
-                .onChange((value: boolean) => { this.setSatelliteUpdateSetting('updatesEnabled', value) })
-            }.width('100%')
-            if (this.satSourceStatus.length > 0) Text(this.satSourceStatus).fontSize(10).fontColor('#C9E8FF').width('100%').maxLines(3)
-          }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor('rgba(111, 168, 207, 0.08)').borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_total_count')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Text(this.satCount.toString()).fontSize(13).fontColor('#99FFFFFF')
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_show_labels')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.satLabels })
-              .onChange((isOn: boolean) => { this.setSatelliteFlag('labels', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_show_orbits')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.satOrbitLines })
-              .onChange((isOn: boolean) => { this.setSatelliteFlag('orbitLines', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Text(I18n.t('sat_orbit_preview_hint')).fontSize(11).fontColor(this.nmSub()).width('100%')
-          Row() {
-            Text(I18n.t('c_show_hints')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.satHints })
-              .onChange((isOn: boolean) => { this.setSatelliteFlag('hints', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_icon_mode')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.satIconicMode })
-              .onChange((isOn: boolean) => { this.setSatelliteFlag('iconicMode', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_hide_invisible')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.satHideInvisible })
-              .onChange((isOn: boolean) => { this.setSatelliteFlag('hideInvisible', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          SatelliteGroupSelector({
-            groups: this.satGroups,
-            activeGroup: this.activeSatGroup,
-            loading: this.satelliteListLoading,
-            subColor: this.nmSub(),
-            accentColor: this.nmAccent(),
-            textColor: this.nmText(),
-            bgColor: this.nmBg(),
-            scroller: this.satelliteGroupScroller,
-            onGroupScroll: () => { this.publishSatellitePanelState() },
-            onSelect: (group: string) => { this.selectSatelliteGroup(group) }
-          })
-          TextInput({ text: this.satQuery, placeholder: '搜索卫星名称或 NORAD 编号' })
-            .height(36).fontSize(13).fontColor('#E5FFFFFF').placeholderColor(this.nmSub())
-            .backgroundColor(this.nmInput()).border({ width: 1, color: 'rgba(214, 238, 255, 0.14)' }).borderRadius(UI_RADIUS_CONTROL)
-            .width('100%')
-            .onChange((value: string) => {
-              this.satQuery = value
-              this.loadSatellites()
-            })
-            .onSubmit(() => { this.loadSatellites(false, true) })
-          if (this.satItems.length > 0) {
-            Text('匹配卫星 ' + this.satMatchedCount.toString() + ' 颗').fontSize(12).fontColor('#99FFFFFF').width('100%').padding({ left: 2 })
-            ForEach(this.satItems, (item: SatelliteListItem) => {
-              Column({ space: 3 }) {
-                Row({ space: 8 }) {
-                  Column({ space: 1 }) {
-                    Text(item.name).fontSize(13).fontColor('#E5FFFFFF').fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    if (item.englishName !== item.name) {
-                      Text(item.englishName).fontSize(10).fontColor('#99FFFFFF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }
-                  }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                  if (item.outdated) {
-                    Text('历元过期').fontSize(10).fontColor('#FFE1A6')
-                  }
-                }.width('100%')
-                Text('NORAD ' + item.id + (item.heightKm > 0 ? ' · 高度 ' + item.heightKm.toFixed(0) + ' km' : ''))
-                  .fontSize(10).fontColor('#88FFFFFF').maxLines(1)
-              }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => { this.searchObject(item.name, '', 'object|Satellite|' + item.id) })
-            }, (item: SatelliteListItem) => item.id)
-          } else if (this.satQuery.length > 0) {
-            Text('未找到匹配的内置卫星').fontSize(12).fontColor('#99FFFFFF').width('100%').padding({ left: 4, top: 4, bottom: 4 })
-          }
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-        .onScroll(() => { this.publishSatellitePanelState() })
-        } else if (this.activePanel === 'meteorshowers') {
+      SatellitesPanel({
+        satOffline: this.satOffline,
+        satNewestUpdate: this.satNewestUpdate,
+        satCatalogCreator: this.satCatalogCreator,
+        satCatalogSnapshot: this.satCatalogSnapshot,
+        satCatalogSource: this.satCatalogSource,
+        satelliteCatalogHealth: this.satelliteCatalogHealth,
+        satOutdatedCount: this.satOutdatedCount,
+        satDateInRange: this.satDateInRange,
+        satObserverIsEarth: this.satObserverIsEarth,
+        satSources: this.satSources,
+        satSourceInput: this.satSourceInput,
+        satSourceAddNew: this.satSourceAddNew,
+        satTleFileInput: this.satTleFileInput,
+        satUpdateSettings: this.satUpdateSettings,
+        satUpdateFrequencyInput: this.satUpdateFrequencyInput,
+        satSourceStatus: this.satSourceStatus,
+        satCount: this.satCount,
+        satLabels: this.satLabels,
+        satOrbitLines: this.satOrbitLines,
+        satHints: this.satHints,
+        satIconicMode: this.satIconicMode,
+        satHideInvisible: this.satHideInvisible,
+        satGroups: this.satGroups,
+        activeSatGroup: this.activeSatGroup,
+        satelliteListLoading: this.satelliteListLoading,
+        satQuery: this.satQuery,
+        satItems: this.satItems,
+        satMatchedCount: this.satMatchedCount,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        panelColor: this.nmBg(),
+        inputColor: this.nmInput(),
+        accentColor: this.nmAccent(),
+        panelScroller: this.satellitePanelScroller,
+        groupScroller: this.satelliteGroupScroller,
+        onPublishState: () => { this.publishSatellitePanelState() },
+        catalogHealthTextOf: (title: string, health: CatalogHealthEntry) => this.catalogHealthText(title, health),
+        catalogHealthColorOf: (health: CatalogHealthEntry) => this.catalogHealthColor(health),
+        onDeleteSource: (index: number) => { this.deleteSatelliteSource(index) },
+        onSourceInput: (value: string) => { this.satSourceInput = value },
+        onSourceAddNew: (value: boolean) => { this.satSourceAddNew = value },
+        onAddSource: () => { this.addSatelliteSource() },
+        onRefreshCatalog: () => { this.refreshSatelliteCatalog() },
+        onTleFileInput: (value: string) => { this.satTleFileInput = value },
+        onImportTle: () => { this.importSatelliteTleFile() },
+        onSetUpdateSetting: (key: string, value: boolean | number) => { this.setSatelliteUpdateSetting(key, value) },
+        onUpdateFrequencyInput: (value: string) => { this.satUpdateFrequencyInput = value },
+        onSubmitUpdateFrequency: () => {
+          const hours = Number(this.satUpdateFrequencyInput)
+          if (Number.isFinite(hours)) this.setSatelliteUpdateSetting('updateFrequencyHours', Math.round(hours))
+        },
+        onSetFlag: (flag: string, isOn: boolean) => { this.setSatelliteFlag(flag, isOn) },
+        onSelectGroup: (group: string) => { this.selectSatelliteGroup(group) },
+        onQueryChange: (value: string) => { this.satQuery = value; this.loadSatellites() },
+        onSubmitQuery: () => { this.loadSatellites(false, true) },
+        onSearchObject: (item: SatelliteListItem) => { this.searchObject(item.name, '', 'object|Satellite|' + item.id) }
+      })
+    } else if (this.activePanel === 'meteorshowers') {
       MeteorShowersPanel({
         msEnabled: this.msEnabled,
         msLabels: this.msLabels,
@@ -22227,117 +21965,37 @@ private loadPlanetPositions(): void {
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 16 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else if (this.activePanel === 'observing') {
-      Column({ space: 8 }) {
-          Row({ space: 8 }) {
-            Text(I18n.t('panel_observing_list')).fontSize(15).fontColor(this.nmText()).layoutWeight(1)
-            if (this.observingListReady) {
-              Text(I18n.t('observing_list_saved')).fontSize(9).fontColor(this.nmSub()).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            Button(I18n.t('dock_search')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
-              .onClick(() => { this.openSubPanel('search') })
-            if (this.observingList.length > 0) {
-              Button(I18n.t('clear_all')).fontSize(11).fontColor('#FF6B6B').backgroundColor('rgba(255,107,107,0.12)')
-                .borderRadius(UI_RADIUS_PILL).height(26).padding({ left: 10, right: 10 })
-                .onClick(() => {
-                  this.observingList = []
-                  this.persistObservingList()
-                  this.flashHint(I18n.t('i0302'))
-                })
-            }
-          }.width('100%').padding({ left: 4, right: 4 })
-          Text(I18n.t('i0130')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 4 }).margin({ top: 2 })
-          Row({ space: 6 }) {
-            ForEach(['planets', 'stars', 'messier'], (category: string) => {
-              Text(category === 'planets' ? I18n.t('s0743') : (category === 'stars' ? I18n.t('s0744') : '梅西耶'))
-                .fontSize(10).fontColor(this.wutStore.wutCategory === category ? this.nmText() : this.nmSub())
-                .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-                .backgroundColor(this.wutStore.wutCategory === category ? this.nmAccent() : this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => {
-                  if (this.wutStore.wutCategory !== category) {
-                    this.wutStore.wutCategory = category
-                    this.loadWutTargets()
-                  }
-                })
-            }, (category: string) => category)
-            Text('').layoutWeight(1)
-            Button(I18n.t('observing_refresh')).fontSize(10).fontColor(this.nmSub()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-              .onClick(() => { this.loadWutTargets() })
-          }.width('100%').padding({ left: 4, right: 4 })
-          if (this.wutStore.wutLoading) {
-            Row({ space: 8 }) {
-              LoadingProgress().width(20).height(20).color(this.nmAccent())
-              Text(this.wutStore.wutProgress.length > 0 ? this.wutStore.wutProgress : I18n.t('observing_loading')).fontSize(11).fontColor(this.nmSub())
-            }.width('100%').padding({ left: 8, top: 7, bottom: 7 })
-          } else if (this.wutStore.wutTargets.length > 0) {
-            ForEach(this.wutStore.wutTargets.slice(0, 5), (target: WutTarget) => {
-              Row({ space: 9 }) {
-                Column({ space: 2 }) {
-                  Row({ space: 6 }) {
-                    Text(this.wutTargetTitle(target)).fontSize(13).fontColor(this.nmText()).fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    Text(this.zhType(target.type ?? '')).fontSize(9).fontColor(this.nmSub()).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }.width('100%')
-                  if (this.wutTargetSubtitle(target).length > 0) {
-                    Text(this.wutTargetSubtitle(target)).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }
-                  Text('高度 ' + (target.altitude ?? 0).toFixed(0) + '°  方位 ' + (target.azimuth ?? 0).toFixed(0) + '°  ' + (target.magnitude ?? 0).toFixed(1) + ' 等')
-                    .fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(1)
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                Button(I18n.t('btn_center')).fontSize(10).fontColor(this.nmAccent()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_CONTROL).height(29).padding({ left: 8, right: 8 })
-                  .onClick(() => { this.jumpToWutTarget(target) })
-                if (this.observingList.includes(target.englishName ?? '')) {
-                  Text(I18n.t('s0739')).fontSize(10).fontColor(this.nmAccent()).padding({ left: 5, right: 5, top: 7, bottom: 7 })
-                } else {
-                  Button(I18n.t('s0738')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                    .borderRadius(UI_RADIUS_CONTROL).height(29).padding({ left: 9, right: 9 })
-                    .onClick(() => { this.addWutTargetToObservingList(target) })
-                }
-              }.width('100%').padding({ left: 10, right: 8, top: 8, bottom: 8 })
-                .backgroundColor(this.nmBg()).border({ width: 1, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL)
-            }, (target: WutTarget, index: number) => target.englishName ?? index.toString())
-          } else if (this.wutStore.wutHint.length > 0) {
-            Text(this.wutStore.wutHint).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8, top: 8, bottom: 8 })
+      ObservingPanel({
+        wutStore: this.wutStore,
+        observingList: this.observingList,
+        observingListReady: this.observingListReady,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        panelColor: this.nmBg(),
+        borderTint: this.nmBorder(),
+        accentColor: this.nmAccent(),
+        onOpenSearch: () => { this.openSubPanel('search') },
+        onClearAll: () => {
+          this.observingList = []
+          this.persistObservingList()
+          this.flashHint(I18n.t('i0302'))
+        },
+        onSelectCategory: (category: string) => {
+          if (this.wutStore.wutCategory !== category) {
+            this.wutStore.wutCategory = category
+            this.loadWutTargets()
           }
-          Text(I18n.t('panel_observing_list') + ' (' + this.observingList.length.toString() + ')')
-            .fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 4 }).margin({ top: 8 })
-          if (!this.observingListReady) {
-            Row({ space: 8 }) {
-              LoadingProgress().width(18).height(18).color(this.nmAccent())
-              Text(I18n.t('observing_list_loading')).fontSize(11).fontColor(this.nmSub())
-            }.width('100%').height(100).justifyContent(FlexAlign.Center)
-          } else if (this.observingList.length === 0) {
-            Column() {
-              Text(I18n.t('obs_list_empty')).fontSize(13).fontColor('#99FFFFFF').margin({ top: 12 })
-              Button(I18n.t('dock_search')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 12, right: 12 }).margin({ top: 8 })
-                .onClick(() => { this.openSubPanel('search') })
-            }.width('100%').height(140).justifyContent(FlexAlign.Center)
-          } else {
-            ForEach(this.observingList, (name: string) => {
-              Row({ space: 8 }) {
-                Column({ space: 2 }) {
-                Text(this.observingDisplayName(name)).fontSize(14).fontColor('#E5FFFFFF').fontWeight(FontWeight.Medium)
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                Button(I18n.t('btn_center')).fontSize(11).fontColor('#5B93BF').backgroundColor('rgba(91,147,191,0.18)')
-                  .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
-                  .onClick(() => { this.searchObject(name) })
-                Button(I18n.t('observing_remove')).fontSize(10).fontColor(this.nmSub()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
-                  .onClick(() => { this.removeObservingTarget(name) })
-              }
-              .width('100%')
-              .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-              .backgroundColor('rgba(255,255,255,0.04)')
-              .borderRadius(UI_RADIUS_CONTROL)
-              .border({ width: 1, color: this.nmBorder() })
-              .onClick(() => { this.searchObject(name) })
-            }, (name: string) => name)
-          }
-        }.width('100%').padding({ left: 4, right: 4 })
+        },
+        onRefreshTargets: () => { this.loadWutTargets() },
+        onJumpTarget: (target: WutTarget) => { this.jumpToWutTarget(target) },
+        onAddTarget: (target: WutTarget) => { this.addWutTargetToObservingList(target) },
+        onRemoveTarget: (name: string) => { this.removeObservingTarget(name) },
+        onSearchName: (name: string) => { this.searchObject(name) },
+        targetTitleOf: (target: WutTarget) => this.wutTargetTitle(target),
+        targetSubtitleOf: (target: WutTarget) => this.wutTargetSubtitle(target),
+        typeOf: (type: string) => this.zhType(type),
+        displayNameOf: (name: string) => this.observingDisplayName(name)
+      })
     } else if (this.activePanel === 'telescope') {
       Scroll() {
         Column({ space: 8 }) {
