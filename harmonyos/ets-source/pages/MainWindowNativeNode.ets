@@ -440,7 +440,11 @@ class HostMediaPort implements MediaPort {
   }
 
   makeDir(path: string): void {
-    fileIo.mkdirSync(path, true)
+    // 目标目录已存在时 fileIo.mkdirSync(path, true) 仍会抛 EEXIST("File exists")，
+    // 未捕获会中断整个屏幕录制启动（表现为“没有生成有效视频”）。建目录只需 best-effort。
+    try { fileIo.mkdirSync(path, true) } catch (error) {
+      hilog.warn(0x0000, 'StellariumArkUI', 'makeDir failed path=%{public}s err=%{public}s', path, String(error))
+    }
   }
 
   fileSize(path: string): number {
