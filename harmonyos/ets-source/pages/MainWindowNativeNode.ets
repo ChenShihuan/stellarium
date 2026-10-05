@@ -35,7 +35,7 @@ import {
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot, gyroMagneticHeadingFromDeviceVectors } from '../common/derive/gyro'
 import { dateToJD, jdToLocalTimeText, graphModeLabel, graphStartOptionLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointColor, hecLayoutPositions, hecPointLeft, hecPointTop, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle } from '../common/derive/labels'
-import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
+import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
@@ -75,6 +75,7 @@ import { TimeController, TimeHostHooks } from '../capability/TimeController'
 import { SkyCultureController, SkyCultureHostHooks } from '../capability/SkyCultureController'
 import { SkyCultureMakerController, SkyCultureMakerHostHooks } from '../capability/SkyCultureMakerController'
 import { BehaviorHostHooks } from '../capability/ControllerHooks'
+import { SettingsController, SettingsHostHooks } from '../capability/SettingsController'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
@@ -236,7 +237,7 @@ import {
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
   MeteorShowersData, LogResponse,
-  ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
+  ScreenshotResponse, SpokenTextResponse, RecordCmd,
   RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptCaption,
   CommandCatalogEntry
 } from './MainWindowModels'
@@ -1043,6 +1044,8 @@ export struct WindowNativeNode {
   private scriptPlaybackControllerImpl: ScriptPlaybackController | null = null
   // D4：时间操作控制器（惰性构造；状态在 time/timeSettings/deltaT store，时间面板定时器自持）。
   private timeControllerImpl: TimeController | null = null
+  // E3：设置面板选项 / 配置行为控制器（惰性构造；状态在 infoWindow/timeSettings/navigation/view/ephemeris/objectDetail/tools/atmosphere store）。
+  private settingsControllerImpl: SettingsController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -2246,7 +2249,7 @@ export struct WindowNativeNode {
           this.applySelectedObject(result, fromRefresh, placement, userReselect)
         },
         setPanel: (panel: string): void => { this.setPanel(panel) },
-        applyAtmosphereResponse: (result: StellariumBridgeResponse): void => { this.applyAtmosphereResponse(result) }
+        applyAtmosphereResponse: (result: StellariumBridgeResponse): void => { this.settingsCtl().applyAtmosphereResponse(result) }
       }
       this.astroCalcControllerImpl = new AstroCalcController(
         this.commandPort(), this.hostMediaPort, this.astroStore, this.ephemerisStore, this.wutStore, this.searchStore, hooks)
@@ -2376,6 +2379,38 @@ export struct WindowNativeNode {
         this.timeStore, this.timeSettingsStore, this.deltaTStore, this.commandPort(), hooks)
     }
     return this.timeControllerImpl
+  }
+
+  // E3：设置面板选项 / 配置行为控制器惰性构造。桥经 HostCommandPort；可观测状态写各域 store；
+  // SelectionService 保留族（applySelectedInfoMode / refreshSelectedObject）、宿主 @State
+  // （setCurrentProjection）、保存动作、时间设置写回与导出剪贴板经 hooks 回注。
+  private settingsCtl(): SettingsController {
+    if (this.settingsControllerImpl === null) {
+      const hooks: SettingsHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        applySelectedInfoMode: (mode: string): void => { this.applySelectedInfoMode(mode) },
+        refreshSelectedObject: (): void => { this.refreshSelectedObject() },
+        setCurrentProjection: (value: string): void => { this.currentProjection = value },
+        saveAppSettings: (): void => { this.saveAppSettings() },
+        saveTimePreference: (command: string, payload: string, message: string): void => { this.timeCtl().saveTimePreference(command, payload, message) },
+        setConfigurationTimeFormat: (value: string): void => { this.timeCtl().setConfigurationTimeFormat(value) },
+        setStartupTimeSetting: (key: string, value: string): void => { this.timeCtl().setStartupTimeSetting(key, value) },
+        copyConfigExportText: (text: string, successHint: ResourceStr): void => {
+          copyTextToClipboard(this.hostPlatformPort, text, successHint, { flashHint: (hint: ResourceStr): void => this.flashHint(hint) })
+        }
+      }
+      this.settingsControllerImpl = new SettingsController(
+        this.commandPort(), this.infoWindowStore, this.timeSettingsStore, this.navigationStore,
+        this.viewSettingsStore, this.ephemerisStore, this.objectDetailStore, this.tools,
+        this.atmosphereStore, hooks)
+    }
+    return this.settingsControllerImpl
   }
 
   aboutToAppear(): void {
@@ -2673,7 +2708,7 @@ export struct WindowNativeNode {
     this.timeStore.attachPort(hostPort, () => {})
     this.timeStore.attachHooks({
       syncNightModeFromEngine: (engineNight: boolean): void => this.nightModeStore.syncNightModeFromEngine(engineNight),
-      applyAtmosphereResponse: (response: StellariumBridgeResponse): void => this.applyAtmosphereResponse(response)
+      applyAtmosphereResponse: (response: StellariumBridgeResponse): void => this.settingsCtl().applyAtmosphereResponse(response)
     })
     this.timeSettingsStore.attachPort(hostPort, () => {})
     this.timeSettingsStore.attachHooks({
@@ -3856,37 +3891,7 @@ export struct WindowNativeNode {
   // setScenery3dScene / setScenery3dEnabled 已随 E2 下沉 capability/LayerController.ets（桥经 CommandPort）。
 
   // ===== 帮助面板：关于 / 日志 / 配置导入导出 =====
-  private exportConfig(): void {
-    this.callNativeWhenReady('exportConfig', '', (r: StellariumBridgeResponse) => {
-      const resp = r as ExportConfigResponse
-      if (resp.ok !== true) {
-        this.flashHint(I18n.t('config_export_failed'))
-        return
-      }
-      this.tools.configExportText = resp.content ?? ''
-      this.tools.configExportVisible = true
-      copyTextToClipboard(this.hostPlatformPort, this.tools.configExportText, I18n.t('config_export_copied'), { flashHint: (text: ResourceStr): void => this.flashHint(text) })
-    })
-  }
-
-  private importConfig(): void {
-    const text = this.tools.configImportText.trim()
-    if (text.length === 0) {
-      this.flashHint(I18n.t('msg_paste_config_first'))
-      return
-    }
-    this.tools.configImportMsg = '正在导入…'
-    this.callNativeWhenReady('importConfig', text, (r: StellariumBridgeResponse) => {
-      const resp = r as ImportConfigResponse
-      if (resp.ok === true) {
-        this.tools.configImportText = ''
-        this.tools.configImportMsg = '已导入 ' + (resp.applied ?? 0) + ' 项配置'
-        this.flashHint(this.tools.configImportMsg)
-      } else {
-        this.tools.configImportMsg = '导入失败：' + (resp.error ?? '未知错误')
-      }
-    })
-  }
+  // exportConfig / importConfig 已随 E3 下沉 capability/SettingsController.ets（桥经 CommandPort，剪贴板经 hooks）。
 
   // ===== 朗读 / 语音播报 =====
   // 说明：当前构建基于 OpenHarmony 基础 SDK（API 24），其 kit 列表不含
@@ -4123,139 +4128,10 @@ export struct WindowNativeNode {
 
   // setSkyDisplaySetting / applyStarMagLimit / applyMilkyWayBright 已随 E2 下沉 capability/LayerController.ets。
 
-  private setProjection(name: string): void {
-    this.callInteractive('setProjectionType', name, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.currentProjection = name
-        this.flashHint(I18n.projectionName(name))
-      } else {
-        hilog.error(0x0000, 'StellariumArkUI', 'setProjectionType rejected %{public}s err=%{public}s', name, r.error ?? '')
-        this.flashHint(I18n.t('msg_apply_failed'))
-      }
-    })
-  }
-
-  private setEphemerisEnabled(key: string, available: boolean, enabled: boolean): void {
-    if (!available && enabled) {
-      this.flashHint('该星历文件未安装，无法启用')
-      return
-    }
-    this.callInteractive('setEphemerisSetting', key + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) { this.flashHint(r.error ?? I18n.t('msg_apply_failed')); return }
-      if (key === 'de430') this.ephemerisStore.ephemerisDe430Active = enabled
-      else if (key === 'de431') this.ephemerisStore.ephemerisDe431Active = enabled
-      else if (key === 'de440') this.ephemerisStore.ephemerisDe440Active = enabled
-      else if (key === 'de441') this.ephemerisStore.ephemerisDe441Active = enabled
-    })
-  }
-
-  private setInformationMode(mode: string): void {
-    if (this.infoWindowStore.informationSettingPending || mode === this.infoWindowStore.informationMode) return
-    this.infoWindowStore.informationSettingPending = true
-    this.callInteractive('setInformationSetting', 'mode|' + mode, (r: StellariumBridgeResponse) => {
-      this.infoWindowStore.informationSettingPending = false
-      if (r.ok !== true) { this.flashHint(r.error ?? I18n.t('msg_apply_failed')); return }
-      this.infoWindowStore.informationMode = r.infoMode ?? mode
-      if (r.customInfoMask !== undefined) this.infoWindowStore.informationCustomMask = Number(r.customInfoMask)
-      this.applySelectedInfoMode(this.infoWindowStore.informationMode)
-      this.objectDetailStore.selectedDetailLoaded = false
-      this.refreshSelectedObject()
-    }, () => {
-      this.infoWindowStore.informationSettingPending = false
-      this.flashHint(I18n.t('msg_apply_failed'))
-    })
-  }
-
-  private setInformationField(key: string, enabled: boolean): void {
-    if (this.infoWindowStore.informationSettingPending || this.infoWindowStore.informationMode !== 'custom' || this.infoWindowStore.informationMaskHas(key) === enabled) return
-    const bit = informationMaskBit(key)
-    if (bit === 0) return
-    const nextMask = enabled ? (this.infoWindowStore.informationCustomMask | bit) : (this.infoWindowStore.informationCustomMask & ~bit)
-    this.infoWindowStore.informationSettingPending = true
-    this.callInteractive('setInformationSetting', 'mask|' + nextMask.toString(), (r: StellariumBridgeResponse) => {
-      this.infoWindowStore.informationSettingPending = false
-      if (r.ok !== true) { this.flashHint(r.error ?? I18n.t('msg_apply_failed')); return }
-      this.infoWindowStore.informationMode = 'custom'
-      this.infoWindowStore.informationCustomMask = r.customInfoMask !== undefined ? Number(r.customInfoMask) : nextMask
-      this.infoWindowStore.infoLevel = 0
-      this.objectDetailStore.selectedDetailLoaded = false
-      this.refreshSelectedObject()
-    }, () => {
-      this.infoWindowStore.informationSettingPending = false
-      this.flashHint(I18n.t('msg_apply_failed'))
-    })
-  }
-
-  private setNavigationBoolean(setting: string, enabled: boolean): void {
-    this.callInteractive('setNavigationSetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) {
-        this.flashHint(I18n.t('msg_apply_failed'))
-        return
-      }
-      if (setting === 'mouseNavigation') this.navigationStore.navigationMouseEnabled = enabled
-      else if (setting === 'mouseZooming') this.navigationStore.navigationMouseZoomEnabled = enabled
-      else if (setting === 'moveKeys') this.navigationStore.navigationMoveKeysEnabled = enabled
-      else if (setting === 'zoomKeys') this.navigationStore.navigationZoomKeysEnabled = enabled
-      else if (setting === 'gravityLabels') this.navigationStore.navigationGravityLabelsEnabled = enabled
-      else if (setting === 'autoZoomResets') this.viewSettingsStore.autoZoomResets = enabled
-    })
-  }
-
-  private setNavigationMaxFov(value: number): void {
-    const maxFov = Math.max(1, Math.min(360, Math.round(value)))
-    this.callInteractive('setNavigationSetting', 'maxFov|' + maxFov.toString(), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.navigationStore.navigationMaxFov = maxFov
-        this.flashHint(I18n.t('settings_view_max_fov_updated'))
-      } else {
-        this.flashHint(I18n.t('msg_apply_failed'))
-      }
-    })
-  }
-
-  private saveAllCoreSettings(): void {
-    this.saveAppSettings()
-    this.callInteractive('saveAllSettings', '', (r: StellariumBridgeResponse) => {
-      this.flashHint(r.ok === true ? I18n.t('settings_saved') : I18n.t('msg_apply_failed'))
-    })
-  }
-
-  private restoreCoreDefaults(): void {
-    this.callInteractive('restoreDefaultSettings', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) {
-        this.flashHint(I18n.t('msg_apply_failed'))
-        return
-      }
-      this.flashHint(I18n.t('settings_defaults_restart'))
-    })
-  }
-
-  private setConfigurationDateFormat(value: string): void {
-    this.timeCtl().saveTimePreference('setDateFormat', value, 'time_settings_applied')
-  }
-
-  private setConfigurationDithering(value: string): void {
-    this.callInteractive('setDitheringMode', value.toLowerCase(), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.viewSettingsStore.configDitheringMode = value
-        this.flashHint('渲染质量已更新')
-      } else {
-        this.flashHint(r.error ?? I18n.t('msg_apply_failed'))
-        this.timeSettingsStore.loadConfigurationSettings()
-      }
-    })
-  }
-
-  private setDistanceUnit(useMetric: boolean): void {
-    this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + (useMetric ? 'true' : 'false'), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.viewSettingsStore.useMetricUnits = useMetric
-      } else {
-        this.flashHint(r.error ?? I18n.t('msg_apply_failed'))
-        this.timeSettingsStore.loadConfigurationSettings()
-      }
-    })
-  }
+  // setProjection / setEphemerisEnabled / setInformationMode / setInformationField /
+  // setNavigationBoolean / setNavigationMaxFov / saveAllCoreSettings / restoreCoreDefaults /
+  // setConfigurationDateFormat / setConfigurationDithering / setDistanceUnit 已随 E3 下沉
+  // capability/SettingsController.ets（桥经 CommandPort；宿主 @State / 保存动作 / 时间设置写回经 hooks）。
 
   private triggerAction(actionId: string): void {
     hilog.info(0x0000, 'StellariumArkUI', 'triggerAction send %{public}s', actionId)
@@ -4320,15 +4196,8 @@ export struct WindowNativeNode {
     this.flashHint(I18n.t('i0079'))
   }
 
-  // 大气参数回包写入 AtmosphereStore。保留宿主实现（§13.1 规则 6）：与 applyAtmosphere 共用，
-  // 并由 TimeStore.loadTimeExtras 经 TimeHostHooks 注入调用（§14 B2R-2）。
-  private applyAtmosphereResponse(r: StellariumBridgeResponse): void {
-    if (r.ok !== true) return
-    if (r.pressure !== undefined) this.atmosphereStore.atmoPressure = r.pressure
-    if (r.temperature !== undefined) this.atmosphereStore.atmoTemperature = r.temperature
-    if (r.extinction !== undefined) this.atmosphereStore.atmoExtinction = r.extinction
-    this.atmosphereStore.refractionOn = (r.refractionOn === true)
-  }
+  // 大气参数回包写入 AtmosphereStore 已随 E3 下沉 capability/SettingsController.applyAtmosphereResponse；
+  // TimeStore.loadTimeExtras 与 AstroCalcController 经 hooks 路由到控制器（§14 B2R-2）。
 
   // ---- 天文计算辅助：高度曲线 ----
 
@@ -4498,9 +4367,7 @@ export struct WindowNativeNode {
     })
   }
 
-  private setFovMarkerSetting(setting: string, value: number): void {
-    this.callInteractive('setFovMarkerSetting', setting + '|' + value.toFixed(1), () => {})
-  }
+  // setFovMarkerSetting 已随 E3 下沉 capability/SettingsController.ets。
 
   // selectLandscape / setLandscapeFadeWithZoom / changeLandscapeTransparency 已随 E2 下沉
   // capability/LayerController.ets（桥经 CommandPort）。
@@ -5319,54 +5186,7 @@ export struct WindowNativeNode {
     }
   }
 
-  private applyCustomInformationMask(): void {
-    if (this.infoWindowStore.informationMode !== 'custom') return
-    if (!this.infoWindowStore.informationMaskHas('magnitude')) {
-      this.objectDetailStore.selectedMagnitude = ''
-      this.objectDetailStore.selectedApparentMagnitude = ''
-      this.objectDetailStore.selectedAirmass = ''
-      this.objectDetailStore.selectedExtinction = ''
-    }
-    if (!this.infoWindowStore.informationMaskHas('raOfDate')) this.objectDetailStore.selectedCoordEq = ''
-    if (!this.infoWindowStore.informationMaskHas('raJ2000')) this.objectDetailStore.selectedCoordEqJ2000 = ''
-    if (!this.infoWindowStore.informationMaskHas('altAz')) {
-      this.objectDetailStore.selectedCoordAlt = ''
-      this.objectDetailStore.selectedCoordApparentAltAz = ''
-      this.objectDetailStore.selectedCoordGeometricAltAz = ''
-    }
-    if (!this.infoWindowStore.informationMaskHas('eclipticOfDate')) this.objectDetailStore.selectedCoordEcliptic = ''
-    if (!this.infoWindowStore.informationMaskHas('eclipticJ2000')) this.objectDetailStore.selectedCoordEclipticJ2000 = ''
-    if (!this.infoWindowStore.informationMaskHas('galactic')) this.objectDetailStore.selectedCoordGalactic = ''
-    if (!this.infoWindowStore.informationMaskHas('supergalactic')) this.objectDetailStore.selectedCoordSupergalactic = ''
-    if (!this.infoWindowStore.informationMaskHas('otherCoordinates')) this.objectDetailStore.selectedCoordParallactic = ''
-    if (!this.infoWindowStore.informationMaskHas('hourAngle')) this.objectDetailStore.selectedHourAngle = ''
-    if (!this.infoWindowStore.informationMaskHas('constellation')) this.objectDetailStore.selectedConstellation = ''
-    if (!this.infoWindowStore.informationMaskHas('distance')) this.objectDetailStore.selectedDistance = ''
-    if (!this.infoWindowStore.informationMaskHas('size')) this.objectDetailStore.selectedSize = ''
-    if (!this.infoWindowStore.informationMaskHas('siderealTime')) {
-      this.objectDetailStore.selectedMeanSiderealTime = ''
-      this.objectDetailStore.selectedApparentSiderealTime = ''
-    }
-    if (!this.infoWindowStore.informationMaskHas('riseTransitSet')) {
-      this.objectDetailStore.selectedRise = ''
-      this.objectDetailStore.selectedSet = ''
-      this.objectDetailStore.selectedTransit = ''
-    }
-    if (!this.infoWindowStore.informationMaskHas('elongation')) {
-      this.objectDetailStore.selectedPhase = ''
-      this.objectDetailStore.selectedElongation = ''
-    }
-    const groups = new Map<string, string>([
-      ['designations', 'catalog'], ['designation', 'catalog'], ['catalogNumber', 'catalog'], ['internationalDesignator', 'catalog'], ['culturalNames', 'name'],
-      ['hourAngle', 'hourAngle'], ['meanSiderealTime', 'siderealTime'], ['apparentSiderealTime', 'siderealTime'],
-      ['equatorialOfDate', 'raOfDate'], ['equatorialJ2000', 'raJ2000'], ['apparentAltAz', 'altAz'], ['geometricAltAz', 'altAz'],
-      ['eclipticCurrent', 'eclipticOfDate'], ['eclipticJ2000', 'eclipticJ2000'], ['galactic', 'galactic'], ['supergalactic', 'supergalactic'],
-      ['parallacticAngle', 'otherCoordinates'], ['blueMagnitude', 'magnitude'], ['surfaceBrightness', 'magnitude'], ['colorIndex', 'magnitude'],
-      ['angularAxes', 'size'], ['positionAngle', 'size']
-    ])
-    this.objectDetailStore.selectedDetailFields = this.objectDetailStore.selectedDetailFields.filter((field: ObjectDetailField) =>
-      this.infoWindowStore.informationMaskHas(groups.get(field.key) ?? 'extra'))
-  }
+  // applyCustomInformationMask 已随 E3 下沉 capability/SettingsController.ets（选中后经该控制器调用）。
 
   private updateSelectedLiveDetails(fields: Array<ObjectDetailField>): void {
     const previous = this.objectDetailStore.selectedDetailFields
@@ -5492,7 +5312,7 @@ export struct WindowNativeNode {
       this.objectDetailStore.selectedTransit = showObservedInfo && result.transit && result.transit.length > 0 ? result.transit : ''
       this.objectDetailStore.selectedPhase = showObservedInfo && typeof result.phase === 'number' ? (result.phase as number).toFixed(0) + '%' : ''
       this.objectDetailStore.selectedElongation = showObservedInfo && typeof result.elongation === 'number' ? (result.elongation as number).toFixed(1) + '°' : ''
-      this.applyCustomInformationMask()
+      this.settingsCtl().applyCustomInformationMask()
       // 选中成功后弹出独立浮动详情窗口（新目标默认收起，不打扰当前菜单；同一目标刷新时保留展开态）
       if (targetChanged) {
         this.dismissedObjectName = ''
@@ -7730,7 +7550,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         onLoadTrailSettings: () => { this.layerViewStore.loadTrailDisplaySettings() },
         onApplyTrailColor: () => { this.layerCtl().applyTrailColor() },
         onTriggerAction: (actionId: string) => { this.triggerAction(actionId) },
-        onSetFovMarker: (setting: string, value: number) => { this.setFovMarkerSetting(setting, value) },
+        onSetFovMarker: (setting: string, value: number) => { this.settingsCtl().setFovMarkerSetting(setting, value) },
         onSetLandscapeFadeWithZoom: (isOn: boolean) => { this.layerCtl().setLandscapeFadeWithZoom(isOn) },
         onImportLandscape: () => { this.layerCtl().importLandscapeFile() },
         onSelectLandscape: (id: string, name: string) => { this.layerCtl().selectLandscape(id, name) },
@@ -7814,7 +7634,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         onTogglePause: () => { this.timeCtl().togglePause() },
         onSpeedUp: () => { this.timeCtl().speedUp() },
         onFovChange: (val: number) => { this.fovSliderValue = Math.round(val); this.changeFovBySlider(val) },
-        onSetProjection: (name: string) => { this.setProjection(name) },
+        onSetProjection: (name: string) => { this.settingsCtl().setProjection(name) },
         onSetLanguage: (lang: string) => { this.setLanguage(lang) },
         onSetSkyCulture: (name: string) => { this.skyCultureCtl().setSkyCulture(name) },
         onSetUnits: (metric: boolean) => { this.viewSettingsStore.useMetricUnits = metric; this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + metric, () => {}) },
@@ -7924,21 +7744,21 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         setViewCoordinateFamily: (family: string) => { this.viewCoordinateCtl().setViewCoordinateFamily(family) },
         setViewEquatorialEpoch: (epoch: string) => { this.viewCoordinateCtl().setViewEquatorialEpoch(epoch) },
         setLanguage: (lang: string) => { this.setLanguage(lang) },
-        setEphemerisEnabled: (key: string, available: boolean, enabled: boolean) => { this.setEphemerisEnabled(key, available, enabled) },
-        setDistanceUnit: (useMetric: boolean) => { this.setDistanceUnit(useMetric) },
-        setConfigurationDithering: (value: string) => { this.setConfigurationDithering(value) },
-        setProjection: (name: string) => { this.setProjection(name) },
+        setEphemerisEnabled: (key: string, available: boolean, enabled: boolean) => { this.settingsCtl().setEphemerisEnabled(key, available, enabled) },
+        setDistanceUnit: (useMetric: boolean) => { this.settingsCtl().setDistanceUnit(useMetric) },
+        setConfigurationDithering: (value: string) => { this.settingsCtl().setConfigurationDithering(value) },
+        setProjection: (name: string) => { this.settingsCtl().setProjection(name) },
         saveAppSettings: () => { this.saveAppSettings() },
         flashHint: (text: ResourceStr) => { this.flashHint(text) },
-        saveAllCoreSettings: () => { this.saveAllCoreSettings() },
-        restoreCoreDefaults: () => { this.restoreCoreDefaults() },
+        saveAllCoreSettings: () => { this.settingsCtl().saveAllCoreSettings() },
+        restoreCoreDefaults: () => { this.settingsCtl().restoreCoreDefaults() },
         saveCurrentViewAsStartup: () => { this.startupBridge().saveCurrentViewAsStartup() },
         setViewLockState: (enabled: boolean) => { this.setViewLockState(enabled) },
-        setNavigationBoolean: (setting: string, enabled: boolean) => { this.setNavigationBoolean(setting, enabled) },
-        setNavigationMaxFov: (value: number) => { this.setNavigationMaxFov(value) },
-        selectSettingsChoice: (group: string, value: string) => { this.selectSettingsChoice(group, value) },
+        setNavigationBoolean: (setting: string, enabled: boolean) => { this.settingsCtl().setNavigationBoolean(setting, enabled) },
+        setNavigationMaxFov: (value: number) => { this.settingsCtl().setNavigationMaxFov(value) },
+        selectSettingsChoice: (group: string, value: string) => { this.settingsCtl().selectSettingsChoice(group, value) },
         setStartupTimeSetting: (key: string, value: string) => { this.timeCtl().setStartupTimeSetting(key, value) },
-        setInformationField: (key: string, enabled: boolean) => { this.setInformationField(key, enabled) },
+        setInformationField: (key: string, enabled: boolean) => { this.settingsCtl().setInformationField(key, enabled) },
         setObjectDetailConnector: (enabled: boolean) => { this.setObjectDetailConnector(enabled) },
         toggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
         confirmPrivacyRevocation: () => { this.confirmPrivacyRevocation() },
@@ -8337,8 +8157,8 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         configImportText: this.tools.configImportText,
         sessionImportText: this.tools.sessionImportText,
         onScreenshot: () => { saveScreenshot(this.commandPort(), this.hostMediaPort, { flashHint: (text: ResourceStr): void => this.flashHint(text), screenshotSaving: (): boolean => this.tools.screenshotSaving, setScreenshotSaving: (saving: boolean): void => { this.tools.screenshotSaving = saving } }) },
-        onExportConfig: () => { this.exportConfig() },
-        onImportConfig: () => { this.importConfig() },
+        onExportConfig: () => { this.settingsCtl().exportConfig() },
+        onImportConfig: () => { this.settingsCtl().importConfig() },
         onConfigImportText: (value: string) => { this.tools.configImportText = value },
         onSessionExport: () => { this.sessionToolStore.sessionExport() },
         onSessionApply: () => { this.sessionToolStore.sessionApply() },
@@ -8413,21 +8233,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
     }, 0, 100, 120)
   }
 
-  private settingsChoiceSelected(group: string, value: string): boolean {
-    if (group === 'information') return this.infoWindowStore.informationMode === value
-    if (group === 'date') return this.timeSettingsStore.configDateFormat === value
-    if (group === 'time') return this.timeSettingsStore.configTimeFormat === value
-    if (group === 'startup') return this.timeSettingsStore.startupTimeMode === value
-    return false
-  }
-
-  private selectSettingsChoice(group: string, value: string): void {
-    if (this.settingsChoiceSelected(group, value)) return
-    if (group === 'information') this.setInformationMode(value)
-    else if (group === 'date') this.setConfigurationDateFormat(value)
-    else if (group === 'time') this.timeCtl().setConfigurationTimeFormat(value)
-    else if (group === 'startup') this.timeCtl().setStartupTimeSetting('startupMode', value)
-  }
+  // settingsChoiceSelected / selectSettingsChoice 已随 E3 下沉 capability/SettingsController.ets。
 
   /** 面板标题行的时分秒：从 timeStore.observationTimeText 拆出第一个空格之后的部分。 */
   /** 面板副标题行的年月日（附带当前时间速率）。 */
