@@ -1,12 +1,3 @@
-## [2026-09-30] DevEco Code - Phase 3a：首个 store + 面板组件对（BookmarkStore + BookmarkPanel）
-
-- **新增文件：** `harmonyos/ets-source/state/BookmarkStore.ets`（`@Observed class BookmarkStore`，字段 `list` / `loading` / `draftName`）、`harmonyos/ets-source/panels/BookmarkPanel.ets`（`@Component struct BookmarkPanel`：`@ObjectLink store` + `@Prop selectedName` / `cardBorderColor` + 三个回调 `onSaveView` / `onGoto` / `onDelete`）。
-- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets` —— 3 个 `@State`（`bookmarkList` / `bookmarkLoading` / `newBookmarkName`）替换为 `@State private bookmarkStore: BookmarkStore`；持久化与命令方法（`loadBookmarks` / `addCurrentBookmark` / `gotoBookmark` / `deleteBookmark` / `saveBookmarksToStorage`）改为读写 store；`panelContent()` 中 85 行的 `bookmarks` 分支替换为 `BookmarkPanel({ ... })` 调用。
-- **本切片确立的两条 (b) 方案实操规则（后续每个 store 都适用）：** ① **`@ObjectLink` 的宿主源必须是可观察状态**——`private bookmarkStore` 被编译器拒绝（`The 'regular' property 'bookmarkStore' cannot be assigned to the '@ObjectLink' property 'store'`），必须写成 `@State private bookmarkStore`；② **组件成员不能与基类属性方法同名**——`@Prop borderColor` 编译失败（`Property 'borderColor' in type 'BookmarkPanel' is not assignable to the same property in base type 'CustomComponent'`），已改名 `cardBorderColor`。这两条正是 Phase 3 后续切片必须先规避的坑。
-- **验证结果：** `arkts_check` 三文件无错误；`BUILD SUCCESSFUL in 59 s 627 ms`；`node scripts/check-ohos-ui-contract.mjs` 通过；模拟器安装启动成功。**状态归属实证：** 进入书签面板 → 输入框输入 `ABC` → 切到时间面板（组件被销毁）→ 经「更多功能 → 观测工作区」返回书签 → 输入框内容仍在，证明草稿文本存放在 store 而不是组件局部状态。
-- **已知非回归项：** 面板显示「正在加载书签…」源于 `loadBookmarks()` 未提供 `onFailure` 回调（既有实现），UI-only 模拟器下命令桥不可用导致 `loading` 永不复位；真机不受影响。
-- **范围约束：** 纯结构搬移 + 状态归属迁移，行为零变更；未改 `main_pages.json`、未改 sync 脚本。
-
 ## [2026-09-30] DevEco Code - Phase 1c：抽出 MainWindowModels（93 个文件作用域类型与常量）
 
 - **新增文件：** `harmonyos/ets-source/pages/MainWindowModels.ets`（764 行）—— 原单体序言区（`interface CityPreset` 起、`@Component` 前）的全部文件作用域声明整体搬移，共 93 个（interface / const / class），逐条加 `export`；并复制单体的 `./StellariumTypes` 导入，因为 `Scenery3dResponse` 等引用了 `Scenery3dItem` 等类型。
