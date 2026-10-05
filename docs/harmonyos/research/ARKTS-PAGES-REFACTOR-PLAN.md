@@ -1045,7 +1045,7 @@ export interface CommandPort {
 
 | ID | 轨道 | 内容 | 前置 | 状态 |
 |---|---|---|---|---|
-| AB-0 | B 前置 | `bridge/CommandPort.ets` + `loadAboutInfo` 试点 | — | 待做 |
+| AB-0 | B 前置 | `bridge/CommandPort.ets` + `loadAboutInfo` 试点 | — | **已完成（Phase AB-0，2026-10-04；新增 `bridge/CommandPort.ets` 33 行纯接口 + 具名适配器 `HostCommandPort` 注入；`loadAboutInfo` 迁入 `ToolsStore`，宿主零残留/零双写；构建/契约 intact；模拟器端口链路实证，`about*` 数据渲染待真机）** |
 | A1-1…A1-7 | A1 | 91 个纯函数 → `common/derive/*.ets`（7 片） | — | 待做（与 AB-0 并行） |
 | B1-1…B1-6 | B1 | 24 个加载器 → store（6 片） | AB-0 | 待做 |
 | B2A-1…B2A-2 | B2 | Astro 簇 19 个（1–2 片） | AB-0、A1-2 | 待做 |
