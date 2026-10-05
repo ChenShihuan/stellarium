@@ -39,6 +39,7 @@ import {
 } from '../common/ui/ChromeGeometry'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { TimeStore } from '../state/TimeStore'
+import { SatelliteStore } from '../state/SatelliteStore'
 import { TimeSpeedChips } from '../panels/time/TimeSpeedChips'
 import { JulianDateStore } from '../state/JulianDateStore'
 import { JulianDateControls } from '../panels/time/JulianDateControls'
@@ -630,39 +631,12 @@ export struct WindowNativeNode {
   @State private archaeoLoading: boolean = false
   @State private archaeoStatus: string = ''
   // 卫星（Satellites）
-  @State private satGroups: string[] = []
-  @State private activeSatGroup: string = ''
-  @State private satLabels: boolean = false
-  @State private satOrbitLines: boolean = false
-  @State private satHints: boolean = false
-  @State private satIconicMode: boolean = false
-  @State private satHideInvisible: boolean = false
-  @State private satCount: number = 0
-  @State private satQuery: string = ''
-  @State private satItems: SatelliteListItem[] = []
-  @State private satOffline: boolean = true
-  @State private satObserverIsEarth: boolean = true
-  @State private satDateInRange: boolean = true
-  @State private satNewestUpdate: string = ''
-  @State private satOutdatedCount: number = 0
-  @State private satMatchedCount: number = 0
-  @State private satCatalogCreator: string = ''
-  @State private satCatalogSnapshot: string = ''
-  @State private satCatalogSource: string = ''
-  @State private satSources: SatelliteSource[] = []
-  @State private satUpdateSettings: SatelliteUpdateSettings = {
-    updatesEnabled: false, autoAddEnabled: false, autoRemoveEnabled: false,
-    autoDisplayEnabled: true, updateFrequencyHours: 72, secondsToUpdate: 0, updateState: 0
-  }
-  @State private satSourceInput: string = ''
-  @State private satTleFileInput: string = ''
-  @State private satSourceAddNew: boolean = false
-  @State private satSourceStatus: string = ''
-  @State private satUpdateFrequencyInput: string = '72'
-  @State private satelliteListLoading: boolean = false
+  // 卫星域状态已下沉 state/SatelliteStore.ets（review §2.7：Prop 风格 → Store 风格）。
+  // SatellitesPanel 改为 @ObjectLink 订阅该 store，刷新粒度不再落在宿主整棵树上。
+  // 下面两个"资源目录健康"字段与星表域共用、且不是卫星面板的入参，故仍留在宿主。
+  @State private satelliteStore: SatelliteStore = new SatelliteStore()
   @State private catalogHealthLoaded: boolean = false
   @State private catalogManifestPresent: boolean = false
-  @State private satelliteCatalogHealth: CatalogHealthEntry = {}
   @State private starCatalogHealth: CatalogHealthEntry = {}
   private satelliteListRequestId: number = 0
   private satelliteLoadTimer: number = -1
@@ -1351,11 +1325,11 @@ export struct WindowNativeNode {
         const parts = String(event['payload'] ?? '').split(':')
         const enabled = parts[1] === '1' || parts[1] === 'true'
         this.satelliteFlagMutationId++
-        if (parts[0] === 'labels') this.satLabels = enabled
-        else if (parts[0] === 'orbitLines') this.satOrbitLines = enabled
-        else if (parts[0] === 'hints') this.satHints = enabled
-        else if (parts[0] === 'iconicMode') this.satIconicMode = enabled
-        else if (parts[0] === 'hideInvisible') this.satHideInvisible = enabled
+        if (parts[0] === 'labels') this.satelliteStore.satLabels = enabled
+        else if (parts[0] === 'orbitLines') this.satelliteStore.satOrbitLines = enabled
+        else if (parts[0] === 'hints') this.satelliteStore.satHints = enabled
+        else if (parts[0] === 'iconicMode') this.satelliteStore.satIconicMode = enabled
+        else if (parts[0] === 'hideInvisible') this.satelliteStore.satHideInvisible = enabled
         this.publishSatellitePanelState()
         return
       }
@@ -4405,27 +4379,27 @@ export struct WindowNativeNode {
   // ===== 卫星（Satellites 插件桥）=====
   private publishSatellitePanelState(error: string = ''): void {
     AppStorage.setOrCreate('stellariumSatellitePanelState', JSON.stringify({
-      ok: error.length === 0, error: error, panel: this.activePanel, group: this.activeSatGroup,
-      loading: this.satelliteListLoading, matchedCount: this.satMatchedCount,
-      ids: this.satItems.map((item: SatelliteListItem) => item.id),
-      groups: this.satGroups, requestId: this.satelliteListRequestId,
-      orbitLines: this.satOrbitLines, hints: this.satHints,
+      ok: error.length === 0, error: error, panel: this.activePanel, group: this.satelliteStore.activeSatGroup,
+      loading: this.satelliteStore.satelliteListLoading, matchedCount: this.satelliteStore.satMatchedCount,
+      ids: this.satelliteStore.satItems.map((item: SatelliteListItem) => item.id),
+      groups: this.satelliteStore.satGroups, requestId: this.satelliteListRequestId,
+      orbitLines: this.satelliteStore.satOrbitLines, hints: this.satelliteStore.satHints,
       elapsedMs: this.satelliteListElapsedMs,
       scrollY: this.satellitePanelScroller.currentOffset()?.yOffset ?? 0,
       groupScrollY: this.satelliteGroupScroller.currentOffset()?.yOffset ?? 0
     }))
   }
   private selectSatelliteGroup(group: string): void {
-    if (group.length > 0 && !this.satGroups.includes(group)) {
+    if (group.length > 0 && !this.satelliteStore.satGroups.includes(group)) {
       this.publishSatellitePanelState('unknown satellite group')
       return
     }
-    if (this.activeSatGroup === group) {
+    if (this.satelliteStore.activeSatGroup === group) {
       this.publishSatellitePanelState()
       return
     }
     this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => {
-      this.activeSatGroup = group
+      this.satelliteStore.activeSatGroup = group
     })
     this.loadSatellites()
   }
@@ -4433,7 +4407,7 @@ export struct WindowNativeNode {
     const requestId = ++this.satelliteListRequestId
     const flagMutationId = this.satelliteFlagMutationId
     const startedAt = Date.now()
-    this.satelliteListLoading = true
+    this.satelliteStore.satelliteListLoading = true
     this.publishSatellitePanelState()
     this.satelliteLoadIncludeSources = this.satelliteLoadIncludeSources || includeSources
     if (this.satelliteLoadTimer >= 0) {
@@ -4444,39 +4418,39 @@ export struct WindowNativeNode {
       this.satelliteLoadTimer = -1
       const includeSourcesForRequest = this.satelliteLoadIncludeSources
       this.satelliteLoadIncludeSources = false
-      const payload = this.activeSatGroup + '|' + this.satQuery + '|40'
-      this.satelliteListLoading = true
+      const payload = this.satelliteStore.activeSatGroup + '|' + this.satelliteStore.satQuery + '|40'
+      this.satelliteStore.satelliteListLoading = true
       this.callNativeWhenReady('getSatellites', payload, (r: StellariumBridgeResponse) => {
         if (requestId !== this.satelliteListRequestId) return
-        this.satelliteListLoading = false
+        this.satelliteStore.satelliteListLoading = false
         const resp = r as SatellitesResponse
         const s = resp.satellites
         if (!s) return
-        if (this.satGroups.join('|') !== s.groups.join('|')) this.satGroups = s.groups
+        if (this.satelliteStore.satGroups.join('|') !== s.groups.join('|')) this.satelliteStore.satGroups = s.groups
         if (flagMutationId === this.satelliteFlagMutationId) {
-          this.satLabels = s.labels
-          this.satOrbitLines = s.orbitLines
-          this.satHints = s.hints
-          this.satIconicMode = s.iconicMode
-          this.satHideInvisible = s.hideInvisible
+          this.satelliteStore.satLabels = s.labels
+          this.satelliteStore.satOrbitLines = s.orbitLines
+          this.satelliteStore.satHints = s.hints
+          this.satelliteStore.satIconicMode = s.iconicMode
+          this.satelliteStore.satHideInvisible = s.hideInvisible
         }
-        this.satCount = s.count
-        this.satOffline = s.offline
-        this.satObserverIsEarth = s.observerIsEarth
-        this.satDateInRange = s.dateInRange
-        this.satNewestUpdate = s.newestUpdate
-        this.satOutdatedCount = s.outdatedCount
-        this.satMatchedCount = s.matchedCount
-        this.satCatalogCreator = s.catalogCreator ?? ''
-        this.satCatalogSnapshot = s.catalogSnapshot ?? ''
-        this.satCatalogSource = s.catalogSource ?? ''
-        this.satItems = s.items
+        this.satelliteStore.satCount = s.count
+        this.satelliteStore.satOffline = s.offline
+        this.satelliteStore.satObserverIsEarth = s.observerIsEarth
+        this.satelliteStore.satDateInRange = s.dateInRange
+        this.satelliteStore.satNewestUpdate = s.newestUpdate
+        this.satelliteStore.satOutdatedCount = s.outdatedCount
+        this.satelliteStore.satMatchedCount = s.matchedCount
+        this.satelliteStore.satCatalogCreator = s.catalogCreator ?? ''
+        this.satelliteStore.satCatalogSnapshot = s.catalogSnapshot ?? ''
+        this.satelliteStore.satCatalogSource = s.catalogSource ?? ''
+        this.satelliteStore.satItems = s.items
         this.satelliteListElapsedMs = Date.now() - startedAt
         this.publishSatellitePanelState()
         if (includeSourcesForRequest) this.loadSatelliteSources()
       }, 0, 100, 15, () => {
         if (requestId === this.satelliteListRequestId) {
-          this.satelliteListLoading = false
+          this.satelliteStore.satelliteListLoading = false
           this.publishSatellitePanelState('satellite query failed')
         }
       })
@@ -4487,10 +4461,10 @@ export struct WindowNativeNode {
   private loadSatelliteSources(): void {
     this.callNativeWhenReady('getSatelliteSources', '', (r: StellariumBridgeResponse) => {
       const response = r as SatelliteSourcesResponse
-      this.satSources = response.sources ?? []
+      this.satelliteStore.satSources = response.sources ?? []
       if (response.settings) {
-        this.satUpdateSettings = response.settings
-        this.satUpdateFrequencyInput = response.settings.updateFrequencyHours.toString()
+        this.satelliteStore.satUpdateSettings = response.settings
+        this.satelliteStore.satUpdateFrequencyInput = response.settings.updateFrequencyHours.toString()
       }
     })
   }
@@ -4499,74 +4473,74 @@ export struct WindowNativeNode {
     payload[key] = value
     this.callInteractive('setSatelliteUpdateSetting', JSON.stringify(payload), () => {
       this.loadSatelliteSources()
-    }, (failure: StellariumBridgeResponse) => { this.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
+    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
   private addSatelliteSource(): void {
-    const url = this.satSourceInput.trim()
-    if (url.length === 0) { this.satSourceStatus = I18n.t('sat_source_empty'); return }
+    const url = this.satelliteStore.satSourceInput.trim()
+    if (url.length === 0) { this.satelliteStore.satSourceStatus = I18n.t('sat_source_empty'); return }
     const sources: SatelliteSourceInput[] = []
-    for (const source of this.satSources) sources.push({ url: source.url, addNew: source.addNew })
-    sources.push({ url: url, addNew: this.satSourceAddNew })
+    for (const source of this.satelliteStore.satSources) sources.push({ url: source.url, addNew: source.addNew })
+    sources.push({ url: url, addNew: this.satelliteStore.satSourceAddNew })
     this.callInteractive('setSatelliteSources', JSON.stringify({ sources: sources }), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.satSourceInput = ''
-        this.satSourceStatus = I18n.t('sat_source_saved')
+        this.satelliteStore.satSourceInput = ''
+        this.satelliteStore.satSourceStatus = I18n.t('sat_source_saved')
         this.loadSatelliteSources()
-      } else this.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
-    }, (failure: StellariumBridgeResponse) => { this.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
+      } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
+    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
   private deleteSatelliteSource(index: number): void {
     const sources: SatelliteSourceInput[] = []
-    for (let sourceIndex = 0; sourceIndex < this.satSources.length; sourceIndex++) {
+    for (let sourceIndex = 0; sourceIndex < this.satelliteStore.satSources.length; sourceIndex++) {
       if (sourceIndex !== index) {
-        const source = this.satSources[sourceIndex]
+        const source = this.satelliteStore.satSources[sourceIndex]
         sources.push({ url: source.url, addNew: source.addNew })
       }
     }
     this.callInteractive('setSatelliteSources', JSON.stringify({ sources: sources }), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.satSourceStatus = I18n.t('sat_source_deleted')
+        this.satelliteStore.satSourceStatus = I18n.t('sat_source_deleted')
         this.loadSatelliteSources()
-      } else this.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
-    }, (failure: StellariumBridgeResponse) => { this.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
+      } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
+    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
   private importSatelliteTleFile(): void {
-    const path = this.satTleFileInput.trim()
-    if (path.length === 0) { this.satSourceStatus = I18n.t('sat_tle_path_empty'); return }
+    const path = this.satelliteStore.satTleFileInput.trim()
+    if (path.length === 0) { this.satelliteStore.satSourceStatus = I18n.t('sat_tle_path_empty'); return }
     this.callInteractive('importSatelliteTle', JSON.stringify({ paths: [path] }), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.satTleFileInput = ''
-        this.satSourceStatus = I18n.t('sat_tle_imported')
+        this.satelliteStore.satTleFileInput = ''
+        this.satelliteStore.satSourceStatus = I18n.t('sat_tle_imported')
         this.loadSatellites(true, true)
-      } else this.satSourceStatus = r.error ?? I18n.t('sat_tle_import_failed')
-    }, (failure: StellariumBridgeResponse) => { this.satSourceStatus = failure.error ?? I18n.t('sat_tle_import_failed') })
+      } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_tle_import_failed')
+    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_tle_import_failed') })
   }
   private refreshSatelliteCatalog(): void {
     this.callInteractive('refreshSatelliteCatalog', '', (r: StellariumBridgeResponse) => {
-      this.satSourceStatus = r.ok === true ? I18n.t('sat_refresh_started') : (r.error ?? I18n.t('sat_refresh_offline'))
+      this.satelliteStore.satSourceStatus = r.ok === true ? I18n.t('sat_refresh_started') : (r.error ?? I18n.t('sat_refresh_offline'))
       this.loadSatelliteSources()
-    }, (failure: StellariumBridgeResponse) => { this.satSourceStatus = failure.error ?? I18n.t('sat_refresh_offline') })
+    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_refresh_offline') })
   }
   private setSatelliteFlag(name: string, v: boolean): void {
-    if ((name === 'labels' && this.satLabels === v) ||
-      (name === 'orbitLines' && this.satOrbitLines === v) ||
-      (name === 'hints' && this.satHints === v) ||
-      (name === 'iconicMode' && this.satIconicMode === v) ||
-      (name === 'hideInvisible' && this.satHideInvisible === v)) return
+    if ((name === 'labels' && this.satelliteStore.satLabels === v) ||
+      (name === 'orbitLines' && this.satelliteStore.satOrbitLines === v) ||
+      (name === 'hints' && this.satelliteStore.satHints === v) ||
+      (name === 'iconicMode' && this.satelliteStore.satIconicMode === v) ||
+      (name === 'hideInvisible' && this.satelliteStore.satHideInvisible === v)) return
     const mutationId = ++this.satelliteFlagMutationId
     let previous: boolean | undefined
-    if (name == 'labels') { previous = this.satLabels; this.satLabels = v }
-    else if (name == 'orbitLines') { previous = this.satOrbitLines; this.satOrbitLines = v }
-    else if (name == 'hints') { previous = this.satHints; this.satHints = v }
-    else if (name == 'iconicMode') { previous = this.satIconicMode; this.satIconicMode = v }
-    else if (name == 'hideInvisible') { previous = this.satHideInvisible; this.satHideInvisible = v }
+    if (name == 'labels') { previous = this.satelliteStore.satLabels; this.satelliteStore.satLabels = v }
+    else if (name == 'orbitLines') { previous = this.satelliteStore.satOrbitLines; this.satelliteStore.satOrbitLines = v }
+    else if (name == 'hints') { previous = this.satelliteStore.satHints; this.satelliteStore.satHints = v }
+    else if (name == 'iconicMode') { previous = this.satelliteStore.satIconicMode; this.satelliteStore.satIconicMode = v }
+    else if (name == 'hideInvisible') { previous = this.satelliteStore.satHideInvisible; this.satelliteStore.satHideInvisible = v }
     this.callNativeWhenReady('setSatellitesFlag', name + ':' + (v ? '1' : '0'), () => {}, 0, 100, 15, () => {
       if (mutationId !== this.satelliteFlagMutationId || previous === undefined) return
-      if (name == 'labels') this.satLabels = previous
-      else if (name == 'orbitLines') this.satOrbitLines = previous
-      else if (name == 'hints') this.satHints = previous
-      else if (name == 'iconicMode') this.satIconicMode = previous
-      else if (name == 'hideInvisible') this.satHideInvisible = previous
+      if (name == 'labels') this.satelliteStore.satLabels = previous
+      else if (name == 'orbitLines') this.satelliteStore.satOrbitLines = previous
+      else if (name == 'hints') this.satelliteStore.satHints = previous
+      else if (name == 'iconicMode') this.satelliteStore.satIconicMode = previous
+      else if (name == 'hideInvisible') this.satelliteStore.satHideInvisible = previous
     })
   }
   private loadCatalogHealth(): void {
@@ -4574,7 +4548,7 @@ export struct WindowNativeNode {
       const health = r as CatalogHealthResponse
       this.catalogHealthLoaded = true
       this.catalogManifestPresent = health.manifestPresent === true
-      this.satelliteCatalogHealth = health.satellites ?? {}
+      this.satelliteStore.satelliteCatalogHealth = health.satellites ?? {}
       this.starCatalogHealth = health.stars ?? {}
     })
   }
@@ -17662,7 +17636,7 @@ private loadPlanetPositions(): void {
         currentSkyCulture: this.currentSkyCulture,
         skyCultures: this.skyCultures,
         useMetricUnits: this.useMetricUnits,
-        satelliteCatalogHealth: this.satelliteCatalogHealth,
+        satelliteCatalogHealth: this.satelliteStore.satelliteCatalogHealth,
         starCatalogHealth: this.starCatalogHealth,
         gyroSensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText),
         textColor: this.nmText(),
@@ -18102,34 +18076,7 @@ private loadPlanetPositions(): void {
       })
     } else if (this.activePanel === 'satellites') {
       SatellitesPanel({
-        satOffline: this.satOffline,
-        satNewestUpdate: this.satNewestUpdate,
-        satCatalogCreator: this.satCatalogCreator,
-        satCatalogSnapshot: this.satCatalogSnapshot,
-        satCatalogSource: this.satCatalogSource,
-        satelliteCatalogHealth: this.satelliteCatalogHealth,
-        satOutdatedCount: this.satOutdatedCount,
-        satDateInRange: this.satDateInRange,
-        satObserverIsEarth: this.satObserverIsEarth,
-        satSources: this.satSources,
-        satSourceInput: this.satSourceInput,
-        satSourceAddNew: this.satSourceAddNew,
-        satTleFileInput: this.satTleFileInput,
-        satUpdateSettings: this.satUpdateSettings,
-        satUpdateFrequencyInput: this.satUpdateFrequencyInput,
-        satSourceStatus: this.satSourceStatus,
-        satCount: this.satCount,
-        satLabels: this.satLabels,
-        satOrbitLines: this.satOrbitLines,
-        satHints: this.satHints,
-        satIconicMode: this.satIconicMode,
-        satHideInvisible: this.satHideInvisible,
-        satGroups: this.satGroups,
-        activeSatGroup: this.activeSatGroup,
-        satelliteListLoading: this.satelliteListLoading,
-        satQuery: this.satQuery,
-        satItems: this.satItems,
-        satMatchedCount: this.satMatchedCount,
+        satelliteStore: this.satelliteStore,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         panelColor: this.nmBg(),
@@ -18141,21 +18088,21 @@ private loadPlanetPositions(): void {
         catalogHealthTextOf: (title: string, health: CatalogHealthEntry) => this.catalogHealthText(title, health),
         catalogHealthColorOf: (health: CatalogHealthEntry) => this.catalogHealthColor(health),
         onDeleteSource: (index: number) => { this.deleteSatelliteSource(index) },
-        onSourceInput: (value: string) => { this.satSourceInput = value },
-        onSourceAddNew: (value: boolean) => { this.satSourceAddNew = value },
+        onSourceInput: (value: string) => { this.satelliteStore.satSourceInput = value },
+        onSourceAddNew: (value: boolean) => { this.satelliteStore.satSourceAddNew = value },
         onAddSource: () => { this.addSatelliteSource() },
         onRefreshCatalog: () => { this.refreshSatelliteCatalog() },
-        onTleFileInput: (value: string) => { this.satTleFileInput = value },
+        onTleFileInput: (value: string) => { this.satelliteStore.satTleFileInput = value },
         onImportTle: () => { this.importSatelliteTleFile() },
         onSetUpdateSetting: (key: string, value: boolean | number) => { this.setSatelliteUpdateSetting(key, value) },
-        onUpdateFrequencyInput: (value: string) => { this.satUpdateFrequencyInput = value },
+        onUpdateFrequencyInput: (value: string) => { this.satelliteStore.satUpdateFrequencyInput = value },
         onSubmitUpdateFrequency: () => {
-          const hours = Number(this.satUpdateFrequencyInput)
+          const hours = Number(this.satelliteStore.satUpdateFrequencyInput)
           if (Number.isFinite(hours)) this.setSatelliteUpdateSetting('updateFrequencyHours', Math.round(hours))
         },
         onSetFlag: (flag: string, isOn: boolean) => { this.setSatelliteFlag(flag, isOn) },
         onSelectGroup: (group: string) => { this.selectSatelliteGroup(group) },
-        onQueryChange: (value: string) => { this.satQuery = value; this.loadSatellites() },
+        onQueryChange: (value: string) => { this.satelliteStore.satQuery = value; this.loadSatellites() },
         onSubmitQuery: () => { this.loadSatellites(false, true) },
         onSearchObject: (item: SatelliteListItem) => { this.searchObject(item.name, '', 'object|Satellite|' + item.id) }
       })
