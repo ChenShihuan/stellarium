@@ -1402,6 +1402,137 @@ D4/D5/D8/D10 均因调用 `refreshState()` 或写 `activePanel`/`panelVisible` �
 
 ---
 
+## 11. `pages/` 同级文件评审：架构对接与迁移动议（2026-10-05）
+
+> 基线已更新：宿主 **8,437 行 / 242 私有方法 / 76 私有字段**（D 轨道大部分已执行落地）。
+> 本节评审 `harmonyos/ets-source/pages/` 下除 MainWindowNativeNode.ets 之外的 20 个文件，
+> 评估它们与当前 `state/` + `bridge/` + `capability/` + `common/` 架构的对齐程度。
+
+### 11.1 总表
+
+| 文件 | 行数 | 仍被宿主 import | 被外部 import | 性质 | 对接评估 |
+|---|---:|---|---|---|---|
+| `StellariumTypes.ets` | 1,121 | ✅ | 40+ 外部消费者 | 核心类型（桥响应/UI 模型/天文计算结果） | **留在 pages/，无问题** |
+| `MainWindowModels.ets` | 767 | ✅ | 30+ 外部消费者 | 扩展域模型（望远镜/卫星/脚本/书签等） | **应拆入 `common/types/`** |
+| `I18n.ets` | 2,378 | ✅ | 30+ 外部消费者 | 国际化中心 | **留在 pages/，无问题** |
+| `StellariumAudio.ets` | 927 | ✅ | 1（StartupBridge） | 过程式音频引擎 | **应迁入 `common/media/`** |
+| `AstronomyGuide.ts` | 197 | ✅ | 2（GuideStore/宿主） | 导览数据模型 + 状态机 | **应迁入 `common/derive/` 或 `state/`** |
+| `location_hierarchy.ts` | 74,611 | ✅ | 2（LocationStore/LocationPickerStore） | 自动生成位置层级数据 | **应迁入 `common/data/`** |
+| `location_names_zh.ts` | 7,350 | ✅ | 2（同上） | 城市名→中文映射 | **同上** |
+| `location_countries.ts` | 986 | ✅ | 2（同上） | ISO 国家代码→名称 | **同上** |
+| `DetailModelRenderTypes.ets` | 45 | ❌ | 1（ObjectModelRenderer） | 渲染管线类型 | **应迁入 `capability/`** |
+| `DetailModelRenderClient.ets` | 106 | ❌ | 1（ObjectModelRenderer） | Worker 客户端 | **同上** |
+| `DetailModelRasterizer.ets` | 177 | ❌ | 0（仅 DetailModelWorker 内部） | 软件光栅化器 | **同上** |
+| `DetailModelGeometry.ets` | 28 | ❌ | 3（ObjectDetailStore/ObjectMediaStore/ObjectModelRenderer） | 3×3 矩阵数学 | **应迁入 `common/derive/`** |
+| `DetailModelWorker.ets` | 21 | ❌ | 0（worker 入口） | Worker 线程入口 | **同上，随 RenderClient** |
+| `ProceduralDetailModel.ets` | 134 | ❌ | 1（ObjectInspectorMediaController） | 过程式纹理生成 | **应迁入 `common/derive/`** |
+| `StartupSky.ets` | 218 | ❌ | 0（仅 ApplicationRoot 内部） | 启动动画组件 | **留在 pages/，无问题** |
+| `StartupStarGeometry.ts` | 91 | ❌ | 0（仅 StartupSky 内部） | 启动动画几何 | **留在 pages/，无问题** |
+| `ApplicationRoot.ets` | 71 | ❌ | 0（页面入口） | 应用根页面 | **留在 pages/，无问题** |
+| `PrivacyBootstrap.ets` | 65 | ❌ | 0（仅 ApplicationRoot 内部） | 隐私同意门控 | **留在 pages/，无问题** |
+| `FloatWindowNativeNode.ets` | 36 | ❌ | 0 | 浮动子窗口页面壳 | **留在 pages/，无问题** |
+| `SubWindowNativeNode.ets` | 36 | ❌ | 0 | 子窗口页面壳 | **留在 pages/，无问题** |
+| `UiExtensionNativeNode.ets` | 47 | ❌ | 0 | UI 扩展页面壳 | **留在 pages/，无问题** |
+
+### 11.2 需迁移的文件（6 组）
+
+#### 11.2.1 `MainWindowModels.ets` → `common/types/DomainModels.ets`（+ 按域拆分）
+
+当前 `MainWindowModels.ets` 导出 40+ 接口 + 10+ 常量，覆盖望远镜、卫星、脚本、书签、星表、Oculars、
+ArchaeoLines、EquationOfTime、MosaicCamera、NebulaTexture、CatalogHealth、MeteorShowers、Scenery3d、
+Commands、Recording 等域。30+ 外部文件从 `'../pages/MainWindowModels'` import。
+
+问题：**域模型不应住在 `pages/`**——它们被 `state/`、`bridge/`、`capability/`、`panels/` 大量消费，
+与页面无关。留在 pages/ 造成架构倒挂（底层依赖顶层）。
+
+建议：
+1. 将 `MainWindowModels.ets` 拆为按域的独立文件，放入 `common/types/`：
+   - `common/types/TelescopeModels.ets`（TelescopeProfile/ControlResponse/ProfilesResponse/Ocular*）
+   - `common/types/SatelliteModels.ets`（SatelliteSourceInput/ListItem/Group*）
+   - `common/types/ScriptModels.ets`（ScriptStatusResponse/CaptionsResponse/Record*）
+   - `common/types/BookmarkModels.ets`（BookmarkItem/Raw/Response）
+   - `common/types/CatalogModels.ets`（StarCatalog*/CatalogHealth*）
+   - `common/types/NebulaTextureModels.ets`（NebulaTextureItem/Status/RefreshResponse）
+   - `common/types/PluginModels.ets`（PluginFeatureRoute/ConfigurationOption/SkyCultureVisualColors）
+   - `common/types/RecordingModels.ets`（RecordCmd/RecordingEntry/RecordingsResponse/DetailResponse）
+   - 等等
+2. 保留 `MainWindowModels.ets` 作为 re-export barrel（`export * from '../common/types/...'`），
+   逐步迁移消费者直引新路径后删除 barrel。
+3. 常量（`MARKING_LAYER_ACTION_IDS`/`CONTENT_LAYER_ACTION_IDS`/`LX200_DEVICE_MODELS` 等）
+   迁入 `common/constants/`。
+
+#### 11.2.2 `StellariumAudio.ets` → `common/media/AudioEngine.ets`
+
+927 行，仅被 StartupBridge 和宿主 import。过程式音频合成引擎，与页面无关。
+迁移后 `StartupBridge.ets` 改为 `from '../common/media/AudioEngine'`。
+注意该文件是 `export default class AudioEngine`，须保留 default export 兼容。
+
+#### 11.2.3 `AstronomyGuide.ts` → `common/derive/AstronomyGuide.ts`
+
+197 行，纯数据模型 + 状态机（GuidePlayer），无 UI、无 SDK 依赖。
+被 GuideStore 和宿主 import。应迁入 `common/derive/`（纯逻辑/数据层）。
+
+#### 11.2.4 位置数据三文件 → `common/data/`
+
+- `location_hierarchy.ts`（74,611 行）→ `common/data/location_hierarchy.ts`
+- `location_names_zh.ts`（7,350 行）→ `common/data/location_names_zh.ts`
+- `location_countries.ts`（986 行）→ `common/data/location_countries.ts`
+
+当前仅 LocationStore 和 LocationPickerStore 引用。迁入 `common/data/` 后改路径。
+这三文件是自动生成的静态数据，放在 pages/ 不合理。
+
+#### 11.2.5 DetailModel 渲染管线五文件 → `capability/`
+
+| 当前 pages/ 位置 | 目标 |
+|---|---|
+| `DetailModelRenderTypes.ets` | `capability/DetailModelRenderTypes.ets` |
+| `DetailModelRenderClient.ets` | `capability/DetailModelRenderClient.ets` |
+| `DetailModelRasterizer.ets` | `capability/DetailModelRasterizer.ets` |
+| `DetailModelGeometry.ets` | `common/derive/DetailModelGeometry.ets` |
+| `DetailModelWorker.ets` | `capability/DetailModelWorker.ets` |
+
+理由：ObjectModelRenderer 已在 `capability/`，其渲染管线支撑文件不应留在 pages/。
+`DetailModelGeometry`（矩阵数学）被 ObjectDetailStore 和 ObjectMediaStore 消费，属纯数学，入 `common/derive/`。
+
+#### 11.2.6 `ProceduralDetailModel.ets` → `common/derive/ProceduralDetailModel.ets`
+
+134 行，纯计算（过程式纹理生成）。仅被 DetailModelRasterizer 和 ObjectInspectorMediaController 消费。
+与页面无关，入 `common/derive/`。
+
+### 11.3 可留在 pages/ 的文件（8 个）
+
+| 文件 | 理由 |
+|---|---|
+| `StellariumTypes.ets` | 核心桥响应类型，被全项目消费；暂留 pages/ 可接受，长期可迁 `common/types/` |
+| `I18n.ets` | 全局单例，被 30+ 文件消费；迁入 `common/i18n/` 亦可，但不急 |
+| `ApplicationRoot.ets` | 页面入口，天然属 pages/ |
+| `PrivacyBootstrap.ets` | 页面级组件，仅 ApplicationRoot 消费 |
+| `StartupSky.ets` | 启动动画组件，仅 ApplicationRoot 消费 |
+| `StartupStarGeometry.ts` | 启动动画几何，仅 StartupSky 消费 |
+| `FloatWindowNativeNode.ets` | 页面壳 |
+| `SubWindowNativeNode.ets` | 页面壳 |
+| `UiExtensionNativeNode.ets` | 页面壳 |
+
+> 长期建议：`StellariumTypes.ets` 与 `MainWindowModels.ets` 合并迁入 `common/types/`，
+> 使 pages/ 仅保留页面组件 + 页面壳 + I18n（如果暂不迁）。但这是独立轨道，不阻塞 D 轨道。
+
+### 11.4 迁移优先级
+
+| 优先级 | 迁移 | 影响消费者数 | 风险 |
+|---|---|---|---|
+| P1 | DetailModel 管线五文件 → capability/ + common/derive/ | 5 | 低（路径替换） |
+| P2 | 位置数据三文件 → common/data/ | 2 | 低 |
+| P3 | ProceduralDetailModel → common/derive/ | 1 | 低 |
+| P4 | AstronomyGuide → common/derive/ | 2 | 低 |
+| P5 | StellariumAudio → common/media/ | 1 | 低 |
+| P6 | MainWindowModels 拆分 → common/types/ | 30+ | 中（大量路径更新） |
+| P7 | StellariumTypes → common/types/ | 40+ | 中（同上） |
+
+> P1–P5 可小步快跑，每个一次提交；P6/P7 可作为独立轨道（E 轨道），
+> 先建 barrel re-export，再逐步迁移消费者直引。
+
+---
+
 ## 附录：本文数字的复现命令
 
 ```powershell
