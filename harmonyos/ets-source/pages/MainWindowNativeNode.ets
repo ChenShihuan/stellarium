@@ -46,6 +46,7 @@ import { TimeSettingsStore } from '../state/TimeSettingsStore'
 import { TimeSettingsSection } from '../panels/settings/TimeSettingsSection'
 import { SettingsChoiceButton } from '../common/ui/SettingsChoiceButton'
 import { NightModeStore } from '../state/NightModeStore'
+import { TimeWheelController } from '../state/TimeWheelController'
 import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
 import { QuickChipRow } from '../panels/QuickChipRow'
 import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
@@ -291,7 +292,6 @@ export struct WindowNativeNode {
   private stateRefreshRequestPending: boolean = false
   private stateRefreshQueued: boolean = false
   private lastMusicToggle: number = 0
-  @State private timeRateText: string = '1x'
   /** 主界面 Dock 右上的常驻时钟文本（HH:mm），面板未打开时显示。 */
   @State private dockClockText: string = ''
   /** Dock 时钟的独立轻量刷新定时器（1s），不并入时间面板 125ms 高频刷新。 */
@@ -300,9 +300,6 @@ export struct WindowNativeNode {
   @State private timeStore: TimeStore = new TimeStore()
   // 原生命令在下一渲染帧才生效。此窗口内忽略轮询到的旧速率，避免按钮
   // 刚显示“-2x”又被上一帧的“-10x”短暂盖回去而产生闪烁。
-  private pendingTimeRate: number = Number.NaN
-  private pendingTimeRateUntilMs: number = 0
-  private lastSyncedTimeRate: number = Number.NaN
   /** 时间轴相对真实当前时刻的偏移秒数（0=此刻，负=过去，正=未来）*/
   // 时间轴的中心 JD。它不是系统时间的固定快照：模拟时间接近边界时会
   // 重新定锚到当前模拟时间，避免快进后游标永远卡在两端。
@@ -314,22 +311,6 @@ export struct WindowNativeNode {
   @State private julianStore: JulianDateStore = new JulianDateStore()
   private julianDateApplyInFlight: boolean = false
   private timeMarkLoading: boolean = false
-  private timeWheelLastInputMs: number = 0
-  private timeWheelLastTouchX: number = 0
-  private timeWheelLastTouchMs: number = 0
-  private timeWheelDragCarry: number = 0
-  private timeWheelTransitionTimer: number = 0
-  private timeWheelTargetMs: number = 0
-  private timeWheelLastNativePushMs: number = 0
-  private timeWheelGestureBaseMs: number = 0
-  private timeWheelGestureSteps: number = 0
-  private timeWheelGestureTickOffset: number = 0
-  private timeWheelInertiaTimer: number = 0
-  private timeWheelInertiaVelocity: number = 0
-  private timeWheelInertiaLastMs: number = 0
-  private timeWheelInertiaStartedAt: number = 0
-  private timeWheelInertiaActive: boolean = false
-  private timeWheelLastVisualVelocity: number = 0
   @State private manualYear: number = 2026
   @State private manualMonth: number = 7
   @State private manualDay: number = 20
@@ -2404,6 +2385,7 @@ export struct WindowNativeNode {
     this.stopTimePanelTimers()
     this.stopViewCoordinateTimer()
     this.stopDockClockTimer()
+    if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
     this.stopSkyCultureTimeFollowTimer()
     this.stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
@@ -2460,6 +2442,7 @@ export struct WindowNativeNode {
     this.stopTimePanelTimers()
     this.stopViewCoordinateTimer()
     this.stopDockClockTimer()
+    if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
     this.stopSkyCultureTimeFollowTimer()
     this.stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
@@ -3336,6 +3319,7 @@ export struct WindowNativeNode {
   /** Dock 常驻时钟：1s 轮询 getSimulationTime，只写 dockClockText 一个 @State。 */
   private syncDockClockTimer(): void {
     this.stopDockClockTimer()
+    if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
     if (!this.applicationInForeground) { return }
     this.refreshDockClock()
     this.dockClockTimer = setInterval(() => {
@@ -11566,6 +11550,29 @@ private loadPlanetPositions(): void {
     this.callNativeFire('setTimeRate', rate.toString())
   }
 
+  // 时间轮交互控制器（普通类，非可观测）：拖动/惯性/轨道重基准/引擎推送。
+  // 跨域依赖以回调注入：引擎推送、暂停速度、UTC 偏移。
+  private timeWheelController: TimeWheelController | undefined = undefined
+
+  private wheel(): TimeWheelController {
+    if (this.timeWheelController === undefined) {
+      this.timeWheelController = new TimeWheelController(
+        this.timeWheelStore,
+        (jd: number) => { this.callNativeFire('setTimeToJD', jd.toFixed(8)) },
+        () => { this.stopTimeWheelSpeed() },
+        () => { return this.utcOffsetHours }
+      )
+    }
+    return this.timeWheelController
+  }
+
+  // 时间轮按下即暂停（原 setTimeWheelStopped 的速度域部分，跨域写收在宿主）。
+  private stopTimeWheelSpeed(): void {
+    this.timeStore.timeSpeedIndex = WindowNativeNode.SPEED_IDX_STOP
+    this.timeStore.beginRateChange(0, 500)
+    this.timeStore.timeRateText = this.formatRate(0)
+  }
+
   // ===== 时间速率档位系统 =====
   // Stellarium 内部单位：Julian days per second (JD/s)
   // 1 JD = 86400 ��，所以 1x 实时 = 1/86400 ≈ 1.1574e-5 JD/s
@@ -11604,36 +11611,21 @@ private loadPlanetPositions(): void {
   ]
   /** Apply speed at given step index. Clamps to valid range. */
   private applySpeedStep(index: number): void {
-    const len: number = this.SPEED_STEPS.length
-    // 映射到有效范围（含负索引倒带）
-    const idx: number = Math.max(0, Math.min(len - 1, index))
+    const idx: number = Math.max(0, Math.min(this.SPEED_STEPS.length - 1, index))
     const rate: number = this.SPEED_STEPS[idx]
     this.timeStore.timeSpeedIndex = idx
-    this.pendingTimeRate = rate
-    this.pendingTimeRateUntilMs = Date.now() + 500
+    this.timeStore.beginRateChange(rate, 500)
     this.setTimeRate(rate)
-    this.timeRateText = this.formatRate(rate)
+    this.timeStore.timeRateText = this.formatRate(rate)
   }
 
   /** 将原生返回的速率映射回时间档位，保证面板重建后按钮状态不会丢失。 */
   private syncTimeRateState(rate: number): void {
-    const now = Date.now()
-    if (!Number.isNaN(this.pendingTimeRate)) {
-      const rateMatchesPending = Math.abs(rate - this.pendingTimeRate) < 1e-9
-      if (!rateMatchesPending && now < this.pendingTimeRateUntilMs) {
-        return
-      }
-      this.pendingTimeRate = Number.NaN
-      this.pendingTimeRateUntilMs = 0
-    }
-    // 换挡瞬间引擎仍会回报上一档速率：同一速率重复回报时不做任何反推，
-    // 否则界面会先跳到旧档位再跳回新档位（真机实测到的「实时→倒带→实时」抖动）。
-    // 只在引擎速率真正发生变化时同步文本与档位。
-    if (!Number.isNaN(this.lastSyncedTimeRate) && Math.abs(rate - this.lastSyncedTimeRate) < 1e-9) {
-      return
-    }
-    this.lastSyncedTimeRate = rate
-    this.timeRateText = this.formatRate(rate)
+    // 陈旧/重复回报由 store 统一判定（待定窗口 + 去重），宿主只负责按结果落库。
+    if (this.timeStore.shouldIgnoreEngineRate(rate)) { return }
+
+    this.timeStore.lastSyncedTimeRate = rate
+    this.timeStore.timeRateText = this.formatRate(rate)
     let nearestIndex = 0
     let nearestDistance = Number.MAX_VALUE
     for (let i = 0; i < this.SPEED_STEPS.length; i++) {
@@ -11661,205 +11653,12 @@ private loadPlanetPositions(): void {
   private togglePause(): void {
     if (this.timeStore.timeSpeedIndex === 6) { // SPEED_IDX_STOP
       // Resume: restore last speed or default to 1x
-      const resumeIdx = this._lastNonZeroSpeedIndex > 0 && this._lastNonZeroSpeedIndex !== 6 ? this._lastNonZeroSpeedIndex : 7
+      const resumeIdx = this.timeStore.lastNonZeroSpeedIndex > 0 && this.timeStore.lastNonZeroSpeedIndex !== 6 ? this.timeStore.lastNonZeroSpeedIndex : 7
       this.applySpeedStep(resumeIdx)
     } else {
       // Pause: remember current speed
-      this._lastNonZeroSpeedIndex = this.timeStore.timeSpeedIndex
+      this.timeStore.lastNonZeroSpeedIndex = this.timeStore.timeSpeedIndex
       this.applySpeedStep(6) // SPEED_IDX_STOP
-    }
-  }
-  private _lastNonZeroSpeedIndex: number = 7
-
-  private selectTimeWheelUnit(unit: string): void {
-    this.finishTimeWheelTransition()
-    this.timeWheelStore.timeWheelUnit = unit
-    this.timeWheelStore.timeWheelDragging = false
-    this.rebaseTimeWheelTrack()
-  }
-
-  private applyTimeWheelDate(local: Date, refreshTicks: boolean, sendNative: boolean): void {
-    this.timeWheelLastInputMs = Date.now()
-    this.timeWheelStore.timeWheelYear = local.getUTCFullYear()
-    this.timeWheelStore.timeWheelMonth = local.getUTCMonth() + 1
-    this.timeWheelStore.timeWheelDay = local.getUTCDate()
-    this.timeWheelStore.timeWheelHour = local.getUTCHours()
-    this.timeWheelStore.timeWheelMinute = local.getUTCMinutes()
-    this.timeWheelStore.timeWheelSecond = local.getUTCSeconds()
-    if (refreshTicks) { this.timeWheelStore.refreshTicks() }
-    if (sendNative) {
-      const targetJd = local.getTime() / 86400000.0 + 2440587.5 - this.utcOffsetHours / 24.0
-      this.callNativeFire('setTimeToJD', targetJd.toFixed(8))
-      this.timeWheelLastNativePushMs = Date.now()
-    }
-  }
-
-  private setTimeWheelStopped(): void {
-    this.timeStore.timeSpeedIndex = WindowNativeNode.SPEED_IDX_STOP
-    this.pendingTimeRate = 0
-    this.pendingTimeRateUntilMs = Date.now() + 500
-    this.timeRateText = this.formatRate(0)
-  }
-
-  private finishTimeWheelTransition(): void {
-    if (this.timeWheelTransitionTimer === 0) { return }
-    clearInterval(this.timeWheelTransitionTimer)
-    this.timeWheelTransitionTimer = 0
-    this.applyTimeWheelDate(new Date(this.timeWheelTargetMs), true, true)
-    this.timeWheelTargetMs = 0
-  }
-
-  private stopTimeWheelInertia(applyFinal: boolean = false): void {
-    if (this.timeWheelInertiaTimer !== 0) {
-      clearInterval(this.timeWheelInertiaTimer)
-      this.timeWheelInertiaTimer = 0
-    }
-    const shouldApply = applyFinal && this.timeWheelInertiaActive && this.timeWheelGestureBaseMs > 0
-    this.timeWheelInertiaActive = false
-    this.timeWheelInertiaVelocity = 0
-    if (shouldApply) {
-      this.applyTimeWheelDate(this.timeWheelStore.dateAtFraction(this.timeWheelGestureBaseMs, this.timeWheelGestureSteps), false, true)
-    }
-  }
-
-  private startTimeWheelInertia(): void {
-    this.stopTimeWheelInertia()
-    const initialVelocity = this.clamp(this.timeWheelLastVisualVelocity * 0.58, -2.8, 2.8)
-    if (Math.abs(initialVelocity) < 0.06 || this.timeWheelGestureBaseMs <= 0) { return }
-    this.timeWheelInertiaActive = true
-    this.timeWheelInertiaVelocity = initialVelocity
-    this.timeWheelInertiaLastMs = Date.now()
-    this.timeWheelInertiaStartedAt = this.timeWheelInertiaLastMs
-    this.timeWheelInertiaTimer = setInterval(() => {
-      if (!this.timeWheelInertiaActive || this.timeWheelStore.timeWheelDragging) {
-        this.stopTimeWheelInertia()
-        return
-      }
-      const now = Date.now()
-      const elapsed = Math.max(1, now - this.timeWheelInertiaLastMs)
-      this.timeWheelInertiaLastMs = now
-      const frameMs = Math.min(34, elapsed)
-      const visualDelta = this.timeWheelInertiaVelocity * frameMs
-      this.timeWheelStore.timeWheelVisualOffset += visualDelta
-      this.timeWheelDragCarry = this.timeWheelStore.timeWheelVisualOffset
-      this.timeWheelGestureSteps -= visualDelta / this.timeWheelStore.tickSpacing
-      const local = this.timeWheelStore.dateAtFraction(this.timeWheelGestureBaseMs, this.timeWheelGestureSteps)
-      const sendNative = now - this.timeWheelLastNativePushMs >= 64
-      this.applyTimeWheelDate(local, false, sendNative)
-      if (Math.abs(this.timeWheelStore.timeWheelVisualOffset) >= this.timeWheelStore.tickSpacing * 8) {
-        this.rebaseTimeWheelTrackAtCenter()
-      }
-      this.timeWheelInertiaVelocity *= Math.pow(0.90, frameMs / 16.0)
-      if (now - this.timeWheelInertiaStartedAt >= 900 || Math.abs(this.timeWheelInertiaVelocity) < 0.025) {
-        this.stopTimeWheelInertia(true)
-      }
-    }, 16) as number
-  }
-
-  private timeWheelVelocityMultiplier(speed: number): number {
-    let baseMultiplier = 1.0
-    if (this.timeWheelStore.timeWheelUnit === 'year') { baseMultiplier = 0.07 }
-    else if (this.timeWheelStore.timeWheelUnit === 'month') { baseMultiplier = 0.08 }
-    else if (this.timeWheelStore.timeWheelUnit === 'day') { baseMultiplier = 0.2 }
-    else if (this.timeWheelStore.timeWheelUnit === 'hour') { baseMultiplier = 0.06 }
-    else if (this.timeWheelStore.timeWheelUnit === 'minute') { baseMultiplier = 0.25 }
-    if (speed < 0.35) { return baseMultiplier }
-    if (speed < 0.8) { return baseMultiplier * 2.0 }
-    if (speed < 1.4) { return baseMultiplier * 4.0 }
-    return baseMultiplier * 8.0
-  }
-
-  private rebaseTimeWheelTrack(): void {
-    this.timeWheelDragCarry = 0
-    this.timeWheelStore.timeWheelAppliedSteps = 0
-    this.timeWheelGestureTickOffset = 0
-    this.timeWheelStore.timeWheelVisualOffset = 0
-    this.timeWheelStore.timeWheelTrackBaseMs = Date.UTC(this.timeWheelStore.timeWheelYear, this.timeWheelStore.timeWheelMonth - 1,
-      this.timeWheelStore.timeWheelDay, this.timeWheelStore.timeWheelHour, this.timeWheelStore.timeWheelMinute, this.timeWheelStore.timeWheelSecond)
-    this.timeWheelStore.refreshTicks()
-  }
-
-  private rebaseTimeWheelTrackAtCenter(): void {
-    const tickShift = Math.round(this.timeWheelStore.timeWheelVisualOffset / this.timeWheelStore.tickSpacing)
-    if (tickShift === 0) { return }
-    this.timeWheelStore.timeWheelVisualOffset -= tickShift * this.timeWheelStore.tickSpacing
-    this.timeWheelDragCarry = this.timeWheelStore.timeWheelVisualOffset
-    this.timeWheelStore.timeWheelAppliedSteps -= tickShift
-    this.timeWheelGestureTickOffset -= tickShift
-  }
-
-  private handleTimeWheelTouch(event: TouchEvent): void {
-    const points = event.touches.length > 0 ? event.touches : event.changedTouches
-    if (points.length === 0) { return }
-    const point = points[0]
-    if (event.type === TouchType.Down) {
-      this.stopTimeWheelInertia()
-      this.finishTimeWheelTransition()
-      this.timeWheelStore.timeWheelDragging = true
-      this.timeWheelLastTouchX = point.x
-      this.timeWheelLastTouchMs = Date.now()
-      this.timeWheelLastInputMs = Date.now()
-      this.timeWheelGestureBaseMs = Date.UTC(this.timeWheelStore.timeWheelYear, this.timeWheelStore.timeWheelMonth - 1,
-        this.timeWheelStore.timeWheelDay, this.timeWheelStore.timeWheelHour, this.timeWheelStore.timeWheelMinute, this.timeWheelStore.timeWheelSecond)
-      this.timeWheelGestureSteps = 0
-      this.timeWheelGestureTickOffset = this.timeWheelStore.timeWheelAppliedSteps
-      this.timeWheelDragCarry = this.timeWheelStore.timeWheelVisualOffset
-      this.timeWheelLastVisualVelocity = 0
-      this.rebaseTimeWheelTrackAtCenter()
-      this.setTimeWheelStopped()
-      return
-    }
-    if (event.type === TouchType.Move && this.timeWheelStore.timeWheelDragging) {
-      const now = Date.now()
-      const delta = point.x - this.timeWheelLastTouchX
-      const elapsedMs = Math.max(1, now - this.timeWheelLastTouchMs)
-      this.timeWheelLastTouchX = point.x
-      this.timeWheelLastTouchMs = now
-      const speed = Math.abs(delta) / elapsedMs
-      const requestedStepDelta = -delta * this.timeWheelVelocityMultiplier(speed) / this.timeWheelStore.tickSpacing
-      const stepDelta = requestedStepDelta
-      const effectiveDelta = -stepDelta * this.timeWheelStore.tickSpacing
-      this.timeWheelDragCarry += effectiveDelta
-      this.timeWheelGestureSteps += stepDelta
-      this.timeWheelStore.timeWheelVisualOffset = this.timeWheelDragCarry
-      this.timeWheelLastVisualVelocity = effectiveDelta / elapsedMs
-      const local = this.timeWheelStore.dateAtFraction(this.timeWheelGestureBaseMs, this.timeWheelGestureSteps)
-      const sendNative = now - this.timeWheelLastNativePushMs >= 64
-      this.applyTimeWheelDate(local, false, sendNative)
-      if (Math.abs(this.timeWheelStore.timeWheelVisualOffset) >= this.timeWheelStore.tickSpacing * 8) {
-        this.rebaseTimeWheelTrackAtCenter()
-      }
-      return
-    }
-    if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      this.timeWheelStore.timeWheelDragging = false
-      if (this.timeWheelGestureBaseMs > 0) {
-        this.applyTimeWheelDate(this.timeWheelStore.dateAtFraction(this.timeWheelGestureBaseMs,
-          this.timeWheelGestureSteps), false, true)
-      }
-      if (event.type === TouchType.Up) {
-        this.startTimeWheelInertia()
-      } else {
-        this.stopTimeWheelInertia()
-      }
-    }
-  }
-
-  private syncTimeWheelFromSimulation(jd: number): void {
-    // ArkUI may emit Begin without a matching End while the panel is built.
-    // Guard only a short interval after actual user input so the display never
-    // becomes permanently detached from the simulated clock.
-    if (this.timeWheelStore.timeWheelDragging || this.timeWheelInertiaActive || Date.now() - this.timeWheelLastInputMs < 800) { return }
-    const local = new Date((jd + this.utcOffsetHours / 24.0 - 2440587.5) * 86400000.0)
-    this.timeWheelStore.timeWheelYear = local.getUTCFullYear()
-    this.timeWheelStore.timeWheelMonth = local.getUTCMonth() + 1
-    this.timeWheelStore.timeWheelDay = local.getUTCDate()
-    this.timeWheelStore.timeWheelHour = local.getUTCHours()
-    this.timeWheelStore.timeWheelMinute = local.getUTCMinutes()
-    this.timeWheelStore.timeWheelSecond = local.getUTCSeconds()
-    if (Math.abs(this.timeWheelStore.timeWheelVisualOffset) < 0.1) {
-      this.timeWheelStore.timeWheelTrackBaseMs = local.getTime()
-      this.timeWheelStore.refreshTicks()
     }
   }
 
@@ -11902,7 +11701,7 @@ private loadPlanetPositions(): void {
       this.applySpeedStep(WindowNativeNode.SPEED_IDX_STOP)
       this.callInteractive('setJD', targetJD.toFixed(6), () => {
         this.timeMarkLoading = false
-        this.syncTimeWheelFromSimulation(targetJD)
+        this.wheel().syncFromSimulation(targetJD)
         this.refreshTimeNow()
         this.flashHint('已定位到' + label + '。')
       }, () => {
@@ -14607,7 +14406,7 @@ private loadPlanetPositions(): void {
       if (r.timeRate !== undefined) {
         this.syncTimeRateState(r.timeRate as number)
       }
-      this.syncTimeWheelFromSimulation(jd)
+      this.wheel().syncFromSimulation(jd)
       this.syncJulianDateFields(r, jd)
     })
   }
@@ -22573,8 +22372,8 @@ private loadPlanetPositions(): void {
       // Sky Guide 风格时间拖动滑块（-365天 ~ +365天）：置于面板最前，手机端打开即可直接拖动
       TimeWheelScrubber({
         store: this.timeWheelStore,
-        onSelectUnit: (unit: string) => { this.selectTimeWheelUnit(unit) },
-        onWheelTouch: (event: TouchEvent) => { this.handleTimeWheelTouch(event) }
+        onSelectUnit: (unit: string) => { this.wheel().selectUnit(unit) },
+        onWheelTouch: (event: TouchEvent) => { this.wheel().handleTouch(event) }
       })
       // 时间控制按钮：[倒带][现在][停止][实时][快进][超快]
       this.timeSpeedChips()
@@ -27779,7 +27578,7 @@ private loadPlanetPositions(): void {
       }
       this.julianStore.julianDateEditing = false
       this.syncJulianDateFields(r, Number(r.jd))
-      this.syncTimeWheelFromSimulation(Number(r.jd))
+      this.wheel().syncFromSimulation(Number(r.jd))
       this.refreshSimTimeLight()
     }, (r: StellariumBridgeResponse) => {
       this.julianDateApplyInFlight = false
@@ -27935,14 +27734,14 @@ private loadPlanetPositions(): void {
       // 现在：回到当前时刻 + 重置为1x
       this.triggerAction('actionReturn_To_Current_Time')
       this.applySpeedStep(7) // SPEED_IDX_REALTIME
-      this.timeRateText = '1x'
+      this.timeStore.timeRateText = '1x'
       this.refreshTimeNow()
     } else if (id === 'stop') {
       // 停止按钮是可逆状态：运行时停止，停止后恢复到停止前速度。
       if (this.timeStore.timeSpeedIndex === 6) {
-        this.applySpeedStep(this._lastNonZeroSpeedIndex === 6 ? 7 : this._lastNonZeroSpeedIndex)
+        this.applySpeedStep(this.timeStore.lastNonZeroSpeedIndex === 6 ? 7 : this.timeStore.lastNonZeroSpeedIndex)
       } else {
-        this._lastNonZeroSpeedIndex = this.timeStore.timeSpeedIndex
+        this.timeStore.lastNonZeroSpeedIndex = this.timeStore.timeSpeedIndex
         this.applySpeedStep(6) // SPEED_IDX_STOP
       }
       this.refreshTimeNow()
@@ -27950,7 +27749,7 @@ private loadPlanetPositions(): void {
       // 实时：回到当前时刻 + 恢复 1x 正常速度
       this.triggerAction('actionReturn_To_Current_Time')
       this.applySpeedStep(7) // SPEED_IDX_REALTIME
-      this.timeRateText = '1x'
+      this.timeStore.timeRateText = '1x'
       this.refreshTimeNow()
     } else if (id === 'rewind') {
       // 倒带：单按钮循环升档 -1x → -2x → -10x → -1分/秒 → -1时/秒 → -1天/秒 → 回到-1x
@@ -27960,7 +27759,7 @@ private loadPlanetPositions(): void {
         rewIdx = this.timeStore.timeSpeedIndex === 0 ? 5 : this.timeStore.timeSpeedIndex - 1
       }
       this.applySpeedStep(rewIdx)
-      this.flashHint(I18n.t('s0763_rewind') + ' ' + this.timeRateText)
+      this.flashHint(I18n.t('s0763_rewind') + ' ' + this.timeStore.timeRateText)
       this.refreshTimeNow()
     } else if (id === 'faster' || id === 'fast' || id === 'warp') {
       // 快进：单按钮循环升档 1x → 2x → 10x → 1分/秒 → 1时/秒 → 1天/秒 → 10天/秒 → 回到1x
@@ -27970,7 +27769,7 @@ private loadPlanetPositions(): void {
         fwdIdx = this.timeStore.timeSpeedIndex >= 13 ? 7 : this.timeStore.timeSpeedIndex + 1
       }
       this.applySpeedStep(fwdIdx)
-      this.flashHint(I18n.t('s0765_fast') + ' ' + this.timeRateText)
+      this.flashHint(I18n.t('s0765_fast') + ' ' + this.timeStore.timeRateText)
       this.refreshTimeNow()
     } else if (id === 'slower') {
       // 减速：向"停止"方向降一档（快进降档、倒带也降档），降到1x再点=停止，不会跨进反向
@@ -27981,7 +27780,7 @@ private loadPlanetPositions(): void {
         prevIdx = this.timeStore.timeSpeedIndex + 1
       }
       this.applySpeedStep(prevIdx)
-      this.flashHint(prevIdx === 6 ? I18n.t('s0761_stop') : I18n.t('s0759_slower') + ' ' + this.timeRateText)
+      this.flashHint(prevIdx === 6 ? I18n.t('s0761_stop') : I18n.t('s0759_slower') + ' ' + this.timeStore.timeRateText)
       this.refreshTimeNow()
     } else if (id === '+12h') {
       this.advanceTime(12)
@@ -28449,7 +28248,7 @@ private loadPlanetPositions(): void {
     const text = this.observationTimeText
     const idx = text.indexOf(' ')
     const date = idx > 0 ? text.substring(0, idx) : ''
-    return date.length > 0 ? date + ' · ' + this.timeRateText : this.timeRateText
+    return date.length > 0 ? date + ' · ' + this.timeStore.timeRateText : this.timeStore.timeRateText
   }
 
   private layerTabItems(): TabItem[] {
