@@ -133,7 +133,11 @@ test('guide bridge actions use implemented commands and atmosphere payloads', as
 
 test('UI and CLI share semantic player, scrollable text and actual result', () => {
   const page = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
-  const guideUI = page.slice(page.indexOf('  interactiveGuideShell()'), page.indexOf('  expandedShell()'));
+  // Phase 6c 删除了相邻的 expandedShell/hoverObservatoryShell，原先"切到下一个 @Builder"的
+  // 结尾锚点随之失效；改为直接截取 interactiveGuideShell 自身的方法体，避免误纳相邻代码。
+  const guideMatch = page.match(/  interactiveGuideShell\(\) \{[\s\S]*?\r?\n  \}/);
+  assert.ok(guideMatch, 'interactiveGuideShell body not found');
+  const guideUI = guideMatch ? guideMatch[0] : '';
   assert.match(guideUI, /Scroll\(\)/);
   assert.doesNotMatch(guideUI, /maxLines|sendKey/);
   assert.doesNotMatch(guideUI, /GuideButton\(\{[^\n]*\?/);
