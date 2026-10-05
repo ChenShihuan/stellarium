@@ -65,6 +65,9 @@ import { SkyTextureStatusController, SkyTextureStatusHostHooks } from '../capabi
 import { NebulaTextureController, NebulaTextureHostHooks } from '../capability/NebulaTextureController'
 import { OcularController } from '../capability/OcularController'
 import { TelescopeController } from '../capability/TelescopeController'
+import { PolarScopeController, PolarScopeHostHooks, PolarScopeSessionFlags } from '../capability/PolarScopeController'
+import { ViewCoordinateController, ViewCoordinateHostHooks } from '../capability/ViewCoordinateController'
+import { SatelliteController, SatelliteHostHooks } from '../capability/SatelliteController'
 import { BehaviorHostHooks } from '../capability/ControllerHooks'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
@@ -225,7 +228,7 @@ import {
   BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
-  SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
+  SatelliteSource, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
   MeteorShowersData, LogResponse,
   ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
   RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptStatusResponse, ScriptCaption, ScriptCaptionsResponse,
@@ -829,6 +832,12 @@ export struct WindowNativeNode {
   private ocularControllerImpl: OcularController | null = null
   // D9：LX200 望远镜编辑器/控制命令控制器（惰性构造；状态在 TelescopeStore，定时器仍由 store 自持）。
   private telescopeControllerImpl: TelescopeController | null = null
+  // D5：极轴镜行为控制器（惰性构造；状态在 PolarScopeStore，polarScopeTimer 由控制器自持）。
+  private polarScopeControllerImpl: PolarScopeController | null = null
+  // D6：视图中心坐标叠层行为控制器（惰性构造；开关/坐标系/历元在 OverlayStore，viewCoordinateTimer 自持）。
+  private viewCoordinateControllerImpl: ViewCoordinateController | null = null
+  // D13：卫星行为控制器（惰性构造；状态在 SatelliteStore，publish* 保留项经 hooks 回注）。
+  private satelliteControllerImpl: SatelliteController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -1009,12 +1018,9 @@ export struct WindowNativeNode {
   private skyCultureMapRenderWidth: number = 0
   private skyCultureMapRenderHeight: number = 0
   // 极轴镜域状态已下沉 state/PolarScopeStore.ets（review §2.7：Prop 风格 → Store 风格）。
-  // 极轴镜几何与引擎/定时器字段（polarScopeRestoreState / Transition* / RequestPending / Timer /
-  // DataRequestId）仍留在宿主。
+  // §10.2 D5：引擎/定时器字段（polarScopeRestoreState / Transition* / Timer）已随行为下沉
+  // capability/PolarScopeController.ets；几何（ControlWidth / FooterHeight / TopInset）仍留宿主。
   @State private polarScopeStore: PolarScopeStore = new PolarScopeStore()
-  private polarScopeRestoreState: string = ''
-  private polarScopeTransitionPending: boolean = false
-  private polarScopeTransitionId: number = 0
   @State private pluginStore: PluginStore = new PluginStore()
   private pluginFeatureLoading: string[] = []
   @State private nebulaTextureStore: NebulaTextureStore = new NebulaTextureStore()
@@ -1032,18 +1038,14 @@ export struct WindowNativeNode {
   // The gyro control itself becomes a live compass while it is enabled.
   // liveMode 已并入 state/ViewSettingsStore.ets（review §2.7）。
   @State private currentFovText: string = '--'
+  // §10.2 D6：4 个 @State 读数留宿主（§2.7.1 G 类逐帧保留，§15.7 规则 2，「高频字段不入 store」）；
+  // 草稿字段（Dragging / DragStart* / Snapshot / Timer / RequestPending）已随行为下沉
+  // capability/ViewCoordinateController.ets。utcOffsetHours 引用点在 D6 方法集之外（dock 时钟 /
+  // 时间格式化 / TimeWheel 钩子），属跨域共用，按 §15.6-1 留宿主。
   @State private viewCoordinatePrimaryText: string = '--'
   @State private viewCoordinateSecondaryText: string = '--'
   @State private viewCoordinateOffsetX: number = 0
   @State private viewCoordinateOffsetY: number = 0
-  private viewCoordinateDragging: boolean = false
-  private viewCoordinateDragStartX: number = 0
-  private viewCoordinateDragStartY: number = 0
-  private viewCoordinateDragStartOffsetX: number = 0
-  private viewCoordinateDragStartOffsetY: number = 0
-  private viewCoordinateSnapshot: StellariumBridgeResponse = {}
-  private viewCoordinateTimer: number = 0
-  private viewCoordinateRequestPending: boolean = false
   /** 观测地 UTC 偏移（小时），由 getState 的 timeText-jd 差值校准，供轻量时间刷新使用 */
   private utcOffsetHours: number = 8
   @State private fovSliderValue: number = 60
@@ -1186,7 +1188,7 @@ export struct WindowNativeNode {
   private timePanelFullTimer: number = 0
   private skyCultureTimeFollowTimer: number = 0
   private skyCultureTimeFollowRequestPending: boolean = false
-  private polarScopeTimer: number = 0
+  // §10.2 D5：polarScopeTimer 已随行为下沉 capability/PolarScopeController.ets（控制器自持）。
   // 极轴镜在途请求态（polarScopeRequestPending / polarScopeDataRequestId）随加载器下沉
   // state/PolarScopeStore.ets（§14 B3-2）。
   private skyCultureDetailsRequestId: number = 0
@@ -1509,7 +1511,7 @@ export struct WindowNativeNode {
           flashHint: (text: ResourceStr): void => this.flashHint(text),
           dismissSplash: (): void => this.dismissSplash(),
           setLanguage: (language: string): void => this.setLanguage(language),
-          syncViewCoordinateTimer: (): void => this.syncViewCoordinateTimer(),
+          syncViewCoordinateTimer: (): void => this.viewCoordinateCtl().syncViewCoordinateTimer(),
           syncDockClockTimer: (): void => this.syncDockClockTimer(),
           setCurrentProjection: (value: string): void => { this.currentProjection = value },
           bridgeSyncStarted: (): boolean => this.bridgeSyncStarted,
@@ -1897,6 +1899,78 @@ export struct WindowNativeNode {
     return this.telescopeControllerImpl
   }
 
+  // D5：极轴镜行为控制器惰性构造。桥经 HostCommandPort；状态写 PolarScopeStore；
+  // 面板路由 / refreshState / flashHint 经 BehaviorHostHooks；叠层几何与桥回包 flags 抽取
+  //（宿主 getUIContext().px2vp 与 `as Record<...>`）经宿主 hooks 回注（控制器禁 as，§15.7 规则 4）。
+  private polarScopeCtl(): PolarScopeController {
+    if (this.polarScopeControllerImpl === null) {
+      const hooks: PolarScopeHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        applicationInForeground: (): boolean => this.applicationInForeground,
+        skyHeight: (): number => this.skyHeight,
+        screenSafeTopPixels: (): number => this.screenSafeTopPixels,
+        polarScopeTopInset: (): number => this.polarScopeTopInset(),
+        polarScopeFooterHeight: (): number => this.polarScopeFooterHeight(),
+        polarScopeSessionFlags: (response: StellariumBridgeResponse): PolarScopeSessionFlags => {
+          const flags = response.flags as Record<string, Object>
+          const location = response.location as Record<string, Object>
+          const result: PolarScopeSessionFlags = {
+            horizontalFlip: flags !== undefined && flags['flipHorz'] === true,
+            verticalFlip: flags !== undefined && flags['flipVert'] === true,
+            planetName: response.location && location['planetName'] !== undefined ? String(location['planetName']) : 'Earth'
+          }
+          return result
+        }
+      }
+      this.polarScopeControllerImpl = new PolarScopeController(this.commandPort(), this.polarScopeStore, hooks)
+    }
+    return this.polarScopeControllerImpl
+  }
+
+  // D6：视图中心坐标叠层行为控制器惰性构造。桥经 HostCommandPort；开关/坐标系/历元写 OverlayStore；
+  // 叠层 4 个 @State 与 5 个 A-保留几何方法经宿主 hooks 读写（§15.7 规则 2 / §15.6-2）；
+  // applicationInForeground / saveAppSettings / stopSkyInertia 经 hooks 回注。
+  private viewCoordinateCtl(): ViewCoordinateController {
+    if (this.viewCoordinateControllerImpl === null) {
+      const hooks: ViewCoordinateHostHooks = {
+        applicationInForeground: (): boolean => this.applicationInForeground,
+        saveAppSettings: (): void => { this.saveAppSettings() },
+        stopSkyInertia: (): void => { this.skyInputCtl().stopSkyInertia() },
+        viewCoordinateOffsetX: (): number => this.viewCoordinateOffsetX,
+        setViewCoordinateOffsetX: (value: number): void => { this.viewCoordinateOffsetX = value },
+        viewCoordinateOffsetY: (): number => this.viewCoordinateOffsetY,
+        setViewCoordinateOffsetY: (value: number): void => { this.viewCoordinateOffsetY = value },
+        setViewCoordinatePrimaryText: (text: string): void => { this.viewCoordinatePrimaryText = text },
+        setViewCoordinateSecondaryText: (text: string): void => { this.viewCoordinateSecondaryText = text },
+        viewCoordinateRestOffsetX: (): number => this.clampedViewCoordinateOffsetX(Math.max(16, (this.skyWidth - this.viewCoordinateOverlayWidth()) / 2)),
+        viewCoordinateRestOffsetY: (): number => this.clampedViewCoordinateOffsetY(this.isFoldHoverLayout ? 52 : (this.isExpandedLayout ? 64 : 102))
+      }
+      this.viewCoordinateControllerImpl = new ViewCoordinateController(this.commandPort(), this.overlayStore, hooks)
+    }
+    return this.viewCoordinateControllerImpl
+  }
+
+  // D13：卫星行为控制器惰性构造。桥经 HostCommandPort；状态整体写 SatelliteStore；
+  // 分组过渡动画与 CLI 发布点 publishSatellitePanelState（§15.6-4 保留）经宿主 hooks 回注。
+  private satelliteCtl(): SatelliteController {
+    if (this.satelliteControllerImpl === null) {
+      const hooks: SatelliteHostHooks = {
+        publishSatellitePanelState: (error: string): void => { this.publishSatellitePanelState(error) },
+        animateSatelliteGroupChange: (action: () => void): void => {
+          this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, action)
+        }
+      }
+      this.satelliteControllerImpl = new SatelliteController(this.commandPort(), this.satelliteStore, hooks)
+    }
+    return this.satelliteControllerImpl
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
@@ -2008,7 +2082,7 @@ export struct WindowNativeNode {
       stopBackgroundTimers: (): void => {
         this.stopTimePanelTimers()
         this.stopSkyCultureTimeFollowTimer()
-        this.stopPolarScopeTimer()
+        this.polarScopeCtl().stopPolarScopeTimer()
       },
       startStatusPolling: (): void => this.startScriptStatusPolling(),
       stopStatusPolling: (): void => this.stopScriptStatusPolling(),
@@ -2153,11 +2227,13 @@ export struct WindowNativeNode {
       hecLayoutPositions: (positions: Array<HeliocentricPosition>) => hecLayoutPositions(positions),
       loadPlanetPositions: () => { this.loadPlanetPositions() }
     })
-    // §14 B3-2：极轴镜加载器下沉 PolarScopeStore；「是否应刷新」谓词仍归宿主经具名 hooks 注入，
-    // 每 1s 计时器与面板开合只调用 store 的 loadPolarScopeData / cancelPolarScopeRequest。
+    // §14 B3-2：极轴镜加载器下沉 PolarScopeStore；「是否应刷新」谓词随 D5 移入
+    // capability/PolarScopeController.ets（读 applicationInForeground + store.polarScopeVisible），
+    // 经具名 hooks 回指控制器；每 1s 计时器与面板开合只调用 store 的 loadPolarScopeData /
+    // cancelPolarScopeRequest。
     this.polarScopeStore.attachPort(hostPort)
     this.polarScopeStore.attachHooks({
-      shouldRefreshPolarScope: () => this.shouldRefreshPolarScope()
+      shouldRefreshPolarScope: () => this.polarScopeCtl().shouldRefreshPolarScope()
     })
     // §14 B2A：今晚观测目标（WUT）簇的 loadWutTargets 下沉 state/WutStore.ets；onChanged 走
     // publishAstroPanelState，保持 CLI 侧 astroPanelState 的 wut 字段同步。
@@ -2309,7 +2385,7 @@ export struct WindowNativeNode {
         return
       }
       if (commandName === 'setSatellitePanelGroup') {
-        this.selectSatelliteGroup(String(event['payload'] ?? '').trim())
+        this.satelliteCtl().selectSatelliteGroup(String(event['payload'] ?? '').trim())
         return
       }
       if (commandName === 'setSearchBrowserPage' || commandName === 'selectSearchCategory') {
@@ -2633,11 +2709,11 @@ export struct WindowNativeNode {
     this.clearSkyCultureMakerArtworkPreview('disappear-sky-culture-maker-artwork')
     this.skyTextureStatusCtl().stop()
     this.stopTimePanelTimers()
-    this.stopViewCoordinateTimer()
+    this.viewCoordinateCtl().stopViewCoordinateTimer()
     this.stopDockClockTimer()
     if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
     this.stopSkyCultureTimeFollowTimer()
-    this.stopPolarScopeTimer()
+    this.polarScopeCtl().stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
     this.stopScriptStatusPolling()
@@ -2669,10 +2745,10 @@ export struct WindowNativeNode {
         void AudioEngine.getInstance().start()
       }
       this.gyroCtl().resumeAfterForeground()
-      this.syncViewCoordinateTimer()
+      this.viewCoordinateCtl().syncViewCoordinateTimer()
       this.syncDockClockTimer()
       this.syncSkyCultureTimeFollowTimer()
-      this.syncPolarScopeTimer()
+      this.polarScopeCtl().syncPolarScopeTimer()
       this.syncAstroCalcContextTimer()
       this.telescopeStore.syncTelescopeLivePosition()
       return
@@ -2682,11 +2758,11 @@ export struct WindowNativeNode {
     // rendering as soon as the Ability leaves the foreground.
     this.foregroundRefreshPaused = this.timePanelTimer !== 0 || this.detailConnectorCtl().hasDetailTimer()
     this.stopTimePanelTimers()
-    this.stopViewCoordinateTimer()
+    this.viewCoordinateCtl().stopViewCoordinateTimer()
     this.stopDockClockTimer()
     if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
     this.stopSkyCultureTimeFollowTimer()
-    this.stopPolarScopeTimer()
+    this.polarScopeCtl().stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
     this.detailConnectorCtl().stopDetailAutoRefresh()
@@ -2740,29 +2816,6 @@ export struct WindowNativeNode {
     }, 500)
   }
 
-  private shouldRefreshPolarScope(): boolean {
-    return this.applicationInForeground && this.polarScopeStore.polarScopeVisible
-  }
-
-  private stopPolarScopeTimer(): void {
-    if (this.polarScopeTimer !== 0) {
-      clearInterval(this.polarScopeTimer)
-      this.polarScopeTimer = 0
-    }
-    this.polarScopeStore.cancelPolarScopeRequest()
-  }
-
-  private syncPolarScopeTimer(): void {
-    if (!this.shouldRefreshPolarScope()) {
-      this.stopPolarScopeTimer()
-      return
-    }
-    this.polarScopeStore.loadPolarScopeData()
-    if (this.polarScopeTimer === 0) {
-      this.polarScopeTimer = setInterval(() => { this.polarScopeStore.loadPolarScopeData(false) }, 1000)
-    }
-  }
-
   private shouldRefreshAstroCalcContext(): boolean {
     return this.applicationInForeground && this.activePanel === 'astro' && this.panelVisible
   }
@@ -2795,105 +2848,10 @@ export struct WindowNativeNode {
   // 已整体搬入 state/TelescopeStore.ets（store 自持 start/stop）；宿主保留上面的生命周期谓词
   // shouldRefreshTelescopePosition 经 TelescopeHostHooks 注入。
 
-  private enterPolarScope(): void {
-    if (this.polarScopeStore.polarScopeVisible) {
-      this.closePolarScope()
-      return
-    }
-    if (this.polarScopeTransitionPending) return
-    const transitionId = ++this.polarScopeTransitionId
-    this.polarScopeTransitionPending = true
-    this.polarScopeStore.polarScopeLoading = true
-    this.polarScopeStore.polarScopeError = ''
-    this.polarScopeStore.polarScopeData = undefined
-    this.activePanel = 'polarScope'
-    this.panelVisible = false
-    this.polarScopeStore.polarScopeVisible = true
-    this.syncNativePolarScopeOverlay(false)
-    this.callNativeWhenReady('getSessionState', '', (response: StellariumBridgeResponse) => {
-      if (transitionId !== this.polarScopeTransitionId) return
-      const snapshot: SessionSnapshot = {
-        viewJ2000: response.viewJ2000,
-        fovDeg: response.fovDeg,
-        jd: response.jd,
-        location: response.location,
-        selected: response.selected,
-        flags: response.flags
-      }
-      this.polarScopeRestoreState = JSON.stringify(snapshot)
-      const flags = response.flags as Record<string, Object>
-      this.polarScopeStore.polarScopeHorizontalFlip = flags !== undefined && flags['flipHorz'] === true
-      this.polarScopeStore.polarScopeVerticalFlip = flags !== undefined && flags['flipVert'] === true
-      const location = response.location as Record<string, Object>
-      const planetName = response.location && location['planetName'] !== undefined
-        ? String(location['planetName']) : 'Earth'
-      if (planetName !== 'Earth') {
-        this.polarScopeTransitionPending = false
-        this.polarScopeStore.polarScopeLoading = false
-        this.polarScopeStore.polarScopeError = I18n.t('polar_scope_earth_only')
-        return
-      }
-      this.callNativeWhenReady('centerPolarScope', '', () => {
-        if (transitionId !== this.polarScopeTransitionId) return
-        this.callNativeWhenReady('setFOV', '4', () => {
-          if (transitionId !== this.polarScopeTransitionId) return
-          this.polarScopeTransitionPending = false
-          this.syncNativePolarScopeOverlay(true)
-          this.syncPolarScopeTimer()
-        }, 0, 100, 15, () => {
-          if (transitionId !== this.polarScopeTransitionId) return
-          this.polarScopeTransitionPending = false
-          this.polarScopeStore.polarScopeLoading = false
-          this.polarScopeStore.polarScopeError = I18n.t('polar_scope_open_failed')
-        })
-      }, 0, 100, 15, () => {
-        if (transitionId !== this.polarScopeTransitionId) return
-        this.polarScopeTransitionPending = false
-        this.polarScopeStore.polarScopeLoading = false
-        this.polarScopeStore.polarScopeError = I18n.t('polar_scope_open_failed')
-      })
-    }, 0, 120, 20, () => {
-      if (transitionId !== this.polarScopeTransitionId) return
-      this.polarScopeTransitionPending = false
-      this.polarScopeStore.polarScopeLoading = false
-      this.polarScopeStore.polarScopeError = I18n.t('polar_scope_open_failed')
-      this.syncNativePolarScopeOverlay(false)
-    })
-  }
-
-  private closePolarScope(): void {
-    if (!this.polarScopeStore.polarScopeVisible && !this.polarScopeTransitionPending) return
-    ++this.polarScopeTransitionId
-    this.polarScopeStore.polarScopeVisible = false
-    this.stopPolarScopeTimer()
-    this.polarScopeStore.polarScopeLoading = false
-    this.syncNativePolarScopeOverlay(false)
-    this.polarScopeTransitionPending = false
-    const restoreState = this.polarScopeRestoreState
-    this.polarScopeRestoreState = ''
-    if (restoreState.length === 0) return
-    this.polarScopeTransitionPending = true
-    const restoreTransitionId = this.polarScopeTransitionId
-    this.callNativeWhenReady('applySessionState', restoreState, () => {
-      if (restoreTransitionId !== this.polarScopeTransitionId) return
-      this.polarScopeTransitionPending = false
-      this.refreshState()
-    }, 0, 120, 20, () => {
-      if (restoreTransitionId !== this.polarScopeTransitionId) return
-      this.polarScopeTransitionPending = false
-      this.flashHint(I18n.t('polar_scope_restore_failed'))
-    })
-  }
-
-  private syncNativePolarScopeOverlay(active: boolean): void {
-    const height = Math.max(1, this.skyHeight)
-    const safeTopRatio = (this.polarScopeTopInset() + 68) / height
-    const safeBottomRatio = (this.polarScopeFooterHeight() + 20) / height
-    const payload = (active ? '1' : '0') + '|' + (this.polarScopeStore.polarScopeHorizontalFlip ? '1' : '0') + '|' +
-      (this.polarScopeStore.polarScopeVerticalFlip ? '1' : '0') + '|' + safeTopRatio.toString() + '|' + safeBottomRatio.toString() +
-      '|' + Math.max(0, Math.round(this.screenSafeTopPixels)).toString()
-    this.callNativeWhenReady('setPolarScopeOverlay', payload, () => {})
-  }
+  // §10.2 D5：极轴镜行为（9 法 + 4 字段）已整体下沉 capability/PolarScopeController.ets
+  // （定时器自持；面板路由 / refreshState / flashHint 经 BehaviorHostHooks，叠层几何与桥回包 flags
+  // 抽取经 PolarScopeHostHooks）。宿主保留叠层几何 polarScopeTopInset / polarScopeControlWidth /
+  // polarScopeFooterHeight（A-保留 51，PolarScopeOverlay 以 @Prop 消费）与命中区。
 
   private polarScopeTopInset(): number {
     const safeTop = this.getUIContext().px2vp(Math.max(0, this.screenSafeTopPixels))
@@ -2906,35 +2864,6 @@ export struct WindowNativeNode {
 
   private polarScopeFooterHeight(): number {
     return this.isExpandedLayout ? 148 : 176
-  }
-
-  private recenterPolarScope(): void {
-    if (this.polarScopeTransitionPending) return
-    this.callInteractive('centerPolarScope', '', () => {
-      this.callInteractive('setFOV', '4', () => { this.polarScopeStore.loadPolarScopeData(false) })
-    })
-  }
-
-  private setPolarScopeHorizontalFlip(value: boolean): void {
-    if (value === this.polarScopeStore.polarScopeHorizontalFlip) return
-    this.polarScopeStore.polarScopeHorizontalFlip = value
-    this.syncNativePolarScopeOverlay(true)
-    this.callInteractive('setActionChecked', 'actionHorizontal_Flip|' + (value ? '1' : '0'), () => {
-      this.polarScopeStore.loadPolarScopeData(false)
-    }, () => {
-      this.polarScopeStore.polarScopeHorizontalFlip = !value
-    })
-  }
-
-  private setPolarScopeVerticalFlip(value: boolean): void {
-    if (value === this.polarScopeStore.polarScopeVerticalFlip) return
-    this.polarScopeStore.polarScopeVerticalFlip = value
-    this.syncNativePolarScopeOverlay(true)
-    this.callInteractive('setActionChecked', 'actionVertical_Flip|' + (value ? '1' : '0'), () => {
-      this.polarScopeStore.loadPolarScopeData(false)
-    }, () => {
-      this.polarScopeStore.polarScopeVerticalFlip = !value
-    })
   }
 
   private mediaPreviewTopInset(): number {
@@ -2989,7 +2918,7 @@ export struct WindowNativeNode {
       this.configTab = 0
     }
     if (panel === 'polarScope') {
-      this.enterPolarScope()
+      this.polarScopeCtl().enterPolarScope()
       return
     }
     const currentPanel = this.activePanel
@@ -3011,7 +2940,7 @@ export struct WindowNativeNode {
     }
     this.stopTimePanelTimers()
     this.stopSkyCultureTimeFollowTimer()
-    this.stopPolarScopeTimer()
+    this.polarScopeCtl().stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
     if (!nextVisible) {
@@ -3076,7 +3005,7 @@ export struct WindowNativeNode {
       this.panelDataLoadTimer = -1
       if (!this.panelVisible || this.activePanel !== panel) return
       this.syncSkyCultureTimeFollowTimer()
-      this.syncPolarScopeTimer()
+      this.polarScopeCtl().syncPolarScopeTimer()
       if (panel === 'place') {
         this.refreshTonight()
       }
@@ -3234,13 +3163,13 @@ export struct WindowNativeNode {
       return
     }
     if (this.polarScopeStore.polarScopeVisible) {
-      this.closePolarScope()
+      this.polarScopeCtl().closePolarScope()
       return
     }
     // 关面板时停掉时间面板定时器，避免后台空转
     this.stopTimePanelTimers()
     this.stopSkyCultureTimeFollowTimer()
-    this.stopPolarScopeTimer()
+    this.polarScopeCtl().stopPolarScopeTimer()
     this.stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
     if (this.panelDataLoadTimer >= 0) {
@@ -3321,53 +3250,11 @@ export struct WindowNativeNode {
     this.callNativeWhenReady(name, payload, onOk, 0, 100, 15, onFailure)
   }
 
-  private refreshViewCenterCoordinates(): void {
-    if (!this.overlayStore.viewCoordinatesVisible || !this.applicationInForeground || this.viewCoordinateRequestPending) {
-      return
-    }
-    this.viewCoordinateRequestPending = true
-    this.callNativeWhenReady('getViewCenterCoordinates', '', (result: StellariumBridgeResponse) => {
-      this.viewCoordinateRequestPending = false
-      if (!this.overlayStore.viewCoordinatesVisible || !this.applicationInForeground) { return }
-      this.viewCoordinateSnapshot = result
-      this.applyViewCoordinateSnapshot()
-    }, 0, 34, 8, () => {
-      this.viewCoordinateRequestPending = false
-    })
-  }
-
-  private applyViewCoordinateSnapshot(): void {
-    const snapshot = this.viewCoordinateSnapshot
-    if (this.overlayStore.viewCoordinateFamily === 'horizontal') {
-      this.viewCoordinatePrimaryText = snapshot.azimuthText ?? '--'
-      this.viewCoordinateSecondaryText = snapshot.altitudeText ?? '--'
-    } else if (this.overlayStore.viewCoordinateFamily === 'galactic') {
-      this.viewCoordinatePrimaryText = snapshot.galacticLongitude ?? '--'
-      this.viewCoordinateSecondaryText = snapshot.galacticLatitude ?? '--'
-    } else if (this.overlayStore.viewEquatorialEpoch === 'ofDate') {
-      this.viewCoordinatePrimaryText = snapshot.ofDateRa ?? '--'
-      this.viewCoordinateSecondaryText = snapshot.ofDateDec ?? '--'
-    } else {
-      this.viewCoordinatePrimaryText = snapshot.j2000Ra ?? '--'
-      this.viewCoordinateSecondaryText = snapshot.j2000Dec ?? '--'
-    }
-  }
-
-  private stopViewCoordinateTimer(): void {
-    if (this.viewCoordinateTimer !== 0) {
-      clearInterval(this.viewCoordinateTimer)
-      this.viewCoordinateTimer = 0
-    }
-  }
-
-  private syncViewCoordinateTimer(): void {
-    this.stopViewCoordinateTimer()
-    if (!this.overlayStore.viewCoordinatesVisible || !this.applicationInForeground) { return }
-    this.refreshViewCenterCoordinates()
-    this.viewCoordinateTimer = setInterval(() => {
-      this.refreshViewCenterCoordinates()
-    }, 50)
-  }
+  // §10.2 D6：视图中心坐标叠层行为（8 法 + 8 草稿字段）已整体下沉
+  // capability/ViewCoordinateController.ets（定时器自持；开关/坐标系/历元写 OverlayStore，
+  // 4 个 @State 与几何方法经 ViewCoordinateHostHooks 回注）。宿主保留 5 个 A-保留几何方法
+  //（viewCoordinateOverlayWidth / Left / Top + clampedViewCoordinateOffsetX / Y，G 类逐帧读数，
+  //  §15.6-2）与命中区。
 
   private stopDockClockTimer(): void {
     if (this.dockClockTimer !== 0) {
@@ -3409,24 +3296,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private setViewCoordinatesVisible(visible: boolean): void {
-    this.overlayStore.viewCoordinatesVisible = visible
-    this.saveAppSettings()
-    this.syncViewCoordinateTimer()
-  }
-
-  private setViewCoordinateFamily(family: string): void {
-    this.overlayStore.viewCoordinateFamily = family
-    this.applyViewCoordinateSnapshot()
-    this.saveAppSettings()
-  }
-
-  private setViewEquatorialEpoch(epoch: string): void {
-    this.overlayStore.viewEquatorialEpoch = epoch
-    this.applyViewCoordinateSnapshot()
-    this.saveAppSettings()
-  }
-
   private viewCoordinateOverlayWidth(): number {
     return Math.min(this.isExpandedLayout ? 310 : 270, Math.max(210, this.skyWidth - 32))
   }
@@ -3449,35 +3318,6 @@ export struct WindowNativeNode {
   private clampedViewCoordinateOffsetY(base: number): number {
     const height = 92
     return clamp(this.viewCoordinateOffsetY, 8 - base, this.skyHeight - height - 8 - base)
-  }
-
-  private handleViewCoordinateTouch(event: TouchEvent): void {
-    const points = event.touches.length > 0 ? event.touches : event.changedTouches
-    if (points.length === 0) { return }
-    const point = points[0]
-    const x = touchScreenX(point)
-    const y = touchScreenY(point)
-    if (event.type === TouchType.Down) {
-      this.viewCoordinateDragging = true
-      this.viewCoordinateDragStartX = x
-      this.viewCoordinateDragStartY = y
-      this.viewCoordinateDragStartOffsetX = this.viewCoordinateOffsetX
-      this.viewCoordinateDragStartOffsetY = this.viewCoordinateOffsetY
-      this.skyInputCtl().stopSkyInertia()
-      return
-    }
-    if (event.type === TouchType.Move && this.viewCoordinateDragging) {
-      this.viewCoordinateOffsetX = this.viewCoordinateDragStartOffsetX + x - this.viewCoordinateDragStartX
-      this.viewCoordinateOffsetY = this.viewCoordinateDragStartOffsetY + y - this.viewCoordinateDragStartY
-      return
-    }
-    if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      this.viewCoordinateDragging = false
-      this.viewCoordinateOffsetX = this.clampedViewCoordinateOffsetX(
-        Math.max(16, (this.skyWidth - this.viewCoordinateOverlayWidth()) / 2))
-      this.viewCoordinateOffsetY = this.clampedViewCoordinateOffsetY(
-        this.isFoldHoverLayout ? 52 : (this.isExpandedLayout ? 64 : 102))
-    }
   }
 
   private callLongRunningInteractive(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void, onProgress?: (r: StellariumBridgeResponse) => void, maxAttempts: number = 240, isCancelled?: () => boolean): void {
@@ -3908,98 +3748,9 @@ export struct WindowNativeNode {
       groupScrollY: this.satelliteGroupScroller.currentOffset()?.yOffset ?? 0
     }))
   }
-  private selectSatelliteGroup(group: string): void {
-    if (group.length > 0 && !this.satelliteStore.satGroups.includes(group)) {
-      this.publishSatellitePanelState('unknown satellite group')
-      return
-    }
-    if (this.satelliteStore.activeSatGroup === group) {
-      this.publishSatellitePanelState()
-      return
-    }
-    this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => {
-      this.satelliteStore.activeSatGroup = group
-    })
-    this.satelliteStore.loadSatellites()
-  }
-  // §14 B3-4：loadSatellites 及其 satelliteListRequestId / satelliteLoadTimer /
-  // satelliteLoadIncludeSources / satelliteFlagMutationId / satelliteListElapsedMs 已整体搬入
-  // state/SatelliteStore.ets（90ms 去抖、请求序号并发抑制、includeSources 合并逐字保留）。
-  private setSatelliteUpdateSetting(key: string, value: boolean | number): void {
-    const payload: Record<string, boolean | number> = {}
-    payload[key] = value
-    this.callInteractive('setSatelliteUpdateSetting', JSON.stringify(payload), () => {
-      this.satelliteStore.loadSatelliteSources()
-    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
-  }
-  private addSatelliteSource(): void {
-    const url = this.satelliteStore.satSourceInput.trim()
-    if (url.length === 0) { this.satelliteStore.satSourceStatus = I18n.t('sat_source_empty'); return }
-    const sources: SatelliteSourceInput[] = []
-    for (const source of this.satelliteStore.satSources) sources.push({ url: source.url, addNew: source.addNew })
-    sources.push({ url: url, addNew: this.satelliteStore.satSourceAddNew })
-    this.callInteractive('setSatelliteSources', JSON.stringify({ sources: sources }), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.satelliteStore.satSourceInput = ''
-        this.satelliteStore.satSourceStatus = I18n.t('sat_source_saved')
-        this.satelliteStore.loadSatelliteSources()
-      } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
-    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
-  }
-  private deleteSatelliteSource(index: number): void {
-    const sources: SatelliteSourceInput[] = []
-    for (let sourceIndex = 0; sourceIndex < this.satelliteStore.satSources.length; sourceIndex++) {
-      if (sourceIndex !== index) {
-        const source = this.satelliteStore.satSources[sourceIndex]
-        sources.push({ url: source.url, addNew: source.addNew })
-      }
-    }
-    this.callInteractive('setSatelliteSources', JSON.stringify({ sources: sources }), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.satelliteStore.satSourceStatus = I18n.t('sat_source_deleted')
-        this.satelliteStore.loadSatelliteSources()
-      } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
-    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
-  }
-  private importSatelliteTleFile(): void {
-    const path = this.satelliteStore.satTleFileInput.trim()
-    if (path.length === 0) { this.satelliteStore.satSourceStatus = I18n.t('sat_tle_path_empty'); return }
-    this.callInteractive('importSatelliteTle', JSON.stringify({ paths: [path] }), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.satelliteStore.satTleFileInput = ''
-        this.satelliteStore.satSourceStatus = I18n.t('sat_tle_imported')
-        this.satelliteStore.loadSatellites(true, true)
-      } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_tle_import_failed')
-    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_tle_import_failed') })
-  }
-  private refreshSatelliteCatalog(): void {
-    this.callInteractive('refreshSatelliteCatalog', '', (r: StellariumBridgeResponse) => {
-      this.satelliteStore.satSourceStatus = r.ok === true ? I18n.t('sat_refresh_started') : (r.error ?? I18n.t('sat_refresh_offline'))
-      this.satelliteStore.loadSatelliteSources()
-    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_refresh_offline') })
-  }
-  private setSatelliteFlag(name: string, v: boolean): void {
-    if ((name === 'labels' && this.satelliteStore.satLabels === v) ||
-      (name === 'orbitLines' && this.satelliteStore.satOrbitLines === v) ||
-      (name === 'hints' && this.satelliteStore.satHints === v) ||
-      (name === 'iconicMode' && this.satelliteStore.satIconicMode === v) ||
-      (name === 'hideInvisible' && this.satelliteStore.satHideInvisible === v)) return
-    const mutationId = ++this.satelliteStore.satelliteFlagMutationId
-    let previous: boolean | undefined
-    if (name == 'labels') { previous = this.satelliteStore.satLabels; this.satelliteStore.satLabels = v }
-    else if (name == 'orbitLines') { previous = this.satelliteStore.satOrbitLines; this.satelliteStore.satOrbitLines = v }
-    else if (name == 'hints') { previous = this.satelliteStore.satHints; this.satelliteStore.satHints = v }
-    else if (name == 'iconicMode') { previous = this.satelliteStore.satIconicMode; this.satelliteStore.satIconicMode = v }
-    else if (name == 'hideInvisible') { previous = this.satelliteStore.satHideInvisible; this.satelliteStore.satHideInvisible = v }
-    this.callNativeWhenReady('setSatellitesFlag', name + ':' + (v ? '1' : '0'), () => {}, 0, 100, 15, () => {
-      if (mutationId !== this.satelliteStore.satelliteFlagMutationId || previous === undefined) return
-      if (name == 'labels') this.satelliteStore.satLabels = previous
-      else if (name == 'orbitLines') this.satelliteStore.satOrbitLines = previous
-      else if (name == 'hints') this.satelliteStore.satHints = previous
-      else if (name == 'iconicMode') this.satelliteStore.satIconicMode = previous
-      else if (name == 'hideInvisible') this.satelliteStore.satHideInvisible = previous
-    })
-  }
+  // §10.2 D13：卫星行为（8 法）已整体下沉 capability/SatelliteController.ets（桥经 CommandPort，
+  // 状态写 SatelliteStore；分组 180ms 过渡动画与 CLI 发布点经 SatelliteHostHooks）。
+  // publishSatellitePanelState（§15.6-4 `publish*` 保留项）与 requestSatellitePasses（选中管线 M3-3）留宿主。
   private catalogHealthText(title: string, health: CatalogHealthEntry): string {
     if (!this.catalogHealthLoaded) return title + '状态检查中'
     if (!this.catalogManifestPresent || health.status === 'unknown') return title + '状态不可用'
@@ -7791,7 +7542,7 @@ private loadPlanetPositions(): void {
     this.flashHint(I18n.t('msg_navigating'))
     this.callNativeWhenReady('setJD', jd.toString(), () => {
       this.callNativeWhenReady('searchObject', lock, (r2: StellariumBridgeResponse) => {
-        this.frameSatellite()
+        this.satelliteCtl().frameSatellite()
         const found = r2.found === true
         this.flashHint(found
           ? ('已跳至『' + label + '』时刻，锁定『' + lock + '』并框入月球(卫星)')
@@ -7801,15 +7552,7 @@ private loadPlanetPositions(): void {
   }
 
   // 跳转后若视角过窄，适当拉远以便把卫星(月球)一并收入视野
-  private frameSatellite(): void {
-    this.callNativeWhenReady('getSessionState', '', (r: StellariumBridgeResponse) => {
-      const fov = (r.fovDeg ?? 0)
-      if (fov > 0 && fov < 12) {
-        const target = 16
-        this.callNativeWhenReady('zoomBy', (target / fov).toFixed(3) + '|0')
-      }
-    })
-  }
+  // （D13：frameSatellite 已下沉 capability/SatelliteController.ets）
 
   private fmtIso(iso: string): string {
     if (!iso || iso.length < 16) return '--'
@@ -7954,11 +7697,11 @@ private loadPlanetPositions(): void {
       const right = (this.skyWidth + this.polarScopeControlWidth()) / 2 - 6
       if (y >= headerTop + 6 && y <= headerTop + 54) {
         if (x >= right - 48 && x <= right) {
-          this.closePolarScope()
+          this.polarScopeCtl().closePolarScope()
           return true
         }
         if (x >= right - 104 && x <= right - 56) {
-          this.recenterPolarScope()
+          this.polarScopeCtl().recenterPolarScope()
           return true
         }
       }
@@ -8633,7 +8376,7 @@ private loadPlanetPositions(): void {
             overlayTop: this.viewCoordinateOverlayTop(),
             hintTop: (this.isExpandedLayout || this.isFoldHoverLayout) ? 16 : 58,
             actionHint: this.actionHint,
-            onHandleViewCoordinateTouch: (event: TouchEvent) => { this.handleViewCoordinateTouch(event) }
+            onHandleViewCoordinateTouch: (event: TouchEvent) => { this.viewCoordinateCtl().handleViewCoordinateTouch(event) }
           })
         }
           .width('100%')
@@ -8660,10 +8403,10 @@ private loadPlanetPositions(): void {
             skyHeight: this.skyHeight,
             isExpandedLayout: this.isExpandedLayout,
             onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
-            onRecenter: () => { this.recenterPolarScope() },
-            onClose: () => { this.closePolarScope() },
-            onHorizontalFlipChange: (value: boolean) => { this.setPolarScopeHorizontalFlip(value) },
-            onVerticalFlipChange: (value: boolean) => { this.setPolarScopeVerticalFlip(value) }
+            onRecenter: () => { this.polarScopeCtl().recenterPolarScope() },
+            onClose: () => { this.polarScopeCtl().closePolarScope() },
+            onHorizontalFlipChange: (value: boolean) => { this.polarScopeCtl().setPolarScopeHorizontalFlip(value) },
+            onVerticalFlipChange: (value: boolean) => { this.polarScopeCtl().setPolarScopeVerticalFlip(value) }
           })
         }
         if (this.skyCultureViewStore.artPreviewOpen) {
@@ -8770,7 +8513,7 @@ private loadPlanetPositions(): void {
         this.skyHeight = Number(newArea.height) > 1 ? Number(newArea.height) : 1
         this.refreshFoldState('onAreaChange')
         this.updateResponsiveLayout('onAreaChange')
-        if (this.polarScopeStore.polarScopeVisible) this.syncNativePolarScopeOverlay(true)
+        if (this.polarScopeStore.polarScopeVisible) this.polarScopeCtl().syncNativePolarScopeOverlay(true)
         if (this.isFoldTabletLayout) {
           this.panelWidth = Math.min(Math.max(this.skyWidth * 0.42, 300), 340)
           this.panelMaxHeight = Math.min(this.skyHeight * 0.70, 560)
@@ -10198,9 +9941,9 @@ private loadPlanetPositions(): void {
         lineColor: this.nightModeStore.nmBorder(),
         onToggleGyroscope: (v: boolean) => { this.gyroCtl().toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) },
         onRevoke: () => { this.confirmPrivacyRevocation() },
-        onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
-        onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
-        onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) },
+        onToggleVisible: (visible: boolean) => { this.viewCoordinateCtl().setViewCoordinatesVisible(visible) },
+        onSelectFamily: (family: string) => { this.viewCoordinateCtl().setViewCoordinateFamily(family) },
+        onSelectEpoch: (epoch: string) => { this.viewCoordinateCtl().setViewEquatorialEpoch(epoch) },
         onApplyLayerSwitch: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
         onSpeedDown: () => { this.speedDown() },
         onTogglePause: () => { this.togglePause() },
@@ -10312,9 +10055,9 @@ private loadPlanetPositions(): void {
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
         hasSelectedObject: () => { return this.objectDetailStore.hasSelectedObject() },
         selectConfigTab: (tabId: number) => { this.layerCtl().selectConfigTab(tabId) },
-        setViewCoordinatesVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
-        setViewCoordinateFamily: (family: string) => { this.setViewCoordinateFamily(family) },
-        setViewEquatorialEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) },
+        setViewCoordinatesVisible: (visible: boolean) => { this.viewCoordinateCtl().setViewCoordinatesVisible(visible) },
+        setViewCoordinateFamily: (family: string) => { this.viewCoordinateCtl().setViewCoordinateFamily(family) },
+        setViewEquatorialEpoch: (epoch: string) => { this.viewCoordinateCtl().setViewEquatorialEpoch(epoch) },
         setLanguage: (lang: string) => { this.setLanguage(lang) },
         setEphemerisEnabled: (key: string, available: boolean, enabled: boolean) => { this.setEphemerisEnabled(key, available, enabled) },
         setDistanceUnit: (useMetric: boolean) => { this.setDistanceUnit(useMetric) },
@@ -10549,21 +10292,21 @@ private loadPlanetPositions(): void {
         onPublishState: () => { this.publishSatellitePanelState() },
         catalogHealthTextOf: (title: string, health: CatalogHealthEntry) => this.catalogHealthText(title, health),
         catalogHealthColorOf: (health: CatalogHealthEntry) => this.catalogHealthColor(health),
-        onDeleteSource: (index: number) => { this.deleteSatelliteSource(index) },
+        onDeleteSource: (index: number) => { this.satelliteCtl().deleteSatelliteSource(index) },
         onSourceInput: (value: string) => { this.satelliteStore.satSourceInput = value },
         onSourceAddNew: (value: boolean) => { this.satelliteStore.satSourceAddNew = value },
-        onAddSource: () => { this.addSatelliteSource() },
-        onRefreshCatalog: () => { this.refreshSatelliteCatalog() },
+        onAddSource: () => { this.satelliteCtl().addSatelliteSource() },
+        onRefreshCatalog: () => { this.satelliteCtl().refreshSatelliteCatalog() },
         onTleFileInput: (value: string) => { this.satelliteStore.satTleFileInput = value },
-        onImportTle: () => { this.importSatelliteTleFile() },
-        onSetUpdateSetting: (key: string, value: boolean | number) => { this.setSatelliteUpdateSetting(key, value) },
+        onImportTle: () => { this.satelliteCtl().importSatelliteTleFile() },
+        onSetUpdateSetting: (key: string, value: boolean | number) => { this.satelliteCtl().setSatelliteUpdateSetting(key, value) },
         onUpdateFrequencyInput: (value: string) => { this.satelliteStore.satUpdateFrequencyInput = value },
         onSubmitUpdateFrequency: () => {
           const hours = Number(this.satelliteStore.satUpdateFrequencyInput)
-          if (Number.isFinite(hours)) this.setSatelliteUpdateSetting('updateFrequencyHours', Math.round(hours))
+          if (Number.isFinite(hours)) this.satelliteCtl().setSatelliteUpdateSetting('updateFrequencyHours', Math.round(hours))
         },
-        onSetFlag: (flag: string, isOn: boolean) => { this.setSatelliteFlag(flag, isOn) },
-        onSelectGroup: (group: string) => { this.selectSatelliteGroup(group) },
+        onSetFlag: (flag: string, isOn: boolean) => { this.satelliteCtl().setSatelliteFlag(flag, isOn) },
+        onSelectGroup: (group: string) => { this.satelliteCtl().selectSatelliteGroup(group) },
         onQueryChange: (value: string) => { this.satelliteStore.satQuery = value; this.satelliteStore.loadSatellites() },
         onSubmitQuery: () => { this.satelliteStore.loadSatellites(false, true) },
         onSearchObject: (item: SatelliteListItem) => { this.searchObject(item.name, '', 'object|Satellite|' + item.id) }
