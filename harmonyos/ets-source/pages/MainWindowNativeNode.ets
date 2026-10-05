@@ -54,6 +54,7 @@ import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { GyroStore } from '../state/GyroStore'
 import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
+import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
@@ -14965,38 +14966,6 @@ private loadPlanetPositions(): void {
   // 把当前星图会话(视线/FOV/时间/位置/选中星)导出成 JSON，可在另一台鸿蒙设备导入接续；
   // 完整跨设备一键流转需华为分布式软总线(Distributed Hardware Kit)。当前基础 SDK 已把
   // "导出/导入"做成统一命令桥，切到含分布式能力的 SDK 后这里即可改为设备发现+拉起目标 Ability。
-  @Builder
-  continuationSection() {
-    Column({ space: 8 }) {
-      Text(I18n.t('c_continuation')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 10, bottom: 2 })
-      Text(I18n.t('m_continuation_desc'))
-        .fontSize(11).fontColor('#99FFFFFF').width('100%').margin({ bottom: 2 })
-      if (this.sessionHint !== '') {
-        Text(this.sessionHint).fontSize(12).fontColor('#CCFFCC').width('100%').margin({ top: 2, bottom: 2 })
-      }
-      Row({ space: 8 }) {
-        Button(I18n.t('btn_export_session'))
-          .fontSize(13).fontColor('#FFFFFF').backgroundColor('#5B93BF')
-          .borderRadius(UI_RADIUS_CONTROL).height(34).layoutWeight(1)
-          .onClick(() => { this.sessionExport() })
-        Button(I18n.t('btn_apply_local'))
-          .fontSize(13).fontColor('#FFFFFF').backgroundColor(this.nmBorder())
-          .borderRadius(UI_RADIUS_CONTROL).height(34).layoutWeight(1)
-          .onClick(() => { this.sessionApply() })
-      }.width('100%').margin({ top: 4 })
-      Button(I18n.t('btn_start_continuation'))
-        .fontSize(13).fontColor('#FFFFFF').backgroundColor('#3A6EA5')
-        .borderRadius(UI_RADIUS_CONTROL).height(34).width('100%').margin({ top: 4 })
-        .onClick(() => { this.sessionHandoff() })
-      if (this.sessionJson !== '') {
-        Scroll() {
-          Text(this.sessionJson)
-            .fontSize(10).fontColor('#BBBBBB').fontFamily('monospace')
-            .width('100%').padding(6)
-        }.height(160).width('100%').backgroundColor('#1A1A1A').borderRadius(UI_RADIUS_CONTROL).margin({ top: 4 })
-      }
-    }.width('100%').padding({ left: 10, right: 10 })
-  }
 
   @Builder tonightEventsSection() {
     Column({ space: 8 }) {
@@ -21204,7 +21173,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       if (!OFFLINE_APPGALLERY_BUILD) {
         this.pointingTestSection()
         this.watchGyroSection()
-        this.continuationSection()
+        ContinuationSection({ hint: this.sessionHint, json: this.sessionJson, textColor: this.nmText(), panelColor: this.nmBorder(), onExport: () => { this.sessionExport() }, onApply: () => { this.sessionApply() }, onHandoff: () => { this.sessionHandoff() } })
         this.tonightEventsSection()
       }
     } else if (this.activePanel === 'layers') {
