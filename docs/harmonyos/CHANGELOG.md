@@ -1,3 +1,19 @@
+## [2026-10-04] DevEco Code - 重构：§14 A2-3 域取值/标签/选项族（放宽粒度首片）
+- **切片**：§14 轨道 A2 第 3 片（放宽粒度首片）。开工 `git log -1` = `308f1634a5`，工作区已跟踪文件干净。
+- **迁移 41 个宿主 `private` 派生方法**（开工按 §14.3.1 口径重测边界，B-下沉组）：
+  - 搜索/目录 12 → `state/CatalogStore.ets`（`catalogLabelForModule`/`searchCategoryOptions`/`searchDynamicCategoryOptions`/`searchAllCategoryOptions`/`searchCategoryIcon`/`categoryModuleIdFor`/`searchCategoryLabel`/`categoryObjectIcon`；后两者读搜索域当前分类，改显式入参 `category`）+ `state/SearchStore.ets`（`searchVisibilityLabel`/`searchInstrumentLabel`/`celestialSubtitle`/`categoryObservationSubtitle`）；撤除 `SearchHostHooks.celestialSubtitle`，`loadMoreCategoryObjects` 改 `this.celestialSubtitle`。
+  - 详情卡 12 → `state/ObjectDetailStore.ets`（`expandedAtmosphereSummary`/`selectedObjectIsConstellation`/`selectedSatelliteTleEpoch`/`objectInspectorIcon`/`objectInspectorSearchText`/`hasSelectedObject`/`selectedObjectIsArtificialSatellite`；`objectDistanceSummary`/`objectDistanceNoticeText` 改显式 `distanceVisible` 入参）+ `state/ObjectMediaStore.ets`（`objectInspectorModelNotice`/`defaultObjectInspectorModelRotation`/`objectInspectorImageHeight`）；撤除 `ObjectDetailHostHooks.selectedObjectIsArtificialSatellite`。
+  - 信息窗 3 → `state/InfoWindowStore.ets`（`informationMaskHas`/`distanceInformationVisible`/`selectedLiveInfoVisible`）。
+  - 脚本/时间 8 → `state/ScriptStore.ets`（`scriptMeta`/`scriptMetaLine`/`scriptSourceLine`/`scriptWaitDisplayText`/`visibleScriptCaptions`/`visibleScriptCaptionText`）+ `state/TimeStore.ets`（`timePanelClockText`/`timePanelDateText`）。
+  - 其余 6：`ephemerisStartOptionLabel`→`EphemerisStore`；`isObserverPlanetSelection`→`SessionToolStore`；`astroNeedsSelectedObject`→`AstroStore`；`skyCultureNarrationParagraphs`→`SkyCultureViewStore`；`selectedSkyCultureMakerConstellation`→复用既有 `SkyCultureMakerStore.selected()`；`hecPointColor`→`common/derive/astro.ets` 纯函数 + 显式 `accentColor` 入参。
+  - **停下 0**；剔除 `sessionHandoff`（void 动作）与 `catalogHealthText`/`catalogHealthColor`（入 A-保留组）。
+- **A-保留组登记（49 个 / 210 行，纯文档）**：判据"全部宿主字段读取项 ⊆ §2.7.1 保留集合、且不读任何 store"（`this.EDGE_MARGIN` 等未登记只读常量不计入）。写入 `ARKTS-PAGES-REFACTOR-PLAN.md` §14.3.1 与 `ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §2.7.1 新子类"宿主控制器逻辑（永久保留）"，逐条命中说明见后者。**实测 49 ≠ 原估 31**：原表 31 为占位估值且其示例清单误抄 A2-4 目标；以重测为准。
+- **体量**：宿主 `MainWindowNativeNode.ets` 15,309 → 15,008（−301）；宿主 `private` 方法 710 → 669（−41）。`git diff --stat`：17 文件 +547 / −438。
+- **测试同步**：4 个受影响脚本夹具改读 store 文件 / 改显式入参 —— `test-ohos-detail-image-layout`（读 `ObjectMediaStore`）、`test-ohos-distance-ui`（读 `ObjectDetailStore`/`InfoWindowStore`，`extract` 支持形参）、`test-ohos-information-policy`（`informationMaskHas` 挂到 `infoWindowStore`）、`test-ohos-search-browser`（`controllerFor` 支持 `CatalogStore`、假宿主补 `catalogStore`）。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 13 文件 0 错；构建 `BUILD SUCCESSFUL`；契约 intact（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 215+ 文件）；受影响 4 测试全绿（5/5、5/5、3/3、3/3）；全量 `*ohos*.mjs` 扫描仅 §13.6 的 7 个环境类失败；模拟器冒烟（`127.0.0.1:5555`，UI-only 通道）：Dock→搜索面板分类 picker（渲染"浏览分类/行星"、展开分类列表）、时间面板手工时间块、更多功能面板，`pidof` 全程存活（16499）。
+- **踩坑（本片新）**：无新类；沿用"`new Function` 夹具需随下沉同步（含形参签名与 `this.<store>` 前缀）"。另记：PowerShell 中 `[System.IO.File]::ReadAllBytes(相对路径)` 用的是 .NET `CurrentDirectory` 而非 `Set-Location` 后的 provider 路径，验证 BOM/裸 LF 时须传 `Resolve-Path` 的绝对路径。
+- **待真机项**：详情卡距离提示/摘要、媒体模型视角与高度、星表分类图标与副标题、脚本元数据行、时间面板副标题、星历起始日期标签的**端到端真实渲染**（UI-only 通道无引擎，`listMatchingObjects`/`getObjectInfo` 无回包）；真机另需确认 `informationMaskHas` 下沉后设置页自定义字段开关联动。
+- **A2 进度**：62 / 214（B-下沉口径 62 / 153）。
 ## [2026-10-04] DevEco Code - 重构：§14 A2-2 单域取值/标签派生方法下沉
 
 - 依据 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.3（A2 三去向）/§14.8（规则 1/2/5/6/7）与 §13.1/§13.2/§13.3；承接 §14.2 的 `common/derive/*.ets`。开工断言：`git log --oneline -1` = `88d2e90cf7`（A2-1）；`git status --porcelain` 已跟踪文件干净。按 §2.12 判据在当前宿主重测 A2 余项，按行数降序取非热路径 15 个（遇多域/多助手耦合者按下表停下）。
