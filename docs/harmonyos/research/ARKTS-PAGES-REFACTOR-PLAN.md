@@ -447,11 +447,20 @@ Phase 3h/3i 做了两轮死代码清理，方法可复现：本 struct 的方法
 | 时间相关（3 个） | `advanceTimeWheel` / `setTimeNow` / `adjustTime` | 被时间轮/快捷行取代 |
 | 其余（21 个） | 抽屉/信息窗几何、`nm`、`tickPercent`、`skyCulture*FilterIndex`、`defaultSkyCultureMakerDraft` 等 | 多为被后续实现取代的旧版本 |
 
-**探查工具（可复用）：** 本轮的"零引用即不可达"判据 + 三形式引用统计，可作为**每个 Phase 4 面板切片的前置自检**，
-先把该面板区域内的死方法清掉，再搬迁，避免把死代码带进新结构。
+**探查工具（可复用，已扩展到四类判据）：** 本轮的判据 + 三形式引用统计，可作为**每个 Phase 4 面板切片的前置自检**，
+先把该面板区域内的死代码清掉再搬迁，避免把死代码带进新结构。四类判据与实测产出：
 
-**教训（已记 CHANGELOG）：** 删除脚本必须特判**单行方法**（`private f(): T { return x }`），
-否则以"下一个 `\n  }\n`"为结束标记会越过边界、连带删除相邻成员；必须由编译器（`arkts_check` + 构建）兜底。
+| 判据 | 做法 | 本轮产出 |
+|---|---|---|
+| 不可达方法 | `private` 方法在文件内 `this.<name>(`、裸 `this.<name>`、字符串 `'<name>'` 三种引用全 0（排除生命周期与 `@Watch` 目标） | 48 个（首轮 39 + 级联 9），约 500 行 |
+| 零调用 `@Builder` | `this.<name>(` 调用点为 0，并核对标识符全文件出现次数以排除同名前缀干扰 | 13 个（含 `tabletObjectInspector`、`railShell`、`padExploreHome` 等旧抽屉/平板布局变体），约 519 行 |
+| 零引用字段 | `this.<name>` 引用全 0（含未写未读） | 31 个（FPS 残留、旧陀螺仪锚定量、旧面板开关等） |
+| 级联复扫 | 每轮删除后重扫，直到无新增 | 3 轮收敛；暴露出"按步进推进时间"整条支路（`advanceTimeWheel` → `startTimeWheelTransition`）在清理前已不可达 |
+
+**两条删除脚本的硬性要求（都已踩过）：**
+① **单行方法必须特判**（`private f(): T { return x }`），否则以"下一个 `\n  }\n`"为结束标记会越过边界、连带删除相邻成员（首轮误删 `drawerWidth` / `onRailTap`，被构建报错捕获）；
+② **删字段必须连同其上方独立装饰器行一起删**（否则留下孤立 `@StorageLink(...)` 叠加到下一个属性，报 `cannot have multiple state management decorators`）。
+两者都必须由 `arkts_check` + 构建兜底。
 
 ### 修订 5：时间轮的"交互控制器"留在宿主是刻意取舍，后续按注入式拆分
 
