@@ -55,6 +55,7 @@ import { GyroStore } from '../state/GyroStore'
 import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
+import { WutTargetCard } from '../panels/astro/WutTargetCard'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
@@ -13760,36 +13761,7 @@ private loadPlanetPositions(): void {
     return this.celestialSubtitle(this.wutTargetTitle(target), target.englishName ?? '')
   }
 
-  @Builder
-  wutMetric(label: string, value: string) {
-    Column({ space: 4 }) {
-      Text(label).fontSize(11).fontColor(this.nmSub()).width('100%')
-      Text(value).fontSize(13).fontColor(this.nmText()).width('100%')
-    }.width('48%').alignItems(HorizontalAlign.Start).margin({ bottom: 10 })
-  }
 
-  @Builder
-  wutTargetCard(target: WutTarget) {
-    Column({ space: 8 }) {
-      Text(this.wutTargetTitle(target)).fontSize(15).fontWeight(FontWeight.Medium)
-        .fontColor(this.nmText()).width('100%')
-      if (this.wutTargetSubtitle(target).length > 0) {
-        Text(this.wutTargetSubtitle(target)).fontSize(11).fontColor(this.nmSub()).width('100%')
-      }
-      Text(this.zhType(target.type ?? '—')).fontSize(12).fontColor(this.nmSub()).width('100%')
-      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-        this.wutMetric(I18n.t('ui_magnitude'), this.fmtNum(target.magnitude, 2, ''))
-        this.wutMetric(I18n.t('wut_max_altitude'), this.fmtNum(target.maxAltitude ?? target.altitude, 1, '°'))
-        this.wutMetric(I18n.t('tn_rise'), this.fmtClock(target.rise))
-        this.wutMetric(I18n.t('tn_transit'), this.fmtClock(target.transit))
-        this.wutMetric(I18n.t('tn_set'), this.fmtClock(target.set))
-        this.wutMetric(I18n.t('ui_constellation'), target.constellation ?? '—')
-      }.width('100%')
-    }.width('100%').alignItems(HorizontalAlign.Start).padding(12)
-      .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 10 })
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .onClick(() => { this.jumpToWutTarget(target) })
-  }
 
   // 天体类型本地化（Planet→行星…）；支持复合类型如 "double star, pulsating variable star"。
   private zhType(type: string): string {
@@ -23352,7 +23324,12 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
               }
               Text(I18n.t('wut_card_action_hint')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ bottom: 8 })
               ForEach(this.wutTargets, (target: WutTarget, index: number) => {
-                this.wutTargetCard(target)
+                WutTargetCard({
+              target: target, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(),
+              titleOf: (item: WutTarget) => this.wutTargetTitle(item), subtitleOf: (item: WutTarget) => this.wutTargetSubtitle(item),
+              typeOf: (type: string) => this.zhType(type), numberText: (value: number | undefined, digits: number, unit: string) => this.fmtNum(value, digits, unit),
+              clockText: (value: string | undefined) => this.fmtClock(value), onJump: (item: WutTarget) => { this.jumpToWutTarget(item) }
+            })
               }, (target: WutTarget, index: number) => (target.englishName ?? index.toString()))
               Text('行星（点击跳到中天时刻）').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 8, bottom: 2 })
               ForEach(this.tonightAstro!.planets ?? [], (p: TonightPlanet) => {
