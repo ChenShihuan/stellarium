@@ -9,7 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const cppPath = path.join(root, 'src/StelMainView.cpp')
 const etsPath = path.join(root, 'harmonyos/ets-source/pages/MainWindowNativeNode.ets')
 const mirrorPath = path.join(root, 'build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets')
-const typesPath = path.join(root, 'harmonyos/ets-source/pages/StellariumTypes.ets')
+const typesPath = path.join(root, 'harmonyos/ets-source/common/types/StellariumTypes.ets')
 // 段落助手已随界面搬进 StructuredDetailRows.ets（改为文件作用域函数）。
 const detailPath = path.join(root, 'harmonyos/ets-source/panels/object/StructuredDetailRows.ets')
 

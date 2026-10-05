@@ -82,5 +82,5 @@ test('UI, semantic actions and snapshot properties share the same switch', () =>
   assert.match(read('harmonyos/ets-source/common/derive/AstronomyGuide.ts'), /actionShow_MistHorizon\|0/);
   assert.match(read('src/StelMainView.cpp'), /result\["mistHorizonOpacity"\]/);
   assert.match(read('src/StelMainView.cpp'), /"actionShow_Ground",\s*"actionShow_MistHorizon"/);
-  assert.match(read('harmonyos/ets-source/pages/StellariumTypes.ets'), /actionShow_MistHorizon\?: boolean/);
+  assert.match(read('harmonyos/ets-source/common/types/StellariumTypes.ets'), /actionShow_MistHorizon\?: boolean/);
 });

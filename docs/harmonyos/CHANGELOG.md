@@ -1,3 +1,16 @@
+## [2026-10-06] DevEco Code - M 轨道 M5：核心桥类型迁入 common/types/（Barrel 兜底；宿主 8,017 行不变）
+
+- **依据**：`ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §11.2.1 的 **Barrel 策略**、M 轨道第 6 片（优先 P7）。**纯路径迁移 + 一行式 barrel**，不改任何类型内容与运行逻辑；开工 `git log -1` = `6b7852d037`。
+- `pages/StellariumTypes.ets`（1,121 行，核心桥响应 / UI 模型 / 天文计算结果类型）与页面无关却被全项目消费（**~98 处** import，覆盖 `state/` / `bridge/` / `capability/` / `panels/` / `common/` 与宿主），架构倒挂最严重。
+- **做法**：① `git mv pages/StellariumTypes.ets → common/types/StellariumTypes.ets`（整文件原样，R100；该文件**无任何内部 import**，搬家不需改相对深度）；② 原位新建 2 行 shim（注释 + `export * from '../common/types/StellariumTypes'`）；③ 消费者 **0 改动**（~98 处仍 import `…/pages/StellariumTypes`，经 barrel 解析到新实体）；④ `common/types/MainWindowModels.ets`（M4 迁入）内部 import `'../../pages/StellariumTypes'` **保留旧路径经 barrel 解析**（同目录 `./StellariumTypes` 与旧路径二选一，取"零内容改动"）。
+- **default export 核查**：`grep 'export default'` = **0**；全部为命名导出（`export interface` 全表）——`export *` 即完整覆盖，**无需** `export { default } from ...`。
+- **夹具同步（2 脚本 / 2 处）**：`scripts/test-ohos-mist-horizon.mjs`（改读 `common/types/StellariumTypes.ets`）、`scripts/verify-ohos-object-details.mjs`（`typesPath` 改新路径）。
+- **不改**：无类型 / 接口 / 常量内容改动；无 `.id()` / `main_pages.json` / 构建产物改动；`common/types/` 不 import `@ohos.*`（类型层无 NAPI，符合 §15.7 规则 1）；`ui-contract-baseline.json` 的 `scannedFiles` 不回改（与 M1–M4 同例）。
+- **度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（本片不动宿主）；`StellariumTypes.ets` 1,121 行（内容等价，仅路径变化）；新增 `common/types/StellariumTypes.ets` + 2 行 barrel；净 4 个跟踪文件改动（1 重命名 + 1 新增 barrel + 2 夹具）。
+- **验证**：`check-ohos-refactor-slice` 通过（括号深度 0）；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL in 1m4s`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 251 文件）；受影响 `test-ohos-mist-horizon`（5/5）、`verify-ohos-object-details`（121 字段 / 11 段）全绿；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（4 个 `-pad` / `mist-performance` / `verify-ohos-search`）。
+- **真机（192.168.50.108:36717）**：`devecocli run --skip-build` → `Smoke: PASS`。① 桥响应：CLI `searchObject Mars` 返回完整 `StellariumBridgeResponse`（`found:true` + `detailModel` + 10 条 `liveDetailFields` + `distance`/`magnitude`/`ra`/`dec`）；② 详情卡：`ui layout` 见 `Text "火星"` + `Scroll#object-detail-content-scroll`，hilog `[detail-model] render pixel map created` + `[detail-media-card] sphere loaded …mars.png`；③ 搜索：`openUiPanel search` 渲染 `search-browser-scroll`，搜索框输入 `Jupiter` → 建议 `Jupiter` / `JUPITER 3 (ECHOSTAR 24)`，点选 → 详情卡 `木星` + hilog `…jupiter.png`；`pidof 23856` 全程存活、无 jscrash / 无 faultlog；测试未改动任何持久化设置。
+- **文档**：`ARKTS-PAGES-REFACTOR-PLAN.md` §15.12.21 追加本片完成结论 + 度量 + barrel 说明 + M 轨道收尾结论（6/7 完成，M7 待做）。
+
 ## [2026-10-06] DevEco Code - M 轨道 M4：扩展域模型迁入 common/types/（Barrel 兜底，消费者零改动；宿主 8,017 行不变）
 
 - **背景**：`ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §11.2.1 的 **Barrel 策略**、M 轨道第 5 片，**纯路径迁移 + 一行式 barrel**，不改任何类型/常量内容与运行逻辑；开工 `git log -1` = `126228abd9`。
