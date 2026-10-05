@@ -1,3 +1,27 @@
+## [2026-10-02] DevEco Code - 构建侧：Windows 侧车生成改为“优先 ffmpeg、缺省回退 System.Drawing”
+
+- **背景**：上一片 `e92ac23726` 用 System.Drawing 在 Windows 上生成了 50 行星 + 3 环的 `.model.rgba` 侧车，真机已验证 `source=sidecar`。用户装好 ffmpeg 后，本片让 Windows 侧车生成与 bash 版对齐：**优先 ffmpeg（逐字同参数），缺省才回退 System.Drawing**。
+- **ffmpeg 解析优先级（与 bash 版一致，另加一步 Windows 便利查找）**：① `$env:FFMPEG`（绝对路径**或**命令名）→ ② `PATH` 上的 `ffmpeg` → ③ WinGet `Gyan.FFmpeg` 包目录（`%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg*\*\bin\ffmpeg.exe`，默认不在 PATH 上）→ 三者皆无才回退 `System.Drawing`。同步日志明确打印本次走哪条路径（`binary: ffmpeg (...)` / `binary: System.Drawing (ffmpeg not found)`）。
+- **改动**：
+  - `scripts/sync-ohos-resources-windows.ps1` 321 → 385 行（+71/-7）：新增 `Resolve-FFmpeg`（三级解析）与 `Export-RgbaSidecarWithFfmpeg`（参数与 bash 版逐字对齐 + 临时文件原子写）；`Invoke-DetailModelSidecarBatch` 增 `-FfmpegBin` 参数并按可用性分派；侧车段打印所选路径；保留幂等（尺寸正确且不旧于源 PNG 则跳过）与逐文件失败告警。
+  - `docs/harmonyos/BUILD-WINDOWS.md`（+12/-4）：§5 第 2 条改写为“侧车生成优先 ffmpeg、缺省回退 System.Drawing”，写明三级解析、`FFMPEG` 环境变量用法与 `-SkipResources` 仍会跳过侧车。
+  - `docs/harmonyos/KNOWN-ISSUES.md`（+3/-1）：第 22 条补记 ffmpeg 优先路径、参数逐字对齐、原子写与双实现对拍结论。
+- **双实现对拍（本片核心证据；同一 PNG 两条路径生成到临时文件，尺寸必须相等）**：
+  - `mars.png`（源即 512×256，不缩放）：524288 B = 524288 B，逐像素差异 **0.0000%**，每通道 mean/max = 0/0。
+  - `sun.png`（2048×1024 → 512×256）：524288 = 524288，差异像素 **31.2225%**，mean R/G/B/A ≈ 0.117/0.116/0.118/0.000，max R3/G4/B4/A0。
+  - `moon.png`（1024×512 → 512×256）：524288 = 524288，差异像素 **72.7341%**，mean ≈ 0.534/0.534/0.542/0.000，max R8/G8/B8/A0。
+  - `saturn_rings_radial.png`（256×2 → 512×2 上采样）：4096 = 4096，差异像素 **99.8047%**，mean ≈ 7.29/6.66/6.96/1.92，max R142/G146/B139/A12（薄环带强梯度所致）。
+  - **结论**：两者尺寸、字节序、alpha 完全一致，逐通道差异处于 sub-1/255 均值量级，视觉等价；环带是上采样锐边的极端个例（alpha 亦有 ≤12 的差）。
+- **产出（本机实测）**：同步打印 `binary: ffmpeg (…Gyan.FFmpeg…\ffmpeg.exe)`、`planets: generated 50, reused 0, failed 0`、`rings: generated 3, reused 0, failed 0`；构建 rawfile 内 53 个侧车尺寸全部正确（50×524288 B + 3×4096 B）。
+- **真机验收**（Mate 80 Pro `192.168.50.108:40565`；`bm clean -d` 强制全新解包；构建**不带** `-SkipResources`）：
+  - 火星：`[detail-model] CPU texture ready uri=.../textures/mars.png bytes=524288 source=sidecar`（**无** `sidecar missing, decoding PNG fallback`）；截图确认带地表的火星球体。
+  - 土星：`[detail-model] ring texture ready path=.../saturn_rings_radial.png.model.rgba bytes=4096` + `[detail-model] CPU texture ready uri=.../textures/saturn.png bytes=524288 source=sidecar`；截图确认含环土星。
+  - `pidof com.cnchensh.stellarium` 全程存活（30737）。
+- **验证链**：未改 .ets（跳过 `arkts_check`）→ 构建（不带 `-SkipResources`）**BUILD SUCCESSFUL**（签名 HAP 708.8 MB）→ `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点全绿 → `audit-ohos-resource-coverage.mjs` 退出 0（其重写的审计文档与重新生成的 `data/search/multilingual-sky-aliases.tsv` 均已 `git checkout` 还原）。
+- **应用侧 PNG 回退逻辑未改**：仍作为无侧车（`-SkipResources` 冻结树、清单外新增纹理）时的兜底。
+- **附带观察（与本片无关，未修）**：由火星切到土星时，`资料` 卡三枚摘要（星等/星座/距离）仍显示火星旧值（1.09 / 巨蟹座 / 1.6550 AU），而同屏标题、模型、实时高度、时角均为土星 —— 疑为选择切换时摘要状态未刷新，留待独立切片。
+- **本片新踩的坑**：`sync-ohos-resources-windows.ps1` 在**嵌套** `powershell -File` 调用（本会话的 shell 包装）下 `$PSScriptRoot` 可能为空，导致参数默认值 `Join-Path $PSScriptRoot '..'` 报空串 → 手工直接跑需显式 `-RepoRoot <repo>`；`build-ohos-hap-windows.ps1` 已显式传 `-RepoRoot`，构建路径不受影响。
+
 ## [2026-10-02] DevEco Code - 构建侧：Windows 资源同步脚本生成 .model.rgba 侧车（恢复“侧车优先”路径）
 
 - **背景**：上一片 `150b332642` 让行星三维模型在侧车缺失时回退解码 PNG（可用，但每次选择都要运行时解码）。本片把构建侧补齐，走回侧车快速路径。

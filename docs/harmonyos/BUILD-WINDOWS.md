@@ -158,10 +158,18 @@ Move-Item "$work\fast_float-*" build\_deps\fastfloat-src
    根治办法是在 CMake 层给 `md4c` / `md4c-html` / `nlopt` 目标加 `SOVERSION`（或改为静态链接），
    让链接器直接写入普通库名。
 2. ~~**未生成 `.model.rgba` 侧车文件**~~ → **已修复（2026-10-02）**。
-   `sync-ohos-resources-windows.ps1` 现在用 `System.Drawing`（不依赖 ffmpeg，与 Windows 移植版的
-   其它图像处理一致）生成与 bash 版同口径的侧车：50 个 512×256 行星/卫星 + 3 个 512×2 行星环，
-   输出为裸 RGBA（`R,G,B,A` 字节序，与 `DetailModelRasterizer.ets` 的读取一致），单文件
-   524288 / 4096 字节。已随 HAP 打包并经真机验证走回"侧车优先"路径。
+   `sync-ohos-resources-windows.ps1` 生成与 bash 版同口径的侧车：50 个 512×256 行星/卫星 +
+   3 个 512×2 行星环，输出为裸 RGBA（`R,G,B,A` 字节序，与 `DetailModelRasterizer.ets` 的读取一致），
+   单文件 524288 / 4096 字节。
+   **侧车生成器优先级（自 2026-10-02 起）**：优先 `ffmpeg`，缺省回退 `System.Drawing`。
+   ffmpeg 的解析顺序与 bash 版一致，另加一步 Windows 便利查找：
+   ① `$env:FFMPEG`（可为绝对路径或命令名）→ ② `PATH` 上的 `ffmpeg` →
+   ③ WinGet 的 `Gyan.FFmpeg` 包目录（`%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg*\*\bin\ffmpeg.exe`，
+   该目录默认不在 `PATH` 上）；三者皆无才回退 `System.Drawing`。
+   用 ffmpeg 时参数与 `sync-ohos-resources.sh` 逐字对齐：
+   `-hide_banner -loglevel error -y -i <png> -vf 'scale=<w>:<h>:flags=lanczos,format=rgba' -frames:v 1 -pix_fmt rgba -f rawvideo <out>`。
+   同步日志会打印本次走的是哪条路径（`binary: ffmpeg (...)` 或 `binary: System.Drawing (ffmpeg not found)`）。
+   待确认 ffmpeg 未装时，可显式 `$env:FFMPEG = 'C:\...\ffmpeg.exe'` 再跑脚本。
    ⚠️ 侧车由资源同步阶段生成，因此 `build-ohos-hap-windows.ps1 -SkipResources` 会跳过它。
 3. **`qt-platform-patch` 版本对不上**：`scripts/build-ohos-platform-patch.sh` 写死
    qtbase `REVISION=97575d35…`（Qt 6.12.0 Beta2），而本机装的是 6.12.0 Release
