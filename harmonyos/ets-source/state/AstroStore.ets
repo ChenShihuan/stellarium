@@ -11,10 +11,11 @@
 // 续作第二批：RTS 日历起始日期 rtsCalendarStartYear/Month/Day 与年度高度图起始日期
 // graphStartYear/Month/Day（原宿主 @State，宿主日期选择器回调读写，AstroPanel 经 host 回调消费）。
 import { TonightEvents, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, PlanetPosition, HeliocentricPosition, CelestialPosition, StellariumBridgeResponse } from '../pages/StellariumTypes'
-import { EphemerisOptions, RtsCalendarOptions, EclipseOptions, PhenomenaOptions, HeliocentricPositionOptions, CelestialPositionOptions } from '../pages/MainWindowModels'
+import { EphemerisOptions, RtsCalendarOptions, EclipseOptions, PhenomenaOptions, HeliocentricPositionOptions, CelestialPositionOptions, AstroCsvExport } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
-import { dateToJD, graphModeLabel, graphStartOptionLabel, planetPairBodyName } from '../common/derive/astro'
+import { dateToJD, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetPairBodyName } from '../common/derive/astro'
 import { zhNameOf } from '../common/derive/labels'
+import { csvCell } from '../common/derive/skycult'
 
 // 本域辅助端口接口（§14.8：store 不 import NAPI/UI，跨 store / 未下沉宿主逻辑经具名回调注入）。
 export interface AstroHostHooks {
@@ -1274,5 +1275,124 @@ export class AstroStore {
     else if (id === 9) {
       this.loadMoonPhases()
     }
+  }
+
+  // ===== A2-2：读本 store 字段的派生取值方法（plan §14.3 A2-D）=====
+  // 以下方法原先在宿主中读取 this.astroStore.*；函数体逐字迁入本 store，改为零宿主引用。
+  // 宿主 AstroPanel 端口对象与 exportCurrentAstroCsv 调用点改为 this.astroStore.<name>()。
+
+  makeAstroCsv(exportData: AstroCsvExport): string {
+    const lines: Array<string> = []
+    lines.push('# ' + exportData.title)
+    const hooks = this.hooks
+    if (this.astroContext !== undefined) {
+      const location = this.astroContext.observerLocation !== undefined && this.astroContext.observerLocation.length > 0
+        ? this.astroContext.observerLocation : '当前观测位置'
+      lines.push('# 观测地点: ' + location)
+      lines.push('# 本地时间: ' + (hooks !== null ? hooks.fmtDateTime(this.astroContext.localTime) : '--'))
+      lines.push('# 时区: ' + (this.astroContext.timeZone ?? '--'))
+      lines.push('# 平恒星时: ' + (this.astroContext.meanSiderealTime ?? '--'))
+      lines.push('# 视恒星时: ' + (this.astroContext.apparentSiderealTime ?? '--'))
+    }
+    if (this.astroCalcSnapshot.length > 0) lines.push('# 参数: ' + this.astroCalcSnapshot)
+    lines.push(exportData.headers.map((header: string) => csvCell(header)).join(','))
+    for (const row of exportData.rows) {
+      lines.push(row.map((cell: string | number | boolean | undefined) => csvCell(cell)).join(','))
+    }
+    return lines.join('\r\n') + '\r\n'
+  }
+
+  filteredEclipses(): Array<EclipseItem> {
+    const filtered: Array<EclipseItem> = []
+    for (const eclipse of this.eclipseData) {
+      if (this.eclipseKindFilter === 1 && eclipse.kind !== 'solar') continue
+      if (this.eclipseKindFilter === 2 && eclipse.kind !== 'lunar') continue
+      const type = eclipse.type ?? ''
+      if (this.eclipseTypeFilter === 1 && type !== '全食') continue
+      if (this.eclipseTypeFilter === 2 && type !== '环食') continue
+      if (this.eclipseTypeFilter === 3 && type !== '偏食') continue
+      if (this.eclipseTypeFilter === 4 && type !== '半影食') continue
+      filtered.push(eclipse)
+    }
+    return filtered
+  }
+
+  altAzMaxLabel(): string {
+    let m: number = -999
+    let t: number = 0
+    for (let i = 0; i < this.altAzCurve.length; i++) {
+      const p: AltAzPoint = this.altAzCurve[i]
+      const v: number = p.altitude !== undefined ? p.altitude : -999
+      if (v > m) { m = v; t = p.t !== undefined ? p.t : 0 }
+    }
+    if (m < -90) return '--'
+    return m.toFixed(1) + '°（' + hourOffsetLabel(t) + '）'
+  }
+
+  altAzVisibleHours(): string {
+    let hours: number = 0
+    for (let i = 0; i + 1 < this.altAzCurve.length; i++) {
+      const p: AltAzPoint = this.altAzCurve[i]
+      const next: AltAzPoint = this.altAzCurve[i + 1]
+      if (p.altitude !== undefined && p.altitude > 0 && p.t !== undefined && next.t !== undefined) {
+        hours += next.t - p.t
+      }
+    }
+    return hours.toFixed(1) + ' 小时'
+  }
+
+  altAzNowLabel(): string {
+    if (this.altAzCurve.length === 0) return '--'
+    const p: AltAzPoint = this.altAzCurve[0]
+    const alt: number = p.altitude !== undefined ? p.altitude : 0
+    const az: number = p.azimuth !== undefined ? p.azimuth : 0
+    return '高度 ' + alt.toFixed(1) + '° / 方位 ' + az.toFixed(1) + '°'
+  }
+
+  annualMaxLabel(): string {
+    let maximum: number = -91
+    let date: string = ''
+    for (const point of this.annualElevationData) {
+      const altitude: number = point.altitude ?? -91
+      if (altitude > maximum) {
+        maximum = altitude
+        date = point.date ?? ''
+      }
+    }
+    return maximum < -90 ? '--' : maximum.toFixed(1) + '°（' + (date.length >= 10 ? date.slice(5) : date) + '）'
+  }
+
+  lunarElongationClosestLabel(): string {
+    let closest: number = 181
+    let time: number = 0
+    for (const point of this.lunarElongationData) {
+      const separation: number = point.separation ?? 181
+      if (separation < closest) {
+        closest = separation
+        time = point.t ?? 0
+      }
+    }
+    return closest > 180 ? '--' : closest.toFixed(1) + '°（' + hourOffsetLabel(time) + '）'
+  }
+
+  rtsCalendarStartOptionLabel(offsetDays: number): string {
+    if (offsetDays < 0) {
+      return this.rtsCalendarStartYear.toString() + '-' + this.rtsCalendarStartMonth.toString().padStart(2, '0') + '-' + this.rtsCalendarStartDay.toString().padStart(2, '0')
+    }
+    if (offsetDays === 0) return '当前'
+    return '+' + offsetDays.toString() + ' 天'
+  }
+
+  eclipseStartOptionLabel(offsetDays: number): string {
+    if (offsetDays < 0) {
+      return this.eclipseStartYear.toString() + '-' + this.eclipseStartMonth.toString().padStart(2, '0') + '-' + this.eclipseStartDay.toString().padStart(2, '0')
+    }
+    if (offsetDays === 0) return '当前'
+    return '+' + offsetDays.toString() + ' 天'
+  }
+
+  graphCustomStartLabel(): string {
+    if (this.graphStartOffsetDays >= 0) return '指定日期'
+    return this.graphStartYear.toString() + '-' + this.graphStartMonth.toString().padStart(2, '0') + '-' + this.graphStartDay.toString().padStart(2, '0')
   }
 }

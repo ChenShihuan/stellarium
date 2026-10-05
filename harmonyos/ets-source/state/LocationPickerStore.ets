@@ -1,9 +1,10 @@
 import { I18n } from '../pages/I18n'
-import { HierCity, StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { HierCity, LocSearchItem, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { LOCATION_HIERARCHY } from '../pages/location_hierarchy'
 import { LOCATION_COUNTRY_NAMES } from '../pages/location_countries'
 import { LOCATION_ZH_NAMES } from '../pages/location_names_zh'
 import { timezoneDisplayName, approximateTimeZoneDisplay } from '../common/derive/labels'
+import { getCityPreset } from '../common/derive/actions'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → LocationPickerStore 的观测点助手（§14.5 B2R-2「额外注入」）。
@@ -508,5 +509,27 @@ export class LocationPickerStore {
     if (kind === 'country') return this.hierCountry
     if (kind === 'region') return this.hierRegion
     return this.hierCity
+  }
+
+  // 离线快速搜索候选（内置城市名 → 城市预设 + 本地化显示名，plan §14.3 A2-2）。原先读宿主
+  // locationPickerStore.locationDisplayName 的函数体逐字迁入本 store，改为 this 直调；
+  // getCityPreset 已随 §14.2 A1-5 沉入 derive/actions。
+  quickLocationSearchItems(): Array<LocSearchItem> {
+    const names: string[] = [
+      'Beijing', 'Shanghai', 'Guangzhou', 'Shenzhen', 'Chengdu', 'Hangzhou', 'Wuhan',
+      'Xian', 'Nanjing', 'Chongqing', 'Harbin', 'Lhasa', 'Urumqi', 'HongKong', 'Taipei',
+      'Tokyo', 'Seoul', 'Singapore', 'NewYork', 'London', 'Sydney', 'Paris', 'Berlin',
+      'Moscow', 'Dubai', 'Mumbai', 'Cairo', 'Rio', 'LosAngeles', 'Toronto', 'Mexico',
+      'Bangkok', 'Istanbul', 'Amsterdam', 'Stockholm', 'Reykjavik', 'CapeTown',
+      'BuenosAires', 'Honolulu'
+    ]
+    const items: Array<LocSearchItem> = []
+    for (const name of names) {
+      const preset = getCityPreset(name)
+      if (preset === undefined) continue
+      const displayName = this.locationDisplayName(name)
+      items.push({ name: name, displayName: displayName, lat: preset.lat, lon: preset.lon, alt: preset.alt, planet: 'Earth', country: '', region: '' })
+    }
+    return items
   }
 }

@@ -1,3 +1,31 @@
+## [2026-10-04] DevEco Code - 重构：§14 A2-2 单域取值/标签派生方法下沉
+
+- 依据 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.3（A2 三去向）/§14.8（规则 1/2/5/6/7）与 §13.1/§13.2/§13.3；承接 §14.2 的 `common/derive/*.ets`。开工断言：`git log --oneline -1` = `88d2e90cf7`（A2-1）；`git status --porcelain` 已跟踪文件干净。按 §2.12 判据在当前宿主重测 A2 余项，按行数降序取非热路径 15 个（遇多域/多助手耦合者按下表停下）。
+- **逐方法（读取字段 / 调用点数 / 去向）**：
+  1. `gyroMagneticHeadingFromDeviceVectors`(25) / 读宿主保留裸字段 `gyroGravityDevice`/`gyroMagneticDevice`/`gyroFilteredGravityDevice`/`gyroFilteredMagneticDevice`（§2.7.1 保留）→ `common/derive/gyro.ets` 纯函数 + 显式入参；调用点 1（`updateGyroCompassReadout`）。
+  2. `archaeoLineSettingValue`(21) / 读 `archaeoStore.*`（本 store 字段）→ `ArchaeoStore` 方法（零宿主引用）；调用点 1（`setArchaeoLineSetting`）。
+  3. `currentSkyCultureMakerDraft`(21) / 读 `skyCultureMakerStore.*` → `SkyCultureMakerStore` 方法；调用点 2（保存 / 校验）。
+  4. `makeAstroCsv`(19) / 读 `astroStore.astroContext`/`astroCalcSnapshot` + 模块 `csvCell` + 宿主格式化 `fmtDateTime` → `AstroStore` 方法，`fmtDateTime` 经既有 `AstroHostHooks.fmtDateTime` 注入；调用点 1（`exportCurrentAstroCsv`）。
+  5. `quickLocationSearchItems`(18) / 读 `locationPickerStore.locationDisplayName` + 模块 `getCityPreset` → `LocationPickerStore` 方法；调用点 1（`quickLocationSearch`）。
+  6. `filteredEclipses`(14) / 读 `astroStore.eclipseData`/`eclipseKindFilter`/`eclipseTypeFilter` → `AstroStore` 方法；调用点 3（`currentAstroCsvExport` 2 + AstroPanel 端口 1）。
+  7. `telescopeCircleValues`(13) / 读 `telescopeStore.lx200Circles` → `TelescopeStore` 方法；调用点 1（`saveTelescopeProfile`）。
+  8. `annualMaxLabel`(12) / 读 `astroStore.annualElevationData` → `AstroStore` 方法；调用点 1（AstroPanel 端口）。
+  9. `lunarElongationClosestLabel`(12) / 读 `astroStore.lunarElongationData` + 模块 `hourOffsetLabel` → `AstroStore` 方法；调用点 1。
+  10. `altAzMaxLabel`(11) / 读 `astroStore.altAzCurve` + `hourOffsetLabel` → `AstroStore` 方法；调用点 1。
+  11. `altAzVisibleHours`(11) / 读 `astroStore.altAzCurve` → `AstroStore` 方法；调用点 1。
+  12. `altAzNowLabel`(7) / 读 `astroStore.altAzCurve` → `AstroStore` 方法；调用点 1。
+  13. `rtsCalendarStartOptionLabel`(7) / 读 `astroStore.rtsCalendarStart*` → `AstroStore` 方法；调用点 1。
+  14. `eclipseStartOptionLabel`(7) / 读 `astroStore.eclipseStart*` → `AstroStore` 方法；调用点 1。
+  15. `graphCustomStartLabel`(4) / 读 `astroStore.graphStart*` → `AstroStore` 方法；调用点 1。
+  - **主动停下 2 个**：`currentAstroCsvExport`(76) —— 读 `astroStore` + `wutStore` 两域并调 3 个宿主标题助手（`hecTitle`/`celestialPositionTitle`/`filteredEclipses`），单域 store 无法承载，留待天文 CSV 专项片；`objectDetailConnectorObstacles`(45) —— 读 2 store + 4 个宿主布局裸字段并调 8 个几何助手，属 A2-G 几何簇，需连同 `selectedObjectUiObstacles`/几何助手整体下沉。另本轮跳过的 10 行级多助手耦合项（`skyCultureColorOptions` 双 store / `celestialSubtitle` 需改 hooks / `quickLocationSearch` 3 助手 / `searchDynamicCategoryOptions` 等）留待后续片。
+- **组件多余 `@Prop` 删除**：无。本轮命中的 `AstroPanelHost` 端口保持为宿主 lambda（改为 `() => this.astroStore.<name>()`），组件接口与数据通道未变，故无需删 `@Prop`。
+- **body diff 摘要**：函数体逐字搬迁，仅改取值方式 —— `this.<store>.<field>` → `this.<field>`（store 内）/ 显式入参见上 / `this.fmtDateTime` → `AstroHostHooks.fmtDateTime`。调用点同片改：宿主 15 处 `this.<name>(...)` → `this.<store>.<name>(...)` 或模块函数；`AstroPanel` 端口 10 处 lambda 改指向 store。删 2 个失效 import（`csvCell`、`hourOffsetLabel`）。
+- **残留与双写复核**：宿主内 `this.<被搬 15 名>` 零残留；各 store 内零 `this.<宿主前缀>` 残留；无同名双定义。
+- 量化：宿主 `private` 方法 **747 → 732**（−15）、单体 **15,531 → 15,309**（−222）；`derive/gyro.ets` 96 → 128；`AstroStore` 1,278 → 1,398；`ArchaeoStore` 105 → 131；`LocationPickerStore` 512 → 535；`SkyCultureMakerStore` 189 → 214；`TelescopeStore` 456 → 473。
+- **验证**：`node scripts/check-ohos-refactor-slice.mjs` 通过；`arkts_check`（7 文件）无错；构建 `BUILD SUCCESSFUL`；`check-ohos-ui-contract.mjs` intact（33 面板 / 24 静态 id / 17 动态前缀 / **44 锚点**）；全量切片脚本仅 §13.6 的 7 个环境类失败（`test-ohos-clipboard-pad`/`guide-pad`/`mist-horizon-pad`/`mist-performance`/`polar-scope-pad`、`verify-ohos-location-search`/`verify-ohos-search`），无新增回归。
+- **模拟器冒烟（UI-only，`127.0.0.1:5555`）**：install + `aa start` 成功，`pidof` = 32658 全程存活；Dock「更多功能」→「观测工作区」→「目镜模拟」面板渲染正常；Dock「位置」摘要面板渲染正常（位置/坐标/海拔 + 地图选点/按地区选）。**模拟器无法覆盖（待真机）**：一切依赖引擎的路径，尤其「天文计算」面板（含本片 10 个 astro 取值方法）在 UI-only 通道无法经 `openUiPanel` 打开（CLI 派发超时、无引擎回包），故 astro/考古天文/位置快速搜索的端到端渲染与真实数值待真机验证。
+- **A2 进度：21 / 214**（A2-1 的 6 + 本片 15）。
+- 踩坑：`stellarium-cli.mjs` 默认 hdc 为 macOS 路径，Windows 下须显式 `--hdc`；且 UI-only 模拟器上其原生命令通道不回包（`openUiPanel` 超时），面板深入口只能靠真机（对应 §13.6/PLATFORM-MATRIX §1.5 的 UI-only 限制）。
 ## [2026-10-04] DevEco Code - 重构：§14 A2-1 objectInspector 媒体族
 
 - 依据 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.3（A2 三去向 A2-D/A2-G/A2-M）与 §14.8（规则 1「文件级函数禁 this」、规则 2「store 不得 import NAPI/UI」、规则 5「禁双写」、规则 6「纯函数模块无状态」、规则 7「声明与调用同片搬」）及 §13.1/§13.2/§13.3；承接 §14.2 已建成的 `common/derive/*.ets`。

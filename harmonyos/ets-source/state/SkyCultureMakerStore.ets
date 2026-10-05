@@ -186,4 +186,29 @@ export class SkyCultureMakerStore {
       this.status = I18n.t('sky_culture_maker_load_failed')
     }, 0, 100, 150)
   }
+
+  // 由当前 store 字段装配草稿（plan §14.3 A2-2）。原先读宿主 skyCultureMakerStore.* 的
+  // 函数体逐字迁入本 store，改为零宿主引用；宿主保存 / 校验调用点改为
+  // this.skyCultureMakerStore.currentSkyCultureMakerDraft()。
+  currentSkyCultureMakerDraft(): SkyCultureMakerDraft {
+    let beginTime = Number(this.beginTime)
+    let endTime = Number(this.endTime)
+    if (!Number.isFinite(beginTime)) beginTime = 0
+    if (!Number.isFinite(endTime)) endTime = 0
+    return {
+      schemaVersion: 1,
+      id: this.id.trim(),
+      name: this.name.trim(),
+      author: this.author.trim(),
+      license: this.license.trim(),
+      region: this.region.trim(),
+      classification: [this.classification],
+      native_lang: this.nativeLang.trim(),
+      beginTime: Math.trunc(beginTime),
+      endTime: Math.trunc(endTime),
+      introduction: this.introduction,
+      description: this.description,
+      constellations: this.constellations
+    }
+  }
 }
