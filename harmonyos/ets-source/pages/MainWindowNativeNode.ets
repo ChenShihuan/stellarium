@@ -150,6 +150,9 @@ import { ObservingPanel } from '../panels/panels/ObservingPanel'
 import { SearchPanel } from '../panels/panels/SearchPanel'
 import { ObjectPanel } from '../panels/panels/ObjectPanel'
 import { SatellitesPanel } from '../panels/panels/SatellitesPanel'
+import { TelescopePanel } from '../panels/panels/TelescopePanel'
+import { OcularsPanel } from '../panels/panels/OcularsPanel'
+import { SettingsQuickLegacyPanel } from '../panels/panels/SettingsQuickLegacyPanel'
 import { SkyCultureSectionHeader, SkyCultureMetaItem, SkyCultureLabelSettingCard, SkyCultureFilterPicker } from '../panels/skyculture/SkyCultureViewParts'
 import { SatelliteGroupSelector } from '../panels/satellite/SatelliteGroupSelector'
 import {
@@ -18177,185 +18180,46 @@ private loadPlanetPositions(): void {
         onExecute: (force: boolean) => { this.executeCommandFromPanel(force) }
       })
     } else if (this.activePanel === 'settings_quick_legacy') {
-      // 快捷设置面板
-      Scroll() {
-        Column({ space: 0 }) {
-          DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.nmText(), subColor: this.nmSub(), onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 6, bottom: 8 })
-            ViewCoordinateSettings({
-              store: this.overlayStore,
-              textColor: this.nmText(),
-              subColor: this.nmSub(),
-              accentColor: this.nmAccent(),
-              panelColor: this.nmBg(),
-              lineColor: this.nmBorder(),
-              onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
-              onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
-              onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) }
-            })
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 2, bottom: 8 })
-          Text('内置数据目录').fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          Column({ space: 4 }) {
-            Text(this.catalogHealthText('卫星目录', this.satelliteCatalogHealth)).fontSize(12).fontColor(this.catalogHealthColor(this.satelliteCatalogHealth)).maxLines(2)
-            Text(this.catalogHealthText('基础星表', this.starCatalogHealth)).fontSize(12).fontColor(this.catalogHealthColor(this.starCatalogHealth)).maxLines(2)
-          }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 2, bottom: 8 })
-          Text(I18n.t('i0114')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          LayerSwitchRow({ label: I18n.t('s0300'), isOn: this.nightModeStore.nightMode, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Night_Mode', '', value) } })
-          LayerSwitchRow({ label: I18n.t('s0301'), isOn: this.telescopeStore.equatorialMount, onToggle: (value: boolean) => { this.applyLayerSwitch('actionSwitch_Equatorial_Mount', '', value) } })
-          LayerSwitchRow({ label: I18n.t('s0302'), isOn: this.autoZoomResets, onToggle: (value: boolean) => { this.applyLayerSwitch('setAutoZoomResets', 'setAutoZoomResets', value) } })
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 6, bottom: 4 })
-          Text(I18n.t('i0116')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          LayerSwitchRow({ label: I18n.t('s0304'), isOn: this.liveMode, onToggle: (value: boolean) => { this.applyLayerSwitch('', '', value) } })
-          LayerSwitchRow({ label: I18n.t('set_vert_clamp'), isOn: this.verticalClamp, onToggle: (value: boolean) => { this.applyLayerSwitch('', 'setVerticalClamp', value) } })
-          LayerSwitchRow({ label: I18n.t('set_flat_horizon'), isOn: this.flatHorizon, onToggle: (value: boolean) => { this.applyLayerSwitch('', 'setFlatHorizon', value) } })
-          Row({ space: 6 }) {
-            Button(I18n.t('i0142')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
-              .onClick(() => { this.speedDown() })
-            Button(I18n.t('i0245')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-              .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
-              .onClick(() => { this.togglePause() })
-            Button(I18n.t('i0246')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
-              .onClick(() => { this.speedUp() })
-          }.width('100%').padding({ left: 4, right: 4 }).margin({ top: 8 })
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 6, bottom: 4 })
-          Text(I18n.t('set_fov_slider')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          Row() {
-            Text(I18n.t('set_fov_slider')).fontSize(12).fontColor(this.nmSub()).width(72)
-            Text(this.fovSliderValue + '°').fontSize(14).fontColor(this.nmText()).margin({ right: 8 })
-            Slider({ value: this.fovSliderValue, min: 1, max: 180, step: 1, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .width('40%')
-              .blockColor(this.nmAccent())
-              .trackColor(this.nmBg())
-              .selectedColor(this.nmAccent())
-              .showSteps(false)
-              .onChange((val: number) => { this.fovSliderValue = Math.round(val); this.changeFovBySlider(val) })
-          }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 6, bottom: 4 })
-          Text(I18n.t('set_projection')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          Row() {
-            Text(I18n.t('set_projection')).fontSize(12).fontColor(this.nmSub()).width(72)
-            Text(I18n.projectionName(this.currentProjection)).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-          }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-
-          // 投影方式选项（中文标签 + 点击后显示说明）
-          Scroll() {
-            Row({ space: 6 }) {
-              ForEach(PROJECTION_KEYS, (name: string) => {
-                Text(I18n.projectionName(name))
-                  .fontSize(11).fontColor(this.currentProjection === name ? '#FFFFFFFF' : '#99FFFFFF')
-                  .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                  .backgroundColor(this.currentProjection === name ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .onClick(() => { this.setProjection(name) })
-              }, (name: string) => name)
-            }.padding({ left: 4, right: 4 })
-          }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-
-          // 当前投影的功能说明（一句话帮助用户理解）
-          Text(I18n.projectionDesc(this.currentProjection))
-            .fontSize(10).fontColor('rgba(180,210,235,0.55)')
-            .width('100%')
-            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 6, bottom: 4 })
-          Text(I18n.t('set_language')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          Row() {
-            Text(I18n.t('i0029')).fontSize(12).fontColor(this.nmSub()).width(72)
-            Text(LANGUAGE_DISPLAY[this.selectedLanguage] ?? this.selectedLanguage).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-          }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-          Scroll() {
-            Row({ space: 6 }) {
-              ForEach(SUPPORTED_LANGUAGES, (lang: string) => {
-                Text(LANGUAGE_DISPLAY[lang] ?? lang)
-                  .fontSize(11).fontColor(this.selectedLanguage === lang ? '#FFFFFFFF' : '#99FFFFFF')
-                  .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                  .backgroundColor(this.selectedLanguage === lang ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .onClick(() => { this.setLanguage(lang) })
-              }, (lang: string) => lang)
-            }.padding({ left: 4, right: 4 })
-          }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 6, bottom: 4 })
-          Text(I18n.t('set_sky_culture')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          Row() {
-            Text(I18n.t('i0035')).fontSize(12).fontColor(this.nmSub()).width(72)
-            Text(this.currentSkyCulture).fontSize(11).fontColor(this.nmText()).layoutWeight(1).maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-          if (this.skyCultures.length > 0) {
-            Scroll() {
-              Row({ space: 6 }) {
-                ForEach(this.skyCultures, (culture: string) => {
-                  Text(culture)
-                    .fontSize(11).fontColor(this.currentSkyCulture === culture ? '#FFFFFFFF' : '#99FFFFFF')
-                    .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                    .backgroundColor(this.currentSkyCulture === culture ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .onClick(() => { this.setSkyCulture(culture) })
-                }, (culture: string) => culture)
-              }.padding({ left: 4, right: 4 })
-            }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-          }
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.nmBorder())
-            .margin({ top: 6, bottom: 4 })
-          Text(I18n.t('set_distance_units')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          Row() {
-            Text(I18n.t('i0029')).fontSize(12).fontColor(this.nmSub()).width(72)
-            Row({ space: 6 }) {
-              Text(I18n.t('unit_km'))
-                .fontSize(11).fontColor(this.useMetricUnits ? '#FFFFFFFF' : '#99FFFFFF')
-                .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                .backgroundColor(this.useMetricUnits ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
-                .borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => {
-                  this.useMetricUnits = true
-                  this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=true', () => {})
-                })
-              Text(I18n.t('unit_mile'))
-                .fontSize(11).fontColor(!this.useMetricUnits ? '#FFFFFFFF' : '#99FFFFFF')
-                .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                .backgroundColor(!this.useMetricUnits ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
-                .borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => {
-                  this.useMetricUnits = false
-                  this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=false', () => {})
-                })
-            }
-          }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-        }.width('100%')
-      }
-      .width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+      SettingsQuickLegacyPanel({
+        gyroStore: this.gyroStore,
+        overlayStore: this.overlayStore,
+        nightModeStore: this.nightModeStore,
+        telescopeStore: this.telescopeStore,
+        autoZoomResets: this.autoZoomResets,
+        liveMode: this.liveMode,
+        verticalClamp: this.verticalClamp,
+        flatHorizon: this.flatHorizon,
+        fovSliderValue: this.fovSliderValue,
+        currentProjection: this.currentProjection,
+        selectedLanguage: this.selectedLanguage,
+        currentSkyCulture: this.currentSkyCulture,
+        skyCultures: this.skyCultures,
+        useMetricUnits: this.useMetricUnits,
+        satelliteCatalogHealth: this.satelliteCatalogHealth,
+        starCatalogHealth: this.starCatalogHealth,
+        gyroSensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText),
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        lineColor: this.nmBorder(),
+        onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) },
+        onRevoke: () => { this.confirmPrivacyRevocation() },
+        onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
+        onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
+        onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) },
+        onApplyLayerSwitch: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
+        onSpeedDown: () => { this.speedDown() },
+        onTogglePause: () => { this.togglePause() },
+        onSpeedUp: () => { this.speedUp() },
+        onFovChange: (val: number) => { this.fovSliderValue = Math.round(val); this.changeFovBySlider(val) },
+        onSetProjection: (name: string) => { this.setProjection(name) },
+        onSetLanguage: (lang: string) => { this.setLanguage(lang) },
+        onSetSkyCulture: (name: string) => { this.setSkyCulture(name) },
+        onSetUnits: (metric: boolean) => { this.useMetricUnits = metric; this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + metric, () => {}) },
+        catalogHealthTextOf: (title: string, health: CatalogHealthEntry) => this.catalogHealthText(title, health),
+        catalogHealthColorOf: (health: CatalogHealthEntry) => this.catalogHealthColor(health)
+      })
     } else if (this.activePanel === 'search') {
       SearchPanel({
         store: this.searchStore,
@@ -20830,283 +20694,27 @@ private loadPlanetPositions(): void {
         onDelete: (id: string) => { this.deleteBookmark(id) }
       })
     } else if (this.activePanel === 'oculars') {
-      Scroll() {
-        Column({ space: 12 }) {
-          if (this.telescopeStore.ocularLoading) {
-            Row({ space: 8 }) {
-              LoadingProgress().width(18).height(18).color(this.nmAccent())
-              Text(I18n.t('ocular_status_loading')).fontSize(11).fontColor(this.nmSub())
-            }.width('100%').height(44).justifyContent(FlexAlign.Center)
-          }
-          if (this.telescopeStore.ocularStatusMessage.length > 0) {
-            Text(this.telescopeStore.ocularStatusMessage).fontSize(11).fontColor('#FFD59A').width('100%').maxLines(3)
-              .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-              .backgroundColor('rgba(194, 128, 36, 0.14)').borderRadius(UI_RADIUS_CONTROL)
-          }
-          if (this.telescopeStore.ocularRequireSelection && !this.telescopeStore.ocularHasSelection) {
-            Row({ space: 10 }) {
-              Column({ space: 3 }) {
-                Text(I18n.t('ocular_select_target_title')).fontSize(12).fontColor(this.nmText()).fontWeight(FontWeight.Medium)
-                Text(I18n.t('ocular_select_target_hint')).fontSize(10).fontColor(this.nmSub()).maxLines(2)
-              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              Button(I18n.t('ocular_choose_target')).fontSize(11).fontColor('#FFFFFF').height(32)
-                .padding({ left: 12, right: 12 }).backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => { this.openSubPanel('search') })
-            }.width('100%').padding({ left: 12, right: 10, top: 10, bottom: 10 })
-              .backgroundColor('rgba(91,147,191,0.16)').borderRadius(UI_RADIUS_CONTROL)
-          }
-          Text(I18n.t('ocular_section_modes')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-          Row() {
-            Text(I18n.t('c_ocular_mode')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularMode })
-              .enabled(this.telescopeStore.ocularReady)
-              .onChange((isOn: boolean) => { this.setOcularMode(isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_telrad')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.telradOn })
-              .onChange((isOn: boolean) => { this.setTelrad(isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_crosshair')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.crosshairsOn })
-              .onChange((isOn: boolean) => { this.setCrosshairs(isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('c_ccd_frame')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ccdOn })
-              .enabled(this.telescopeStore.ocularCcdReady)
-              .onChange((isOn: boolean) => { this.setCCD(isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.telescopeStore.ocularMagnification > 0 || this.telescopeStore.ocularCcdFovX > 0) {
-            Text(I18n.t('ocular_section_result')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
-            Column({ space: 9 }) {
-              if (this.telescopeStore.ocularMagnification > 0) {
-                Row({ space: 12 }) {
-                  OcularMetric({ label: I18n.t('ocular_magnification'), value: this.telescopeStore.ocularMagnification.toFixed(1) + '×', subColor: this.nmSub(), textColor: this.nmText() })
-                  OcularMetric({ label: I18n.t('ocular_actual_fov'), value: this.telescopeStore.ocularActualFov.toFixed(3) + '°', subColor: this.nmSub(), textColor: this.nmText() })
-                }.width('100%')
-                Row({ space: 12 }) {
-                  OcularMetric({ label: I18n.t('ocular_exit_pupil'), value: this.telescopeStore.ocularExitPupil.toFixed(2) + ' mm', subColor: this.nmSub(), textColor: this.nmText() })
-                  OcularMetric({ label: I18n.t('ocular_limit_magnitude'), value: this.telescopeStore.ocularLimitMagnitude.toFixed(1) + ' mag', subColor: this.nmSub(), textColor: this.nmText() })
-                }.width('100%')
-              }
-              if (this.telescopeStore.ocularCcdFovX > 0) {
-                Row({ space: 12 }) {
-                  OcularMetric({ label: I18n.t('ocular_ccd_fov'), value: this.telescopeStore.ocularCcdFovX.toFixed(3) + '° × ' + this.telescopeStore.ocularCcdFovY.toFixed(3) + '°', subColor: this.nmSub(), textColor: this.nmText() })
-                  OcularMetric({ label: I18n.t('ocular_pixel_scale'), value: this.telescopeStore.ocularCcdPixelScaleX.toFixed(2) + '"/px', subColor: this.nmSub(), textColor: this.nmText() })
-                }.width('100%')
-              }
-            }.width('100%').padding({ left: 12, right: 12, top: 10, bottom: 10 })
-              .backgroundColor('rgba(91,147,191,0.10)').borderRadius(UI_RADIUS_CONTROL)
-          }
-          Text(I18n.t('ocular_section_devices')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
-          OcularSelector({ store: this.telescopeStore, kind: 'Ocular', label: I18n.t('ocular_device_ocular'), subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), accentColor: this.nmAccent(), lineColor: this.nmBorder(), onSelect: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) } })
-          OcularSelector({ store: this.telescopeStore, kind: 'Telescope', label: I18n.t('ocular_device_telescope'), subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), accentColor: this.nmAccent(), lineColor: this.nmBorder(), onSelect: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) } })
-          OcularSelector({ store: this.telescopeStore, kind: 'Lens', label: I18n.t('ocular_device_lens'), subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), accentColor: this.nmAccent(), lineColor: this.nmBorder(), onSelect: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) } })
-          OcularSelector({ store: this.telescopeStore, kind: 'CCD', label: 'CCD', subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), accentColor: this.nmAccent(), lineColor: this.nmBorder(), onSelect: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) } })
-          if (this.telescopeStore.ocularCcdReady && this.telescopeStore.ccdIndex >= 0) {
-            Column({ space: 6 }) {
-              Row() {
-                Text(I18n.t('ocular_ccd_rotation')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.telescopeStore.ocularCcdRotation.toFixed(0) + '°').fontSize(11).fontColor(this.nmSub())
-              }.width('100%')
-              Slider({ value: this.telescopeStore.ocularCcdRotation, min: -180, max: 180, step: 1, style: SliderStyle.OutSet })
-                .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-                .width('100%').blockColor(this.nmAccent()).selectedColor(this.nmAccent()).trackColor(this.nmBg())
-                .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularCcdRotation(value, mode) })
-            }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          }
-          if (this.telescopeStore.ocularCcdReady && this.telescopeStore.ccdIndex >= 0) {
-            Column({ space: 6 }) {
-              Row() {
-                Text(I18n.t('ocular_prism_rotation')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.telescopeStore.ocularCcdPrismRotation.toFixed(0) + '°').fontSize(11).fontColor(this.nmSub())
-              }.width('100%')
-              Slider({ value: this.telescopeStore.ocularCcdPrismRotation, min: -180, max: 180, step: 1, style: SliderStyle.OutSet })
-                .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-                .width('100%').blockColor(this.nmAccent()).selectedColor(this.nmAccent()).trackColor(this.nmBg())
-                .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularPrismRotation(value, mode) })
-              Button(I18n.t('ocular_reset_prism')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(28).width('100%')
-                .onClick(() => { this.resetOcularInstrument('prism') })
-            }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          }
-          Row({ space: 8 }) {
-            Button(I18n.t('ocular_rotate_left')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(30).layoutWeight(1)
-              .onClick(() => { this.rotateOcularReticle('counterclockwise') })
-            Button(I18n.t('ocular_rotate_right')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(30).layoutWeight(1)
-              .onClick(() => { this.rotateOcularReticle('clockwise') })
-          }.width('100%')
-          Text(I18n.t('ocular_section_advanced')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
-          Row() {
-            Text(I18n.t('ocular_semi_transparent_mask')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularSemiTransparentMask })
-              .onChange((isOn: boolean) => { this.setOcularSetting('semiTransparentMask', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.telescopeStore.ocularSemiTransparentMask) {
-            Column({ space: 6 }) {
-              Row() {
-                Text(I18n.t('ocular_mask_opacity')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.telescopeStore.ocularMaskOpacity.toString() + '%').fontSize(11).fontColor(this.nmSub())
-              }.width('100%')
-              Slider({ value: this.telescopeStore.ocularMaskOpacity, min: 0, max: 100, step: 1, style: SliderStyle.OutSet })
-                .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-                .width('100%').blockColor(this.nmAccent()).selectedColor(this.nmAccent()).trackColor(this.nmBg())
-                .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularMaskOpacity(value, mode) })
-            }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          }
-          Row() {
-            Text(I18n.t('ocular_resolution_criteria')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularShowResolutionCriteria })
-              .onChange((isOn: boolean) => { this.setOcularSetting('showResolutionCriteria', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_auto_mount')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAutoSetMountForCcd })
-              .enabled(this.telescopeStore.ocularCcdReady)
-              .onChange((isOn: boolean) => { this.setOcularSetting('autoSetMountForCcd', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_horizontal_coordinates')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularHorizontalCoordinates })
-              .onChange((isOn: boolean) => { this.setOcularSetting('horizontalCoordinates', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_sensor_crop')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularSensorCropOverlay })
-              .enabled(this.telescopeStore.ocularCcdReady)
-              .onChange((isOn: boolean) => { this.setOcularSetting('sensorCropOverlay', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_sensor_pixel_grid')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularSensorPixelGrid })
-              .enabled(this.telescopeStore.ocularCcdReady && this.telescopeStore.ocularSensorCropOverlay)
-              .onChange((isOn: boolean) => { this.setOcularSetting('sensorPixelGrid', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.telescopeStore.ocularCcdReady && this.telescopeStore.ocularSensorCropOverlay) {
-            Column({ space: 5 }) {
-              Row() {
-                Text(I18n.t('ocular_crop_horizontal')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.telescopeStore.ocularCcdCropHSize.toString() + ' px').fontSize(10).fontColor(this.nmSub())
-              }.width('100%')
-              Slider({ value: this.telescopeStore.ocularCcdCropHSize, min: 1, max: 1000, step: 1, style: SliderStyle.OutSet })
-                .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-                .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularCropSize('ccdCropHSize', value, mode) })
-              Row() {
-                Text(I18n.t('ocular_crop_vertical')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.telescopeStore.ocularCcdCropVSize.toString() + ' px').fontSize(10).fontColor(this.nmSub())
-              }.width('100%')
-              Slider({ value: this.telescopeStore.ocularCcdCropVSize, min: 1, max: 1000, step: 1, style: SliderStyle.OutSet })
-                .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-                .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularCropSize('ccdCropVSize', value, mode) })
-            }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          }
-          Row() {
-            Text(I18n.t('ocular_focuser_overlay')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularFocuserOverlay })
-              .enabled(this.telescopeStore.ocularCcdReady)
-              .onChange((isOn: boolean) => { this.setOcularSetting('focuserOverlay', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_scale_image_circle')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularScaleImageCircle })
-              .onChange((isOn: boolean) => { this.setOcularSetting('scaleImageCircle', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_show_contour')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularShowContour })
-              .onChange((isOn: boolean) => { this.setOcularSetting('showContour', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_show_cardinals')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularShowCardinals })
-              .onChange((isOn: boolean) => { this.setOcularSetting('showCardinals', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_align_crosshair')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAlignCrosshair })
-              .onChange((isOn: boolean) => { this.setOcularSetting('alignCrosshair', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_oag_limits')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularOagLimits })
-              .enabled(this.telescopeStore.ocularCcdReady)
-              .onChange((isOn: boolean) => { this.setOcularSetting('oagLimits', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_dms_degrees')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularDmsDegrees })
-              .onChange((isOn: boolean) => { this.setOcularSetting('dmsDegrees', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_init_fov')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularInitFov })
-              .onChange((isOn: boolean) => { this.setOcularSetting('initFov', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_init_direction')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularInitDirection })
-              .onChange((isOn: boolean) => { this.setOcularSetting('initDirection', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_max_exposure')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularMaxExposureTimeForCcd })
-              .enabled(this.telescopeStore.ocularCcdReady)
-              .onChange((isOn: boolean) => { this.setOcularSetting('maxExposureTimeForCcd', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.telescopeStore.ocularFocuserOverlay && this.telescopeStore.ocularCcdReady) {
-            Text(I18n.t('ocular_focuser_size')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
-            Row() {
-              Text(I18n.t('ocular_focuser_small')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularSmallFocuserOverlay })
-                .onChange((isOn: boolean) => { this.setOcularSetting('smallFocuserOverlay', isOn) })
-            }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-            Row() {
-              Text(I18n.t('ocular_focuser_medium')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularMediumFocuserOverlay })
-                .onChange((isOn: boolean) => { this.setOcularSetting('mediumFocuserOverlay', isOn) })
-            }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-            Row() {
-              Text(I18n.t('ocular_focuser_large')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularLargeFocuserOverlay })
-                .onChange((isOn: boolean) => { this.setOcularSetting('largeFocuserOverlay', isOn) })
-            }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          }
-          Text(I18n.t('ocular_section_behavior')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
-          Row() {
-            Text(I18n.t('ocular_require_selection')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularRequireSelection })
-              .onChange((isOn: boolean) => { this.setOcularSetting('requireSelection', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_auto_limit')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAutoLimitMagnitude })
-              .onChange((isOn: boolean) => { this.setOcularSetting('autoLimitMagnitude', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_hide_grids')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularHideGridsLines })
-              .onChange((isOn: boolean) => { this.setOcularSetting('hideGridsLines', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_auto_scale_telrad')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAutoScaleTelrad })
-              .onChange((isOn: boolean) => { this.setOcularSetting('autoScaleTelrad', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('ocular_auto_scale_ccd')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAutoScaleCcd })
-              .onChange((isOn: boolean) => { this.setOcularSetting('autoScaleCcd', isOn) })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+      OcularsPanel({
+        store: this.telescopeStore,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        lineColor: this.nmBorder(),
+        onOpenSubPanel: (name: string) => { this.openSubPanel(name) },
+        onSetOcularMode: (isOn: boolean) => { this.setOcularMode(isOn) },
+        onSetTelrad: (isOn: boolean) => { this.setTelrad(isOn) },
+        onSetCrosshairs: (isOn: boolean) => { this.setCrosshairs(isOn) },
+        onSetCcd: (isOn: boolean) => { this.setCCD(isOn) },
+        onSelectInstrument: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) },
+        onChangeCcdRotation: (value: number, mode: SliderChangeMode) => { this.changeOcularCcdRotation(value, mode) },
+        onChangePrismRotation: (value: number, mode: SliderChangeMode) => { this.changeOcularPrismRotation(value, mode) },
+        onResetInstrument: (target: string) => { this.resetOcularInstrument(target) },
+        onRotateReticle: (dir: string) => { this.rotateOcularReticle(dir) },
+        onSetOcularSetting: (setting: string, isOn: boolean) => { this.setOcularSetting(setting, isOn) },
+        onChangeMaskOpacity: (value: number, mode: SliderChangeMode) => { this.changeOcularMaskOpacity(value, mode) },
+        onChangeCropSize: (setting: string, value: number, mode: SliderChangeMode) => { this.changeOcularCropSize(setting, value, mode) }
+      })
     } else if (this.activePanel === 'mosaicCamera') {
       MosaicCameraPanel({
         mosaicCameraEnabled: this.mosaicCameraEnabled,
@@ -21605,10 +21213,7 @@ private loadPlanetPositions(): void {
         displayNameOf: (name: string) => this.observingDisplayName(name)
       })
     } else if (this.activePanel === 'telescope') {
-      Scroll() {
-        Column({ space: 8 }) {
-          Text(I18n.t('telescope_control_hint')).fontSize(10).fontColor(this.nmSub()).width('100%')
-          Lx200Panel({
+      TelescopePanel({
         store: this.telescopeStore,
         textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(),
         panelColor: this.nmBg(), inputColor: this.nmInput(), lineColor: this.nmBorder(), inputLineColor: this.nmInputBorder(),
@@ -21625,8 +21230,6 @@ private loadPlanetPositions(): void {
         onReadPosition: (center: boolean) => { this.readTelescopePosition(center) },
         onSetLivePosition: (enabled: boolean) => { this.setTelescopeLivePosition(enabled) }
       })
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else if (this.activePanel === 'tools') {
       ToolsPanel({
         store: this.tools,
