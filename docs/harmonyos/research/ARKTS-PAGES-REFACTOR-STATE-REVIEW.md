@@ -27,7 +27,9 @@
 > 注：计划终态记载 18,593 行。2026-10-04 完成 **§2.7「域状态下沉」**后，宿主 `@State` 由 333 → **132**
 > （46 个 store 实例 + 86 个刻意保留的裸字段，登记于 §2.7.1），`state/` 由 27 → **48** 文件；
 > 随后 **A/B 类方法下沉**（PLAN §14，38 片）完成，宿主降至 **14,347 行 / 593 私有方法 / 3 个 `load*`**，
-> `bridge/CommandPort.ets` 建成。**A/B 之后的"剩余功能模块"普查与下沉候选见 §9。**
+> `bridge/CommandPort.ets` 建成。再后提取控制器（Sensor/Recording/ObjectModel/SkyInput）与
+> 三端口（MediaPort/PlatformPort/SensorPort），宿主降至 **12,321 行 / 501 私有方法**。
+> **A/B 之后的"剩余功能模块"普查见 §9；"行为控制器下沉"（D 轨道）普查见 §10。**
 
 主文件从「单体上帝组件」转型为**页面壳/胶水层**：状态所有权已下沉到 **46 个 `@Observed` store 实例**
 （`state/` 共 48 文件），UI 已下沉到 119 个组件文件，宿主保留的是生命周期编排、桥薄委托、面板路由与回调仓库。
@@ -1072,6 +1074,331 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 > 通用约束沿用 PLAN §14.8：控制器**不 import NAPI/UI**（经端口注入）；可观测数据入 `@Observed` store，
 > 逐帧/草稿字段留控制器且不入被观察对象；定时器由控制器 `start()/stop()` 自持并在生命周期收口；
 > 每片 `arkts_check` → 构建 → 契约（锚点不变）→ 受影响测试 → 真机 → CHANGELOG（CRLF、裸 LF=0）→ 独立提交。
+
+---
+
+## 10. D 轨道普查：行为控制器下沉（2026-10-05，基线 12,321 / 501）
+
+### 10.0 基线与轨道定义
+
+§9 记录的基线是 A/B 刚完成时的 14,347 / 593。此后已进一步提取 **SensorController、RecordingController、
+ObjectModelRenderer、SkyInputController**（各自以 `gyroCtl()`/`recordingCtl()`/`objectModelRendererCtl()`/`skyInputCtl()`
+懒初始化访问器持有），以及 **HostMediaPort / HostPlatformPort / HostSensorPort** 三个端口适配器。
+宿主降至 **12,321 行 / 501 个 `private` 方法 / 155 个 `private` 字段**。
+
+前序轨道（A/B/C/M）覆盖的是**纯函数 / 派生 / 加载器 / 端口服务 / sky-input / selection**。
+D 轨道覆盖的是**从未被切片的「行为层」**：域 handler / 动作 / 定时器簇 / 文件导入。
+D 轨道沿用 §9 的 P 标注：P1＝控制器类；P2＝并入既有 store；P4＝跨域服务。
+
+### 10.1 全簇总表（17 簇，501 个 `private` 方法全覆盖）
+
+| D# | 簇名 | 方法数 | 估行数 | 代表方法 | P | 可迁性 |
+|---:|---|---:|---:|---|---|---|
+| D1 | 详情连接线/刷新定时器 | 14 | ~410 | `startDetailAutoRefresh` `armObjectDetailConnectorTransition` `refreshObjectDetailConnector` `objectDetailConnectorObstacles` `rayRectIntersection` | P1 | **干净** |
+| D2 | 图层 / 视图标签 | 12 | ~180 | `setLayer` `applyLayerSwitch` `applyLayerPreset` `layerPresetStates` `selectViewTab` | P1 | **干净** |
+| D3 | SkyCulture 行为 | 67 | ~1,126 | `selectSkyCulture` `setSkyCultureStyleOption`/`LabelMode*`/`VisualSetting`/`VisualColor`、art preview 族、maker 族（add/remove/validate/save/undo/export/import）、`drawSkyCultureTerritoryMap` `refreshSkyCultureSimulationYear` | P1 | **部分**（`loadSkyCultureDetails` 须保留） |
+| D4 | 时间操作 | 20 | ~373 | `refreshTimeNow` `handleChip` `setTimeRate` `advanceTime` `jumpToTimeMark` `applyManualTime` `syncManualTimeFromState` `applyTimeSettings` `saveTimePreference` | P1 | **受阻**（经 `refreshState`） |
+| D5 | PolarScope 控制器 | 9 | ~145 | `enterPolarScope` `closePolarScope` `syncNativePolarScopeOverlay` `recenterPolarScope` `setPolarScopeHorizontalFlip`/`VerticalFlip` | P1 | **基本干净**（需 `activePanel`/`refreshState` hook） |
+| D6 | ViewCoordinate 叠层 | 16 | ~155 | `refreshViewCenterCoordinates` `applyViewCoordinateSnapshot` `syncViewCoordinateTimer` `handleViewCoordinateTouch` `setViewCoordinatesVisible`/`Family`/`EquatorialEpoch` | P1 | **干净** |
+| D7 | AstroCalc 行为 | 32 | ~550 | `jumpToRts` `jumpToEphemerisRow` `chooseGraphStartDate` `openAstroTargetPicker` `publishAstroPanelState` `selectAstroFilter`/`Group`/`Tab` `exportCurrentAstroCsv` `applyAtmosphere` | P1 | **基本干净** |
+| D8 | 位置 / 地图 / GPS | 18 | ~350 | `setLocation` `applyPickerLocation` `searchLocations` `scanLocationSearchChunk` `handleLocationMapTouch` `useDeviceLocation` `saveCurrentLocation` `setObserverPlanet` | P1 | **部分**（`setLocation` → `refreshState`；`useDeviceLocation` → `geoLocationManager`） |
+| D9 | Ocular / 望远镜工具 | 27 | ~450 | `setOcularMode` `setMosaicCamera` `setEquationOfTime` `setArchaeoLineSetting`/`applyArchaeoLineSetting` `selectOcularInstrument` `changeOcularCcdRotation`/`MaskOpacity`/`PrismRotation`/`CropSize` `validateTelescopeEditorStatus` `saveTelescopeProfile` `testTelescopeConnection` `lx200GotoSelected` | P1 | **干净**（薄桥→store 写回） |
+| D10 | 脚本录制回放 UI | 13 | ~220 | `toggleRecordingUi` `handleScriptControlDragTouch` `startScriptStatusPolling` `finishNativeScriptUi` `refreshScriptStatus`/`Captions` `changeScriptRate` `importScriptFile` | P1 | **部分**（`finishNativeScriptUi` → `refreshState`；`toggleRecordingUi` → `panelVisible`/`infoWindow`） |
+| D11 | SkyTexture 状态观察 | 6 | ~110 | `stopSkyTextureStatusObserver` `hideSkyTextureStatus` `updateSkyTextureStatus` `pollSkyTextureStatus` `scheduleSkyTextureStatusCheck` `retrySkyTextureStatus` | P1 | **很干净** |
+| D12 | Nebula 纹理 | 6 | ~60 | `setNebulaTextureVisible` `refreshNebulaTextures` `gotoNebulaTexture` `removeNebulaTexture` `importNebulaTextureFile` | P1 | **干净** |
+| D13 | 卫星行为 | 11 | ~130 | `publishSatellitePanelState` `selectSatelliteGroup` `setSatelliteUpdateSetting` `addSatelliteSource` `importSatelliteTleFile` `frameSatellite` | P1 | **基本干净** |
+| D14 | 插件功能 | 10 | ~120 | `ensurePluginLoaded` `openPluginFeature` `openPluginFeatureAfterLoad` `pluginFeatureDestination`/`IsActionable`/`ActionLabel` | P1 | **部分**（`openPluginFeatureAfterLoad` → `openSubPanel`/`searchStore`） |
+| D15 | 目录下载 / 书签 | 6 | ~90 | `startCatalogDownload` `pollCatalogStatus` `persistObservingList` `addCurrentBookmark` `gotoBookmark` `deleteBookmark` | P4 | **干净** |
+| D16 | 夜间模式 / 儒略日 | 7 | ~100 | `syncNightModeFromEngine` `applyNightMode` `persistNightMode` `syncJulianDateFields` `applyJulianDateInput` `adjustJulianDate` | P2 | **干净**（入 store） |
+| D17 | 对象检查器媒体 | 20 | ~300 | `objectInspectorFilePath` `startObjectInspectorMediaWarmup`/`stop`/`refresh` `readRawSidecar` `openObjectInspectorMediaPreview`/`close`/`retry`/`onLoaded`/`onError` | P1 | **基本干净** |
+| — | **保留宿主** | ~163 | — | 见 10.6 | — | 保留 |
+
+**合计**：501 方法 = D1–D17 的 338 + 保留 163。
+
+### 10.2 簇详情与依赖分析
+
+#### D1 详情连接线/刷新定时器（最干净，首切）
+
+| 方法 | 依赖 |
+|---|---|
+| `startDetailAutoRefresh` | `detailTimer` `skyDragging` `objectDetailStore` `infoWindowStore` `activePanel` `panelVisible` |
+| `pauseDetailRefreshForSkyDrag` | → `stopDetailAutoRefresh` |
+| `resumeDetailRefreshAfterSkyDrag` | → `startDetailAutoRefresh` `refreshObjectDetailConnector` `scheduleSkyTextureStatusCheck` |
+| `stopDetailAutoRefresh` | `detailTimer` `detailRefreshGuard` `detailRefreshing` |
+| `startObjectDetailConnectorRefresh` | `objectDetailConnectorTimer` → `refreshObjectDetailConnector` |
+| `stopObjectDetailConnectorRefresh` | `objectDetailConnectorTimer` `objectDetailConnectorAnimationTimer` `objectDetailConnectorAnimateGeometry` |
+| `armObjectDetailConnectorTransition` | `objectDetailConnectorAnimateGeometry` `objectDetailConnectorAnimationTimer` |
+| `refreshObjectDetailConnector` | `objectDetailConnectorX/Y/Length/Angle/EndX/EndY/TargetX/TargetY/TargetOnScreen` `objectDetailConnectorObstacles` `rayRectIntersection` `segmentRectEntryFraction` `objectDetailMarkerSize` |
+| `objectDetailConnectorObstacles` | 已登记宿主控制器（A2-5） |
+| `rayRectIntersection` `segmentRectEntryFraction` | 纯几何 |
+| `objectDetailCardY` | `isFoldHoverLayout` `hoverBottomCardY` `bottomCardY` |
+
+**私有字段**：`detailTimer` `detailRefreshing` `detailRefreshGuard` `objectDetailConnectorTimer`
+`objectDetailConnectorAnimationTimer` `objectDetailConnectorLastPanelVisible`
+`objectDetailConnectorLastActivePanel` `objectDetailConnectorLastClippedByUi`
+`objectCardDragging` `objectCardPlacementPending` `objectDetailTabTransitionId`
+`objectCardDragStartX/Y` `objectCardDragStartOffsetX/Y` = **15 字段**
+**@State 字段**：`objectDetailConnectorX/Y/Length/Angle/EndX/EndY/TargetX/TargetY/TargetOnScreen`
+`objectDetailContentOpacity` `objectDetailContentTranslateX` `objectDetailConnectorAnimateGeometry` = **14 @State**
+**注入**：`CommandPort`（`callInteractive`）、`objectDetailStore`、`infoWindowStore`、`activePanel` 读（hook）、
+`scheduleSkyTextureStatusCheck` 读（hook）、`isFoldHoverLayout`/`bottomCardY`/`hoverBottomCardY` 读（几何 hook）。
+**判定**：**P1 干净**。定时器自持，几何推导纯函数，store 字段入 `@Observed`。
+唯一注意：`objectDetailConnectorObstacles` 已登记 A2-5（宿主控制器），控制器须回读宿主 hook。
+目标形态：`state/DetailConnectorController.ets`。
+
+#### D2 图层 / 视图标签
+
+方法：`setLayer` `applyLayerSwitch` `layerTabItems` `markingLayerStates` `layerPresetStates`
+`applyLayerStates` `clearMarkingLayers` `applyLayerPreset` `selectViewTab` `selectConfigTab`
+`viewTabTransitionId` `configTabTransitionId`。**12 方法**。
+
+**私有字段**：`viewTabTransitionId` `configTabTransitionId` = **2 字段**。
+**注入**：`CommandPort`（`callNative`）、`overlayStore` 读、`flashHint` hook。
+**判定**：**P1 干净**。所有方法都是"store 写 → 桥调用 → flashHint"模式。
+目标形态：`state/LayerController.ets`。
+
+#### D3 SkyCulture 行为（最大簇）
+
+67 方法分三子域：
+- **选择/标签/视觉**（`selectSkyCulture` `setSkyCultureStyleOption` `*LabelMode` `*VisualSetting`
+  `*VisualColor` `setCurrentSkyCultureAsDefault`）≈ 22 方法 → 薄桥 + store 写。
+- **Art 预览**（`openSkyCultureArtPreview` `resolveSkyCultureArtPreview` `decodeSkyCultureArtThumbnail`
+  `closeSkyCultureArtPreview` `onSkyCultureArtLoaded`/`Error` `retrySkyCultureArtPreview`
+  `clearSkyCultureArtThumbnails` `prepareSkyCultureArtResources` `drawSkyCultureTerritoryMap`）≈ 15 方法 →
+  含定时器 + 媒体解码 + 渲染。
+- **Maker**（`skyCultureMakerDraftFromResponse` `applySkyCultureMakerDraft` `scheduleSkyCultureMakerSave`
+  `saveSkyCultureMakerDraft` `validateSkyCultureMaker` `resetSkyCultureMaker` `undoSkyCultureMaker`
+  `addSkyCultureMakerConstellation`/`HipLine`/`ArtworkAnchor`/`ArtworkTouch`
+  `removeSelectedSkyCultureMakerConstellation`/`SkyCultureMakerLine`/`Artwork`
+  `exportSkyCultureMaker` `selectSkyCultureMakerConstellation` `applySkyCultureMakerArtworkResponse`
+  `refreshSkyCultureMakerArtworkPreview`/`clearSkyCultureMakerArtworkPreview`）≈ 30 方法 →
+  完整 CRUD + 画布交互 + 定时器。
+
+**私有字段**：`skyCultureDetailsRequestId` `skyCultureRowY` `skyCultureAnchorId`
+`skyCultureAnchorY` `skyCultureAnchorRequestId` `skyCultureAnchorArmed`
+`skyCultureMakerArtworkPreviewPath` `skyCultureMakerArtworkDecodeGeneration`
+`skyCultureMakerArtworkTouchStartX/Y` `skyCultureMakerArtworkTouchMoved`
+`skyCultureMakerSaveTimer` `skyCultureArtDecodeGeneration` `skyCultureArtThumbnailGeneration`
+`skyCultureArtDecodeTimer` `skyCultureArtStatusFlushTimer` `skyCultureArtPendingStatuses`
+`skyCultureMapRenderWidth/Height` `skyCultureTimeFollowTimer`
+`skyCultureTimeFollowRequestPending` = **20 字段**。
+**注入**：`CommandPort` + `MediaPort`（`decodeLocalImage`/`fileIo`）、`skyCultureStore`
+`activePanel` 读、`loadSkyCultureDetails` hook、`refreshState` hook。
+**判定**：**P1 部分可迁**。`loadSkyCultureDetails` 已登记保留（§9.6-3），须作为宿主 hook 注入。
+Maker 30 方法自成一域，可拆为 `SkyCultureMakerController` 子控制器。
+目标形态：`state/SkyCultureController.ets`（选择/标签/视觉）+ `state/SkyCultureMakerController.ets`（Maker）。
+
+#### D4 时间操作
+
+20 方法。**关键阻塞**：`refreshTimeNow` 只是 `refreshState()` 薄包装；`handleChip`/`setTimeRate`
+/`applySpeedStep` → `triggerAction`/`syncTimeRateState` → `refreshState`。
+`refreshState` 属 §9.6 保留项（生命周期收口）。
+
+**私有字段**：`timePanelTimer` `timePanelFullTimer` `julianDateApplyInFlight`
+`timeMarkLoading` `fpsTimer` = **5 字段**。
+**判定**：**保留**，除非 `refreshState` 可被 hook 化。若未来 `refreshState` 变为
+`onPostRefresh: () => void` 回调注入，则 D4 可作为 `TimeController` 迁出。暂登记。
+
+#### D5 PolarScope 控制器
+
+9 方法 + **4 私有字段**（`polarScopeRestoreState` `polarScopeTransitionPending`
+`polarScopeTransitionId` `polarScopeTimer`）。
+**注入**：`CommandPort`（`callNativeWhenReady`/`callInteractive`）、`polarScopeStore`、
+`activePanel`/`panelVisible` 写（hook）、`refreshState` hook、`flashHint` hook。
+**判定**：**P1 基本干净**。`enterPolarScope` 写 `this.activePanel = 'polarScope'` 和
+`this.panelVisible = false`——须以 `onPanelChange(activePanel, visible)` hook 注入。
+`closePolarScope` 调 `this.refreshState()`——同 D4 的 `refreshState` hook 问题。
+目标形态：`state/PolarScopeController.ets`。
+
+#### D6 ViewCoordinate 叠层
+
+16 方法 + **10 私有字段**（`viewCoordinateDragging` `viewCoordinateDragStartX/Y`
+`viewCoordinateDragStartOffsetX/Y` `viewCoordinateSnapshot` `viewCoordinateTimer`
+`viewCoordinateRequestPending` `utcOffsetHours`）+ **4 @State**（`viewCoordinatePrimaryText`
+`viewCoordinateSecondaryText` `viewCoordinateOffsetX` `viewCoordinateOffsetY`）。
+**注入**：`CommandPort`、`overlayStore`、`skyInputCtl()` 引用（`stopSkyInertia`）、
+`applicationInForeground` 读、`saveAppSettings` hook。
+**判定**：**P1 干净**。定时器自持，触摸自持，所有 @State 可入 store。
+目标形态：`state/ViewCoordinateController.ets`。
+
+#### D7 AstroCalc 行为
+
+32 方法。含 5 个 `chooseXxxStartDate`（打开 DatePickerDialog）、3 个 `openXxxTargetPicker`、
+4 个格式化纯函数（`fmtDateTime`/`fmtClock`/`fmtEphemerisDate`/`fmtNum`）、1 个 CSV 导出
+（`exportCurrentAstroCsv`，用 `picker.DocumentViewPicker` + `fileIo`）、
+`applyAtmosphere`（桥→store）、`publishAstroPanelState`（AppStorage 写）。
+
+**私有字段**：`astroTransitionId` `astroRequestedTab`
+`planetPositionsRequestSequence` `graphTargetPickerActive` `rtsTargetPickerActive`
+`ephemerisTargetPickerActive` `astroContextTimer` = **7 字段**。
+**注入**：`CommandPort`、`astroStore` `ephemerisStore` `wutStore`、`flashHint` hook、
+`refreshState` hook（`jumpToRts`/`jumpToEphemerisRow`）、`getUIContext` hook（DatePicker）。
+**判定**：**P1 基本干净**。格式化纯函数可提入 `common/derive/`。
+CSV 导出用 `MediaPort` + `PlatformPort`（picker）。
+目标形态：`state/AstroCalcController.ets`。
+
+#### D8 位置 / 地图 / GPS
+
+18 方法。`setLocation`(65 行)含多级 fallback（`setLocation`→`setLocationCoords`→`setLocationByName`）
+且尾调 `refreshState`；`useDeviceLocation`(42 行)用 `geoLocationManager` + 权限。
+搜索族（`searchLocations`/`scanLocationSearchChunk`/`selectSearchLocation`）含分块扫描定时器。
+
+**私有字段**：`mapTouchStartX/Y` `mapTouchMoved` `locSearchRequestId`
+`locationSearchScanContinents/Regions/ContinentIndex/RegionIndex/CityIndex`
+`locationSearchScanQuery/Results` `locationSearchScanTimer`
+`locationSearchLastPublishMs` `deviceLocationRequestInProgress` = **14 字段**。
+**注入**：`CommandPort`、`locationStore` `locationPickerStore` `sessionToolStore`、
+`refreshState` hook、`flashHint` hook、`PlatformPort`（`geoLocationManager` + 权限）。
+**判定**：**P1 部分可迁**。搜索/地图触摸/`setPickerLocation` 干净可迁；
+`setLocation` 须保留或经 `refreshState` hook；`useDeviceLocation` 经 `PlatformPort`。
+目标形态：`state/LocationController.ets`（搜索+地图+GPS）+ `setLocation` 保留宿主。
+
+#### D9 Ocular / 望远镜工具
+
+27 方法。**全部为"store 写 → 桥调用 → store.load"薄包装**，无定时器，无跨域依赖。
+分两子域：Ocular（17 方法，写 `telescopeStore`/`mosaicStore`/`equationOfTimeStore`/`archaeoStore`）、
+Telescope 编辑器（10 方法，写 `telescopeStore`）。
+
+**私有字段**：`equationOfTimeMutationId` `archaeoMutationId` = **2 字段**。
+**注入**：`CommandPort`、对应 store。
+**判定**：**P1 很干净**。可直接迁为 `state/OcularController.ets` + `state/TelescopeController.ets`。
+
+#### D10 脚本录制回放 UI
+
+13 方法。`finishNativeScriptUi` 尾调 `refreshState` + `locationPickerStore.loadObserverInfo`
++ `sessionToolStore.loadPlanetList`；`toggleRecordingUi` 写 `panelVisible`
+`infoWindowStore.infoWinVisible` `gyroStore.gyroCalibPanelOpen`。
+
+**私有字段**：`scriptControlDragging` `scriptControlDragStartX/Y`
+`scriptControlDragStartOffsetX/Y` `scriptStatusTimer`
+`scriptStatusRequestPending` `scriptCaptionsRequestPending`
+`scriptStartGraceUntil` = **9 字段**。
+**注入**：`CommandPort`、`scriptStore` `tools` `guideStore`、`refreshState` hook、
+面板状态写 hook、`MediaPort`（脚本/地景文件导入）。
+**判定**：**P1 部分**。核心轮询/拖拽/速率控制干净；首尾两个方法需 hook。
+目标形态：`state/ScriptPlaybackController.ets`。
+
+#### D11 SkyTexture 状态观察
+
+6 方法 + **4 私有字段**（`skyTextureStatusTimer` `skyTextureStatusDelayTimer`
+`skyTextureStatusPolls` `skyTextureStatusSlow`）。
+**注入**：`CommandPort`、`tools` store。
+**判定**：**P1 很干净**。自含状态机 + 定时器，只写 `tools` 一个 store。
+目标形态：`state/SkyTextureStatusController.ets`。
+
+#### D12 Nebula 纹理
+
+6 方法。全部"桥→store 写/加载"模式，`importNebulaTextureFile` 用 picker + fileIo。
+**注入**：`CommandPort` + `MediaPort`（picker/fileIo）、`nebulaTextureStore`。
+**判定**：**P1 干净**。
+目标形态：`state/NebulaTextureController.ets`。
+
+#### D13 卫星行为
+
+11 方法。`publishSatellitePanelState` 写 `AppStorage`；其余为桥+store 薄包装。
+**注入**：`CommandPort`、`satelliteStore`、`getUIContext().animateTo` hook。
+**判定**：**P1 基本干净**。
+目标形态：`state/SatelliteController.ets`。
+
+#### D14 插件功能
+
+10 方法。`openPluginFeatureAfterLoad` 写 `astroStore.astroTab`/`graphMode` +
+`searchStore` + `openSubPanel`——跨域路由。
+**注入**：`CommandPort`、`pluginFeatureLoading`、`flashHint` hook、
+`openSubPanel` hook、`searchStore` 写 hook。
+**判定**：**P1 部分**。其余方法干净。
+目标形态：`state/PluginFeatureController.ets` + `openPluginFeatureAfterLoad` 保留宿主。
+
+#### D15 目录下载 / 书签
+
+6 方法。全部桥+store 模式，无定时器。
+**判定**：**P4 干净**。小服务，可入 `CatalogService` 或留 store 方法。
+
+#### D16 夜间模式 / 儒略日
+
+7 方法。`pendingNightMode`/`pendingNightModeUntilMs` + `julianDateApplyInFlight` = **3 字段**。
+全部桥+store 模式。
+**判定**：**P2 干净**。并入 `sessionToolStore` 或 `OverlayStore` 方法。
+
+#### D17 对象检查器媒体
+
+20 方法。含媒体 warmup 定时器、decode generation、sidecar 读取、预览开关重试。
+**私有字段**：`objectInspectorMediaRequestPath`/`ResolvedRequestPath`/`ResolvedPath`
+`objectInspectorMediaResolutionComplete` `objectInspectorMediaWarmupTimer`
+`objectInspectorMediaDecodeGeneration` `bodyDetailWarmupTimer`/`Index`/`Pending`
+`objectInspectorProceduralKey`/`Particles` = **11 字段**。
+**注入**：`CommandPort` + `MediaPort`（decode/fileIo）、`objectMediaStore` `objectDetailStore`。
+**判定**：**P1 基本干净**。定时器自持。
+目标形态：`state/ObjectInspectorMediaController.ets`。
+
+### 10.3 共性阻塞：`refreshState` 与面板路由 hook
+
+D4/D5/D8/D10 均因调用 `refreshState()` 或写 `activePanel`/`panelVisible` 而受阻。
+解法有二：
+
+1. **`refreshState` hook 化**：在控制器构造时注入 `onRefreshState: () => void`，
+   宿主传 `() => { this.refreshState() }`。控制器不 import 宿主，不调宿主方法。
+2. **面板路由 hook**：注入 `onPanelChange: (panel: string, visible: boolean) => void`，
+   宿主传 `() => { this.activePanel = panel; this.panelVisible = visible; this.syncDockClockTimer() }`。
+
+此二 hook 一旦建立，D4/D5/D8/D10 全部解锁。建议作为 D 轨道的前置切片 D0 实施。
+
+### 10.4 已有端口清单（§9.5 的建议已落地）
+
+| 端口 | 状态 | 供哪些簇 |
+|---|---|---|
+| `CommandPort` / `HostCommandPort` | ✅ 已建 | D1–D17 全部 |
+| `MediaPort` / `HostMediaPort` | ✅ 已建 | D3（art decode）、D7（CSV）、D8（GPS 权限可选）、D10（脚本/地景导入）、D12（纹理导入）、D17（sidecar/decode） |
+| `PlatformPort` / `HostPlatformPort` | ✅ 已建 | D7（picker）、D8（`geoLocationManager`）、D10（picker） |
+| `SensorPort` / `HostSensorPort` | ✅ 已建 | 已供 SensorController |
+
+### 10.5 明确保留项（宿主，不再动）
+
+- §2.7.1 登记的 86 保留裸字段。
+- A2 的 51 A-保留 + 4 热路径 + 13 宿主控制器。
+- `loadSkyCultureDetails`（永久登记）。
+- 壳层/路由（`setPanel`/`openSubPanel`/`closePanel`/`goBackPanel` 族）+ `publish*`/`schedule*` 收口。
+- `floatingPanel`/`compactPanel`/`panelContent` 三个 `@Builder`。
+- `refreshState`/`refreshStateNow`（生命周期收口）。
+- Bridge 层（`callNative`/`callNativeFire`/`callNativeWhenReady`/`callInteractive`/`callLongRunningInteractive`）。
+- 生命周期/隐私/启动回调。
+- 折叠/响应式布局。
+- 命中测试（`isUiPoint`/`handleUiTap`/`dockActionAt`/`skyZoomButtonAt` 等）。
+- Dock 触摸/动作。
+- 几何推导（`bottomCardX/Y`/`detailCardX/Y/Width/Height`/`compactObjectPeek*`/`tabletInspector*`/`dockTop`/`chromeRowY` 等 ~40 方法）。
+- 设置/配置切换 + `flashHint` + 音乐切换 + `SELFTEST`。
+
+### 10.6 建议顺序（D 轨道切片队列）
+
+| 优先级 | 切片 | 簇 | 风险 | 估行迁出 |
+|---:|---|---|---|---:|
+| **D0** | hook 基础设施（`refreshState` hook + `panelChange` hook + `flashHint` hook） | — | 低 | ~30（宿主侧 hook 注入） |
+| D1 | DetailConnectorController | D1 | 低 | ~410 |
+| D2 | LayerController | D2 | 低 | ~180 |
+| D11 | SkyTextureStatusController | D11 | 低 | ~110 |
+| D12 | NebulaTextureController | D12 | 低 | ~60 |
+| D16 | 夜间模式/儒略日 → store 方法 | D16 | 低 | ~100 |
+| D9 | OcularController + TelescopeController | D9 | 低 | ~450 |
+| D6 | ViewCoordinateController | D6 | 低中 | ~155 |
+| D5 | PolarScopeController | D5 | 低中 | ~145 |
+| D7 | AstroCalcController | D7 | 中 | ~550 |
+| D13 | SatelliteController | D13 | 低 | ~130 |
+| D15 | Catalog/Bookmark service | D15 | 低 | ~90 |
+| D17 | ObjectInspectorMediaController | D17 | 中 | ~300 |
+| D10 | ScriptPlaybackController | D10 | 中 | ~220 |
+| D8 | LocationController | D8 | 中高 | ~350 |
+| D14 | PluginFeatureController | D14 | 中 | ~120 |
+| D3 | SkyCultureController + SkyCultureMakerController | D3 | 高 | ~1,126 |
+| D4 | TimeController（须 `refreshState` hook 已就绪） | D4 | 高 | ~373 |
+
+> **D0 完成后**，D1/D2/D11/D12/D16/D9 可并行（无跨簇依赖）；
+> D5/D6/D7 需 hook 已就绪；D3 最大最复杂放最后。
+> 预计全 D 轨道可迁出 **~4,000 行**，宿主降至 **~8,300 行**。
+
+> 通用约束沿用 §9.7 尾段：控制器不 import NAPI/UI（经端口注入）；
+> 可观测数据入 `@Observed` store，逐帧/草稿字段留控制器；
+> 定时器自持 `start()/stop()` + 生命周期收口；
+> 每片 `arkts_check` → 构建 → 契约 → 受影响测试 → 真机 → CHANGELOG → 独立提交。
 
 ---
 
