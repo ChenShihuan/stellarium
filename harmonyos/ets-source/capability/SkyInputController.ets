@@ -100,6 +100,10 @@ export interface SkyInputHostHooks {
   requestFieldOfView(onResult: (fov: number) => void): void
 }
 
+// 手势归属（Phase 2）：Down 时由几何一次判定，Up/Cancel 时复位。取代会跨手势残留的
+// touchStartedOnUi 全局标志与 `!skyTouchActive` 网关——归属不再依赖“上一手势是否漏清理”。
+enum SkyGestureOwner { None, Sky, Ui, PanelDrag }
+
 export class SkyInputController {
   private commandPort: CommandPort
   private nightModeStore: NightModeStore
@@ -118,6 +122,8 @@ export class SkyInputController {
   private dragVelocityY: number = 0
   private dragVelocitySampleValid: boolean = false
   private pinchActive: boolean = false
+  // 本次手势归属（Phase 2）：Down 时一次判定，Up/Cancel 复位。
+  private gestureOwner: SkyGestureOwner = SkyGestureOwner.None
   // 触摸/拖拽/捏合草稿（宿主引用数为 0，可整块迁移）
   private touchStartX: number = 0
   private touchStartY: number = 0
@@ -407,6 +413,7 @@ export class SkyInputController {
         const pr = panelRight(this.hooks.isExpandedLayout(), this.hooks.skyWidth(), this.hooks.panelWidth(), this.hooks.panelOffsetX(), this.hooks.edgeMargin())
         const pt = panelTop(this.hooks.edgeMargin(), this.hooks.panelOffsetY())
         if (downX >= pl && downX <= pr && downY >= pt && downY <= pt + 48) {
+          this.gestureOwner = SkyGestureOwner.PanelDrag
           this.panelDragging = true
           this.panelDragStartX = downX
           this.panelDragStartY = downY
@@ -420,6 +427,7 @@ export class SkyInputController {
       const zoomHit = this.hooks.skyZoomButtonAt(downX, downY)
       if (zoomHit.length > 0) {
         this.resetSkyTapSequence()
+        this.gestureOwner = SkyGestureOwner.None
         this.hooks.setTouchStartedOnUi(true)
         this.hooks.setSkyTouchFeedback(false)
         this.hooks.setSkyTouchActive(false)
@@ -434,6 +442,7 @@ export class SkyInputController {
       }
       if (isDockPoint(downX, downY, this.hooks.polarScopeVisible(), this.hooks.isExpandedLayout(), this.hooks.skyWidth(), this.hooks.skyHeight(), this.hooks.panelVisible(), this.hooks.panelWidth(), this.hooks.panelOffsetX(), this.hooks.edgeMargin(), this.hooks.compactDockWidthPercent(), this.hooks.dockTop())) {
         this.resetSkyTapSequence()
+        this.gestureOwner = SkyGestureOwner.None
         this.hooks.setDockTouchActive(true)
         this.hooks.setTouchStartedOnUi(true)
         this.hooks.setSkyTouchFeedback(false)
@@ -442,6 +451,7 @@ export class SkyInputController {
       }
       if (this.hooks.isUiPoint(downX, downY)) {
         this.resetSkyTapSequence()
+        this.gestureOwner = SkyGestureOwner.Ui
         this.hooks.setTouchStartedOnUi(true)
         // A UI touch must never inherit sky-drag ownership. This branch used to
         // set only touchStartedOnUi, unlike the dock branch below which also
@@ -477,6 +487,11 @@ export class SkyInputController {
         return
       }
       this.hooks.setSkyTouchActive(true)
+      this.gestureOwner = SkyGestureOwner.Sky
+      // 本次手势归属只由本次 Down 的几何决定。旧实现把 UI 归属存在全局的 touchStartedOnUi 里，
+      // 而该手势的 Up 会被 `!skyTouchActive` 早退吞掉、来不及清理；残留的 true 会让下一次
+      // 天空手势被误判为 UI——既不拖动也不点选。这里显式清零，禁止跨手势继承。
+      this.hooks.setTouchStartedOnUi(false)
       this.hooks.setSkyDragging(true)
       this.hooks.cancelSelectedObjectUiChange()
       this.commandPort.fire('beginSkyGesture')
@@ -534,13 +549,31 @@ export class SkyInputController {
       }
       return
     }
-    if (!this.hooks.skyTouchActive()) {
+    if (this.gestureOwner !== SkyGestureOwner.Sky && this.gestureOwner !== SkyGestureOwner.PanelDrag) {
+      // Ui / None 归属的手势：Move 忽略即可；Up/Cancel 清掉归属与拖动态，防跨手势残留。
+      if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        this.gestureOwner = SkyGestureOwner.None
+        this.nativeDragActive = false
+        this.panelDragging = false
+        this.hooks.setTouchStartedOnUi(false)
+        this.hooks.setDockTouchActive(false)
+        this.hooks.setSkyTouchFeedback(false)
+        this.hooks.setSkyTouchFeedbackMulti(false)
+        this.hooks.setSkyDragging(false)
+        this.hooks.resumeDetailRefreshAfterSkyDrag()
+      }
       return
     }
 
     if (event.type === TouchType.Move) {
       const x = touchWindowX(points[0])
       const y = touchWindowY(points[0])
+      if (this.gestureOwner === SkyGestureOwner.PanelDrag) {
+        this.hooks.setTouchStartedOnUi(false)
+        this.hooks.setPanelOffset(this.panelDragStartOffsetX + (x - this.panelDragStartX),
+          this.panelDragStartOffsetY + (y - this.panelDragStartY))
+        return
+      }
       if (this.hooks.skyTouchFeedback()) {
         this.hooks.setSkyTouchPoint(x, y)
       }
@@ -592,14 +625,6 @@ export class SkyInputController {
       }
       this.hooks.setSkyTouchFeedbackMulti(false)
 
-      // Panel drag handling
-      if (this.panelDragging) {
-        this.hooks.setTouchStartedOnUi(false)
-        this.hooks.setPanelOffset(this.panelDragStartOffsetX + (x - this.panelDragStartX),
-          this.panelDragStartOffsetY + (y - this.panelDragStartY))
-        return
-      }
-
       const totalMove = distance(x, y, this.touchStartX, this.touchStartY)
       // 阈值放宽到 16vp:uitest/mock 注入的触摸常有几像素位移,
       // 4vp 会把"轻点"误判成"拖动",导致 selectAt 不触发。
@@ -634,39 +659,18 @@ export class SkyInputController {
     }
 
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+      const owner = this.gestureOwner
+      this.gestureOwner = SkyGestureOwner.None
       const x = touchWindowX(points[0])
       const y = touchWindowY(points[0])
       const endedOnUi = this.hooks.isUiPoint(x, y)
       const recordingViewChanged = this.touchMoved || this.pinchActive
-      // End panel drag
-      if (this.panelDragging) {
+      if (owner === SkyGestureOwner.PanelDrag) {
         this.panelDragging = false
         this.hooks.scheduleSelectedObjectForUiChange(160)
         return
       }
-      // Gesture ownership is decided on Down. A drag that started on the sky
-      // must still finish as a sky gesture even when the finger crosses the
-      // floating object card before it lifts; otherwise the early return leaves
-      // skyDragging set and permanently pauses detail refresh/inertia.
-      if (this.hooks.touchStartedOnUi()) {
-        if (this.hooks.dockTouchActive()) {
-          this.hooks.setDockTouchActive(false)
-          if (event.type === TouchType.Up) {
-            const dockItem = this.hooks.dockActionAt(x, y)
-            if (dockItem !== null) {
-              this.hooks.activateDockAction(dockItem)
-            }
-          }
-        }
-        this.hooks.setTouchStartedOnUi(false)
-        // Clear the same drag state the sky branch clears on lift-off: this early
-        // return used to leave it behind for the next gesture to inherit.
-        this.nativeDragActive = false
-        this.hooks.setSkyTouchActive(false)
-        this.hooks.setSkyTouchFeedback(false)
-        this.hooks.setSkyDragging(false)
-        return
-      }
+      // owner === Sky：天空手势的抬起收尾（惯性 / 点选 / 结束捏合 / 尾部清理 / 检查点）。
       if (this.nativeDragActive && event.type === TouchType.Up) {
         this.emitFluidDrag(x, y, Date.now(), false)
         this.startSkyInertia()
