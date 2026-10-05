@@ -6655,11 +6655,19 @@ export struct WindowNativeNode {
 
   private jumpToWutTarget(target: WutTarget): void {
     if (target.jd === undefined || target.jd <= 0 || target.englishName === undefined) return
+    const targetName = target.englishName
     this.callInteractive('setJD', String(target.jd), (timeResult: StellariumBridgeResponse) => {
-      if (timeResult.ok === true) {
-        this.callNative('searchObject', target.englishName ?? '')
-        this.refreshState()
-      }
+      if (timeResult.ok !== true) { return }
+      // Selecting is not centring. searchObject only marks the target; the
+      // engine's own handler never moves the view (on device the log showed a
+      // bare setJD + searchObject and no moveToSelected*/setTracking command at
+      // all), so this row button looked dead. Run the same post-selection
+      // placement the global search uses - applySelectedObject with
+      // placement 'center' - so the row centres like every other entry point.
+      this.callInteractive('searchObject', targetName, (selectResult: StellariumBridgeResponse) => {
+        if (selectResult.found !== true) { return }
+        this.applySelectedObject(selectResult, false, 'center')
+      })
     })
   }
 
