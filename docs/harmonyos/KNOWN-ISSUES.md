@@ -459,3 +459,16 @@
 - **结论**：维持修法 **A**（设置 → 设备与隐私新增「陀螺仪校准」行）；实现时先收起设置面板，以免 `(16, 80)` 的校准面板被遮住。本轮验收**未改码**。
 
 **2026-10-01 验收附带记录（非第 21 条本身，新开条目）**：`BottomDock` 的 `DockButton` active 高亮在真机上不显示（面板打开后对应入口不变蓝 `#70C8FF`；像素采样 max(B−R)=3–11，而同刻 `CompactQuickButton` 激活态为 66）。疑因 `ForEach` 键不含 `active`（键不变 → 子项不重建 → `@Prop active` 陈旧），或 Phase 3at 把 `dockActionActive` 改为 `isActive` 闭包入参后依赖无法追踪；未确认属回归还是既有，留待独立切片。
+
+### 22. 行星三维模型显示"本地资源解码失败"（构建期缺 `.model.rgba` 侧车）— 【2026-10-02 已修复（应用内回退解码 PNG），真机验证通过】
+
+- **现象（用户真机）**：详情卡"资料"页媒体区（`objectInspectorMediaKind === 'model'` 的天体，如火星、土星）显示 `TabletInspectorNoticeRow` 的**「本地资源解码失败 / 资源已找到，但当前设备无法显示此文件」+「重试」**，即 `ObjectMediaStore.objectInspectorMediaLoadFailed === true`。`kind === 'image'` 的深空天体（实测 M31）正常，故**仅 model 路径受影响**。
+- **真机复现与日志**（Mate 80 Pro `192.168.50.108:40565`，`com.cnchensh.stellarium`，`searchObject Mars`）：
+  - `[detail-media] decoding local image kind=model uri=.../stellarium/textures/mars.png`
+  - `[detail-model] CPU texture load failed path= error={}` —— 旧代码用 `JSON.stringify(Error)` 输出 `{}`，**丢失了错误 message**（这正是本轮补的诊断）。
+- **失败文件与真实格式**：`textures/mars.png` 存在、169665 字节（`hdc shell ls -l`），真实格式为普通 PNG；`textures/` 下**没有任何 `.model.rgba` 侧车**（`ls | grep model.rgba` 为空；构建 rawfile 中 0 个）。
+- **根因**：`refreshObjectInspectorMedia` 对 model 走 `loadObjectInspectorModelRawTexture()`，读的是同目录 **`textures/<name>.png.model.rgba`**（512×256×4 = 524288 字节 CPU 侧车，由 `scripts/sync-ohos-resources.sh` 用 `ffmpeg -vf scale=512:256,format=rgba -f rawvideo` 生成）。Windows 移植脚本 `sync-ohos-resources-windows.ps1` **未实现该 ffmpeg 步骤**（本机无 ffmpeg），侧车从未进入 HAP → `objectInspectorFilePath(name + '.model.rgba')` 返回 `''` → 旧代码直接抛 `CPU texture sidecar is missing` → `objectInspectorMediaLoadFailed = true`。与 KNOWN-ISSUES P2「行星细节模型纹理缺失（`.model.rgba` 未生成）」同源，本次把它定性为**用户可见的阻断**。
+- **修法（应用内回退，不改构建产物）**：`loadObjectInspectorModelRawTexture()` 在侧车缺失/读取失败时改为**回退用鸿蒙图像框架解码 PNG**：`decodeLocalImage(png, 'model', ..., { width: 512, height: 256 })`（`RGBA_8888`，专为 model 准备的既有分支）→ `pixelMap.readPixelsToBufferSync()` 读回 524288 字节 RGBA → 复用同一提交路径设置 `objectInspectorModelTexturePixels` 并触发 CPU 光栅化。环形纹理同法按 `512×2` 回退（土星环实测生效）。侧车存在时优先走原快速路径，行为不变。CPU 光栅化器按 `[R,G,B,A]` 读取（`DetailModelRasterizer.ets`），与 `RGBA_8888` readback 字节序一致，颜色实测正确。
+- **诊断增强**：`describeDecodeError()` 显式输出 `err.name + ': ' + err.message`（取代丢失 message 的 `JSON.stringify`）；`TabletInspectorMedia.ets` 两个 `Image.onError` 改为 `(err: ImageError)` 并打印 `err.error.code` 与 `err.message`。
+- **真机验证**：重建 HAP（39s）安装后 `searchObject Mars` → `[detail-model] sidecar missing, decoding PNG fallback` → `[detail-model] CPU texture ready bytes=524288 source=png` → `[detail-media-card] sphere loaded`；截图确认**带地表的火星球体**（非失败提示）。土星含环同样渲染成功（`satellite rings_radial.png` 解码 + `released pixel map kind=model-ring-texture-fallback`）。沉浸叠层（Phase 5d）复测：`devecocli ui click` 打开 `object-model-stage` → `drag` 旋转（前后截图地表特征位移）→ 关闭回到 `object-model-inline-stage`；**双指缩放未用 CLI 走查（`devecocli ui` 无多点触控）**。
+- **仍需处理（构建侧，非本轮）**：`sync-ohos-resources-windows.ps1` 仍未生成 `.model.rgba`；本轮回退让功能可用，但侧车仍可省去每次选择的运行时解码。若日后补齐 Windows 侧生成步骤，可恢复"侧车优先"的快速路径（应用逻辑已兼容两者）。

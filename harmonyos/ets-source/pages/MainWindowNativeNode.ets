@@ -15965,6 +15965,9 @@ private loadPlanetPositions(): void {
     const ringRawFilePath = ringSpec === undefined
       ? ''
       : this.objectInspectorFilePath(ringSpec.texturePath + '.model.rgba')
+    const ringPngFilePath = ringSpec === undefined
+      ? ''
+      : this.objectInspectorFilePath(ringSpec.texturePath)
     const resolutionAlreadyAttempted = this.objectInspectorMediaResolutionComplete &&
       this.objectInspectorMediaResolvedRequestPath === requestedPath
     const shouldResolve = requestedPath.length > 0 && path.length === 0 && !resolutionAlreadyAttempted
@@ -16058,7 +16061,8 @@ private loadPlanetPositions(): void {
       hilog.info(0x0000, 'StellariumArkUI',
         '[detail-media] decoding local image kind=%{public}s uri=%{public}s', kind, expectedPath)
       if (kind === 'model') {
-        this.loadObjectInspectorModelRawTexture(modelRawFilePath, ringRawFilePath, generation, expectedSelection, expectedPath)
+        this.loadObjectInspectorModelRawTexture(modelRawFilePath, ringRawFilePath, generation, expectedSelection, expectedPath,
+          filePath, ringPngFilePath)
         return
       }
       this.decodeLocalImage(filePath, kind, (pixelMap: image.PixelMap) => {
@@ -16095,9 +16099,114 @@ private loadPlanetPositions(): void {
         }
         hilog.error(0x0000, 'StellariumArkUI',
           '[detail-media] pixel map decode failed kind=%{public}s uri=%{public}s error=%{public}s',
-          kind, expectedPath, JSON.stringify(err))
+          kind, expectedPath, this.describeDecodeError(err))
       })
     }
+  }
+
+  private describeDecodeError(err: Error): string {
+    const name = err.name !== undefined && err.name.length > 0 ? err.name : 'Error'
+    const message = err.message !== undefined && err.message.length > 0 ? err.message : 'unknown failure'
+    return name + ': ' + message
+  }
+
+  private failObjectInspectorModelTexture(mediaGeneration: number, reason: string): void {
+    if (mediaGeneration !== this.objectInspectorMediaDecodeGeneration) {
+      return
+    }
+    this.objectMediaStore.objectInspectorMediaLoading = false
+    this.objectMediaStore.objectInspectorMediaDecoding = false
+    this.objectMediaStore.objectInspectorMediaLoadFailed = true
+    hilog.error(0x0000, 'StellariumArkUI',
+      '[detail-model] CPU texture load failed uri=%{public}s reason=%{public}s',
+      this.objectMediaStore.objectInspectorMediaPath, reason)
+  }
+
+  private commitObjectInspectorModelTexture(
+    texture: ArrayBuffer,
+    ringTexture: ArrayBuffer | undefined,
+    mediaGeneration: number,
+    expectedSelection: string,
+    expectedPath: string,
+    sourceLabel: string,
+  ): void {
+    const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
+    if (currentSelection !== expectedSelection || this.objectMediaStore.objectInspectorMediaPath !== expectedPath ||
+      mediaGeneration !== this.objectInspectorMediaDecodeGeneration) {
+      return
+    }
+    this.objectInspectorModelTexturePixels = texture
+    this.objectInspectorModelTextureWidth = 512
+    this.objectInspectorModelTextureHeight = 256
+    this.objectInspectorModelTextureStride = 512 * 4
+    if (ringTexture !== undefined) {
+      this.objectInspectorModelRingTexturePixels = ringTexture
+      this.objectInspectorModelRingTextureWidth = 512
+      this.objectInspectorModelRingTextureHeight = 2
+      this.objectInspectorModelRingTextureStride = 512 * 4
+    } else {
+      this.objectInspectorModelRingTexturePixels = undefined
+      this.objectInspectorModelRingTextureWidth = 0
+      this.objectInspectorModelRingTextureHeight = 0
+      this.objectInspectorModelRingTextureStride = 0
+    }
+    this.objectMediaStore.objectInspectorMediaLoading = false
+    this.objectMediaStore.objectInspectorMediaDecoding = true
+    this.objectMediaStore.objectInspectorMediaLoadFailed = false
+    hilog.info(0x0000, 'StellariumArkUI',
+      '[detail-model] CPU texture ready uri=%{public}s bytes=%{public}s source=%{public}s phase=%{public}s',
+      expectedPath, texture.byteLength.toString(), sourceLabel, this.objectDetailStore.selectedPhase)
+    this.requestObjectInspectorModelRender(true)
+  }
+
+  // HarmonyOS 的 CPU 光栅化需要原始 RGBA 字节。构建期侧车（.model.rgba）缺失时
+  // （Windows 资源同步脚本不生成它们），退回到用鸿蒙图像框架解码 PNG（512x256，
+  // RGBA_8888）再读回像素，避免“本地资源已找到但设备无法显示”因缺少侧车而失败。
+  private decodeObjectInspectorModelTextureFromPng(
+    pngFilePath: string,
+    ringPngFilePath: string,
+    mediaGeneration: number,
+    expectedSelection: string,
+    expectedPath: string,
+  ): void {
+    if (pngFilePath.length === 0) {
+      this.failObjectInspectorModelTexture(mediaGeneration, 'sidecar and PNG are both missing')
+      return
+    }
+    this.decodeLocalImage(pngFilePath, 'model', (pixelMap: image.PixelMap) => {
+      const pixels = new ArrayBuffer(512 * 256 * 4)
+      try {
+        pixelMap.readPixelsToBufferSync(pixels)
+      } catch (err) {
+        this.releaseDecodedImage(pixelMap, 'model-texture-fallback')
+        this.failObjectInspectorModelTexture(mediaGeneration, 'PNG readback failed: ' + this.describeDecodeError(err as Error))
+        return
+      }
+      this.releaseDecodedImage(pixelMap, 'model-texture-fallback')
+      if (ringPngFilePath.length === 0) {
+        this.commitObjectInspectorModelTexture(pixels, undefined, mediaGeneration, expectedSelection, expectedPath, 'png')
+        return
+      }
+      this.decodeLocalImage(ringPngFilePath, 'model', (ringPixelMap: image.PixelMap) => {
+        const ringPixels = new ArrayBuffer(512 * 2 * 4)
+        let ringTexture: ArrayBuffer | undefined = undefined
+        try {
+          ringPixelMap.readPixelsToBufferSync(ringPixels)
+          ringTexture = ringPixels
+        } catch (err) {
+          hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] ring PNG readback failed error=%{public}s',
+            this.describeDecodeError(err as Error))
+        }
+        this.releaseDecodedImage(ringPixelMap, 'model-ring-texture-fallback')
+        this.commitObjectInspectorModelTexture(pixels, ringTexture, mediaGeneration, expectedSelection, expectedPath, 'png')
+      }, (err: Error) => {
+        hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] ring PNG decode failed error=%{public}s',
+          this.describeDecodeError(err))
+        this.commitObjectInspectorModelTexture(pixels, undefined, mediaGeneration, expectedSelection, expectedPath, 'png')
+      }, { width: 512, height: 2 })
+    }, (err: Error) => {
+      this.failObjectInspectorModelTexture(mediaGeneration, 'PNG decode failed: ' + this.describeDecodeError(err))
+    }, { width: 512, height: 256 })
   }
 
   private loadObjectInspectorModelRawTexture(
@@ -16106,34 +16215,28 @@ private loadPlanetPositions(): void {
     mediaGeneration: number,
     expectedSelection: string,
     expectedPath: string,
+    pngFilePath: string,
+    ringPngFilePath: string,
   ): void {
     const expectedBytes = 512 * 256 * 4
+    if (rawFilePath.length === 0) {
+      hilog.warn(0x0000, 'StellariumArkUI',
+        '[detail-model] sidecar missing, decoding PNG fallback uri=%{public}s png=%{public}s',
+        expectedPath, pngFilePath)
+      this.decodeObjectInspectorModelTextureFromPng(pngFilePath, ringPngFilePath, mediaGeneration, expectedSelection, expectedPath)
+      return
+    }
     let file: fileIo.File | undefined = undefined
     try {
-      if (rawFilePath.length === 0) {
-        throw new Error('CPU texture sidecar is missing')
-      }
       const pixels = new ArrayBuffer(expectedBytes)
       file = fileIo.openSync(rawFilePath, fileIo.OpenMode.READ_ONLY)
       const bytesRead = fileIo.readSync(file.fd, pixels)
       fileIo.closeSync(file)
       file = undefined
-      const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-      if (currentSelection !== expectedSelection || this.objectMediaStore.objectInspectorMediaPath !== expectedPath ||
-        mediaGeneration !== this.objectInspectorMediaDecodeGeneration) {
-        return
-      }
       if (bytesRead !== expectedBytes) {
         throw new Error('CPU texture sidecar has unexpected size: ' + bytesRead.toString())
       }
-      this.objectInspectorModelTexturePixels = pixels
-      this.objectInspectorModelTextureWidth = 512
-      this.objectInspectorModelTextureHeight = 256
-      this.objectInspectorModelTextureStride = 512 * 4
-      this.objectInspectorModelRingTexturePixels = undefined
-      this.objectInspectorModelRingTextureWidth = 0
-      this.objectInspectorModelRingTextureHeight = 0
-      this.objectInspectorModelRingTextureStride = 0
+      let ringTexture: ArrayBuffer | undefined = undefined
       if (ringRawFilePath.length > 0) {
         const ringExpectedBytes = 512 * 2 * 4
         let ringFile: fileIo.File | undefined = undefined
@@ -16146,10 +16249,7 @@ private loadPlanetPositions(): void {
           if (ringBytesRead !== ringExpectedBytes) {
             throw new Error('ring sidecar has unexpected size: ' + ringBytesRead.toString())
           }
-          this.objectInspectorModelRingTexturePixels = ringPixels
-          this.objectInspectorModelRingTextureWidth = 512
-          this.objectInspectorModelRingTextureHeight = 2
-          this.objectInspectorModelRingTextureStride = 512 * 4
+          ringTexture = ringPixels
           hilog.info(0x0000, 'StellariumArkUI',
             '[detail-model] ring texture ready path=%{public}s bytes=%{public}s',
             ringRawFilePath, ringBytesRead.toString())
@@ -16161,31 +16261,24 @@ private loadPlanetPositions(): void {
           }
           hilog.warn(0x0000, 'StellariumArkUI',
             '[detail-model] ring texture unavailable path=%{public}s error=%{public}s',
-            ringRawFilePath, JSON.stringify(ringErr))
+            ringRawFilePath, this.describeDecodeError(ringErr as Error))
         }
       }
-      this.objectMediaStore.objectInspectorMediaLoading = false
-      this.objectMediaStore.objectInspectorMediaDecoding = true
-      this.objectMediaStore.objectInspectorMediaLoadFailed = false
-      hilog.info(0x0000, 'StellariumArkUI',
-        '[detail-model] CPU texture ready path=%{public}s bytes=%{public}s phase=%{public}s',
-        rawFilePath, bytesRead.toString(), this.objectDetailStore.selectedPhase)
-      this.requestObjectInspectorModelRender(true)
+      this.commitObjectInspectorModelTexture(pixels, ringTexture, mediaGeneration, expectedSelection, expectedPath, 'sidecar')
     } catch (err) {
       if (file !== undefined) {
         try {
           fileIo.closeSync(file)
         } catch (_closeErr) { }
       }
-      if (mediaGeneration !== this.objectInspectorMediaDecodeGeneration) {
+      hilog.warn(0x0000, 'StellariumArkUI',
+        '[detail-model] sidecar load failed path=%{public}s error=%{public}s',
+        rawFilePath, this.describeDecodeError(err as Error))
+      if (pngFilePath.length > 0) {
+        this.decodeObjectInspectorModelTextureFromPng(pngFilePath, ringPngFilePath, mediaGeneration, expectedSelection, expectedPath)
         return
       }
-      this.objectMediaStore.objectInspectorMediaLoading = false
-      this.objectMediaStore.objectInspectorMediaDecoding = false
-      this.objectMediaStore.objectInspectorMediaLoadFailed = true
-      hilog.error(0x0000, 'StellariumArkUI',
-        '[detail-model] CPU texture load failed path=%{public}s error=%{public}s',
-        rawFilePath, JSON.stringify(err))
+      this.failObjectInspectorModelTexture(mediaGeneration, 'sidecar failed: ' + this.describeDecodeError(err as Error))
     }
   }
 
