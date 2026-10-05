@@ -56,9 +56,8 @@ import { WutStore } from '../state/WutStore'
 import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
 import { LocationStore } from '../state/LocationStore'
 import { CityChipsRow } from '../panels/location/CityChipsRow'
-import { LocationSearchPanel } from '../panels/location/LocationSearchPanel'
+import { LocationPickerPanel } from '../panels/location/LocationPickerPanel'
 import { LocationPickerStore } from '../state/LocationPickerStore'
-import { HierColumn } from '../panels/common/HierColumn'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
@@ -912,7 +911,6 @@ export struct WindowNativeNode {
   private widePanelScroller: Scroller = new Scroller()
   private compactPanelScroller: Scroller = new Scroller()
   private scriptListScroller: Scroller = new Scroller()
-  private locationColumnScrollers: Array<Scroller> = [new Scroller(), new Scroller(), new Scroller(), new Scroller()]
   @State private catalogList: StarCatalogItem[] = []
   @State private catalogLoading: boolean = false
   @State private catalogBusy: boolean = false
@@ -15110,26 +15108,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-  @Builder
-  locationModeChip(mode: string, label: ResourceStr) {
-    Button(label)
-      .height(28)
-      .fontSize(11)
-      .fontColor(this.locationPickerStore.locationPickMode === mode ? this.nmText() : this.nmSub())
-      .backgroundColor(this.locationPickerStore.locationPickMode === mode ? this.nmAccent() : this.nmBg())
-      .border({ width: 1, color: this.locationPickerStore.locationPickMode === mode ? 'rgba(107, 163, 214, 0.35)' : 'rgba(255, 255, 255, 0.08)' })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .margin({ right: 8 })
-      .onClick(() => {
-        this.locationPickerStore.locationPickMode = mode
-      })
-  }
-
-  locationColumnScroller(kind: string): Scroller {
-    const index = kind === 'continent' ? 0 : (kind === 'country' ? 1 : (kind === 'region' ? 2 : 3))
-    return this.locationColumnScrollers[index]
-  }
-
   private panelLeft(): number {
     // 跟随面板真实位置（含拖动偏移），避免点面板却漏成星图拖拽。
     // 展开态直接复用渲染用的 expandedMainPanelLeft()，保证命中区与实际绘制位置永远一致
@@ -20596,7 +20574,28 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         Text(I18n.t('i0016')).fontSize(12).fontColor('#99FFFFFF').width(72)
         Text(this.altitudeText).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.height(28).width('100%').padding({ left: 10, right: 10 })
-      this.locationPickerPanel()
+      LocationPickerPanel({
+        pickerStore: this.locationPickerStore,
+        locationStore: this.locationStore,
+        observerPlanet: this.observerPlanet,
+        mapWidth: this.locationMapWidth(),
+        mapHeight: this.locationMapHeight(),
+        subColor: this.nmSub(),
+        inputColor: this.nmInput(),
+        textColor: this.nmText(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        onUseDeviceLocation: () => { this.useDeviceLocation() },
+        onSearchLocations: (query: string) => { this.searchLocations(query) },
+        contextOf: (item: LocSearchItem) => this.locationResultContext(item),
+        onPickSearchItem: (item: LocSearchItem) => { this.selectSearchLocation(item) },
+        onApply: () => { this.applyPickerLocation() },
+        onMapTouch: (event: TouchEvent) => this.handleLocationMapTouch(event),
+        onSelectContinent: (c: string) => { this.selectContinent(c) },
+        onSelectCountry: (c: string) => { this.selectCountry(c) },
+        onSelectRegion: (r: string) => { this.selectRegion(r) },
+        onSelectCity: (c: string) => { this.selectCityByName(c) }
+      })
       CityChipsRow({
         store: this.locationStore,
         onSaveCurrent: () => { this.saveCurrentLocation() },
@@ -25264,197 +25263,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
 		  }
 
 	  @Builder
-  locationPickerPanel() {
-    Column() {
-      Row() {
-        Text(I18n.t('i0037'))
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#E5FFFFFF')
-          .layoutWeight(1)
-        Row() {
-            Image($r('app.media.ic_location')).width(14).height(14).fillColor('#FFFFFFFF')
-            Text(I18n.t('i0052')).fontSize(11).fontColor('#FFFFFFFF').margin({ left: 4 })
-          }
-          .height(30)
-          .padding({ left: 12, right: 12 })
-          .backgroundColor('#5B93BF')
-          .borderRadius(UI_RADIUS_PILL)
-          .onClick(() => {
-	            this.useDeviceLocation()
-	          })
-      }
-        .width('100%')
-
-      Row() {
-        this.locationModeChip('map', I18n.t('s0715'))
-        this.locationModeChip('hierarchy', I18n.t('s0716'))
-      }
-        .width('100%')
-        .margin({ top: 10 })
-
-      LocationSearchPanel({
-        store: this.locationStore,
-        subColor: this.nmSub(),
-        inputColor: this.nmInput(),
-        onSearch: (query: string) => { this.searchLocations(query) },
-        onNameDraft: (name: string) => { this.locationPickerStore.locationPickerName = name },
-        contextOf: (item: LocSearchItem) => this.locationResultContext(item),
-        onPickItem: (item: LocSearchItem) => { this.selectSearchLocation(item) }
-      })
-
-      if (this.locationPickerStore.locationPickMode === 'map') {
-        Stack() {
-          Image($rawfile('worldmap.jpg'))
-            .width('100%')
-            .height('100%')
-            .objectFit(ImageFit.Contain)
-          // 经纬度刻度
-          Text('N').fontSize(9).fontColor('#99FFFFFF').position({ x: 6, y: 4 })
-          Text('S').fontSize(9).fontColor('#99FFFFFF').position({ x: 6, y: this.locationPickerStore.mapRenderHeight - 16 })
-          Text('90°W').fontSize(8).fontColor('#CC8FB6FF').position({ x: 4, y: Math.round(this.locationPickerStore.mapRenderHeight / 2) - 4 })
-          Text('90°E').fontSize(8).fontColor('#CC8FB6FF').position({ x: this.locationPickerStore.mapRenderWidth - 32, y: Math.round(this.locationPickerStore.mapRenderHeight / 2) - 4 })
-          Text(I18n.t('i0040'))
-            .fontSize(18)
-            .fontColor('#7FB3DC')
-            .textShadow({ radius: 8, color: 'rgba(159, 232, 255, 0.75)', offsetX: 0, offsetY: 0 })
-            .position({ x: this.locationPickerStore.pickerPinX(), y: this.locationPickerStore.pickerPinY() })
-        }
-          .width(this.locationMapWidth())
-          .height(this.locationMapHeight())
-          .alignSelf(ItemAlign.Center)
-          .clip(true)
-          .backgroundColor('rgba(11, 24, 43, 0.46)')
-          .border({ width: 1, color: 'rgba(159, 232, 255, 0.22)' })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .margin({ top: 10 })
-          .onAreaChange((oldArea: Area, newArea: Area) => {
-            this.locationPickerStore.mapRenderWidth = Number(newArea.width)
-            this.locationPickerStore.mapRenderHeight = Number(newArea.height)
-          })
-          .onTouch((event: TouchEvent) => this.handleLocationMapTouch(event))
-        Text(this.locationPickerStore.pickerCoordinateText())
-          .fontSize(12)
-          .fontColor('#99FFFFFF')
-          .width('100%')
-          .margin({ top: 8 })
-      } else {
-        Column() {
-          Row() {
-            HierColumn({
-              title: this.locationPickerStore.locationColumnTitle('continent'),
-              items: this.locationPickerStore.hierColumnItems('continent', this.observerPlanet),
-              selected: this.locationPickerStore.hierarchySelectionFor('continent'),
-              scroller: this.locationColumnScroller('continent'),
-              labelOf: (item: string) => this.locationPickerStore.hierarchyItemLabel('continent', item, this.observerPlanet),
-              onSelect: (c: string) => { this.selectContinent(c) }
-            })
-            HierColumn({
-              title: this.locationPickerStore.locationColumnTitle('country'),
-              items: this.locationPickerStore.hierColumnItems('country', this.observerPlanet),
-              selected: this.locationPickerStore.hierarchySelectionFor('country'),
-              scroller: this.locationColumnScroller('country'),
-              labelOf: (item: string) => this.locationPickerStore.hierarchyItemLabel('country', item, this.observerPlanet),
-              onSelect: (c: string) => { this.selectCountry(c) }
-            })
-            HierColumn({
-              title: this.locationPickerStore.locationColumnTitle('region'),
-              items: this.locationPickerStore.hierColumnItems('region', this.observerPlanet),
-              selected: this.locationPickerStore.hierarchySelectionFor('region'),
-              scroller: this.locationColumnScroller('region'),
-              labelOf: (item: string) => this.locationPickerStore.hierarchyItemLabel('region', item, this.observerPlanet),
-              onSelect: (r: string) => { this.selectRegion(r) }
-            })
-            HierColumn({
-              title: this.locationPickerStore.locationColumnTitle('city'),
-              items: this.locationPickerStore.hierColumnItems('city', this.observerPlanet),
-              selected: this.locationPickerStore.hierarchySelectionFor('city'),
-              scroller: this.locationColumnScroller('city'),
-              labelOf: (item: string) => this.locationPickerStore.hierarchyItemLabel('city', item, this.observerPlanet),
-              onSelect: (c: string) => { this.selectCityByName(c) }
-            })
-          }
-            .width('100%')
-            .height(196)
-          Text(this.locationPickerStore.hierarchySelectionSummary(this.observerPlanet))
-            .fontSize(11)
-            .fontColor(this.locationPickerStore.hierContinent ? '#A9D9F5' : '#7F96AE')
-            .width('100%')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ top: 7 })
-          Text(this.locationPickerStore.pickerCoordinateText())
-            .fontSize(12)
-            .fontColor('#99FFFFFF')
-            .width('100%')
-            .margin({ top: 8 })
-        }
-          .width('100%')
-          .margin({ top: 10 })
-      }
-
-      Row() {
-        Text(I18n.t('i0016')).fontSize(12).fontColor('#8EA0BD').width(56)
-        TextInput({ text: this.locationPickerStore.locationPickerAltitude.toFixed(0), placeholder: I18n.t('i0067') })
-          .height(34)
-          .fontSize(13)
-          .fontColor('#E5FFFFFF')
-          .placeholderColor('#8EA0BD')
-          .backgroundColor('rgba(255, 255, 255, 0.06)')
-          .border({ width: 1, color: 'rgba(214, 238, 255, 0.14)' })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .layoutWeight(1)
-          .onChange((value: string) => {
-            const altitude = Number(value)
-            if (Number.isFinite(altitude)) {
-              this.locationPickerStore.locationPickerAltitude = Math.round(altitude)
-            }
-          })
-        Text('m').fontSize(11).fontColor('#8EA0BD').margin({ left: 6 })
-      }
-      .width('100%')
-      .margin({ top: 8 })
-      // 时区显示
-      if (this.locationPickerStore.observerTimeZone.length > 0) {
-        Row() {
-          Text(I18n.t('loc_timezone')).fontSize(11).fontColor('#8EA0BD')
-          Text(this.locationPickerStore.observerTimeZone).fontSize(11).fontColor('#7FB3DC').margin({ left: 8 })
-        }
-        .width('100%')
-        .margin({ top: 6 })
-      }
-      Row() {
-        Row() {
-            Image($r('app.media.ic_globe')).width(14).height(14).fillColor('#FFFFFFFF')
-            Text(I18n.t('i0053')).fontSize(12).fontColor('#FFFFFFFF').margin({ left: 4 })
-          }
-          .height(32)
-          .padding({ left: 14, right: 14 })
-          .backgroundColor('#5B93BF')
-          .borderRadius(UI_RADIUS_PILL)
-          .margin({ right: 8 })
-          .onClick(() => {
-            this.applyPickerLocation()
-          })
-        Text(this.locationPickerStore.locationPickerStatus)
-          .fontSize(11)
-          .fontColor('#99FFFFFF')
-          .layoutWeight(1)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-        .width('100%')
-        .margin({ top: 9 })
-    }
-      .width('100%')
-      .padding({ left: 10, right: 10, top: 10, bottom: 10 })
-      .backgroundColor('rgba(107, 163, 214, 0.12)')
-      .border({ width: 1, color: 'rgba(107, 163, 214, 0.20)' })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .margin({ top: 8, bottom: 8 })
-  }
-
-  @Builder
   lx200ObjectControls() {
     Column() {
       Row() {
