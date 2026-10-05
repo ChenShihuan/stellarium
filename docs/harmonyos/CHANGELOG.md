@@ -1,3 +1,14 @@
+## [2026-10-03] DevEco Code - 修复：+/- 放大时天体偏离准星（缩放锚点被 s_viewLock 挡住）
+
+- **问题（用户真机实测）**：搜索行星并居中后，用新增的 + 放大按钮连续放大，天体会离开屏幕中心 —— 金星最明显，放到最后整个盘面跑到屏幕底缘之外。
+- **根因（两段）**：
+  1. **偏移本来就有**：App 侧刻意把选中天体放在"安全区"目标点（`moveToSelectedAt`，避开详情卡与底部 Dock），所以天体**本就不在准星（视口几何中心）上**。实测 `searchObject Venus` 后视口中心高度 24.53440°、金星视高度 24.52055°、几何高度 24.48431°，即偏差 0.0139°（≈50″）。
+  2. **缩放把偏移放大**：缩放是围绕视口中心做的，偏差按 1/FOV 放大 —— FOV 0.05° 时 0.0139° ≈ 780 px，继续放大即飞出画面。引擎里其实已有"把选中天体钉在其屏幕位置"的维护器 `ohosMaintainSelectedZoomAnchor()`，但它的第一道闸门是 `if (!s_viewLock) return;`，只有用户打开「固定目标位置」才生效；`zoomStep` 虽然调了 `ohosCaptureSelectedZoomAnchor()`，却因闸门从未被维护，锚点白存。
+- **修复（`src/StelMainView.cpp`，+25/−2）**：新增静态 `s_ohosStepAnchorHoldUntilSec`；`zoomStep` 在捕获锚点之后 arm 0.45 s（盖住 `zoomTo(aim, 0.18f)` 的动画加尾巴），并注释说明为何必须如此；`ohosMaintainSelectedZoomAnchor()` 的闸门放宽为「`s_viewLock` 为真 **或** 处于本次 step 的 hold 窗口内」，且把时间判定移到 app/脚本检查之后（避免在 `StelApp` 未初始化时调用 `getTotalRunTime()`）。其余既有守卫（陀螺仪视图、脚本运行、`getFlagTracking()`、天体有效性、`s_ohosSelectedAnchorHoldUntilSec` 暂缓窗口）一律未改。
+- **验证（真机 `192.168.50.108:36717`，包 `com.cnchensh.stellarium`）**：先 `setTimeRate 0` 冻结时钟排除金星自身运动，再 `searchObject Venus` + 等 5 s 越过宿主 1.15 s 的锚定暂缓窗口，然后连点 +：FOV 8.053° → 6.442 → 5.154 → 4.123 → 3.299 → 2.639（共 3.05×），天体相对准星的**像素**偏移稳定在 −14.3 / −13.0 / −14.0 / −15.0 / −16.4 / −15.7 px（≈ ±1.7 px，与维护器 1.25 px 死区 + `dragView` 的 `qRound` 量化一致）。**未修复时**该角度偏差恒定，像素偏差会按 3.05× 长到 −43.5 px。截图复核：金星停在准星上（修复前它落在屏幕底缘之外）。测后已 `setTimeRate 1` / `setFOV 60` / `clearSelection` 复位。
+- **已知边界（按用户要求本片不动）**：`searchObject` 之后 App 会 `moveToSelectedAt` 并在 1.15 s 内 `ohosDeferSelectedAnchor`，该窗口内锚定维护按设计挂起，所以紧接着的头 1–3 次放大仍会保留一次性的原偏移（实测前 3 击 angOff 恒为 0.145624，第 4 击起才开始收敛）；捏合手势一侧的 `OhosPinchAnchorMode::SelectedObject` 同样被 `s_viewLock` 挡住，属同一根因但本轮未改。
+- **构建**：本轮需重编引擎（`StelMainView.cpp`），走 `scripts/build-ohos-hap-windows.ps1 -SkipDeploy -SkipResources`：`libstellarium.so` 重链 + **BUILD SUCCESSFUL**（708.9 MB signed HAP）。ArkTS 与 UI 契约未变动（仍 33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 184 文件）。
+
 ## [2026-10-03] DevEco Code - 新增非手势缩放：Dock 左侧与常驻时钟对称的 +/− 竖排按钮
 
 - **需求（用户）**：在面板左侧、与时间显示对称的位置，上下布置 +放大 / −缩小两个按钮，引入非手势缩放入口。

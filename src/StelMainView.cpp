@@ -1898,6 +1898,16 @@ static bool s_verticalClamp = true;
 static bool s_ohosPanInertiaActive = false;
 static bool s_ohosPinchActive = false;
 static double s_ohosPinchAnchorRelaxUntilSec = 0.0;
+// A discrete zoom step (the ArkUI +/- buttons, the keyboard +/- shortcuts) must
+// pivot about the SELECTED BODY, not about the optical centre of the viewport.
+// The app deliberately parks a selected object at a "safe target" that clears
+// the detail card and the dock (see moveToSelectedAt), so the body normally sits
+// off the reticle; zooming about the reticle then magnifies that offset and
+// flings the body out of frame (measured: Venus 0.0139 deg below the view
+// centre at FOV 0.05 deg, i.e. ~780 px). While this hold is armed the render
+// loop keeps re-pinning the body to its captured screen position, so a zoom
+// step changes only the FOV. Armed by the zoomStep handler.
+static double s_ohosStepAnchorHoldUntilSec = 0.0;
 enum class OhosPinchAnchorMode
 {
 	None,
@@ -2454,7 +2464,12 @@ static void ohosMaintainSelectedZoomAnchor()
 	// camera owners. Tracking keeps the selected object at the view centre;
 	// anchoring keeps the user's released screen position. Never let the
 	// anchoring pass overwrite an active tracking move.
-	if (!s_viewLock)
+	//
+	// s_viewLock ("固定目标位置") keeps the anchor alive permanently. A discrete
+	// zoom step arms the same anchor for the duration of its animation even with
+	// the lock off, so pressing +/- holds the body instead of dragging it away
+	// from the safe target the app parked it at.
+	if (!s_viewLock && s_ohosStepAnchorHoldUntilSec <= 0.0)
 		return;
 	if (s_gyroViewActive)
 		return;
@@ -2466,7 +2481,10 @@ static void ohosMaintainSelectedZoomAnchor()
 	// leave each scripted target off-center.
 	if (app->getScriptMgr().scriptIsRunning())
 		return;
-	if (StelApp::getTotalRunTime() < s_ohosSelectedAnchorHoldUntilSec)
+	const double nowSec = StelApp::getTotalRunTime();
+	if (!s_viewLock && nowSec >= s_ohosStepAnchorHoldUntilSec)
+		return;
+	if (nowSec < s_ohosSelectedAnchorHoldUntilSec)
 		return;
 	StelCore* core = app->getCore();
 	StelObjectMgr* objectMgr = GETSTELMODULE(StelObjectMgr);
@@ -6251,6 +6269,11 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			movementMgr->cancelAutoMove();
 			s_ohosSelectedAnchorHoldUntilSec = 0.0;
 			ohosCaptureSelectedZoomAnchor();
+			// Pin the captured body for the whole zoom animation (0.18 s) plus a
+			// short tail, so the step changes the FOV without walking the body
+			// away from the safe target the app parked it at. Without this the
+			// step pivots about the reticle and the offset grows with every tap.
+			s_ohosStepAnchorHoldUntilSec = StelApp::getTotalRunTime() + 0.45;
 			// Use the pending aim FOV so rapid button taps compose continuously
 			// instead of repeatedly restarting from the in-between current FOV.
 			double aim = movementMgr->getAimFov() * factor;
