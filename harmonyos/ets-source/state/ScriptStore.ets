@@ -2,6 +2,7 @@ import { RecordingEntry, RecordingsResponse, RecordingDetailResponse } from '../
 import { ScriptMetadata, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { resourceText } from '../common/derive/labels'
+import { scriptControlWidth } from '../common/derive/geometry'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → ScriptStore 的 UI 提示 / 动作注入（§13.1 规则 6 / §14.8 规则 2：store 不触碰 UI）。
@@ -257,5 +258,34 @@ export class ScriptStore {
   // 脚本控制条高度（§14 A2-4，原宿主 scriptControlHeight；只读本 store 的 replaying）。
   scriptControlHeight(): number {
     return this.replaying ? 176 : 224
+  }
+
+  // 脚本/导览播放可见性（原宿主 scriptPlaybackVisible，A2-6）：读本 store 三标志 + 导览 active，
+  // 后者跨 store 故以显式入参传入。函数体逐字搬入。
+  scriptPlaybackVisible(guideActive: boolean): boolean {
+    return guideActive || this.scriptFocusActive || this.scriptLaunching || this.replaying
+  }
+
+  // 是否有脚本会话（原宿主 scriptSessionActive，A2-6）：读导出录制标志 + 播放可见性；
+  // recording 属 ToolsStore 跨域、guideActive 属 GuideStore，均以显式入参传入。
+  scriptSessionActive(recording: boolean, guideActive: boolean): boolean {
+    return recording || this.scriptPlaybackVisible(guideActive)
+  }
+
+  // 脚本控制条是否为紧凑档（原宿主 scriptControlCompact，A2-6）：skyWidth 宿主传入。
+  scriptControlCompact(skyWidth: number): boolean {
+    return scriptControlWidth(skyWidth, this.replaying) < 390
+  }
+
+  // 脚本按键宽度（原宿主 scriptKeyButtonWidth，A2-6）：skyWidth 宿主传入。
+  scriptKeyButtonWidth(skyWidth: number): number {
+    return Math.max(32, Math.min(44, (scriptControlWidth(skyWidth, this.replaying) - 49) / 6))
+  }
+
+  // 回放时间轴位置（ms，原宿主 replayTimelineMs，A2-6）：开始/暂停/累计耗时仍由宿主持有
+  // （回放引擎写入的瞬时量），以显式入参传入；replayPaused/replayRate 读本 store。
+  replayTimelineMs(pauseStartedAt: number, startedAt: number, pausedTotal: number): number {
+    const now = this.replayPaused && pauseStartedAt > 0 ? pauseStartedAt : Date.now()
+    return Math.max(0, now - startedAt - pausedTotal) * this.replayRate
   }
 }

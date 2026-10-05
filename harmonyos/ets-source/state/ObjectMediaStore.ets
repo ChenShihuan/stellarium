@@ -146,4 +146,11 @@ export class ObjectMediaStore {
     return this.objectInspectorMediaViewportHeight > 0
       ? Math.max(72, Math.min(210, this.objectInspectorMediaViewportHeight - 88)) : 210
   }
+
+  // 模型是否就绪（原宿主 objectInspectorModelReady，A2-6）：读本 store 的 objectInspectorProceduralKind
+  // + 宿主渲染管线逐帧写入的原始纹理三量（刻意不入被观察 store，§13.3），后者以显式入参传入。
+  objectInspectorModelReady(texPixels: ArrayBuffer | undefined, texWidth: number, texHeight: number): boolean {
+    return this.objectInspectorProceduralKind.length > 0 ||
+      (texPixels !== undefined && texWidth > 0 && texHeight > 0)
+  }
 }

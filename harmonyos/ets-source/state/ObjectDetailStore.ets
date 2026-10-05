@@ -1,6 +1,7 @@
 import { StellariumBridgeResponse, ObjectDetailField, ObjectDetailModel, SatellitePass, SkyCultureDescriptionBlock } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { catalogIconForObjectType } from '../common/derive/catalog'
+import { modelIdentity, modelMultiply } from '../pages/DetailModelGeometry'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → ObjectDetailStore 的卫星过境助手注入（§13.1 规则 6 / §14.8 规则 2）。
@@ -213,5 +214,18 @@ export class ObjectDetailStore {
   // 是否已选中天体且状态为 Selected（原宿主 hasSelectedObject）。
   hasSelectedObject(): boolean {
     return this.selectedStatus === 'Selected' && this.selectedName.length > 0
+  }
+
+  // 详情卡是否已渲染（原宿主 isObjectDetailCardRendered，A2-6）：读本 store 的 selectedName +
+  // 信息窗可见性，后者跨 store 故以显式入参传入。函数体逐字搬入。
+  isObjectDetailCardRendered(infoWinVisible: boolean): boolean {
+    return infoWinVisible && this.selectedName.length > 0
+  }
+
+  // 模型视图变换（原宿主 objectInspectorModelTransform，A2-6）：读本 store 的
+  // selectedDetailModel.lighting.viewToBody 与传入的旋转矩阵，纯计算（modelMultiply/modelIdentity
+  // 来自纯几何模块 DetailModelGeometry，非 NAPI/UI）。函数体逐字搬入。
+  objectInspectorModelTransform(rotation: number[]): number[] {
+    return modelMultiply(this.selectedDetailModel?.lighting?.viewToBody ?? modelIdentity(), rotation)
   }
 }

@@ -141,3 +141,64 @@ export function sessionSignature(r: StellariumBridgeResponse): string {
   const locName = (r.location && locObj['name'] !== undefined) ? String(locObj['name']) : ''
   return [vr.join(','), Math.round((r.fovDeg ?? 0) * 100) / 100, r.selected ?? '', locName].join('|')
 }
+
+// 面板路由查表（原宿主 panelRouteRoot / panelRouteParent，A2-6）：零宿主状态读取，纯查表，
+// 与上方 *HubActions 同源，故并入本模块。函数体逐字搬入，仅去 this.。
+export function panelRouteRoot(panel: string): string {
+  const mainPanels = ['search', 'time', 'place', 'layers', 'more']
+  if (mainPanels.indexOf(panel) >= 0) return panel
+  return 'more'
+}
+
+export function panelRouteParent(panel: string): string {
+  if (panel === 'observeHub' || panel === 'dataHub' || panel === 'automationHub') return 'more'
+  if (panel === 'pluginManager') return 'dataHub'
+  if (observingHubActions().some((item: ShellAction) => item.panel === panel)) return 'observeHub'
+  if (skyDataHubActions().some((item: ShellAction) => item.panel === panel)) return 'dataHub'
+  if (automationHubActions().some((item: ShellAction) => item.panel === panel)) return 'automationHub'
+  return ''
+}
+
+// 面板切换方向（原宿主 inferredPanelRouteDirection，A2-6 热路径 #6）。实测零宿主字段读取
+// （仅调用上面两个纯函数），属 A1 残留而非 A2，故下沉本模块，语义逐字不变。
+export function inferredPanelRouteDirection(fromPanel: string, toPanel: string): number {
+  if (fromPanel === toPanel) return 1
+  const routeOrder = ['search', 'time', 'place', 'layers', 'more']
+  const fromRoot = panelRouteRoot(fromPanel)
+  const toRoot = panelRouteRoot(toPanel)
+  const fromIndex = routeOrder.indexOf(fromRoot)
+  const toIndex = routeOrder.indexOf(toRoot)
+  if (fromIndex >= 0 && toIndex >= 0 && fromIndex !== toIndex) {
+    return toIndex > fromIndex ? 1 : -1
+  }
+  if (panelRouteParent(toPanel) === fromPanel) return 1
+  if (panelRouteParent(fromPanel) === toPanel) return -1
+  if (panelRouteParent(fromPanel).length > 0 &&
+    panelRouteParent(fromPanel) === panelRouteParent(toPanel)) return 1
+  return 1
+}
+
+// 位置搜索文本匹配（原宿主 matchesLocationSearch / locationSearchMatchScore，A2-6）：零宿主读取，
+// 只依赖入参与 normalizeLocationSearchText，属 A1 残留，故并入本模块。函数体逐字搬入。
+export function matchesLocationSearch(text: string, query: string): boolean {
+  const rawQuery = query.trim().toLocaleLowerCase()
+  if (!rawQuery) return false
+  const rawText = text.toLocaleLowerCase()
+  return rawText.includes(rawQuery) ||
+    normalizeLocationSearchText(rawText).includes(normalizeLocationSearchText(rawQuery))
+}
+
+export function locationSearchMatchScore(query: string, primaryNames: Array<string>, text: string): number {
+  const normalizedQuery = normalizeLocationSearchText(query)
+  if (!normalizedQuery) return 0
+  let best = 0
+  for (const primaryName of primaryNames) {
+    const normalizedName = normalizeLocationSearchText(primaryName)
+    if (!normalizedName) continue
+    if (normalizedName === normalizedQuery) best = Math.max(best, 100)
+    else if (normalizedName.startsWith(normalizedQuery)) best = Math.max(best, 85)
+    else if (normalizedName.includes(normalizedQuery)) best = Math.max(best, 70)
+  }
+  if (best > 0) return best
+  return normalizeLocationSearchText(text).includes(normalizedQuery) ? 40 : 0
+}

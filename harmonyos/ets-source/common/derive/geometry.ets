@@ -307,3 +307,16 @@ export function isObjectDetailCardPoint(x: number, y: number, isRendered: boolea
   return x >= left - 8 && x <= left + cardWidth + 8 &&
     y >= top - 8 && y <= top + cardHeight + 8
 }
+
+// 展开型详情摘要是否可显示 / 其可用宽（原宿主 canShowExpandedDetailSummary /
+// expandedDetailSummaryWidth，A2-6）。均只读宿主布局字段（skyWidth/panelWidth/panelOffsetX）
+// 与未登记常量 EDGE_MARGIN，改为显式入参；函数体逐字搬入。
+export function canShowExpandedDetailSummary(skyWidth: number, panelWidth: number, panelOffsetX: number,
+  edgeMargin: number): boolean {
+  return expandedDetailAvailableWidth(skyWidth, panelWidth, panelOffsetX, edgeMargin) >= 140
+}
+
+export function expandedDetailSummaryWidth(skyWidth: number, panelWidth: number, panelOffsetX: number,
+  edgeMargin: number): number {
+  return clamp(expandedDetailAvailableWidth(skyWidth, panelWidth, panelOffsetX, edgeMargin), 140, 300)
+}

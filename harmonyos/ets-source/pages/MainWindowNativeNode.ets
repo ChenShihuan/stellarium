@@ -19,7 +19,7 @@ import preferences from '@ohos.data.preferences'
 import { LOCATION_HIERARCHY } from './location_hierarchy'
 import { LOCATION_COUNTRY_NAMES } from './location_countries'
 import { LOCATION_ZH_NAMES } from './location_names_zh'
-import { modelIdentity, modelMultiply, modelDrag } from './DetailModelGeometry'
+import { modelIdentity, modelDrag } from './DetailModelGeometry'
 import { proceduralModelKind, proceduralParticles } from './ProceduralDetailModel'
 import { DetailModelRenderClient } from './DetailModelRenderClient'
 import { ASTRONOMY_GUIDES, AstronomyGuide, GuidePlayer, GuideState, GuideResult, GuideStep } from './AstronomyGuide'
@@ -41,8 +41,8 @@ import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, g
 import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointColor, hecLayoutPositions, hecPointLeft, hecPointTop, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
-import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, normalizeLocationSearchText, officialLocationAliases, sessionSignature } from '../common/derive/actions'
-import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, expandedDetailAvailableWidth, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, objectActionBarY, isObjectDetailCardPoint } from '../common/derive/geometry'
+import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, officialLocationAliases, sessionSignature, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
+import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, objectActionBarY, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
 import { objectInspectorPlanetTexturePath, objectInspectorPlanetRingSpec, objectInspectorDeepSkyImageName, objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
 import { BridgeClient } from '../bridge/BridgeClient'
@@ -1622,7 +1622,7 @@ export struct WindowNativeNode {
         }
         return
       }
-      if (commandName === 'stopScript' && response.ok === true && this.scriptSessionActive()) {
+      if (commandName === 'stopScript' && response.ok === true && this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active)) {
         this.finishNativeScriptUi(I18n.t('script_stopped'))
         return
       }
@@ -2194,48 +2194,16 @@ export struct WindowNativeNode {
     })
   }
 
-  private panelRouteRoot(panel: string): string {
-    const mainPanels = ['search', 'time', 'place', 'layers', 'more']
-    if (mainPanels.indexOf(panel) >= 0) return panel
-    return 'more'
-  }
-
-  private panelRouteParent(panel: string): string {
-    if (panel === 'observeHub' || panel === 'dataHub' || panel === 'automationHub') return 'more'
-    if (panel === 'pluginManager') return 'dataHub'
-    if (observingHubActions().some((item: ShellAction) => item.panel === panel)) return 'observeHub'
-    if (skyDataHubActions().some((item: ShellAction) => item.panel === panel)) return 'dataHub'
-    if (automationHubActions().some((item: ShellAction) => item.panel === panel)) return 'automationHub'
-    return ''
-  }
-
   private openPanelFromCli(panel: string): void {
     if (panel === 'settingsInformation' || panel === 'settingsTime' || panel === 'settingsPrivacy') {
       this.openPanelFromCli('settings')
       this.selectConfigTab(panel === 'settingsInformation' ? 1 : (panel === 'settingsTime' ? 3 : -1))
       return
     }
-    const parent = this.panelRouteParent(panel)
+    const parent = panelRouteParent(panel)
     this.panelNavigationStack = parent.length > 0 ? [parent] : []
     this.panelNavigationDepth = this.panelNavigationStack.length
     this.setPanel(panel, true, true)
-  }
-
-  private inferredPanelRouteDirection(fromPanel: string, toPanel: string): number {
-    if (fromPanel === toPanel) return 1
-    const routeOrder = ['search', 'time', 'place', 'layers', 'more']
-    const fromRoot = this.panelRouteRoot(fromPanel)
-    const toRoot = this.panelRouteRoot(toPanel)
-    const fromIndex = routeOrder.indexOf(fromRoot)
-    const toIndex = routeOrder.indexOf(toRoot)
-    if (fromIndex >= 0 && toIndex >= 0 && fromIndex !== toIndex) {
-      return toIndex > fromIndex ? 1 : -1
-    }
-    if (this.panelRouteParent(toPanel) === fromPanel) return 1
-    if (this.panelRouteParent(fromPanel) === toPanel) return -1
-    if (this.panelRouteParent(fromPanel).length > 0 &&
-      this.panelRouteParent(fromPanel) === this.panelRouteParent(toPanel)) return 1
-    return 1
   }
 
   private setPanel(panel: string, preserveHistory: boolean = false, forceVisible: boolean = false, routeDirection: number = 0): void {
@@ -2263,7 +2231,7 @@ export struct WindowNativeNode {
     }
     const currentPanel = this.activePanel
     const resolvedRouteDirection = routeDirection === 0
-      ? this.inferredPanelRouteDirection(currentPanel, panel)
+      ? inferredPanelRouteDirection(currentPanel, panel)
       : (routeDirection < 0 ? -1 : 1)
     hilog.info(0x0000, 'StellariumArkUI', 'setPanel ' + panel)
     const nextVisible = forceVisible ? true : (this.activePanel === panel ? !this.panelVisible : true)
@@ -2470,7 +2438,7 @@ export struct WindowNativeNode {
   }
 
   private canGoBackPanel(): boolean {
-    return this.panelNavigationStack.length > 0 || this.panelRouteParent(this.activePanel).length > 0
+    return this.panelNavigationStack.length > 0 || panelRouteParent(this.activePanel).length > 0
   }
 
   private handlePanelBackTap(): void {
@@ -2478,7 +2446,7 @@ export struct WindowNativeNode {
     if (now - this.lastPanelBackAt < 240) return
     this.lastPanelBackAt = now
     hilog.info(0x0000, 'StellariumArkUI', '[panel-back] panel=%{public}s stack=%{public}d parent=%{public}s',
-      this.activePanel, this.panelNavigationStack.length, this.panelRouteParent(this.activePanel))
+      this.activePanel, this.panelNavigationStack.length, panelRouteParent(this.activePanel))
     this.goBackPanel()
   }
 
@@ -2489,7 +2457,7 @@ export struct WindowNativeNode {
       previous = this.panelNavigationStack[this.panelNavigationStack.length - 1]
       this.panelNavigationStack = this.panelNavigationStack.slice(0, this.panelNavigationStack.length - 1)
     } else {
-      previous = this.panelRouteParent(this.activePanel)
+      previous = panelRouteParent(this.activePanel)
     }
     if (previous.length === 0) {
       this.closePanel(true)
@@ -2990,7 +2958,7 @@ export struct WindowNativeNode {
 
   // ===== 脚本录制 / 回放（#39）=====
   private startRecording(): void {
-    if (this.scriptSessionActive()) {
+    if (this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active)) {
       this.flashHint('脚本或回放进行中，结束后再开始录制')
       return
     }
@@ -3067,7 +3035,7 @@ export struct WindowNativeNode {
   }
 
   private playRecording(file: string): void {
-    if (this.scriptSessionActive()) {
+    if (this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active)) {
       this.flashHint('已有脚本或回放正在运行')
       return
     }
@@ -3102,7 +3070,7 @@ export struct WindowNativeNode {
     const fallbackTime = this.replayIndex * 40
     const targetTime = typeof commandItem.t === 'number' && Number.isFinite(commandItem.t)
       ? Math.max(0, commandItem.t) : fallbackTime
-    const timelineElapsed = this.replayTimelineMs()
+    const timelineElapsed = this.scriptStore.replayTimelineMs(this.replayPauseStartedAt, this.replayStartedAt, this.replayPausedTotal)
     const delay = Math.max(0, (targetTime - timelineElapsed) / Math.max(0.25, this.scriptStore.replayRate))
     this.replayTimer = setTimeout(() => {
       if (!this.scriptStore.replaying) { return }
@@ -3131,11 +3099,7 @@ export struct WindowNativeNode {
       this.flashHint(message)
   }
 
-  private replayTimelineMs(): number {
-    const now = this.scriptStore.replayPaused && this.replayPauseStartedAt > 0
-      ? this.replayPauseStartedAt : Date.now()
-    return Math.max(0, now - this.replayStartedAt - this.replayPausedTotal) * this.scriptStore.replayRate
-  }
+
 
   private toggleReplayPause(): void {
     if (!this.scriptStore.replaying) { return }
@@ -3161,7 +3125,7 @@ export struct WindowNativeNode {
   private changePlaybackRate(direction: number): void {
     if (this.scriptStore.replaying) {
       const next = Math.max(0.25, Math.min(16, this.scriptStore.replayRate * (direction > 0 ? 2 : 0.5)))
-      const timeline = this.replayTimelineMs()
+      const timeline = this.scriptStore.replayTimelineMs(this.replayPauseStartedAt, this.replayStartedAt, this.replayPausedTotal)
       const anchor = this.scriptStore.replayPaused && this.replayPauseStartedAt > 0
         ? this.replayPauseStartedAt : Date.now()
       this.scriptStore.replayRate = next
@@ -3185,18 +3149,12 @@ export struct WindowNativeNode {
     }
   }
 
-  private scriptPlaybackVisible(): boolean {
-    return this.guideStore.guideState.active || this.scriptStore.scriptFocusActive || this.scriptStore.scriptLaunching || this.scriptStore.replaying
-  }
-
-  private scriptSessionActive(): boolean {
-    return this.tools.recording || this.scriptPlaybackVisible()
-  }
 
 
-  private scriptControlCompact(): boolean {
-    return scriptControlWidth(this.skyWidth, this.scriptStore.replaying) < 390
-  }
+
+
+
+
 
   private scriptControlSafeTop(): number {
     const safeTop = this.getUIContext().px2vp(Math.max(0, this.screenSafeTopPixels))
@@ -3277,7 +3235,7 @@ export struct WindowNativeNode {
   }
 
   private refreshScriptStatus(): void {
-    if (this.guideStore.guideState.active || this.scriptStatusRequestPending || !this.scriptPlaybackVisible()) { return }
+    if (this.guideStore.guideState.active || this.scriptStatusRequestPending || !this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active)) { return }
     this.scriptStatusRequestPending = true
     this.callInteractive('getScriptStatus', '', (r: StellariumBridgeResponse) => {
       this.scriptStatusRequestPending = false
@@ -3307,7 +3265,7 @@ export struct WindowNativeNode {
   }
 
   private refreshScriptCaptions(): void {
-    if (this.scriptCaptionsRequestPending || !this.scriptPlaybackVisible()) return
+    if (this.scriptCaptionsRequestPending || !this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active)) return
     this.scriptCaptionsRequestPending = true
     this.callInteractive('getScriptCaptions', '', (r: StellariumBridgeResponse) => {
       this.scriptCaptionsRequestPending = false
@@ -3390,9 +3348,7 @@ export struct WindowNativeNode {
   }
 
 
-  private scriptKeyButtonWidth(): number {
-    return Math.max(32, Math.min(44, (scriptControlWidth(this.skyWidth, this.scriptStore.replaying) - 49) / 6))
-  }
+
 
   // loadScriptList / setScriptMetadata 已下沉 ScriptStore（§14 B2R-4）。
 
@@ -6588,7 +6544,7 @@ private loadPlanetPositions(): void {
   }
 
   private playScriptByName(filename: string): void {
-    if (this.scriptSessionActive()) {
+    if (this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active)) {
       return
     }
     this.scriptStore.scriptLaunching = true
@@ -8772,10 +8728,10 @@ private loadPlanetPositions(): void {
             label: 'object-inspector', left: this.tabletInspectorX(), top: this.tabletInspectorY(),
             right: this.tabletInspectorX() + this.tabletInspectorWidth(), bottom: this.tabletInspectorY() + tabletInspectorHeight(this.skyHeight, this.EDGE_MARGIN)
           })
-        } else if (useExpandedDetailSummary() && this.canShowExpandedDetailSummary()) {
+        } else if (useExpandedDetailSummary() && canShowExpandedDetailSummary(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)) {
           obstacles.push({
             label: 'summary', left: this.expandedDetailSummaryX(), top: this.expandedDetailSummaryY(),
-            right: this.expandedDetailSummaryX() + this.expandedDetailSummaryWidth(),
+            right: this.expandedDetailSummaryX() + expandedDetailSummaryWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN),
             bottom: this.expandedDetailSummaryY() + expandedDetailSummaryHeight()
           })
         } else {
@@ -8952,11 +8908,7 @@ private loadPlanetPositions(): void {
 
   // 天体名称由核心的官方 .qm 资源提供。ArkUI 只负责排版，不再维护
   // 第二套恒星、行星或深空天体译名。
-  private observingDisplayName(englishName: string): string {
-    const target = this.wutStore.wutTargets.find((item: WutTarget) => item.englishName === englishName)
-    if (target !== undefined) return this.wutTargetTitle(target)
-    return planetZh(englishName) !== englishName ? planetZh(englishName) : zhNameOf(englishName)
-  }
+
 
 
   private wutTargetTitle(target: WutTarget): string {
@@ -8967,9 +8919,7 @@ private loadPlanetPositions(): void {
 
 
 
-  private wutTargetSubtitle(target: WutTarget): string {
-    return this.searchStore.celestialSubtitle(this.wutTargetTitle(target), target.englishName ?? '')
-  }
+
 
 
 
@@ -9486,63 +9436,16 @@ private loadPlanetPositions(): void {
 
   // ===== 位置搜索（离线数据，按查询分块扫描）=====
 
-  private matchesLocationSearch(text: string, query: string): boolean {
-    const rawQuery = query.trim().toLocaleLowerCase()
-    if (!rawQuery) return false
-    const rawText = text.toLocaleLowerCase()
-    return rawText.includes(rawQuery) ||
-      normalizeLocationSearchText(rawText).includes(normalizeLocationSearchText(rawQuery))
-  }
-
-  private locationSearchMatchScore(query: string, primaryNames: Array<string>, text: string): number {
-    const normalizedQuery = normalizeLocationSearchText(query)
-    if (!normalizedQuery) return 0
-    let best = 0
-    for (const primaryName of primaryNames) {
-      const normalizedName = normalizeLocationSearchText(primaryName)
-      if (!normalizedName) continue
-      if (normalizedName === normalizedQuery) best = Math.max(best, 100)
-      else if (normalizedName.startsWith(normalizedQuery)) best = Math.max(best, 85)
-      else if (normalizedName.includes(normalizedQuery)) best = Math.max(best, 70)
-    }
-    if (best > 0) return best
-    return normalizeLocationSearchText(text).includes(normalizedQuery) ? 40 : 0
-  }
 
 
-  private locationSearchCountryName(countryCode: string): string {
-    if (countryCode === 'TW' || countryCode === 'HK' || countryCode === 'MO') {
-      return I18n.isChineseLanguage()
-        ? (LOCATION_COUNTRY_NAMES[countryCode]?.zh ?? this.locationPickerStore.translateCountry(countryCode, this.sessionToolStore.observerPlanet))
-        : this.locationPickerStore.translateCountry(countryCode, this.sessionToolStore.observerPlanet)
-    }
-    return this.locationPickerStore.translateCountry(countryCode, this.sessionToolStore.observerPlanet)
-  }
 
-  private locationResultContext(item: LocSearchItem): string {
-    const parts: Array<string> = []
-    const append = (value: string): void => {
-      if (value.length > 0 && !parts.includes(value)) parts.push(value)
-    }
-    if (item.province) append(this.locationPickerStore.translateProvince(item.province))
-    else if (item.region) append(this.locationPickerStore.translateProvince(item.region))
-    if (item.country) append(this.locationSearchCountryName(item.country))
-    return parts.join(' · ')
-  }
 
-  private quickLocationSearch(query: string): Array<LocSearchItem> {
-    if (!query.trim()) return []
-    return this.locationPickerStore.quickLocationSearchItems()
-      .filter((item: LocSearchItem) => item.planet.toLowerCase() === this.sessionToolStore.observerPlanet.toLowerCase())
-      .filter((item: LocSearchItem) => this.matchesLocationSearch(
-        item.name + ' ' + (item.displayName ?? '') + ' ' + (LOCATION_ZH_NAMES[item.name] ?? ''), query))
-      .sort((left: LocSearchItem, right: LocSearchItem) => {
-        const leftText = left.name + ' ' + (left.displayName ?? '') + ' ' + (LOCATION_ZH_NAMES[left.name] ?? '')
-        const rightText = right.name + ' ' + (right.displayName ?? '') + ' ' + (LOCATION_ZH_NAMES[right.name] ?? '')
-        return this.locationSearchMatchScore(query, [left.name, left.displayName ?? '', LOCATION_ZH_NAMES[left.name] ?? ''], leftText) -
-          this.locationSearchMatchScore(query, [right.name, right.displayName ?? '', LOCATION_ZH_NAMES[right.name] ?? ''], rightText)
-      })
-  }
+
+
+
+
+
+
 
   private searchLocations(query: string): void {
     const q = query.trim()
@@ -9556,7 +9459,7 @@ private loadPlanetPositions(): void {
       this.locationStore.locSearching = false
       return
     }
-    const quickResults = this.quickLocationSearch(q)
+    const quickResults = this.locationPickerStore.quickLocationSearch(q, this.sessionToolStore.observerPlanet)
     if (quickResults.length > 0) {
       this.locationStore.locSearchResults = quickResults.slice(0, 20)
       this.locationStore.locSearching = false
@@ -9604,7 +9507,7 @@ private loadPlanetPositions(): void {
       const chinese = LOCATION_ZH_NAMES[city.n] ?? ''
       const displayName = this.locationPickerStore.locationDisplayName(city.n)
       const countryCode = city.country
-      const country = this.locationSearchCountryName(countryCode)
+      const country = this.locationPickerStore.locationSearchCountryName(countryCode, this.sessionToolStore.observerPlanet)
       const province = this.locationPickerStore.translateProvince(city.province ?? '')
       // Search accepts the source name, official Chinese name, and the name
       // rendered for the active language. Display itself remains single-language.
@@ -9612,7 +9515,7 @@ private loadPlanetPositions(): void {
       const text = city.n + ' ' + chinese + ' ' + displayName + ' ' +
         (city.province ?? '') + ' ' + province + ' ' + region + ' ' + country + ' ' +
         (sourceCountry?.zh ?? '') + ' ' + (sourceCountry?.en ?? '') + officialLocationAliases(countryCode)
-      const matchScore = this.locationSearchMatchScore(this.locationSearchScanQuery,
+      const matchScore = locationSearchMatchScore(this.locationSearchScanQuery,
         [city.n, chinese, displayName, city.province ?? '', province, region, country], text)
       if (matchScore <= 0) continue
       const item: LocSearchItem = {
@@ -10012,7 +9915,7 @@ private loadPlanetPositions(): void {
       }
       return false
     }
-    if (this.tools.recording && !this.scriptPlaybackVisible() &&
+    if (this.tools.recording && !this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active) &&
       x >= 16 && x <= Math.max(266, this.skyWidth - 16) &&
       y >= this.EDGE_MARGIN - 8 && y <= this.EDGE_MARGIN + 58) {
       return true
@@ -10052,7 +9955,7 @@ private loadPlanetPositions(): void {
         return true
       }
     }
-    if (isObjectDetailCardPoint(x, y, this.isObjectDetailCardRendered(), this.detailCardX(), this.detailCardY(), this.detailCardWidth(), this.detailCardHeight()) || this.isObjectActionBarPoint(x, y)) {
+    if (isObjectDetailCardPoint(x, y, this.objectDetailStore.isObjectDetailCardRendered(this.infoWindowStore.infoWinVisible), this.detailCardX(), this.detailCardY(), this.detailCardWidth(), this.detailCardHeight()) || this.isObjectActionBarPoint(x, y)) {
       return true
     }
     if (this.isExpandedLayout) {
@@ -10882,7 +10785,7 @@ private loadPlanetPositions(): void {
           this.handleOverlayTouch(event)
         })
 
-      if (this.scriptPlaybackVisible()) {
+      if (this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active)) {
         if (this.guideStore.guideState.active) {
           InteractiveGuideShell({
             guidePhase: this.guideStore.guideState.phase,
@@ -10906,14 +10809,14 @@ private loadPlanetPositions(): void {
         } else {
           ScriptFocusShell({
             scriptStore: this.scriptStore,
-            playbackVisible: this.scriptPlaybackVisible(),
-            compact: this.scriptControlCompact(),
+            playbackVisible: this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active),
+            compact: this.scriptStore.scriptControlCompact(this.skyWidth),
             displayName: scriptZh(this.scriptStore.scriptId.length > 0 ? this.scriptStore.scriptId : (this.scriptStore.scriptLaunchingName.length > 0 ? this.scriptStore.scriptLaunchingName : this.scriptStore.replayName)),
             hasCaptions: this.scriptStore.visibleScriptCaptions().length > 0,
             captionText: this.scriptStore.visibleScriptCaptionText(),
             waitText: this.scriptStore.scriptWaitDisplayText(),
             rateText: (this.scriptStore.replaying ? this.scriptStore.replayRate : this.scriptStore.scriptRate).toFixed((this.scriptStore.replaying ? this.scriptStore.replayRate : this.scriptStore.scriptRate) < 1 ? 2 : 1) + 'x',
-            keyButtonWidth: this.scriptKeyButtonWidth(),
+            keyButtonWidth: this.scriptStore.scriptKeyButtonWidth(this.skyWidth),
             controlWidth: scriptControlWidth(this.skyWidth, this.scriptStore.replaying),
             controlHeight: this.scriptStore.scriptControlHeight(),
             controlX: scriptControlX(this.skyWidth, this.scriptStore.replaying, this.scriptStore.scriptControlOffsetX),
@@ -10928,10 +10831,10 @@ private loadPlanetPositions(): void {
           })
         }
       }
-      if (!this.scriptPlaybackVisible() && this.tools.recording && !this.tools.recordingUiExpanded) {
+      if (!this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active) && this.tools.recording && !this.tools.recordingUiExpanded) {
         RecordingFocusShell({ onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) } })
       }
-      if (!this.scriptPlaybackVisible() && !(this.tools.recording && !this.tools.recordingUiExpanded) && !this.polarScopeStore.polarScopeVisible) {
+      if (!this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active) && !(this.tools.recording && !this.tools.recordingUiExpanded) && !this.polarScopeStore.polarScopeVisible) {
         Stack() {
           if (this.isFoldHoverLayout) {
             Stack() {
@@ -10971,7 +10874,7 @@ private loadPlanetPositions(): void {
                 distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
                 imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
                 inlineModelSize: this.objectInspectorInlineModelSize(),
-                modelReady: this.objectInspectorModelReady(),
+                modelReady: this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight),
                 modelRendering: this.objectInspectorModelRendering,
                 hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
                 modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
@@ -11076,7 +10979,7 @@ private loadPlanetPositions(): void {
                 distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
                 imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
                 inlineModelSize: this.objectInspectorInlineModelSize(),
-                modelReady: this.objectInspectorModelReady(),
+                modelReady: this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight),
                 modelRendering: this.objectInspectorModelRendering,
                 hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
                 modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
@@ -11198,7 +11101,7 @@ private loadPlanetPositions(): void {
                 distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
                 imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
                 inlineModelSize: this.objectInspectorInlineModelSize(),
-                modelReady: this.objectInspectorModelReady(),
+                modelReady: this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight),
                 modelRendering: this.objectInspectorModelRendering,
                 hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
                 modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
@@ -11321,7 +11224,7 @@ private loadPlanetPositions(): void {
           .zIndex(3)
           .hitTestBehavior(HitTestMode.Default)
       }
-      if (!this.scriptPlaybackVisible() && this.tools.recording) {
+      if (!this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active) && this.tools.recording) {
         RecordingControlBar({
           store: this.tools, recordCount: this.scriptStore.recordCount, skyWidth: this.skyWidth, safeTop: this.scriptControlSafeTop(),
           onToggleUi: () => { this.toggleRecordingUi() },
@@ -11329,7 +11232,7 @@ private loadPlanetPositions(): void {
           onStop: () => { this.stopRecording() }
         })
       }
-      if (!this.scriptPlaybackVisible() && (!this.tools.recording || this.tools.recordingUiExpanded)) {
+      if (!this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active) && (!this.tools.recording || this.tools.recordingUiExpanded)) {
         if (this.polarScopeStore.polarScopeVisible) {
           PolarScopeOverlay({
             polarScopeStore: this.polarScopeStore,
@@ -11505,7 +11408,7 @@ private loadPlanetPositions(): void {
     }
     let result: GuideResult
     if (commandName === 'startGuide') {
-      if (this.scriptSessionActive() || this.polarScopeStore.polarScopeVisible || !ASTRONOMY_GUIDES.some((guide: AstronomyGuide) => guide.id === payload)) {
+      if (this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active) || this.polarScopeStore.polarScopeVisible || !ASTRONOMY_GUIDES.some((guide: AstronomyGuide) => guide.id === payload)) {
         result = { ok: false, error: 'session_busy_or_unknown_guide' }
       } else {
         this.guidePanelWasVisible = this.panelVisible
@@ -11754,17 +11657,13 @@ private loadPlanetPositions(): void {
 
 
 
-  private expandedDetailSummaryWidth(): number {
-    return clamp(expandedDetailAvailableWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN), 140, 300)
-  }
 
-  private canShowExpandedDetailSummary(): boolean {
-    return expandedDetailAvailableWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN) >= 140
-  }
+
+
 
   private expandedDetailSummaryX(): number {
     const base = baseExpandedDetailSummaryX(this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
-    return base + this.clampedObjectCardOffsetX(base, this.expandedDetailSummaryWidth())
+    return base + this.clampedObjectCardOffsetX(base, expandedDetailSummaryWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN))
   }
 
 
@@ -11804,7 +11703,7 @@ private loadPlanetPositions(): void {
   }
 
   private objectActionBarWidth(): number {
-    if (useExpandedDetailSummary()) { return this.expandedDetailSummaryWidth() }
+    if (useExpandedDetailSummary()) { return expandedDetailSummaryWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN) }
     if (isPhoneDetailPeek()) { return this.compactObjectPeekWidth() }
     return this.bottomCardWidth()
   }
@@ -11818,22 +11717,20 @@ private loadPlanetPositions(): void {
   }
 
   private isExpandedDetailSummaryPoint(x: number, y: number): boolean {
-    if (!useExpandedDetailSummary() || !this.canShowExpandedDetailSummary()) { return false }
+    if (!useExpandedDetailSummary() || !canShowExpandedDetailSummary(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)) { return false }
     const sx = this.expandedDetailSummaryX()
     const sy = this.expandedDetailSummaryY()
-    return x >= sx - 8 && x <= sx + this.expandedDetailSummaryWidth() + 8 && y >= sy - 8 && y <= sy + expandedDetailSummaryHeight() + 8
+    return x >= sx - 8 && x <= sx + expandedDetailSummaryWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN) + 8 && y >= sy - 8 && y <= sy + expandedDetailSummaryHeight() + 8
   }
 
-  private isObjectDetailCardRendered(): boolean {
-    return this.infoWindowStore.infoWinVisible && this.objectDetailStore.selectedName.length > 0
-  }
+
 
 
   private handleExpandedDetailSummaryTap(x: number, y: number): boolean {
     if (!this.isExpandedDetailSummaryPoint(x, y)) { return false }
     const sx = this.expandedDetailSummaryX()
     const sy = this.expandedDetailSummaryY()
-    const sw = this.expandedDetailSummaryWidth()
+    const sw = expandedDetailSummaryWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
     if (y <= sy + 42 && x >= sx + sw - 40) {
       this.dismissObjectInspector()
       return true
@@ -12673,10 +12570,7 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private objectInspectorModelTransform(): number[] {
-    return modelMultiply(this.objectDetailStore.selectedDetailModel?.lighting?.viewToBody ?? modelIdentity(),
-      this.objectInspectorModelRotation)
-  }
+
 
   private rotateObjectInspectorModel(deltaX: number, deltaY: number): void {
     this.objectInspectorModelRotation = modelDrag(this.objectInspectorModelRotation, deltaX, deltaY)
@@ -12684,7 +12578,7 @@ private loadPlanetPositions(): void {
   }
 
   private requestObjectInspectorModelRender(highQuality: boolean): void {
-    if (!this.objectInspectorModelReady()) {
+    if (!this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
       return
     }
     this.objectInspectorModelRenderHighQuality = this.objectInspectorModelRenderHighQuality || highQuality
@@ -12711,7 +12605,7 @@ private loadPlanetPositions(): void {
 
   private flushObjectInspectorModelRender(): void {
     if (this.objectInspectorModelRendering || !this.objectInspectorModelRenderPending ||
-      !this.objectInspectorModelReady()) {
+      !this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
       return
     }
     const renderHighQuality = this.objectInspectorModelRenderHighQuality
@@ -12722,14 +12616,14 @@ private loadPlanetPositions(): void {
   }
 
   private renderObjectInspectorModel(highQuality: boolean): void {
-    if (!this.objectInspectorModelReady()) {
+    if (!this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
       this.objectInspectorModelRendering = false
       return
     }
     const generation = this.objectInspectorModelRenderGeneration
     const immersive = this.objectMediaStore.objectInspectorModelImmersive
     const renderSize = highQuality ? (immersive ? 640 : 320) : 224
-    const transform = this.objectInspectorModelTransform()
+    const transform = this.objectDetailStore.objectInspectorModelTransform(this.objectInspectorModelRotation)
     const inspectionRotation = this.objectInspectorModelRotation.slice()
     const lighting = this.objectDetailStore.selectedDetailModel?.lighting
     const started = Date.now()
@@ -12769,7 +12663,7 @@ private loadPlanetPositions(): void {
     }
     this.objectInspectorModelRenderClient.setSuspended(!this.applicationInForeground)
     this.objectInspectorModelRenderClient.render(resources, frame).then((result: DetailModelResult) => {
-      if (generation !== this.objectInspectorModelRenderGeneration || !this.objectInspectorModelReady()) {
+      if (generation !== this.objectInspectorModelRenderGeneration || !this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
         throw new Error('stale model frame')
       }
       computeMs = result.computeMs
@@ -12785,7 +12679,7 @@ private loadPlanetPositions(): void {
       })
     }).then((pixelMap: image.PixelMap) => {
       if (generation !== this.objectInspectorModelRenderGeneration ||
-        !this.objectInspectorModelReady()) {
+        !this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
         this.releaseDecodedImage(pixelMap, 'stale-object-inspector-model')
         return
       }
@@ -12828,10 +12722,7 @@ private loadPlanetPositions(): void {
     })
   }
 
-  private objectInspectorModelReady(): boolean {
-    return this.objectMediaStore.objectInspectorProceduralKind.length > 0 ||
-      (this.objectInspectorModelTexturePixels !== undefined && this.objectInspectorModelTextureWidth > 0 && this.objectInspectorModelTextureHeight > 0)
-  }
+
 
   private resetObjectInspectorModelView(): void {
     this.objectInspectorModelRotation = this.objectMediaStore.defaultObjectInspectorModelRotation()
@@ -13000,7 +12891,7 @@ private loadPlanetPositions(): void {
   // 底部详情卡片触摸交互：只处理头部关闭按钮，
   // Swiper body 区域返回 false，让 Swiper 自身手势系统处理水平滑动。
   private handleInfoWinTap(x: number, y: number): boolean {
-    if (!isObjectDetailCardPoint(x, y, this.isObjectDetailCardRendered(), this.detailCardX(), this.detailCardY(), this.detailCardWidth(), this.detailCardHeight())) { return false }
+    if (!isObjectDetailCardPoint(x, y, this.objectDetailStore.isObjectDetailCardRendered(this.infoWindowStore.infoWinVisible), this.detailCardX(), this.detailCardY(), this.detailCardWidth(), this.detailCardHeight())) { return false }
     const bcX = this.detailCardX()
     const bcY = this.detailCardY()
     const bcW = this.detailCardWidth()
@@ -13272,7 +13163,7 @@ private loadPlanetPositions(): void {
         imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
         iconName: this.objectDetailStore.objectInspectorIcon(),
         inlineModelSize: this.objectInspectorInlineModelSize(),
-        modelReady: this.objectInspectorModelReady(),
+        modelReady: this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight),
         modelRendering: this.objectInspectorModelRendering,
         hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
         modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
@@ -13365,7 +13256,7 @@ private loadPlanetPositions(): void {
         panelColor: this.nightModeStore.nmBg(),
         borderTint: this.nightModeStore.nmBorder(),
         planetLabel: (en: string) => planetZh(en),
-        contextOf: (item: LocSearchItem) => this.locationResultContext(item),
+        contextOf: (item: LocSearchItem) => this.locationPickerStore.locationResultContext(item, this.sessionToolStore.observerPlanet),
         onUseDeviceLocation: () => { this.useDeviceLocation() },
         onSearchLocations: (query: string) => { this.searchLocations(query) },
         onPickSearchItem: (item: LocSearchItem) => { this.selectSearchLocation(item) },
@@ -13757,7 +13648,7 @@ private loadPlanetPositions(): void {
           selectAstroGroup: (group: number) => { this.selectAstroGroup(group) },
           selectAstroTab: (tab: number) => { this.selectAstroTab(tab) },
           wutCategoryTitle: () => this.wutStore.wutCategoryTitle(),
-          wutTargetSubtitle: (target: WutTarget) => this.wutTargetSubtitle(target),
+          wutTargetSubtitle: (target: WutTarget) => this.searchStore.wutTargetSubtitle(target),
           wutTargetTitle: (target: WutTarget) => this.wutTargetTitle(target),
         }
       })
@@ -13940,7 +13831,7 @@ private loadPlanetPositions(): void {
     } else if (this.activePanel === 'scripts') {
       ScriptsPanel({
         tools: this.tools,
-        guideSessionActive: this.scriptSessionActive(),
+        guideSessionActive: this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
         scriptStore: this.scriptStore,
         textColor: this.nightModeStore.nmText(),
         subColor: this.nightModeStore.nmSub(),
@@ -14009,9 +13900,9 @@ private loadPlanetPositions(): void {
         onRemoveTarget: (name: string) => { this.removeObservingTarget(name) },
         onSearchName: (name: string) => { this.searchObject(name) },
         targetTitleOf: (target: WutTarget) => this.wutTargetTitle(target),
-        targetSubtitleOf: (target: WutTarget) => this.wutTargetSubtitle(target),
+        targetSubtitleOf: (target: WutTarget) => this.searchStore.wutTargetSubtitle(target),
         typeOf: (type: string) => zhType(type),
-        displayNameOf: (name: string) => this.observingDisplayName(name)
+        displayNameOf: (name: string) => this.wutStore.observingDisplayName(name)
       })
     } else if (this.activePanel === 'telescope') {
       TelescopePanel({
@@ -14078,7 +13969,7 @@ private loadPlanetPositions(): void {
         observingListStore: this.obsListStore,
         skyCultureViewStore: this.skyCultureViewStore,
         panelColor: this.nightModeStore.nmBg(),
-        observingDisplayName: (name: string) => { return this.observingDisplayName(name) },
+        observingDisplayName: (name: string) => { return this.wutStore.observingDisplayName(name) },
         selectObservingTarget: (name: string) => { this.searchObject(name); this.flashHint(I18n.t('i0082')) },
         removeObservingTarget: (name: string) => { this.removeObservingTarget(name) },
         clearObservingList: () => { this.obsListStore.observingList = []; this.persistObservingList(); this.flashHint(I18n.t('i0302')) },

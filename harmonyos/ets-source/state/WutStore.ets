@@ -2,6 +2,7 @@ import { WutTarget, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 import { wutCategoryOptions, wutCategoryKey } from '../common/derive/catalog'
+import { celestialTitle, planetZh, zhNameOf } from '../common/derive/labels'
 // 今晚观测目标（WUT）面板状态（原宿主 @State 的 wut* 簇）。
 // 这是 astro 域切片的前置半步：后续把面板内的列表/筛选 UI 抽成组件时，组件直接观察本 store。
 // §14 B2A：本域加载器 loadWutTargets 与标题助手 wutCategoryTitle 随桥注入下沉本 store。
@@ -51,6 +52,15 @@ export class WutStore {
       if (wutCategoryKey(option.id) === this.wutCategory) return String(option.label)
     }
     return '天体'
+  }
+
+  // 观测目标的显示名（原宿主 observingDisplayName，A2-6）：只在 wutTargets 命中时用
+  // 标题，否则回退 planetZh/zhNameOf 纯函数。函数体逐字搬入，this.wutTargetTitle 内联为
+  // celestialTitle（同源纯函数），this.wutStore.wutTargets → this.wutTargets。
+  observingDisplayName(englishName: string): string {
+    const target = this.wutTargets.find((item: WutTarget) => item.englishName === englishName)
+    if (target !== undefined) return celestialTitle(target.name ?? '', target.englishName ?? '')
+    return planetZh(englishName) !== englishName ? planetZh(englishName) : zhNameOf(englishName)
   }
 
   // 今晚观测目标：原宿主 loadWutTargets，函数体逐字搬入；仅
