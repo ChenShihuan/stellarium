@@ -57,6 +57,8 @@ import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
 import { LocationStore } from '../state/LocationStore'
 import { CityChipsRow } from '../panels/location/CityChipsRow'
 import { LocationSearchPanel } from '../panels/location/LocationSearchPanel'
+import { LocationPickerStore } from '../state/LocationPickerStore'
+import { HierColumn } from '../panels/common/HierColumn'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
@@ -271,11 +273,9 @@ export struct WindowNativeNode {
   @State private locationText: string = '--'
   @State private coordinateText: string = '--'
   @State private altitudeText: string = '--'
-  @State private locationPickerName: string = I18n.t('custom_location')
-  @State private locationPickerLatitude: number = 39.9042
-  @State private locationPickerLongitude: number = 116.4074
-  @State private locationPickerAltitude: number = 44
-  @State private locationPickerStatus: ResourceStr = I18n.t('m_drag_map_hint')
+  // 位置选择器状态簇（picker 坐标/名称/状态、层级选择、地图渲染尺寸、时区、选点方式 + 层级翻译纯计算）
+  // 随 locationPickerPanel 组件化迁移到 LocationPickerStore（Phase 3aj）。
+  @State private locationPickerStore: LocationPickerStore = new LocationPickerStore()
   private mapTouchStartX: number = 0
   private mapTouchStartY: number = 0
   private mapTouchMoved: boolean = false
@@ -305,15 +305,7 @@ export struct WindowNativeNode {
   @State private tonightSunJd: number = 0
   @State private tonightShowerJd: number = 0
   @State private tonightPlanetRows: TonightPlanetRow[] = []
-  @State private locationPickMode: string = 'map'
   @State private locationStore: LocationStore = new LocationStore()
-  @State private observerTimeZone: string = ''
-  @State private hierContinent: string = ''
-  @State private hierCountry: string = ''
-  @State private hierRegion: string = ''
-  @State private hierCity: string = ''
-  @State private mapRenderWidth: number = 280
-  @State private mapRenderHeight: number = 150
   @State private fovText: string = '--'
   @State private trackingText: string = 'Off'
   @State private trackingRequestPending: boolean = false
@@ -1216,7 +1208,6 @@ export struct WindowNativeNode {
   private locationSearchScanKeys: Set<string> = new Set<string>()
   private locationSearchScanTimer: number = -1
   private locationSearchLastPublishMs: number = 0
-  private locationProvinceTranslationCache: Record<string, string> = {}
   private searchSuggestionTimer: number = -1
   private panelIdleTimer: number = -1
   private lastOverlayActivityMs: number = 0
@@ -5555,7 +5546,7 @@ export struct WindowNativeNode {
       this.coordinateText = this.locationStore.formatDegrees(result.latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(result.longitude, 'E', 'W')
       if (result.locationName !== undefined && result.locationName.length > 0) {
         const planetName = result.planetName && result.planetName.length > 0 ? result.planetName : 'Earth'
-        this.locationText = this.locationDisplayName(result.locationName) + ' · ' + this.planetZh(planetName)
+        this.locationText = this.locationPickerStore.locationDisplayName(result.locationName) + ' · ' + this.planetZh(planetName)
       }
       if (result.altitude !== undefined) {
         this.altitudeText = result.altitude.toFixed(0) + ' m'
@@ -14164,34 +14155,20 @@ private loadPlanetPositions(): void {
   }
 
   private setPickerLocation(name: string, latitude: number, longitude: number, altitude: number, status: ResourceStr): void {
-    this.locationPickerName = name
-    this.locationPickerLatitude = this.clamp(latitude, -90, 90)
-    this.locationPickerLongitude = this.clamp(longitude, -180, 180)
-    this.locationPickerAltitude = Math.round(altitude)
-    this.locationPickerStatus = status
+    this.locationPickerStore.locationPickerName = name
+    this.locationPickerStore.locationPickerLatitude = this.clamp(latitude, -90, 90)
+    this.locationPickerStore.locationPickerLongitude = this.clamp(longitude, -180, 180)
+    this.locationPickerStore.locationPickerAltitude = Math.round(altitude)
+    this.locationPickerStore.locationPickerStatus = status
   }
 
   private updatePickerFromMap(x: number, y: number): void {
-    const width = this.mapRenderWidth
-    const height = this.mapRenderHeight
+    const width = this.locationPickerStore.mapRenderWidth
+    const height = this.locationPickerStore.mapRenderHeight
     const latitude = 90 - this.clamp(y, 0, height) / height * 180
     const longitude = this.clamp(x, 0, width) / width * 360 - 180
-    this.setPickerLocation(I18n.t('custom_location'), latitude, longitude, this.locationPickerAltitude, I18n.t('m_map_selected'))
+    this.setPickerLocation(I18n.t('custom_location'), latitude, longitude, this.locationPickerStore.locationPickerAltitude, I18n.t('m_map_selected'))
     this.locationStore.locSearchQuery = ''
-  }
-
-  private pickerCoordinateText(): string {
-    return this.locationStore.formatDegrees(this.locationPickerLatitude, 'N', 'S') + ' / ' +
-      this.locationStore.formatDegrees(this.locationPickerLongitude, 'E', 'W') + ' / ' +
-      this.locationPickerAltitude.toFixed(0) + ' m'
-  }
-
-  private pickerPinX(): number {
-    return (this.locationPickerLongitude + 180) / 360 * this.mapRenderWidth - 9
-  }
-
-  private pickerPinY(): number {
-    return (90 - this.locationPickerLatitude) / 180 * this.mapRenderHeight - 9
   }
 
   private handleLocationMapTouch(event: TouchEvent): boolean {
@@ -14229,7 +14206,7 @@ private loadPlanetPositions(): void {
       !this.applicationInForeground || !hasCurrentPrivacyConsent()) return
     this.deviceLocationRequestInProgress = true
     hilog.info(0x0000, 'StellariumArkUI', 'useDeviceLocation() called')
-    this.locationPickerStatus = I18n.t('m_req_location_perm')
+    this.locationPickerStore.locationPickerStatus = I18n.t('m_req_location_perm')
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const atManager = abilityAccessCtrl.createAtManager()
@@ -14240,10 +14217,10 @@ private loadPlanetPositions(): void {
       const permissionResult = await atManager.requestPermissionsFromUser(context, permissions)
       if (!this.privacyNativeStartupAllowed || !this.applicationInForeground || !hasCurrentPrivacyConsent()) return
       if (!permissionResult.authResults.some((result: number) => result === 0)) {
-        this.locationPickerStatus = I18n.t('m_gps_unavailable')
+        this.locationPickerStore.locationPickerStatus = I18n.t('m_gps_unavailable')
         return
       }
-      this.locationPickerStatus = I18n.t('m_getting_location')
+      this.locationPickerStore.locationPickerStatus = I18n.t('m_getting_location')
       const current = await geoLocationManager.getCurrentLocation({
         priority: geoLocationManager.LocationRequestPriority.ACCURACY,
         scenario: geoLocationManager.LocationRequestScenario.DAILY_LIFE_SERVICE,
@@ -14254,22 +14231,22 @@ private loadPlanetPositions(): void {
       const altitude = Number.isFinite(current.altitude) ? current.altitude : 0
       this.setPickerLocation(I18n.t('m_current_location'), current.latitude, current.longitude, altitude, I18n.t('m_device_loc_synced'))
       this.applyPickerLocation()
-      this.locationPickMode = 'map'
-      this.hierContinent = ''
-      this.hierCountry = ''
-      this.hierRegion = ''
-      this.hierCity = ''
+      this.locationPickerStore.locationPickMode = 'map'
+      this.locationPickerStore.hierContinent = ''
+      this.locationPickerStore.hierCountry = ''
+      this.locationPickerStore.hierRegion = ''
+      this.locationPickerStore.hierCity = ''
     } catch (err) {
       const errMsg: string = err instanceof Error ? err.message : JSON.stringify(err)
       hilog.warn(0x0000, 'StellariumArkUI', 'device location failed: %{public}s', errMsg)
-      this.locationPickerStatus = I18n.t('m_gps_unavailable')
+      this.locationPickerStore.locationPickerStatus = I18n.t('m_gps_unavailable')
     } finally {
       this.deviceLocationRequestInProgress = false
     }
   }
 
   private applyPickerLocation(): void {
-    this.setLocation(this.locationPickerName, this.locationPickerLatitude, this.locationPickerLongitude, this.locationPickerAltitude)
+    this.setLocation(this.locationPickerStore.locationPickerName, this.locationPickerStore.locationPickerLatitude, this.locationPickerStore.locationPickerLongitude, this.locationPickerStore.locationPickerAltitude)
     // 延迟刷新时区信息（等C++侧location切换完成）
     setTimeout(() => { this.loadObserverInfo(true) }, 500)
   }
@@ -14303,11 +14280,11 @@ private loadPlanetPositions(): void {
     // Update picker UI immediately (non-blocking, gives instant feedback)
     this.setPickerLocation(name, latitude, longitude, altitude, I18n.t('m_synced_to_sky'))
     this.observerPlanet = targetPlanet
-    this.locationText = this.locationDisplayName(name) + ' · ' + this.planetZh(targetPlanet)
+    this.locationText = this.locationPickerStore.locationDisplayName(name) + ' · ' + this.planetZh(targetPlanet)
     this.coordinateText = this.locationStore.formatDegrees(latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(longitude, 'E', 'W')
     this.altitudeText = altitude.toFixed(0) + ' m'
-    this.observerTimeZone = targetPlanet === 'Earth' ? this.approximateTimeZoneDisplay(longitude) : I18n.t('tz_system')
-    this.flashHint(I18n.t('i0073').replace('%s', this.locationDisplayName(name)))
+    this.locationPickerStore.observerTimeZone = targetPlanet === 'Earth' ? this.approximateTimeZoneDisplay(longitude) : I18n.t('tz_system')
+    this.flashHint(I18n.t('i0073').replace('%s', this.locationPickerStore.locationDisplayName(name)))
     if (targetPlanet !== currentPlanet || targetPlanet !== 'Earth') {
       this.callNativeWhenReady('setObserverPlanet', `${targetPlanet}|${latitude}|${longitude}|${altitude}`, (r: StellariumBridgeResponse) => {
         if (r.ok === true) {
@@ -14359,7 +14336,7 @@ private loadPlanetPositions(): void {
     for (const name of names) {
       const preset = this.getCityPreset(name)
       if (preset === undefined) continue
-      const displayName = this.locationDisplayName(name)
+      const displayName = this.locationPickerStore.locationDisplayName(name)
       items.push({ name: name, displayName: displayName, lat: preset.lat, lon: preset.lon, alt: preset.alt, planet: 'Earth', country: '', region: '' })
     }
     return items
@@ -14405,10 +14382,10 @@ private loadPlanetPositions(): void {
   private locationSearchCountryName(countryCode: string): string {
     if (countryCode === 'TW' || countryCode === 'HK' || countryCode === 'MO') {
       return I18n.isChineseLanguage()
-        ? (LOCATION_COUNTRY_NAMES[countryCode]?.zh ?? this.translateCountry(countryCode))
-        : this.translateCountry(countryCode)
+        ? (LOCATION_COUNTRY_NAMES[countryCode]?.zh ?? this.locationPickerStore.translateCountry(countryCode, this.observerPlanet))
+        : this.locationPickerStore.translateCountry(countryCode, this.observerPlanet)
     }
-    return this.translateCountry(countryCode)
+    return this.locationPickerStore.translateCountry(countryCode, this.observerPlanet)
   }
 
   private locationResultContext(item: LocSearchItem): string {
@@ -14416,8 +14393,8 @@ private loadPlanetPositions(): void {
     const append = (value: string): void => {
       if (value.length > 0 && !parts.includes(value)) parts.push(value)
     }
-    if (item.province) append(this.translateProvince(item.province))
-    else if (item.region) append(this.translateProvince(item.region))
+    if (item.province) append(this.locationPickerStore.translateProvince(item.province))
+    else if (item.region) append(this.locationPickerStore.translateProvince(item.region))
     if (item.country) append(this.locationSearchCountryName(item.country))
     return parts.join(' · ')
   }
@@ -14492,12 +14469,12 @@ private loadPlanetPositions(): void {
         continue
       }
       const city = cities[this.locationSearchScanCityIndex++]
-      if (!this.isCurrentObserverPlanet(city)) continue
+      if (!this.locationPickerStore.isCurrentObserverPlanet(city, this.observerPlanet)) continue
       const chinese = LOCATION_ZH_NAMES[city.n] ?? ''
-      const displayName = this.locationDisplayName(city.n)
+      const displayName = this.locationPickerStore.locationDisplayName(city.n)
       const countryCode = city.country
       const country = this.locationSearchCountryName(countryCode)
-      const province = this.translateProvince(city.province ?? '')
+      const province = this.locationPickerStore.translateProvince(city.province ?? '')
       // Search accepts the source name, official Chinese name, and the name
       // rendered for the active language. Display itself remains single-language.
       const sourceCountry = LOCATION_COUNTRY_NAMES[countryCode]
@@ -14513,7 +14490,7 @@ private loadPlanetPositions(): void {
         lat: city.la,
         lon: city.lo,
         alt: city.al,
-        planet: this.locationPlanet(city),
+        planet: this.locationPickerStore.locationPlanet(city),
         country: countryCode,
         region: region,
         province: city.province ?? '',
@@ -14547,7 +14524,7 @@ private loadPlanetPositions(): void {
     this.setLocation(item.name, item.lat, item.lon, item.alt, item.planet)
     this.locationStore.locSearchQuery = ''
     this.locationStore.locSearchResults = []
-      this.locationPickMode = 'map'
+      this.locationPickerStore.locationPickMode = 'map'
   }
 
   // ===== 时区获取 =====
@@ -14617,9 +14594,9 @@ private loadPlanetPositions(): void {
           this.skyCultureObserverLatitude = Number(r.latitude)
         }
         if (updateTimeZone && r.timeZone !== undefined && r.timeZone.length > 0 && r.timeZone !== 'system_default') {
-          this.observerTimeZone = this.timezoneDisplayName(r.timeZone)
-        } else if (updateTimeZone && this.observerTimeZone.length === 0 && r.longitude !== undefined) {
-          this.observerTimeZone = this.approximateTimeZoneDisplay(Number(r.longitude))
+          this.locationPickerStore.observerTimeZone = this.timezoneDisplayName(r.timeZone)
+        } else if (updateTimeZone && this.locationPickerStore.observerTimeZone.length === 0 && r.longitude !== undefined) {
+          this.locationPickerStore.observerTimeZone = this.approximateTimeZoneDisplay(Number(r.longitude))
         }
         if (r.planetName) {
           this.observerPlanet = r.planetName
@@ -14651,7 +14628,7 @@ private loadPlanetPositions(): void {
   }
 
   private saveCurrentLocation(): void {
-    const name = this.locationPickerName
+    const name = this.locationPickerStore.locationPickerName
     // 检查是否已存在
     const exists = this.locationStore.savedLocations.some((s: SavedLocation) => s.name === name)
     if (exists) {
@@ -14660,9 +14637,9 @@ private loadPlanetPositions(): void {
     }
     const item: SavedLocation = {
       name: name,
-      lat: this.locationPickerLatitude,
-      lon: this.locationPickerLongitude,
-      alt: this.locationPickerAltitude,
+      lat: this.locationPickerStore.locationPickerLatitude,
+      lon: this.locationPickerStore.locationPickerLongitude,
+      alt: this.locationPickerStore.locationPickerAltitude,
       planet: this.observerPlanet,
     }
     this.locationStore.savedLocations = [...this.locationStore.savedLocations, item]
@@ -14704,10 +14681,10 @@ private loadPlanetPositions(): void {
     this.callInteractive('setObserverPlanet', name, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.observerPlanet = name
-        this.hierContinent = ''
-        this.hierCountry = ''
-        this.hierRegion = ''
-        this.hierCity = ''
+        this.locationPickerStore.hierContinent = ''
+        this.locationPickerStore.hierCountry = ''
+        this.locationPickerStore.hierRegion = ''
+        this.locationPickerStore.hierCity = ''
         this.refreshState()
         this.flashHint('已切换观测星球：' + name)
       } else {
@@ -15106,380 +15083,30 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private hierContinents(): Array<string> {
-    return Object.keys(LOCATION_HIERARCHY).filter((continent: string) =>
-      Object.values(LOCATION_HIERARCHY[continent]).some((cities: Array<HierCity>) =>
-        cities.some((city: HierCity) => this.isCurrentObserverPlanet(city))))
-  }
-
-  // Translate continent name from Chinese to current language
-  private translateContinent(name: string): string {
-    const map: Record<string, string> = {
-      '亚洲': I18n.t('continent_asia'),
-      '欧洲': I18n.t('continent_europe'),
-      '北美洲': I18n.t('continent_north_america'),
-      '南美洲': I18n.t('continent_south_america'),
-      '非洲': I18n.t('continent_africa'),
-      '大洋洲': I18n.t('continent_oceania'),
-      '南极洲': I18n.t('continent_antarctica'),
-      '月球': '月球',
-      '火星': '火星',
-      '金星': '金星',
-      '土卫六': '土卫六',
-      '小行星贝努': '小行星贝努',
-    }
-    return map[name] ?? name
-  }
-
-  // Translate region/city names to current language
-  private translateRegion(name: string): string {
-    if (!name || name === '未知地区') return I18n.t('region_unknown')
-    if (I18n.isChineseLanguage()) {
-      // Keep the upstream name as the native lookup key; Chinese UI never
-      // falls back to that key, so incomplete source data cannot leak Latin text.
-      return LOCATION_ZH_NAMES[name] ?? '未收录地点'
-    }
-    // Region names are city/timezone names from Stellarium's base_locations
-    // Use I18n for known regions, fallback to original name
-    const regionMap: Record<string, string> = {
-      'Tokyo': I18n.t('city_tokyo'),
-      'Seoul': I18n.t('city_seoul'),
-      'Shanghai': I18n.t('city_shanghai'),
-      'Hong Kong': I18n.t('city_hongkong'),
-      'Taipei': I18n.t('city_taipei'),
-      'Singapore': I18n.t('city_singapore'),
-      'Bangkok': I18n.t('city_bangkok'),
-      'Jakarta': I18n.t('city_jakarta'),
-      'Kuala Lumpur': I18n.t('city_kuala_lumpur'),
-      'Manila': I18n.t('city_manila'),
-      'Ho Chi Minh': I18n.t('city_ho_chi_minh'),
-      'Hanoi': I18n.t('city_hanoi'),
-      'Beijing': I18n.t('city_beijing'),
-      'New York': I18n.t('city_new_york'),
-      'Los Angeles': I18n.t('city_los_angeles'),
-      'Chicago': I18n.t('city_chicago'),
-      'Toronto': I18n.t('city_toronto'),
-      'Vancouver': I18n.t('city_vancouver'),
-      'London': I18n.t('city_london'),
-      'Paris': I18n.t('city_paris'),
-      'Berlin': I18n.t('city_berlin'),
-      'Madrid': I18n.t('city_madrid'),
-      'Rome': I18n.t('city_rome'),
-      'Moscow': I18n.t('city_moscow'),
-      'Istanbul': I18n.t('city_istanbul'),
-      'Athens': I18n.t('city_athens'),
-      'Dubai': I18n.t('city_dubai'),
-      'Tehran': I18n.t('city_tehran'),
-      'Riyadh': I18n.t('city_riyadh'),
-      'Jerusalem': I18n.t('city_jerusalem'),
-      'Cairo': I18n.t('city_cairo'),
-      'Lagos': I18n.t('city_lagos'),
-      'Nairobi': I18n.t('city_nairobi'),
-      'Johannesburg': I18n.t('city_johannesburg'),
-      'Sydney': I18n.t('city_sydney'),
-      'Melbourne': I18n.t('city_melbourne'),
-      'Auckland': I18n.t('city_auckland'),
-      'Honolulu': I18n.t('city_honolulu'),
-      'Mumbai': I18n.t('city_mumbai'),
-      'Kolkata': I18n.t('city_kolkata'),
-      'Delhi': I18n.t('city_delhi'),
-      'Karachi': I18n.t('city_karachi'),
-      'Dhaka': I18n.t('city_dhaka'),
-      'Colombo': I18n.t('city_colombo'),
-      'Kathmandu': I18n.t('city_kathmandu'),
-      'Yangon': I18n.t('city_yangon'),
-      'Phnom Penh': I18n.t('city_phnom_penh'),
-      'Vientiane': I18n.t('city_vientiane'),
-      'Brunei': I18n.t('city_brunei'),
-      'Macau': I18n.t('city_macau'),
-      'Pyongyang': I18n.t('city_pyongyang'),
-      'Ulaanbaatar': I18n.t('city_ulaanbaatar'),
-      'Almaty': I18n.t('city_almaty'),
-      'Tashkent': I18n.t('city_tashkent'),
-      'Baku': I18n.t('city_baku'),
-      'Tbilisi': I18n.t('city_tbilisi'),
-      'Yerevan': I18n.t('city_yerevan'),
-      'Kabul': I18n.t('city_kabul'),
-      'Amman': I18n.t('city_amman'),
-      'Beirut': I18n.t('city_beirut'),
-      'Damascus': I18n.t('city_damascus'),
-      'Baghdad': I18n.t('city_baghdad'),
-      'Kuwait': I18n.t('city_kuwait'),
-      'Muscat': I18n.t('city_muscat'),
-      'Doha': I18n.t('city_doha'),
-      'Bahrain': I18n.t('city_bahrain'),
-      'Aden': I18n.t('city_aden'),
-      'Khartoum': I18n.t('city_khartoum'),
-      'Tripoli': I18n.t('city_tripoli'),
-      'Tunis': I18n.t('city_tunis'),
-      'Algiers': I18n.t('city_algiers'),
-      'Casablanca': I18n.t('city_casablanca'),
-      'Accra': I18n.t('city_accra'),
-      'Dakar': I18n.t('city_dakar'),
-      'Abidjan': I18n.t('city_abidjan'),
-      'Addis Ababa': I18n.t('city_addis_ababa'),
-      'Dar es Salaam': I18n.t('city_dar_es_salaam'),
-      'Lusaka': I18n.t('city_lusaka'),
-      'Harare': I18n.t('city_harare'),
-      'Kigali': I18n.t('city_kigali'),
-      'Bujumbura': I18n.t('city_bujumbura'),
-      'Maputo': I18n.t('city_maputo'),
-      'Antananarivo': I18n.t('city_antananarivo'),
-      'Vienna': I18n.t('city_vienna'),
-      'Prague': I18n.t('city_prague'),
-      'Warsaw': I18n.t('city_warsaw'),
-      'Budapest': I18n.t('city_budapest'),
-      'Bucharest': I18n.t('city_bucharest'),
-      'Sofia': I18n.t('city_sofia'),
-      'Belgrade': I18n.t('city_belgrade'),
-      'Zagreb': I18n.t('city_zagreb'),
-      'Ljubljana': I18n.t('city_ljubljana'),
-      'Sarajevo': I18n.t('city_sarajevo'),
-      'Skopje': I18n.t('city_skopje'),
-      'Tirane': I18n.t('city_tirane'),
-      'Kyiv': I18n.t('city_kyiv'),
-      'Minsk': I18n.t('city_minsk'),
-      'Vilnius': I18n.t('city_vilnius'),
-      'Riga': I18n.t('city_riga'),
-      'Tallinn': I18n.t('city_tallinn'),
-      'Helsinki': I18n.t('city_helsinki'),
-      'Stockholm': I18n.t('city_stockholm'),
-      'Oslo': I18n.t('city_oslo'),
-      'Copenhagen': I18n.t('city_copenhagen'),
-      'Reykjavik': I18n.t('city_reykjavik'),
-      'Dublin': I18n.t('city_dublin'),
-      'Lisbon': I18n.t('city_lisbon'),
-      'Amsterdam': I18n.t('city_amsterdam'),
-      'Brussels': I18n.t('city_brussels'),
-      'Luxembourg': I18n.t('city_luxembourg'),
-      'Bern': I18n.t('city_bern'),
-      'Zurich': I18n.t('city_zurich'),
-
-      'Mexico City': I18n.t('city_mexico_city'),
-      'Guatemala': I18n.t('city_guatemala'),
-      'Havana': I18n.t('city_havana'),
-      'Panama': I18n.t('city_panama'),
-      'Bogota': I18n.t('city_bogota'),
-      'Lima': I18n.t('city_lima'),
-      'Santiago': I18n.t('city_santiago'),
-      'Buenos Aires': I18n.t('city_buenos_aires'),
-      'Montevideo': I18n.t('city_montevideo'),
-      'Asuncion': I18n.t('city_asuncion'),
-      'Caracas': I18n.t('city_caracas'),
-      'Quito': I18n.t('city_quito'),
-      'La Paz': I18n.t('city_la_paz'),
-      'Sucre': I18n.t('city_sucre'),
-      'Sao Paulo': I18n.t('city_sao_paulo'),
-      'Rio de Janeiro': I18n.t('city_rio_de_janeiro'),
-      'Brasilia': I18n.t('city_brasilia'),
-      'Perth': I18n.t('city_perth'),
-      'Brisbane': I18n.t('city_brisbane'),
-      'Adelaide': I18n.t('city_adelaide'),
-      'Hobart': I18n.t('city_hobart'),
-      'Darwin': I18n.t('city_darwin'),
-      'Suva': I18n.t('city_suva'),
-      'Apia': I18n.t('city_apia'),
-      "Nuku'alofa": I18n.t('city_nukualofa'),
-      'Port Moresby': I18n.t('city_port_moresby'),
-
-    }
-    return regionMap[name] ?? name
-  }
-
-  private locationDisplayName(name: string): string {
-    if (!name || name.length === 0) {
-      return '--'
-    }
-    if (name === I18n.t('custom_location') || name === I18n.t('m_map_pick') ||
-      name === I18n.t('m_current_location') || name.startsWith('Custom ')) {
-      return I18n.t('custom_location')
-    }
-    const translated = this.translateRegion(name)
-    return translated === '未收录地点' ? name : translated
-  }
-
-  private locationColumnTitle(kind: string): string {
-    if (kind === 'continent') {
-      return I18n.t('h_continent')
-    }
-    if (kind === 'region') {
-      return I18n.t('h_region')
-    }
-    if (kind === 'country') {
-      return I18n.t('h_country')
-    }
-    return I18n.t('h_city')
-  }
-
-  private hierarchyItemLabel(kind: string, name: string): string {
-    if (kind === 'continent') return this.translateContinent(name)
-    if (kind === 'country') return this.translateCountry(name)
-    if (kind === 'region' && name === '未知地区' && this.observerPlanet !== 'Earth') return '月球任务地点'
-    if (kind === 'region') return this.translateProvince(name)
-    return this.locationDisplayName(name)
-  }
-
-  private chineseRegionKey(city: HierCity): string {
-    if (city.country === 'HK') return 'Hong Kong'
-    if (city.country === 'MO') return 'Macau'
-    if (city.country === 'TW') return 'Taiwan'
-    return city.province ?? ''
-  }
-
-  private locationPlanet(city: HierCity): string {
-    return city.planet ?? 'Earth'
-  }
-
-  private isCurrentObserverPlanet(city: HierCity): boolean {
-    return this.locationPlanet(city).toLowerCase() === this.observerPlanet.toLowerCase()
-  }
-
-  private translateProvince(name: string): string {
-    if (!name) return I18n.t('region_unknown')
-    if (!I18n.isChineseLanguage()) return name
-    const cached = this.locationProvinceTranslationCache[name]
-    if (cached !== undefined) return cached
-    const provinceMap: Record<string, string> = {
-      'Beijing': '北京市', 'Tianjin': '天津市', 'Shanghai': '上海市', 'Chongqing': '重庆市',
-      'Hebei': '河北省', 'Shanxi': '山西省', 'Liaoning': '辽宁省', 'Jilin': '吉林省',
-      'Heilongjiang': '黑龙江省', 'Jiangsu': '江苏省', 'Zhejiang': '浙江省', 'Anhui': '安徽省',
-      'Fujian': '福建省', 'Jiangxi': '江西省', 'Shandong': '山东省', 'Henan': '河南省',
-      'Hubei': '湖北省', 'Hunan': '湖南省', 'Guangdong': '广东省', 'Hainan': '海南省',
-      'Sichuan': '四川省', 'Guizhou': '贵州省', 'Yunnan': '云南省', 'Shaanxi': '陕西省',
-      'Gansu': '甘肃省', 'Qinghai': '青海省', 'Taiwan': '中国台湾地区', 'Taipei': '中国台湾地区',
-      'Xinjiang': '新疆维吾尔自治区', 'Tibet': '西藏自治区', 'Inner Mongolia': '内蒙古自治区',
-      'Guangxi': '广西壮族自治区', 'Ningxia': '宁夏回族自治区', 'Hong Kong': '中国香港特别行政区',
-      'Macau': '中国澳门特别行政区', 'Macao': '中国澳门特别行政区',
-    }
-    const translated = provinceMap[name] ?? LOCATION_ZH_NAMES[name] ?? name
-    this.locationProvinceTranslationCache[name] = translated
-    return translated
-  }
-
-  private translateCountry(code: string): string {
-    const normalizedCode = code === 'TW' ? 'CN' : code
-    if (normalizedCode === 'ZZ') {
-      return this.observerPlanet === 'Earth' ? I18n.t('region_unknown') : this.planetZh(this.observerPlanet) + '表面地点'
-    }
-    const country = LOCATION_COUNTRY_NAMES[normalizedCode]
-    if (!country) return normalizedCode
-    if (I18n.isChineseLanguage()) return country.zh
-    return I18n.displayCountry(normalizedCode, country.en)
-  }
-
-  private normalizedLocationCountry(code: string): string {
-    // Chinese UI presents Hong Kong, Macao and Taiwan as regions under China.
-    return code === 'TW' || code === 'HK' || code === 'MO' ? 'CN' : code
-  }
-
-  private hierarchySelectionSummary(): string {
-    const parts: Array<string> = []
-    if (this.hierContinent) {
-      parts.push(this.translateContinent(this.hierContinent))
-    }
-    if (this.hierCountry) {
-      parts.push(this.translateCountry(this.hierCountry))
-    }
-    if (this.hierRegion) {
-      parts.push(this.hierarchyItemLabel('region', this.hierRegion))
-    }
-    if (this.hierCity) {
-      parts.push(this.locationDisplayName(this.hierCity))
-    }
-    return parts.length > 0 ? parts.join('  >  ') : '未选择'
-  }
-
-  private hierRegions(): Array<string> {
-    if (this.hierContinent === '' || this.hierCountry === '' || !LOCATION_HIERARCHY[this.hierContinent]) {
-      return []
-    }
-    if (this.hierCountry === 'CN') {
-      const provinces = new Set<string>()
-      for (const cities of Object.values(LOCATION_HIERARCHY[this.hierContinent])) {
-        for (const city of cities) {
-          if (!this.isCurrentObserverPlanet(city)) continue
-          if (this.normalizedLocationCountry(city.country) !== 'CN') continue
-          const province = this.chineseRegionKey(city)
-          if (province.length > 0) provinces.add(province)
-        }
-      }
-      return Array.from(provinces).sort((a: string, b: string) =>
-        this.translateProvince(a).localeCompare(this.translateProvince(b)))
-    }
-    return Object.keys(LOCATION_HIERARCHY[this.hierContinent]).filter((region: string) =>
-      LOCATION_HIERARCHY[this.hierContinent][region].some((city: HierCity) =>
-        this.isCurrentObserverPlanet(city) && this.normalizedLocationCountry(city.country) === this.hierCountry))
-  }
-
-  private hierCountries(): Array<string> {
-    if (this.hierContinent === '' || !LOCATION_HIERARCHY[this.hierContinent]) return []
-    const countries = new Set<string>()
-    for (const cities of Object.values(LOCATION_HIERARCHY[this.hierContinent])) {
-      for (const city of cities) {
-        if (this.isCurrentObserverPlanet(city)) countries.add(this.normalizedLocationCountry(city.country))
-      }
-    }
-    return Array.from(countries).sort((a: string, b: string) =>
-      this.translateCountry(a).localeCompare(this.translateCountry(b)))
-  }
-
-  private hierCityList(): Array<HierCity> {
-    if (this.hierContinent === '' || this.hierCountry === '' || this.hierRegion === '' ||
-      !LOCATION_HIERARCHY[this.hierContinent]) {
-      return []
-    }
-    if (this.hierCountry === 'CN') {
-      const cities: Array<HierCity> = []
-      for (const regionCities of Object.values(LOCATION_HIERARCHY[this.hierContinent])) {
-        for (const city of regionCities) {
-          if (!this.isCurrentObserverPlanet(city)) continue
-          if (this.normalizedLocationCountry(city.country) === 'CN' && this.chineseRegionKey(city) === this.hierRegion) {
-            cities.push(city)
-          }
-        }
-      }
-      return cities
-    }
-    if (!LOCATION_HIERARCHY[this.hierContinent][this.hierRegion]) return []
-    return LOCATION_HIERARCHY[this.hierContinent][this.hierRegion]
-      .filter((city: HierCity) => this.isCurrentObserverPlanet(city) && this.normalizedLocationCountry(city.country) === this.hierCountry)
-  }
-
-  private hierCityNames(): Array<string> {
-    return this.hierCityList().map((c: HierCity) => c.n)
-  }
-
-  private hierarchySelectionFor(kind: string): string {
-    if (kind === 'continent') return this.hierContinent
-    if (kind === 'country') return this.hierCountry
-    if (kind === 'region') return this.hierRegion
-    return this.hierCity
-  }
-
   private selectContinent(c: string): void {
-    this.hierContinent = c
-    this.hierCountry = ''
-    this.hierRegion = ''
-    this.hierCity = ''
+    this.locationPickerStore.hierContinent = c
+    this.locationPickerStore.hierCountry = ''
+    this.locationPickerStore.hierRegion = ''
+    this.locationPickerStore.hierCity = ''
   }
 
   private selectCountry(country: string): void {
-    this.hierCountry = country
-    this.hierRegion = ''
-    this.hierCity = ''
+    this.locationPickerStore.hierCountry = country
+    this.locationPickerStore.hierRegion = ''
+    this.locationPickerStore.hierCity = ''
   }
 
   private selectRegion(r: string): void {
-    this.hierRegion = r
-    this.hierCity = ''
+    this.locationPickerStore.hierRegion = r
+    this.locationPickerStore.hierCity = ''
   }
 
   private selectCityByName(name: string): void {
-    this.hierCity = name
-    const found = this.hierCityList().find((c: HierCity) => c.n === name)
+    this.locationPickerStore.hierCity = name
+    const found = this.locationPickerStore.hierCities(this.observerPlanet).find((c: HierCity) => c.n === name)
     if (found) {
       // Auto-apply the selected city immediately
-      this.setLocation(found.n, found.la, found.lo, found.al, this.locationPlanet(found))
+      this.setLocation(found.n, found.la, found.lo, found.al, this.locationPickerStore.locationPlanet(found))
     }
   }
 
@@ -15488,96 +15115,19 @@ private loadPlanetPositions(): void {
     Button(label)
       .height(28)
       .fontSize(11)
-      .fontColor(this.locationPickMode === mode ? this.nmText() : this.nmSub())
-      .backgroundColor(this.locationPickMode === mode ? this.nmAccent() : this.nmBg())
-      .border({ width: 1, color: this.locationPickMode === mode ? 'rgba(107, 163, 214, 0.35)' : 'rgba(255, 255, 255, 0.08)' })
+      .fontColor(this.locationPickerStore.locationPickMode === mode ? this.nmText() : this.nmSub())
+      .backgroundColor(this.locationPickerStore.locationPickMode === mode ? this.nmAccent() : this.nmBg())
+      .border({ width: 1, color: this.locationPickerStore.locationPickMode === mode ? 'rgba(107, 163, 214, 0.35)' : 'rgba(255, 255, 255, 0.08)' })
       .borderRadius(UI_RADIUS_CONTROL)
       .margin({ right: 8 })
       .onClick(() => {
-        this.locationPickMode = mode
+        this.locationPickerStore.locationPickMode = mode
       })
   }
 
   locationColumnScroller(kind: string): Scroller {
     const index = kind === 'continent' ? 0 : (kind === 'country' ? 1 : (kind === 'region' ? 2 : 3))
     return this.locationColumnScrollers[index]
-  }
-
-  @Builder
-  hierColumn(kind: string, onSelect: (item: string) => void) {
-    Column() {
-      // Column header with localized title and icon
-      Row({ space: 4 }) {
-        Text(this.locationColumnTitle(kind))
-          .fontSize(11)
-          .fontColor('#8EC5E8')
-          .fontWeight(FontWeight.Medium)
-      }
-      .width('100%')
-      .height(26)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor('rgba(91, 147, 191, 0.12)')
-      .borderRadius(UI_RADIUS_CONTROL)
-      .margin({ bottom: 5 })
-      Scroll(this.locationColumnScroller(kind)) {
-        Column({ space: 4 }) {
-          ForEach(kind === 'continent' ? this.hierContinents() :
-            (kind === 'country' ? this.hierCountries() :
-            (kind === 'region' ? this.hierRegions() : this.hierCityNames())), (item: string) => {
-              Button() {
-                Stack() {
-                  Text(this.hierarchyItemLabel(kind, item))
-                    .fontSize(11)
-                    .fontColor(this.hierarchySelectionFor(kind) === item ? '#FFFFFFFF' : '#A8C4E0')
-                    .fontWeight(this.hierarchySelectionFor(kind) === item ? FontWeight.Medium : FontWeight.Regular)
-                    .width('100%')
-                    .height(36)
-                    .maxLines(2)
-                    .textOverflow({ overflow: TextOverflow.Clip })
-                    .textAlign(TextAlign.Center)
-                    .lineHeight(15)
-                  if (this.hierarchySelectionFor(kind) === item) {
-                    Text('✓')
-                      .fontSize(10)
-                      .fontColor('#FFFFFF')
-                      .fontWeight(FontWeight.Bold)
-                      .width(16)
-                      .height(16)
-                      .textAlign(TextAlign.Center)
-                      .align(Alignment.End)
-                  }
-                }
-                  .width('100%')
-                  .height(42)
-                  .alignContent(Alignment.Center)
-              }
-                .padding({ left: 4, right: 4, top: 3, bottom: 3 })
-                .width('100%')
-                .height(48)
-                .backgroundColor(this.hierarchySelectionFor(kind) === item ? '#2A6694' : 'rgba(255,255,255,0.03)')
-                .border({ width: this.hierarchySelectionFor(kind) === item ? 1.5 : 1, color: this.hierarchySelectionFor(kind) === item ? '#9BD8FF' : 'rgba(107,163,214,0.10)' })
-                .borderRadius(UI_RADIUS_CONTROL)
-                .shadow(this.hierarchySelectionFor(kind) === item ? { radius: 8, color: 'rgba(99, 185, 255, 0.35)', offsetX: 0, offsetY: 1 } : { radius: 0, color: 'transparent', offsetX: 0, offsetY: 0 })
-                .stateEffect(true)
-                .animation({ duration: 160, curve: curves.springMotion(0.42, 0.86) })
-                .onClick(() => onSelect(item))
-            }, (item: string) => item)
-        }
-      }
-      .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Auto)
-      .backgroundColor('rgba(8, 14, 28, 0.4)')
-      .borderRadius(UI_RADIUS_CONTROL)
-      .scrollBarWidth(3)
-    }
-    .layoutWeight(1)
-    .padding(6)
-    .backgroundColor('rgba(10, 18, 36, 0.55)')
-    .border({ width: 1, color: 'rgba(91, 147, 191, 0.20)' })
-    .borderRadius(UI_RADIUS_CONTROL)
-    .margin({ right: 5 })
   }
 
   private panelLeft(): number {
@@ -25748,12 +25298,12 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         subColor: this.nmSub(),
         inputColor: this.nmInput(),
         onSearch: (query: string) => { this.searchLocations(query) },
-        onNameDraft: (name: string) => { this.locationPickerName = name },
+        onNameDraft: (name: string) => { this.locationPickerStore.locationPickerName = name },
         contextOf: (item: LocSearchItem) => this.locationResultContext(item),
         onPickItem: (item: LocSearchItem) => { this.selectSearchLocation(item) }
       })
 
-      if (this.locationPickMode === 'map') {
+      if (this.locationPickerStore.locationPickMode === 'map') {
         Stack() {
           Image($rawfile('worldmap.jpg'))
             .width('100%')
@@ -25761,14 +25311,14 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             .objectFit(ImageFit.Contain)
           // 经纬度刻度
           Text('N').fontSize(9).fontColor('#99FFFFFF').position({ x: 6, y: 4 })
-          Text('S').fontSize(9).fontColor('#99FFFFFF').position({ x: 6, y: this.mapRenderHeight - 16 })
-          Text('90°W').fontSize(8).fontColor('#CC8FB6FF').position({ x: 4, y: Math.round(this.mapRenderHeight / 2) - 4 })
-          Text('90°E').fontSize(8).fontColor('#CC8FB6FF').position({ x: this.mapRenderWidth - 32, y: Math.round(this.mapRenderHeight / 2) - 4 })
+          Text('S').fontSize(9).fontColor('#99FFFFFF').position({ x: 6, y: this.locationPickerStore.mapRenderHeight - 16 })
+          Text('90°W').fontSize(8).fontColor('#CC8FB6FF').position({ x: 4, y: Math.round(this.locationPickerStore.mapRenderHeight / 2) - 4 })
+          Text('90°E').fontSize(8).fontColor('#CC8FB6FF').position({ x: this.locationPickerStore.mapRenderWidth - 32, y: Math.round(this.locationPickerStore.mapRenderHeight / 2) - 4 })
           Text(I18n.t('i0040'))
             .fontSize(18)
             .fontColor('#7FB3DC')
             .textShadow({ radius: 8, color: 'rgba(159, 232, 255, 0.75)', offsetX: 0, offsetY: 0 })
-            .position({ x: this.pickerPinX(), y: this.pickerPinY() })
+            .position({ x: this.locationPickerStore.pickerPinX(), y: this.locationPickerStore.pickerPinY() })
         }
           .width(this.locationMapWidth())
           .height(this.locationMapHeight())
@@ -25779,11 +25329,11 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .borderRadius(UI_RADIUS_CONTROL)
           .margin({ top: 10 })
           .onAreaChange((oldArea: Area, newArea: Area) => {
-            this.mapRenderWidth = Number(newArea.width)
-            this.mapRenderHeight = Number(newArea.height)
+            this.locationPickerStore.mapRenderWidth = Number(newArea.width)
+            this.locationPickerStore.mapRenderHeight = Number(newArea.height)
           })
           .onTouch((event: TouchEvent) => this.handleLocationMapTouch(event))
-        Text(this.pickerCoordinateText())
+        Text(this.locationPickerStore.pickerCoordinateText())
           .fontSize(12)
           .fontColor('#99FFFFFF')
           .width('100%')
@@ -25791,21 +25341,49 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       } else {
         Column() {
           Row() {
-            this.hierColumn('continent', (c: string) => this.selectContinent(c))
-            this.hierColumn('country', (c: string) => this.selectCountry(c))
-            this.hierColumn('region', (r: string) => this.selectRegion(r))
-            this.hierColumn('city', (c: string) => this.selectCityByName(c))
+            HierColumn({
+              title: this.locationPickerStore.locationColumnTitle('continent'),
+              items: this.locationPickerStore.hierColumnItems('continent', this.observerPlanet),
+              selected: this.locationPickerStore.hierarchySelectionFor('continent'),
+              scroller: this.locationColumnScroller('continent'),
+              labelOf: (item: string) => this.locationPickerStore.hierarchyItemLabel('continent', item, this.observerPlanet),
+              onSelect: (c: string) => { this.selectContinent(c) }
+            })
+            HierColumn({
+              title: this.locationPickerStore.locationColumnTitle('country'),
+              items: this.locationPickerStore.hierColumnItems('country', this.observerPlanet),
+              selected: this.locationPickerStore.hierarchySelectionFor('country'),
+              scroller: this.locationColumnScroller('country'),
+              labelOf: (item: string) => this.locationPickerStore.hierarchyItemLabel('country', item, this.observerPlanet),
+              onSelect: (c: string) => { this.selectCountry(c) }
+            })
+            HierColumn({
+              title: this.locationPickerStore.locationColumnTitle('region'),
+              items: this.locationPickerStore.hierColumnItems('region', this.observerPlanet),
+              selected: this.locationPickerStore.hierarchySelectionFor('region'),
+              scroller: this.locationColumnScroller('region'),
+              labelOf: (item: string) => this.locationPickerStore.hierarchyItemLabel('region', item, this.observerPlanet),
+              onSelect: (r: string) => { this.selectRegion(r) }
+            })
+            HierColumn({
+              title: this.locationPickerStore.locationColumnTitle('city'),
+              items: this.locationPickerStore.hierColumnItems('city', this.observerPlanet),
+              selected: this.locationPickerStore.hierarchySelectionFor('city'),
+              scroller: this.locationColumnScroller('city'),
+              labelOf: (item: string) => this.locationPickerStore.hierarchyItemLabel('city', item, this.observerPlanet),
+              onSelect: (c: string) => { this.selectCityByName(c) }
+            })
           }
             .width('100%')
             .height(196)
-          Text(this.hierarchySelectionSummary())
+          Text(this.locationPickerStore.hierarchySelectionSummary(this.observerPlanet))
             .fontSize(11)
-            .fontColor(this.hierContinent ? '#A9D9F5' : '#7F96AE')
+            .fontColor(this.locationPickerStore.hierContinent ? '#A9D9F5' : '#7F96AE')
             .width('100%')
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .margin({ top: 7 })
-          Text(this.pickerCoordinateText())
+          Text(this.locationPickerStore.pickerCoordinateText())
             .fontSize(12)
             .fontColor('#99FFFFFF')
             .width('100%')
@@ -25817,7 +25395,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
 
       Row() {
         Text(I18n.t('i0016')).fontSize(12).fontColor('#8EA0BD').width(56)
-        TextInput({ text: this.locationPickerAltitude.toFixed(0), placeholder: I18n.t('i0067') })
+        TextInput({ text: this.locationPickerStore.locationPickerAltitude.toFixed(0), placeholder: I18n.t('i0067') })
           .height(34)
           .fontSize(13)
           .fontColor('#E5FFFFFF')
@@ -25829,7 +25407,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .onChange((value: string) => {
             const altitude = Number(value)
             if (Number.isFinite(altitude)) {
-              this.locationPickerAltitude = Math.round(altitude)
+              this.locationPickerStore.locationPickerAltitude = Math.round(altitude)
             }
           })
         Text('m').fontSize(11).fontColor('#8EA0BD').margin({ left: 6 })
@@ -25837,10 +25415,10 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       .width('100%')
       .margin({ top: 8 })
       // 时区显示
-      if (this.observerTimeZone.length > 0) {
+      if (this.locationPickerStore.observerTimeZone.length > 0) {
         Row() {
           Text(I18n.t('loc_timezone')).fontSize(11).fontColor('#8EA0BD')
-          Text(this.observerTimeZone).fontSize(11).fontColor('#7FB3DC').margin({ left: 8 })
+          Text(this.locationPickerStore.observerTimeZone).fontSize(11).fontColor('#7FB3DC').margin({ left: 8 })
         }
         .width('100%')
         .margin({ top: 6 })
@@ -25858,7 +25436,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .onClick(() => {
             this.applyPickerLocation()
           })
-        Text(this.locationPickerStatus)
+        Text(this.locationPickerStore.locationPickerStatus)
           .fontSize(11)
           .fontColor('#99FFFFFF')
           .layoutWeight(1)
