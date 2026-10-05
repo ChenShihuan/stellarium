@@ -1641,3 +1641,19 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **真机（192.168.50.108:36717）**：`Smoke: PASS`。`setSkyCulture tibetan` → `[sky-culture-anchor] id=tibetan delta=-13.3 offset=1878.4` + `[sky-culture-art] thumbnail ready ...` ×24 + `released pixel map kind=sky-culture-art-thumbnail`；`openUiPanel skyCultureMaker` → `新增星座` 渲染 `1 个星座` → `saveSkyCultureMakerDraft` 收到含 `constellation_1` 的草稿 → `校验草稿` → `validateSkyCultureMakerDraft`；`pidof` 全程 33488 存活、无 jscrash；测试后 `setSkyCulture modern` + `resetSkyCultureMakerDraft` 复原。**未走查（待真机人工）**：Art 大图预览叠层开合；领地地图 Canvas 重绘；标签模式 picker 选项弹层与收起动画本体；Maker 美术图导入 / 导出 picker。
 
 **D 轨道收尾结论（17 簇全清）**：D 轨道基线 12,321 行 / 501 `private`；本队列依次完成 D0（`capability/ControllerHooks` 前置）→ D1/D2/D11/D12/D16 → D9/D15 → D5/D6/D13 → D7/D14 → D17/D10/D4 → D8（位置域 `LocationController`，§15.12.3）→ **D3（本片，末位最大簇）**。**17/17 簇全部落地**：迁出为控制器/并入既有 store，`loadSkyCultureDetails` 按 §15.6-3 永久登记、`SelectionService` 族按 §15.6-6 永久登记。宿主降至 **8,646 行**（自 D 轨道基线 **12,321 → 8,646，−3,675 行**，−29.8%）。
+
+#### 15.12.11 E 轨道 E1：删死代码 + 位置层级选择薄胶水下沉（2026-10-05）
+
+> **背景**：D 轨道收尾后进入 **E 轨道（设置/配置行为残余清理 + 薄胶水下沉）**。E1 为清理 + 小迁移片：删除 action bar 死链与零引用 `loadFov`，并把 D8（§15.12.1）登记为「薄胶水」的 `selectContinent` / `selectCountry` / `selectRegion` / `selectCityByName` 迁入既有 `capability/LocationController.ets`。
+
+**删除的死代码（用户已确认；以零引用扫描为准）**
+
+- 宿主 `MainWindowNativeNode.ets`：`showObjectActionBar`（硬编码 `return false`）、`objectActionBarX`、`objectActionBarWidth`、`isObjectActionBarPoint`（4 法，仅互调 + `isUiPoint` 一处恒假分支）、零引用 `loadFov`。
+- `isUiPoint` 体内 `if (isObjectDetailCardPoint(...) || this.isObjectActionBarPoint(x, y))` 删恒假第二项，保 `isObjectDetailCardPoint(...)` 首项不变（语义等价）。
+- geometry import 移除零引用的 `objectActionBarY`；其函数本体**保留**（`scripts/test-ohos-polar-scope.mjs` 以它为文本切分边界，production 已零引用）。
+
+**位置 4 法迁出判定**：`selectContinent` / `selectCountry` / `selectRegion` / `selectCityByName` **逐字等价**迁入 `capability/LocationController.ets` —— 纯 store 写（`hier*` 取/清）与 `hierCities(...).find(...)` 过滤、`locationPlanet(found)` 判定一字未改；仅 `this.<宿主 store>` → 控制器持有的 `LocationPickerStore` / `SessionToolStore`，`this.locationCtl().setLocation` → 控制器内部 `this.setLocation`。宿主 4 个调用点（`PlacePanel` 回调）改指 `this.locationCtl().selectXxx(...)`。无新文件、无新端口。
+
+**度量（ReadAllLines / UTF-8 口径）**：宿主 **8,646 → 8,587 行（−59）**、`private` 方法 **277 → 268（−9）**、`@State private` **132 不变**；`LocationController.ets` **214 → 246（+32）**。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-polar-scope` 4/4、`test-ohos-privacy-startup` 19/19 全绿；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。真机（192.168.50.108:36717）：`Smoke: PASS`；层级选择 亚洲→丹麦→哥本哈根→哥本哈根 → `getObserverInfo` `Copenhagen / 55.6759 / 12.5655 / 14` + hilog `command received: "setLocation" "Copenhagen|55.6759|12.5655|14"`；切大洲「欧洲」验证下级列刷新与地区/城市清空；`pidof` 存活、无 jscrash；测试后经「地图选点 + 应用」复原 `自定义位置 / 21.34°N / 110.38°E / 0 m`。**未走查 / 记录**：层级列无 `--id`，交互用坐标点击（缺语义命令，已记录）；`objectActionBarY` 因测试脚本切片锚点保留。

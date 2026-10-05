@@ -37,7 +37,7 @@ import { dateToJD, jdToLocalTimeText, graphModeLabel, graphStartOptionLabel, pla
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
-import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, objectActionBarY, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
+import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
 import { objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
 import { BridgeClient } from '../bridge/BridgeClient'
@@ -4618,15 +4618,6 @@ export struct WindowNativeNode {
     }
   }
 
-    private loadFov(): void {
-    this.callInteractive('getFieldOfView', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && typeof r.fov === 'number') {
-        this.currentFovText = (r.fov as number).toFixed(1) + '°'
-        this.fovSliderValue = r.fov as number
-      }
-    })
-  }
-
   private changeFovBySlider(val: number): void {
     this.callInteractive('setFOV', Math.round(val).toString(), (r: StellariumBridgeResponse) => {
       hilog.info(0x0000, 'StellariumArkUI', 'changeFovBySlider %{public}d ok=%{public}s', Math.round(val), r.ok === true ? '1' : '0')
@@ -5949,33 +5940,6 @@ export struct WindowNativeNode {
     return (d.length >= 10 ? d.slice(5) : d) + ' ' + (t.length >= 8 ? t.slice(0, 5) : t)
   }
 
-  private selectContinent(c: string): void {
-    this.locationPickerStore.hierContinent = c
-    this.locationPickerStore.hierCountry = ''
-    this.locationPickerStore.hierRegion = ''
-    this.locationPickerStore.hierCity = ''
-  }
-
-  private selectCountry(country: string): void {
-    this.locationPickerStore.hierCountry = country
-    this.locationPickerStore.hierRegion = ''
-    this.locationPickerStore.hierCity = ''
-  }
-
-  private selectRegion(r: string): void {
-    this.locationPickerStore.hierRegion = r
-    this.locationPickerStore.hierCity = ''
-  }
-
-  private selectCityByName(name: string): void {
-    this.locationPickerStore.hierCity = name
-    const found = this.locationPickerStore.hierCities(this.sessionToolStore.observerPlanet).find((c: HierCity) => c.n === name)
-    if (found) {
-      // Auto-apply the selected city immediately
-      this.locationCtl().setLocation(found.n, found.la, found.lo, found.al, this.locationPickerStore.locationPlanet(found))
-    }
-  }
-
   private isUiPoint(x: number, y: number): boolean {
     // 录制聚焦态（控制条收起）：除顶部录制控制条外，面板/详情卡/搜索/Dock/底部条等界面
     // 全部隐藏，不得留下“幽灵命中区”吞掉拖动。此前只有录制条被排除，其余隐藏界面的命中区
@@ -6039,7 +6003,7 @@ export struct WindowNativeNode {
         return true
       }
     }
-    if (isObjectDetailCardPoint(x, y, this.objectDetailStore.isObjectDetailCardRendered(this.infoWindowStore.infoWinVisible), this.detailCardX(), this.detailCardY(), this.detailCardWidth(), this.detailCardHeight()) || this.isObjectActionBarPoint(x, y)) {
+    if (isObjectDetailCardPoint(x, y, this.objectDetailStore.isObjectDetailCardRendered(this.infoWindowStore.infoWinVisible), this.detailCardX(), this.detailCardY(), this.detailCardWidth(), this.detailCardHeight())) {
       return true
     }
     if (this.isExpandedLayout) {
@@ -7162,29 +7126,6 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
     return base + this.clampedObjectCardOffsetY(base, tabletInspectorHeight(this.skyHeight, this.EDGE_MARGIN))
   }
 
-  private showObjectActionBar(): boolean {
-    return false
-  }
-
-  private objectActionBarX(): number {
-    if (useExpandedDetailSummary()) { return this.expandedDetailSummaryX() }
-    if (isPhoneDetailPeek()) { return this.compactObjectPeekX() }
-    return this.bottomCardX()
-  }
-
-  private objectActionBarWidth(): number {
-    if (useExpandedDetailSummary()) { return expandedDetailSummaryWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN) }
-    if (isPhoneDetailPeek()) { return this.compactObjectPeekWidth() }
-    return this.bottomCardWidth()
-  }
-
-  private isObjectActionBarPoint(x: number, y: number): boolean {
-    if (!this.showObjectActionBar()) { return false }
-    const left = this.objectActionBarX()
-    const top = objectActionBarY(this.bottomCardY(), this.expandedDetailSummaryY(), this.compactObjectPeekY(), this.hoverBottomCardY(), this.isFoldHoverLayout)
-    return x >= left - 8 && x <= left + this.objectActionBarWidth() + 8 && y >= top - 8 && y <= top + 42
-  }
-
   private isExpandedDetailSummaryPoint(x: number, y: number): boolean {
     if (!useExpandedDetailSummary() || !canShowExpandedDetailSummary(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)) { return false }
     const sx = this.expandedDetailSummaryX()
@@ -7876,10 +7817,10 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         onSearchLocations: (query: string) => { this.locationStore.searchLocations(query) },
         onPickSearchItem: (item: LocSearchItem) => { this.locationStore.selectSearchLocation(item) },
         onApply: () => { this.locationCtl().applyPickerLocation() },
-        onSelectContinent: (c: string) => { this.selectContinent(c) },
-        onSelectCountry: (c: string) => { this.selectCountry(c) },
-        onSelectRegion: (r: string) => { this.selectRegion(r) },
-        onSelectCity: (c: string) => { this.selectCityByName(c) },
+        onSelectContinent: (c: string) => { this.locationCtl().selectContinent(c) },
+        onSelectCountry: (c: string) => { this.locationCtl().selectCountry(c) },
+        onSelectRegion: (r: string) => { this.locationCtl().selectRegion(r) },
+        onSelectCity: (c: string) => { this.locationCtl().selectCityByName(c) },
         onSaveCurrent: () => { this.locationStore.saveCurrentLocation() },
         onApplyLocation: (name: string, lat: number, lon: number, alt: number, planet: string) => { this.locationCtl().setLocation(name, lat, lon, alt, planet) },
         onDeleteLocation: (name: string) => { this.locationStore.deleteSavedLocation(name) },
