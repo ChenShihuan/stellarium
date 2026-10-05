@@ -61,6 +61,11 @@ export interface MediaPort {
   // 选择单个文档并复制到 <filesDir>/<dirName>，返回落盘路径；用户取消时 cancelled=true。
   // 后缀过滤 / 单文件 / 文件名清洗逐字对应宿主 importNebulaTextureFile 的 picker + fileIo 段。
   pickDocumentToDir(dirName: string, fileSuffixFilters: string[], fallbackFileName: string): Promise<MediaImportResult>
+  // 选择单个文档并复制到 <filesDir>/<dirName>，文件名由 buildFileName 基于清洗后的源文件名生成
+  //（源名清洗 `[^A-Za-z0-9._-]` → `_`，空白回退由 buildFileName 自行处理）；用户取消时 cancelled=true。
+  // 逐字对应宿主 importSkyCultureMakerArtworkFile / importSkyCultureMakerFile 的
+  // picker + fileIo.mkdirSync/copy 段（D3）。
+  pickDocumentToDirNamed(dirName: string, fileSuffixFilters: string[], buildFileName: (sourceName: string) => string): Promise<MediaImportResult>
   // 选择单个 .ssc 脚本并复制到 <filesDir>/stellarium_userdir/scripts，返回落盘路径；用户取消时 cancelled=true。
   // 后缀过滤（'Stellarium 脚本|.ssc'）/ 单文件 / 名称清洗（scriptImportFileName 语义）/ 同名碰撞改名逐字
   // 对应原宿主 importScriptFile 的 picker + fileIo 段（D10）。

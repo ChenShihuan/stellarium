@@ -1614,3 +1614,30 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **真机（192.168.50.108:36717）**：`Smoke: PASS`。D4：时间面板 chips 点按实时刷新（快进→2x / 实时→1x / 停止→已暂停），面板时钟 125ms 轮询在跑（21:08:17→21:08:33）。D17：搜索 M4 → 详情卡「离线深空资料图像」→ 打开全屏预览，hilog `[detail-media-preview] open/image loaded/close`；D10：「导入脚本」唤起系统 `DocumentViewPicker`（`HostMediaPort.importScriptDocument`）并取消存活；`pidof` 全程存活、无 jscrash；测试后时间恢复「实时 · 1x」。
 
 **未走查（待真机人工）**：脚本控制条拖动/回放速率/录制 UI 开关（需先进入录制会话，入口深于 3 步）；对象媒体预览「重试」（需解码失败态）；手动时间应用 / 日期选择器 / 时间设置写回（会改持久化设置）。
+
+
+#### 15.12.10 D 轨道 D3 完成结论与 D 轨道收尾（2026-10-05）
+
+> **背景**：D17/D10/D4 之后，STATE-REVIEW §10.6 队列仅剩末位 **D3（SkyCulture 行为，最大簇，估 ~1,126 行）**。
+> 按 §15.6-3，`loadSkyCultureDetails` 永久保留宿主；本片把「选择/标签/视觉」「Art 预览」「Maker」三子域拆为
+> 两个控制器，全部行为逐字下沉。
+
+**新增文件**
+
+- `capability/SkyCultureController.ets`（700 行；38 行为法 + 12 私有字段；注入 `CommandPort` + `MediaPort` + `SkyCultureViewStore` + `SkyCultureSettingsStore` + `SkyCultureHostHooks extends BehaviorHostHooks`；时间跟随 500ms 轮询与 Art 48ms/32ms 渐进定时器自持）。
+- `capability/SkyCultureMakerController.ets`（507 行；24 行为法 + 6 私有字段；注入 `CommandPort` + `MediaPort` + `SkyCultureMakerStore` + `SkyCultureMakerHostHooks`；650ms 自动保存去抖自持 + `flushSkyCultureMakerSave()` 收口）。
+
+**修改**
+
+- `bridge/MediaPort.ets` **+6**：新增 `pickDocumentToDirNamed(dirName, fileSuffixFilters, buildFileName)`（Maker 美术图/文化包导入的 picker + fileIo 段逐字上移；宿主 `HostMediaPort` 具名实现）。
+- 宿主 `MainWindowNativeNode.ets`：删 62 法 + 16 字段声明，增 3 私有方法（`correctSkyCultureRowScroll` / `skyCultureCtl()` / `skyCultureMakerCtl()`）与全部调用点改指向；`SkyCultureMakerStore` 两 hook 与 `LayerHostHooks.syncSkyCultureTimeFollowTimer` 改指控制器；CLI `setSkyCulture` 分支与 `aboutToDisappear` maker 定时器收口改指控制器。
+
+**D3 三子域判定（以工作区实测为准）**：① 选择/标签/视觉 22 法 + 时间跟随 3 法 → `SkyCultureController`，薄桥 + store 写，逐字等价；`skyCultureColorOptions` / `skyCultureActiveColorTarget`（§15.6-2 A2 登记宿主控制器）经 hook 回读。② Art 预览 14 法 → `SkyCultureController`；渐进字段按 §15.7 规则 2 判定：`skyCultureArtStates` / `skyCultureArtThumbnailPixelMaps` 属 §2.7.1 L 高频渐进且被 LayersPanel 以宿主 `@State→@Prop` 消费，**字段本体留宿主、经 hooks get/set**（§15.6-1 与 §15.7-2 双重约束）；代际/定时器/pending 等非可观测字段留控制器；`drawSkyCultureTerritoryMap`（持宿主 `CanvasRenderingContext2D` + 画布尺寸，UI 类型）与 `skyCultureMapRenderWidth/Height` 留宿主（§15.7 规则 1）。③ Maker 24 法 → `SkyCultureMakerController`，完整 CRUD + 画布触摸 + 650ms 自动保存定时器自持。**`loadSkyCultureDetails` 回注确认**：本体留宿主（§15.6-3 永久登记），控制器经 `hooks.loadSkyCultureDetails()` 调用；共享序号 `skyCultureDetailsRequestId` 留宿主（§14.8 规则 3），控制器经 `hooks.skyCultureDetailsRequestId()` / `nextSkyCultureDetailsRequestId()` 读写。
+
+**度量**：宿主 **9,513 → 8,646 行（−867）**、`private` 方法 **336 → 277（−59）**、`@State private` **131 不变**；新增 2 控制器文件、扩展 1 端口。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 4 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-skyculture-refresh` 5/5 / `test-ohos-skyculture-text` 4/4 全绿；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。
+
+**真机（192.168.50.108:36717）**：`Smoke: PASS`。`setSkyCulture tibetan` → `[sky-culture-anchor] id=tibetan delta=-13.3 offset=1878.4` + `[sky-culture-art] thumbnail ready ...` ×24 + `released pixel map kind=sky-culture-art-thumbnail`；`openUiPanel skyCultureMaker` → `新增星座` 渲染 `1 个星座` → `saveSkyCultureMakerDraft` 收到含 `constellation_1` 的草稿 → `校验草稿` → `validateSkyCultureMakerDraft`；`pidof` 全程 33488 存活、无 jscrash；测试后 `setSkyCulture modern` + `resetSkyCultureMakerDraft` 复原。**未走查（待真机人工）**：Art 大图预览叠层开合；领地地图 Canvas 重绘；标签模式 picker 选项弹层与收起动画本体；Maker 美术图导入 / 导出 picker。
+
+**D 轨道收尾结论（17 簇全清）**：D 轨道基线 12,321 行 / 501 `private`；本队列依次完成 D0（`capability/ControllerHooks` 前置）→ D1/D2/D11/D12/D16 → D9/D15 → D5/D6/D13 → D7/D14 → D17/D10/D4 → D8（位置域 `LocationController`，§15.12.3）→ **D3（本片，末位最大簇）**。**17/17 簇全部落地**：迁出为控制器/并入既有 store，`loadSkyCultureDetails` 按 §15.6-3 永久登记、`SelectionService` 族按 §15.6-6 永久登记。宿主降至 **8,646 行**（自 D 轨道基线 **12,321 → 8,646，−3,675 行**，−29.8%）。
