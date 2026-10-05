@@ -68,12 +68,14 @@ test('fallback defaults on, but photo and 3D scenes suppress it', () => {
 });
 
 test('UI, semantic actions and snapshot properties share the same switch', () => {
+  const switchRow = read('harmonyos/ets-source/panels/layers/LayerSwitchRow.ets');
   assert.match(read('src/core/modules/LandscapeMgr.hpp'), /Q_PROPERTY\(bool mistHorizonEnabled/);
   assert.match(manager, /addAction\("actionShow_MistHorizon"/);
-  assert.match(page, /this.mistHorizon = result.actionShow_MistHorizon === true/);
-  assert.match(page, /isOn: actionId === 'actionShow_Ground' \? this.ground/);
-  assert.match(page, /actionId === 'actionShow_MistHorizon' && value === this.mistHorizon/);
-  assert.match(page, /switchRow\(I18n.t\('mist_horizon'\), this.mistHorizon, 'actionShow_MistHorizon'\)/);
+  // Phase 3ak：mistHorizon 已迁入 LayerStore；开关行的同值短路从宿主 @Builder switchRow 的
+  // actionId 分支搬到了 LayerSwitchRow 组件，调用点直接传解析后的布尔值。
+  assert.match(page, /this\.layerStore\.mistHorizon = result\.actionShow_MistHorizon === true/);
+  assert.match(switchRow, /if \(value === this\.isOn\) return/);
+  assert.match(page, /LayerSwitchRow\(\{ label: I18n\.t\('mist_horizon'\), isOn: this\.layerStore\.mistHorizon, onToggle: \(value: boolean\) => \{ this\.applyLayerSwitch\('actionShow_MistHorizon', '', value\) \} \}\)/);
   assert.match(read('harmonyos/ets-source/pages/AstronomyGuide.ts'), /actionShow_MistHorizon\|0/);
   assert.match(read('src/StelMainView.cpp'), /result\["mistHorizonOpacity"\]/);
   assert.match(read('src/StelMainView.cpp'), /"actionShow_Ground",\s*"actionShow_MistHorizon"/);
