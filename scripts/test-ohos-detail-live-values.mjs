@@ -45,10 +45,12 @@ test('structured row resolves replaced fields and handles fields that disappear'
 });
 
 test('live detail polling does not wait for optional satellite pass predictions', () => {
-  const poll = source.match(/private startDetailAutoRefresh\(\): void \{([\s\S]*?)\n  \}/)[1];
+  // D1：startDetailAutoRefresh 已下沉 capability/DetailConnectorController.ets（宿主状态经 hooks 回读）。
+  const connectorCtl = readFileSync(new URL('../harmonyos/ets-source/capability/DetailConnectorController.ets', import.meta.url), 'utf8');
+  const poll = connectorCtl.match(/startDetailAutoRefresh\(\): void \{([\s\S]*?)\n  \}/)[1];
   assert.doesNotMatch(poll, /selectedSatellitePassesLoaded|getSatellitePasses/);
-  assert.match(poll, /this\.skyDragging/);
-  assert.match(poll, /this\.refreshSelectedObject\(\)/);
+  assert.match(poll, /this\.hooks\.skyDragging\(\)/);
+  assert.match(poll, /this\.hooks\.refreshSelectedObject\(\)/);
 });
 
 test('live merging preserves row order and static records while removing expired values', () => {

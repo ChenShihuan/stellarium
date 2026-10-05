@@ -1429,3 +1429,28 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 - 逐字等价（§15.7 规则 5）：`setLocation` 为高频动作路径，仅「`this.<宿主字段>`→store/hooks/port」，
   比较边界/分支/三步回退（`setLocation`→`setLocationCoords`→`setLocationByName`）未改。
 
+
+#### 15.12.4 D 轨道 D0/D1 完成结论与度量（2026-10-05）
+
+> **背景**：M3-3 后进入 STATE-REVIEW §10 的 **D 轨道**（行为控制器下沉，17 簇）。首切两片：**D0**（hook 基础设施，
+> 解开 §10.3 的 `refreshState` / 面板路由阻塞）与 **D1**（§10.2「详情连接线/刷新定时器」，最干净首切）。
+
+**D0：行为控制器 hook 基础设施**
+
+- 新增 `capability/ControllerHooks.ets`：纯接口 `BehaviorHostHooks { refreshState() / flashHint(text: ResourceStr) / panelChange(panel, visible) }`，不 import NAPI/UI（§15.7 规则 1）；后续 D 轨道控制器接口 `extends BehaviorHostHooks`。
+- 宿主新增具名 `behaviorHooks(): BehaviorHostHooks`：`refreshState → this.refreshState()`；`flashHint → this.flashHint`；`panelChange → this.activePanel = panel; this.panelVisible = visible; this.syncDockClockTimer()`（与 §10.3 第 2 条逐字一致）。
+- 本段不迁任何簇，构建/契约绿。
+
+**D1：详情连接线 / 详情刷新定时器 → `capability/DetailConnectorController.ets`**
+
+- 新增 `capability/DetailConnectorController.ets`（353 行；`DetailConnectorHostHooks extends BehaviorHostHooks`）。逐字下沉 12 法：`startDetailAutoRefresh` / `stopDetailAutoRefresh` / `pauseDetailRefreshForSkyDrag` / `resumeDetailRefreshAfterSkyDrag` / `startObjectDetailConnectorRefresh` / `stopObjectDetailConnectorRefresh` / `armObjectDetailConnectorTransition` / `refreshObjectDetailConnector` / `clearObjectDetailConnector` / `rayRectIntersection` / `segmentRectEntryFraction` / `objectDetailCardY`。
+- **迁出私有字段（9）**：`detailTimer` / `detailRefreshing` / `detailRefreshGuard` / `objectDetailConnectorTimer` / `objectDetailConnectorAnimationTimer` / `objectDetailConnectorLastPanelVisible` / `objectDetailConnectorLastActivePanel` / `objectDetailConnectorLastClippedByUi` / `objectCardPlacementPending`。定时器自持 `start()/stop()`；宿主 `aboutToDisappear` 与清除选中处改调 `stop()`（§15.7 规则 3）。
+- **登记保留（实测引用点全在宿主非 D1 方法）**：`objectCardDragging` / `objectCardDragStartX/Y/OffsetX/OffsetY`（唯一引用点 `handleObjectInspectorDragTouch`）、`objectDetailTabTransitionId`（唯一引用点 `selectObjectDetailTab`）——§10.2 字段清单含它们，但「以实测引用点为准」，不在 D1 方法集内故不迁。
+- **@State 留宿主、经 hooks 逐帧 get/set（§15.7 规则 2）**：`objectDetailConnectorX/Y/Length/Angle/EndX/EndY/TargetX/TargetY/TargetOnScreen` 9 个 + `objectDetailConnectorAnimateGeometry`；`objectDetailContentOpacity/TranslateX` 未被 D1 引用、原样留宿主。
+- **保留宿主、经 hooks 回读**：`objectDetailConnectorObstacles`（A2-5 登记宿主控制器）、`refreshSelectedObject`、`scheduleSkyTextureStatusCheck`、几何派生 `detailCardX/Y/Width/Height`、`bottomCardY`/`hoverBottomCardY`、`skyWidth`/`skyHeight`、`isFoldHoverLayout`、`panelVisible`/`activePanel`/`skyDragging`、`connectorVisible()`。
+- **端口说明**：D1 唯一桥调用 `getGyroGuidePosition` 的回包需强转 `GyroGuideProjection` 而控制器禁 `as`，故未注入 `CommandPort`，按 `SensorController.guideProjection` 先例以 hook `gyroGuideProjection()` 由宿主强转后回注（§15.7 规则 4）。
+- **逐字等价（§15.7 规则 5）**：`refreshObjectDetailConnector` 仅改取值来源（`this.<宿主字段>` → `this.hooks.*` / 控制器私有字段），比较边界与分支结构未改；宿主保留方法 `refreshSelectedObject` 仅把 `detailRefreshing`/`detailRefreshGuard` 的读写改为控制器 API——二者所有权随 D1 移交控制器（§15.6-6 相应项随之修订，即 M3-3 记录的后续路径）。
+- **度量**：宿主 **12,111 → 11,906 行（−205）**、`private` 方法 **502 → 492（−10）**、`@State private` **132 不变**；新增 2 文件。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 3 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-detail-live-values.mjs` 7/7 全绿（第 4 用例改读控制器 + hooks 断言）；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。
+- **真机（192.168.50.108:36717）**：`Smoke: PASS`；`verify_ui` 走通「搜索 → 选中 Sirius → 详情卡 → 拖动星图」，`pidof` 存活、hilog 无 jscrash。连接线本体未目视确认（天狼在地平线下 −82°，按设计隐藏）；未走查：地平线上目标的连接线跟随与遮挡过渡动画（待真机人工）。
+
