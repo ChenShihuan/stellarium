@@ -1,3 +1,36 @@
+## [2026-10-04] DevEco Code - 重构：§14 B3-5（B3 收尾：skyCultureDetails 保持登记 + scenery3d/catalogHealth 下沉）
+
+- 依据 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.6（B3 表最后 3 行）/ §14.7 / §14.8（规则 2「store 不得 import NAPI/UI」、规则 3「请求序号随加载器搬入 store、禁双序号」、规则 5「禁止双写」、规则 7「声明与调用同片」）与 §13.1/§13.2/§13.3；复用 §14.1 的 `bridge/CommandPort.ets` 与宿主同一 `HostCommandPort` 实例（AB-0 / B1 / B2 / B3-1…B3-4 先例）。**B3 轨道收尾片。**
+- 开工断言：`git log -1` = `56d2f10c5d`（B3-4）；`git status --porcelain` 已跟踪文件干净。
+- **判定口径**：逐加载器做读写点 / 桥 / 助手 / 序号 / 定时器 / 路由 / `publish*` 普查 → (a) 可下沉（登记字段经 hooks setter 回注、宿主保留字段本身）或 (b) 与登记字段 / 宿主生命周期**深度交织**则保持登记（永久保留，写明理由与依赖清单）。**结果：2 下沉 + 1 保持登记。**
+
+- **逐项普查与处置**：
+  1. **`loadSkyCultureDetails`(69) → (b) 保持登记（永久保留）**。理由（依赖清单）：① 请求序号 `skyCultureDetailsRequestId` 与**其它宿主方法共享**（`selectSkyCulture` 预增、`armSkyCultureAnchor`/`clearSkyCultureAnchor` 捕获锚点、`handleSkyCultureRowArea` 比对、美术图解码管线 8 处比对、CLI 事件 `invalidateSkyCultureDetails`）—— §14.8 规则 3 要求序号随加载器搬入 store 且禁双序号，搬走须一并重写锚点系统 / `selectSkyCulture` / 整条美术解码管线，远超本片边界；② 调 5 个宿主助手 `clearSkyCultureAnchor`/`armSkyCultureAnchor`/`clearSkyCultureArtThumbnails`/`closeSkyCultureArtPreview`/`prepareSkyCultureArtResources`；③ 跨 store 方法调用 5 处（`skyCultureSettingsStore` 的 `skyCultureDisplayName`/`loadSkyCultureConstellationSelectionFlags`/`loadSkyCultureVisualSettings`/`setSkyCultureTimeYear`/`setSkyCultureTerritoryMapYear`）；④ 写 §2.7.1 登记的「高频逐帧」字段 `skyCultureArtStates`（渐进分块 / 防抖写入，宿主保留）。现状：B2R-3 起 store 已经由 `SkyCultureViewHostHooks.loadSkyCultureDetails()`/`invalidateSkyCultureDetails()` 调用宿主加载器，**本片不改代码**。
+  2. **`loadScenery3d`(12) → (a) 下沉 `SceneryStore`**。普查：桥 `getScenery3dList`（`callNativeWhenReady` 默认 200ms×60、无 onFailure）；写 4 个本 store 字段（`scenery3dLoading`/`scenery3dItems`/`scenery3dLoadingId`/`scenery3dEnabled`）+ §2.7.1 登记的「引擎自用」字段 `scenery3dCurrentId`（**全工程只写不读**，宿主保留、经 `SceneryHostHooks.setScenery3dCurrentId` 回注）；无序号 / 无定时器 / 无他 store / 无 `publish*` / 无路由。依赖清单：`SceneryHostHooks(1)` + `CommandPort`。调用点 3 处（面板开合 `ensurePluginLoaded('Scenery3d', …)` + `setScenery3dScene` + `setScenery3dEnabled`）改 `this.sceneryStore.loadScenery3d()`。
+  3. **`loadCatalogHealth`(9) → (a) 下沉 `CatalogStore`**。普查：桥 `getCatalogHealth`；写 §2.7.1 登记的「跨域共用」字段 `catalogHealthLoaded`/`catalogManifestPresent`（宿主保留，供 `SatellitesPanel`/`SettingsQuickLegacyPanel` 经宿主闭包 `catalogHealthText`/`catalogHealthColor` 读取、**本加载器为唯一写点**）；写本 store 的 `starCatalogHealth`；写他域 `satelliteStore.satelliteCatalogHealth`（经 setter 回注，store 不持他 store）。无序号 / 无定时器 / 无 `publish*`。依赖清单：`CatalogHostHooks` 新增 3 法（`setCatalogHealthLoaded`/`setCatalogManifestPresent`/`setSatelliteCatalogHealth`）。调用点 2 处（`panel === 'settings'` / `panel === 'satellites'`）改 `this.catalogStore.loadCatalogHealth()`。
+
+- **手法**：函数体**逐字**搬入；差异仅 `callNativeWhenReady`→`port.requestWhenReady`、`this.<store>.<f>`→`this.<f>`、`this.<宿主登记字段>`→`hooks.set*`、`this.<他域 store>.<f>`→`hooks.set*`；开头 `ensurePort()` 守卫。`SceneryStore` 新建 `attachPort/attachHooks/ensurePort`（此前无桥基础设施，为本片首次接入 `HostCommandPort`）；`CatalogStore` 复用既有 `attachPort/attachHooks`。宿主删 2 个方法 + 改调用点 + 补 2 处 `attach*`；**禁双写**（宿主零同名方法副本）。
+
+- **新增 hooks**：`SceneryHostHooks { setScenery3dCurrentId(id: string): void }`；`CatalogHostHooks` 由 7 法扩到 10 法（+`setCatalogHealthLoaded` / `setCatalogManifestPresent` / `setSatelliteCatalogHealth`）。两 store 均**未 import NAPI/UI**。
+
+- **body diff 摘要**：`SceneryStore.ets` **18 → 66**（+48：`SceneryHostHooks` + 桥 3 法 + `loadScenery3d` + 注释）；`CatalogStore.ets` **144 → 172**（+28：hooks 3 法 + `loadCatalogHealth` + 注释）；宿主 `MainWindowNativeNode.ets` **14681 → 14673**（−8）：删 2 个 `private load*`、改 5 处调用点、补 2 处 `attach*`、删 2 个无用类型 import（`CatalogHealthResponse`/`Scenery3dResponse`）。
+  - **残留复核**：宿主 `grep private (loadCatalogHealth|loadScenery3d)` = **0**；宿主 `grep this.(loadCatalogHealth|loadScenery3d)\(` = **0**；两 store 内 `this.(sceneryStore|catalogStore|satelliteStore).` = **0**（仅注释）。
+  - **双写复核**：`scenery3dCurrentId` 唯一写点 = 宿主 `setScenery3dCurrentId` 闭包；`catalogHealthLoaded`/`catalogManifestPresent` 唯一写点 = 宿主两 setter 闭包；`satelliteCatalogHealth` 唯一写点 = 宿主 `setSatelliteCatalogHealth` 闭包（§14.8 规则 5）。
+  - **宿主 `private load*` 前后**：按 `private load[A-Za-z0-9_]*(` 全量口径 **5 → 3**（−2：本片两加载器；剩余 `loadSkyCultureDetails`（B3 保持登记）、`loadFov`/`loadPlanetPositions`（非 A/B 目标））。
+
+- **B3 总账（收尾）**：§2.13 的 B3 清单 **11** + 后续转入（B1 4：`loadAngleMeasure`/`loadNavStars`/`loadMeteorShowers`/`loadConstellationNavigation` + B2 1：`loadTelescopeControlStatus`）= **16** → **已下沉 15** + **保持登记（永久保留）1**（`loadSkyCultureDetails`）+ **未处理 0**。
+  - 已下沉 15：B3-1（4）`loadAngleMeasure`→ToolsStore、`loadNavStars`→NavStarsStore、`loadMeteorShowers`→MeteorStore、`loadConstellationNavigation`→SearchStore（+语言代际→LanguageStore）；B3-2（3）`loadMoonPhases`/`loadAstroCalcContext`→AstroStore、`loadPolarScopeData`→PolarScopeStore；B3-3（3）`loadCategoryObjects`/`loadMoreCategoryObjects`/`loadSearchHistoryFromStorage`→SearchStore；B3-4（3）`loadSatellites`→SatelliteStore、`loadVideoRecordingState`→ScriptStore、`loadTelescopeControlStatus`→TelescopeStore；B3-5（2）`loadScenery3d`→SceneryStore、`loadCatalogHealth`→CatalogStore。
+  - 保持登记 1：`loadSkyCultureDetails`（理由见上；§2.7.1「高频逐帧」+ 共享序号 + 锚点/美术管线交织）。
+  - **B3 轨道至此清空。**
+
+- **全队列 `load*` 剩余数**：宿主 `private load*` = **3**（`loadSkyCultureDetails` 登记项 + `loadFov`/`loadPlanetPositions` 非 A/B 目标）。§14 队列所有可下沉 `load*` 已结清（B1/B2/B3 全覆盖）。
+
+- **验证证据**：`node scripts/check-ohos-refactor-slice.mjs` 通过；`arkts_check`（MainWindowNativeNode / SceneryStore / CatalogStore）无错；**BUILD SUCCESSFUL in 39s**（30 executed / 3 up-to-date，signed HAP 708.7 MB）；`check-ohos-ui-contract.mjs` = 33 panels / 24 static ids / 17 dynamic prefixes / 44 id anchors / over 214 files，**intact**；受影响 `test-ohos-skyculture-refresh` **5/5**、`-skyculture-text` **4/4**、`-satellite-panel` **7/7**、`-plugin-panel-state` **4/4**、`-search-browser` **3/3**；全量 `*ohos*.mjs` 扫描仅 §13.6 的 **7 个环境类**失败（5 个 `-pad`、`mist-performance`、`verify-ohos-location-search`、`verify-ohos-search`）；扫描重写的 `RESOURCE-COVERAGE-AUDIT-2026-08-24.md` 已 `git checkout --` 还原。
+  - **模拟器冒烟（真机离线；`127.0.0.1:5555`，UI-only 无引擎）**：install → `aa start -a QAbility -b com.cnchensh.stellarium` → `pidof` = **12658 全程存活**。Dock「更多功能」→「天体数据与扩展」→①「卫星」打开卫星面板（`loadCatalogHealth` 路径，渲染「卫星目录状态检查中」）；②「3D地景」打开面板并点按启用开关（`loadScenery3d` + `setScenery3dEnabled` 路径）；③ Dock「图层」→「文化」标签（`loadSkyCultureDetails`/`loadSkyCultureList` 路径，渲染「文化图层」）；每步 `pidof` 稳定 12658。
+  - **模拟器无法覆盖（待真机）**：`getCatalogHealth`/`getScenery3dList`/`getSkyCultureDetails` 桥回包的真实写入与渲染（无引擎，`catalogHealthText` 停在「检查中」、`scenery3dItems` 为空）；`setScenery3dScene`/`setScenery3dEnabled` 的桥确认与 `loadScenery3d` 回环；星空文化锚点滚动与美术图渐进解码。以上需真机以 hilog / 坐标读数实证。
+  - **未改持久化设置**（无引擎，`setScenery3dEnabled` 桥失败即回退），无需恢复。
+
+- **本片踩坑**：`write` 工具新建 `SceneryStore.ets` 落盘为 **LF**（仓库为 CRLF，`git` 报警 `LF will be replaced by CRLF`）——新建文件后必须用 `[System.IO.File]::ReadAllText` + `(?<!`r)`n`→`r`n` 归一为 CRLF 再核对 `bareLF=0`。
 ## [2026-10-04] DevEco Code - 重构：§14 B3-4 定时器族（satellites/videoRecordingState/telescopeControlStatus）
 
 - 依据 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.6（B3 表「定时器族」三行）/ §14.7 / §14.8（规则 2「store 不得 import NAPI/UI」、规则 3「请求序号随加载器搬入 store」、规则 5「禁止双写」、规则 7「声明与调用同片」）；复用 §14.1 的 `bridge/CommandPort.ets` 与宿主同一 `HostCommandPort` 实例（AB-0 / B1 / B2 / B3-1 / B3-2 / B3-3 先例）。**单提交完成。**
