@@ -1,3 +1,15 @@
+## [2026-10-04] DevEco Code - 修复：观测列表每行"居中"无响应（只选不居中）
+
+- **现象**：观测工作区 · 观测列表（今晚可观测目标）里，点任意一行（如"仙女座星系"）的 **居中**，视野不动、无任何反馈；`添加到列表` 正常。
+- **取证（日志 + 代码双向）**：
+  - 该按钮走 `jumpToWutTarget`（`MainWindowNativeNode.ets:6656`），原实现只有两步：`setJD(target.jd)` → **`callNative('searchObject', name)`**（fire-and-forget，拿不到响应）→ `refreshState()`。
+  - **引擎的 `searchObject` 只做选中、不移动视野**：其 handler 内不存在 `moveToObject` / `moveToSelected` / `setFlagTracking`（对 handler 起点的 120 行范围扫描为空）。
+  - App 的**规范居中路径**是 `applySelectedObject(result, false, 'center')`（搜索流 `:11464`），它在 `:12503` 有专门的 `placement === 'center'` 分支执行导航；`jumpToWutTarget` 从未调用它。
+  - **真机日志实证**：点"居中"（连点三次）时 `setJD "2461318.1686721565"` 与 `searchObject "Andromeda Galaxy"` 都经 `command received` → `command on Qt thread` 正常执行，但 **`moveToSelected*` / `setTracking` 命中 0 次** ⇒ 时间跳了、目标选中了、**视野没动**，故表现为"按钮无响应"。
+- **修复（`harmonyos/ets-source/pages/MainWindowNativeNode.ets`，+12/−4）**：`jumpToWutTarget` 改为与全局搜索完全同路径 —— 把 `callNative('searchObject', …)` 换成 `callInteractive('searchObject', targetName, r => { if (r.found !== true) return; this.applySelectedObject(r, false, 'center') })`；`setJD` 失败即提前返回。这样居中的安全区摆放、陀螺仪/布局避让等行为与其他入口完全一致。
+- **验证**：`arkts_check` 通过；UI 契约 `intact`（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 184 文件）；**BUILD SUCCESSFUL** 并 `install -r` 冷启；**用户界面实测确认居中生效**。
+- **备注**：观测列表行的"居中/添加到列表"仍无对应的语义 CLI 命令（沿用 `getWutTargets` 驱动列表、坐标点击行内按钮验收），与上一笔记录的"缺失命令"同类，待后续补 `setObservantWutCategory` 之外的行内动作命令。
+
 ## [2026-10-04] DevEco Code - 修复：观测列表切回"梅西耶"后无限循环（WUT 作业被旧轮询反复取消）+ 恒星按星等截断
 
 - **现象**：观测工作区 · 观测列表（今晚可观测目标，标签 行星/恒星/梅西耶）。首次选**梅西耶**很快出结果；点过一次**恒星**后（恒星量大），再切回**梅西耶**就**不停转圈、始终不出结果**。
