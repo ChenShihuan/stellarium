@@ -33,6 +33,8 @@ import { DeepSkyWarmupStatus, getDeepSkyResourceWarmupStatus, isStellariumDetail
 import { UI_RADIUS_CONTROL, UI_RADIUS_PANEL, UI_RADIUS_SHEET, UI_RADIUS_PILL, UI_OPTION_ANIMATION_MS } from '../common/ui/UiTokens'
 import { getIcon } from '../common/ui/ShellIcons'
 import { BridgeClient } from '../bridge/BridgeClient'
+import { TimeStore } from '../state/TimeStore'
+import { TimeSpeedChips } from '../panels/time/TimeSpeedChips'
 
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
@@ -286,7 +288,7 @@ export struct WindowNativeNode {
   /** Dock 时钟的独立轻量刷新定时器（1s），不并入时间面板 125ms 高频刷新。 */
   private dockClockTimer: number = 0
   /** Current speed-step index into TIME_SPEED_STEPS. */
-  @State private timeSpeedIndex: number = 7  // 7=1x realtime (default, new index)
+  @State private timeStore: TimeStore = new TimeStore()
   // 原生命令在下一渲染帧才生效。此窗口内忽略轮询到的旧速率，避免按钮
   // 刚显示“-2x”又被上一帧的“-10x”短暂盖回去而产生闪烁。
   private pendingTimeRate: number = Number.NaN
@@ -11770,7 +11772,7 @@ private loadPlanetPositions(): void {
     // 映射到有效范围（含负索引倒带）
     const idx: number = Math.max(0, Math.min(len - 1, index))
     const rate: number = this.SPEED_STEPS[idx]
-    this.timeSpeedIndex = idx
+    this.timeStore.timeSpeedIndex = idx
     this.pendingTimeRate = rate
     this.pendingTimeRateUntilMs = Date.now() + 500
     this.setTimeRate(rate)
@@ -11799,28 +11801,28 @@ private loadPlanetPositions(): void {
         nearestIndex = i
       }
     }
-    this.timeSpeedIndex = nearestIndex
+    this.timeStore.timeSpeedIndex = nearestIndex
   }
 
   /** Speed up one step. */
   private speedUp(): void {
-    this.applySpeedStep(this.timeSpeedIndex + 1)
+    this.applySpeedStep(this.timeStore.timeSpeedIndex + 1)
   }
 
   /** Slow down one step (can go into reverse). */
   private speedDown(): void {
-    this.applySpeedStep(this.timeSpeedIndex - 1)
+    this.applySpeedStep(this.timeStore.timeSpeedIndex - 1)
   }
 
   /** Toggle pause: remember current non-zero speed, restore on unpause. */
   private togglePause(): void {
-    if (this.timeSpeedIndex === 6) { // SPEED_IDX_STOP
+    if (this.timeStore.timeSpeedIndex === 6) { // SPEED_IDX_STOP
       // Resume: restore last speed or default to 1x
       const resumeIdx = this._lastNonZeroSpeedIndex > 0 && this._lastNonZeroSpeedIndex !== 6 ? this._lastNonZeroSpeedIndex : 7
       this.applySpeedStep(resumeIdx)
     } else {
       // Pause: remember current speed
-      this._lastNonZeroSpeedIndex = this.timeSpeedIndex
+      this._lastNonZeroSpeedIndex = this.timeStore.timeSpeedIndex
       this.applySpeedStep(6) // SPEED_IDX_STOP
     }
   }
@@ -11883,7 +11885,7 @@ private loadPlanetPositions(): void {
     const targetJd = this.scrubberReferenceJd + this.scrubberPendingOffset / 86400.0
     // setTimeToJD 会把原生模拟速率设为 0，避免用户拖动时星图仍继续走时。
     this.callNativeFire('setTimeToJD', targetJd.toFixed(6))
-    this.timeSpeedIndex = WindowNativeNode.SPEED_IDX_STOP
+    this.timeStore.timeSpeedIndex = WindowNativeNode.SPEED_IDX_STOP
     this.pendingTimeRate = 0
     this.pendingTimeRateUntilMs = Date.now() + 500
     this.timeRateText = this.formatRate(0)
@@ -12093,7 +12095,7 @@ private loadPlanetPositions(): void {
   }
 
   private setTimeWheelStopped(): void {
-    this.timeSpeedIndex = WindowNativeNode.SPEED_IDX_STOP
+    this.timeStore.timeSpeedIndex = WindowNativeNode.SPEED_IDX_STOP
     this.pendingTimeRate = 0
     this.pendingTimeRateUntilMs = Date.now() + 500
     this.timeRateText = this.formatRate(0)
@@ -29491,35 +29493,11 @@ private loadPlanetPositions(): void {
   // 当前档位高亮，点击立即更新速度显示
   @Builder
   timeSpeedChips() {
-    Scroll() {
-      Row({ space: 5 }) {
-        // 倒带 — 单按钮循环升档：-1x → -2x → -10x → -1分/秒 → -1时/秒 → -10天/秒 → 回到-1x
-        // 倒带与减速都显示当前反向倍率，避免用户无法判断“减速”是否已生效。
-        this.speedChip('rewind',
-          this.timeSpeedIndex < 6 ? I18n.t('s0763_rewind') + ' ' + this.timeRateText : I18n.t('s0763_rewind'),
-          'ic_time_rewind.svg', this.timeSpeedIndex < 6)
-        // 停止/继续 — 停止后同一按钮变成继续，避免“停止”和播放状态混淆
-        this.speedChip('stop', this.timeSpeedIndex === 6 ? I18n.t('btn_resume') : I18n.t('s0761_stop'),
-          this.timeSpeedIndex === 6 ? 'ic_time_resume.svg' : 'ic_time_stop.svg', this.timeSpeedIndex === 6)
-        // 实时 — 回到当前时刻 + 1x
-        this.speedChip('realtime', I18n.t('s0764_realtime'), 'ic_time_realtime.svg', this.timeSpeedIndex === 7)
-        // 减速 — 每点降一档；降到1x再点=停止
-        this.speedChip('slower',
-          this.timeSpeedIndex < 6 ? I18n.t('s0759_slower') + ' ' + this.timeRateText : I18n.t('s0759_slower'),
-          'ic_time_slower.svg', false)
-        // 快进 — 单按钮循环升档：1x → 2x → 10x → 1分/秒 → 1时/秒 → 1天/秒 → 10天/秒 → 回到1x
-        // 激活时标签直接显示当前档位速度
-        this.speedChip('fast',
-          this.timeSpeedIndex > 7 ? I18n.t('s0765_fast') + ' ' + this.timeRateText : I18n.t('s0765_fast'),
-          'ic_time_fast.svg', this.timeSpeedIndex > 7)
-      }
-      .padding({ left: 2, right: 10 })
-    }
-      .width('100%')
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.Spring)
-      .margin({ top: 8 })
+    TimeSpeedChips({
+      store: this.timeStore,
+      rateText: this.timeRateText,
+      onChip: (id: string) => { this.handleChip(id) }
+    })
   }
 
   // ===== Sky Guide 风格：按字段选择的时间转轴 =====
@@ -29766,33 +29744,6 @@ private loadPlanetPositions(): void {
       .borderRadius(UI_RADIUS_PILL).onClick(() => { this.selectTimeWheelUnit('second') })
   }
 
-  @Builder
-  speedChip(id: string, label: string, icon: string | null, active: boolean) {
-    Row({ space: 4 }) {
-      if (icon) {
-        // 用 $r 引用 media 资源（$rawfile 读的是 rawfile/ 目录，不是 media/）
-        Image($r('app.media.' + icon.replace('.svg', '')))
-          .width(14)
-          .height(14)
-          .fillColor(active ? '#FFFFFF' : '#7FB3DC')
-      }
-      Text(label)
-        .fontSize(11.5)
-        .fontWeight(active ? FontWeight.Medium : FontWeight.Normal)
-        .fontColor(active ? '#FFFFFF' : '#B8D4EF')
-    }
-      .height(32)
-      // 内边距收紧：保证 倒带/停止/实时/减速/快进 五个按钮在 360vp 宽屏上一屏排下，
-      // 否则最右的「快进」会被挤出可视区，用户只能点到「减速」（曾导致误以为快进=暂停）
-      .padding({ left: 7, right: 7 })
-      .borderRadius(UI_RADIUS_PILL)
-      .backgroundColor(active ? 'rgba(79, 148, 211, 0.55)' : 'rgba(107, 163, 214, 0.15)')
-      .border({ width: active ? 1.2 : 0.6, color: active ? 'rgba(127, 179, 220, 0.7)' : 'rgba(127, 179, 220, 0.22)' })
-      .shadow(active ? { radius: 10, color: 'rgba(49, 120, 200, 0.25)', offsetX: 0, offsetY: 3 } : { radius: 8, color: 'rgba(0, 0, 0, 0.12)', offsetX: 0, offsetY: 4 })
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .animation({ duration: 180, curve: curves.springMotion(0.42, 0.86) })
-      .onClick(() => { this.handleChip(id) })
-  }
 
   @Builder
   cityChipsRow() {
@@ -29933,10 +29884,10 @@ private loadPlanetPositions(): void {
       this.refreshTimeNow()
     } else if (id === 'stop') {
       // 停止按钮是可逆状态：运行时停止，停止后恢复到停止前速度。
-      if (this.timeSpeedIndex === 6) {
+      if (this.timeStore.timeSpeedIndex === 6) {
         this.applySpeedStep(this._lastNonZeroSpeedIndex === 6 ? 7 : this._lastNonZeroSpeedIndex)
       } else {
-        this._lastNonZeroSpeedIndex = this.timeSpeedIndex
+        this._lastNonZeroSpeedIndex = this.timeStore.timeSpeedIndex
         this.applySpeedStep(6) // SPEED_IDX_STOP
       }
       this.refreshTimeNow()
@@ -29950,9 +29901,9 @@ private loadPlanetPositions(): void {
     } else if (id === 'rewind') {
       // 倒带：单按钮循环升档 -1x → -2x → -10x → -1分/秒 → -1时/秒 → -1天/秒 → 回到-1x
       let rewIdx = 5 // 默认从 -1x 起步（非倒带状态按下时）
-      if (this.timeSpeedIndex < 6) {
+      if (this.timeStore.timeSpeedIndex < 6) {
         // 已在倒带中：再点升一档（索引减小=更快反向）；到底(0)循环回 -1x
-        rewIdx = this.timeSpeedIndex === 0 ? 5 : this.timeSpeedIndex - 1
+        rewIdx = this.timeStore.timeSpeedIndex === 0 ? 5 : this.timeStore.timeSpeedIndex - 1
       }
       this.applySpeedStep(rewIdx)
       this.flashHint(I18n.t('s0763_rewind') + ' ' + this.timeRateText)
@@ -29960,20 +29911,20 @@ private loadPlanetPositions(): void {
     } else if (id === 'faster' || id === 'fast' || id === 'warp') {
       // 快进：单按钮循环升档 1x → 2x → 10x → 1分/秒 → 1时/秒 → 1天/秒 → 10天/秒 → 回到1x
       let fwdIdx = 7 // 默认回 1x（停止/倒带状态按下时从 1x 起步）
-      if (this.timeSpeedIndex >= 7) {
+      if (this.timeStore.timeSpeedIndex >= 7) {
         // 已在正向：升一档；到顶(13)循环回 1x
-        fwdIdx = this.timeSpeedIndex >= 13 ? 7 : this.timeSpeedIndex + 1
+        fwdIdx = this.timeStore.timeSpeedIndex >= 13 ? 7 : this.timeStore.timeSpeedIndex + 1
       }
       this.applySpeedStep(fwdIdx)
       this.flashHint(I18n.t('s0765_fast') + ' ' + this.timeRateText)
       this.refreshTimeNow()
     } else if (id === 'slower') {
       // 减速：向"停止"方向降一档（快进降档、倒带也降档），降到1x再点=停止，不会跨进反向
-      let prevIdx = this.timeSpeedIndex
-      if (this.timeSpeedIndex > 6) {
-        prevIdx = this.timeSpeedIndex - 1
-      } else if (this.timeSpeedIndex < 6) {
-        prevIdx = this.timeSpeedIndex + 1
+      let prevIdx = this.timeStore.timeSpeedIndex
+      if (this.timeStore.timeSpeedIndex > 6) {
+        prevIdx = this.timeStore.timeSpeedIndex - 1
+      } else if (this.timeStore.timeSpeedIndex < 6) {
+        prevIdx = this.timeStore.timeSpeedIndex + 1
       }
       this.applySpeedStep(prevIdx)
       this.flashHint(prevIdx === 6 ? I18n.t('s0761_stop') : I18n.t('s0759_slower') + ' ' + this.timeRateText)
