@@ -1,3 +1,16 @@
+## [2026-10-06] DevEco Code - M 轨道 M2：位置参考数据三文件迁入 common/location/（纯路径迁移；宿主 8,017 行不变）
+
+- **背景**：`ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §11.2.4 的最终决定；M 轨道第 2 片，**纯路径迁移**（`git mv` + 同步消费者相对深度），不改任何数据内容/运行逻辑；开工 `git log -1` = `9bc9992c4b`。
+- **移动 3 个文件（`git mv` 保留历史，按 §11.2.4 去 `location_` 冗余前缀）**：`pages/location_hierarchy.ts` → `common/location/hierarchy.ts`（74,611 行）；`pages/location_names_zh.ts` → `common/location/names_zh.ts`（7,350）；`pages/location_countries.ts` → `common/location/countries.ts`（986）。共 82,947 行、内容 0 改动（git 识别为 R100 重命名）。
+- **改动的消费者 import（3 文件 / 9 行）**：宿主 `pages/MainWindowNativeNode.ets`（`./location_hierarchy` → `../common/location/hierarchy`、`./location_countries` → `../common/location/countries`、`./location_names_zh` → `../common/location/names_zh`）；`state/LocationStore.ets`、`state/LocationPickerStore.ets`（各 `../pages/location_*` → `../common/location/*`）。导出名 `LOCATION_HIERARCHY` / `LOCATION_COUNTRY_NAMES` / `LOCATION_ZH_NAMES` 全部保持不变。
+- **生成器/夹具输出路径同步（4 脚本 / 7 处，否则下次生成会重新落回 `pages/`）**：`scripts/generate-ohos-location-hierarchy.mjs`（hierarchyPath / outputCountriesPath）；`scripts/generate-ohos-location-zh.mjs`（hierarchyPath / outputPath）；`scripts/check-ohos-i18n.mjs`（读 countries）；`scripts/verify-ohos-location-search.mjs`（读 hierarchy + names_zh）。
+- **零引用扫描**：全仓 `grep` `location_hierarchy|location_names_zh|location_countries`（含 `.mjs`/`.md`）确认消费者即上列 7 文件，无其它 import/字符串引用；**未新增/改任何 `.id()`、未改组件树、未改 `main_pages.json`**。
+- **度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（本片不动宿主）；无 store/端口新增。净改动 7 个跟踪文件（3 重命名 + 3 消费者 import + 4 脚本内 7 处路径）。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 3 文件 0 error；`BUILD SUCCESSFUL in 30s`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 249 文件）；受影响测试 `verify-ohos-location-search` 全绿（`OK: 7387 offline locations have Chinese display entries` + `OK: 12 localized and normalized location searches passed`）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（4 个 `-pad` / `mist-performance` / `verify-ohos-search`）。
+- **真机（192.168.50.108:36717，`-SkipDeploy` 产 HAP → `hdc install -r` + `aa start`）**：`pidof 58001` 全程存活、hilog 无 jscrash/`setLocation failed`。位置面板 →「按地区选」→ 层级四列**实证迁移后数据运行期可加载**：大洲「亚洲/欧洲/非洲」、国家/地区「不丹/东帝汶/中国」（`LOCATION_COUNTRY_NAMES` 中文名）、地区「上海市/中国台湾地区/中国澳门特别行政区」、城市「上海」；点击「上海」后坐标由 `21.34°N / 110.38°E` 实时刷新为 `31.22°N / 121.46°E`、位置名「上海 · 地球」（`applyPickerLocation`→`setLocation` 全链生效）。测试改动的持久化观测点已恢复到测试前显示值（`自定义位置` / 21.41°N / 110.38°E / 0 m）。
+- **本片新踩的坑**：① `verify_ui` 把「按地区选」误判为「点击无响应（三次均未跳转）」——实为 `PlacePanel` 将 `LocationPickerPanel` 放在信息行之后，层级四列位于滚动视口**以下**，截图与 `ui layout` 只覆盖视口底部；切换其实已生效，需 `devecocli ui swipe` 滚动后才可见（后续改用 swipe + layout 定位，不再依赖自动化截图的「是否跳转」判断）；② 真机恢复持久化观测点时，地图点选走「像素→经纬度」线性映射，步长约 0.34°/px，无法精确命中历史显示的两位小数纬度 21.34°N（最近可达 21.41°N），只能恢复显示近似值；③ §13.6 的 6 项环境类失败与上片一致，非本片回归。
+- **文档**：`ARKTS-PAGES-REFACTOR-PLAN.md` §15.12.17 追加本片完成结论 + 度量 + 移动清单；§1.1 的 `pages/location_*` 行加迁移注记。
+
 ## [2026-10-06] DevEco Code - M 轨道 M1：DetailModel 渲染管线迁出 pages/（纯路径迁移；宿主 7,573 行不变）
 
 - **背景**：`ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §11 的 M 轨道第 1 片，**纯路径迁移**（移动文件 + 同步消费者相对深度），不改任何运行逻辑；开工 `git log -1` = `b675c48a0c`。
