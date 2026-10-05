@@ -51,6 +51,7 @@ import { BookmarkStore } from '../state/BookmarkStore'
 import { BookmarkPanel } from '../panels/BookmarkPanel'
 import { SearchStore } from '../state/SearchStore'
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
+import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
@@ -18137,9 +18138,9 @@ private loadPlanetPositions(): void {
         }.width('100%').height(24).padding({ left: 16, right: 16 })
       } else {
         Column({ space: 3 }) {
-          this.objectDataRow('时角', 'selectedHourAngle')
-          this.objectDataRow('平恒星时', 'selectedMeanSiderealTime')
-          this.objectDataRow('视恒星时', 'selectedApparentSiderealTime')
+          ObjectDataRow({ label: '时角', value: this.selectedDisplayValue('selectedHourAngle') })
+          ObjectDataRow({ label: '平恒星时', value: this.selectedDisplayValue('selectedMeanSiderealTime') })
+          ObjectDataRow({ label: '视恒星时', value: this.selectedDisplayValue('selectedApparentSiderealTime') })
         }.width('100%')
       }
     }
@@ -18518,7 +18519,7 @@ private loadPlanetPositions(): void {
             Text('当前天球位置').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
             this.objectDistanceNotice()
             this.selectedCoordinateRows(false)
-            this.objectDataRow(I18n.t('i0010'), 'selectedConstellation')
+            ObjectDataRow({ label: I18n.t('i0010'), value: this.selectedDisplayValue('selectedConstellation') })
             Text('坐标会跟随时间、位置与视角更新。').fontSize(11).fontColor('#8FBBD6').lineHeight(16).width('100%').margin({ top: 4 })
           } else if (this.bottomCardIndex === 2) {
             Text('完整资料').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
@@ -19496,12 +19497,6 @@ private loadPlanetPositions(): void {
       .onClick(() => { this.objectInspectorMoreOpen = false; action() })
   }
 
-  @Builder
-  tabletInspectorSection(title: string) {
-    Text(title).fontSize(12).fontWeight(FontWeight.Medium).fontColor('#A7D7EF').width('100%')
-      .padding({ top: 4, bottom: 4 }).border({ width: { bottom: 0.5 }, color: { bottom: 'rgba(147,215,255,0.14)' } })
-  }
-
   private objectInspectorImageHeight(): number {
     return this.objectInspectorMediaViewportHeight > 0
       ? Math.max(72, Math.min(210, this.objectInspectorMediaViewportHeight - 88)) : 210
@@ -19908,16 +19903,6 @@ private loadPlanetPositions(): void {
       .animation({ duration: 180, curve: Curve.EaseInOut })
       .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
       .onClick(() => { this.selectObjectDetailTab(index) })
-  }
-
-  @Builder
-  objectDataRow(label: string, key: string) {
-    Row({ space: 10 }) {
-      Text(label).fontSize(11).fontColor('#8FBBD6').width(68)
-      Text(this.selectedDisplayValue(key) || '--').fontSize(12).fontColor('#E0F1F8').layoutWeight(1).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-    }
-      .width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 })
-      .backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
   }
 
   @Builder
@@ -20587,20 +20572,6 @@ private loadPlanetPositions(): void {
   }
 
   @Builder
-  structuredObjectDetailRow(key: string, tablet: boolean) {
-    Row({ space: 12 }) {
-      Text(this.detailFieldLabel(key))
-        .fontSize(tablet ? 11 : 10).fontColor('#91B8CD').width(tablet ? 108 : 104)
-        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text(this.detailFieldValue(key))
-        .fontSize(tablet ? 12 : 11).fontColor('#E1F2FA').layoutWeight(1)
-        .textAlign(TextAlign.Start).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-        .lineHeight(tablet ? 18 : 17)
-    }
-      .width('100%').height(tablet ? 46 : 44).alignItems(VerticalAlign.Center)
-  }
-
-  @Builder
   structuredObjectDetails(tablet: boolean) {
     if (!this.objectDetailStore.selectedDetailLoaded) {
       Row({ space: 8 }) {
@@ -20615,15 +20586,13 @@ private loadPlanetPositions(): void {
       ForEach(this.detailSectionIds(), (section: string) => {
         if (this.detailFieldsForSection(section).length > 0) {
           if (tablet) {
-            this.tabletInspectorSection(this.detailSectionTitle(section))
+            DetailSectionTitle({ title: this.detailSectionTitle(section), tablet: true })
           } else {
-            Text(this.detailSectionTitle(section))
-              .fontSize(11).fontWeight(FontWeight.Medium).fontColor('#A7D7EF').width('100%')
-              .padding({ top: 7, bottom: 4 })
+            DetailSectionTitle({ title: this.detailSectionTitle(section), tablet: false })
           }
           Column() {
             ForEach(this.detailFieldsForSection(section), (field: ObjectDetailField) => {
-              this.structuredObjectDetailRow(field.key, tablet)
+              StructuredDetailRow({ label: this.detailFieldLabel(field.key), value: this.detailFieldValue(field.key), tablet: tablet })
             }, (field: ObjectDetailField) => field.section + ':' + field.key)
           }
             .width('100%')
@@ -22096,17 +22065,17 @@ private loadPlanetPositions(): void {
         Divider().color(this.nmBorder()).margin({ top: 8, bottom: 8 })
         this.tabletInspectorMedia()
         this.satellitePassesDetails(true)
-        this.tabletInspectorSection('坐标参考')
+        DetailSectionTitle({ title: '坐标参考', tablet: true })
         this.selectedCoordinateRows(true)
-        this.tabletInspectorSection('实时观测')
-        this.objectDataRow('时角', 'selectedHourAngle')
-        this.objectDataRow('平恒星时', 'selectedMeanSiderealTime')
-        this.objectDataRow('视恒星时', 'selectedApparentSiderealTime')
-        this.objectDataRow(I18n.t('s0700'), 'selectedRise')
-        this.objectDataRow(I18n.t('s0701'), 'selectedTransit')
-        this.objectDataRow(I18n.t('s0702'), 'selectedSet')
-        this.objectDataRow(I18n.t('i0291'), 'selectedPhase')
-        this.objectDataRow(I18n.t('i0255'), 'selectedElongation')
+        DetailSectionTitle({ title: '实时观测', tablet: true })
+        ObjectDataRow({ label: '时角', value: this.selectedDisplayValue('selectedHourAngle') })
+        ObjectDataRow({ label: '平恒星时', value: this.selectedDisplayValue('selectedMeanSiderealTime') })
+        ObjectDataRow({ label: '视恒星时', value: this.selectedDisplayValue('selectedApparentSiderealTime') })
+        ObjectDataRow({ label: I18n.t('s0700'), value: this.selectedDisplayValue('selectedRise') })
+        ObjectDataRow({ label: I18n.t('s0701'), value: this.selectedDisplayValue('selectedTransit') })
+        ObjectDataRow({ label: I18n.t('s0702'), value: this.selectedDisplayValue('selectedSet') })
+        ObjectDataRow({ label: I18n.t('i0291'), value: this.selectedDisplayValue('selectedPhase') })
+        ObjectDataRow({ label: I18n.t('i0255'), value: this.selectedDisplayValue('selectedElongation') })
         this.structuredObjectDetails(false)
       }
       Row() {
