@@ -25,8 +25,9 @@ export struct PlacePanel {
   @Prop locationText: string
   @Prop coordinateText: string
   @Prop altitudeText: string
-  @Prop mapWidth: number
-  @Prop mapHeight: number
+  // §15.12：地图几何随 LocationPickerPanel 自算，这里只传它依赖的布局态。
+  @Prop expandedLayout: boolean
+  @Prop skyWidth: number
   @Prop textColor: string
   @Prop subColor: string
   @Prop inputColor: string
@@ -39,7 +40,6 @@ export struct PlacePanel {
   onSearchLocations: (query: string) => void = () => {}
   onPickSearchItem: (item: LocSearchItem) => void = () => {}
   onApply: () => void = () => {}
-  onMapTouch: (event: TouchEvent) => boolean = () => false
   onSelectContinent: (c: string) => void = () => {}
   onSelectCountry: (c: string) => void = () => {}
   onSelectRegion: (r: string) => void = () => {}
@@ -77,8 +77,8 @@ export struct PlacePanel {
         pickerStore: this.locationPickerStore,
         locationStore: this.locationStore,
         observerPlanet: this.sessionToolStore.observerPlanet,
-        mapWidth: this.mapWidth,
-        mapHeight: this.mapHeight,
+        expandedLayout: this.expandedLayout,
+        skyWidth: this.skyWidth,
         subColor: this.subColor,
         inputColor: this.inputColor,
         textColor: this.textColor,
@@ -89,7 +89,6 @@ export struct PlacePanel {
         contextOf: (item: LocSearchItem) => this.contextOf(item),
         onPickSearchItem: (item: LocSearchItem) => { this.onPickSearchItem(item) },
         onApply: () => { this.onApply() },
-        onMapTouch: (event: TouchEvent) => this.onMapTouch(event),
         onSelectContinent: (c: string) => { this.onSelectContinent(c) },
         onSelectCountry: (c: string) => { this.onSelectCountry(c) },
         onSelectRegion: (r: string) => { this.onSelectRegion(r) },

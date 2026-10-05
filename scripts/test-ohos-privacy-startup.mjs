@@ -187,10 +187,15 @@ test('sensor and location entrypoints gate privacy and location rechecks after a
   const sensor = read('capability/SensorController.ets');
   const sensorStart = sensor.slice(sensor.indexOf('  startGyroscope()'), sensor.indexOf('  stopGyroscope('));
   assert.ok(sensorStart.indexOf('canUseSensors()') < sensorStart.indexOf('subscribeRotationVector('));
-  const location = page.slice(page.indexOf('  private async useDeviceLocation()'), page.indexOf('  private applyPickerLocation()'));
-  assert.equal((location.match(/hasCurrentPrivacyConsent\(\)/g) ?? []).length, 3);
-  assert.match(location, /permissionResult.authResults.some/);
-  assert.match(location, /finally\s*\{\s*this.deviceLocationRequestInProgress = false/);
+  // §15.12：useDeviceLocation/applyPickerLocation 已下沉 capability/LocationController.ets；权限与
+  // 定位 NAPI 收在宿主具名适配器 HostLocationPort，隐私门禁经 hooks 回注（仍是 3 处复检）。
+  const locationController = read('capability/LocationController.ets');
+  const location = locationController.slice(
+    locationController.indexOf('  async useDeviceLocation()'),
+    locationController.indexOf('  applyPickerLocation()'));
+  assert.equal((location.match(/hasPrivacyConsent\(\)/g) ?? []).length, 3);
+  assert.match(page, /permissionResult\.authResults\.some/);
+  assert.match(location, /finally\s*\{\s*this\.deviceLocationRequestInProgress = false/);
 });
 
 test('incomplete installations are repaired asynchronously, never by full sync extraction', () => {

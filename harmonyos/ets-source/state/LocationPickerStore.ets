@@ -4,6 +4,7 @@ import { LOCATION_HIERARCHY } from '../pages/location_hierarchy'
 import { LOCATION_COUNTRY_NAMES } from '../pages/location_countries'
 import { LOCATION_ZH_NAMES } from '../pages/location_names_zh'
 import { timezoneDisplayName, approximateTimeZoneDisplay } from '../common/derive/labels'
+import { clamp } from '../common/derive/astro'
 import { getCityPreset, matchesLocationSearch, locationSearchMatchScore } from '../common/derive/actions'
 import { CommandPort } from '../bridge/CommandPort'
 
@@ -146,6 +147,16 @@ export class LocationPickerStore {
 
   pickerPinY(): number {
     return (90 - this.locationPickerLatitude) / 180 * this.mapRenderHeight - 9
+  }
+
+  // 纯 setter：应用一次选点（原宿主 setPickerLocation(§15.12)，函数体逐字搬入；仅 this.* → 本 store 字段）。
+  // 地图点选（LocationPickerPanel 内）与控制器（LocationController 的 GPS / 城市落地）共用本方法。
+  setPickerLocation(name: string, latitude: number, longitude: number, altitude: number, status: ResourceStr): void {
+    this.locationPickerName = name
+    this.locationPickerLatitude = clamp(latitude, -90, 90)
+    this.locationPickerLongitude = clamp(longitude, -180, 180)
+    this.locationPickerAltitude = Math.round(altitude)
+    this.locationPickerStatus = status
   }
 
   // Translate continent name from Chinese to current language
