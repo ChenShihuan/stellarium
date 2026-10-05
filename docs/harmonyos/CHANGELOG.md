@@ -1,3 +1,24 @@
+## [2026-10-02] DevEco Code - 构建侧：Windows 资源同步脚本生成 .model.rgba 侧车（恢复“侧车优先”路径）
+
+- **背景**：上一片 `150b332642` 让行星三维模型在侧车缺失时回退解码 PNG（可用，但每次选择都要运行时解码）。本片把构建侧补齐，走回侧车快速路径。
+- **根因对照**：bash 版 `scripts/sync-ohos-resources.sh` 用 ffmpeg `scale=512:256:flags=lanczos,format=rgba -pix_fmt rgba -f rawvideo`（行星）与 `512:2`（行星环）生成 `textures/<name>.png.model.rgba`；名单为 50 个 `MODEL_TEXTURES` + 3 个 `RING_TEXTURES`；Windows 版 `sync-ohos-resources-windows.ps1` 无此步。本机 `Get-Command ffmpeg` 不存在、`FFMPEG` 环境变量为空、仓库无约定路径（唯一命中是剪影类 App 私有目录，按既有纪律不采用）。
+- **改动（无新增外部依赖，沿用 Windows 移植版既定的 System.Drawing 路线，与 `BUILD-WINDOWS.md`/`KNOWN-ISSUES` 记载的等价实现一致）**：
+  - `scripts/sync-ohos-resources-windows.ps1` 187 → 321 行：新增 `Export-RgbaSidecar`（System.Drawing `HighQualityBicubic` 缩放 + `WrapMode.TileFlipXY` 复刻 ffmpeg/swscale 边缘处理、`Format32bppArgb` 的 BGRA→**RGBA** swizzle、临时文件原子写）与 `Invoke-DetailModelSidecarBatch`（幂等：侧车尺寸正确且不旧于源 PNG 则跳过；缺失源 PNG 跳过；失败逐文件 `Write-Warning` 并汇总）。名单与 bash 版逐字对齐；生成阶段紧跟 16-bit 归一化之后，与 bash 顺序一致。头注释补侧车说明。
+  - `scripts/build-ohos-hap-windows.ps1` 331 → 334 行：`-SkipResources` 参数文档写明侧车由资源同步生成，跳过即无侧车。
+- **产出**：资源同步打印 `planets: generated 50 … rings: generated 3 … failed 0`；构建 rawfile 与签名 HAP 内各 **53 个** `textures/*.png.model.rgba`（50×524288 B + 3×4096 B）。
+- **真机验收**（Mate 80 Pro `192.168.50.108:40565`，`bm clean -d` 强制全新解包后安装）：
+  - 火星：`[detail-model] CPU texture ready uri=.../textures/mars.png bytes=524288 source=sidecar`，**不再出现** `sidecar missing, decoding PNG fallback`；截图确认带地表的火星球体（红棕地表 + 极冠，字节序正确）。
+  - 土星：`[detail-model] ring texture ready path=.../saturn_rings_radial.png.model.rgba bytes=4096` + `CPU texture ready … source=sidecar`；截图确认含环土星。
+  - M31 无回归：`[detail-media-card] image loaded uri=.../nebulae/default/m31.png`；`pidof` 全程存活（55667）。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check` 未改 .ets（跳过）→ 构建（不带 `-SkipResources`）**BUILD SUCCESSFUL**（sync + 31 s，签名 HAP 708.8 MB）→ `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点全绿 → 受影响脚本 `audit-ohos-resource-coverage.mjs` 退出 0（其重写的审计文档已 `git checkout` 还原）。
+- **文档**：`KNOWN-ISSUES.md` 第 22 条标记完全修复并记录侧车数量/大小与验收证据，第 2 条同步更新；`BUILD-WINDOWS.md` §5 技术债第 2 条标记已修复。
+- **本片新踩的坑**：
+  1. GDI+ `DrawImage` 默认把源外区域当透明采样 → 缩放后纹理边缘 RGB 向黑衰减、alpha 掉到 72（会让等距圆柱贴图出现暗缝）。改用 `ImageAttributes.SetWrapMode(TileFlipXY)` 镜像边缘后恢复为 `R=255 A=255`。
+  2. `Format32bppArgb` 内存是 BGRA，必须 swizzle 成 `R,G,B,A` 才能匹配 `DetailModelRasterizer.ets`（否则火星会发蓝）；纯红 PNG 离线断言 `[255,0,0,255]` 通过。
+  3. HAP 更新保留 `filesDir`，`.ohos_detail_model_rgba_v2` 标记会让 `refreshDetailModelTextures` 提前返回 → 装新包后设备仍用旧（无侧车）纹理；验收前需 `bm clean -d`（或删标记）强制重新解包。
+  4. `bm clean` 需显式 `-d`；`run-as` 在 Mate 80 上不可用。
+  5. `audit-ohos-resource-coverage.mjs` 未见侧车白名单，会把 53 个侧车计为 `textures` 的 rawfile 额外文件（“有差异”）；本轮未改审计器（超出本片范围），已在报告标注。
+
 ## [2026-10-02] DevEco Code - Phase 5d-诊断：行星三维模型“本地资源解码失败”（缺 .model.rgba 侧车）修复 + 真机走查
 
 - **现象/复现**：详情卡“资料”页媒体区对 `kind=model` 天体（火星/土星）显示「本地资源解码失败 / 资源已找到，但当前设备无法显示此文件」（`ObjectMediaStore.objectInspectorMediaLoadFailed=true`）；`kind=image`（M31）正常。真机 `192.168.50.108:40565`（Mate 80 Pro）用 `searchObject Mars` 复现。

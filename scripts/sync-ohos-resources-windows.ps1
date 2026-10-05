@@ -8,13 +8,24 @@
 
     The bash version relies on rsync and ffmpeg. Neither ships with Git for
     Windows, so this port uses robocopy for the directory mirroring and
-    System.Drawing for the two image compatibility passes:
+    System.Drawing for the image processing:
 
       * 16-bit PNG textures are re-encoded to 8-bit RGBA
+      * detail-model CPU textures are exported as raw RGBA sidecars
+        (textures/<name>.png.model.rgba — 512x256 planets, 512x2 ring bands)
       * grayscale / indexed sky-culture illustrations are re-encoded to RGBA
 
     ArkUI ImageKit on HarmonyOS 7.0 rejects the encodings those files use
     upstream, so the normalisation is mandatory and not merely cosmetic.
+
+    The detail-model sidecar parity matters: the C++ detail-model rasteriser
+    (DetailModelRasterizer.ets -> loadObjectInspectorModelRawTexture) reads raw
+    R,G,B,A bytes, and the bash syncer produces them with ffmpeg's
+    `scale=...,format=rgba -f rawvideo`. Without them the app still works, but
+    only through a slower per-selection PNG decode fallback. They are generated
+    here, as part of this resource sync — so a build that passes
+    -SkipResources keeps whatever sidecars the previous sync produced, and a
+    build from a frozen rawfile tree must not expect them to be created.
 
     It also writes data/ohos/skyculture_art_rgba_v1.txt, the evidence file
     StellariumResourceBootstrap.ets requires before it hands off to Qt.
@@ -134,12 +145,135 @@ function Convert-PngToRgba {
     Move-Item -LiteralPath $temporary -Destination $Path -Force
 }
 
+# Writes "<png>.model.rgba": a headerless raw RGBA buffer at $Width x $Height.
+# This is the Windows equivalent of the bash syncer's
+#   ffmpeg -vf 'scale=<w>:<h>:flags=lanczos,format=rgba' -pix_fmt rgba -f rawvideo
+# The consumer (DetailModelRasterizer.ets) reads byte 0 as red, so the GDI+
+# Format32bppArgb BGRA memory layout is swizzled into R,G,B,A on the way out.
+function Export-RgbaSidecar {
+    param([string]$SourcePng, [int]$Width, [int]$Height)
+    $sidecar = "$SourcePng.model.rgba"
+    $image = [System.Drawing.Image]::FromFile($SourcePng)
+    $bitmap = $null
+    $graphics = $null
+    try {
+        $bitmap = New-Object System.Drawing.Bitmap($Width, $Height, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+        $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $graphics.Clear([System.Drawing.Color]::Transparent)
+        # TileFlipXY mirrors at the borders instead of sampling transparent black
+        # outside the source, which is what ffmpeg/swscale effectively does. Without
+        # it the resampled RGB darkens toward the edges (visible seams on the
+        # equirectangular planet maps and the ring bands).
+        $attributes = New-Object System.Drawing.Imaging.ImageAttributes
+        $attributes.SetWrapMode([System.Drawing.Drawing2D.WrapMode]::TileFlipXY)
+        $destination = New-Object System.Drawing.Rectangle(0, 0, $Width, $Height)
+        $graphics.DrawImage($image, $destination, 0, 0, $image.Width, $image.Height, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+        $attributes.Dispose()
+        $graphics.Dispose()
+        $graphics = $null
+
+        $rect = New-Object System.Drawing.Rectangle(0, 0, $Width, $Height)
+        $locked = $bitmap.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::ReadOnly, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        try {
+            $stride = $locked.Stride
+            $source = New-Object byte[] ($stride * $Height)
+            [System.Runtime.InteropServices.Marshal]::Copy($locked.Scan0, $source, 0, $source.Length)
+        } finally {
+            $bitmap.UnlockBits($locked)
+        }
+
+        $rgba = New-Object byte[] ($Width * $Height * 4)
+        for ($y = 0; $y -lt $Height; $y++) {
+            $sourceRow = $y * $stride
+            $targetRow = $y * $Width * 4
+            for ($x = 0; $x -lt $Width; $x++) {
+                $s = $sourceRow + ($x * 4)
+                $d = $targetRow + ($x * 4)
+                $rgba[$d] = $source[$s + 2]     # R (BGRA -> RGBA)
+                $rgba[$d + 1] = $source[$s + 1] # G
+                $rgba[$d + 2] = $source[$s]     # B
+                $rgba[$d + 3] = $source[$s + 3] # A
+            }
+        }
+
+        # Write through a temporary so an interrupted run never leaves a
+        # truncated sidecar that the app would read as "unexpected size".
+        $temporary = "$sidecar.tmp"
+        [System.IO.File]::WriteAllBytes($temporary, $rgba)
+        Move-Item -LiteralPath $temporary -Destination $sidecar -Force
+    } finally {
+        if ($graphics) { $graphics.Dispose() }
+        if ($bitmap) { $bitmap.Dispose() }
+        $image.Dispose()
+    }
+}
+
+# Generates detail-model sidecars for the given PNG names. Idempotent: a sidecar
+# that already has the expected size and is at least as new as its PNG is kept.
+function Invoke-DetailModelSidecarBatch {
+    param([string[]]$Names, [int]$Width, [int]$Height)
+    $texturesRoot = Join-Path $Out 'textures'
+    $expectedBytes = $Width * $Height * 4
+    $generated = 0
+    $reused = 0
+    $failed = 0
+    foreach ($name in $Names) {
+        $source = Join-Path $texturesRoot $name
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { continue }
+        $sidecar = "$source.model.rgba"
+        if (Test-Path -LiteralPath $sidecar -PathType Leaf) {
+            $sidecarItem = Get-Item -LiteralPath $sidecar
+            if ($sidecarItem.Length -eq $expectedBytes -and
+                $sidecarItem.LastWriteTimeUtc -ge (Get-Item -LiteralPath $source).LastWriteTimeUtc) {
+                $reused++
+                continue
+            }
+        }
+        try {
+            Export-RgbaSidecar -SourcePng $source -Width $Width -Height $Height
+            $generated++
+        } catch {
+            $failed++
+            Write-Warning "detail-model sidecar failed for ${name}: $($_.Exception.Message)"
+        }
+    }
+    return [pscustomobject]@{ Generated = $generated; Reused = $reused; Failed = $failed }
+}
+
 Write-Host '==> normalising 16-bit textures'
 $textureCount = 0
 foreach ($png in (Get-ChildItem -LiteralPath (Join-Path $Out 'textures') -Recurse -File -Filter '*.png')) {
     if ((Get-PngFormat $png.FullName).BitDepth -eq 16) { Convert-PngToRgba $png.FullName; $textureCount++ }
 }
 Write-Host "    converted $textureCount 16-bit PNG(s)"
+
+# Detail-model CPU textures. The list is the exact parity set of the bash
+# syncer's MODEL_TEXTURES / RING_TEXTURES arrays (and of
+# StellariumResourceBootstrap.ets DETAIL_MODEL_TEXTURE_FILES /
+# DETAIL_MODEL_RING_TEXTURE_FILES): 512x256 RGBA planets and moons, 512x2 RGBA
+# ring bands. Missing source PNGs are skipped, matching the bash `[ -f ]` guard.
+$detailModelTextures = @(
+    'sun.png', 'mercury.png', 'venus.png', 'earth_cmap.png', 'moon.png', 'mars.png', 'jupiter.png', 'saturn.png',
+    'uranus.png', 'neptune.png', 'pluto.png', 'charon.png', 'ceres.png', 'vesta.png', 'eros.png', 'bennu.png',
+    'gaspra.png', 'ida.png', 'sedna.png', 'eris.png', 'haumea.png', 'dysnomia.png', '2007OR10.png', 'phobos.png',
+    'deimos.png', 'io.png', 'europa.png', 'ganymede.png', 'callisto.png', 'amalthea.png', 'mimas.png', 'enceladus.png',
+    'tethys.png', 'dione.png', 'rhea.png', 'titan.png', 'hyperion.png', 'iapetus.png', 'phoebe.png', 'janus.png',
+    'epimetheus.png', 'prometheus.png', 'ariel.png', 'umbriel.png', 'titania.png', 'oberon.png', 'miranda.png',
+    'triton.png', 'nereid.png', 'proteus.png'
+)
+$detailRingTextures = @('saturn_rings_radial.png', 'uranus_rings.png', 'neptune_rings.png')
+
+Write-Host '==> generating detail-model CPU texture sidecars'
+$modelSidecars = Invoke-DetailModelSidecarBatch -Names $detailModelTextures -Width 512 -Height 256
+Write-Host "    planets: generated $($modelSidecars.Generated), reused $($modelSidecars.Reused), failed $($modelSidecars.Failed)"
+$ringSidecars = Invoke-DetailModelSidecarBatch -Names $detailRingTextures -Width 512 -Height 2
+Write-Host "    rings  : generated $($ringSidecars.Generated), reused $($ringSidecars.Reused), failed $($ringSidecars.Failed)"
+if (($modelSidecars.Failed + $ringSidecars.Failed) -gt 0) {
+    Write-Warning "$($modelSidecars.Failed + $ringSidecars.Failed) detail-model sidecar(s) could not be written; the app will fall back to decoding the PNG at selection time."
+}
 
 Write-Host '==> normalising grayscale / indexed sky-culture illustrations'
 $artCount = 0
