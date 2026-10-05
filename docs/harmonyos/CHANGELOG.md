@@ -1,3 +1,12 @@
+## [2026-09-30] DevEco Code - 修两个真机问题：速度 chip 标签去掉倍率（超宽）+ 消除「实时→倒带→实时」抖动
+
+- **来源：** 用户在真机实测 store 版后反馈的两个问题。
+- **修复 1（按钮行超宽）：** `panels/time/TimeSpeedChips.ets` 的 `倒带` / `减速` / `快进` 三个标签不再拼接倍率（删除三处 `+ ' ' + this.rateText`），并移除因此不再使用的 `@Prop rateText` 与调用点的传参。真机实测：五个 chip 标签为纯文案，最右「快进」右边界 **1137 < 1280**，整行不再超宽。倍率反馈仍由既有通道提供——点击时的顶部提示（`flashHint`，实测显示「倒带 -1时/秒」）与面板副标题（`2026-09-30 · 1x`）。
+- **修复 2（高亮抖动）：** 现象为「倒带 → 实时」后界面走 `实时(乐观) → 倒带 → 实时`。根因在 `syncTimeRateState()`：它在引擎回报速率时**反推档位并写回 store**，而换挡瞬间引擎仍会回报上一档速率；超过既有 500 ms `pendingTimeRateUntilMs` 窗口后旧速率就会被接受，于是档位跳回旧档再跳回新档。此前 chip 子树的参数化 `@Builder` 冻结，该问题被掩盖，现在 chip 能实时刷新才暴露。
+  - **改法：** 新增 `private lastSyncedTimeRate`，`syncTimeRateState` 在「引擎速率与上次同步值相同」时**直接 return**，不再重写 `timeRateText` 与 `timeStore.timeSpeedIndex`；仅在速率**真正变化**时同步文本与档位。两个方向（倒带→实时 / 实时→倒带）的旧速率回报都会被该去重吸收。
+- **验证结果：** `arkts_check` 无错误；`BUILD SUCCESSFUL in 1 min 5 s 933 ms`；`node scripts/check-ohos-ui-contract.mjs` 通过；真机 `install bundle successfully` / `start ability successfully`；点「实时」后连续 8 次采样副标题稳定为 `1x`（采样粒度约 3.6 s，**瞬态抖动需用户肉眼复测确认**）。
+- **范围约束：** 仅两处行为修复（去掉标签倍率、去重引擎速率回报），未改面板结构、未改 `.id()` 与 CLI 契约。
+
 ## [2026-09-30] DevEco Code - 真机三版对照实验定论：冻结根因是参数化 @Builder；store + 组件实时刷新成立并修复既有 bug
 
 - **背景：** 上一轮两片 store 因"无法证明实时刷新等价"被回退。用户指示在真机做实验，遂在 **Mate 80 Pro（SGT-AL00 / arm64-v8a / API 26，引擎存活，`192.168.1.4:40565`）** 上做同一交互（打开时间面板 → 点「快进」）的三版对照。
