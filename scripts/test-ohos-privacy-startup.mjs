@@ -182,7 +182,7 @@ test('reentrant startup is serialized and background return cannot release nativ
 
 test('sensor and location entrypoints gate privacy and location rechecks after awaits', () => {
   const page = read('pages/MainWindowNativeNode.ets');
-  const sensorStart = page.slice(page.indexOf('  private startGyroscope()'), page.indexOf('  private probeGyroSensor('));
+  const sensorStart = page.slice(page.indexOf('  private startGyroscope()'), page.indexOf('  private stopGyroscope('));
   assert.ok(sensorStart.indexOf('hasCurrentPrivacyConsent()') < sensorStart.indexOf('sensor.on('));
   const location = page.slice(page.indexOf('  private async useDeviceLocation()'), page.indexOf('  private applyPickerLocation()'));
   assert.equal((location.match(/hasCurrentPrivacyConsent\(\)/g) ?? []).length, 3);
