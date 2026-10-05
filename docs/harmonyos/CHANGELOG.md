@@ -1,3 +1,28 @@
+## [2026-10-05] DevEco Code - E 轨道 E2：显示 / 图层设置行为并入 LayerController
+
+- **E2（并入既有 `capability/LayerController.ets`，不新建控制器；理由见下）16 法逐字下沉**：
+  - 星等 / 银河：`applyStarMagLimit`、`applyMilkyWayBright`。
+  - 轨迹 / 轨道：`applyTrailColor`、`setOrbitDisplayFlag`、`setOrbitDisplayThickness`、`setOrbitColorStyle`、`setTrailDisplayFlag`、`setTrailDisplayNumber`。
+  - 地景 / 3D：`setLandscapeFadeWithZoom`、`changeLandscapeTransparency`、`selectLandscape`、`importLandscapeFile`、`setScenery3dEnabled`、`setScenery3dScene`。
+  - **`setSkyDisplaySetting` / `setBridgeFlag`**：二者原为 D2 遗留的 `LayerHostHooks` 回注宿主（发不同桥命令），本片把**实现迁入控制器**并**移除这两个 hooks**；`setBridgeFlag` 的私有助手 `syncBridgeFlagState` 随之一并下沉（`setViewLock` 分支仍经 hooks 回注宿主 `setViewLockState`，含选中判定 / `trackingText` 回读，属 §15.6-1 保留宿主字段）。
+- **并入而非新建的理由（先普查再决定）**：16 法全部是「图层 / 显示」域 —— 写 `LayerViewStore` / `LayerStore` / `SceneryStore` / `ObjectDetailStore` / `ViewSettingsStore` 的薄桥写回，与 D2 `LayerController` 同域（`applyLayerSwitch` 本就分发到 `setSkyDisplaySetting` / `setBridgeFlag`）；`LayerController` 已持有 `CommandPort` + `LayerViewStore`，新建控制器会产生两个持有同一 `LayerViewStore` 的类。故扩展 `LayerHostHooks` 与构造器、不新增文件。
+- **端口扩展**：`bridge/MediaPort.ets` +1 —— 新增 `importLandscapeDocument()`（地景 ZIP 的 picker + fileIo 段与 `landscapeImportFileName` 名称清洗逐字上移；宿主 `HostMediaPort` 具名实现 + 私有静态 `landscapeImportFileName`，与 D10 `importScriptDocument` 同形态）。
+- **逐字等价**：仅「`this.<宿主字段>` → store/hooks/port」与桥名映射（`callInteractive`→`port.requestInteractive`），比较边界 / 分支 / 取整 / 过滤正则 / 去重判定一字未改；`importLandscapeFile` 成功提示的 `fileName` 由返回值路径 basename 推导（与原 `destinationPath` basename 等价）；地景详情浮层宿主 `@State landscapeDetailOpen` 经新增 hook `setLandscapeDetailOpen` 写入。
+- **度量**：宿主 **8,587 → 8,437 行（−150）**、`private` 方法 **268 → 250（−18 = 16 法 + `landscapeImportFileName` + `syncBridgeFlagState`）**、`@State private` **131 不变**；`capability/LayerController.ets` **250 → 487 行（+237）**、`bridge/MediaPort.ets` **103 → 107 行（+4）**；未新增文件。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 3 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 247+ 文件）；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败（clipboard-pad / guide-pad / mist-horizon-pad / mist-performance / polar-scope-pad / verify-ohos-search），无新增失败。
+- **真机（192.168.50.108:36717）**：`Smoke: PASS`。`openUiPanel layers` → hilog `[cli-ui] opened panel=layers`；`setLayerTab 0` → hilog `layer tab=0`。
+  - `applyStarMagLimit`：星等限制滑块 6.5 → 5.0，右侧文本实时刷新；`getLimitMagnitude` 回读 `starMagnitudeLimitEnabled=true / customStarMagLimit=5`。
+  - `applyMilkyWayBright`：「银河亮度 +」3 → 4（文本实时刷新）；`getMilkyWayIntensity` 回读 `1 → 1.33`。
+  - `setOrbitDisplayFlag`：太阳系页展开「轨道显示方式」→「只显示当前选中天体」开关 true → false；`getOrbitDisplaySettings` 回读 `orbitIsolated: true → false`。
+  - `setSkyDisplaySetting`：「星星闪烁」开关关闭后，其条件子行「无大气时保持闪烁」即时消失（`layerStore.starTwinkle` 写入 + 条件重绘）。
+  - `setBridgeFlag`：天空页「流星」开关 true → false；`getMeteors` 回读 `true → false`。
+  - `selectLandscape`：地景列表点「飓风」→ `getLandscapeInfo.id` `guereins → hurricane`，再点「盖兰」复原 `guereins`。
+  - `changeLandscapeTransparency`：透明度滑块 0% → 55%；`getLandscapeOpacity` 回读 `0.0027 → 0.55`；拖回 0% 后经 `setLandscapeUseTransparency 0` 复原，重启并等待落定后 `getLandscapeOpacity=0.0027`（启动淡入瞬间会短暂读到 0.5，非持久值）。
+  - `setScenery3dEnabled` / `setScenery3dScene`：`openUiPanel scenery3d` → 开关启用（`getScenery3dList.enabled: false → true`）→ 点选 `Testscene`（`current: "" → Testscene`）；关闭开关 + 重启复原 `enabled=false / current=""`。
+  - `pidof` 全程存活（63072 → 重启 3737 → 8238 → 10454 → 10938）、无 jscrash；测试后全部持久化设置复原（`getLimitMagnitude` 6.5/false、`getMilkyWayIntensity` 1、`getOrbitDisplaySettings` orbitIsolated=true、`getMeteors` true、`getLandscapeInfo` guereins、`getScenery3dList` enabled=false）。
+  - **未走查（待真机人工）**：`applyTrailColor`（颜色输入 + 应用，需文本输入与颜色校验路径）、`setOrbitDisplayThickness` / `setOrbitColorStyle` / `setTrailDisplayFlag` / `setTrailDisplayNumber`（同域滑块 / 下拉，已过构建级逐字等价）、`setLandscapeFadeWithZoom`（Toggle 状态 layout 不暴露）、`importLandscapeFile`（系统文件选择器交互）。
+- **文档**：`ARKTS-PAGES-REFACTOR-PLAN.md` §15.12 追加 E2 完成行 + 度量。
+
 ## [2026-10-05] DevEco Code - E 轨道 E1：删死代码 + 位置层级选择薄胶水下沉
 
 - **删死代码（用户已确认）**：删 5 个宿主私有方法 —— `showObjectActionBar`（硬编码 `return false`）、`objectActionBarX`、`objectActionBarWidth`、`isObjectActionBarPoint`（仅被前三者与下述分支引用）、零引用 `loadFov`；并删 `isUiPoint` 体内恒假的第二判定项 `|| this.isObjectActionBarPoint(x, y)`（只删恒假项，`isObjectDetailCardPoint(...)` 第一项判定与比较边界不变）；从 geometry import 移除随之零引用的 `objectActionBarY`（其函数本体按 `scripts/test-ohos-polar-scope.mjs` 的文本切分边界保留，未删）。

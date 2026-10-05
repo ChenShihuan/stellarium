@@ -1657,3 +1657,30 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **度量（ReadAllLines / UTF-8 口径）**：宿主 **8,646 → 8,587 行（−59）**、`private` 方法 **277 → 268（−9）**、`@State private` **132 不变**；`LocationController.ets` **214 → 245（+31）**。
 
 **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-polar-scope` 4/4、`test-ohos-privacy-startup` 19/19 全绿；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。真机（192.168.50.108:36717）：`Smoke: PASS`；层级选择 亚洲→丹麦→哥本哈根→哥本哈根 → `getObserverInfo` `Copenhagen / 55.6759 / 12.5655 / 14` + hilog `command received: "setLocation" "Copenhagen|55.6759|12.5655|14"`；切大洲「欧洲」验证下级列刷新与地区/城市清空；`pidof` 存活、无 jscrash；测试后经「地图选点 + 应用」复原 `自定义位置 / 21.34°N / 110.38°E / 0 m`。**未走查 / 记录**：层级列无 `--id`，交互用坐标点击（缺语义命令，已记录）；`objectActionBarY` 因测试脚本切片锚点保留。
+
+#### 15.12.12 E 轨道 E2：显示 / 图层设置行为并入 LayerController（2026-10-05）
+
+> **背景**：E1 之后继续清理「设置/配置行为残余」。E2 把宿主残留的 16 个显示 / 图层设置
+> 行为并入既有 `capability/LayerController.ets`（D2 控制器；不新建文件，先普查后决定 —— 16 法
+> 与 D2 同属「图层 / 显示」域，写同一组 store，`applyLayerSwitch` 本就分发到其中两法）。
+
+**16 法逐条判定（以工作区实测为准）**
+
+| 法 | 目标 | 判定 |
+|---|---|---|
+| `applyStarMagLimit` | `LayerController` | 逐字等价（`layerViewStore.starMagLimit` + `setLimitMagnitude`） |
+| `applyMilkyWayBright` | `LayerController` | 逐字等价（`layerViewStore.milkyWayBright` + `setMilkyWayIntensity`） |
+| `applyTrailColor` | `LayerController` | 逐字等价（`flashHint` 经 hooks） |
+| `setOrbitDisplayFlag` / `setOrbitDisplayThickness` / `setOrbitColorStyle` | `LayerController` | 逐字等价（`setOrbitDisplaySetting`） |
+| `setTrailDisplayFlag` / `setTrailDisplayNumber` | `LayerController` | 逐字等价（`setTrailDisplaySetting`） |
+| `setLandscapeFadeWithZoom` / `changeLandscapeTransparency` | `LayerController` | 逐字等价 |
+| `selectLandscape` | `LayerController` | 逐字等价（`landscapeDetailOpen` 经 hook `setLandscapeDetailOpen`） |
+| `importLandscapeFile` | `LayerController` | picker/fileIo 经新增 `MediaPort.importLandscapeDocument()`；`landscapeImportFileName` 随之上移 `HostMediaPort` |
+| `setScenery3dEnabled` / `setScenery3dScene` | `LayerController` | 逐字等价（`sceneryStore`） |
+| `setSkyDisplaySetting` / `setBridgeFlag` | `LayerController` | **D2 遗留 hooks 实现迁入并移除 hooks**；`syncBridgeFlagState` 随 `setBridgeFlag` 下沉，`setViewLock` 分支经 hooks 回注宿主 |
+
+**新增 hooks**：`setViewLockState(enabled)`（宿主既有动作，含选中判定 / `trackingText`）、`setLandscapeDetailOpen(value)`；**移除** `setSkyDisplaySetting` / `setBridgeFlag` 两个 D2 遗留 hooks。端口：`MediaPort` +1（`importLandscapeDocument`）。
+
+**度量**：宿主 **8,587 → 8,437 行（−150）**、`private` 方法 **268 → 250（−18）**、`@State private` **131 不变**；`LayerController.ets` **250 → 487 行（+237）**；`MediaPort.ets` **103 → 107 行（+4）**；未新增文件。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 3 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。真机（192.168.50.108:36717）：`Smoke: PASS`；`applyStarMagLimit` 6.5→5.0（`getLimitMagnitude` enabled=true/5）、`applyMilkyWayBright` 3→4（`getMilkyWayIntensity` 1→1.33）、`setOrbitDisplayFlag`（`orbitIsolated` true→false）、`setSkyDisplaySetting`（「星星闪烁」关闭后条件子行消失）、`setBridgeFlag`（`getMeteors` true→false）、`selectLandscape`（guereins→hurricane→复原）、`changeLandscapeTransparency`（0%→55%，opacity 0.0027→0.55，复原）、`setScenery3dEnabled`/`setScenery3dScene`（enabled/current 变更并重启复原）；`pidof` 全程存活、无 jscrash。**未走查（待真机人工）**：`applyTrailColor` 的颜色输入应用、轨道/轨迹同域滑块与下拉、`setLandscapeFadeWithZoom` 开关、地景导入系统文件选择器。

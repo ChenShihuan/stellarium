@@ -561,6 +561,52 @@ class HostMediaPort implements MediaPort {
     return name
   }
 
+  // E2：地景包导入——picker 选择 .zip + 复制到应用地景导入目录（原宿主 importLandscapeFile 的
+  // picker/fileIo 段与 landscapeImportFileName 清洗逐字上移到端口适配器）。
+  importLandscapeDocument(): Promise<MediaImportResult> {
+    const factory = this.contextFactory
+    if (factory === null) {
+      const missing: MediaImportResult = { cancelled: true, path: '' }
+      return Promise.resolve(missing)
+    }
+    const run = async (): Promise<MediaImportResult> => {
+      const context = factory()
+      const options = new picker.DocumentSelectOptions()
+      options.fileSuffixFilters = ['Stellarium 地景 ZIP|.zip']
+      options.maxSelectNumber = 1
+      const selectedUris = await new picker.DocumentViewPicker(context).select(options)
+      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
+        const cancelled: MediaImportResult = { cancelled: true, path: '' }
+        return cancelled
+      }
+      const importDir = context.filesDir + '/stellarium_userdir/landscape-imports'
+      fileIo.mkdirSync(importDir, true)
+      const baseName = HostMediaPort.landscapeImportFileName(selectedUris[0])
+      let fileName = baseName
+      let destinationPath = importDir + '/' + fileName
+      if (fileIo.accessSync(destinationPath)) {
+        fileName = baseName.replace(/\.zip$/i, '') + '-' + Date.now().toString() + '.zip'
+        destinationPath = importDir + '/' + fileName
+      }
+      await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(destinationPath))
+      const imported: MediaImportResult = { cancelled: false, path: destinationPath }
+      return imported
+    }
+    return run()
+  }
+
+  // 原宿主 landscapeImportFileName：从 URI 抽取并清洗地景包文件名（E2 随导入逻辑上移端口）。
+  private static landscapeImportFileName(uri: string): string {
+    let name = uri.substring(uri.lastIndexOf('/') + 1)
+    const queryIndex = name.indexOf('?')
+    if (queryIndex >= 0) name = name.substring(0, queryIndex)
+    try { name = decodeURIComponent(name) } catch (_error) {}
+    name = name.trim().replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_')
+    if (name.length === 0 || !name.toLowerCase().endsWith('.zip')) name = 'imported-landscape-' + Date.now().toString() + '.zip'
+    if (name.length > 120) name = name.substring(0, 116) + '.zip'
+    return name
+  }
+
   // ── 对象模型渲染（M2-A）：worker 光栅化结果的像素图创建与 PNG 回退读回。 ──
   createPixelMapFromRgba(pixels: ArrayBuffer, width: number, height: number, label: string): Promise<image.PixelMap> {
     return image.createPixelMap(pixels, {
@@ -1939,8 +1985,8 @@ export struct WindowNativeNode {
           this.panelVisible = visible
           this.syncDockClockTimer()
         },
-        setSkyDisplaySetting: (actionId: string, value: boolean): void => { this.setSkyDisplaySetting(actionId, value) },
-        setBridgeFlag: (cmd: string, value: boolean): void => { this.setBridgeFlag(cmd, value) },
+        setViewLockState: (enabled: boolean): void => { this.setViewLockState(enabled) },
+        setLandscapeDetailOpen: (value: boolean): void => { this.landscapeDetailOpen = value },
         persistEquatorialMount: (): void => { this.telescopeStore.persistEquatorialMount() },
         persistNightMode: (): void => { this.nightModeStore.persistNightMode() },
         syncSkyCultureTimeFollowTimer: (): void => { this.skyCultureCtl().syncSkyCultureTimeFollowTimer() },
@@ -1964,7 +2010,9 @@ export struct WindowNativeNode {
         }
       }
       this.layerControllerImpl = new LayerController(
-        this.commandPort(), this.layerViewStore, this.scriptStore, this.pluginStore, hooks
+        this.commandPort(), this.hostMediaPort, this.layerViewStore, this.layerStore,
+        this.sceneryStore, this.objectDetailStore, this.viewSettingsStore,
+        this.scriptStore, this.pluginStore, hooks
       )
     }
     return this.layerControllerImpl
@@ -3737,59 +3785,8 @@ export struct WindowNativeNode {
 
   // loadRecordingByName 已下沉 ScriptStore（§14 B2R-4）。
 
-  private landscapeImportFileName(uri: string): string {
-    let name = uri.substring(uri.lastIndexOf('/') + 1)
-    const queryIndex = name.indexOf('?')
-    if (queryIndex >= 0) name = name.substring(0, queryIndex)
-    try { name = decodeURIComponent(name) } catch (_error) {}
-    name = name.trim().replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_')
-    if (name.length === 0 || !name.toLowerCase().endsWith('.zip')) name = 'imported-landscape-' + Date.now().toString() + '.zip'
-    if (name.length > 120) name = name.substring(0, 116) + '.zip'
-    return name
-  }
-
-  private async importLandscapeFile(): Promise<void> {
-    if (this.layerViewStore.landscapeImporting) return
-    this.layerViewStore.landscapeImporting = true
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const options = new picker.DocumentSelectOptions()
-      options.fileSuffixFilters = ['Stellarium 地景 ZIP|.zip']
-      options.maxSelectNumber = 1
-      const selectedUris = await new picker.DocumentViewPicker(context).select(options)
-      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
-        this.flashHint(I18n.t('landscape_import_cancelled'))
-        this.layerViewStore.landscapeImporting = false
-        return
-      }
-      const importDir = context.filesDir + '/stellarium_userdir/landscape-imports'
-      fileIo.mkdirSync(importDir, true)
-      const baseName = this.landscapeImportFileName(selectedUris[0])
-      let fileName = baseName
-      let destinationPath = importDir + '/' + fileName
-      if (fileIo.accessSync(destinationPath)) {
-        fileName = baseName.replace(/\.zip$/i, '') + '-' + Date.now().toString() + '.zip'
-        destinationPath = importDir + '/' + fileName
-      }
-      await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(destinationPath))
-      this.callInteractive('importLandscape', destinationPath, (r: StellariumBridgeResponse) => {
-        if (r.ok === true) {
-          this.flashHint(I18n.format('landscape_import_success', [String(r.id ?? fileName)]))
-          this.layerViewStore.loadLandscapeList()
-        } else {
-          this.flashHint(I18n.t('landscape_import_failed'))
-        }
-        this.layerViewStore.landscapeImporting = false
-      }, () => {
-        this.flashHint(I18n.t('landscape_import_failed'))
-        this.layerViewStore.landscapeImporting = false
-      })
-    } catch (error) {
-      hilog.error(0x0000, 'StellariumArkUI', 'Landscape import failed: %{public}s', String(error))
-      this.flashHint(I18n.t('landscape_import_failed'))
-      this.layerViewStore.landscapeImporting = false
-    }
-  }
+  // landscapeImportFileName / importLandscapeFile 已随 E2 下沉 capability/LayerController.ets
+  //（picker/fileIo 经 MediaPort.importLandscapeDocument；名称清洗收在 HostMediaPort 适配器）。
 
   private async saveFileAs(path: string, fileName: string, suffixLabel: string): Promise<void> {
     if (path.length === 0 || !this.hostMediaPort.fileExists(path)) {
@@ -3856,25 +3853,7 @@ export struct WindowNativeNode {
   // ===== 流星雨（MeteorShowers 插件桥）=====
   // loadMeteorShowers / setMeteorShowersFlag 已随 §14 B3-1 同片搬入 state/MeteorStore.ets。
 
-  private setScenery3dScene(id: string): void {
-    this.sceneryStore.scenery3dLoadingId = id
-    this.callInteractive('setScenery3dScene', id, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) {
-        this.sceneryStore.scenery3dLoadingId = ''
-        this.flashHint('三维地景加载失败')
-        return
-      }
-      this.sceneryStore.loadScenery3d()
-    }, () => { this.sceneryStore.scenery3dLoadingId = '' })
-  }
-
-  private setScenery3dEnabled(enabled: boolean): void {
-    this.sceneryStore.scenery3dEnabled = enabled
-    this.callInteractive('setScenery3dEnabled', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) this.sceneryStore.scenery3dEnabled = !enabled
-      this.sceneryStore.loadScenery3d()
-    }, () => { this.sceneryStore.scenery3dEnabled = !enabled })
-  }
+  // setScenery3dScene / setScenery3dEnabled 已随 E2 下沉 capability/LayerController.ets（桥经 CommandPort）。
 
   // ===== 帮助面板：关于 / 日志 / 配置导入导出 =====
   private exportConfig(): void {
@@ -4111,85 +4090,9 @@ export struct WindowNativeNode {
     })
   }
 
-  // Routed bridge flag: calls a named bridge command (e.g. setMeteors) with "1"/"0"
-  private setBridgeFlag(cmd: string, enabled: boolean): void {
-    hilog.info(0x0000, 'StellariumArkUI', 'setBridgeFlag send %{public}s|%{public}s', cmd, enabled ? '1' : '0')
-    if (cmd === 'setViewLock') {
-      this.setViewLockState(enabled)
-      return
-    }
-    // 同步本地 @State：否则面板关闭重开后 Toggle 会显示旧值，再点一次就把状态发反了
-    this.syncBridgeFlagState(cmd, enabled)
-    this.callInteractive(cmd, enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      hilog.info(0x0000, 'StellariumArkUI', 'setBridgeFlag %{public}s ok=%{public}s err=%{public}s', cmd, r.ok === true ? '1' : '0', r.error ?? '')
-      this.refreshState()
-    })
-  }
-
-  private setOrbitDisplayFlag(setting: string, enabled: boolean): void {
-    this.callInteractive('setOrbitDisplaySetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      if (setting === 'isolated') this.layerViewStore.orbitIsolated = enabled
-      else if (setting === 'majorPlanets') this.layerViewStore.orbitMajorPlanets = enabled
-      else if (setting === 'planetsOnly') this.layerViewStore.orbitPlanetsOnly = enabled
-      else if (setting === 'withMoons') this.layerViewStore.orbitWithMoons = enabled
-      else if (setting === 'permanent') this.layerViewStore.orbitPermanent = enabled
-    })
-  }
-
-  private setOrbitDisplayThickness(value: number): void {
-    const thickness = Math.round(value)
-    this.callInteractive('setOrbitDisplaySetting', 'thickness|' + thickness.toString(), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.layerViewStore.orbitThickness = thickness
-    })
-  }
-
-  private setOrbitColorStyle(index: number): void {
-    const values: string[] = ['one_color', 'groups', 'major_planets', 'major_planets_minor_types']
-    const style = values[index] ?? 'one_color'
-    this.callInteractive('setOrbitDisplaySetting', 'colorStyle|' + style, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.layerViewStore.orbitColorStyle = style
-    })
-  }
-
-  private setTrailDisplayFlag(setting: string, enabled: boolean): void {
-    this.callInteractive('setTrailDisplaySetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (r.ok === true && setting === 'isolated') this.layerViewStore.trailIsolated = enabled
-    })
-  }
-
-  private setTrailDisplayNumber(setting: string, value: number): void {
-    const number = Math.round(value)
-    this.callInteractive('setTrailDisplaySetting', setting + '|' + number.toString(), (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      if (setting === 'selectionCount') this.layerViewStore.trailSelectionCount = number
-      else if (setting === 'years') this.layerViewStore.trailYears = number
-      else if (setting === 'thickness') this.layerViewStore.trailThickness = number
-    })
-  }
-
-  private applyTrailColor(): void {
-    const normalized = this.layerViewStore.trailColorInput.trim().toUpperCase()
-    if (!/^#[0-9A-F]{6}$/.test(normalized)) {
-      this.flashHint('请输入 #RRGGBB 格式的颜色')
-      return
-    }
-    this.callInteractive('setTrailDisplaySetting', 'color|' + normalized, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      this.layerViewStore.trailColor = r.trailColor !== undefined ? r.trailColor : normalized
-      this.layerViewStore.trailColorInput = this.layerViewStore.trailColor
-    })
-  }
-
-  // 把 cmd 型开关的最新值写回对应的本地 @State，保证 Toggle 重建时显示正确
-  private syncBridgeFlagState(cmd: string, enabled: boolean): void {
-    if (cmd === 'setViewLock') { this.viewSettingsStore.viewLock = enabled }
-    else if (cmd === 'setVerticalClamp') { this.viewSettingsStore.verticalClamp = enabled }
-    else if (cmd === 'setFlatHorizon') { this.viewSettingsStore.flatHorizon = enabled }
-    else if (cmd === 'setMeteors') { this.layerStore.meteors = enabled }
-    else if (cmd === 'setDsoLabels') { this.layerStore.dsoLabels = enabled }
-    else if (cmd === 'setAutoZoomResets') { this.viewSettingsStore.autoZoomResets = enabled }
-  }
+  // setBridgeFlag / syncBridgeFlagState / setOrbitDisplayFlag / setOrbitDisplayThickness / setOrbitColorStyle /
+  // setTrailDisplayFlag / setTrailDisplayNumber / applyTrailColor 已随 E2 下沉 capability/LayerController.ets
+  //（桥经 CommandPort，cmd 型开关的本地 store 同步随 setBridgeFlag 一并下沉）。
 
   private setViewLockState(enabled: boolean): void {
     if (enabled && !this.objectDetailStore.hasSelectedObject()) {
@@ -4218,36 +4121,7 @@ export struct WindowNativeNode {
     this.setViewLockState(!this.viewSettingsStore.viewLock)
   }
 
-  private setSkyDisplaySetting(setting: string, value: boolean | number): void {
-    if (setting === 'luminanceAdaptation') this.layerStore.luminanceAdaptation = value as boolean
-    else if (setting === 'starTwinkle') this.layerStore.starTwinkle = value as boolean
-    else if (setting === 'forcedStarTwinkle') this.layerStore.forcedStarTwinkle = value as boolean
-    else if (setting === 'bigStarHalo') this.layerStore.bigStarHalo = value as boolean
-    else if (setting === 'starSpiky') this.layerStore.starSpiky = value as boolean
-    else if (setting === 'bortleScale') this.layerViewStore.bortleScale = Math.round(value as number)
-    else if (setting === 'meteorZhr') this.layerViewStore.meteorZhr = Math.round(value as number)
-    else if (setting === 'zodiacalLight') this.layerStore.zodiacalLight = value as boolean
-    else if (setting === 'zodiacalIntensity') this.layerViewStore.zodiacalIntensity = value as number
-    const payload = setting + '|' + (typeof value === 'boolean' ? (value ? '1' : '0') : value.toString())
-    this.callInteractive('setSkyDisplaySetting', payload, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        if (typeof value === 'boolean' || setting === 'bortleScale') this.refreshState()
-      } else {
-        this.flashHint(r.error ?? I18n.t('msg_apply_failed'))
-        this.refreshState()
-      }
-    })
-  }
-
-  private applyStarMagLimit(value: number): void {
-    this.layerViewStore.starMagLimit = value
-    this.callInteractive('setLimitMagnitude', value.toFixed(1), () => {})
-  }
-
-  private applyMilkyWayBright(value: number): void {
-    this.layerViewStore.milkyWayBright = value
-    this.callInteractive('setMilkyWayIntensity', (value / 3).toFixed(2), () => {})
-  }
+  // setSkyDisplaySetting / applyStarMagLimit / applyMilkyWayBright 已随 E2 下沉 capability/LayerController.ets。
 
   private setProjection(name: string): void {
     this.callInteractive('setProjectionType', name, (r: StellariumBridgeResponse) => {
@@ -4628,32 +4502,8 @@ export struct WindowNativeNode {
     this.callInteractive('setFovMarkerSetting', setting + '|' + value.toFixed(1), () => {})
   }
 
-  private selectLandscape(id: string, name: string): void {
-    this.callInteractive('setLandscape', id, (response: StellariumBridgeResponse) => {
-      if (response.ok !== true) {
-        this.flashHint(I18n.t('msg_apply_failed'))
-        return
-      }
-      this.layerViewStore.currentLandscapeId = id
-      this.objectDetailStore.selectedLandscapeName = name
-      this.landscapeDetailOpen = false
-      this.refreshState()
-    })
-  }
-
-  private setLandscapeFadeWithZoom(isOn: boolean): void {
-    this.layerViewStore.landscapeFadeWithZoom = isOn
-    this.callInteractive('setLandscapeFadeWithZoom', isOn ? '1' : '0', () => {})
-  }
-
-  private changeLandscapeTransparency(val: number): void {
-    const v = (val / 100).toFixed(2)
-    // 手动透明度接管地景显示；不要再调用 setLandscapeFadeWithZoom(0)，
-    // C++ 里该命令会重置透明度，导致滑条看起来“没反应”。
-    this.layerViewStore.landscapeFadeWithZoom = false
-    this.callInteractive('setLandscapeUseTransparency', '1', () => {})
-    this.callInteractive('setLandscapeTransparency', v, () => {})
-  }
+  // selectLandscape / setLandscapeFadeWithZoom / changeLandscapeTransparency 已随 E2 下沉
+  // capability/LayerController.ets（桥经 CommandPort）。
 
   private selectCommandEntry(item: CommandCatalogEntry): void {
     this.commandStore.commandNameInput = item.name
@@ -7868,23 +7718,23 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         onClear: () => { this.layerCtl().clearMarkingLayers() },
         onSelectTab: (id: number) => { this.layerCtl().selectViewTab(id) },
         onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
-        onSetSkyDisplay: (setting: string, value: boolean | number) => { this.setSkyDisplaySetting(setting, value) },
-        onStarMagLimit: (value: number) => { this.applyStarMagLimit(value) },
-        onMilkyWayBright: (value: number) => { this.applyMilkyWayBright(value) },
-        onSetOrbitFlag: (setting: string, enabled: boolean) => { this.setOrbitDisplayFlag(setting, enabled) },
-        onSetOrbitThickness: (value: number) => { this.setOrbitDisplayThickness(value) },
-        onSetOrbitColorStyle: (index: number) => { this.setOrbitColorStyle(index) },
+        onSetSkyDisplay: (setting: string, value: boolean | number) => { this.layerCtl().setSkyDisplaySetting(setting, value) },
+        onStarMagLimit: (value: number) => { this.layerCtl().applyStarMagLimit(value) },
+        onMilkyWayBright: (value: number) => { this.layerCtl().applyMilkyWayBright(value) },
+        onSetOrbitFlag: (setting: string, enabled: boolean) => { this.layerCtl().setOrbitDisplayFlag(setting, enabled) },
+        onSetOrbitThickness: (value: number) => { this.layerCtl().setOrbitDisplayThickness(value) },
+        onSetOrbitColorStyle: (index: number) => { this.layerCtl().setOrbitColorStyle(index) },
         onLoadOrbitSettings: () => { this.layerViewStore.loadOrbitDisplaySettings() },
-        onSetTrailFlag: (setting: string, enabled: boolean) => { this.setTrailDisplayFlag(setting, enabled) },
-        onSetTrailNumber: (setting: string, value: number) => { this.setTrailDisplayNumber(setting, value) },
+        onSetTrailFlag: (setting: string, enabled: boolean) => { this.layerCtl().setTrailDisplayFlag(setting, enabled) },
+        onSetTrailNumber: (setting: string, value: number) => { this.layerCtl().setTrailDisplayNumber(setting, value) },
         onLoadTrailSettings: () => { this.layerViewStore.loadTrailDisplaySettings() },
-        onApplyTrailColor: () => { this.applyTrailColor() },
+        onApplyTrailColor: () => { this.layerCtl().applyTrailColor() },
         onTriggerAction: (actionId: string) => { this.triggerAction(actionId) },
         onSetFovMarker: (setting: string, value: number) => { this.setFovMarkerSetting(setting, value) },
-        onSetLandscapeFadeWithZoom: (isOn: boolean) => { this.setLandscapeFadeWithZoom(isOn) },
-        onImportLandscape: () => { this.importLandscapeFile() },
-        onSelectLandscape: (id: string, name: string) => { this.selectLandscape(id, name) },
-        onChangeLandscapeTransparency: (val: number) => { this.changeLandscapeTransparency(val) },
+        onSetLandscapeFadeWithZoom: (isOn: boolean) => { this.layerCtl().setLandscapeFadeWithZoom(isOn) },
+        onImportLandscape: () => { this.layerCtl().importLandscapeFile() },
+        onSelectLandscape: (id: string, name: string) => { this.layerCtl().selectLandscape(id, name) },
+        onChangeLandscapeTransparency: (val: number) => { this.layerCtl().changeLandscapeTransparency(val) },
         onLoadList: () => { this.skyCultureViewStore.loadSkyCultureList() },
         onSelectCulture: (id: string) => { this.skyCultureCtl().selectSkyCulture(id) },
         onRowArea: (id: string, area: Area) => { this.skyCultureCtl().handleSkyCultureRowArea(id, area) },
@@ -8340,8 +8190,8 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         subColor: this.nightModeStore.nmSub(),
         panelColor: this.nightModeStore.nmBg(),
         accentColor: this.nightModeStore.nmAccent(),
-        onToggleEnabled: (enabled: boolean) => { this.setScenery3dEnabled(enabled) },
-        onSelectScene: (id: string) => { this.setScenery3dScene(id) }
+        onToggleEnabled: (enabled: boolean) => { this.layerCtl().setScenery3dEnabled(enabled) },
+        onSelectScene: (id: string) => { this.layerCtl().setScenery3dScene(id) }
       })
     } else if (this.activePanel === 'skyCultureMaker') {
       SkyCultureMakerPanel({

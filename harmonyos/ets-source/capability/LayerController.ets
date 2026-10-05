@@ -1,9 +1,16 @@
-// 图层 / 视图标签行为控制器（STATE-REVIEW §10.2 D2，PLAN §15 D 轨道 D2）。
+// 图层 / 视图标签行为控制器（STATE-REVIEW §10.2 D2，PLAN §15 D 轨道 D2；E2 并入显示 / 图层设置行为）。
 //
-// 原宿主 MainWindowNativeNode 的 10 个方法逐字下沉：
+// D2 原宿主 10 个方法逐字下沉：
 //   setLayer / applyLayerSwitch / layerTabItems / markingLayerStates / layerPresetStates /
 //   applyLayerStates / clearMarkingLayers / applyLayerPreset / selectViewTab / selectConfigTab。
 // 私有字段 viewTabTransitionId / configTabTransitionId 随控制器（标签切换去重序号，不入 @Observed store）。
+//
+// E2（显示 / 图层设置，16 法）逐字并入本控制器（职责同属「图层 / 显示」域，故不新建控制器）：
+//   setSkyDisplaySetting / setBridgeFlag（二者原为 D2 遗留的 hooks 回注宿主，本片把实现迁入并**移除 hooks**）、
+//   applyStarMagLimit / applyMilkyWayBright / applyTrailColor / setOrbitDisplayFlag /
+//   setOrbitDisplayThickness / setOrbitColorStyle / setTrailDisplayFlag / setTrailDisplayNumber /
+//   setLandscapeFadeWithZoom / changeLandscapeTransparency / selectLandscape / importLandscapeFile /
+//   setScenery3dEnabled / setScenery3dScene（另随 setBridgeFlag 并入 private syncBridgeFlagState）。
 //
 // 职责划分（§15.7 规则 2）：
 //   - LayerViewStore 的地景加载器（loadLandscapeList）与 ScriptStore/PluginStore 的标签页数据加载
@@ -12,23 +19,33 @@
 //   - viewTab / configTab 与两组过渡量（内容透明度 / 水平偏移）是宿主 @State、组件经 @Prop 消费，
 //     留宿主、经 hooks get/set；
 //   - 标签切换动画（宿主 getUIContext().animateTo）归宿主，经 animateTabIn / animateTabOut 回注。
+//   - E2：星空显示 / 开关设置写 LayerStore（布尔）与 LayerViewStore（数值），地景导入 picker/fileIo 经
+//     MediaPort.importLandscapeDocument；setViewLock 分支（选中判定 + trackingText 回读）与地景详情浮层
+//     宿主 @State 经 hooks 回注。
 //
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；跨域回调经 LayerHostHooks 具名回注（§13.1 规则 6）。
+// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；picker/fileIo 经 MediaPort；跨域回调经
+// LayerHostHooks 具名回注（§13.1 规则 6）。
 import hilog from '@ohos.hilog'
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse, TabItem } from '../pages/StellariumTypes'
 import { LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, OFFLINE_APPGALLERY_BUILD } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
+import { MediaPort, MediaImportResult } from '../bridge/MediaPort'
 import { LayerViewStore } from '../state/LayerViewStore'
+import { LayerStore } from '../state/LayerStore'
+import { SceneryStore } from '../state/SceneryStore'
+import { ObjectDetailStore } from '../state/ObjectDetailStore'
+import { ViewSettingsStore } from '../state/ViewSettingsStore'
 import { ScriptStore } from '../state/ScriptStore'
 import { PluginStore } from '../state/PluginStore'
 import { BehaviorHostHooks } from './ControllerHooks'
 
 // 宿主 → 控制器回注（§13.1 规则 6）：图层开关分派、持久化、标签切换动画与宿主 @State 读写。
 export interface LayerHostHooks extends BehaviorHostHooks {
-  // 图层开关分派（宿主保留 setSkyDisplaySetting / setBridgeFlag，二者发不同桥命令）。
-  setSkyDisplaySetting(actionId: string, value: boolean): void
-  setBridgeFlag(cmd: string, value: boolean): void
+  // 视图锁定（cmd === 'setViewLock' 的既有宿主动作，含选中判定 / trackingText 回读，留宿主 §15.7 规则 1）。
+  setViewLockState(enabled: boolean): void
+  // 地景详情浮层宿主 @State（selectLandscape 关闭浮层；组件 @Prop 消费，§15.7 规则 2）。
+  setLandscapeDetailOpen(value: boolean): void
   // 持久化（跨 store / AppStorage：赤道仪开关归 TelescopeStore；夜视归 NightModeStore 的 D16 方法）。
   persistEquatorialMount(): void
   persistNightMode(): void
@@ -55,7 +72,12 @@ export interface LayerHostHooks extends BehaviorHostHooks {
 
 export class LayerController {
   private port: CommandPort
+  private mediaPort: MediaPort
   private layerViewStore: LayerViewStore
+  private layerStore: LayerStore
+  private sceneryStore: SceneryStore
+  private objectDetailStore: ObjectDetailStore
+  private viewSettingsStore: ViewSettingsStore
   private scriptStore: ScriptStore
   private pluginStore: PluginStore
   private hooks: LayerHostHooks
@@ -65,13 +87,23 @@ export class LayerController {
 
   constructor(
     port: CommandPort,
+    mediaPort: MediaPort,
     layerViewStore: LayerViewStore,
+    layerStore: LayerStore,
+    sceneryStore: SceneryStore,
+    objectDetailStore: ObjectDetailStore,
+    viewSettingsStore: ViewSettingsStore,
     scriptStore: ScriptStore,
     pluginStore: PluginStore,
     hooks: LayerHostHooks
   ) {
     this.port = port
+    this.mediaPort = mediaPort
     this.layerViewStore = layerViewStore
+    this.layerStore = layerStore
+    this.sceneryStore = sceneryStore
+    this.objectDetailStore = objectDetailStore
+    this.viewSettingsStore = viewSettingsStore
     this.scriptStore = scriptStore
     this.pluginStore = pluginStore
     this.hooks = hooks
@@ -93,9 +125,9 @@ export class LayerController {
   applyLayerSwitch(actionId: string, cmd: string, value: boolean): void {
     if (cmd.length > 0) {
       if (cmd.indexOf('setSkyDisplay') === 0) {
-        this.hooks.setSkyDisplaySetting(actionId, value)
+        this.setSkyDisplaySetting(actionId, value)
       } else {
-        this.hooks.setBridgeFlag(cmd, value)
+        this.setBridgeFlag(cmd, value)
       }
     } else {
       this.setLayer(actionId, value)
@@ -246,5 +278,210 @@ export class LayerController {
       this.hooks.setConfigTabContentOpacity(0)
       this.hooks.setConfigTabContentOffsetX((0 - direction) * 8)
     })
+  }
+
+  // ===== E2：显示 / 图层设置行为（原宿主 16 法逐字下沉）=====
+
+  // 原宿主 setSkyDisplaySetting()：星空显示设置写回（布尔项写 LayerStore，数值项写 LayerViewStore）。
+  setSkyDisplaySetting(setting: string, value: boolean | number): void {
+    if (setting === 'luminanceAdaptation') this.layerStore.luminanceAdaptation = value as boolean
+    else if (setting === 'starTwinkle') this.layerStore.starTwinkle = value as boolean
+    else if (setting === 'forcedStarTwinkle') this.layerStore.forcedStarTwinkle = value as boolean
+    else if (setting === 'bigStarHalo') this.layerStore.bigStarHalo = value as boolean
+    else if (setting === 'starSpiky') this.layerStore.starSpiky = value as boolean
+    else if (setting === 'bortleScale') this.layerViewStore.bortleScale = Math.round(value as number)
+    else if (setting === 'meteorZhr') this.layerViewStore.meteorZhr = Math.round(value as number)
+    else if (setting === 'zodiacalLight') this.layerStore.zodiacalLight = value as boolean
+    else if (setting === 'zodiacalIntensity') this.layerViewStore.zodiacalIntensity = value as number
+    const payload = setting + '|' + (typeof value === 'boolean' ? (value ? '1' : '0') : value.toString())
+    this.port.requestInteractive('setSkyDisplaySetting', payload, (r: StellariumBridgeResponse) => {
+      if (r.ok === true) {
+        if (typeof value === 'boolean' || setting === 'bortleScale') this.hooks.refreshState()
+      } else {
+        this.hooks.flashHint(r.error ?? I18n.t('msg_apply_failed'))
+        this.hooks.refreshState()
+      }
+    })
+  }
+
+  // 原宿主 setBridgeFlag()：命名桥命令的通用写回（本地 @State 同步 + viewLock 分支）。
+  setBridgeFlag(cmd: string, enabled: boolean): void {
+    hilog.info(0x0000, 'StellariumArkUI', 'setBridgeFlag send %{public}s|%{public}s', cmd, enabled ? '1' : '0')
+    if (cmd === 'setViewLock') {
+      this.hooks.setViewLockState(enabled)
+      return
+    }
+    // 同步本地 @State：否则面板关闭重开后 Toggle 会显示旧值，再点一次就把状态发反了
+    this.syncBridgeFlagState(cmd, enabled)
+    this.port.requestInteractive(cmd, enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
+      hilog.info(0x0000, 'StellariumArkUI', 'setBridgeFlag %{public}s ok=%{public}s err=%{public}s', cmd, r.ok === true ? '1' : '0', r.error ?? '')
+      this.hooks.refreshState()
+    })
+  }
+
+  // 原宿主 syncBridgeFlagState()：把 cmd 型开关的最新值写回对应的本地 store（随 setBridgeFlag 下沉）。
+  private syncBridgeFlagState(cmd: string, enabled: boolean): void {
+    if (cmd === 'setViewLock') { this.viewSettingsStore.viewLock = enabled }
+    else if (cmd === 'setVerticalClamp') { this.viewSettingsStore.verticalClamp = enabled }
+    else if (cmd === 'setFlatHorizon') { this.viewSettingsStore.flatHorizon = enabled }
+    else if (cmd === 'setMeteors') { this.layerStore.meteors = enabled }
+    else if (cmd === 'setDsoLabels') { this.layerStore.dsoLabels = enabled }
+    else if (cmd === 'setAutoZoomResets') { this.viewSettingsStore.autoZoomResets = enabled }
+  }
+
+  // 原宿主 applyStarMagLimit()：极限星等写 store 并写桥。
+  applyStarMagLimit(value: number): void {
+    this.layerViewStore.starMagLimit = value
+    this.port.requestInteractive('setLimitMagnitude', value.toFixed(1), () => {})
+  }
+
+  // 原宿主 applyMilkyWayBright()：银河亮度写 store 并写桥。
+  applyMilkyWayBright(value: number): void {
+    this.layerViewStore.milkyWayBright = value
+    this.port.requestInteractive('setMilkyWayIntensity', (value / 3).toFixed(2), () => {})
+  }
+
+  // 原宿主 setOrbitDisplayFlag()：轨道显示开关写回（回包成功后写 LayerViewStore）。
+  setOrbitDisplayFlag(setting: string, enabled: boolean): void {
+    this.port.requestInteractive('setOrbitDisplaySetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) return
+      if (setting === 'isolated') this.layerViewStore.orbitIsolated = enabled
+      else if (setting === 'majorPlanets') this.layerViewStore.orbitMajorPlanets = enabled
+      else if (setting === 'planetsOnly') this.layerViewStore.orbitPlanetsOnly = enabled
+      else if (setting === 'withMoons') this.layerViewStore.orbitWithMoons = enabled
+      else if (setting === 'permanent') this.layerViewStore.orbitPermanent = enabled
+    })
+  }
+
+  // 原宿主 setOrbitDisplayThickness()：轨道线宽写回。
+  setOrbitDisplayThickness(value: number): void {
+    const thickness = Math.round(value)
+    this.port.requestInteractive('setOrbitDisplaySetting', 'thickness|' + thickness.toString(), (r: StellariumBridgeResponse) => {
+      if (r.ok === true) this.layerViewStore.orbitThickness = thickness
+    })
+  }
+
+  // 原宿主 setOrbitColorStyle()：轨道配色方案写回。
+  setOrbitColorStyle(index: number): void {
+    const values: string[] = ['one_color', 'groups', 'major_planets', 'major_planets_minor_types']
+    const style = values[index] ?? 'one_color'
+    this.port.requestInteractive('setOrbitDisplaySetting', 'colorStyle|' + style, (r: StellariumBridgeResponse) => {
+      if (r.ok === true) this.layerViewStore.orbitColorStyle = style
+    })
+  }
+
+  // 原宿主 setTrailDisplayFlag()：轨迹显示开关写回。
+  setTrailDisplayFlag(setting: string, enabled: boolean): void {
+    this.port.requestInteractive('setTrailDisplaySetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
+      if (r.ok === true && setting === 'isolated') this.layerViewStore.trailIsolated = enabled
+    })
+  }
+
+  // 原宿主 setTrailDisplayNumber()：轨迹数量 / 年数 / 线宽写回。
+  setTrailDisplayNumber(setting: string, value: number): void {
+    const number = Math.round(value)
+    this.port.requestInteractive('setTrailDisplaySetting', setting + '|' + number.toString(), (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) return
+      if (setting === 'selectionCount') this.layerViewStore.trailSelectionCount = number
+      else if (setting === 'years') this.layerViewStore.trailYears = number
+      else if (setting === 'thickness') this.layerViewStore.trailThickness = number
+    })
+  }
+
+  // 原宿主 applyTrailColor()：校验 #RRGGBB 后写桥并回写 store。
+  applyTrailColor(): void {
+    const normalized = this.layerViewStore.trailColorInput.trim().toUpperCase()
+    if (!/^#[0-9A-F]{6}$/.test(normalized)) {
+      this.hooks.flashHint('请输入 #RRGGBB 格式的颜色')
+      return
+    }
+    this.port.requestInteractive('setTrailDisplaySetting', 'color|' + normalized, (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) return
+      this.layerViewStore.trailColor = r.trailColor !== undefined ? r.trailColor : normalized
+      this.layerViewStore.trailColorInput = this.layerViewStore.trailColor
+    })
+  }
+
+  // 原宿主 selectLandscape()：应用地景包（成功写当前地景 / 关闭详情浮层 / 刷新状态）。
+  selectLandscape(id: string, name: string): void {
+    this.port.requestInteractive('setLandscape', id, (response: StellariumBridgeResponse) => {
+      if (response.ok !== true) {
+        this.hooks.flashHint(I18n.t('msg_apply_failed'))
+        return
+      }
+      this.layerViewStore.currentLandscapeId = id
+      this.objectDetailStore.selectedLandscapeName = name
+      this.hooks.setLandscapeDetailOpen(false)
+      this.hooks.refreshState()
+    })
+  }
+
+  // 原宿主 setLandscapeFadeWithZoom()：随缩放淡出地景开关写回。
+  setLandscapeFadeWithZoom(isOn: boolean): void {
+    this.layerViewStore.landscapeFadeWithZoom = isOn
+    this.port.requestInteractive('setLandscapeFadeWithZoom', isOn ? '1' : '0', () => {})
+  }
+
+  // 原宿主 changeLandscapeTransparency()：手动透明度接管地景显示。
+  changeLandscapeTransparency(val: number): void {
+    const v = (val / 100).toFixed(2)
+    // 手动透明度接管地景显示；不要再调用 setLandscapeFadeWithZoom(0)，
+    // C++ 里该命令会重置透明度，导致滑条看起来“没反应”。
+    this.layerViewStore.landscapeFadeWithZoom = false
+    this.port.requestInteractive('setLandscapeUseTransparency', '1', () => {})
+    this.port.requestInteractive('setLandscapeTransparency', v, () => {})
+  }
+
+  // 原宿主 importLandscapeFile()：picker 选 ZIP → 复制到应用导入目录 → 桥导入（picker/fileIo 经 MediaPort）。
+  async importLandscapeFile(): Promise<void> {
+    if (this.layerViewStore.landscapeImporting) return
+    this.layerViewStore.landscapeImporting = true
+    try {
+      const result: MediaImportResult = await this.mediaPort.importLandscapeDocument()
+      if (result.cancelled) {
+        this.hooks.flashHint(I18n.t('landscape_import_cancelled'))
+        this.layerViewStore.landscapeImporting = false
+        return
+      }
+      const fileName = result.path.substring(result.path.lastIndexOf('/') + 1)
+      this.port.requestInteractive('importLandscape', result.path, (r: StellariumBridgeResponse) => {
+        if (r.ok === true) {
+          this.hooks.flashHint(I18n.format('landscape_import_success', [String(r.id ?? fileName)]))
+          this.layerViewStore.loadLandscapeList()
+        } else {
+          this.hooks.flashHint(I18n.t('landscape_import_failed'))
+        }
+        this.layerViewStore.landscapeImporting = false
+      }, () => {
+        this.hooks.flashHint(I18n.t('landscape_import_failed'))
+        this.layerViewStore.landscapeImporting = false
+      })
+    } catch (error) {
+      hilog.error(0x0000, 'StellariumArkUI', 'Landscape import failed: %{public}s', String(error))
+      this.hooks.flashHint(I18n.t('landscape_import_failed'))
+      this.layerViewStore.landscapeImporting = false
+    }
+  }
+
+  // 原宿主 setScenery3dScene()：三维地景场景切换。
+  setScenery3dScene(id: string): void {
+    this.sceneryStore.scenery3dLoadingId = id
+    this.port.requestInteractive('setScenery3dScene', id, (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) {
+        this.sceneryStore.scenery3dLoadingId = ''
+        this.hooks.flashHint('三维地景加载失败')
+        return
+      }
+      this.sceneryStore.loadScenery3d()
+    }, () => { this.sceneryStore.scenery3dLoadingId = '' })
+  }
+
+  // 原宿主 setScenery3dEnabled()：三维地景总开关（失败回滚 store 布尔）。
+  setScenery3dEnabled(enabled: boolean): void {
+    this.sceneryStore.scenery3dEnabled = enabled
+    this.port.requestInteractive('setScenery3dEnabled', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) this.sceneryStore.scenery3dEnabled = !enabled
+      this.sceneryStore.loadScenery3d()
+    }, () => { this.sceneryStore.scenery3dEnabled = !enabled })
   }
 }
