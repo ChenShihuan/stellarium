@@ -1,3 +1,11 @@
+## [2026-10-01] DevEco Code - Phase 3ab：媒体区改写成组件（TabletInspectorMediaGroup），解除"资料"页搬迁阻塞
+
+- **新增 `panels/object/TabletInspectorMediaGroup.ets`**：宿主原**无参 @Builder `tabletInspectorMedia()`**（133 行八分支）→ 组件。分支判定随组件走；媒体状态用 `@ObjectLink store: ObjectMediaStore` 观察，"是否计划中的模型"用 `@ObjectLink detailStore: ObjectDetailStore` 观察；派生值（`imageHeight` / `iconName` / `inlineModelSize` / `modelReady` / `modelRendering` / `hasModelTexture` / `modelNotice` / `warmupText` / `fallbackKind` / `starColor`）与四个交互（`onOpen` / `onRetry` / `onModelExpand` / `onModelTouch`）全部由宿主注入。原因是 §13.1 规则 9：经 `@BuilderParam` 传递会让应用退出，只有改成组件才是正解。
+- **顺带清理：** 删除该 builder 时发现 Phase 3v 那次拼接因 `String.Split("
+")` 被按**字符**切分，把该区域每行之间塞进了空行（提交里一直存在、功能无害）；本次随删除一并消失，宿主行数因此降幅大于纯迁移。
+- **单体行数：** 28,616 → **28,519**（−97）。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验（81 个 .ets）/ 安装启动通过；搜 `Mars` 选中后应用存活（`pidof` 有值），"资料"页媒体区由新组件渲染（`本地资源解码失败` + `重试`）；点"重试"后 hilog 实证回调链路：`[detail-media] retry request=textures/mars.png` → `[detail-media] decoding local image kind=model`。
+- **测试同步：** 无（媒体区组件不切片；`verify-ohos-object-details` 的标签/段落校验不受影响）。
 ## [2026-10-01] DevEco Code - Phase 3aa（部分）：详情卡片"观测/坐标"两页组件化；真机发现 @BuilderParam 致命问题
 
 - **新增 `panels/object/ObjectDetailTabs.ets`**：`unifiedObjectDetailCard()` 里 `bottomCardIndex` 0/1 两个分支 → `ObjectDetailObserveTab`（28 行）与 `ObjectDetailCoordinateTab`（5 行）。两页都以 `@ObjectLink store` 观察状态，动态查值用注入的 `resolve: (key: string) => string`（宿主传 `(key) => this.selectedDisplayValue(key)`），因此宿主仍独享查值逻辑。
