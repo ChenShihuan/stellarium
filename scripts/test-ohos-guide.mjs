@@ -136,9 +136,9 @@ test('UI and CLI share semantic player, scrollable text and actual result', () =
   const guideUI = page.slice(page.indexOf('  interactiveGuideShell()'), page.indexOf('  scriptFocusShell()'));
   assert.match(guideUI, /Scroll\(\)/);
   assert.doesNotMatch(guideUI, /maxLines|sendKey/);
-  assert.doesNotMatch(guideUI, /this\.guideButton\([^\n]*\?/);
+  assert.doesNotMatch(guideUI, /GuideButton\(\{[^\n]*\?/);
   assert.match(guideUI, /if \(this\.guideState\.phase === 'paused'\)/);
-  assert.match(guideUI, /this\.guideButton\('btn_resume', 'resume'\)/);
+  assert.match(guideUI, /GuideButton\(\{ label: 'btn_resume', action: 'resume'/);
   assert.match(guideUI, /minHeight: 52.*HitTestMode\.Default/);
   assert.match(page, /lastRequestId: this.guideLastRequest/);
   assert.match(page, /guideState.phase === 'exploring'/);
