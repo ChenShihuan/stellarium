@@ -739,7 +739,6 @@ export struct WindowNativeNode {
   private polarScopeTimer: number = 0
   private polarScopeRequestPending: boolean = false
   private polarScopeDataRequestId: number = 0
-  private skyCultureListRequestId: number = 0
   private skyCultureDetailsRequestId: number = 0
   private skyCultureRowY: Record<string, number> = {}
   private skyCultureAnchorId: string = ''
@@ -1165,6 +1164,29 @@ export struct WindowNativeNode {
     this.skyCultureSettingsStore.attachPort(hostPort, () => {})
     this.objectDetailStore.attachPort(hostPort, () => {})
     this.overlayStore.attachPort(hostPort, () => {})
+    // §14 B2R-3：星空文化域四加载器下沉。skyCultureSettingsStore 复用既有 HostCommandPort
+    // （其 loadSkyCultureConstellationSelectionFlags 已在 B1-6 自持）；SkyCultureViewStore /
+    // SkyCultureMakerStore 新增同一端口。三域消费方均为 @ObjectLink，字段赋值即刷新，无 publish*
+    // 发布点，onChanged 传空实现。loadSkyCultureDetails（详情，写 §2.7.1 保留的 skyCultureArtStates
+    // 渐进字段）仍留宿主、登记 B3，只经 hooks 注入调用；skyCultureActiveColorTarget /
+    // drawSkyCultureTerritoryMap / skyCultureCurrentId / applySkyCultureMakerDraft / ensurePluginLoaded /
+    // skyCultureMakerDraftFromResponse 同经具名 hooks 回注（store 不 import 桥/UI/他 store）。
+    this.skyCultureSettingsStore.attachHooks({
+      skyCultureActiveColorTarget: (): string => this.skyCultureActiveColorTarget(),
+      drawSkyCultureTerritoryMap: (): void => { this.drawSkyCultureTerritoryMap() },
+      skyCultureCurrentId: (): string => this.skyCultureViewStore.currentSkyCultureId
+    })
+    this.skyCultureViewStore.attachPort(hostPort, () => {})
+    this.skyCultureViewStore.attachHooks({
+      invalidateSkyCultureDetails: (): void => { ++this.skyCultureDetailsRequestId },
+      loadSkyCultureDetails: (): void => { this.loadSkyCultureDetails() }
+    })
+    this.skyCultureMakerStore.attachPort(hostPort, () => {})
+    this.skyCultureMakerStore.attachHooks({
+      applySkyCultureMakerDraft: (draft: SkyCultureMakerDraft): void => this.applySkyCultureMakerDraft(draft),
+      ensurePluginLoaded: (pluginName: string, callback: () => void, failureCallback?: () => void): void => this.ensurePluginLoaded(pluginName, callback, failureCallback),
+      skyCultureMakerDraftFromResponse: (response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined => this.skyCultureMakerDraftFromResponse(response)
+    })
     // §14 B1-6：卫星域有 publish* CLI 发布点（publishSatellitePanelState），
     // 故 onChanged 用它，保持 CLI 侧 satellitePanelState 与 store 同步。
     this.satelliteStore.attachPort(hostPort, () => { this.publishSatellitePanelState() })
@@ -1622,7 +1644,7 @@ export struct WindowNativeNode {
   }
 
   private restoreStartupSettings(): void {
-    this.loadSkyCultureList()
+    this.skyCultureViewStore.loadSkyCultureList()
     this.pluginStore.loadPluginList()
     const settings = AppStorage.get<string>("stellariumSettings")
     if (settings) {
@@ -2391,7 +2413,7 @@ export struct WindowNativeNode {
       } else if (panel === 'nebulaTextures') {
         this.ensurePluginLoaded('NebulaTextures', () => { this.nebulaTextureStore.loadNebulaTextureStatus() })
       } else if (panel === 'skyCultureMaker') {
-        this.loadSkyCultureMakerDraft()
+        this.skyCultureMakerStore.loadSkyCultureMakerDraft()
       } else if (panel === 'pointerCoordinates') {
         this.ensurePluginLoaded('PointerCoordinates', () => { this.overlayStore.loadPointerCoordinates() })
       } else if (panel === 'observing') {
@@ -6063,49 +6085,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private loadSkyCultureList(): void {
-    const requestId = ++this.skyCultureListRequestId
-    ++this.skyCultureDetailsRequestId
-    this.skyCultureViewStore.pendingId = ''
-    this.skyCultureViewStore.skyCultureListLoading = true
-    this.callInteractive('getSkyCultureList', '', (r: StellariumBridgeResponse) => {
-      if (requestId !== this.skyCultureListRequestId) return
-      if (r.ok === true && r.items !== undefined && Array.isArray(r.items)) {
-        const arr = r.items as Array<SkyCultureRawItem>;
-        const list: Array<SkyCultureItem> = [];
-        for (let i = 0; i < arr.length; i++) {
-          const obj: SkyCultureRawItem = arr[i]
-          const id = obj.id !== undefined ? obj.id : ''
-          const name = obj.name !== undefined ? obj.name : id
-          const regions: string[] = obj.region !== undefined ? obj.region : []
-          list.push({
-            id: id,
-            name: name,
-            region: regions,
-            classification: obj.classification !== undefined ? obj.classification : '',
-            beginTime: obj.beginTime !== undefined ? obj.beginTime : 0,
-            endTime: obj.endTime !== undefined ? obj.endTime : 0,
-            constellationCount: obj.constellationCount !== undefined ? obj.constellationCount : 0,
-            asterismCount: obj.asterismCount !== undefined ? obj.asterismCount : 0,
-            nativeNameCount: obj.nativeNameCount !== undefined ? obj.nativeNameCount : 0,
-            artCount: obj.artCount !== undefined ? obj.artCount : 0,
-            hasZodiac: obj.hasZodiac === true,
-            hasLunarSystem: obj.hasLunarSystem === true,
-          });
-        }
-        this.skyCultureViewStore.skyCultureList = list;
-        if (r.current !== undefined) {
-          this.skyCultureViewStore.currentSkyCultureId = r.current as string;
-        }
-        this.loadSkyCultureDetails()
-      }
-      this.skyCultureViewStore.skyCultureListLoading = false
-    }, () => {
-      if (requestId !== this.skyCultureListRequestId) return
-      this.skyCultureViewStore.skyCultureListLoading = false
-    })
-  }
-
   private selectSkyCulture(id: string): void {
     if (id === this.skyCultureViewStore.currentSkyCultureId || id === this.skyCultureViewStore.pendingId) return
     this.captureSkyCultureAnchor(id)
@@ -6261,7 +6240,7 @@ export struct WindowNativeNode {
       this.skyCultureViewStore.pendingId = ''
       this.skyCultureViewStore.detailsLoading = false
       this.skyCultureSettingsStore.loadSkyCultureConstellationSelectionFlags()
-      this.loadSkyCultureVisualSettings()
+      this.skyCultureSettingsStore.loadSkyCultureVisualSettings()
     }, () => {
       if (requestId !== this.skyCultureDetailsRequestId) return
       this.skyCultureViewStore.pendingId = ''
@@ -6381,47 +6360,6 @@ export struct WindowNativeNode {
   private applySkyCultureConstellationSelection(actionId: string, hint: string): void {
     this.callInteractive('triggerAction', actionId, (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.flashHint(hint)
-    })
-  }
-
-  private loadSkyCultureVisualSettings(): void {
-    this.callInteractive('getSkyCultureVisualSettings', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      this.skyCultureSettingsStore.skyCultureConstellationFontSize = r.constellationFontSize !== undefined ? r.constellationFontSize : this.skyCultureSettingsStore.skyCultureConstellationFontSize
-      this.skyCultureSettingsStore.skyCultureConstellationLineThickness = r.constellationLineThickness !== undefined ? r.constellationLineThickness : this.skyCultureSettingsStore.skyCultureConstellationLineThickness
-      this.skyCultureSettingsStore.skyCultureConstellationBoundaryThickness = r.constellationBoundaryThickness !== undefined ? r.constellationBoundaryThickness : this.skyCultureSettingsStore.skyCultureConstellationBoundaryThickness
-      this.skyCultureSettingsStore.skyCultureConstellationHullsThickness = r.constellationHullsThickness !== undefined ? r.constellationHullsThickness : this.skyCultureSettingsStore.skyCultureConstellationHullsThickness
-      this.skyCultureSettingsStore.skyCultureZodiacThickness = r.zodiacThickness !== undefined ? r.zodiacThickness : this.skyCultureSettingsStore.skyCultureZodiacThickness
-      this.skyCultureSettingsStore.skyCultureLunarSystemThickness = r.lunarSystemThickness !== undefined ? r.lunarSystemThickness : this.skyCultureSettingsStore.skyCultureLunarSystemThickness
-      this.skyCultureSettingsStore.skyCultureConstellationArtIntensity = r.constellationArtIntensity !== undefined ? r.constellationArtIntensity : this.skyCultureSettingsStore.skyCultureConstellationArtIntensity
-      this.skyCultureSettingsStore.skyCultureConstellationLinesFadeDuration = r.constellationLinesFadeDuration !== undefined ? r.constellationLinesFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationLinesFadeDuration
-      this.skyCultureSettingsStore.skyCultureConstellationLabelsFadeDuration = r.constellationLabelsFadeDuration !== undefined ? r.constellationLabelsFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationLabelsFadeDuration
-      this.skyCultureSettingsStore.skyCultureConstellationArtFadeDuration = r.constellationArtFadeDuration !== undefined ? r.constellationArtFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationArtFadeDuration
-      this.skyCultureSettingsStore.skyCultureConstellationBoundariesFadeDuration = r.constellationBoundariesFadeDuration !== undefined ? r.constellationBoundariesFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationBoundariesFadeDuration
-      this.skyCultureSettingsStore.skyCultureConstellationHullsFadeDuration = r.constellationHullsFadeDuration !== undefined ? r.constellationHullsFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationHullsFadeDuration
-      this.skyCultureSettingsStore.skyCultureZodiacFadeDuration = r.zodiacFadeDuration !== undefined ? r.zodiacFadeDuration : this.skyCultureSettingsStore.skyCultureZodiacFadeDuration
-      this.skyCultureSettingsStore.skyCultureLunarSystemFadeDuration = r.lunarSystemFadeDuration !== undefined ? r.lunarSystemFadeDuration : this.skyCultureSettingsStore.skyCultureLunarSystemFadeDuration
-      this.skyCultureSettingsStore.skyCultureAsterismFontSize = r.asterismFontSize !== undefined ? r.asterismFontSize : this.skyCultureSettingsStore.skyCultureAsterismFontSize
-      this.skyCultureSettingsStore.skyCultureAsterismLineThickness = r.asterismLineThickness !== undefined ? r.asterismLineThickness : this.skyCultureSettingsStore.skyCultureAsterismLineThickness
-      this.skyCultureSettingsStore.skyCultureRayHelperThickness = r.rayHelperThickness !== undefined ? r.rayHelperThickness : this.skyCultureSettingsStore.skyCultureRayHelperThickness
-      this.skyCultureSettingsStore.skyCultureAsterismLinesFadeDuration = r.asterismLinesFadeDuration !== undefined ? r.asterismLinesFadeDuration : this.skyCultureSettingsStore.skyCultureAsterismLinesFadeDuration
-      this.skyCultureSettingsStore.skyCultureAsterismLabelsFadeDuration = r.asterismLabelsFadeDuration !== undefined ? r.asterismLabelsFadeDuration : this.skyCultureSettingsStore.skyCultureAsterismLabelsFadeDuration
-      this.skyCultureSettingsStore.skyCultureRayHelperFadeDuration = r.rayHelperFadeDuration !== undefined ? r.rayHelperFadeDuration : this.skyCultureSettingsStore.skyCultureRayHelperFadeDuration
-      if (r.skyCultureColors !== undefined) {
-        const colors = r.skyCultureColors
-        this.skyCultureSettingsStore.skyCultureVisualColors = {
-          constellationLines: colors.constellationLines ?? this.skyCultureSettingsStore.skyCultureVisualColors.constellationLines,
-          constellationLabels: colors.constellationLabels ?? this.skyCultureSettingsStore.skyCultureVisualColors.constellationLabels,
-          constellationBoundaries: colors.constellationBoundaries ?? this.skyCultureSettingsStore.skyCultureVisualColors.constellationBoundaries,
-          constellationHulls: colors.constellationHulls ?? this.skyCultureSettingsStore.skyCultureVisualColors.constellationHulls,
-          zodiac: colors.zodiac ?? this.skyCultureSettingsStore.skyCultureVisualColors.zodiac,
-          lunarSystem: colors.lunarSystem ?? this.skyCultureSettingsStore.skyCultureVisualColors.lunarSystem,
-          asterismLines: colors.asterismLines ?? this.skyCultureSettingsStore.skyCultureVisualColors.asterismLines,
-          asterismLabels: colors.asterismLabels ?? this.skyCultureSettingsStore.skyCultureVisualColors.asterismLabels,
-          rayHelpers: colors.rayHelpers ?? this.skyCultureSettingsStore.skyCultureVisualColors.rayHelpers
-        }
-        this.skyCultureSettingsStore.skyCultureColorInput = this.skyCultureSettingsStore.skyCultureVisualColor(this.skyCultureActiveColorTarget())
-      }
     })
   }
 
@@ -6847,28 +6785,6 @@ export struct WindowNativeNode {
 
 
 
-  private loadSkyCultureTerritoryMap(): void {
-    if (!this.skyCultureSettingsStore.skyCultureHasTerritoryArchive || this.skyCultureViewStore.currentSkyCultureId.length === 0 || this.skyCultureSettingsStore.skyCultureTerritoryMapLoading) return
-    this.skyCultureSettingsStore.applySkyCultureTerritoryMapYearInput()
-    const requestedYear = this.skyCultureSettingsStore.skyCultureTerritoryMapYear
-    this.skyCultureSettingsStore.skyCultureTerritoryMapLoading = true
-    this.skyCultureSettingsStore.skyCultureTerritoryMapError = ''
-    this.callInteractive('getSkyCultureTerritoryGeometry', requestedYear.toString(), (r: StellariumBridgeResponse) => {
-      this.skyCultureSettingsStore.skyCultureTerritoryMapLoading = false
-      if (r.ok !== true || r.territoryPolygons === undefined || !Array.isArray(r.territoryPolygons)) {
-        this.skyCultureSettingsStore.skyCultureTerritoryMapError = '未能读取该年份的文化区域。'
-        return
-      }
-      this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons = r.territoryPolygons as Array<SkyCultureTerritoryPolygon>
-      this.skyCultureSettingsStore.skyCultureTerritoryMapYear = r.year !== undefined ? Math.round(r.year) : requestedYear
-      this.skyCultureSettingsStore.skyCultureTerritoryMapExpanded = true
-      this.drawSkyCultureTerritoryMap()
-    }, () => {
-      this.skyCultureSettingsStore.skyCultureTerritoryMapLoading = false
-      this.skyCultureSettingsStore.skyCultureTerritoryMapError = '未能读取该年份的文化区域。'
-    })
-  }
-
   private drawSkyCultureTerritoryMap(): void {
     const width = this.skyCultureMapRenderWidth
     const height = this.skyCultureMapRenderHeight
@@ -6961,28 +6877,6 @@ export struct WindowNativeNode {
       description: this.skyCultureMakerStore.description,
       constellations: this.skyCultureMakerStore.constellations
     }
-  }
-
-  private loadSkyCultureMakerDraft(): void {
-    if (this.skyCultureMakerStore.loading) return
-    this.skyCultureMakerStore.loading = true
-    this.skyCultureMakerStore.draftReady = false
-    this.callNativeWhenReady('getSkyCultureMakerDraft', '', (response: StellariumBridgeResponse) => {
-      this.skyCultureMakerStore.loading = false
-      const draft = this.skyCultureMakerDraftFromResponse(response)
-      if (response.ok !== true || draft === undefined) {
-        this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_load_failed')
-        return
-      }
-      this.applySkyCultureMakerDraft(draft)
-      const values = response as Record<string, Object>
-      this.skyCultureMakerStore.canUndo = values['canUndo'] === true
-      this.skyCultureMakerStore.status = ''
-      this.ensurePluginLoaded('SkyCultureMaker', () => {})
-    }, 0, 100, 150, () => {
-      this.skyCultureMakerStore.loading = false
-      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_load_failed')
-    })
   }
 
   private scheduleSkyCultureMakerSave(): void {
@@ -15224,10 +15118,10 @@ private loadPlanetPositions(): void {
         onImportLandscape: () => { this.importLandscapeFile() },
         onSelectLandscape: (id: string, name: string) => { this.selectLandscape(id, name) },
         onChangeLandscapeTransparency: (val: number) => { this.changeLandscapeTransparency(val) },
-        onLoadList: () => { this.loadSkyCultureList() },
+        onLoadList: () => { this.skyCultureViewStore.loadSkyCultureList() },
         onSelectCulture: (id: string) => { this.selectSkyCulture(id) },
         onRowArea: (id: string, area: Area) => { this.handleSkyCultureRowArea(id, area) },
-        onReloadList: () => { this.callInteractive('reloadSkyCulture', '', () => { this.loadSkyCultureList() }) },
+        onReloadList: () => { this.callInteractive('reloadSkyCulture', '', () => { this.skyCultureViewStore.loadSkyCultureList() }) },
         onSelectLabelMode: (target: string, index: number) => { this.selectSkyCultureLabelMode(target, index) },
         onSetShortLabels: (enabled: boolean) => { this.setSkyCultureShortLabels(enabled) },
         onSetCommonNames: (enabled: boolean) => { this.setSkyCultureCommonNames(enabled) },
@@ -15241,7 +15135,7 @@ private loadPlanetPositions(): void {
         onSetDefault: () => { this.setCurrentSkyCultureAsDefault() },
         onSyncTimeFollowTimer: () => { this.syncSkyCultureTimeFollowTimer() },
         onRefreshSimulationYear: () => { this.refreshSkyCultureSimulationYear(true) },
-        onLoadTerritoryMap: () => { this.loadSkyCultureTerritoryMap() },
+        onLoadTerritoryMap: () => { this.skyCultureSettingsStore.loadSkyCultureTerritoryMap() },
         onMapReady: () => { this.drawSkyCultureTerritoryMap() },
         onMapAreaChange: (width: number, height: number) => { this.skyCultureMapRenderWidth = width; this.skyCultureMapRenderHeight = height; this.drawSkyCultureTerritoryMap() },
         onLoadObserverInfo: (force: boolean) => { this.locationPickerStore.loadObserverInfo(force) },
