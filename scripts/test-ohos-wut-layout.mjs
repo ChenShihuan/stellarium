@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
-const panelStart = source.indexOf("Text('今晚可观测目标').fontSize(13)");
-const panel = source.slice(panelStart, source.indexOf('} else if (this.astroTab === 6)', panelStart));
+// Phase 4l：astro 分支体已下沉到 panels/astro/AstroPanel.ets，tonight 区段改从组件文件切片。
+const panelSource = readFileSync(new URL('../harmonyos/ets-source/panels/astro/AstroPanel.ets', import.meta.url), 'utf8');
+const panelStart = panelSource.indexOf("Text('今晚可观测目标').fontSize(13)");
+const panel = panelSource.slice(panelStart, panelSource.indexOf('} else if (this.store.astroTab === 6)', panelStart));
 const astroComponents = readFileSync(new URL('../harmonyos/ets-source/panels/astro/WutTargetCard.ets', import.meta.url), 'utf8');
 const card = astroComponents.slice(astroComponents.indexOf('export struct WutTargetCard {'));
 

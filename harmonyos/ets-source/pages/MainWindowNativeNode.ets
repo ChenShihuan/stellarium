@@ -51,6 +51,7 @@ import { SearchStore } from '../state/SearchStore'
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { GyroStore } from '../state/GyroStore'
 import { WutStore } from '../state/WutStore'
+import { AstroStore } from '../state/AstroStore'
 import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
 import { LocationStore } from '../state/LocationStore'
 import { CityChipsRow } from '../panels/location/CityChipsRow'
@@ -73,6 +74,7 @@ import { SkyCultureSettingsStore } from '../state/SkyCultureSettingsStore'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
+import { AstroPanel } from '../panels/astro/AstroPanel'
 import { GraphLoadingRow, RtsSelectionGuide, GraphSelectionGuide } from '../panels/astro/GraphGuides'
 import { InfoRow } from '../common/ui/InfoRow'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
@@ -205,6 +207,7 @@ export struct WindowNativeNode {
   @State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()
   @State private gyroStore: GyroStore = new GyroStore()
   @State private wutStore: WutStore = new WutStore()
+  @State private astroStore: AstroStore = new AstroStore()
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
   @State private tools: ToolsStore = new ToolsStore()
   private searchHistory: string[] = []
@@ -390,10 +393,6 @@ export struct WindowNativeNode {
   @State private navigationMaxFov: number = 180
   // Open AstroCalc on the observation-first view: it needs no selected object
   // and immediately gives a useful answer for the current location and date.
-  @State private astroTab: number = 5   // 天文计算面板子标签索引
-  @State private astroGroup: number = 0 // 天文计算一级导航分组
-  @State private astroContentOpacity: number = 1
-  @State private astroContentOffsetX: number = 0
   private astroTransitionId: number = 0
   private astroRequestedTab: number = -1
   private astroPanelScroller: Scroller = new Scroller()
@@ -410,173 +409,37 @@ export struct WindowNativeNode {
   @State private scriptList: string[] = []
   @State private scriptMetadata: Record<string, ScriptMetadata> = {}
   @State private moduleList: string[] = []
-  @State private rtsData: Map<string, string> = new Map()
-  @State private rtsError: string = ''
-  @State private rtsLoading: boolean = false
   private rtsRequestSequence: number = 0
-  @State private rtsCalendarData: Array<RtsCalendarDay> = []
-  @State private rtsCalendarName: string = ''
-  @State private rtsCalendarError: string = ''
-  @State private rtsCalendarDays: number = 14
-  @State private rtsCalendarStartOffsetDays: number = 0
   @State private rtsCalendarStartYear: number = new Date().getFullYear()
   @State private rtsCalendarStartMonth: number = new Date().getMonth() + 1
   @State private rtsCalendarStartDay: number = new Date().getDate()
-  @State private rtsCalendarLoading: boolean = false
-  @State private rtsCalendarNeedsGeneration: boolean = false
-  @State private rtsCalendarProgress: number = 0
-  @State private rtsCalendarTotalDays: number = 0
-  @State private almanacData: Map<string, string> = new Map()
-  @State private almanacLoading: boolean = false
-  @State private almanacError: string = ''
   private almanacRequestSequence: number = 0
-  @State private almanacSeasons: Array<SeasonEvent> = []
-  @State private almanacSeasonYear: string = ''
   @State private dsoTotalCount: number = 0
   @State private dsoGalaxies: number = 0
   @State private dsoClusters: number = 0
   @State private dsoNebulae: number = 0
-  @State private planetPositions: Array<PlanetPosition> = []
-  @State private planetPositionsLoading: boolean = false
-  @State private planetPositionsError: string = ''
   private planetPositionsRequestSequence: number = 0
-  @State private positionMode: number = 0
-  @State private hecPositions: Array<HeliocentricPosition> = []
-  @State private hecPositionsLoading: boolean = false
-  @State private hecPositionsError: string = ''
   private hecPositionsRequestSequence: number = 0
-  @State private hecTime: string = ''
-  @State private hecIncludeSelectedMinor: boolean = false
-  @State private hecIncludeBrightComets: boolean = false
-  @State private hecCometMagnitudeLimit: number = 9
-  @State private celestialPositions: Array<CelestialPosition> = []
-  @State private celestialPositionsLoading: boolean = false
-  @State private celestialPositionsError: string = ''
   private celestialPositionsRequestSequence: number = 0
-  @State private celestialPositionCategory: string = 'planets'
-  @State private celestialPositionMagnitude: number = 6
-  @State private celestialPositionHorizontal: boolean = true
-  @State private celestialPositionTime: string = ''
-  @State private ephemerisData: Array<EphemerisRow> = []
-  @State private ephemerisName: string = ''
-  @State private ephemerisMeta: string = ''
-  @State private ephemerisError: string = ''
-  @State private ephemerisDays: number = 14
-  @State private ephemerisStepHours: number = 24
-  @State private ephemerisStartOffsetDays: number = 0
   @State private ephemerisStartYear: number = new Date().getFullYear()
   @State private ephemerisStartMonth: number = new Date().getMonth() + 1
   @State private ephemerisStartDay: number = new Date().getDate()
-  @State private ephemerisMode: number = 0
-  @State private ephemerisPrimary: string = 'Moon'
-  @State private ephemerisSecondary: string = 'Sun'
-  @State private ephemerisLoading: boolean = false
-  @State private planetCalcData: Array<PlanetCalcItem> = []
-  @State private planetCalcLoading: boolean = false
-  @State private planetCalcError: string = ''
   private planetCalcRequestSequence: number = 0
-  @State private planetCalcMode: number = 0
-  @State private planetPairDistanceData: Array<PlanetPairDistancePoint> = []
-  @State private planetPairDistanceError: string = ''
-  @State private planetPairDistanceLoading: boolean = false
   private planetPairDistanceRequestSequence: number = 0
-  @State private planetPairFirst: string = 'Sun'
-  @State private planetPairSecond: string = 'Moon'
-  @State private planetPairFirstName: string = '太阳'
-  @State private planetPairSecondName: string = '月亮'
-  @State private planetPairDays: number = 40
-  @State private planetPairStepDays: number = 4
-  @State private planetPairAngularAvailable: boolean = true
-  @State private planetPairLinearMin: number = 0
-  @State private planetPairLinearMax: number = 1
-  @State private planetPairAngularMin: number = 0
-  @State private planetPairAngularMax: number = 180
-  @State private altAzCurve: Array<AltAzPoint> = []
-  @State private altAzName: string = ''
-  @State private altAzError: string = ''
-  @State private altAzHours: number = 24
-  @State private altAzStepMin: number = 30
-  @State private altAzShowSun: boolean = false
-  @State private altAzShowMoon: boolean = false
-  @State private altAzMinimum: number = -90
-  @State private graphStartOffsetDays: number = 0
   @State private graphStartYear: number = new Date().getFullYear()
   @State private graphStartMonth: number = new Date().getMonth() + 1
   @State private graphStartDay: number = new Date().getDate()
-  @State private graphMode: number = 0
-  @State private graphLoading: boolean = false
   private graphTargetPickerActive: boolean = false
   private rtsTargetPickerActive: boolean = false
   private ephemerisTargetPickerActive: boolean = false
-  @State private annualElevationData: Array<AnnualElevationPoint> = []
-  @State private annualElevationName: string = ''
-  @State private annualElevationError: string = ''
-  @State private annualElevationHour: number = 0
-  @State private annualElevationMinimum: number = -90
-  @State private observabilityData: Array<ObservabilityDay> = []
-  @State private observabilityName: string = ''
-  @State private observabilityError: string = ''
-  @State private observabilityProgress: string = ''
-  @State private observabilityDays: number = 30
-  @State private observabilityMinAltitude: number = 20
-  @State private lunarElongationData: Array<LunarElongationPoint> = []
-  @State private lunarElongationName: string = ''
-  @State private lunarElongationError: string = ''
-  @State private lunarElongationDays: number = 30
-  @State private lunarElongationStepHours: number = 12
-  @State private lunarElongationLimit: number = 40
-  @State private planetTimeSeriesData: Array<PlanetTimeSeriesPoint> = []
-  @State private planetTimeSeriesName: string = ''
-  @State private planetTimeSeriesError: string = ''
-  @State private planetTimeSeriesDays: number = 30
-  @State private planetTimeSeriesStepHours: number = 24
-  @State private planetTimeSeriesLeftMetric: string = 'angularSize'
-  @State private planetTimeSeriesRightMetric: string = 'magnitude'
-  @State private planetTimeSeriesLeftMin: number = 0
-  @State private planetTimeSeriesLeftMax: number = 1
-  @State private planetTimeSeriesRightMin: number = 0
-  @State private planetTimeSeriesRightMax: number = 1
-  @State private eclipseData: Array<EclipseItem> = []
-  @State private eclipseMonths: number = 36
-  @State private eclipseStartOffsetDays: number = 0
   @State private eclipseStartYear: number = new Date().getFullYear()
   @State private eclipseStartMonth: number = new Date().getMonth() + 1
   @State private eclipseStartDay: number = new Date().getDate()
-  @State private eclipseLoading: boolean = false
-  @State private eclipseError: string = ''
-  @State private eclipseKindFilter: number = 0
-  @State private eclipseTypeFilter: number = 0
-  @State private eclipseMode: number = 0
-  @State private planetaryTransitData: Array<PlanetaryTransitItem> = []
-  @State private planetaryTransitYears: number = 20
-  @State private planetaryTransitLoaded: boolean = false
-  @State private planetaryTransitLoading: boolean = false
-  @State private planetaryTransitError: string = ''
-  @State private moonPhaseData: Array<MoonPhaseItem> = []
-  @State private moonPhaseDays: number = 30
-  @State private moonPhaseLoading: boolean = false
-  @State private moonPhaseError: string = ''
   private moonPhaseRequestId: number = 0
   private moonPhaseLoadingDays: number = 0
-  @State private phenomenaData: Array<PhenomenonItem> = []
-  @State private phenomenaHint: string = ''
-  @State private phenomenaLoading: boolean = false
-  @State private phenomenaPrimary: string = 'all'
-  @State private phenomenaTarget: string = 'all'
-  @State private phenomenaDays: number = 400
-  @State private phenomenaStartOffsetMonths: number = 0
-  @State private phenomenaMaxSeparation: number = 4
-  @State private phenomenaIncludeOppositions: boolean = true
-  @State private phenomenaIncludePerihelionAphelion: boolean = true
-  @State private phenomenaIncludeElongationsQuadratures: boolean = true
-  @State private phenomenaIncludeStations: boolean = true
-  @State private astroExporting: boolean = false
-  @State private astroContext: AstroCalcContext | undefined = undefined
-  @State private astroCalcSnapshot: string = ''
   private astroContextTimer: number = 0
   private astroContextRequestId: number = 0
   private astroContextRequestPending: boolean = false
-  @State private tonightAstro: TonightEvents | null = null
   private wutRequestSequence: number = 0
   @State private atmoPressure: number = 1013
   @State private atmoTemperature: number = 10
@@ -1837,29 +1700,29 @@ export struct WindowNativeNode {
         if (saved.objectDetailConnectorVisible !== undefined) { this.overlayStore.objectDetailConnectorVisible = saved.objectDetailConnectorVisible as boolean }
         const savedAstroTab = Number(saved.astroTab)
         if (Number.isInteger(savedAstroTab) && savedAstroTab >= 0 && savedAstroTab <= 9) {
-          this.astroTab = savedAstroTab
-          this.astroGroup = this.astroGroupForTab(savedAstroTab)
+          this.astroStore.astroTab = savedAstroTab
+          this.astroStore.astroGroup = this.astroGroupForTab(savedAstroTab)
         }
         const savedPositionMode = Number(saved.positionMode)
-        if (Number.isInteger(savedPositionMode) && savedPositionMode >= 0 && savedPositionMode <= 2) this.positionMode = savedPositionMode
+        if (Number.isInteger(savedPositionMode) && savedPositionMode >= 0 && savedPositionMode <= 2) this.astroStore.positionMode = savedPositionMode
         const savedCelestialMagnitude = Number(saved.celestialPositionMagnitude)
-        if (Number.isFinite(savedCelestialMagnitude)) this.celestialPositionMagnitude = this.clamp(savedCelestialMagnitude, -5, 25)
-        if (saved.celestialPositionCategory !== undefined) this.celestialPositionCategory = saved.celestialPositionCategory as string
-        if (saved.celestialPositionHorizontal !== undefined) this.celestialPositionHorizontal = saved.celestialPositionHorizontal === 'true'
+        if (Number.isFinite(savedCelestialMagnitude)) this.astroStore.celestialPositionMagnitude = this.clamp(savedCelestialMagnitude, -5, 25)
+        if (saved.celestialPositionCategory !== undefined) this.astroStore.celestialPositionCategory = saved.celestialPositionCategory as string
+        if (saved.celestialPositionHorizontal !== undefined) this.astroStore.celestialPositionHorizontal = saved.celestialPositionHorizontal === 'true'
         const savedEphemerisMode = Number(saved.ephemerisMode)
-        if (Number.isInteger(savedEphemerisMode) && savedEphemerisMode >= 0 && savedEphemerisMode <= 2) this.ephemerisMode = savedEphemerisMode
+        if (Number.isInteger(savedEphemerisMode) && savedEphemerisMode >= 0 && savedEphemerisMode <= 2) this.astroStore.ephemerisMode = savedEphemerisMode
         const savedEphemerisDays = Number(saved.ephemerisDays)
-        if (Number.isInteger(savedEphemerisDays) && savedEphemerisDays >= 1 && savedEphemerisDays <= 31) this.ephemerisDays = savedEphemerisDays
+        if (Number.isInteger(savedEphemerisDays) && savedEphemerisDays >= 1 && savedEphemerisDays <= 31) this.astroStore.ephemerisDays = savedEphemerisDays
         const savedEphemerisStep = Number(saved.ephemerisStepHours)
-        if (Number.isInteger(savedEphemerisStep) && savedEphemerisStep >= 1 && savedEphemerisStep <= 24) this.ephemerisStepHours = savedEphemerisStep
+        if (Number.isInteger(savedEphemerisStep) && savedEphemerisStep >= 1 && savedEphemerisStep <= 24) this.astroStore.ephemerisStepHours = savedEphemerisStep
         const savedRtsDays = Number(saved.rtsCalendarDays)
-        if (Number.isInteger(savedRtsDays) && savedRtsDays >= 1 && savedRtsDays <= 365) this.rtsCalendarDays = savedRtsDays
+        if (Number.isInteger(savedRtsDays) && savedRtsDays >= 1 && savedRtsDays <= 365) this.astroStore.rtsCalendarDays = savedRtsDays
         const savedGraphMode = Number(saved.graphMode)
-        if (Number.isInteger(savedGraphMode) && savedGraphMode >= 0 && savedGraphMode <= 5) this.graphMode = savedGraphMode
+        if (Number.isInteger(savedGraphMode) && savedGraphMode >= 0 && savedGraphMode <= 5) this.astroStore.graphMode = savedGraphMode
         const savedEclipseMonths = Number(saved.eclipseMonths)
-        if (Number.isInteger(savedEclipseMonths) && savedEclipseMonths >= 1 && savedEclipseMonths <= 60) this.eclipseMonths = savedEclipseMonths
+        if (Number.isInteger(savedEclipseMonths) && savedEclipseMonths >= 1 && savedEclipseMonths <= 60) this.astroStore.eclipseMonths = savedEclipseMonths
         const savedMoonPhaseDays = Number(saved.moonPhaseDays)
-        if (savedMoonPhaseDays === 30 || savedMoonPhaseDays === 90) this.moonPhaseDays = savedMoonPhaseDays
+        if (savedMoonPhaseDays === 30 || savedMoonPhaseDays === 90) this.astroStore.moonPhaseDays = savedMoonPhaseDays
       } catch (_err) { }
     }
     if (this.musicEnabled) { AudioEngine.getInstance().start() }
@@ -1881,19 +1744,19 @@ export struct WindowNativeNode {
       viewCoordinateFamily: this.overlayStore.viewCoordinateFamily,
       viewEquatorialEpoch: this.overlayStore.viewEquatorialEpoch,
       objectDetailConnectorVisible: this.overlayStore.objectDetailConnectorVisible,
-      astroTab: this.astroTab.toString(),
-      astroGroup: this.astroGroup.toString(),
-      positionMode: this.positionMode.toString(),
-      celestialPositionCategory: this.celestialPositionCategory,
-      celestialPositionMagnitude: this.celestialPositionMagnitude.toString(),
-      celestialPositionHorizontal: this.celestialPositionHorizontal.toString(),
-      ephemerisMode: this.ephemerisMode.toString(),
-      ephemerisDays: this.ephemerisDays.toString(),
-      ephemerisStepHours: this.ephemerisStepHours.toString(),
-      rtsCalendarDays: this.rtsCalendarDays.toString(),
-      graphMode: this.graphMode.toString(),
-      eclipseMonths: this.eclipseMonths.toString(),
-      moonPhaseDays: this.moonPhaseDays.toString()
+      astroTab: this.astroStore.astroTab.toString(),
+      astroGroup: this.astroStore.astroGroup.toString(),
+      positionMode: this.astroStore.positionMode.toString(),
+      celestialPositionCategory: this.astroStore.celestialPositionCategory,
+      celestialPositionMagnitude: this.astroStore.celestialPositionMagnitude.toString(),
+      celestialPositionHorizontal: this.astroStore.celestialPositionHorizontal.toString(),
+      ephemerisMode: this.astroStore.ephemerisMode.toString(),
+      ephemerisDays: this.astroStore.ephemerisDays.toString(),
+      ephemerisStepHours: this.astroStore.ephemerisStepHours.toString(),
+      rtsCalendarDays: this.astroStore.rtsCalendarDays.toString(),
+      graphMode: this.astroStore.graphMode.toString(),
+      eclipseMonths: this.astroStore.eclipseMonths.toString(),
+      moonPhaseDays: this.astroStore.moonPhaseDays.toString()
     }))
   }
 
@@ -2518,7 +2381,7 @@ export struct WindowNativeNode {
       }
       if (panel === 'astro') {
         this.publishAstroPanelState()
-        this.loadAstroTab(this.astroTab)
+        this.loadAstroTab(this.astroStore.astroTab)
       } else if (panel === 'layers') {
         this.refreshState()
         if (this.viewTab === 4) this.loadLandscapeList()
@@ -5692,16 +5555,16 @@ export struct WindowNativeNode {
   private loadRTS(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.rtsRequestSequence
-    this.rtsError = ''
-    this.rtsLoading = true
+    this.astroStore.rtsError = ''
+    this.astroStore.rtsLoading = true
     if (!this.hasSelectedObject()) {
-      this.rtsLoading = false
+      this.astroStore.rtsLoading = false
       this.clearRtsSelectionResults()
       return
     }
     this.callInteractive('getRTS', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.rtsRequestSequence) return
-      this.rtsLoading = false
+      this.astroStore.rtsLoading = false
       if (r.ok === true && r.rts !== undefined) {
         const rv = r.rts as Record<string, Object>
         const data = new Map<string, string>()
@@ -5718,21 +5581,21 @@ export struct WindowNativeNode {
         data.set('prevRiseText', rv['prevRiseText'] !== undefined ? String(rv['prevRiseText']) : (rv['prevRiseJD'] !== undefined ? String(rv['prevRiseJD']) : '0'))
         data.set('prevTransitText', rv['prevTransitText'] !== undefined ? String(rv['prevTransitText']) : (rv['prevTransitJD'] !== undefined ? String(rv['prevTransitJD']) : '0'))
         data.set('prevSetText', rv['prevSetText'] !== undefined ? String(rv['prevSetText']) : (rv['prevSetJD'] !== undefined ? String(rv['prevSetJD']) : '0'))
-        this.rtsData = data
+        this.astroStore.rtsData = data
       } else {
-        this.rtsData = new Map()
-        this.rtsError = r.error ?? '请先在星图上选中一个天体，再计算升中天落。'
+        this.astroStore.rtsData = new Map()
+        this.astroStore.rtsError = r.error ?? '请先在星图上选中一个天体，再计算升中天落。'
       }
     }, () => {
       if (requestId !== this.rtsRequestSequence) return
-      this.rtsLoading = false
-      this.rtsData = new Map()
-      this.rtsError = '升中天落计算失败，请点刷新后重试。'
+      this.astroStore.rtsLoading = false
+      this.astroStore.rtsData = new Map()
+      this.astroStore.rtsError = '升中天落计算失败，请点刷新后重试。'
     })
   }
 
   private jumpToRts(key: string): void {
-    const jd = this.rtsData.get(key) ?? '0'
+    const jd = this.astroStore.rtsData.get(key) ?? '0'
     if (parseFloat(jd) <= 0) {
       this.flashHint('该天体在当前位置没有这个事件。')
       return
@@ -5750,16 +5613,16 @@ export struct WindowNativeNode {
   private makeAstroCsv(exportData: AstroCsvExport): string {
     const lines: Array<string> = []
     lines.push('# ' + exportData.title)
-    if (this.astroContext !== undefined) {
-      const location = this.astroContext.observerLocation !== undefined && this.astroContext.observerLocation.length > 0
-        ? this.astroContext.observerLocation : '当前观测位置'
+    if (this.astroStore.astroContext !== undefined) {
+      const location = this.astroStore.astroContext.observerLocation !== undefined && this.astroStore.astroContext.observerLocation.length > 0
+        ? this.astroStore.astroContext.observerLocation : '当前观测位置'
       lines.push('# 观测地点: ' + location)
-      lines.push('# 本地时间: ' + this.fmtDateTime(this.astroContext.localTime))
-      lines.push('# 时区: ' + (this.astroContext.timeZone ?? '--'))
-      lines.push('# 平恒星时: ' + (this.astroContext.meanSiderealTime ?? '--'))
-      lines.push('# 视恒星时: ' + (this.astroContext.apparentSiderealTime ?? '--'))
+      lines.push('# 本地时间: ' + this.fmtDateTime(this.astroStore.astroContext.localTime))
+      lines.push('# 时区: ' + (this.astroStore.astroContext.timeZone ?? '--'))
+      lines.push('# 平恒星时: ' + (this.astroStore.astroContext.meanSiderealTime ?? '--'))
+      lines.push('# 视恒星时: ' + (this.astroStore.astroContext.apparentSiderealTime ?? '--'))
     }
-    if (this.astroCalcSnapshot.length > 0) lines.push('# 参数: ' + this.astroCalcSnapshot)
+    if (this.astroStore.astroCalcSnapshot.length > 0) lines.push('# 参数: ' + this.astroStore.astroCalcSnapshot)
     lines.push(exportData.headers.map((header: string) => this.csvCell(header)).join(','))
     for (const row of exportData.rows) {
       lines.push(row.map((cell: string | number | boolean | undefined) => this.csvCell(cell)).join(','))
@@ -5768,78 +5631,78 @@ export struct WindowNativeNode {
   }
 
   private currentAstroCsvExport(): AstroCsvExport | undefined {
-    if (this.astroTab === 0) {
-      if (this.positionMode === 0 && this.planetPositions.length > 0) {
+    if (this.astroStore.astroTab === 0) {
+      if (this.astroStore.positionMode === 0 && this.astroStore.planetPositions.length > 0) {
         return { title: '地平位置', headers: ['天体', '赤经(当日)', '赤纬(当日)', '高度(度)', '方位(度)', '星等', '距离(AU)', '视直径(角分)', '中天'],
-          rows: this.planetPositions.map((item: PlanetPosition) => [this.planetZh(item.name), item.rightAscension, item.declination, item.altitude, item.azimuth, item.magnitude, item.distanceAU, item.angularSizeArcmin, item.transit]) }
+          rows: this.astroStore.planetPositions.map((item: PlanetPosition) => [this.planetZh(item.name), item.rightAscension, item.declination, item.altitude, item.azimuth, item.magnitude, item.distanceAU, item.angularSizeArcmin, item.transit]) }
       }
-      if (this.positionMode === 1 && this.hecPositions.length > 0) {
+      if (this.astroStore.positionMode === 1 && this.astroStore.hecPositions.length > 0) {
         return { title: '日心黄道位置', headers: ['天体', '英文名', '黄纬(度)', '黄经(度)', '日心距离(AU)', '彗星', '已选小天体'],
-          rows: this.hecPositions.map((item: HeliocentricPosition) => [this.hecTitle(item), item.englishName, item.latitude, item.longitude, item.distanceAU, item.isComet, item.isSelectedMinor]) }
+          rows: this.astroStore.hecPositions.map((item: HeliocentricPosition) => [this.hecTitle(item), item.englishName, item.latitude, item.longitude, item.distanceAU, item.isComet, item.isSelectedMinor]) }
       }
-      if (this.positionMode === 2 && this.celestialPositions.length > 0) {
+      if (this.astroStore.positionMode === 2 && this.astroStore.celestialPositions.length > 0) {
         return { title: '目录天体位置', headers: ['天体', '英文名', '目录编号', '坐标一', '坐标二', '高度(度)', '方位(度)', '星等', '类型', '距日(度)', '视直径(角分)', '距离(AU)', '中天'],
-          rows: this.celestialPositions.map((item: CelestialPosition) => [this.celestialPositionTitle(item), item.englishName, item.catalogId, item.firstCoordinate, item.secondCoordinate, item.altitude, item.azimuth, item.magnitude, item.type, item.elongation, item.angularSizeArcmin, item.distanceAU, item.transit]) }
+          rows: this.astroStore.celestialPositions.map((item: CelestialPosition) => [this.celestialPositionTitle(item), item.englishName, item.catalogId, item.firstCoordinate, item.secondCoordinate, item.altitude, item.azimuth, item.magnitude, item.type, item.elongation, item.angularSizeArcmin, item.distanceAU, item.transit]) }
       }
-    } else if (this.astroTab === 1 && this.ephemerisData.length > 0) {
-      return { title: (this.ephemerisName.length > 0 ? this.ephemerisName : '天体') + '星历', headers: ['日期时间', '天体', '英文名', '赤经(J2000)', '赤纬(J2000)', '赤经(当日)', '赤纬(当日)', '高度(度)', '方位(度)', '时角(度)', '极距(度)', '星等', '相位(%)', '距离(AU)', '距日(度)', '视直径(角分)', '气团质量'],
-        rows: this.ephemerisData.map((item: EphemerisRow) => [item.date, item.bodyName, item.bodyEnglishName, item.ra, item.dec, item.raOfDate, item.decOfDate, item.altitude, item.azimuth, item.hourAngleDegrees, item.polarDistanceDegrees, item.magnitude, item.phase !== undefined ? item.phase * 100 : undefined, item.distanceAU, item.elongationDegrees, item.angularSizeArcmin, item.airmass]) }
-    } else if (this.astroTab === 2 && this.rtsCalendarData.length > 0) {
-      return { title: (this.rtsCalendarName.length > 0 ? this.rtsCalendarName : '天体') + '升中天落日期表', headers: ['日期', '升起', '中天', '落下', '中天高度(度)', '星等', '距日(度)', '距月(度)', '状态'],
-        rows: this.rtsCalendarData.map((item: RtsCalendarDay) => [item.date, item.rise, item.transit, item.set, item.transitAltitude, item.magnitude, item.solarElongation, item.lunarElongation, item.status]) }
-    } else if (this.astroTab === 3 && this.phenomenaData.length > 0) {
+    } else if (this.astroStore.astroTab === 1 && this.astroStore.ephemerisData.length > 0) {
+      return { title: (this.astroStore.ephemerisName.length > 0 ? this.astroStore.ephemerisName : '天体') + '星历', headers: ['日期时间', '天体', '英文名', '赤经(J2000)', '赤纬(J2000)', '赤经(当日)', '赤纬(当日)', '高度(度)', '方位(度)', '时角(度)', '极距(度)', '星等', '相位(%)', '距离(AU)', '距日(度)', '视直径(角分)', '气团质量'],
+        rows: this.astroStore.ephemerisData.map((item: EphemerisRow) => [item.date, item.bodyName, item.bodyEnglishName, item.ra, item.dec, item.raOfDate, item.decOfDate, item.altitude, item.azimuth, item.hourAngleDegrees, item.polarDistanceDegrees, item.magnitude, item.phase !== undefined ? item.phase * 100 : undefined, item.distanceAU, item.elongationDegrees, item.angularSizeArcmin, item.airmass]) }
+    } else if (this.astroStore.astroTab === 2 && this.astroStore.rtsCalendarData.length > 0) {
+      return { title: (this.astroStore.rtsCalendarName.length > 0 ? this.astroStore.rtsCalendarName : '天体') + '升中天落日期表', headers: ['日期', '升起', '中天', '落下', '中天高度(度)', '星等', '距日(度)', '距月(度)', '状态'],
+        rows: this.astroStore.rtsCalendarData.map((item: RtsCalendarDay) => [item.date, item.rise, item.transit, item.set, item.transitAltitude, item.magnitude, item.solarElongation, item.lunarElongation, item.status]) }
+    } else if (this.astroStore.astroTab === 3 && this.astroStore.phenomenaData.length > 0) {
       return { title: '天象预报', headers: ['日期时间', '事件', '天体一', '天体二', '数值', '指标', '单位'],
-        rows: this.phenomenaData.map((item: PhenomenonItem) => [item.date, item.type, item.bodyA, item.bodyB, item.separation, item.metricLabel, item.metricUnit]) }
-    } else if (this.astroTab === 4) {
-      if ((this.graphMode === 0 || this.graphMode === 1) && this.altAzCurve.length > 0) {
-        return { title: this.altAzName + (this.graphMode === 0 ? '地平高度曲线' : '方位角曲线'), headers: ['儒略日', '距起点(小时)', '高度(度)', '方位(度)', '太阳高度(度)', '月亮高度(度)'],
-          rows: this.altAzCurve.map((item: AltAzPoint) => [item.jd, item.t, item.altitude, item.azimuth, item.sunAltitude, item.moonAltitude]) }
+        rows: this.astroStore.phenomenaData.map((item: PhenomenonItem) => [item.date, item.type, item.bodyA, item.bodyB, item.separation, item.metricLabel, item.metricUnit]) }
+    } else if (this.astroStore.astroTab === 4) {
+      if ((this.astroStore.graphMode === 0 || this.astroStore.graphMode === 1) && this.astroStore.altAzCurve.length > 0) {
+        return { title: this.astroStore.altAzName + (this.astroStore.graphMode === 0 ? '地平高度曲线' : '方位角曲线'), headers: ['儒略日', '距起点(小时)', '高度(度)', '方位(度)', '太阳高度(度)', '月亮高度(度)'],
+          rows: this.astroStore.altAzCurve.map((item: AltAzPoint) => [item.jd, item.t, item.altitude, item.azimuth, item.sunAltitude, item.moonAltitude]) }
       }
-      if (this.graphMode === 2 && this.annualElevationData.length > 0) {
-        return { title: this.annualElevationName + '全年高度', headers: ['日期', '儒略日', '高度(度)', '方位(度)'],
-          rows: this.annualElevationData.map((item: AnnualElevationPoint) => [item.date, item.jd, item.altitude, item.azimuth]) }
+      if (this.astroStore.graphMode === 2 && this.astroStore.annualElevationData.length > 0) {
+        return { title: this.astroStore.annualElevationName + '全年高度', headers: ['日期', '儒略日', '高度(度)', '方位(度)'],
+          rows: this.astroStore.annualElevationData.map((item: AnnualElevationPoint) => [item.date, item.jd, item.altitude, item.azimuth]) }
       }
-      if (this.graphMode === 3 && this.observabilityData.length > 0) {
-        return { title: this.observabilityName + '观测窗口', headers: ['日期', '最佳时刻', '最高高度(度)', '可观测时长(小时)', '暗夜时长(小时)', '月面照明(%)', '月亮高度(度)'],
-          rows: this.observabilityData.map((item: ObservabilityDay) => [item.date, item.peakTime, item.maxAltitude, item.visibleHours, item.darkHours, item.moonIllumination, item.moonAltitude]) }
+      if (this.astroStore.graphMode === 3 && this.astroStore.observabilityData.length > 0) {
+        return { title: this.astroStore.observabilityName + '观测窗口', headers: ['日期', '最佳时刻', '最高高度(度)', '可观测时长(小时)', '暗夜时长(小时)', '月面照明(%)', '月亮高度(度)'],
+          rows: this.astroStore.observabilityData.map((item: ObservabilityDay) => [item.date, item.peakTime, item.maxAltitude, item.visibleHours, item.darkHours, item.moonIllumination, item.moonAltitude]) }
       }
-      if (this.graphMode === 4 && this.lunarElongationData.length > 0) {
-        return { title: this.lunarElongationName + '月距曲线', headers: ['日期时间', '儒略日', '距起点(小时)', '月距(度)'],
-          rows: this.lunarElongationData.map((item: LunarElongationPoint) => [item.date, item.jd, item.t, item.separation]) }
+      if (this.astroStore.graphMode === 4 && this.astroStore.lunarElongationData.length > 0) {
+        return { title: this.astroStore.lunarElongationName + '月距曲线', headers: ['日期时间', '儒略日', '距起点(小时)', '月距(度)'],
+          rows: this.astroStore.lunarElongationData.map((item: LunarElongationPoint) => [item.date, item.jd, item.t, item.separation]) }
       }
-      if (this.graphMode === 5 && this.planetTimeSeriesData.length > 0) {
-        return { title: this.planetTimeSeriesName + '双变量时间曲线', headers: ['日期时间', '儒略日', '距起点(小时)', this.planetMetricLabel(this.planetTimeSeriesLeftMetric), this.planetMetricLabel(this.planetTimeSeriesRightMetric)],
-          rows: this.planetTimeSeriesData.map((item: PlanetTimeSeriesPoint) => [item.date, item.jd, item.t, item.left, item.right]) }
+      if (this.astroStore.graphMode === 5 && this.astroStore.planetTimeSeriesData.length > 0) {
+        return { title: this.astroStore.planetTimeSeriesName + '双变量时间曲线', headers: ['日期时间', '儒略日', '距起点(小时)', this.planetMetricLabel(this.astroStore.planetTimeSeriesLeftMetric), this.planetMetricLabel(this.astroStore.planetTimeSeriesRightMetric)],
+          rows: this.astroStore.planetTimeSeriesData.map((item: PlanetTimeSeriesPoint) => [item.date, item.jd, item.t, item.left, item.right]) }
       }
-    } else if (this.astroTab === 5 && this.wutStore.wutTargets.length > 0) {
+    } else if (this.astroStore.astroTab === 5 && this.wutStore.wutTargets.length > 0) {
       return { title: '今晚可观测天体', headers: ['天体', '英文名', '类型', '观测时刻', '高度(度)', '方位(度)', '星等', '角尺寸(角分)', '升起', '中天', '落下'],
         rows: this.wutStore.wutTargets.map((item: WutTarget) => [this.zhNameOf(item.name ?? ''), item.englishName, item.type, this.wutStore.wutObservationTime, item.altitude, item.azimuth, item.magnitude, item.angularSizeArcmin, item.rise, item.transit, item.set]) }
-    } else if (this.astroTab === 6) {
-      if (this.planetCalcMode === 0 && this.planetCalcData.length > 0) {
+    } else if (this.astroStore.astroTab === 6) {
+      if (this.astroStore.planetCalcMode === 0 && this.astroStore.planetCalcData.length > 0) {
         return { title: '行星计算', headers: ['天体', '英文名', '赤经', '赤纬', '高度(度)', '方位(度)', '星等', '距离(AU)', '距日(度)', '相位(%)', '升起', '中天', '落下'],
-          rows: this.planetCalcData.map((item: PlanetCalcItem) => [item.name, item.englishName, item.ra, item.dec, item.altitude, item.azimuth, item.magnitude, item.distanceAU, item.elongation, item.phase !== undefined ? item.phase * 100 : undefined, item.rise, item.transit, item.set]) }
+          rows: this.astroStore.planetCalcData.map((item: PlanetCalcItem) => [item.name, item.englishName, item.ra, item.dec, item.altitude, item.azimuth, item.magnitude, item.distanceAU, item.elongation, item.phase !== undefined ? item.phase * 100 : undefined, item.rise, item.transit, item.set]) }
       }
-      if (this.planetCalcMode === 1 && this.planetPairDistanceData.length > 0) {
-        return { title: this.planetPairFirstName + '与' + this.planetPairSecondName + '距离曲线', headers: ['日期时间', '儒略日', '距起点(天)', '线性距离(AU)', '角距离(度)'],
-          rows: this.planetPairDistanceData.map((item: PlanetPairDistancePoint) => [item.date, item.jd, item.t, item.linearDistance, item.angularDistance]) }
+      if (this.astroStore.planetCalcMode === 1 && this.astroStore.planetPairDistanceData.length > 0) {
+        return { title: this.astroStore.planetPairFirstName + '与' + this.astroStore.planetPairSecondName + '距离曲线', headers: ['日期时间', '儒略日', '距起点(天)', '线性距离(AU)', '角距离(度)'],
+          rows: this.astroStore.planetPairDistanceData.map((item: PlanetPairDistancePoint) => [item.date, item.jd, item.t, item.linearDistance, item.angularDistance]) }
       }
-    } else if (this.astroTab === 7) {
-      if (this.eclipseMode === 0 && this.filteredEclipses().length > 0) {
+    } else if (this.astroStore.astroTab === 7) {
+      if (this.astroStore.eclipseMode === 0 && this.filteredEclipses().length > 0) {
         return { title: '日月食预报', headers: ['日期时间', '类别', '类型', '食分', '沙罗周期', '本地可见', '本地食甚', '太阳高度(度)', '月亮高度(度)', '备注'],
           rows: this.filteredEclipses().map((item: EclipseItem) => [item.date, item.kind, item.type, item.magnitude, item.saros, item.localVisible, item.localMax, item.localSunAltitude, item.localMoonAltitude, item.note]) }
       }
-      if (this.eclipseMode === 1 && this.planetaryTransitData.length > 0) {
+      if (this.astroStore.eclipseMode === 1 && this.astroStore.planetaryTransitData.length > 0) {
         return { title: '行星凌日预报', headers: ['日期时间', '行星', '初亏', '内切始', '食甚', '内切终', '复圆', '食分', '最小距日心(度)', '持续(分钟)', '本地可见'],
-          rows: this.planetaryTransitData.map((item: PlanetaryTransitItem) => [item.date, item.planet, item.firstContact, item.secondContact, item.middle, item.thirdContact, item.lastContact, item.magnitude, item.minimumSeparation, item.durationMin, item.localVisible]) }
+          rows: this.astroStore.planetaryTransitData.map((item: PlanetaryTransitItem) => [item.date, item.planet, item.firstContact, item.secondContact, item.middle, item.thirdContact, item.lastContact, item.magnitude, item.minimumSeparation, item.durationMin, item.localVisible]) }
       }
-    } else if (this.astroTab === 8 && this.almanacData.size > 0) {
+    } else if (this.astroStore.astroTab === 8 && this.astroStore.almanacData.size > 0) {
       const rows: Array<Array<string | number | boolean | undefined>> = []
-      this.almanacData.forEach((value: string, key: string) => { rows.push([key, value]) })
-      for (const event of this.almanacSeasons) rows.push(['四季节点：' + (event.label ?? ''), event.date])
+      this.astroStore.almanacData.forEach((value: string, key: string) => { rows.push([key, value]) })
+      for (const event of this.astroStore.almanacSeasons) rows.push(['四季节点：' + (event.label ?? ''), event.date])
       return { title: '历法与月相', headers: ['项目', '数值'], rows: rows }
-    } else if (this.astroTab === 9 && this.moonPhaseData.length > 0) {
+    } else if (this.astroStore.astroTab === 9 && this.astroStore.moonPhaseData.length > 0) {
       return { title: '月相预报', headers: ['日期时间', '月相', '照亮(%)', '高度(度)', '方位(度)', '升起', '中天', '落下'],
-        rows: this.moonPhaseData.map((item: MoonPhaseItem) => [item.date, item.phase, item.illumination, item.altitude, item.azimuth, item.rise, item.transit, item.set]) }
+        rows: this.astroStore.moonPhaseData.map((item: MoonPhaseItem) => [item.date, item.phase, item.illumination, item.altitude, item.azimuth, item.rise, item.transit, item.set]) }
     }
     return undefined
   }
@@ -5851,7 +5714,7 @@ export struct WindowNativeNode {
       this.flashHint('当前页没有可导出的计算结果，请先生成数据。')
       return
     }
-    this.astroExporting = true
+    this.astroStore.astroExporting = true
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const saveOptions = new picker.DocumentSaveOptions()
@@ -5876,51 +5739,51 @@ export struct WindowNativeNode {
       hilog.error(0x0000, 'StellariumArkUI', 'AstroCalc CSV export failed: %{public}s', String(error))
       this.flashHint('保存失败，请检查文件管理权限后重试。')
     } finally {
-      this.astroExporting = false
+      this.astroStore.astroExporting = false
     }
   }
 
   private loadRtsCalendar(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.rtsCalendarLoadSequence
-    this.rtsCalendarData = []
-    this.rtsCalendarError = ''
-    this.rtsCalendarNeedsGeneration = false
+    this.astroStore.rtsCalendarData = []
+    this.astroStore.rtsCalendarError = ''
+    this.astroStore.rtsCalendarNeedsGeneration = false
     if (!this.hasSelectedObject()) {
       this.clearRtsSelectionResults()
       return
     }
-    this.rtsCalendarLoading = true
-    this.rtsCalendarProgress = 0
-    this.rtsCalendarTotalDays = this.rtsCalendarDays
+    this.astroStore.rtsCalendarLoading = true
+    this.astroStore.rtsCalendarProgress = 0
+    this.astroStore.rtsCalendarTotalDays = this.astroStore.rtsCalendarDays
     this.resolveRtsCalendarStartJD(requestId, (startJD: number) => {
-      const options: RtsCalendarOptions = { days: this.rtsCalendarDays }
+      const options: RtsCalendarOptions = { days: this.astroStore.rtsCalendarDays }
       if (startJD > 0) options.jd = startJD
       this.callLongRunningInteractive('getRTSCalendar', JSON.stringify(options), (r: StellariumBridgeResponse) => {
         if (requestId !== this.rtsCalendarLoadSequence) return
-        this.rtsCalendarLoading = false
+        this.astroStore.rtsCalendarLoading = false
         if (r.ok === true && r.rtsCalendar !== undefined) {
-          this.rtsCalendarData = r.rtsCalendar as Array<RtsCalendarDay>
-          this.rtsCalendarName = r.name ?? ''
-          this.rtsCalendarProgress = this.rtsCalendarDays
+          this.astroStore.rtsCalendarData = r.rtsCalendar as Array<RtsCalendarDay>
+          this.astroStore.rtsCalendarName = r.name ?? ''
+          this.astroStore.rtsCalendarProgress = this.astroStore.rtsCalendarDays
         } else {
-          this.rtsCalendarError = '请先在星图上选中一个天体，再生成升中天落日期表。'
+          this.astroStore.rtsCalendarError = '请先在星图上选中一个天体，再生成升中天落日期表。'
         }
       }, () => {
         if (requestId !== this.rtsCalendarLoadSequence) return
-        this.rtsCalendarLoading = false
-        this.rtsCalendarError = '日期表计算时间较长，请缩短时长后重试。'
+        this.astroStore.rtsCalendarLoading = false
+        this.astroStore.rtsCalendarError = '日期表计算时间较长，请缩短时长后重试。'
       }, (progress: StellariumBridgeResponse) => {
         if (requestId !== this.rtsCalendarLoadSequence) return
         const completed = Number(progress.progress)
         const total = Number(progress.totalDays)
-        if (Number.isFinite(completed) && completed > 0) this.rtsCalendarProgress = completed
-        if (Number.isFinite(total) && total > 0) this.rtsCalendarTotalDays = total
+        if (Number.isFinite(completed) && completed > 0) this.astroStore.rtsCalendarProgress = completed
+        if (Number.isFinite(total) && total > 0) this.astroStore.rtsCalendarTotalDays = total
       }, 480)
     }, () => {
       if (requestId !== this.rtsCalendarLoadSequence) return
-      this.rtsCalendarLoading = false
-      this.rtsCalendarError = '无法读取当前模拟时间，请点生成日期表后重试。'
+      this.astroStore.rtsCalendarLoading = false
+      this.astroStore.rtsCalendarError = '无法读取当前模拟时间，请点生成日期表后重试。'
     })
   }
 
@@ -5928,20 +5791,20 @@ export struct WindowNativeNode {
 
   private markRtsCalendarForRegeneration(): void {
     ++this.rtsCalendarLoadSequence
-    this.rtsCalendarLoading = false
-    this.rtsCalendarData = []
-    this.rtsCalendarError = ''
-    this.rtsCalendarNeedsGeneration = true
-    this.rtsCalendarProgress = 0
-    this.rtsCalendarTotalDays = 0
+    this.astroStore.rtsCalendarLoading = false
+    this.astroStore.rtsCalendarData = []
+    this.astroStore.rtsCalendarError = ''
+    this.astroStore.rtsCalendarNeedsGeneration = true
+    this.astroStore.rtsCalendarProgress = 0
+    this.astroStore.rtsCalendarTotalDays = 0
   }
 
   private resolveRtsCalendarStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
-    if (this.rtsCalendarStartOffsetDays < 0) {
+    if (this.astroStore.rtsCalendarStartOffsetDays < 0) {
       onReady(this.dateToJD(this.rtsCalendarStartYear, this.rtsCalendarStartMonth, this.rtsCalendarStartDay, 0, 0))
       return
     }
-    if (this.rtsCalendarStartOffsetDays === 0) {
+    if (this.astroStore.rtsCalendarStartOffsetDays === 0) {
       onReady(0)
       return
     }
@@ -5949,7 +5812,7 @@ export struct WindowNativeNode {
       if (requestId !== this.rtsCalendarLoadSequence) return
       const currentJD = Number(state.jd)
       if (state.ok === true && Number.isFinite(currentJD) && currentJD > 0) {
-        onReady(currentJD + this.rtsCalendarStartOffsetDays)
+        onReady(currentJD + this.astroStore.rtsCalendarStartOffsetDays)
         return
       }
       onFailure()
@@ -5986,7 +5849,7 @@ export struct WindowNativeNode {
         this.rtsCalendarStartYear = value.year ?? this.rtsCalendarStartYear
         this.rtsCalendarStartMonth = (value.month ?? (this.rtsCalendarStartMonth - 1)) + 1
         this.rtsCalendarStartDay = value.day ?? this.rtsCalendarStartDay
-        this.rtsCalendarStartOffsetDays = -1
+        this.astroStore.rtsCalendarStartOffsetDays = -1
         this.markRtsCalendarForRegeneration()
       },
       onCancel: () => {}
@@ -6004,54 +5867,54 @@ export struct WindowNativeNode {
   private loadEphemeris(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.ephemerisLoadSequence
-    this.ephemerisData = []
-    this.ephemerisName = ''
-    this.ephemerisError = ''
-    this.ephemerisLoading = true
+    this.astroStore.ephemerisData = []
+    this.astroStore.ephemerisName = ''
+    this.astroStore.ephemerisError = ''
+    this.astroStore.ephemerisLoading = true
     this.resolveEphemerisStartJD(requestId, (startJD: number) => {
-      const options: EphemerisOptions = { days: this.ephemerisDays, stepHours: this.ephemerisStepHours }
+      const options: EphemerisOptions = { days: this.astroStore.ephemerisDays, stepHours: this.astroStore.ephemerisStepHours }
       if (startJD > 0) options.jd = startJD
-      if (this.ephemerisMode === 1) options.names = [this.ephemerisPrimary, this.ephemerisSecondary]
-      if (this.ephemerisMode === 2) options.allNakedEye = true
+      if (this.astroStore.ephemerisMode === 1) options.names = [this.astroStore.ephemerisPrimary, this.astroStore.ephemerisSecondary]
+      if (this.astroStore.ephemerisMode === 2) options.allNakedEye = true
       this.callNativeWhenReady('getEphemeris', JSON.stringify(options), (r: StellariumBridgeResponse) => {
         if (requestId !== this.ephemerisLoadSequence) return
-        this.ephemerisLoading = false
+        this.astroStore.ephemerisLoading = false
         if (r.ok === true && r.ephemeris !== undefined) {
-          this.ephemerisData = r.ephemeris as Array<EphemerisRow>
-          this.ephemerisName = r.name !== undefined ? String(r.name) : ''
+          this.astroStore.ephemerisData = r.ephemeris as Array<EphemerisRow>
+          this.astroStore.ephemerisName = r.name !== undefined ? String(r.name) : ''
           const location = r.observerLocation !== undefined ? String(r.observerLocation) : ''
           const timeZone = r.timeZone !== undefined ? String(r.timeZone) : ''
           const frame = r.coordinateFrame !== undefined ? String(r.coordinateFrame) : 'J2000'
           const calculatedAt = r.calculationTime !== undefined ? this.fmtDateTime(String(r.calculationTime)) : ''
-          this.ephemerisMeta = '坐标系 ' + frame + (location.length > 0 ? ' · 观测地 ' + location : '')
+          this.astroStore.ephemerisMeta = '坐标系 ' + frame + (location.length > 0 ? ' · 观测地 ' + location : '')
             + (timeZone.length > 0 ? ' · 时区 ' + timeZone : '')
             + (calculatedAt.length > 0 ? ' · 计算于 ' + calculatedAt : '')
         } else {
-          this.ephemerisMeta = ''
-          this.ephemerisError = r.error ?? '请先在星图上选中一个天体，再生成它的星历。'
+          this.astroStore.ephemerisMeta = ''
+          this.astroStore.ephemerisError = r.error ?? '请先在星图上选中一个天体，再生成它的星历。'
         }
       }, 0, 100, 80, () => {
         if (requestId !== this.ephemerisLoadSequence) return
-        this.ephemerisLoading = false
-        this.ephemerisMeta = ''
-        this.ephemerisError = '星历计算时间较长，请缩短时间范围或增大采样间隔后重试。'
+        this.astroStore.ephemerisLoading = false
+        this.astroStore.ephemerisMeta = ''
+        this.astroStore.ephemerisError = '星历计算时间较长，请缩短时间范围或增大采样间隔后重试。'
       })
     }, () => {
       if (requestId !== this.ephemerisLoadSequence) return
-      this.ephemerisLoading = false
-      this.ephemerisMeta = ''
-      this.ephemerisError = '无法读取当前模拟时间，请点刷新后重试。'
+      this.astroStore.ephemerisLoading = false
+      this.astroStore.ephemerisMeta = ''
+      this.astroStore.ephemerisError = '无法读取当前模拟时间，请点刷新后重试。'
     })
   }
 
   private ephemerisLoadSequence: number = 0
 
   private resolveEphemerisStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
-    if (this.ephemerisStartOffsetDays < 0) {
+    if (this.astroStore.ephemerisStartOffsetDays < 0) {
       onReady(this.dateToJD(this.ephemerisStartYear, this.ephemerisStartMonth, this.ephemerisStartDay, 0, 0))
       return
     }
-    if (this.ephemerisStartOffsetDays === 0) {
+    if (this.astroStore.ephemerisStartOffsetDays === 0) {
       onReady(0)
       return
     }
@@ -6059,7 +5922,7 @@ export struct WindowNativeNode {
       if (requestId !== this.ephemerisLoadSequence) return
       const currentJD = Number(state.jd)
       if (state.ok === true && Number.isFinite(currentJD) && currentJD > 0) {
-        onReady(currentJD + this.ephemerisStartOffsetDays)
+        onReady(currentJD + this.astroStore.ephemerisStartOffsetDays)
         return
       }
       onFailure()
@@ -6087,7 +5950,7 @@ export struct WindowNativeNode {
         this.ephemerisStartYear = value.year ?? this.ephemerisStartYear
         this.ephemerisStartMonth = (value.month ?? (this.ephemerisStartMonth - 1)) + 1
         this.ephemerisStartDay = value.day ?? this.ephemerisStartDay
-        this.ephemerisStartOffsetDays = -1
+        this.astroStore.ephemerisStartOffsetDays = -1
         this.loadEphemeris()
       },
       onCancel: () => {}
@@ -6107,55 +5970,55 @@ export struct WindowNativeNode {
   private loadPlanetCalc(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.planetCalcRequestSequence
-    this.planetCalcData = []
-    this.planetCalcError = ''
-    this.planetCalcLoading = true
+    this.astroStore.planetCalcData = []
+    this.astroStore.planetCalcError = ''
+    this.astroStore.planetCalcLoading = true
     this.callInteractive('getPlanetCalc', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.planetCalcRequestSequence) return
-      this.planetCalcLoading = false
+      this.astroStore.planetCalcLoading = false
       if (r.ok === true && r.planetCalc !== undefined) {
-        this.planetCalcData = r.planetCalc as Array<PlanetCalcItem>
-        if (this.planetCalcData.length === 0) this.planetCalcError = '当前没有可显示的行星数据。'
+        this.astroStore.planetCalcData = r.planetCalc as Array<PlanetCalcItem>
+        if (this.astroStore.planetCalcData.length === 0) this.astroStore.planetCalcError = '当前没有可显示的行星数据。'
       } else {
-        this.planetCalcError = r.error ?? '行星实时数据计算失败，请点刷新后重试。'
+        this.astroStore.planetCalcError = r.error ?? '行星实时数据计算失败，请点刷新后重试。'
       }
     }, () => {
       if (requestId !== this.planetCalcRequestSequence) return
-      this.planetCalcLoading = false
-      this.planetCalcError = '行星实时数据计算失败，请点刷新后重试。'
+      this.astroStore.planetCalcLoading = false
+      this.astroStore.planetCalcError = '行星实时数据计算失败，请点刷新后重试。'
     })
   }
 
   private loadPlanetPairDistance(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.planetPairDistanceRequestSequence
-    this.planetPairDistanceData = []
-    this.planetPairDistanceError = ''
-    this.planetPairDistanceLoading = true
+    this.astroStore.planetPairDistanceData = []
+    this.astroStore.planetPairDistanceError = ''
+    this.astroStore.planetPairDistanceLoading = true
     const options = JSON.stringify({
-      first: this.planetPairFirst,
-      second: this.planetPairSecond,
-      days: this.planetPairDays,
-      stepDays: this.planetPairStepDays
+      first: this.astroStore.planetPairFirst,
+      second: this.astroStore.planetPairSecond,
+      days: this.astroStore.planetPairDays,
+      stepDays: this.astroStore.planetPairStepDays
     })
     this.callInteractive('getPlanetPairDistanceCurve', options, (r: StellariumBridgeResponse) => {
       if (requestId !== this.planetPairDistanceRequestSequence) return
-      this.planetPairDistanceLoading = false
+      this.astroStore.planetPairDistanceLoading = false
       if (r.ok === true && r.planetPairDistance !== undefined) {
         const data = r.planetPairDistance as Array<PlanetPairDistancePoint>
-        this.planetPairDistanceData = data
-        this.planetPairFirstName = this.planetPairBodyName(this.planetPairFirst)
-        this.planetPairSecondName = this.planetPairBodyName(this.planetPairSecond)
-        this.planetPairAngularAvailable = r.angularAvailable === true
+        this.astroStore.planetPairDistanceData = data
+        this.astroStore.planetPairFirstName = this.planetPairBodyName(this.astroStore.planetPairFirst)
+        this.astroStore.planetPairSecondName = this.planetPairBodyName(this.astroStore.planetPairSecond)
+        this.astroStore.planetPairAngularAvailable = r.angularAvailable === true
         this.updatePlanetPairDistanceRanges(data)
       } else {
-        this.planetPairDistanceData = []
-        this.planetPairDistanceError = r.error ?? '请选择两个不同的太阳系天体。'
+        this.astroStore.planetPairDistanceData = []
+        this.astroStore.planetPairDistanceError = r.error ?? '请选择两个不同的太阳系天体。'
       }
     }, () => {
       if (requestId !== this.planetPairDistanceRequestSequence) return
-      this.planetPairDistanceLoading = false
-      this.planetPairDistanceError = '距离曲线计算失败，请点刷新后重试。'
+      this.astroStore.planetPairDistanceLoading = false
+      this.astroStore.planetPairDistanceError = '距离曲线计算失败，请点刷新后重试。'
     })
   }
 
@@ -6173,164 +6036,164 @@ export struct WindowNativeNode {
         angularMax = Math.max(angularMax, point.angularDistance)
       }
     }
-    this.planetPairLinearMin = linearMin === Number.MAX_VALUE ? 0 : linearMin
-    this.planetPairLinearMax = linearMax <= linearMin ? linearMin + 1 : linearMax
-    this.planetPairAngularMin = angularMin === Number.MAX_VALUE ? 0 : angularMin
-    this.planetPairAngularMax = angularMax <= angularMin ? angularMin + 1 : angularMax
+    this.astroStore.planetPairLinearMin = linearMin === Number.MAX_VALUE ? 0 : linearMin
+    this.astroStore.planetPairLinearMax = linearMax <= linearMin ? linearMin + 1 : linearMax
+    this.astroStore.planetPairAngularMin = angularMin === Number.MAX_VALUE ? 0 : angularMin
+    this.astroStore.planetPairAngularMax = angularMax <= angularMin ? angularMin + 1 : angularMax
   }
 
   private loadAltAzCurve(): void {
     this.updateAstroCalcSnapshot()
     const requestId = this.beginGraphLoad()
-    this.altAzCurve = []
-    this.altAzError = ''
+    this.astroStore.altAzCurve = []
+    this.astroStore.altAzError = ''
     this.resolveGraphStartJD(requestId, (startJD: number) => {
       this.callInteractive('getAltAzCurve', JSON.stringify({
         jd: startJD,
-        hours: this.altAzHours,
-        stepMin: this.altAzStepMin,
-        includeSun: this.graphMode === 0 && this.altAzShowSun,
-        includeMoon: this.graphMode === 0 && this.altAzShowMoon
+        hours: this.astroStore.altAzHours,
+        stepMin: this.astroStore.altAzStepMin,
+        includeSun: this.astroStore.graphMode === 0 && this.astroStore.altAzShowSun,
+        includeMoon: this.astroStore.graphMode === 0 && this.astroStore.altAzShowMoon
       }), (r: StellariumBridgeResponse) => {
         if (requestId !== this.graphLoadSequence) return
         this.finishGraphLoad(requestId)
         if (r.ok === true && r.curve !== undefined) {
-          this.altAzCurve = r.curve as Array<AltAzPoint>
-          this.altAzName = r.name !== undefined ? r.name : ''
-          this.altAzError = ''
+          this.astroStore.altAzCurve = r.curve as Array<AltAzPoint>
+          this.astroStore.altAzName = r.name !== undefined ? r.name : ''
+          this.astroStore.altAzError = ''
         } else {
-          this.altAzCurve = []
-          this.altAzError = '请先在星图上选中一个天体，再来看它的' + (this.graphMode === 0 ? '高度' : '方位角') + '曲线。'
+          this.astroStore.altAzCurve = []
+          this.astroStore.altAzError = '请先在星图上选中一个天体，再来看它的' + (this.astroStore.graphMode === 0 ? '高度' : '方位角') + '曲线。'
         }
       }, () => {
         if (requestId !== this.graphLoadSequence) return
         this.finishGraphLoad(requestId)
-        this.altAzError = '计算等待超时，请点刷新后重试。'
+        this.astroStore.altAzError = '计算等待超时，请点刷新后重试。'
       })
     }, () => {
-      this.altAzError = '无法读取当前模拟时间，请点刷新后重试。'
+      this.astroStore.altAzError = '无法读取当前模拟时间，请点刷新后重试。'
     })
   }
 
   private loadObservabilityCalendar(): void {
     this.updateAstroCalcSnapshot()
     const requestId = this.beginGraphLoad()
-    this.observabilityData = []
-    this.observabilityError = ''
-    this.observabilityProgress = '准备计算…'
+    this.astroStore.observabilityData = []
+    this.astroStore.observabilityError = ''
+    this.astroStore.observabilityProgress = '准备计算…'
     this.resolveGraphStartJD(requestId, (startJD: number) => {
-      const options = JSON.stringify({ jd: startJD, days: this.observabilityDays, minAltitude: this.observabilityMinAltitude })
+      const options = JSON.stringify({ jd: startJD, days: this.astroStore.observabilityDays, minAltitude: this.astroStore.observabilityMinAltitude })
       this.callLongRunningInteractive('getObservabilityCalendar', options, (r: StellariumBridgeResponse) => {
         if (requestId !== this.graphLoadSequence) return
         this.finishGraphLoad(requestId)
-        this.observabilityProgress = ''
+        this.astroStore.observabilityProgress = ''
         if (r.ok === true && r.observability !== undefined) {
-          this.observabilityData = r.observability as Array<ObservabilityDay>
-          this.observabilityName = r.name ?? ''
+          this.astroStore.observabilityData = r.observability as Array<ObservabilityDay>
+          this.astroStore.observabilityName = r.name ?? ''
         } else {
-          this.observabilityData = []
-          this.observabilityError = (r.error ?? '').toString().includes('no object')
+          this.astroStore.observabilityData = []
+          this.astroStore.observabilityError = (r.error ?? '').toString().includes('no object')
             ? '请先在星图上选中一个天体，再查看它未来多晚的可见性。'
             : '观测窗口计算失败，请稍后重试。'
         }
       }, () => {
         if (requestId !== this.graphLoadSequence) return
         this.finishGraphLoad(requestId)
-        this.observabilityProgress = ''
-        this.observabilityError = '计算等待超时，请稍后重试。'
+        this.astroStore.observabilityProgress = ''
+        this.astroStore.observabilityError = '计算等待超时，请稍后重试。'
       }, (progress: StellariumBridgeResponse) => {
         if (requestId !== this.graphLoadSequence) return
         const completed = Number(progress.progress ?? 0)
-        const total = Number(progress.totalDays ?? this.observabilityDays)
-        this.observabilityProgress = '正在计算：' + Math.min(completed, total).toFixed(0) + ' / ' + total.toFixed(0) + ' 天'
+        const total = Number(progress.totalDays ?? this.astroStore.observabilityDays)
+        this.astroStore.observabilityProgress = '正在计算：' + Math.min(completed, total).toFixed(0) + ' / ' + total.toFixed(0) + ' 天'
       })
     }, () => {
-      this.observabilityProgress = ''
-      this.observabilityError = '无法读取当前模拟时间，请点刷新后重试。'
+      this.astroStore.observabilityProgress = ''
+      this.astroStore.observabilityError = '无法读取当前模拟时间，请点刷新后重试。'
     })
   }
 
   private loadAnnualElevation(): void {
     this.updateAstroCalcSnapshot()
     const requestId = this.beginGraphLoad()
-    this.annualElevationData = []
-    this.annualElevationError = ''
-    this.callInteractive('getAnnualElevation', JSON.stringify({ hour: this.annualElevationHour }), (r: StellariumBridgeResponse) => {
+    this.astroStore.annualElevationData = []
+    this.astroStore.annualElevationError = ''
+    this.callInteractive('getAnnualElevation', JSON.stringify({ hour: this.astroStore.annualElevationHour }), (r: StellariumBridgeResponse) => {
       if (requestId !== this.graphLoadSequence) return
       this.finishGraphLoad(requestId)
       if (r.ok === true && r.annualElevation !== undefined) {
-        this.annualElevationData = r.annualElevation as Array<AnnualElevationPoint>
-        this.annualElevationName = r.name ?? ''
+        this.astroStore.annualElevationData = r.annualElevation as Array<AnnualElevationPoint>
+        this.astroStore.annualElevationName = r.name ?? ''
       } else {
-        this.annualElevationData = []
-        this.annualElevationError = '请先在星图上选中一个天体，再生成全年高度曲线。'
+        this.astroStore.annualElevationData = []
+        this.astroStore.annualElevationError = '请先在星图上选中一个天体，再生成全年高度曲线。'
       }
     }, () => {
       if (requestId !== this.graphLoadSequence) return
       this.finishGraphLoad(requestId)
-      this.annualElevationError = '计算等待超时，请点刷新后重试。'
+      this.astroStore.annualElevationError = '计算等待超时，请点刷新后重试。'
     })
   }
 
   private loadLunarElongation(): void {
     this.updateAstroCalcSnapshot()
     const requestId = this.beginGraphLoad()
-    this.lunarElongationData = []
-    this.lunarElongationError = ''
+    this.astroStore.lunarElongationData = []
+    this.astroStore.lunarElongationError = ''
     this.resolveGraphStartJD(requestId, (startJD: number) => {
-      const options = JSON.stringify({ jd: startJD, days: this.lunarElongationDays, stepHours: this.lunarElongationStepHours })
+      const options = JSON.stringify({ jd: startJD, days: this.astroStore.lunarElongationDays, stepHours: this.astroStore.lunarElongationStepHours })
       this.callInteractive('getLunarElongationCurve', options, (r: StellariumBridgeResponse) => {
         if (requestId !== this.graphLoadSequence) return
         this.finishGraphLoad(requestId)
         if (r.ok === true && r.lunarElongation !== undefined) {
-          this.lunarElongationData = r.lunarElongation as Array<LunarElongationPoint>
-          this.lunarElongationName = r.name ?? ''
+          this.astroStore.lunarElongationData = r.lunarElongation as Array<LunarElongationPoint>
+          this.astroStore.lunarElongationName = r.name ?? ''
         } else {
-          this.lunarElongationData = []
-          this.lunarElongationError = '请先选中除月亮和人造卫星之外的天体，再生成月距曲线。'
+          this.astroStore.lunarElongationData = []
+          this.astroStore.lunarElongationError = '请先选中除月亮和人造卫星之外的天体，再生成月距曲线。'
         }
       }, () => {
         if (requestId !== this.graphLoadSequence) return
         this.finishGraphLoad(requestId)
-        this.lunarElongationError = '计算等待超时，请点刷新后重试。'
+        this.astroStore.lunarElongationError = '计算等待超时，请点刷新后重试。'
       })
     }, () => {
-      this.lunarElongationError = '无法读取当前模拟时间，请点刷新后重试。'
+      this.astroStore.lunarElongationError = '无法读取当前模拟时间，请点刷新后重试。'
     })
   }
 
   private loadPlanetTimeSeries(): void {
     this.updateAstroCalcSnapshot()
     const requestId = this.beginGraphLoad()
-    this.planetTimeSeriesData = []
-    this.planetTimeSeriesError = ''
+    this.astroStore.planetTimeSeriesData = []
+    this.astroStore.planetTimeSeriesError = ''
     this.resolveGraphStartJD(requestId, (startJD: number) => {
       const options = JSON.stringify({
         jd: startJD,
-        days: this.planetTimeSeriesDays,
-        stepHours: this.planetTimeSeriesStepHours,
-        leftMetric: this.planetTimeSeriesLeftMetric,
-        rightMetric: this.planetTimeSeriesRightMetric
+        days: this.astroStore.planetTimeSeriesDays,
+        stepHours: this.astroStore.planetTimeSeriesStepHours,
+        leftMetric: this.astroStore.planetTimeSeriesLeftMetric,
+        rightMetric: this.astroStore.planetTimeSeriesRightMetric
       })
       this.callInteractive('getPlanetTimeSeries', options, (r: StellariumBridgeResponse) => {
         if (requestId !== this.graphLoadSequence) return
         this.finishGraphLoad(requestId)
         if (r.ok === true && r.timeSeries !== undefined) {
           const data = r.timeSeries as Array<PlanetTimeSeriesPoint>
-          this.planetTimeSeriesData = data
-          this.planetTimeSeriesName = r.name ?? ''
+          this.astroStore.planetTimeSeriesData = data
+          this.astroStore.planetTimeSeriesName = r.name ?? ''
           this.updatePlanetTimeSeriesRanges(data)
         } else {
-          this.planetTimeSeriesData = []
-          this.planetTimeSeriesError = '请先选中一个太阳系天体（行星、太阳或月亮），再生成双曲线。'
+          this.astroStore.planetTimeSeriesData = []
+          this.astroStore.planetTimeSeriesError = '请先选中一个太阳系天体（行星、太阳或月亮），再生成双曲线。'
         }
       }, () => {
         if (requestId !== this.graphLoadSequence) return
         this.finishGraphLoad(requestId)
-        this.planetTimeSeriesError = '计算等待超时，请点刷新后重试。'
+        this.astroStore.planetTimeSeriesError = '计算等待超时，请点刷新后重试。'
       })
     }, () => {
-      this.planetTimeSeriesError = '无法读取当前模拟时间，请点刷新后重试。'
+      this.astroStore.planetTimeSeriesError = '无法读取当前模拟时间，请点刷新后重试。'
     })
   }
 
@@ -6338,20 +6201,20 @@ export struct WindowNativeNode {
 
   private beginGraphLoad(): number {
     this.graphLoadSequence += 1
-    this.graphLoading = true
+    this.astroStore.graphLoading = true
     return this.graphLoadSequence
   }
 
   private finishGraphLoad(requestId: number): void {
-    if (requestId === this.graphLoadSequence) this.graphLoading = false
+    if (requestId === this.graphLoadSequence) this.astroStore.graphLoading = false
   }
 
   private resolveGraphStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
-    if (this.graphStartOffsetDays < 0) {
+    if (this.astroStore.graphStartOffsetDays < 0) {
       onReady(this.dateToJD(this.graphStartYear, this.graphStartMonth, this.graphStartDay, 0, 0))
       return
     }
-    if (this.graphStartOffsetDays === 0) {
+    if (this.astroStore.graphStartOffsetDays === 0) {
       onReady(0)
       return
     }
@@ -6359,7 +6222,7 @@ export struct WindowNativeNode {
       if (requestId !== this.graphLoadSequence) return
       const currentJD = Number(state.jd)
       if (state.ok === true && Number.isFinite(currentJD) && currentJD > 0) {
-        onReady(currentJD + this.graphStartOffsetDays)
+        onReady(currentJD + this.astroStore.graphStartOffsetDays)
         return
       }
       this.finishGraphLoad(requestId)
@@ -6377,7 +6240,7 @@ export struct WindowNativeNode {
   }
 
   private graphCustomStartLabel(): string {
-    if (this.graphStartOffsetDays >= 0) return '指定日期'
+    if (this.astroStore.graphStartOffsetDays >= 0) return '指定日期'
     return this.graphStartYear.toString() + '-' + this.graphStartMonth.toString().padStart(2, '0') + '-' + this.graphStartDay.toString().padStart(2, '0')
   }
 
@@ -6391,7 +6254,7 @@ export struct WindowNativeNode {
         this.graphStartYear = value.year ?? this.graphStartYear
         this.graphStartMonth = (value.month ?? (this.graphStartMonth - 1)) + 1
         this.graphStartDay = value.day ?? this.graphStartDay
-        this.graphStartOffsetDays = -1
+        this.astroStore.graphStartOffsetDays = -1
         this.reloadCurrentGraph()
       },
       onCancel: () => {}
@@ -6399,10 +6262,10 @@ export struct WindowNativeNode {
   }
 
   private reloadCurrentGraph(): void {
-    if (this.graphMode === 2) this.loadAnnualElevation()
-    else if (this.graphMode === 3) this.loadObservabilityCalendar()
-    else if (this.graphMode === 4) this.loadLunarElongation()
-    else if (this.graphMode === 5) this.loadPlanetTimeSeries()
+    if (this.astroStore.graphMode === 2) this.loadAnnualElevation()
+    else if (this.astroStore.graphMode === 3) this.loadObservabilityCalendar()
+    else if (this.astroStore.graphMode === 4) this.loadLunarElongation()
+    else if (this.astroStore.graphMode === 5) this.loadPlanetTimeSeries()
     else this.loadAltAzCurve()
   }
 
@@ -6436,15 +6299,15 @@ export struct WindowNativeNode {
 
   private clearRtsSelectionResults(): void {
     ++this.rtsRequestSequence
-    this.rtsLoading = false
-    this.rtsData = new Map()
-    this.rtsError = '升起、中天和落下时间需要先选择一个天体。'
-    this.rtsCalendarData = []
-    this.rtsCalendarName = ''
-    this.rtsCalendarLoading = false
-    this.rtsCalendarError = '请先选择一个天体，再生成升中天落日期表。'
-    this.rtsCalendarNeedsGeneration = false
-    this.rtsCalendarProgress = 0
+    this.astroStore.rtsLoading = false
+    this.astroStore.rtsData = new Map()
+    this.astroStore.rtsError = '升起、中天和落下时间需要先选择一个天体。'
+    this.astroStore.rtsCalendarData = []
+    this.astroStore.rtsCalendarName = ''
+    this.astroStore.rtsCalendarLoading = false
+    this.astroStore.rtsCalendarError = '请先选择一个天体，再生成升中天落日期表。'
+    this.astroStore.rtsCalendarNeedsGeneration = false
+    this.astroStore.rtsCalendarProgress = 0
     ++this.rtsCalendarLoadSequence
   }
 
@@ -6466,10 +6329,10 @@ export struct WindowNativeNode {
       rightMin = Math.min(rightMin, right)
       rightMax = Math.max(rightMax, right)
     }
-    this.planetTimeSeriesLeftMin = leftMin === Number.MAX_VALUE ? 0 : leftMin
-    this.planetTimeSeriesLeftMax = leftMax <= leftMin ? leftMin + 1 : leftMax
-    this.planetTimeSeriesRightMin = rightMin === Number.MAX_VALUE ? 0 : rightMin
-    this.planetTimeSeriesRightMax = rightMax <= rightMin ? rightMin + 1 : rightMax
+    this.astroStore.planetTimeSeriesLeftMin = leftMin === Number.MAX_VALUE ? 0 : leftMin
+    this.astroStore.planetTimeSeriesLeftMax = leftMax <= leftMin ? leftMin + 1 : leftMax
+    this.astroStore.planetTimeSeriesRightMin = rightMin === Number.MAX_VALUE ? 0 : rightMin
+    this.astroStore.planetTimeSeriesRightMax = rightMax <= rightMin ? rightMin + 1 : rightMax
   }
 
   private jumpToObservabilityDay(day: ObservabilityDay): void {
@@ -6481,30 +6344,30 @@ export struct WindowNativeNode {
 
   private loadEclipses(): void {
     this.updateAstroCalcSnapshot()
-    if (this.eclipseData.length > 0 || this.eclipseLoading) return
+    if (this.astroStore.eclipseData.length > 0 || this.astroStore.eclipseLoading) return
     const requestId = ++this.eclipseLoadSequence
-    this.eclipseLoading = true
-    this.eclipseError = ''
+    this.astroStore.eclipseLoading = true
+    this.astroStore.eclipseError = ''
     this.resolveEclipseStartJD(requestId, (startJD: number) => {
-      const options: EclipseOptions = { months: this.eclipseMonths }
+      const options: EclipseOptions = { months: this.astroStore.eclipseMonths }
       if (startJD > 0) options.jd = startJD
       this.callNativeWhenReady('getEclipses', JSON.stringify(options), (r: StellariumBridgeResponse) => {
         if (requestId !== this.eclipseLoadSequence) return
-        this.eclipseLoading = false
+        this.astroStore.eclipseLoading = false
         if (r.ok === true && r.eclipses !== undefined) {
-          this.eclipseData = r.eclipses as Array<EclipseItem>
+          this.astroStore.eclipseData = r.eclipses as Array<EclipseItem>
           return
         }
-        this.eclipseError = r.error ?? '日月食计算未能完成，请重试。'
+        this.astroStore.eclipseError = r.error ?? '日月食计算未能完成，请重试。'
       }, 0, 100, 200, () => {
         if (requestId !== this.eclipseLoadSequence) return
-        this.eclipseLoading = false
-        this.eclipseError = '日月食计算时间较长，请缩短预测范围后重试。'
+        this.astroStore.eclipseLoading = false
+        this.astroStore.eclipseError = '日月食计算时间较长，请缩短预测范围后重试。'
       })
     }, () => {
       if (requestId !== this.eclipseLoadSequence) return
-      this.eclipseLoading = false
-      this.eclipseError = '无法读取当前模拟时间，请重试。'
+      this.astroStore.eclipseLoading = false
+      this.astroStore.eclipseError = '无法读取当前模拟时间，请重试。'
     })
   }
 
@@ -6512,18 +6375,18 @@ export struct WindowNativeNode {
 
   private reloadEclipses(): void {
     ++this.eclipseLoadSequence
-    this.eclipseLoading = false
-    this.eclipseData = []
-    this.eclipseError = ''
+    this.astroStore.eclipseLoading = false
+    this.astroStore.eclipseData = []
+    this.astroStore.eclipseError = ''
     this.loadEclipses()
   }
 
   private resolveEclipseStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
-    if (this.eclipseStartOffsetDays < 0) {
+    if (this.astroStore.eclipseStartOffsetDays < 0) {
       onReady(this.dateToJD(this.eclipseStartYear, this.eclipseStartMonth, this.eclipseStartDay, 0, 0))
       return
     }
-    if (this.eclipseStartOffsetDays === 0) {
+    if (this.astroStore.eclipseStartOffsetDays === 0) {
       onReady(0)
       return
     }
@@ -6531,7 +6394,7 @@ export struct WindowNativeNode {
       if (requestId !== this.eclipseLoadSequence) return
       const currentJD = Number(state.jd)
       if (state.ok === true && Number.isFinite(currentJD) && currentJD > 0) {
-        onReady(currentJD + this.eclipseStartOffsetDays)
+        onReady(currentJD + this.astroStore.eclipseStartOffsetDays)
         return
       }
       onFailure()
@@ -6559,7 +6422,7 @@ export struct WindowNativeNode {
         this.eclipseStartYear = value.year ?? this.eclipseStartYear
         this.eclipseStartMonth = (value.month ?? (this.eclipseStartMonth - 1)) + 1
         this.eclipseStartDay = value.day ?? this.eclipseStartDay
-        this.eclipseStartOffsetDays = -1
+        this.astroStore.eclipseStartOffsetDays = -1
         this.reloadEclipses()
       },
       onCancel: () => {}
@@ -6568,14 +6431,14 @@ export struct WindowNativeNode {
 
   private filteredEclipses(): Array<EclipseItem> {
     const filtered: Array<EclipseItem> = []
-    for (const eclipse of this.eclipseData) {
-      if (this.eclipseKindFilter === 1 && eclipse.kind !== 'solar') continue
-      if (this.eclipseKindFilter === 2 && eclipse.kind !== 'lunar') continue
+    for (const eclipse of this.astroStore.eclipseData) {
+      if (this.astroStore.eclipseKindFilter === 1 && eclipse.kind !== 'solar') continue
+      if (this.astroStore.eclipseKindFilter === 2 && eclipse.kind !== 'lunar') continue
       const type = eclipse.type ?? ''
-      if (this.eclipseTypeFilter === 1 && type !== '全食') continue
-      if (this.eclipseTypeFilter === 2 && type !== '环食') continue
-      if (this.eclipseTypeFilter === 3 && type !== '偏食') continue
-      if (this.eclipseTypeFilter === 4 && type !== '半影食') continue
+      if (this.astroStore.eclipseTypeFilter === 1 && type !== '全食') continue
+      if (this.astroStore.eclipseTypeFilter === 2 && type !== '环食') continue
+      if (this.astroStore.eclipseTypeFilter === 3 && type !== '偏食') continue
+      if (this.astroStore.eclipseTypeFilter === 4 && type !== '半影食') continue
       filtered.push(eclipse)
     }
     return filtered
@@ -6583,25 +6446,25 @@ export struct WindowNativeNode {
 
   private loadPlanetaryTransits(): void {
     this.updateAstroCalcSnapshot()
-    if (!this.planetaryTransitLoaded && !this.planetaryTransitLoading) {
+    if (!this.astroStore.planetaryTransitLoaded && !this.astroStore.planetaryTransitLoading) {
       const requestId = ++this.planetaryTransitRequestSequence
-      this.planetaryTransitLoading = true
-      this.planetaryTransitError = ''
-      this.callNativeWhenReady('getPlanetaryTransits', JSON.stringify({ years: this.planetaryTransitYears }), (r: StellariumBridgeResponse) => {
+      this.astroStore.planetaryTransitLoading = true
+      this.astroStore.planetaryTransitError = ''
+      this.callNativeWhenReady('getPlanetaryTransits', JSON.stringify({ years: this.astroStore.planetaryTransitYears }), (r: StellariumBridgeResponse) => {
         if (requestId !== this.planetaryTransitRequestSequence) return
-        this.planetaryTransitLoading = false
+        this.astroStore.planetaryTransitLoading = false
         if (r.ok === true && r.planetaryTransits !== undefined) {
-          this.planetaryTransitData = r.planetaryTransits as Array<PlanetaryTransitItem>
-          this.planetaryTransitError = ''
+          this.astroStore.planetaryTransitData = r.planetaryTransits as Array<PlanetaryTransitItem>
+          this.astroStore.planetaryTransitError = ''
         } else {
-          this.planetaryTransitError = '行星凌日只能按地球上的当前观测地点计算。'
+          this.astroStore.planetaryTransitError = '行星凌日只能按地球上的当前观测地点计算。'
         }
-        this.planetaryTransitLoaded = true
+        this.astroStore.planetaryTransitLoaded = true
       }, 0, 100, 200, () => {
         if (requestId !== this.planetaryTransitRequestSequence) return
-        this.planetaryTransitLoading = false
-        this.planetaryTransitLoaded = true
-        this.planetaryTransitError = '行星凌日计算时间较长，请缩短预测范围后重试。'
+        this.astroStore.planetaryTransitLoading = false
+        this.astroStore.planetaryTransitLoaded = true
+        this.astroStore.planetaryTransitError = '行星凌日计算时间较长，请缩短预测范围后重试。'
       })
     }
   }
@@ -6611,33 +6474,33 @@ export struct WindowNativeNode {
   private loadPhenomena(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.phenomenaRequestSequence
-    this.phenomenaData = []
-    this.phenomenaHint = ''
-    this.phenomenaLoading = true
+    this.astroStore.phenomenaData = []
+    this.astroStore.phenomenaHint = ''
+    this.astroStore.phenomenaLoading = true
     const options: PhenomenaOptions = {
-      bodyA: this.phenomenaPrimary,
-      bodyB: this.phenomenaTarget,
-      days: this.phenomenaDays,
-      startOffsetMonths: this.phenomenaStartOffsetMonths,
-      maxSeparation: this.phenomenaMaxSeparation,
-      includeOppositions: this.phenomenaIncludeOppositions,
-      includePerihelionAphelion: this.phenomenaIncludePerihelionAphelion,
-      includeElongationsQuadratures: this.phenomenaIncludeElongationsQuadratures,
-      includeStations: this.phenomenaIncludeStations,
+      bodyA: this.astroStore.phenomenaPrimary,
+      bodyB: this.astroStore.phenomenaTarget,
+      days: this.astroStore.phenomenaDays,
+      startOffsetMonths: this.astroStore.phenomenaStartOffsetMonths,
+      maxSeparation: this.astroStore.phenomenaMaxSeparation,
+      includeOppositions: this.astroStore.phenomenaIncludeOppositions,
+      includePerihelionAphelion: this.astroStore.phenomenaIncludePerihelionAphelion,
+      includeElongationsQuadratures: this.astroStore.phenomenaIncludeElongationsQuadratures,
+      includeStations: this.astroStore.phenomenaIncludeStations,
     }
     this.callNativeWhenReady('getPhenomena', JSON.stringify(options), (r: StellariumBridgeResponse) => {
       if (requestId !== this.phenomenaRequestSequence) return
-      this.phenomenaLoading = false
+      this.astroStore.phenomenaLoading = false
       if (r.ok === true && r.phenomena !== undefined) {
-        this.phenomenaData = r.phenomena as Array<PhenomenonItem>
-        if (this.phenomenaData.length === 0) this.phenomenaHint = '所选时段内没有符合角距条件的天象。'
+        this.astroStore.phenomenaData = r.phenomena as Array<PhenomenonItem>
+        if (this.astroStore.phenomenaData.length === 0) this.astroStore.phenomenaHint = '所选时段内没有符合角距条件的天象。'
       } else {
-        this.phenomenaHint = r.error ?? '暂时无法完成天象计算，请稍后重试。'
+        this.astroStore.phenomenaHint = r.error ?? '暂时无法完成天象计算，请稍后重试。'
       }
     }, 0, 100, 300, () => {
       if (requestId !== this.phenomenaRequestSequence) return
-      this.phenomenaLoading = false
-      this.phenomenaHint = '计算时间较长，请缩短预测范围或减少比较对象后重试。'
+      this.astroStore.phenomenaLoading = false
+      this.astroStore.phenomenaHint = '计算时间较长，请缩短预测范围或减少比较对象后重试。'
     })
   }
 
@@ -6669,9 +6532,9 @@ export struct WindowNativeNode {
   }
 
   private loadTonightAstro(): void {
-    if (this.tonightAstro === null) {
+    if (this.astroStore.tonightAstro === null) {
       this.callInteractive('getTonightEvents', '', (r: StellariumBridgeResponse) => {
-        if (r.ok === true && r.tonight !== undefined) this.tonightAstro = r.tonight as TonightEvents
+        if (r.ok === true && r.tonight !== undefined) this.astroStore.tonightAstro = r.tonight as TonightEvents
       })
     }
     this.loadWutTargets()
@@ -6792,8 +6655,8 @@ export struct WindowNativeNode {
   private altAzMaxLabel(): string {
     let m: number = -999
     let t: number = 0
-    for (let i = 0; i < this.altAzCurve.length; i++) {
-      const p: AltAzPoint = this.altAzCurve[i]
+    for (let i = 0; i < this.astroStore.altAzCurve.length; i++) {
+      const p: AltAzPoint = this.astroStore.altAzCurve[i]
       const v: number = p.altitude !== undefined ? p.altitude : -999
       if (v > m) { m = v; t = p.t !== undefined ? p.t : 0 }
     }
@@ -6802,8 +6665,8 @@ export struct WindowNativeNode {
   }
 
   private altAzNowLabel(): string {
-    if (this.altAzCurve.length === 0) return '--'
-    const p: AltAzPoint = this.altAzCurve[0]
+    if (this.astroStore.altAzCurve.length === 0) return '--'
+    const p: AltAzPoint = this.astroStore.altAzCurve[0]
     const alt: number = p.altitude !== undefined ? p.altitude : 0
     const az: number = p.azimuth !== undefined ? p.azimuth : 0
     return '高度 ' + alt.toFixed(1) + '° / 方位 ' + az.toFixed(1) + '°'
@@ -6811,9 +6674,9 @@ export struct WindowNativeNode {
 
   private altAzVisibleHours(): string {
     let hours: number = 0
-    for (let i = 0; i + 1 < this.altAzCurve.length; i++) {
-      const p: AltAzPoint = this.altAzCurve[i]
-      const next: AltAzPoint = this.altAzCurve[i + 1]
+    for (let i = 0; i + 1 < this.astroStore.altAzCurve.length; i++) {
+      const p: AltAzPoint = this.astroStore.altAzCurve[i]
+      const next: AltAzPoint = this.astroStore.altAzCurve[i + 1]
       if (p.altitude !== undefined && p.altitude > 0 && p.t !== undefined && next.t !== undefined) {
         hours += next.t - p.t
       }
@@ -6822,33 +6685,33 @@ export struct WindowNativeNode {
   }
 
   private altAzRangeLabel(): string {
-    return '未来 ' + this.altAzHours.toString() + ' 小时'
+    return '未来 ' + this.astroStore.altAzHours.toString() + ' 小时'
   }
 
   private altAzMidpointLabel(): string {
-    return '+' + (this.altAzHours / 2).toString() + 'h'
+    return '+' + (this.astroStore.altAzHours / 2).toString() + 'h'
   }
 
   private altBarWidth(): number {
-    if (this.altAzCurve.length === 0) return 4
-    return Math.max(1, Math.min(4, 292 / this.altAzCurve.length))
+    if (this.astroStore.altAzCurve.length === 0) return 4
+    return Math.max(1, Math.min(4, 292 / this.astroStore.altAzCurve.length))
   }
 
   private altBarHeight(alt: number | undefined): number {
     const a: number = alt !== undefined ? alt : -90
-    if (a < this.altAzMinimum) return 1
-    const range: number = 90 - this.altAzMinimum
-    return Math.max(1, Math.min(96, (a - this.altAzMinimum) / range * 96))
+    if (a < this.astroStore.altAzMinimum) return 1
+    const range: number = 90 - this.astroStore.altAzMinimum
+    return Math.max(1, Math.min(96, (a - this.astroStore.altAzMinimum) / range * 96))
   }
 
   private altitudeCurveColor(altitude: number | undefined, color: string): string {
-    return (altitude ?? -90) >= this.altAzMinimum ? color : '#33FFFFFF'
+    return (altitude ?? -90) >= this.astroStore.altAzMinimum ? color : '#33FFFFFF'
   }
 
   private altCurveSegmentWidth(): number {
     let count: number = 1
-    if (this.altAzShowSun) count++
-    if (this.altAzShowMoon) count++
+    if (this.astroStore.altAzShowSun) count++
+    if (this.astroStore.altAzShowMoon) count++
     return Math.max(1, (this.altBarWidth() - Math.max(0, count - 1)) / count)
   }
 
@@ -6859,20 +6722,20 @@ export struct WindowNativeNode {
 
   private annualBarHeight(altitude: number | undefined): number {
     const value: number = altitude !== undefined ? altitude : -90
-    if (value < this.annualElevationMinimum) return 1
-    const range: number = 90 - this.annualElevationMinimum
-    return Math.max(1, Math.min(96, (value - this.annualElevationMinimum) / range * 96))
+    if (value < this.astroStore.annualElevationMinimum) return 1
+    const range: number = 90 - this.astroStore.annualElevationMinimum
+    return Math.max(1, Math.min(96, (value - this.astroStore.annualElevationMinimum) / range * 96))
   }
 
   private annualBarWidth(): number {
-    if (this.annualElevationData.length === 0) return 3
-    return Math.max(1, Math.min(6, 292 / this.annualElevationData.length))
+    if (this.astroStore.annualElevationData.length === 0) return 3
+    return Math.max(1, Math.min(6, 292 / this.astroStore.annualElevationData.length))
   }
 
   private annualMaxLabel(): string {
     let maximum: number = -91
     let date: string = ''
-    for (const point of this.annualElevationData) {
+    for (const point of this.astroStore.annualElevationData) {
       const altitude: number = point.altitude ?? -91
       if (altitude > maximum) {
         maximum = altitude
@@ -6883,13 +6746,13 @@ export struct WindowNativeNode {
   }
 
   private azimuthNowLabel(): string {
-    if (this.altAzCurve.length === 0) return '--'
-    return (this.altAzCurve[0].azimuth ?? 0).toFixed(1) + '°'
+    if (this.astroStore.altAzCurve.length === 0) return '--'
+    return (this.astroStore.altAzCurve[0].azimuth ?? 0).toFixed(1) + '°'
   }
 
   private lunarElongationBarWidth(): number {
-    if (this.lunarElongationData.length === 0) return 4
-    return Math.max(1, Math.min(4, 292 / this.lunarElongationData.length))
+    if (this.astroStore.lunarElongationData.length === 0) return 4
+    return Math.max(1, Math.min(4, 292 / this.astroStore.lunarElongationData.length))
   }
 
   private lunarElongationBarHeight(separation: number | undefined): number {
@@ -6897,18 +6760,18 @@ export struct WindowNativeNode {
   }
 
   private lunarElongationLineTop(): number {
-    return Math.max(0, Math.min(95, (1 - this.lunarElongationLimit / 180) * 96))
+    return Math.max(0, Math.min(95, (1 - this.astroStore.lunarElongationLimit / 180) * 96))
   }
 
   private lunarElongationNowLabel(): string {
-    if (this.lunarElongationData.length === 0) return '--'
-    return (this.lunarElongationData[0].separation ?? 0).toFixed(1) + '°'
+    if (this.astroStore.lunarElongationData.length === 0) return '--'
+    return (this.astroStore.lunarElongationData[0].separation ?? 0).toFixed(1) + '°'
   }
 
   private lunarElongationClosestLabel(): string {
     let closest: number = 181
     let time: number = 0
-    for (const point of this.lunarElongationData) {
+    for (const point of this.astroStore.lunarElongationData) {
       const separation: number = point.separation ?? 181
       if (separation < closest) {
         closest = separation
@@ -6941,8 +6804,8 @@ export struct WindowNativeNode {
   }
 
   private planetTimeSeriesBarWidth(): number {
-    if (this.planetTimeSeriesData.length === 0) return 4
-    return Math.max(2, Math.min(6, 292 / this.planetTimeSeriesData.length))
+    if (this.astroStore.planetTimeSeriesData.length === 0) return 4
+    return Math.max(2, Math.min(6, 292 / this.astroStore.planetTimeSeriesData.length))
   }
 
   private planetTimeSeriesSegmentWidth(): number {
@@ -6972,8 +6835,8 @@ export struct WindowNativeNode {
   }
 
   private planetPairBarWidth(): number {
-    if (this.planetPairDistanceData.length === 0) return 4
-    return Math.max(2, Math.min(6, 292 / this.planetPairDistanceData.length))
+    if (this.astroStore.planetPairDistanceData.length === 0) return 4
+    return Math.max(2, Math.min(6, 292 / this.astroStore.planetPairDistanceData.length))
   }
 
   private planetPairSegmentWidth(): number {
@@ -6991,7 +6854,7 @@ export struct WindowNativeNode {
   }
 
   private planetPairCurrentIndex(): number {
-    return Math.floor(this.planetPairDistanceData.length / 2)
+    return Math.floor(this.astroStore.planetPairDistanceData.length / 2)
   }
 
   private hecDistanceToRadius(distanceAU: number): number {
@@ -7183,10 +7046,10 @@ export struct WindowNativeNode {
       this.astroContextRequestPending = false
       if (requestId !== this.astroContextRequestId) return
       if (r.ok !== true) {
-        this.astroContext = undefined
+        this.astroStore.astroContext = undefined
         return
       }
-      this.astroContext = {
+      this.astroStore.astroContext = {
         jd: r.jd as number,
         localTime: r.localTime as string,
         observerLocation: r.observerLocation as string,
@@ -7212,7 +7075,7 @@ export struct WindowNativeNode {
   }
 
   private almanacHoursLabel(key: string): string {
-    const value = this.almanacData.get(key) ?? ''
+    const value = this.astroStore.almanacData.get(key) ?? ''
     return value.length > 0 ? parseFloat(value).toFixed(1) + ' 小时' : '--'
   }
 
@@ -7255,7 +7118,7 @@ export struct WindowNativeNode {
 
   private publishAstroPanelState(): void {
     AppStorage.setOrCreate('stellariumAstroPanelState', JSON.stringify({
-      ok: true, group: this.astroGroup, tab: this.astroTab,
+      ok: true, group: this.astroStore.astroGroup, tab: this.astroStore.astroTab,
       requestedTab: this.astroRequestedTab, transitionId: this.astroTransitionId,
       transitioning: this.astroRequestedTab >= 0,
       loading: this.wutStore.wutLoading,
@@ -7286,15 +7149,15 @@ export struct WindowNativeNode {
   private selectAstroGroup(group: number): void {
     if (group < 0 || group > 2) return
     const tabs = this.astroTabItemsForGroup(group)
-    const currentTab = tabs.find((item: TabItem) => item.id === this.astroTab)
+    const currentTab = tabs.find((item: TabItem) => item.id === this.astroStore.astroTab)
     this.selectAstroTab(currentTab !== undefined ? currentTab.id : tabs[0].id)
   }
 
   private selectAstroTab(tab: number): void {
     if (!Number.isInteger(tab) || tab < 0 || tab > 9 || tab === this.astroRequestedTab) return
-    if (tab === this.astroTab && this.astroRequestedTab < 0) return
+    if (tab === this.astroStore.astroTab && this.astroRequestedTab < 0) return
     const order: number[] = [5, 2, 4, 9, 0, 1, 6, 3, 7, 8]
-    const direction: number = order.indexOf(tab) >= order.indexOf(this.astroTab) ? 1 : -1
+    const direction: number = order.indexOf(tab) >= order.indexOf(this.astroStore.astroTab) ? 1 : -1
     const transitionId = ++this.astroTransitionId
     this.astroRequestedTab = tab
     this.publishAstroPanelState()
@@ -7302,15 +7165,15 @@ export struct WindowNativeNode {
       if (transitionId !== this.astroTransitionId) return
       if (!this.panelVisible || this.activePanel !== 'astro') {
         this.astroRequestedTab = -1
-        this.astroContentOpacity = 1
-        this.astroContentOffsetX = 0
+        this.astroStore.astroContentOpacity = 1
+        this.astroStore.astroContentOffsetX = 0
         this.publishAstroPanelState()
         return
       }
-      this.astroTab = tab
-      this.astroGroup = this.astroGroupForTab(tab)
+      this.astroStore.astroTab = tab
+      this.astroStore.astroGroup = this.astroGroupForTab(tab)
       this.astroPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
-      this.astroContentOffsetX = direction * 10
+      this.astroStore.astroContentOffsetX = direction * 10
       this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut, onFinish: () => {
         if (transitionId !== this.astroTransitionId) return
         this.astroRequestedTab = -1
@@ -7319,26 +7182,26 @@ export struct WindowNativeNode {
         this.saveAppSettings()
         this.loadAstroTab(tab)
       } }, () => {
-        this.astroContentOpacity = 1
-        this.astroContentOffsetX = 0
+        this.astroStore.astroContentOpacity = 1
+        this.astroStore.astroContentOffsetX = 0
       })
     } }, () => {
-      this.astroContentOpacity = 0
-      this.astroContentOffsetX = (0 - direction) * 8
+      this.astroStore.astroContentOpacity = 0
+      this.astroStore.astroContentOffsetX = (0 - direction) * 8
     })
   }
 
   private astroNeedsSelectedObject(): boolean {
-    if (this.astroTab === 2 || this.astroTab === 4) return true
-    if (this.astroTab === 1 && this.ephemerisMode < 2) return true
-    if (this.astroTab === 6 && this.planetCalcMode === 1) return false
+    if (this.astroStore.astroTab === 2 || this.astroStore.astroTab === 4) return true
+    if (this.astroStore.astroTab === 1 && this.astroStore.ephemerisMode < 2) return true
+    if (this.astroStore.astroTab === 6 && this.astroStore.planetCalcMode === 1) return false
     return false
   }
 
   private openAstroTargetPicker(): void {
-    if (this.astroTab === 2) {
+    if (this.astroStore.astroTab === 2) {
       this.openRtsTargetPicker()
-    } else if (this.astroTab === 4) {
+    } else if (this.astroStore.astroTab === 4) {
       this.openGraphTargetPicker()
     } else {
       this.openEphemerisTargetPicker()
@@ -7347,63 +7210,63 @@ export struct WindowNativeNode {
 
 
   private updateAstroCalcSnapshot(): void {
-    if (this.astroTab === 0) {
-      const mode = this.positionMode === 0 ? '地平位置' : (this.positionMode === 1 ? '日心黄道' : '目录天体')
-      this.astroCalcSnapshot = mode + (this.positionMode === 2 ? ' · 星等 ≤ ' + this.celestialPositionMagnitude.toFixed(1) : '')
+    if (this.astroStore.astroTab === 0) {
+      const mode = this.astroStore.positionMode === 0 ? '地平位置' : (this.astroStore.positionMode === 1 ? '日心黄道' : '目录天体')
+      this.astroStore.astroCalcSnapshot = mode + (this.astroStore.positionMode === 2 ? ' · 星等 ≤ ' + this.astroStore.celestialPositionMagnitude.toFixed(1) : '')
       return
     }
-    if (this.astroTab === 1) {
-      const target = this.ephemerisMode === 0 ? '当前选中天体' : (this.ephemerisMode === 1 ? '两个天体' : '全部肉眼行星')
-      this.astroCalcSnapshot = target + ' · ' + this.ephemerisDays.toString() + ' 天 · 每 ' + this.ephemerisStepHours.toString() + ' 小时'
+    if (this.astroStore.astroTab === 1) {
+      const target = this.astroStore.ephemerisMode === 0 ? '当前选中天体' : (this.astroStore.ephemerisMode === 1 ? '两个天体' : '全部肉眼行星')
+      this.astroStore.astroCalcSnapshot = target + ' · ' + this.astroStore.ephemerisDays.toString() + ' 天 · 每 ' + this.astroStore.ephemerisStepHours.toString() + ' 小时'
       return
     }
-    if (this.astroTab === 2) {
-      this.astroCalcSnapshot = '升中天落 · ' + this.rtsCalendarDays.toString() + ' 天 · ' + (this.hasSelectedObject() ? this.graphTargetLabel() : '未选择天体')
+    if (this.astroStore.astroTab === 2) {
+      this.astroStore.astroCalcSnapshot = '升中天落 · ' + this.astroStore.rtsCalendarDays.toString() + ' 天 · ' + (this.hasSelectedObject() ? this.graphTargetLabel() : '未选择天体')
       return
     }
-    if (this.astroTab === 3) {
-      this.astroCalcSnapshot = this.phenomenaBodyName(this.phenomenaPrimary) + ' / ' + this.phenomenaBodyName(this.phenomenaTarget) + ' · ' + this.phenomenaDays.toString() + ' 天'
+    if (this.astroStore.astroTab === 3) {
+      this.astroStore.astroCalcSnapshot = this.phenomenaBodyName(this.astroStore.phenomenaPrimary) + ' / ' + this.phenomenaBodyName(this.astroStore.phenomenaTarget) + ' · ' + this.astroStore.phenomenaDays.toString() + ' 天'
       return
     }
-    if (this.astroTab === 4) {
+    if (this.astroStore.astroTab === 4) {
       let detail = ''
-      if (this.graphMode === 0 || this.graphMode === 1) {
-        detail = this.altAzHours.toString() + ' 小时 · 每 ' + this.altAzStepMin.toString() + ' 分钟'
-      } else if (this.graphMode === 2) {
-        detail = '每日 ' + this.annualElevationHour.toString().padStart(2, '0') + ':00'
-      } else if (this.graphMode === 3) {
-        detail = this.observabilityDays.toString() + ' 天 · 最低 ' + this.observabilityMinAltitude.toString() + '°'
-      } else if (this.graphMode === 4) {
-        detail = this.lunarElongationDays.toString() + ' 天 · 每 ' + this.lunarElongationStepHours.toString() + ' 小时'
+      if (this.astroStore.graphMode === 0 || this.astroStore.graphMode === 1) {
+        detail = this.astroStore.altAzHours.toString() + ' 小时 · 每 ' + this.astroStore.altAzStepMin.toString() + ' 分钟'
+      } else if (this.astroStore.graphMode === 2) {
+        detail = '每日 ' + this.astroStore.annualElevationHour.toString().padStart(2, '0') + ':00'
+      } else if (this.astroStore.graphMode === 3) {
+        detail = this.astroStore.observabilityDays.toString() + ' 天 · 最低 ' + this.astroStore.observabilityMinAltitude.toString() + '°'
+      } else if (this.astroStore.graphMode === 4) {
+        detail = this.astroStore.lunarElongationDays.toString() + ' 天 · 每 ' + this.astroStore.lunarElongationStepHours.toString() + ' 小时'
       } else {
-        detail = this.planetTimeSeriesDays.toString() + ' 天 · 每 ' + this.planetTimeSeriesStepHours.toString() + ' 小时'
+        detail = this.astroStore.planetTimeSeriesDays.toString() + ' 天 · 每 ' + this.astroStore.planetTimeSeriesStepHours.toString() + ' 小时'
       }
-      this.astroCalcSnapshot = this.graphModeLabel(this.graphMode) + ' · ' + this.graphTargetLabel() + ' · '
-        + this.graphStartOptionLabel(this.graphStartOffsetDays) + ' · ' + detail
+      this.astroStore.astroCalcSnapshot = this.graphModeLabel(this.astroStore.graphMode) + ' · ' + this.graphTargetLabel() + ' · '
+        + this.graphStartOptionLabel(this.astroStore.graphStartOffsetDays) + ' · ' + detail
       return
     }
-    if (this.astroTab === 5) {
-      this.astroCalcSnapshot = '今晚可观测 · ' + this.wutStore.wutCategory + ' · ' + this.wutStore.wutObservationTime
+    if (this.astroStore.astroTab === 5) {
+      this.astroStore.astroCalcSnapshot = '今晚可观测 · ' + this.wutStore.wutCategory + ' · ' + this.wutStore.wutObservationTime
       return
     }
-    if (this.astroTab === 6) {
-      this.astroCalcSnapshot = this.planetCalcMode === 0 ? '行星实时位置' : this.planetPairBodyName(this.planetPairFirst)
-        + ' / ' + this.planetPairBodyName(this.planetPairSecond) + ' · ' + this.planetPairDays.toString() + ' 天'
+    if (this.astroStore.astroTab === 6) {
+      this.astroStore.astroCalcSnapshot = this.astroStore.planetCalcMode === 0 ? '行星实时位置' : this.planetPairBodyName(this.astroStore.planetPairFirst)
+        + ' / ' + this.planetPairBodyName(this.astroStore.planetPairSecond) + ' · ' + this.astroStore.planetPairDays.toString() + ' 天'
       return
     }
-    if (this.astroTab === 7) {
-      this.astroCalcSnapshot = (this.eclipseMode === 0 ? '日月食' : '行星凌日') + ' · ' + (this.eclipseMode === 0 ? this.eclipseMonths.toString() + ' 个月' : this.planetaryTransitYears.toString() + ' 年')
+    if (this.astroStore.astroTab === 7) {
+      this.astroStore.astroCalcSnapshot = (this.astroStore.eclipseMode === 0 ? '日月食' : '行星凌日') + ' · ' + (this.astroStore.eclipseMode === 0 ? this.astroStore.eclipseMonths.toString() + ' 个月' : this.astroStore.planetaryTransitYears.toString() + ' 年')
       return
     }
-    if (this.astroTab === 9) {
-      this.astroCalcSnapshot = '月相 · 未来 ' + this.moonPhaseDays.toString() + ' 天'
+    if (this.astroStore.astroTab === 9) {
+      this.astroStore.astroCalcSnapshot = '月相 · 未来 ' + this.astroStore.moonPhaseDays.toString() + ' 天'
       return
     }
-    if (this.astroTab === 8) {
-      this.astroCalcSnapshot = '年历 · 当前模拟日期 · 当前观测地点'
+    if (this.astroStore.astroTab === 8) {
+      this.astroStore.astroCalcSnapshot = '年历 · 当前模拟日期 · 当前观测地点'
       return
     }
-    this.astroCalcSnapshot = ''
+    this.astroStore.astroCalcSnapshot = ''
   }
 
   private graphModeLabel(mode: number): string {
@@ -7419,27 +7282,27 @@ export struct WindowNativeNode {
     this.updateAstroCalcSnapshot()
     this.loadAstroCalcContext()
     if (id === 0) {
-      if (this.positionMode === 0) this.loadPlanetPositions()
-      else if (this.positionMode === 1) this.loadHeliocentricPositions()
+      if (this.astroStore.positionMode === 0) this.loadPlanetPositions()
+      else if (this.astroStore.positionMode === 1) this.loadHeliocentricPositions()
       else this.loadCelestialPositions()
     }
     else if (id === 1) this.loadEphemeris()
     else if (id === 2) this.loadRTS()
     else if (id === 3) this.loadPhenomena()
     else if (id === 4) {
-      if (this.graphMode === 2) this.loadAnnualElevation()
-      else if (this.graphMode === 3) this.loadObservabilityCalendar()
-      else if (this.graphMode === 4) this.loadLunarElongation()
-      else if (this.graphMode === 5) this.loadPlanetTimeSeries()
+      if (this.astroStore.graphMode === 2) this.loadAnnualElevation()
+      else if (this.astroStore.graphMode === 3) this.loadObservabilityCalendar()
+      else if (this.astroStore.graphMode === 4) this.loadLunarElongation()
+      else if (this.astroStore.graphMode === 5) this.loadPlanetTimeSeries()
       else this.loadAltAzCurve()
     }
     else if (id === 5) this.loadTonightAstro()
     else if (id === 6) {
-      if (this.planetCalcMode === 1) this.loadPlanetPairDistance()
+      if (this.astroStore.planetCalcMode === 1) this.loadPlanetPairDistance()
       else this.loadPlanetCalc()
     }
     else if (id === 7) {
-      if (this.eclipseMode === 0) this.loadEclipses()
+      if (this.astroStore.eclipseMode === 0) this.loadEclipses()
       else this.loadPlanetaryTransits()
     }
     else if (id === 8) this.loadAlmanac()
@@ -7448,13 +7311,13 @@ export struct WindowNativeNode {
 
   private loadMoonPhases(): void {
     this.updateAstroCalcSnapshot()
-    const days = this.moonPhaseDays
-    if (this.moonPhaseLoading && this.moonPhaseLoadingDays === days) return
+    const days = this.astroStore.moonPhaseDays
+    if (this.astroStore.moonPhaseLoading && this.moonPhaseLoadingDays === days) return
     const requestId = ++this.moonPhaseRequestId
     this.moonPhaseLoadingDays = days
-    this.moonPhaseData = []
-    this.moonPhaseError = ''
-    this.moonPhaseLoading = true
+    this.astroStore.moonPhaseData = []
+    this.astroStore.moonPhaseError = ''
+    this.astroStore.moonPhaseLoading = true
     const finish = (callback: () => void): void => {
       if (requestId !== this.moonPhaseRequestId) return
       callback()
@@ -7463,21 +7326,21 @@ export struct WindowNativeNode {
     // 1.5 秒超时；长任务通道会持续读取异步结果，避免首次点击误报超时。
     this.callLongRunningInteractive('getMoonPhases', JSON.stringify({ days: days }), (r: StellariumBridgeResponse) => {
       finish(() => {
-        this.moonPhaseLoading = false
+        this.astroStore.moonPhaseLoading = false
         if (r.ok === true && r.moonPhases !== undefined) {
-          this.moonPhaseData = r.moonPhases as Array<MoonPhaseItem>
+          this.astroStore.moonPhaseData = r.moonPhases as Array<MoonPhaseItem>
         } else {
-          this.moonPhaseError = r.error ?? '月相计算未能完成，请稍后重试。'
+          this.astroStore.moonPhaseError = r.error ?? '月相计算未能完成，请稍后重试。'
         }
       })
     }, (r: StellariumBridgeResponse) => {
       finish(() => {
-        this.moonPhaseLoading = false
-        this.moonPhaseError = r.error ?? '月相计算等待超时，请稍后重试。'
+        this.astroStore.moonPhaseLoading = false
+        this.astroStore.moonPhaseError = r.error ?? '月相计算等待超时，请稍后重试。'
       })
     }, (r: StellariumBridgeResponse) => {
       finish(() => {
-        this.moonPhaseError = ''
+        this.astroStore.moonPhaseError = ''
       })
     }, days >= 90 ? 600 : 240)
   }
@@ -7490,14 +7353,14 @@ export struct WindowNativeNode {
   private loadAlmanac(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.almanacRequestSequence
-    this.almanacSeasons = []
-    this.almanacSeasonYear = ''
-    this.almanacData = new Map()
-    this.almanacError = ''
-    this.almanacLoading = true
+    this.astroStore.almanacSeasons = []
+    this.astroStore.almanacSeasonYear = ''
+    this.astroStore.almanacData = new Map()
+    this.astroStore.almanacError = ''
+    this.astroStore.almanacLoading = true
     this.callInteractive('getAlmanac', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.almanacRequestSequence) return
-      this.almanacLoading = false
+      this.astroStore.almanacLoading = false
       if (r.ok === true && r.almanac !== undefined) {
         const av = r.almanac as Record<string, Object>
         const textValue = (name: string): string => av[name + 'Text'] !== undefined ? String(av[name + 'Text']) : (av[name] !== undefined ? String(av[name]) : '0')
@@ -7517,17 +7380,17 @@ export struct WindowNativeNode {
         data.set('daylightHours', av['daylightHours'] !== undefined ? String(av['daylightHours']) : '')
         data.set('nightHours', av['nightHours'] !== undefined ? String(av['nightHours']) : '')
         data.set('moonPhase', av['moonPhase'] !== undefined ? String(av['moonPhase']) : '0')
-        this.almanacData = data
-        if (Array.isArray(av['seasonEvents'])) this.almanacSeasons = av['seasonEvents'] as Array<SeasonEvent>
-        if (av['seasonYear'] !== undefined) this.almanacSeasonYear = String(av['seasonYear'])
-        if (this.almanacData.size === 0) this.almanacError = '当前没有可显示的年历数据。'
+        this.astroStore.almanacData = data
+        if (Array.isArray(av['seasonEvents'])) this.astroStore.almanacSeasons = av['seasonEvents'] as Array<SeasonEvent>
+        if (av['seasonYear'] !== undefined) this.astroStore.almanacSeasonYear = String(av['seasonYear'])
+        if (this.astroStore.almanacData.size === 0) this.astroStore.almanacError = '当前没有可显示的年历数据。'
       } else {
-        this.almanacError = r.error ?? '年历计算失败，请点刷新后重试。'
+        this.astroStore.almanacError = r.error ?? '年历计算失败，请点刷新后重试。'
       }
     }, () => {
       if (requestId !== this.almanacRequestSequence) return
-      this.almanacLoading = false
-      this.almanacError = '年历计算失败，请点刷新后重试。'
+      this.astroStore.almanacLoading = false
+      this.astroStore.almanacError = '年历计算失败，请点刷新后重试。'
     })
   }
 
@@ -9451,8 +9314,8 @@ export struct WindowNativeNode {
   }
 
   private openPluginFeatureAfterLoad(id: string, route: PluginFeatureRoute): void {
-    if (route.astroTab !== undefined) this.astroTab = route.astroTab
-    if (route.graphMode !== undefined) this.graphMode = route.graphMode
+    if (route.astroTab !== undefined) this.astroStore.astroTab = route.astroTab
+    if (route.graphMode !== undefined) this.astroStore.graphMode = route.graphMode
     if (route.layerTab !== undefined) this.viewTab = route.layerTab
     if (route.catalogModuleId !== undefined) {
       this.searchStore.searchText = ''
@@ -9515,14 +9378,14 @@ private loadObjectInfo(): void {
 private loadPlanetPositions(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.planetPositionsRequestSequence
-    this.planetPositions = []
-    this.planetPositionsError = ''
-    this.planetPositionsLoading = true
+    this.astroStore.planetPositions = []
+    this.astroStore.planetPositionsError = ''
+    this.astroStore.planetPositionsLoading = true
     this.callInteractive('getObjectPositions', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.planetPositionsRequestSequence) return
-      this.planetPositionsLoading = false
+      this.astroStore.planetPositionsLoading = false
       if (r.ok === true && Array.isArray(r.items)) {
-        this.planetPositions = (r.items as Array<PlanetPosition>).map((p: PlanetPosition): PlanetPosition => ({
+        this.astroStore.planetPositions = (r.items as Array<PlanetPosition>).map((p: PlanetPosition): PlanetPosition => ({
           name: p.name,
           englishName: p.englishName,
           rightAscension: p.rightAscension,
@@ -9534,31 +9397,31 @@ private loadPlanetPositions(): void {
           angularSizeArcmin: p.angularSizeArcmin,
           transit: p.transit,
         }))
-        if (this.planetPositions.length === 0) this.planetPositionsError = '当前没有可显示的行星位置。'
+        if (this.astroStore.planetPositions.length === 0) this.astroStore.planetPositionsError = '当前没有可显示的行星位置。'
       } else {
-        this.planetPositionsError = r.error ?? '行星位置计算失败，请点刷新后重试。'
+        this.astroStore.planetPositionsError = r.error ?? '行星位置计算失败，请点刷新后重试。'
       }
     }, () => {
       if (requestId !== this.planetPositionsRequestSequence) return
-      this.planetPositionsLoading = false
-      this.planetPositionsError = '行星位置计算失败，请点刷新后重试。'
+      this.astroStore.planetPositionsLoading = false
+      this.astroStore.planetPositionsError = '行星位置计算失败，请点刷新后重试。'
     })
   }
 
   private loadHeliocentricPositions(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.hecPositionsRequestSequence
-    this.hecPositions = []
-    this.hecPositionsError = ''
-    this.hecPositionsLoading = true
+    this.astroStore.hecPositions = []
+    this.astroStore.hecPositionsError = ''
+    this.astroStore.hecPositionsLoading = true
     const options: HeliocentricPositionOptions = {
-      includeSelectedMinor: this.hecIncludeSelectedMinor,
-      includeBrightComets: this.hecIncludeBrightComets,
-      cometMagnitudeLimit: this.hecCometMagnitudeLimit,
+      includeSelectedMinor: this.astroStore.hecIncludeSelectedMinor,
+      includeBrightComets: this.astroStore.hecIncludeBrightComets,
+      cometMagnitudeLimit: this.astroStore.hecCometMagnitudeLimit,
     }
     this.callInteractive('getHeliocentricEclipticPositions', JSON.stringify(options), (r: StellariumBridgeResponse) => {
       if (requestId !== this.hecPositionsRequestSequence) return
-      this.hecPositionsLoading = false
+      this.astroStore.hecPositionsLoading = false
       if (r.ok === true && r.hecPositions !== undefined) {
         const positions = (r.hecPositions as Array<HeliocentricPosition>).map((p: HeliocentricPosition): HeliocentricPosition => ({
           name: p.name,
@@ -9569,45 +9432,45 @@ private loadPlanetPositions(): void {
           isComet: p.isComet === true,
           isSelectedMinor: p.isSelectedMinor === true,
         }))
-        this.hecPositions = this.hecLayoutPositions(positions)
-        this.hecTime = r.hecTime ?? ''
-        if (this.hecPositions.length === 0) this.hecPositionsError = '当前没有可显示的日心位置。'
+        this.astroStore.hecPositions = this.hecLayoutPositions(positions)
+        this.astroStore.hecTime = r.hecTime ?? ''
+        if (this.astroStore.hecPositions.length === 0) this.astroStore.hecPositionsError = '当前没有可显示的日心位置。'
       } else {
-        this.hecPositionsError = r.error ?? '日心黄道位置计算失败，请点刷新后重试。'
+        this.astroStore.hecPositionsError = r.error ?? '日心黄道位置计算失败，请点刷新后重试。'
       }
     }, () => {
       if (requestId !== this.hecPositionsRequestSequence) return
-      this.hecPositionsLoading = false
-      this.hecPositionsError = '日心黄道位置计算失败，请点刷新后重试。'
+      this.astroStore.hecPositionsLoading = false
+      this.astroStore.hecPositionsError = '日心黄道位置计算失败，请点刷新后重试。'
     })
   }
 
   private loadCelestialPositions(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.celestialPositionsRequestSequence
-    this.celestialPositions = []
-    this.celestialPositionsError = ''
-    this.celestialPositionsLoading = true
+    this.astroStore.celestialPositions = []
+    this.astroStore.celestialPositionsError = ''
+    this.astroStore.celestialPositionsLoading = true
     const options: CelestialPositionOptions = {
-      category: this.celestialPositionCategory,
-      horizontal: this.celestialPositionHorizontal,
-      magnitudeLimit: this.celestialPositionMagnitude,
+      category: this.astroStore.celestialPositionCategory,
+      horizontal: this.astroStore.celestialPositionHorizontal,
+      magnitudeLimit: this.astroStore.celestialPositionMagnitude,
       maximumRows: 80,
     }
     this.callInteractive('getCelestialPositions', JSON.stringify(options), (r: StellariumBridgeResponse) => {
       if (requestId !== this.celestialPositionsRequestSequence) return
-      this.celestialPositionsLoading = false
+      this.astroStore.celestialPositionsLoading = false
       if (r.ok === true && r.celestialPositions !== undefined) {
-        this.celestialPositions = r.celestialPositions as Array<CelestialPosition>
-        this.celestialPositionTime = r.positionTime ?? ''
-        if (this.celestialPositions.length === 0) this.celestialPositionsError = '当前筛选条件下没有可显示的目录天体。'
+        this.astroStore.celestialPositions = r.celestialPositions as Array<CelestialPosition>
+        this.astroStore.celestialPositionTime = r.positionTime ?? ''
+        if (this.astroStore.celestialPositions.length === 0) this.astroStore.celestialPositionsError = '当前筛选条件下没有可显示的目录天体。'
       } else {
-        this.celestialPositionsError = r.error ?? '目录天体位置计算失败，请点刷新后重试。'
+        this.astroStore.celestialPositionsError = r.error ?? '目录天体位置计算失败，请点刷新后重试。'
       }
     }, () => {
       if (requestId !== this.celestialPositionsRequestSequence) return
-      this.celestialPositionsLoading = false
-      this.celestialPositionsError = '目录天体位置计算失败，请点刷新后重试。'
+      this.astroStore.celestialPositionsLoading = false
+      this.astroStore.celestialPositionsError = '目录天体位置计算失败，请点刷新后重试。'
     })
   }
 
@@ -11859,15 +11722,15 @@ private loadPlanetPositions(): void {
         this.applySelectedObject(result, false, selectionPlacement)
         if (returnToGraph) {
           this.graphTargetPickerActive = false
-          this.astroTab = 4
+          this.astroStore.astroTab = 4
           this.setPanel('astro')
         } else if (returnToRts) {
           this.rtsTargetPickerActive = false
-          this.astroTab = 2
+          this.astroStore.astroTab = 2
           this.setPanel('astro')
         } else if (returnToEphemeris) {
           this.ephemerisTargetPickerActive = false
-          this.astroTab = 1
+          this.astroStore.astroTab = 1
           this.setPanel('astro')
           this.loadEphemeris()
         }
@@ -18373,1986 +18236,133 @@ private loadPlanetPositions(): void {
         onOpenTools: () => { this.openSubPanel('tools') }
       })
     } else if (this.activePanel === 'astro') {
-      // 天文计算窗口
-      Scroll() {
-        Row({ space: 4 }) {
-        ForEach(this.astroGroupItems(), (tab: TabItem) => {
-          Text(tab.label)
-            .fontSize(10)
-            .fontColor(this.astroGroup === tab.id ? this.nmText() : this.nmSub())
-            .fontWeight(this.astroGroup === tab.id ? FontWeight.Medium : FontWeight.Normal)
-            .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-            .backgroundColor(this.astroGroup === tab.id ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-            .borderRadius(UI_RADIUS_CONTROL)
-
-            .id('astro-group-' + tab.id.toString()).clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-            .onClick(() => { this.selectAstroGroup(tab.id) })
-        }, (tab: TabItem) => tab.id.toString())
-        }.padding({ left: 2, right: 2 })
-      }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-        .margin({ top: 4, bottom: 3 })
-      Scroll() {
-        Row({ space: 4 }) {
-          ForEach(this.astroTabItemsForGroup(this.astroGroup), (tab: TabItem) => {
-            Text(tab.label)
-              .fontSize(10)
-              .fontColor(this.astroTab === tab.id ? this.nmText() : this.nmSub())
-              .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-              .backgroundColor(this.astroTab === tab.id ? 'rgba(91,147,191,0.20)' : 'rgba(255,255,255,0.035)').animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-              .border({ width: { bottom: 2 }, color: this.astroTab === tab.id ? this.nmAccent() : Color.Transparent })
-              .borderRadius(UI_RADIUS_CONTROL)
-
-              .id('astro-tab-' + tab.id.toString()).clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { this.selectAstroTab(tab.id) })
-          }, (tab: TabItem) => tab.id.toString())
-        }.padding({ left: 2, right: 2 })
-      }.width('100%').height(31).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-        .margin({ bottom: 6 })
-      Row({ space: 8 }) {
-        Button(this.astroExporting ? '正在保存…' : '导出当前数据')
-          .fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
-          .enabled(!this.astroExporting)
-          .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-          .onClick(() => { this.exportCurrentAstroCsv() })
-        if (this.astroExporting) {
-          LoadingProgress().width(16).height(16).color(this.nmAccent())
+      AstroPanel({
+        store: this.astroStore,
+        wutStore: this.wutStore,
+        objectDetailStore: this.objectDetailStore,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        panelColor: this.nmBg(),
+        accentColor: this.nmAccent(),
+        lineColor: this.nmBorder(),
+        scroller: this.astroPanelScroller,
+        host: {
+          almanacHoursLabel: (key: string) => this.almanacHoursLabel(key),
+          altAzMaxLabel: () => this.altAzMaxLabel(),
+          altAzMidpointLabel: () => this.altAzMidpointLabel(),
+          altAzNowLabel: () => this.altAzNowLabel(),
+          altAzRangeLabel: () => this.altAzRangeLabel(),
+          altAzVisibleHours: () => this.altAzVisibleHours(),
+          altBarHeight: (alt: number | undefined) => this.altBarHeight(alt),
+          altBarWidth: () => this.altBarWidth(),
+          altCurveSegmentWidth: () => this.altCurveSegmentWidth(),
+          altitudeCurveColor: (altitude: number | undefined, color: string) => this.altitudeCurveColor(altitude, color),
+          annualBarHeight: (altitude: number | undefined) => this.annualBarHeight(altitude),
+          annualBarWidth: () => this.annualBarWidth(),
+          annualMaxLabel: () => this.annualMaxLabel(),
+          astroGroupItems: () => this.astroGroupItems(),
+          astroNeedsSelectedObject: () => this.astroNeedsSelectedObject(),
+          astroTabItemsForGroup: (group: number) => this.astroTabItemsForGroup(group),
+          azBarHeight: (azimuth: number | undefined) => this.azBarHeight(azimuth),
+          azimuthNowLabel: () => this.azimuthNowLabel(),
+          callNative: (name: string, payload?: string) => { this.callNative(name, payload) },
+          celestialPositionSubtitle: (position: CelestialPosition) => this.celestialPositionSubtitle(position),
+          celestialPositionTitle: (position: CelestialPosition) => this.celestialPositionTitle(position),
+          chooseEclipseStartDate: () => { this.chooseEclipseStartDate() },
+          chooseEphemerisStartDate: () => { this.chooseEphemerisStartDate() },
+          chooseGraphStartDate: () => { this.chooseGraphStartDate() },
+          chooseRtsCalendarStartDate: () => { this.chooseRtsCalendarStartDate() },
+          eclipseStartOptionLabel: (offsetDays: number) => this.eclipseStartOptionLabel(offsetDays),
+          ephemerisStartOptionLabel: (offsetDays: number) => this.ephemerisStartOptionLabel(offsetDays),
+          exportCurrentAstroCsv: () => this.exportCurrentAstroCsv(),
+          filteredEclipses: () => this.filteredEclipses(),
+          fmtClock: (s: string | undefined) => this.fmtClock(s),
+          fmtDateTime: (s: string | undefined) => this.fmtDateTime(s),
+          fmtEphemerisDate: (s: string | undefined) => this.fmtEphemerisDate(s),
+          fmtNum: (v: number | undefined, digits: number, suffix: string) => this.fmtNum(v, digits, suffix),
+          graphCustomStartLabel: () => this.graphCustomStartLabel(),
+          graphStartOptionLabel: (offsetDays: number) => this.graphStartOptionLabel(offsetDays),
+          graphTargetLabel: () => this.graphTargetLabel(),
+          hasSelectedObject: () => this.hasSelectedObject(),
+          hecDistanceLabel: (position: HeliocentricPosition) => this.hecDistanceLabel(position),
+          hecPointColor: (position: HeliocentricPosition) => this.hecPointColor(position),
+          hecPointLeft: (position: HeliocentricPosition) => this.hecPointLeft(position),
+          hecPointSize: (position: HeliocentricPosition) => this.hecPointSize(position),
+          hecPointTop: (position: HeliocentricPosition) => this.hecPointTop(position),
+          hecTitle: (position: HeliocentricPosition) => this.hecTitle(position),
+          jdToDateStr: (jd: string) => this.jdToDateStr(jd),
+          jumpToAlmanacSeason: (event: SeasonEvent) => { this.jumpToAlmanacSeason(event) },
+          jumpToEphemerisRow: (row: EphemerisRow) => { this.jumpToEphemerisRow(row) },
+          jumpToMoonPhase: (item: MoonPhaseItem) => { this.jumpToMoonPhase(item) },
+          jumpToObservabilityDay: (day: ObservabilityDay) => { this.jumpToObservabilityDay(day) },
+          jumpToPhenomenon: (item: PhenomenonItem) => { this.jumpToPhenomenon(item) },
+          jumpToRts: (key: string) => { this.jumpToRts(key) },
+          jumpToRtsCalendar: (day: RtsCalendarDay) => { this.jumpToRtsCalendar(day) },
+          jumpToWutTarget: (target: WutTarget) => { this.jumpToWutTarget(target) },
+          loadAlmanac: () => { this.loadAlmanac() },
+          loadAltAzCurve: () => { this.loadAltAzCurve() },
+          loadAnnualElevation: () => { this.loadAnnualElevation() },
+          loadCelestialPositions: () => { this.loadCelestialPositions() },
+          loadEclipses: () => { this.loadEclipses() },
+          loadEphemeris: () => { this.loadEphemeris() },
+          loadHeliocentricPositions: () => { this.loadHeliocentricPositions() },
+          loadLunarElongation: () => { this.loadLunarElongation() },
+          loadMoonPhases: () => { this.loadMoonPhases() },
+          loadObservabilityCalendar: () => { this.loadObservabilityCalendar() },
+          loadPhenomena: () => { this.loadPhenomena() },
+          loadPlanetCalc: () => { this.loadPlanetCalc() },
+          loadPlanetPairDistance: () => { this.loadPlanetPairDistance() },
+          loadPlanetPositions: () => { this.loadPlanetPositions() },
+          loadPlanetTimeSeries: () => { this.loadPlanetTimeSeries() },
+          loadPlanetaryTransits: () => { this.loadPlanetaryTransits() },
+          loadRTS: () => { this.loadRTS() },
+          loadRtsCalendar: () => { this.loadRtsCalendar() },
+          loadTonightAstro: () => { this.loadTonightAstro() },
+          loadWutTargets: () => { this.loadWutTargets() },
+          lunarElongationBarHeight: (separation: number | undefined) => this.lunarElongationBarHeight(separation),
+          lunarElongationBarWidth: () => this.lunarElongationBarWidth(),
+          lunarElongationClosestLabel: () => this.lunarElongationClosestLabel(),
+          lunarElongationLineTop: () => this.lunarElongationLineTop(),
+          lunarElongationNowLabel: () => this.lunarElongationNowLabel(),
+          markRtsCalendarForRegeneration: () => { this.markRtsCalendarForRegeneration() },
+          openAstroTargetPicker: () => { this.openAstroTargetPicker() },
+          openEphemerisTargetPicker: () => { this.openEphemerisTargetPicker() },
+          openGraphTargetPicker: () => { this.openGraphTargetPicker() },
+          openRtsTargetPicker: () => { this.openRtsTargetPicker() },
+          phenomenaBodyName: (body: string) => this.phenomenaBodyName(body),
+          phenomenonCaption: (type: string) => this.phenomenonCaption(type),
+          planetMetricLabel: (metric: string) => this.planetMetricLabel(metric),
+          planetMetricUnit: (metric: string) => this.planetMetricUnit(metric),
+          planetPairBarHeight: (value: number | undefined, min: number, max: number) => this.planetPairBarHeight(value, min, max),
+          planetPairBarWidth: () => this.planetPairBarWidth(),
+          planetPairBodyName: (body: string) => this.planetPairBodyName(body),
+          planetPairCurrentIndex: () => this.planetPairCurrentIndex(),
+          planetPairLinearLabel: (value: number | undefined) => this.planetPairLinearLabel(value),
+          planetPairSegmentWidth: () => this.planetPairSegmentWidth(),
+          planetTimeSeriesBarHeight: (value: number | undefined, min: number, max: number) => this.planetTimeSeriesBarHeight(value, min, max),
+          planetTimeSeriesBarWidth: () => this.planetTimeSeriesBarWidth(),
+          planetTimeSeriesSegmentWidth: () => this.planetTimeSeriesSegmentWidth(),
+          planetTimeSeriesValueLabel: (value: number | undefined, metric: string) => this.planetTimeSeriesValueLabel(value, metric),
+          planetZh: (en: string) => this.planetZh(en),
+          publishAstroPanelState: () => { this.publishAstroPanelState() },
+          reloadCurrentGraph: () => { this.reloadCurrentGraph() },
+          reloadEclipses: () => { this.reloadEclipses() },
+          rtsCalendarDurationLabel: (days: number) => this.rtsCalendarDurationLabel(days),
+          rtsCalendarStartOptionLabel: (offsetDays: number) => this.rtsCalendarStartOptionLabel(offsetDays),
+          searchObject: (name: string, catalogModuleId?: string, exactSelectionPayload?: string, placement?: string) => { this.searchObject(name, catalogModuleId, exactSelectionPayload, placement) },
+          selectAstroFilter: (key: string, value: string) => { this.selectAstroFilter(key, value) },
+          selectAstroGroup: (group: number) => { this.selectAstroGroup(group) },
+          selectAstroTab: (tab: number) => { this.selectAstroTab(tab) },
+          wutCategoryKey: (id: number) => this.wutCategoryKey(id),
+          wutCategoryOptions: () => this.wutCategoryOptions(),
+          wutCategoryTitle: () => this.wutCategoryTitle(),
+          wutDirectionLabel: (direction: string) => this.wutDirectionLabel(direction),
+          wutTargetSubtitle: (target: WutTarget) => this.wutTargetSubtitle(target),
+          wutTargetTitle: (target: WutTarget) => this.wutTargetTitle(target),
+          zhNameOf: (raw: string) => this.zhNameOf(raw),
+          zhType: (type: string) => this.zhType(type)
         }
-        Text('CSV').fontSize(9).fontColor(this.nmSub())
-      }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 }).alignItems(VerticalAlign.Center)
-      if (this.astroContext !== undefined) {
-        Column({ space: 2 }) {
-          Row({ space: 6 }) {
-            Text(this.astroContext.observerLocation !== undefined && this.astroContext.observerLocation.length > 0 ? this.astroContext.observerLocation : '当前观测位置')
-              .fontSize(10).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(this.astroContext.offline === true ? '离线计算' : '本地计算').fontSize(9).fontColor(this.nmAccent())
-          }.width('100%')
-          Text('时间 ' + this.fmtDateTime(this.astroContext.localTime) + ' · 时区 ' + (this.astroContext.timeZone ?? '--'))
-            .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text('平恒星时 ' + (this.astroContext.meanSiderealTime ?? '--') + ' · 视恒星时 ' + (this.astroContext.apparentSiderealTime ?? '--') + ' · 时间方程 ' + this.fmtNum(this.astroContext.equationOfTimeMinutes, 2, ' 分钟'))
-            .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text('太阳 ' + this.fmtNum(this.astroContext.sunAltitude, 1, '°') + ' / ' + this.fmtNum(this.astroContext.sunAzimuth, 1, '°')
-            + ' · 月亮 ' + this.fmtNum(this.astroContext.moonAltitude, 1, '°') + ' / ' + this.fmtNum(this.astroContext.moonAzimuth, 1, '°')
-            + ' · 月面 ' + this.fmtNum(this.astroContext.moonIllumination, 1, '%'))
-            .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          if (this.astroCalcSnapshot.length > 0) {
-            Text('参数快照 · ' + this.astroCalcSnapshot)
-              .fontSize(9).fontColor('#A8FFFFFF').width('100%').maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-        }.width('100%').padding({ left: 8, right: 8, top: 6, bottom: 6 })
-          .backgroundColor('rgba(255, 255, 255, 0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 6 })
-      }
-      AstroSelectionGuide({ visible: this.astroNeedsSelectedObject() && !this.hasSelectedObject(), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), onOpenPicker: () => { this.openAstroTargetPicker() } })
-      Scroll(this.astroPanelScroller) {
-        Column({ space: 0 }) {
-          if (this.astroTab === 0) {
-            Text(I18n.t('i0125')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-            Row({ space: 4 }) {
-              ForEach(['地平位置', '日心黄道', '目录天体'], (mode: string, index: number) => {
-                Text(mode).fontSize(10)
-                  .fontColor(this.positionMode === index ? this.nmText() : this.nmSub())
-                  .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-                  .backgroundColor(this.positionMode === index ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.positionMode !== index) {
-                      this.positionMode = index
-                      if (index === 0) this.loadPlanetPositions()
-                      else if (index === 1) this.loadHeliocentricPositions()
-                      else this.loadCelestialPositions()
-                    }
-                  })
-              }, (mode: string) => mode)
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            if (this.positionMode === 0) {
-              Button(I18n.t('i0241')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.loadPlanetPositions() })
-              Column({ space: 1 }) {
-                Row() {
-                  Text(I18n.t('s0374')).fontSize(10).fontColor(this.nmSub()).width(60)
-                  Text(I18n.t('s0375')).fontSize(10).fontColor(this.nmSub()).width(50)
-                  Text(I18n.t('s0376')).fontSize(10).fontColor(this.nmSub()).width(50)
-                  Text(I18n.t('s0377')).fontSize(10).fontColor(this.nmSub()).width(40)
-                }.width('100%')
-                Text('赤经/赤纬（当日） · 距离 · 视直径 · 中天').fontSize(8).fontColor(this.nmSub()).width('100%')
-              }.width('100%').padding({ left: 8, right: 8 }).margin({ top: 4, bottom: 2 })
-              if (this.planetPositionsLoading) {
-                Row({ space: 8 }) {
-                  LoadingProgress().width(20).height(20).color(this.nmAccent())
-                  Text('正在计算行星位置…').fontSize(11).fontColor(this.nmSub())
-                }.width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-              } else if (this.planetPositionsError.length > 0) {
-                Text(this.planetPositionsError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-              } else if (this.planetPositions.length === 0) {
-                Text('当前没有可显示的行星位置。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-              }
-              Scroll() {
-                Column({ space: 2 }) {
-                  ForEach(this.planetPositions, (p: PlanetPosition) => {
-                    Column({ space: 1 }) {
-                      Row() {
-                        Text(this.planetZh(p.name)).fontSize(11).fontColor(this.nmText()).width(60)
-                        Text(p.altitude.toFixed(1) + '°').fontSize(10).fontColor(this.nmSub()).width(50)
-                        Text(p.azimuth.toFixed(1) + '°').fontSize(10).fontColor(this.nmSub()).width(50)
-                        Text(p.magnitude.toFixed(1)).fontSize(10).fontColor(this.nmSub()).width(40)
-                      }.width('100%')
-                      Text((p.rightAscension ?? '--') + ' / ' + (p.declination ?? '--')
-                        + ' · ' + (p.distanceAU !== undefined ? p.distanceAU.toFixed(3) + ' AU' : '--')
-                        + ' · 中天 ' + (p.transit !== undefined ? this.fmtDateTime(p.transit) : '--'))
-                        .fontSize(8).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }.height(40).width('100%').padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                    .backgroundColor(this.nmBg())
-                    .borderRadius(UI_RADIUS_CONTROL)
-                  }, (p: PlanetPosition, index: number) => p.name)
-                }
-              }
-              .width('100%').height(220).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-            } else if (this.positionMode === 1) {
-              Text('以太阳为中心显示实时日心位置；每条细椭圆对应一颗行星的轨道。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 5 })
-              Row({ space: 8 }) {
-                Text('已选小天体').fontSize(10).fontColor(this.nmText()).layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.hecIncludeSelectedMinor })
-                  .width(38).height(22)
-                  .onChange((value: boolean) => { this.hecIncludeSelectedMinor = value; this.loadHeliocentricPositions() })
-              }.width('100%').height(30).padding({ left: 4, right: 4 })
-              Row({ space: 8 }) {
-                Text('显示明亮彗星').fontSize(10).fontColor(this.nmText()).layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.hecIncludeBrightComets })
-                  .width(38).height(22)
-                  .onChange((value: boolean) => { this.hecIncludeBrightComets = value; this.loadHeliocentricPositions() })
-              }.width('100%').height(30).padding({ left: 4, right: 4 })
-              if (this.hecIncludeBrightComets) {
-                Row({ space: 4 }) {
-                  Text('彗星星等上限').fontSize(10).fontColor(this.nmSub()).width(76)
-                  ForEach([6, 9, 12], (limit: number) => {
-                    Text(limit.toString()).fontSize(10)
-                      .fontColor(this.hecCometMagnitudeLimit === limit ? this.nmText() : this.nmSub())
-                      .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                      .backgroundColor(this.hecCometMagnitudeLimit === limit ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                      .borderRadius(UI_RADIUS_CONTROL)
-                      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                      .onClick(() => { this.hecCometMagnitudeLimit = limit; this.loadHeliocentricPositions() })
-                  }, (limit: number) => limit.toString())
-                }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 5 })
-              }
-              Row({ space: 8 }) {
-                Button('刷新坐标').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.loadHeliocentricPositions() })
-                Text(this.hecTime.length > 0 ? this.fmtDateTime(this.hecTime) : '正在计算…').fontSize(9).fontColor(this.nmSub()).layoutWeight(1)
-              }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 5 })
-              if (this.hecPositionsLoading) {
-                Row({ space: 8 }) {
-                  LoadingProgress().width(20).height(20).color(this.nmAccent())
-                  Text('正在计算日心黄道位置…').fontSize(11).fontColor(this.nmSub())
-                }.width('100%').padding({ left: 8 }).margin({ top: 4, bottom: 6 })
-              } else if (this.hecPositionsError.length > 0) {
-                Text(this.hecPositionsError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 4, bottom: 6 })
-              } else if (this.hecPositions.length === 0) {
-                Text('当前没有可显示的日心位置。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 4, bottom: 6 })
-              }
-              Stack({ alignContent: Alignment.Center }) {
-                ForEach(HELIOCENTRIC_PLANET_ORBITS, (orbit: HeliocentricOrbit) => {
-                  Circle()
-                    .width(orbit.visualRadius * 2)
-                    .height(orbit.visualRadius * 0.86 * 2)
-                    .fill('transparent')
-                    .stroke(orbit.color)
-                    .strokeWidth(0.65)
-                    .opacity(0.48)
-                }, (orbit: HeliocentricOrbit) => orbit.name)
-                Circle().width(34).height(34).fill('#F4C454').opacity(0.12)
-                Circle().width(22).height(22).fill('#F4C454')
-                Text('太阳').fontSize(8).fontColor('#30240D')
-                ForEach(this.hecPositions, (position: HeliocentricPosition) => {
-                  Circle().width(this.hecPointSize(position) + 4).height(this.hecPointSize(position) + 4).fill(this.nmBg())
-                    .position({ x: this.hecPointLeft(position) - 2, y: this.hecPointTop(position) - 2 })
-                  Circle().width(this.hecPointSize(position)).height(this.hecPointSize(position)).fill(this.hecPointColor(position))
-                    .position({ x: this.hecPointLeft(position), y: this.hecPointTop(position) })
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => { this.searchObject(position.englishName) })
-                }, (position: HeliocentricPosition) => position.englishName)
-              }.width(292).height(292).margin({ top: 2, bottom: 7 }).backgroundColor(this.nmBg()).border({ width: 1, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL)
-              Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
-                ForEach(HELIOCENTRIC_PLANET_ORBITS, (orbit: HeliocentricOrbit) => {
-                  Row({ space: 4 }) {
-                    Circle().width(6).height(6).fill(orbit.color)
-                    Text(orbit.name).fontSize(9).fontColor(this.nmSub())
-                  }.margin({ right: 9, bottom: 4 })
-                }, (orbit: HeliocentricOrbit) => orbit.name)
-              }.width(292).margin({ bottom: 5 })
-              Row() {
-                Text('天体').fontSize(10).fontColor(this.nmSub()).width(70)
-                Text('黄纬').fontSize(10).fontColor(this.nmSub()).width(47)
-                Text('黄经').fontSize(10).fontColor(this.nmSub()).width(47)
-                Text('距日').fontSize(10).fontColor(this.nmSub()).layoutWeight(1)
-              }.height(20).width('100%').padding({ left: 8, right: 8 })
-              Scroll() {
-                Column({ space: 2 }) {
-                  ForEach(this.hecPositions, (position: HeliocentricPosition) => {
-                    Row() {
-                      Text(this.hecTitle(position)).fontSize(11).fontColor(this.nmText()).width(70).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                      Text(position.latitude.toFixed(1) + '°').fontSize(10).fontColor(this.nmSub()).width(47)
-                      Text(position.longitude.toFixed(1) + '°').fontSize(10).fontColor(this.nmSub()).width(47)
-                      Text(this.hecDistanceLabel(position) + ' AU').fontSize(10).fontColor(this.nmSub()).layoutWeight(1).maxLines(1)
-                    }
-                    .height(28).width('100%').padding({ left: 8, right: 8 })
-                    .backgroundColor(this.nmBg())
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => { this.searchObject(position.englishName) })
-                  }, (position: HeliocentricPosition) => position.englishName)
-                }
-              }
-              .width('100%').height(220).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-            } else {
-              Text('列出当前地平线以上、满足星等条件的目录天体；按高度由高到低排列。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 5 })
-              Scroll() {
-                Row({ space: 4 }) {
-                  ForEach(CELESTIAL_POSITION_CATEGORIES, (category: CelestialPositionCategory) => {
-                    Text(category.label).fontSize(10)
-                      .fontColor(this.celestialPositionCategory === category.id ? this.nmText() : this.nmSub())
-                      .padding({ left: 9, right: 9, top: 5, bottom: 5 })
-                      .backgroundColor(this.celestialPositionCategory === category.id ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                      .borderRadius(UI_RADIUS_CONTROL)
-                      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                      .onClick(() => { this.celestialPositionCategory = category.id; this.loadCelestialPositions() })
-                  }, (category: CelestialPositionCategory) => category.id)
-                }.padding({ left: 2, right: 2 })
-              }.width('100%').height(31).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ bottom: 5 })
-              Row({ space: 4 }) {
-                Text('星等上限').fontSize(10).fontColor(this.nmSub()).width(56)
-                ForEach([3, 6, 9, 12], (magnitude: number) => {
-                  Text(magnitude.toString()).fontSize(10)
-                    .fontColor(this.celestialPositionMagnitude === magnitude ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.celestialPositionMagnitude === magnitude ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => { this.celestialPositionMagnitude = magnitude; this.loadCelestialPositions() })
-                }, (magnitude: number) => magnitude.toString())
-              }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-              Row({ space: 8 }) {
-                Text('使用地平坐标').fontSize(10).fontColor(this.nmText()).layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.celestialPositionHorizontal })
-                  .width(38).height(22)
-                  .onChange((value: boolean) => { this.celestialPositionHorizontal = value; this.loadCelestialPositions() })
-                Button('刷新').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.loadCelestialPositions() })
-              }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 5 })
-              Text(this.celestialPositionTime.length > 0 ? this.fmtDateTime(this.celestialPositionTime) : '正在计算…').fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 4 }).margin({ bottom: 4 })
-              if (this.celestialPositionsLoading) {
-                Row({ space: 8 }) {
-                  LoadingProgress().width(20).height(20).color(this.nmAccent())
-                  Text('正在计算目录天体位置…').fontSize(11).fontColor(this.nmSub())
-                }.width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-              } else if (this.celestialPositionsError.length > 0) {
-                Text(this.celestialPositionsError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8 })
-              } else if (this.celestialPositions.length === 0) {
-                Text('当前筛选条件下没有地平线以上的天体。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8 })
-              } else {
-                Scroll() {
-                  Column({ space: 2 }) {
-                    ForEach(this.celestialPositions, (position: CelestialPosition) => {
-                      Column({ space: 1 }) {
-                        Row() {
-                          Text(this.celestialPositionTitle(position)).fontSize(11).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                          Text('星等 ' + position.magnitude.toFixed(1)).fontSize(10).fontColor(this.nmSub()).width(60).textAlign(TextAlign.End)
-                        }.width('100%')
-                        if (this.celestialPositionSubtitle(position).length > 0) {
-                          Text(this.celestialPositionSubtitle(position)).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                        }
-                        Text((this.celestialPositionHorizontal ? '方位 ' : '赤经 ') + position.firstCoordinate + '   ' + (this.celestialPositionHorizontal ? '高度 ' : '赤纬 ') + position.secondCoordinate)
-                          .fontSize(9).fontColor('#B8FFFFFF').width('100%').maxLines(1)
-                        Text('地平高度 ' + position.altitude.toFixed(1) + '°   距日 ' + (position.elongation ?? 0).toFixed(1) + '°')
-                          .fontSize(9).fontColor('#88FFFFFF').width('100%').maxLines(1)
-                        Text('视直径 ' + (position.angularSizeArcmin !== undefined ? position.angularSizeArcmin.toFixed(2) + '′' : '--')
-                          + (position.distanceAU !== undefined ? '   距离 ' + position.distanceAU.toFixed(3) + ' AU' : '')
-                          + (position.transit !== undefined ? '   中天 ' + this.fmtClock(position.transit) : ''))
-                          .fontSize(9).fontColor('#70FFFFFF').width('100%').maxLines(1)
-                      }
-                      .width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 })
-                      .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-                      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                      .onClick(() => { this.searchObject(position.englishName) })
-                    }, (position: CelestialPosition) => position.englishName + position.catalogId)
-                  }
-                }.width('100%').height(310).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-              }
-            }
-          } else if (this.astroTab === 1) {
-            Text(I18n.t('i0126')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-            Text('计算对象').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach(['当前选中天体', '两个天体', '全部肉眼行星'], (label: string, mode: number) => {
-                Text(label).fontSize(10)
-                  .fontColor(this.ephemerisMode === mode ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 5, bottom: 5 })
-                  .backgroundColor(this.ephemerisMode === mode ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.ephemerisMode = mode })
-              }, (label: string) => label)
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 5 })
-            if (this.ephemerisMode === 0) {
-              Row({ space: 8 }) {
-                Column({ space: 1 }) {
-                  Text('星历目标').fontSize(9).fontColor(this.nmSub())
-                  Text(this.objectDetailStore.selectedName.length > 0 ? this.zhNameOf(this.objectDetailStore.selectedName) : '尚未选择天体')
-                    .fontSize(11).fontColor(this.objectDetailStore.selectedName.length > 0 ? this.nmText() : this.nmSub())
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                Button(this.objectDetailStore.selectedName.length > 0 ? '更换天体' : '选择天体')
-                  .fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 10, right: 10 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.openEphemerisTargetPicker() })
-              }.width('100%').padding({ left: 4, right: 4, top: 4, bottom: 5 })
-                .backgroundColor('rgba(255, 255, 255, 0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 5 })
-            }
-            if (this.ephemerisMode === 1) {
-              Text('第一个天体').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Scroll() {
-                Row({ space: 4 }) {
-                  ForEach(['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'], (body: string) => {
-                    Text(this.planetPairBodyName(body)).fontSize(10)
-                      .fontColor(this.ephemerisPrimary === body ? this.nmText() : this.nmSub())
-                      .padding({ left: 9, right: 9, top: 5, bottom: 5 })
-                      .backgroundColor(this.ephemerisPrimary === body ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                      .onClick(() => {
-                        this.ephemerisPrimary = body
-                        if (this.ephemerisSecondary === body) this.ephemerisSecondary = 'Sun'
-                      })
-                  }, (body: string) => body)
-                }.padding({ left: 2, right: 2 })
-              }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ bottom: 4 })
-              Text('第二个天体').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Scroll() {
-                Row({ space: 4 }) {
-                  ForEach(['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'], (body: string) => {
-                    if (body !== this.ephemerisPrimary) {
-                      Text(this.planetPairBodyName(body)).fontSize(10)
-                        .fontColor(this.ephemerisSecondary === body ? this.nmText() : this.nmSub())
-                        .padding({ left: 9, right: 9, top: 5, bottom: 5 })
-                        .backgroundColor(this.ephemerisSecondary === body ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .onClick(() => { this.ephemerisSecondary = body })
-                    }
-                  }, (body: string) => body)
-                }.padding({ left: 2, right: 2 })
-              }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ bottom: 5 })
-            }
-            Text('时间范围').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach([7, 14, 31], (days: number) => {
-                Text(days.toString() + ' 天')
-                  .fontSize(10)
-                  .fontColor(this.ephemerisDays === days ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.ephemerisDays === days ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.ephemerisDays !== days) {
-                      this.ephemerisDays = days
-                      this.loadEphemeris()
-                    }
-                  })
-              }, (days: number) => days.toString())
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            Text('开始日期').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach([0, 1, 7, 30], (offsetDays: number) => {
-                Text(this.ephemerisStartOptionLabel(offsetDays)).fontSize(10)
-                  .fontColor(this.ephemerisStartOffsetDays === offsetDays ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.ephemerisStartOffsetDays === offsetDays ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.ephemerisStartOffsetDays !== offsetDays) {
-                      this.ephemerisStartOffsetDays = offsetDays
-                      this.loadEphemeris()
-                    }
-                  })
-              }, (offsetDays: number) => offsetDays.toString())
-              Button(this.ephemerisStartOffsetDays < 0 ? this.ephemerisStartOptionLabel(-1) : '指定日期').fontSize(10)
-                .fontColor(this.ephemerisStartOffsetDays < 0 ? this.nmText() : this.nmSub())
-                .height(26).padding({ left: 9, right: 9 })
-                .backgroundColor(this.ephemerisStartOffsetDays < 0 ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                .borderRadius(UI_RADIUS_CONTROL)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.chooseEphemerisStartDate() })
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            Text('采样间隔').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach([1, 3, 6, 12, 24], (hours: number) => {
-                Text(hours.toString() + ' 小时')
-                  .fontSize(10)
-                  .fontColor(this.ephemerisStepHours === hours ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.ephemerisStepHours === hours ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.ephemerisStepHours !== hours) {
-                      this.ephemerisStepHours = hours
-                      this.loadEphemeris()
-                    }
-                  })
-              }, (hours: number) => hours.toString())
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            Row({ space: 6 }) {
-              Button('刷新星历').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.loadEphemeris() })
-            }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 6 })
-            Text(this.ephemerisMode === 0 ? '选择天体后将自动生成星历；点任一行可跳到对应时刻。' : (this.ephemerisMode === 1 ? '两个天体共用同一时间轴，便于直接比较位置和星等。' : '肉眼行星模式在地球上显示水星、金星、火星、木星和土星。')).fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-            if (this.ephemerisLoading) {
-              Row({ space: 8 }) {
-                LoadingProgress().width(22).height(22).color(this.nmAccent())
-                Text('正在生成星历…').fontSize(11).fontColor(this.nmSub())
-              }.width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-            } else if (this.ephemerisError.length > 0) {
-              Text(this.ephemerisError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8 })
-            } else if (this.ephemerisData.length === 0) {
-              Text('尚未生成星历。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8 })
-            } else {
-              Text(this.ephemerisName + ' · 从' + this.ephemerisStartOptionLabel(this.ephemerisStartOffsetDays) + '开始，持续 ' + this.ephemerisDays.toString() + ' 天（每 ' + this.ephemerisStepHours.toString() + ' 小时）').fontSize(11).fontColor(this.nmText()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-              if (this.ephemerisMeta.length > 0) {
-                Text(this.ephemerisMeta).fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-              }
-            }
-            ForEach(this.ephemerisData, (row: EphemerisRow) => {
-              Column({ space: 1 }) {
-                Row({ space: 8 }) {
-                  Text(this.fmtEphemerisDate(row.date)).fontSize(10).fontColor(this.nmText()).width(96)
-                  Text((row.bodyName !== undefined ? row.bodyName + '  ' : '') + '赤经 ' + (row.ra ?? '--')).fontSize(10).fontColor(this.nmSub()).layoutWeight(1).maxLines(1)
-                }.width('100%')
-                Text('赤纬 ' + (row.dec ?? '--')).fontSize(9).fontColor('#B8FFFFFF').width('100%').maxLines(1)
-                if (row.raOfDate !== undefined || row.decOfDate !== undefined) {
-                  Text('当日坐标 ' + (row.raOfDate ?? '--') + '  ' + (row.decOfDate ?? '--')).fontSize(9).fontColor('#A0FFFFFF').width('100%').maxLines(1)
-                }
-                Text('高度 ' + this.fmtNum(row.altitude, 1, '°')
-                  + '   方位 ' + this.fmtNum(row.azimuth, 0, '°')
-                  + '   星等 ' + this.fmtNum(row.magnitude, 1, ''))
-                  .fontSize(9).fontColor('#88FFFFFF').width('100%').maxLines(1)
-                if (row.hourAngle !== undefined || row.polarDistanceDegrees !== undefined) {
-                  Text('时角 ' + (row.hourAngle ?? '--') + '   极距 ' + this.fmtNum(row.polarDistanceDegrees, 2, '°')
-                    + (row.airmass !== undefined ? '   气团 ' + row.airmass.toFixed(2) : ''))
-                    .fontSize(9).fontColor('#80FFFFFF').width('100%').maxLines(1)
-                }
-                if (row.phase !== undefined || row.distanceAU !== undefined || row.elongationDegrees !== undefined) {
-                  Text((row.phase !== undefined ? '相位 ' + (row.phase * 100).toFixed(1) + '%' : '')
-                    + (row.distanceAU !== undefined ? '   距离 ' + row.distanceAU.toFixed(3) + ' AU' : '')
-                    + (row.elongationDegrees !== undefined ? '   距日 ' + row.elongationDegrees.toFixed(1) + '°' : ''))
-                    .fontSize(9).fontColor('#70FFFFFF').width('100%').maxLines(1)
-                }
-                if (row.angularSizeArcmin !== undefined) {
-                  Text('视直径 ' + row.angularSizeArcmin.toFixed(2) + '′').fontSize(9).fontColor('#70FFFFFF').width('100%').maxLines(1)
-                }
-              }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { this.jumpToEphemerisRow(row) })
-            }, (row: EphemerisRow, index: number) => index.toString())
-          } else if (this.astroTab === 2) {
-            Text(I18n.t('i0127')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-            Button(I18n.t('i0239')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { this.loadRTS() })
-            if (!this.hasSelectedObject()) {
-              RtsSelectionGuide({ textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openRtsTargetPicker() } })
-            } else if (this.rtsLoading) {
-              Row({ space: 8 }) {
-                LoadingProgress().width(20).height(20).color(this.nmAccent())
-                Text('正在计算升起、中天和落下时间…').fontSize(11).fontColor(this.nmSub())
-              }.width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-            } else if (this.rtsError.length > 0) {
-              Text(this.rtsError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            } else if (this.rtsData.size > 0) {
-              InfoRow({ label: I18n.t('s0358'), value: this.rtsData.get('name') ?? 'N/A' })
-              Row()
-                .width('100%').height(0.5)
-                .backgroundColor(this.nmBorder())
-                .margin({ top: 4, bottom: 4 })
-              Text(I18n.t('s0370')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              InfoRow({ label: I18n.t('s0700'), value: this.jdToDateStr(this.rtsData.get('nextRiseText') ?? '0') })
-              InfoRow({ label: I18n.t('s0701'), value: this.jdToDateStr(this.rtsData.get('nextTransitText') ?? '0') })
-              InfoRow({ label: I18n.t('s0702'), value: this.jdToDateStr(this.rtsData.get('nextSetText') ?? '0') })
-              Row()
-                .width('100%').height(0.5)
-                .backgroundColor(this.nmBorder())
-                .margin({ top: 4, bottom: 4 })
-              Text(I18n.t('s0371')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              InfoRow({ label: I18n.t('s0700'), value: this.jdToDateStr(this.rtsData.get('prevRiseText') ?? '0') })
-              InfoRow({ label: I18n.t('s0701'), value: this.jdToDateStr(this.rtsData.get('prevTransitText') ?? '0') })
-              InfoRow({ label: I18n.t('s0702'), value: this.jdToDateStr(this.rtsData.get('prevSetText') ?? '0') })
-            }
-            if (this.hasSelectedObject()) {
-            Row({ space: 6 }) {
-              Button(I18n.t('i0146')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.jumpToRts('nextRiseJD') })
-              Button(I18n.t('i0148')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.jumpToRts('nextTransitJD') })
-              Button(I18n.t('i0147')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.jumpToRts('nextSetJD') })
-            }.width('100%').padding({ left: 4, right: 4 }).margin({ top: 8 })
-            Row()
-              .width('100%').height(0.5)
-              .backgroundColor(this.nmBorder())
-              .margin({ top: 10, bottom: 8 })
-            Text('升中天落日期表').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Text('持续时长').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Scroll() {
-              Row({ space: 4 }) {
-                ForEach([7, 14, 31, 62, 92, 183, 365], (days: number) => {
-                  Text(this.rtsCalendarDurationLabel(days)).fontSize(10)
-                  .fontColor(this.rtsCalendarDays === days ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.rtsCalendarDays === days ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.rtsCalendarDays !== days) {
-                      this.rtsCalendarDays = days
-                      this.markRtsCalendarForRegeneration()
-                    }
-                  })
-                }, (days: number) => days.toString())
-              }.padding({ left: 2, right: 2 })
-            }.width('100%').height(30).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ bottom: 5 })
-            Text('开始日期').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach([0, 1, 7, 30], (offsetDays: number) => {
-                Text(this.rtsCalendarStartOptionLabel(offsetDays)).fontSize(10)
-                  .fontColor(this.rtsCalendarStartOffsetDays === offsetDays ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.rtsCalendarStartOffsetDays === offsetDays ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.rtsCalendarStartOffsetDays !== offsetDays) {
-                      this.rtsCalendarStartOffsetDays = offsetDays
-                      this.markRtsCalendarForRegeneration()
-                    }
-                  })
-              }, (offsetDays: number) => offsetDays.toString())
-              Button(this.rtsCalendarStartOffsetDays < 0 ? this.rtsCalendarStartOptionLabel(-1) : '指定日期').fontSize(10)
-                .fontColor(this.rtsCalendarStartOffsetDays < 0 ? this.nmText() : this.nmSub())
-                .height(26).padding({ left: 9, right: 9 })
-                .backgroundColor(this.rtsCalendarStartOffsetDays < 0 ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                .borderRadius(UI_RADIUS_CONTROL)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.chooseRtsCalendarStartDate() })
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 5 })
-            Row({ space: 6 }) {
-              Button('生成日期表').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.loadRtsCalendar() })
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 5 })
-            if (this.rtsCalendarLoading) {
-              Row({ space: 8 }) {
-                LoadingProgress().width(22).height(22).color(this.nmAccent())
-                Text('正在生成升中天落日期表… ' + this.rtsCalendarProgress.toString() + '/' + this.rtsCalendarTotalDays.toString() + ' 天').fontSize(11).fontColor(this.nmSub())
-              }.width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 6 })
-            } else if (this.rtsCalendarNeedsGeneration) {
-              Text('参数已更新，请点击生成日期表开始计算。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 4 })
-            } else if (this.rtsCalendarError.length > 0) {
-              Text(this.rtsCalendarError).fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 4 })
-            } else if (this.rtsCalendarData.length > 0) {
-              Text(this.rtsCalendarName + ' · 从' + this.rtsCalendarStartOptionLabel(this.rtsCalendarStartOffsetDays) + '开始，持续 ' + this.rtsCalendarDurationLabel(this.rtsCalendarDays) + '；每项按本地日期计算，点击可跳到该日中天。')
-                .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-              ForEach(this.rtsCalendarData, (day: RtsCalendarDay) => {
-                Column({ space: 1 }) {
-                  Row() {
-                    Text(this.fmtDateTime(day.date)).fontSize(10).fontColor(this.nmText()).width(94)
-                    if (day.status !== undefined) {
-                      Text(day.status ?? '').fontSize(10).fontColor(this.nmAccent()).layoutWeight(1)
-                    } else {
-                      Text('升 ' + this.fmtClock(day.rise) + '  中天 ' + this.fmtClock(day.transit) + '  落 ' + this.fmtClock(day.set))
-                        .fontSize(10).fontColor(this.nmText()).layoutWeight(1).maxLines(1)
-                    }
-                  }.width('100%').padding({ left: 8, right: 8 })
-                  if (day.status === undefined) {
-                    Text('中天高度 ' + (day.transitAltitude ?? 0).toFixed(1) + '°   星等 ' + (day.magnitude ?? 0).toFixed(1)
-                      + '   距日 ' + (day.solarElongation ?? 0).toFixed(1) + '°   距月 ' + (day.lunarElongation ?? 0).toFixed(1) + '°')
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 }).maxLines(1)
-                  }
-                }.width('100%').padding({ top: 4, bottom: 4 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.jumpToRtsCalendar(day) })
-              }, (day: RtsCalendarDay, index: number) => day.date ?? index.toString())
-            }
-            }
-          } else if (this.astroTab === 3) {
-            Text(I18n.t('i0128')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-            Text('计算对象').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Scroll() {
-              Row({ space: 4 }) {
-                ForEach(['all', 'Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'], (body: string) => {
-                  Text(this.phenomenaBodyName(body)).fontSize(10)
-                    .fontColor(this.phenomenaPrimary === body ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 5, bottom: 5 })
-                    .backgroundColor(this.phenomenaPrimary === body ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      this.phenomenaPrimary = body
-                      if (this.phenomenaTarget === body) this.phenomenaTarget = 'all'
-                    })
-                }, (body: string) => body)
-              }.padding({ left: 2, right: 2 })
-            }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ bottom: 5 })
-            if (this.phenomenaPrimary !== 'all') {
-              Text('比较对象').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Scroll() {
-                Row({ space: 4 }) {
-                  ForEach(['all', 'Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'], (body: string) => {
-                    if (body !== this.phenomenaPrimary) {
-                      Text(this.phenomenaBodyName(body)).fontSize(10)
-                        .fontColor(this.phenomenaTarget === body ? this.nmText() : this.nmSub())
-                        .padding({ left: 9, right: 9, top: 5, bottom: 5 })
-                        .backgroundColor(this.phenomenaTarget === body ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                        .borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .onClick(() => { this.phenomenaTarget = body })
-                    }
-                  }, (body: string) => body)
-                }.padding({ left: 2, right: 2 })
-              }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ bottom: 5 })
-            }
-            Text('起始时段').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach(PHENOMENA_START_OPTIONS, (item: PhenomenaStartOption) => {
-                Text(item.label).fontSize(10)
-                  .fontColor(this.phenomenaStartOffsetMonths === item.value ? this.nmText() : this.nmSub())
-                  .padding({ left: 8, right: 8, top: 5, bottom: 5 })
-                  .backgroundColor(this.phenomenaStartOffsetMonths === item.value ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.phenomenaStartOffsetMonths = item.value })
-              }, (item: PhenomenaStartOption) => item.value.toString())
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 5 })
-            Column({ space: 5 }) {
-              Text('预测范围').fontSize(10).fontColor(this.nmSub()).width('100%')
-              Row({ space: 4 }) {
-                ForEach([30, 90, 180, 400, 730], (days: number) => {
-                  Text(days < 365 ? days.toString() + ' 天' : (days / 365).toFixed(1) + ' 年').fontSize(10)
-                    .fontColor(this.phenomenaDays === days ? this.nmText() : this.nmSub())
-                    .padding({ left: 7, right: 7, top: 5, bottom: 5 })
-                    .backgroundColor(this.phenomenaDays === days ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => { this.phenomenaDays = days })
-                }, (days: number) => days.toString())
-              }
-              Text('最大角距').fontSize(10).fontColor(this.nmSub()).width('100%')
-              Row({ space: 4 }) {
-                ForEach([1, 4, 10, 20], (degrees: number) => {
-                  Text(degrees.toString() + '°').fontSize(10)
-                    .fontColor(this.phenomenaMaxSeparation === degrees ? this.nmText() : this.nmSub())
-                    .padding({ left: 7, right: 7, top: 5, bottom: 5 })
-                    .backgroundColor(this.phenomenaMaxSeparation === degrees ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => { this.phenomenaMaxSeparation = degrees })
-                }, (degrees: number) => degrees.toString())
-              }
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            Text('附加天象').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              Text('冲').fontSize(10).fontColor(this.phenomenaIncludeOppositions ? this.nmText() : this.nmSub())
-                .padding({ left: 10, right: 10, top: 5, bottom: 5 }).backgroundColor(this.phenomenaIncludeOppositions ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.phenomenaIncludeOppositions = !this.phenomenaIncludeOppositions })
-              Text('近日点/远日点').fontSize(10).fontColor(this.phenomenaIncludePerihelionAphelion ? this.nmText() : this.nmSub())
-                .padding({ left: 10, right: 10, top: 5, bottom: 5 }).backgroundColor(this.phenomenaIncludePerihelionAphelion ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.phenomenaIncludePerihelionAphelion = !this.phenomenaIncludePerihelionAphelion })
-              Text('大距/方照').fontSize(10).fontColor(this.phenomenaIncludeElongationsQuadratures ? this.nmText() : this.nmSub())
-                .padding({ left: 10, right: 10, top: 5, bottom: 5 }).backgroundColor(this.phenomenaIncludeElongationsQuadratures ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.phenomenaIncludeElongationsQuadratures = !this.phenomenaIncludeElongationsQuadratures })
-              Text('留点').fontSize(10).fontColor(this.phenomenaIncludeStations ? this.nmText() : this.nmSub())
-                .padding({ left: 10, right: 10, top: 5, bottom: 5 }).backgroundColor(this.phenomenaIncludeStations ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.phenomenaIncludeStations = !this.phenomenaIncludeStations })
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 7 })
-            Row({ space: 6 }) {
-              Button('计算天象').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.loadPhenomena() })
-            }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 6 })
-            Text('合相按最大角距筛选；点任一结果可跳到发生时刻。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-            if (this.phenomenaLoading) {
-              Row({ space: 8 }) {
-                LoadingProgress().width(22).height(22).color(this.nmAccent())
-                Text('正在计算天象…').fontSize(11).fontColor(this.nmSub())
-              }.width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-            } else if (this.phenomenaHint.length > 0) {
-              Text(this.phenomenaHint).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8 })
-            } else if (this.phenomenaData.length === 0) {
-              Text('尚未计算天象。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8 })
-            }
-            ForEach(this.phenomenaData, (p: PhenomenonItem) => {
-              Row({ space: 8 }) {
-                Stack({ alignContent: Alignment.Center }) {
-                  PhenomenonRelationMark({ type: p.type ?? '' })
-                }.width(52).height(44).backgroundColor(this.nmBg()).border({ width: 1, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL)
-                Column({ space: 3 }) {
-                  Text(this.phenomenonCaption(p.type ?? '')).fontSize(9).fontColor(this.nmSub()).fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text((p.bodyA ?? '天体') + ' 与 ' + (p.bodyB ?? '太阳'))
-                    .fontSize(12).fontColor(this.nmText()).fontWeight(FontWeight.Medium).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(this.fmtDateTime(p.date)).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                Column({ space: 3 }) {
-                  Text(p.metricLabel ?? '角距').fontSize(9).fontColor(this.nmSub()).width('100%').textAlign(TextAlign.End)
-                  Text(this.fmtNum(p.separation, 2, p.metricUnit ?? '°')).fontSize(11).fontColor(this.nmText()).fontWeight(FontWeight.Medium)
-                    .width('100%').textAlign(TextAlign.End).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                }.width(84).alignItems(HorizontalAlign.End)
-              }.width('100%').height(64).padding({ left: 8, right: 8, top: 5, bottom: 5 })
-                .backgroundColor(this.nmBg()).border({ width: 1, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 4 })
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { this.jumpToPhenomenon(p) })
-            }, (p: PhenomenonItem, index: number) => index.toString())
-          } else if (this.astroTab === 4) {
-            Text(I18n.t('i0129')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-            Row({ space: 8 }) {
-              Column({ space: 1 }) {
-                Text('曲线目标').fontSize(9).fontColor(this.nmSub())
-                Text(this.graphTargetLabel()).fontSize(12).fontColor(this.objectDetailStore.selectedName.length > 0 ? this.nmText() : this.nmSub())
-                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              Button(this.objectDetailStore.selectedName.length > 0 ? '更换天体' : '选择天体')
-                .fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.openGraphTargetPicker() })
-            }.width('100%').padding({ left: 4, right: 4, top: 5, bottom: 5 })
-              .backgroundColor(this.nmBg()).border({ width: 1, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-            if (this.graphMode !== 2) {
-              Text('起始日期').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([0, 1, 7, 30], (offsetDays: number) => {
-                  Text(this.graphStartOptionLabel(offsetDays)).fontSize(10)
-                    .fontColor(this.graphStartOffsetDays === offsetDays ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.graphStartOffsetDays === offsetDays ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.graphStartOffsetDays !== offsetDays) {
-                        this.graphStartOffsetDays = offsetDays
-                        this.reloadCurrentGraph()
-                      }
-                    })
-                }, (offsetDays: number) => offsetDays.toString())
-                Button(this.graphCustomStartLabel()).fontSize(10)
-                  .fontColor(this.graphStartOffsetDays < 0 ? this.nmText() : this.nmSub())
-                  .height(26).padding({ left: 9, right: 9 })
-                  .backgroundColor(this.graphStartOffsetDays < 0 ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.chooseGraphStartDate() })
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 8 })
-            }
-            Row({ space: 4 }) {
-              ForEach(['高度', '方位', '全年', '月度', '月距', '双曲线'], (mode: string, index: number) => {
-                Text(mode).fontSize(10)
-                  .fontColor(this.graphMode === index ? this.nmText() : this.nmSub())
-                  .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-                  .backgroundColor(this.graphMode === index ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.graphMode !== index) {
-                      this.graphMode = index
-                      if (index === 2) this.loadAnnualElevation()
-                      else if (index === 3) this.loadObservabilityCalendar()
-                      else if (index === 4) this.loadLunarElongation()
-                      else if (index === 5) this.loadPlanetTimeSeries()
-                      else this.loadAltAzCurve()
-                    }
-                  })
-              }, (mode: string) => mode)
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 8 })
-            if (this.graphMode === 0 || this.graphMode === 1) {
-            Text('时间范围').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach([12, 24, 48, 72], (hours: number) => {
-                Text(hours.toString() + 'h')
-                  .fontSize(10)
-                  .fontColor(this.altAzHours === hours ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.altAzHours === hours ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.altAzHours !== hours) {
-                      this.altAzHours = hours
-                      this.loadAltAzCurve()
-                    }
-                  })
-              }, (hours: number) => hours.toString())
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            Text('采样间隔').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach([15, 30, 60], (stepMin: number) => {
-                Text(stepMin.toString() + ' 分')
-                  .fontSize(10)
-                  .fontColor(this.altAzStepMin === stepMin ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.altAzStepMin === stepMin ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.altAzStepMin !== stepMin) {
-                      this.altAzStepMin = stepMin
-                      this.loadAltAzCurve()
-                    }
-                  })
-              }, (stepMin: number) => stepMin.toString())
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            if (this.graphMode === 0) {
-              Text('叠加曲线').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                Text('太阳').fontSize(10)
-                  .fontColor(this.altAzShowSun ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.altAzShowSun ? '#9C6A24' : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.altAzShowSun = !this.altAzShowSun; this.loadAltAzCurve() })
-                Text('月亮').fontSize(10)
-                  .fontColor(this.altAzShowMoon ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.altAzShowMoon ? '#657384' : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.altAzShowMoon = !this.altAzShowMoon; this.loadAltAzCurve() })
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('显示高度不低于').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([-90, 0, 15, 30], (minimum: number) => {
-                  Text(minimum === -90 ? '全部' : minimum.toString() + '°').fontSize(10)
-                    .fontColor(this.altAzMinimum === minimum ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.altAzMinimum === minimum ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => { this.altAzMinimum = minimum })
-                }, (minimum: number) => minimum.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            }
-            Row({ space: 6 }) {
-              Button(this.graphMode === 0 ? '刷新高度' : '刷新方位').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.altAzCurve = []; this.altAzError = ''; this.loadAltAzCurve() })
-            }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 6 })
-            if (this.graphLoading) {
-              GraphLoadingRow({ label: '正在计算' + this.altAzRangeLabel() + '的' + (this.graphMode === 0 ? '高度' : '方位角') + '变化…', accentColor: this.nmAccent(), subColor: this.nmSub() })
-            } else if (this.altAzError.length > 0) {
-              Text(this.altAzError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              GraphSelectionGuide({ error: this.altAzError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
-            } else if (this.altAzCurve.length === 0) {
-              Text('没有可绘制的数据。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            } else {
-              Text(this.altAzName + ' · ' + this.altAzRangeLabel() + (this.graphMode === 0 ? '高度变化' : '方位角变化') + '（每 ' + this.altAzStepMin.toString() + ' 分）').fontSize(11).fontColor(this.nmText()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-              Stack({ alignContent: Alignment.Center }) {
-                Row() {
-                  ForEach(this.altAzCurve, (r: AltAzPoint) => {
-                    if (this.graphMode === 0) {
-                      Row({ space: 1 }) {
-                        Column().width(this.altCurveSegmentWidth()).height(this.altBarHeight(r.altitude))
-                          .backgroundColor(this.altitudeCurveColor(r.altitude, this.nmAccent())).borderRadius(1)
-                        if (this.altAzShowSun) {
-                          Column().width(this.altCurveSegmentWidth()).height(this.altBarHeight(r.sunAltitude))
-                            .backgroundColor(this.altitudeCurveColor(r.sunAltitude, '#E8B24B')).borderRadius(1)
-                        }
-                        if (this.altAzShowMoon) {
-                          Column().width(this.altCurveSegmentWidth()).height(this.altBarHeight(r.moonAltitude))
-                            .backgroundColor(this.altitudeCurveColor(r.moonAltitude, '#CCD7E5')).borderRadius(1)
-                        }
-                      }.width(this.altBarWidth()).height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
-                    } else {
-                      Column().width(this.altBarWidth()).height(this.azBarHeight(r.azimuth))
-                        .backgroundColor(this.nmAccent()).borderRadius(1)
-                    }
-                  }, (r: AltAzPoint, index: number) => index.toString())
-                }.width('100%').height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
-                if (this.graphMode === 0 && this.altAzMinimum <= 0) {
-                  Divider().color('#66FFFFFF').strokeWidth(1).width('100%').align(this.altAzMinimum === 0 ? Alignment.Bottom : Alignment.Center)
-                }
-              }.width('100%').height(96).padding({ left: 6, right: 6 })
-              Row() {
-                Text(this.graphMode === 0 ? '现在' : '0°').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Start)
-                Text(this.graphMode === 0 ? this.altAzMidpointLabel() : '180°').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Center)
-                Text(this.graphMode === 0 ? '+' + this.altAzHours.toString() + 'h' : '360°').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.End)
-              }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
-              Text(this.graphMode === 0 ? (this.altAzMinimum <= 0 ? '横线是地平线；主曲线为目标，金色为太阳，银灰色为月亮。' : '曲线仅显示不低于 ' + this.altAzMinimum.toString() + '° 的部分；主曲线为目标，金色为太阳，银灰色为月亮。') : '方位角从北方 0° 起顺时针增加：东 90°、南 180°、西 270°。').fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-              if (this.graphMode === 0) {
-                InfoRow({ label: '当前位置', value: this.altAzNowLabel() })
-                InfoRow({ label: '最高高度', value: this.altAzMaxLabel() })
-                InfoRow({ label: '地平线以上时长', value: this.altAzVisibleHours() })
-                InfoRow({ label: '显示下限', value: this.altAzMinimum === -90 ? '不限制' : this.altAzMinimum.toString() + '°' })
-              } else {
-                InfoRow({ label: '当前方位', value: this.azimuthNowLabel() })
-              }
-            }
-            } else if (this.graphMode === 2) {
-              Text('选定本地时刻后，按全年每 3 天采样一次；与桌面版“全年高度”计算方式一致。')
-                .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-              Row({ space: 8 }) {
-                Text('本地时刻 ' + this.annualElevationHour.toString().padStart(2, '0') + ':00').fontSize(10).fontColor(this.nmSub()).width(100)
-                Slider({ value: this.annualElevationHour, min: 0, max: 23, step: 1 })
-                  .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-                  .layoutWeight(1)
-                  .onChange((value: number) => {
-                    const hour = Math.round(value)
-                    if (hour !== this.annualElevationHour) {
-                      this.annualElevationHour = hour
-                      this.loadAnnualElevation()
-                    }
-                  })
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('显示高度不低于').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([-90, 0, 15, 30], (minimum: number) => {
-                  Text(minimum === -90 ? '全部' : minimum.toString() + '°').fontSize(10)
-                    .fontColor(this.annualElevationMinimum === minimum ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.annualElevationMinimum === minimum ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => { this.annualElevationMinimum = minimum })
-                }, (minimum: number) => minimum.toString())
-                Button('刷新').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 9, right: 9 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.loadAnnualElevation() })
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              if (this.graphLoading) {
-                GraphLoadingRow({ label: '正在生成全年高度曲线…', accentColor: this.nmAccent(), subColor: this.nmSub() })
-              } else if (this.annualElevationError.length > 0) {
-                Text(this.annualElevationError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-                GraphSelectionGuide({ error: this.annualElevationError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
-              } else if (this.annualElevationData.length === 0) {
-                Text('没有可绘制的数据。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              } else {
-                Text(this.annualElevationName + ' · ' + this.annualElevationHour.toString().padStart(2, '0') + ':00 全年高度').fontSize(11).fontColor(this.nmText()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-                Stack({ alignContent: Alignment.Center }) {
-                  Row() {
-                    ForEach(this.annualElevationData, (point: AnnualElevationPoint) => {
-                      Column().width(this.annualBarWidth()).height(this.annualBarHeight(point.altitude))
-                        .backgroundColor((point.altitude ?? -90) >= this.annualElevationMinimum ? this.nmAccent() : '#33FFFFFF').animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(1)
-                    }, (point: AnnualElevationPoint, index: number) => index.toString())
-                  }.width('100%').height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
-                  if (this.annualElevationMinimum <= 0) {
-                    Divider().color('#66FFFFFF').strokeWidth(1).width('100%')
-                  }
-                }.width('100%').height(96).padding({ left: 6, right: 6 })
-                Row() {
-                  Text('1月').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Start)
-                  Text('4月').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Center)
-                  Text('7月').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Center)
-                  Text('10月').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.End)
-                }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
-                InfoRow({ label: '全年最高', value: this.annualMaxLabel() })
-                InfoRow({ label: '显示下限', value: this.annualElevationMinimum === -90 ? '不限制' : this.annualElevationMinimum.toString() + '°' })
-              }
-            } else if (this.graphMode === 3) {
-              Text('按天文暗夜（太阳低于地平线 18°）统计；点任一晚可跳到目标最高的时刻。')
-                .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-              Text('计划范围').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([30, 90], (days: number) => {
-                  Text('未来 ' + days.toString() + ' 天').fontSize(10)
-                    .fontColor(this.observabilityDays === days ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.observabilityDays === days ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.observabilityDays !== days) {
-                        this.observabilityDays = days
-                        this.loadObservabilityCalendar()
-                      }
-                    })
-                }, (days: number) => days.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('最低高度').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([15, 20, 30], (altitude: number) => {
-                  Text(altitude.toString() + '°').fontSize(10)
-                    .fontColor(this.observabilityMinAltitude === altitude ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.observabilityMinAltitude === altitude ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.observabilityMinAltitude !== altitude) {
-                        this.observabilityMinAltitude = altitude
-                        this.loadObservabilityCalendar()
-                      }
-                    })
-                }, (altitude: number) => altitude.toString())
-                Button('刷新').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 9, right: 9 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.loadObservabilityCalendar() })
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              if (this.graphLoading) {
-                GraphLoadingRow({ label: this.observabilityProgress.length > 0 ? this.observabilityProgress : '正在计算未来多晚的观测窗口…', accentColor: this.nmAccent(), subColor: this.nmSub() })
-              } else if (this.observabilityError.length > 0) {
-                Text(this.observabilityError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-                GraphSelectionGuide({ error: this.observabilityError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
-              } else if (this.observabilityData.length === 0) {
-                Text('所选时段没有可用观测窗口。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              } else {
-                Text(this.observabilityName + ' · 高于 ' + this.observabilityMinAltitude.toString() + '° 的暗夜可见时间')
-                  .fontSize(11).fontColor(this.nmText()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-                ForEach(this.observabilityData, (day: ObservabilityDay) => {
-                  Column({ space: 2 }) {
-                    Row() {
-                      Text(day.date ?? '--').fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                      Text((day.visibleHours ?? 0).toFixed(1) + ' 小时').fontSize(11)
-                        .fontColor((day.visibleHours ?? 0) > 0 ? this.nmAccent() : this.nmSub())
-                    }.width('100%').padding({ left: 8, right: 8 })
-                    if ((day.darkHours ?? 0) > 0) {
-                      Text('最佳 ' + this.fmtClock(day.peakTime) + ' · 最高 ' + this.fmtNum(day.maxAltitude, 1, '°') + ' · 暗夜 ' + this.fmtNum(day.darkHours, 1, ' 小时'))
-                        .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 12, right: 8 })
-                      Text('月亮：照亮 ' + this.fmtNum(day.moonIllumination, 0, ' %') + '，高度 ' + this.fmtNum(day.moonAltitude, 0, '°'))
-                        .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12, right: 8 })
-                    } else {
-                      Text('当地没有完整的天文暗夜。').fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 12, right: 8 })
-                    }
-                  }.width('100%').padding({ top: 5, bottom: 5 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.jumpToObservabilityDay(day) })
-                }, (day: ObservabilityDay, index: number) => index.toString())
-              }
-            } else if (this.graphMode === 4) {
-              Text('显示选中目标与月亮的角距；金色柱表示距离小于参考线，通常意味着月光干扰更明显。')
-                .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-              Text('时间范围').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([14, 30, 60], (days: number) => {
-                  Text('未来 ' + days.toString() + ' 天').fontSize(10)
-                    .fontColor(this.lunarElongationDays === days ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.lunarElongationDays === days ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.lunarElongationDays !== days) {
-                        this.lunarElongationDays = days
-                        this.loadLunarElongation()
-                      }
-                    })
-                }, (days: number) => days.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('采样间隔').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([6, 12, 24], (hours: number) => {
-                  Text(hours.toString() + ' 小时').fontSize(10)
-                    .fontColor(this.lunarElongationStepHours === hours ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.lunarElongationStepHours === hours ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.lunarElongationStepHours !== hours) {
-                        this.lunarElongationStepHours = hours
-                        this.loadLunarElongation()
-                      }
-                    })
-                }, (hours: number) => hours.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('月距参考线').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([10, 20, 40, 60], (limit: number) => {
-                  Text(limit.toString() + '°').fontSize(10)
-                    .fontColor(this.lunarElongationLimit === limit ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.lunarElongationLimit === limit ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => { this.lunarElongationLimit = limit })
-                }, (limit: number) => limit.toString())
-                Button('刷新').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 9, right: 9 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.loadLunarElongation() })
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              if (this.graphLoading) {
-                GraphLoadingRow({ label: '正在计算目标与月亮的角距…', accentColor: this.nmAccent(), subColor: this.nmSub() })
-              } else if (this.lunarElongationError.length > 0) {
-                Text(this.lunarElongationError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-                GraphSelectionGuide({ error: this.lunarElongationError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
-              } else if (this.lunarElongationData.length === 0) {
-                Text('没有可绘制的数据。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              } else {
-                Text(this.lunarElongationName + ' · 未来 ' + this.lunarElongationDays.toString() + ' 天月距（每 ' + this.lunarElongationStepHours.toString() + ' 小时）')
-                  .fontSize(11).fontColor(this.nmText()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-                Stack({ alignContent: Alignment.Center }) {
-                  Row() {
-                    ForEach(this.lunarElongationData, (point: LunarElongationPoint) => {
-                      Column().width(this.lunarElongationBarWidth()).height(this.lunarElongationBarHeight(point.separation))
-                        .backgroundColor((point.separation ?? 180) < this.lunarElongationLimit ? '#E8B24B' : this.nmAccent()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(1)
-                    }, (point: LunarElongationPoint, index: number) => index.toString())
-                  }.width('100%').height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
-                  Divider().color('#E8B24B').strokeWidth(1).width('100%').position({ x: 0, y: this.lunarElongationLineTop() })
-                }.width('100%').height(96).padding({ left: 6, right: 6 })
-                Row() {
-                  Text('现在').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Start)
-                  Text('+' + Math.round(this.lunarElongationDays / 2).toString() + '天').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Center)
-                  Text('+' + this.lunarElongationDays.toString() + '天').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.End)
-                }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
-                Text('纵轴 0°-180°；金色横线是 ' + this.lunarElongationLimit.toString() + '° 参考线。').fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-                InfoRow({ label: '当前月距', value: this.lunarElongationNowLabel() })
-                InfoRow({ label: '最接近月亮', value: this.lunarElongationClosestLabel() })
-                InfoRow({ label: '参考线', value: this.lunarElongationLimit.toString() + '°' })
-              }
-            } else {
-              Text('桌面版“Graphs”双变量时间曲线：左右两条曲线各自缩放，适合比较不同量纲的变化趋势。')
-                .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-              Text('时间范围').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([30, 90, 365], (days: number) => {
-                  Text(days === 365 ? '未来 1 年' : '未来 ' + days.toString() + ' 天').fontSize(10)
-                    .fontColor(this.planetTimeSeriesDays === days ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.planetTimeSeriesDays === days ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.planetTimeSeriesDays !== days) {
-                        this.planetTimeSeriesDays = days
-                        if (days === 365 && this.planetTimeSeriesStepHours < 24) this.planetTimeSeriesStepHours = 24
-                        this.loadPlanetTimeSeries()
-                      }
-                    })
-                }, (days: number) => days.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('采样间隔').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach(this.planetTimeSeriesDays === 365 ? [24, 72] : [6, 24, 72], (hours: number) => {
-                  Text(hours.toString() + ' 小时').fontSize(10)
-                    .fontColor(this.planetTimeSeriesStepHours === hours ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.planetTimeSeriesStepHours === hours ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.planetTimeSeriesStepHours !== hours) {
-                        this.planetTimeSeriesStepHours = hours
-                        this.loadPlanetTimeSeries()
-                      }
-                    })
-                }, (hours: number) => hours.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('左轴：' + this.planetMetricLabel(this.planetTimeSeriesLeftMetric)).fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Column({ space: 3 }) {
-                ForEach([['magnitude', 'phase', 'distance', 'elongation', 'angularSize'], ['phaseAngle', 'heliocentricDistance', 'transitAltitude', 'rightAscension', 'declination']], (metrics: Array<string>, row: number) => {
-                  Row({ space: 3 }) {
-                    ForEach(metrics, (metric: string) => {
-                      Text(this.planetMetricLabel(metric)).fontSize(9).maxLines(1)
-                        .fontColor(this.planetTimeSeriesLeftMetric === metric ? this.nmText() : this.nmSub())
-                        .padding({ left: 5, right: 5, top: 4, bottom: 4 })
-                        .backgroundColor(this.planetTimeSeriesLeftMetric === metric ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                        .borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .onClick(() => { this.planetTimeSeriesLeftMetric = metric; this.loadPlanetTimeSeries() })
-                    }, (metric: string) => metric)
-                  }.width('100%')
-                }, (metrics: Array<string>, row: number) => row.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('右轴：' + this.planetMetricLabel(this.planetTimeSeriesRightMetric)).fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Column({ space: 3 }) {
-                ForEach([['magnitude', 'phase', 'distance', 'elongation', 'angularSize'], ['phaseAngle', 'heliocentricDistance', 'transitAltitude', 'rightAscension', 'declination']], (metrics: Array<string>, row: number) => {
-                  Row({ space: 3 }) {
-                    ForEach(metrics, (metric: string) => {
-                      Text(this.planetMetricLabel(metric)).fontSize(9).maxLines(1)
-                        .fontColor(this.planetTimeSeriesRightMetric === metric ? this.nmText() : this.nmSub())
-                        .padding({ left: 5, right: 5, top: 4, bottom: 4 })
-                        .backgroundColor(this.planetTimeSeriesRightMetric === metric ? '#9C6A24' : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                        .borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .onClick(() => { this.planetTimeSeriesRightMetric = metric; this.loadPlanetTimeSeries() })
-                    }, (metric: string) => metric)
-                  }.width('100%')
-                }, (metrics: Array<string>, row: number) => row.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Row({ space: 6 }) {
-                Button('刷新').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 9, right: 9 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.loadPlanetTimeSeries() })
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              if (this.graphLoading) {
-                GraphLoadingRow({ label: '正在计算双变量时间曲线…', accentColor: this.nmAccent(), subColor: this.nmSub() })
-              } else if (this.planetTimeSeriesError.length > 0) {
-                Text(this.planetTimeSeriesError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-                GraphSelectionGuide({ error: this.planetTimeSeriesError, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(), onPick: () => { this.openGraphTargetPicker() } })
-              } else if (this.planetTimeSeriesData.length === 0) {
-                Text('没有可绘制的数据。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              } else {
-                Text(this.planetTimeSeriesName + ' · ' + this.planetMetricLabel(this.planetTimeSeriesLeftMetric) + ' / ' + this.planetMetricLabel(this.planetTimeSeriesRightMetric))
-                  .fontSize(11).fontColor(this.nmText()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-                Stack({ alignContent: Alignment.Center }) {
-                  Row() {
-                    ForEach(this.planetTimeSeriesData, (point: PlanetTimeSeriesPoint) => {
-                      Row({ space: 1 }) {
-                        Column().width(this.planetTimeSeriesSegmentWidth())
-                          .height(this.planetTimeSeriesBarHeight(point.left, this.planetTimeSeriesLeftMin, this.planetTimeSeriesLeftMax))
-                          .backgroundColor(this.nmAccent()).borderRadius(1)
-                        Column().width(this.planetTimeSeriesSegmentWidth())
-                          .height(this.planetTimeSeriesBarHeight(point.right, this.planetTimeSeriesRightMin, this.planetTimeSeriesRightMax))
-                          .backgroundColor('#E8B24B').borderRadius(1)
-                      }.width(this.planetTimeSeriesBarWidth()).height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
-                    }, (point: PlanetTimeSeriesPoint, index: number) => index.toString())
-                  }.width('100%').height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
-                }.width('100%').height(96).padding({ left: 6, right: 6 })
-                Row() {
-                  Text('现在').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Start)
-                  Text('+' + Math.round(this.planetTimeSeriesDays / 2).toString() + '天').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Center)
-                  Text(this.planetTimeSeriesDays === 365 ? '+1年' : '+' + this.planetTimeSeriesDays.toString() + '天').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.End)
-                }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
-                Text('蓝色左轴：' + this.planetTimeSeriesLeftMin.toFixed(1) + ' - ' + this.planetTimeSeriesLeftMax.toFixed(1) + this.planetMetricUnit(this.planetTimeSeriesLeftMetric)
-                  + '；金色右轴：' + this.planetTimeSeriesRightMin.toFixed(1) + ' - ' + this.planetTimeSeriesRightMax.toFixed(1) + this.planetMetricUnit(this.planetTimeSeriesRightMetric))
-                  .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-                InfoRow({ label: '当前 ' + this.planetMetricLabel(this.planetTimeSeriesLeftMetric), value: this.planetTimeSeriesValueLabel(this.planetTimeSeriesData[0].left, this.planetTimeSeriesLeftMetric) })
-                InfoRow({ label: '当前 ' + this.planetMetricLabel(this.planetTimeSeriesRightMetric), value: this.planetTimeSeriesValueLabel(this.planetTimeSeriesData[0].right, this.planetTimeSeriesRightMetric) })
-              }
-            }
-          } else if (this.astroTab === 5) {
-            Text('今晚可观测目标').fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 2 })
-            Text('按时段、最低高度和星等筛选适合观测的天体。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-            Row({ space: 6 }) {
-              Button('刷新可观测目标').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.tonightAstro = null; this.loadTonightAstro() })
-            }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 6 })
-            if (this.tonightAstro === null) {
-              Text('（正在汇总今晚的观测条件…）').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            } else {
-              Text('太阳与暗夜窗口').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              InfoRow({ label: '日落', value: this.fmtDateTime(this.tonightAstro!.sun?.set) })
-              InfoRow({ label: '天文暮光结束', value: this.fmtDateTime(this.tonightAstro!.sun?.astroTwilightEnd) })
-              InfoRow({ label: '天文暮光开始', value: this.fmtDateTime(this.tonightAstro!.sun?.astroTwilightStart) })
-              InfoRow({ label: '日出', value: this.fmtDateTime(this.tonightAstro!.sun?.rise) })
-              InfoRow({ label: '可用暗夜时长', value: this.fmtNum(this.tonightAstro!.sun?.darkWindowHours, 1, ' 小时') })
-              Text('月亮').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 8, bottom: 2 })
-              InfoRow({ label: '月相', value: this.tonightAstro!.moon?.phaseName ?? '--' })
-              InfoRow({ label: '照亮比例', value: this.fmtNum(this.tonightAstro!.moon?.illumination, 1, ' %') })
-              InfoRow({ label: '月龄', value: this.fmtNum(this.tonightAstro!.moon?.age, 1, ' 天') })
-              InfoRow({ label: '月出', value: this.fmtDateTime(this.tonightAstro!.moon?.rise) })
-              InfoRow({ label: '月落', value: this.fmtDateTime(this.tonightAstro!.moon?.set) })
-              Text('今晚可观测目标').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 8, bottom: 2 })
-              Button({ type: ButtonType.Normal }) {
-                Row({ space: 8 }) {
-                  Column({ space: 4 }) {
-                    Text('选择类别').fontSize(12).fontColor(this.nmSub()).width('100%')
-                    Text(this.wutCategoryTitle()).fontSize(14).fontColor(this.nmText()).width('100%')
-                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                  Image(getIcon('chevron_right', false)).width(18).height(18).fillColor(this.nmSub())
-                    .rotate({ angle: this.wutStore.wutCategoriesExpanded ? 90 : 0 })
-                }.width('100%')
-              }.width('100%').padding(12).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => {
-                  this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseInOut }, () => {
-                    this.wutStore.wutCategoriesExpanded = !this.wutStore.wutCategoriesExpanded
-                  })
-                })
-              if (this.wutStore.wutCategoriesExpanded) {
-                Flex({ wrap: FlexWrap.Wrap }) {
-                  ForEach(this.wutCategoryOptions(), (option: TabItem) => {
-                    Text(option.label).fontSize(12).width('48%')
-                      .fontColor(this.wutStore.wutCategory === this.wutCategoryKey(option.id) ? this.nmText() : this.nmSub())
-                      .padding(10).margin({ right: '2%', bottom: 6 })
-                      .backgroundColor(this.wutStore.wutCategory === this.wutCategoryKey(option.id) ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                      .borderRadius(UI_RADIUS_CONTROL)
-                      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                      .onClick(() => {
-                        const category = this.wutCategoryKey(option.id)
-                        this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseInOut }, () => {
-                          this.wutStore.wutCategoriesExpanded = false
-                        })
-                        if (this.wutStore.wutCategory !== category) {
-                          this.wutStore.wutCategory = category
-                          this.wutStore.wutAngularSizeAvailable = !['stars', 'variableStars', 'highProperMotion', 'carbonStars', 'bariumStars'].includes(category)
-                          this.loadWutTargets()
-                        }
-                      })
-                  }, (option: TabItem) => option.id.toString())
-                }.width('100%').margin({ top: 8 }).transition(TransitionEffect.OPACITY)
-              }
-              Column({ space: 10 }) {
-                  Flex({ wrap: FlexWrap.Wrap }) {
-                    Text('观测时段').fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 })
-                    ForEach(['evening', 'midnight', 'morning', 'night'], (period: string) => {
-                      Text(period === 'evening' ? '傍晚' : (period === 'morning' ? '清晨' : (period === 'night' ? '整夜' : '午夜')))
-                        .fontSize(12).fontColor(this.wutStore.wutPeriod === period ? this.nmText() : this.nmSub())
-                        .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                        .backgroundColor(this.wutStore.wutPeriod === period ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .id('astro-filter-period-' + period)
-                        .onClick(() => { this.selectAstroFilter('period', period) })
-                    }, (period: string) => period)
-                  }.width('100%')
-                  Flex({ wrap: FlexWrap.Wrap }) {
-                    Text('地平高度高于').fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 })
-                    ForEach([0, 10, 20, 30, 45], (altitude: number) => {
-                      Text(altitude.toString() + '°').fontSize(12)
-                        .fontColor(this.wutStore.wutMinAltitude === altitude ? this.nmText() : this.nmSub())
-                        .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                        .backgroundColor(this.wutStore.wutMinAltitude === altitude ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .id('astro-filter-altitude-' + altitude.toString())
-                        .onClick(() => { this.selectAstroFilter('altitude', altitude.toString()) })
-                    }, (altitude: number) => altitude.toString())
-                  }.width('100%')
-                  Flex({ wrap: FlexWrap.Wrap }) {
-                    Text('星等不超过').fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 })
-                    ForEach([4, 6, 8, 10], (magnitude: number) => {
-                      Text(magnitude.toString()).fontSize(12)
-                        .fontColor(this.wutStore.wutMaxMagnitude === magnitude ? this.nmText() : this.nmSub())
-                        .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                        .backgroundColor(this.wutStore.wutMaxMagnitude === magnitude ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .id('astro-filter-magnitude-' + magnitude.toString())
-                        .onClick(() => { this.selectAstroFilter('magnitude', magnitude.toString()) })
-                    }, (magnitude: number) => magnitude.toString())
-                  }.width('100%')
-                  Flex({ wrap: FlexWrap.Wrap }) {
-                    Text('方向').fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 })
-                    ForEach(['all', 'north', 'east', 'south', 'west'], (direction: string) => {
-                      Text(this.wutDirectionLabel(direction)).fontSize(12).fontColor(this.wutStore.wutDirection === direction ? this.nmText() : this.nmSub())
-                        .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                        .backgroundColor(this.wutStore.wutDirection === direction ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .id('astro-filter-direction-' + direction)
-                        .onClick(() => { this.selectAstroFilter('direction', direction) })
-                    }, (direction: string) => direction)
-                  }.width('100%')
-                  Row({ space: 8 }) {
-                    Text('限制角大小').fontSize(12).fontColor(this.nmSub()).layoutWeight(1)
-                    Toggle({ type: ToggleType.Switch, isOn: this.wutStore.wutLimitAngularSize }).width(44).height(28)
-                      .enabled(this.wutStore.wutAngularSizeAvailable)
-                      .onChange((value: boolean) => { this.wutStore.wutLimitAngularSize = value; this.loadWutTargets() })
-                  }.width('100%')
-                  if (this.wutStore.wutLimitAngularSize && this.wutStore.wutAngularSizeAvailable) {
-                    Flex({ wrap: FlexWrap.Wrap }) {
-                      ForEach(['10角分–1度', '1度–10度'], (label: string, index: number) => {
-                        Text(label).fontSize(12).fontColor((index === 0 ? this.wutStore.wutMinAngularSizeArcmin === 10 : this.wutStore.wutMinAngularSizeArcmin === 60) ? this.nmText() : this.nmSub())
-                          .padding({ left: 12, right: 12, top: 9, bottom: 9 }).margin({ right: 6, bottom: 6 })
-                          .backgroundColor((index === 0 ? this.wutStore.wutMinAngularSizeArcmin === 10 : this.wutStore.wutMinAngularSizeArcmin === 60) ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
-                          .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                          .onClick(() => { this.wutStore.wutMinAngularSizeArcmin = index === 0 ? 10 : 60; this.wutStore.wutMaxAngularSizeArcmin = index === 0 ? 60 : 600; this.loadWutTargets() })
-                      }, (label: string) => label)
-                    }.width('100%')
-                  }
-
-              }.width('100%').padding(12).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ top: 8, bottom: 12 })
-              if (this.wutStore.wutLoading) {
-                Row({ space: 8 }) {
-                  LoadingProgress().width(20).height(20).color(this.nmAccent())
-                  Text(this.wutStore.wutProgress.length > 0 ? this.wutStore.wutProgress : '正在筛选可观测目标…').fontSize(11).fontColor(this.nmSub())
-                }.width('100%').padding({ left: 8, top: 5, bottom: 7 })
-              }
-              if (this.wutStore.wutHint.length > 0) {
-                Text(this.wutStore.wutHint).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 8 })
-              } else {
-                Text('筛选结果 ' + this.wutStore.wutTargets.length.toString() + ' 个 · ' + this.fmtClock(this.wutStore.wutObservationTime))
-                  .fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 8 })
-              }
-              Text(I18n.t('wut_card_action_hint')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ bottom: 8 })
-              ForEach(this.wutStore.wutTargets, (target: WutTarget, index: number) => {
-                WutTargetCard({
-              target: target, textColor: this.nmText(), subColor: this.nmSub(), panelColor: this.nmBg(),
-              titleOf: (item: WutTarget) => this.wutTargetTitle(item), subtitleOf: (item: WutTarget) => this.wutTargetSubtitle(item),
-              typeOf: (type: string) => this.zhType(type), numberText: (value: number | undefined, digits: number, unit: string) => this.fmtNum(value, digits, unit),
-              clockText: (value: string | undefined) => this.fmtClock(value), onJump: (item: WutTarget) => { this.jumpToWutTarget(item) }
-            })
-              }, (target: WutTarget, index: number) => (target.englishName ?? index.toString()))
-              Text('行星（点击跳到中天时刻）').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 8, bottom: 2 })
-              ForEach(this.tonightAstro!.planets ?? [], (p: TonightPlanet) => {
-                Column({ space: 1 }) {
-                  Row() {
-                    Text(p.name ?? '').fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                    Text((p.visible === true ? '现在可见' : '在地平线下')).fontSize(9)
-                      .fontColor((p.visible === true) ? this.nmAccent() : this.nmSub()).width(64)
-                    Text((p.magnitude ?? 0).toFixed(1) + ' 等').fontSize(10).fontColor(this.nmSub()).width(52)
-                  }.width('100%').padding({ left: 8, right: 8 })
-                  Text('升 ' + this.fmtClock(p.rise)
-                    + '  中天 ' + this.fmtClock(p.transit)
-                    + '  落 ' + this.fmtClock(p.set))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                }.width('100%').padding({ top: 4, bottom: 4 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { if (p.transitJd !== undefined) this.callNative('setJD', String(p.transitJd)) })
-              }, (p: TonightPlanet, index: number) => index.toString())
-              if ((this.tonightAstro!.meteorShowers ?? []).length > 0) {
-                Text('活跃流星雨（点击跳到最佳观测时刻）').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 8, bottom: 2 })
-                ForEach(this.tonightAstro!.meteorShowers ?? [], (s: TonightShower) => {
-                  Row() {
-                    Text(s.name ?? '').fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                    Text('每小时约 ' + String(s.zhr ?? '?') + ' 颗').fontSize(10).fontColor(this.nmSub()).width(96)
-                  }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 })
-                  .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { if (s.primeJd !== undefined) this.callNative('setJD', String(s.primeJd)) })
-                }, (s: TonightShower, index: number) => index.toString())
-              }
-            }
-          } else if (this.astroTab === 6) {
-            Text(I18n.t('i0131')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-            Row({ space: 4 }) {
-              ForEach(['实时数据', '距离曲线'], (mode: string, index: number) => {
-                Text(mode).fontSize(10)
-                  .fontColor(this.planetCalcMode === index ? this.nmText() : this.nmSub())
-                  .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-                  .backgroundColor(this.planetCalcMode === index ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.planetCalcMode !== index) {
-                      this.planetCalcMode = index
-                      if (index === 1) this.loadPlanetPairDistance()
-                      else this.loadPlanetCalc()
-                    }
-                  })
-              }, (mode: string) => mode)
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 8 })
-            if (this.planetCalcMode === 0) {
-            Row({ space: 6 }) {
-              Button(I18n.t('i0243')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.loadPlanetCalc() })
-            }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 6 })
-            if (this.planetCalcLoading) {
-              Row({ space: 8 }) {
-                LoadingProgress().width(20).height(20).color(this.nmAccent())
-                Text('正在计算各行星的实时数据…').fontSize(11).fontColor(this.nmSub())
-              }.width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 6 })
-            } else if (this.planetCalcError.length > 0) {
-              Text(this.planetCalcError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            } else if (this.planetCalcData.length === 0) {
-              Text('当前没有可显示的行星实时数据。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            }
-            ForEach(this.planetCalcData, (p: PlanetCalcItem) => {
-              Column({ space: 2 }) {
-                Row() {
-                  Text(p.name ?? '').fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-                  Text((p.magnitude ?? 0).toFixed(1) + ' 等').fontSize(10).fontColor(this.nmSub()).width(52)
-                }.width('100%').padding({ left: 8, right: 8 })
-                Text('赤经 ' + String(p.ra ?? '--') + '   赤纬 ' + String(p.dec ?? '--'))
-                  .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                Text('高度 ' + (p.altitude ?? 0).toFixed(1) + '°   方位 ' + (p.azimuth ?? 0).toFixed(1) + '°'
-                  + (p.distanceAU !== undefined ? ('   距离 ' + (p.distanceAU ?? 0).toFixed(3) + ' AU') : ''))
-                  .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                if (p.elongation !== undefined) {
-                  Text('距角 ' + ((p.elongation ?? 0) * 180 / Math.PI).toFixed(1) + '°'
-                    + '   相位 ' + ((p.phase ?? 0) * 100).toFixed(0) + '%')
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                }
-                if (p.phaseAngleDegrees !== undefined || p.heliocentricDistanceAU !== undefined) {
-                  Text((p.phaseAngleDegrees !== undefined ? '相位角 ' + p.phaseAngleDegrees.toFixed(1) + '°' : '')
-                    + (p.heliocentricDistanceAU !== undefined ? '   日心距 ' + p.heliocentricDistanceAU.toFixed(3) + ' AU' : ''))
-                    .fontSize(9).fontColor('#70FFFFFF').width('100%').padding({ left: 12 })
-                }
-                if (p.illumination !== undefined) {
-                  Text('照亮 ' + (p.illumination ?? 0).toFixed(1) + '%   月龄 ' + (p.age ?? 0).toFixed(1) + ' 天')
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                }
-                if (p.rise !== undefined) {
-                  Text('升 ' + this.fmtClock(p.rise)
-                    + '  中天 ' + this.fmtClock(p.transit)
-                    + '  落 ' + this.fmtClock(p.set))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                }
-              }.width('100%').padding({ top: 5, bottom: 5 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { this.callNative('searchObject', String(p.englishName ?? '')) })
-            }, (p: PlanetCalcItem, index: number) => index.toString())
-            } else {
-              Text('对应桌面版行星计算器的“图表”：蓝色为线性距离，金色为表观角距离；两轴独立缩放。')
-                .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-              Text('第一个天体').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Column({ space: 3 }) {
-                ForEach([['Sun', 'Earth', 'Moon', 'Mercury', 'Venus', 'Mars'], ['Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']], (bodies: Array<string>, row: number) => {
-                  Row({ space: 3 }) {
-                    ForEach(bodies, (body: string) => {
-                      Text(this.planetPairBodyName(body)).fontSize(9)
-                        .fontColor(this.planetPairFirst === body ? this.nmText() : this.nmSub())
-                        .padding({ left: 6, right: 6, top: 4, bottom: 4 })
-                        .backgroundColor(this.planetPairFirst === body ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                        .borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .onClick(() => {
-                          if (body !== this.planetPairSecond) {
-                            this.planetPairFirst = body
-                            this.loadPlanetPairDistance()
-                          }
-                        })
-                    }, (body: string) => body)
-                  }.width('100%')
-                }, (bodies: Array<string>, row: number) => row.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('第二个天体').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Column({ space: 3 }) {
-                ForEach([['Sun', 'Earth', 'Moon', 'Mercury', 'Venus', 'Mars'], ['Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']], (bodies: Array<string>, row: number) => {
-                  Row({ space: 3 }) {
-                    ForEach(bodies, (body: string) => {
-                      Text(this.planetPairBodyName(body)).fontSize(9)
-                        .fontColor(this.planetPairSecond === body ? this.nmText() : this.nmSub())
-                        .padding({ left: 6, right: 6, top: 4, bottom: 4 })
-                        .backgroundColor(this.planetPairSecond === body ? '#9C6A24' : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                        .borderRadius(UI_RADIUS_CONTROL)
-                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                        .onClick(() => {
-                          if (body !== this.planetPairFirst) {
-                            this.planetPairSecond = body
-                            this.loadPlanetPairDistance()
-                          }
-                        })
-                    }, (body: string) => body)
-                  }.width('100%')
-                }, (bodies: Array<string>, row: number) => row.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('前后范围').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([40, 80, 180], (days: number) => {
-                  Text('前后 ' + days.toString() + ' 天').fontSize(10)
-                    .fontColor(this.planetPairDays === days ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.planetPairDays === days ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.planetPairDays !== days) {
-                        this.planetPairDays = days
-                        if (days === 80 && this.planetPairStepDays < 2) this.planetPairStepDays = 2
-                        if (days === 180 && this.planetPairStepDays < 4) this.planetPairStepDays = 4
-                        this.loadPlanetPairDistance()
-                      }
-                    })
-                }, (days: number) => days.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('采样步长').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach(this.planetPairDays === 40 ? [1, 2, 4, 7] : (this.planetPairDays === 80 ? [2, 4, 7] : [4, 7]), (step: number) => {
-                  Text(step.toString() + ' 天').fontSize(10)
-                    .fontColor(this.planetPairStepDays === step ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.planetPairStepDays === step ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.planetPairStepDays !== step) {
-                        this.planetPairStepDays = step
-                        this.loadPlanetPairDistance()
-                      }
-                    })
-                }, (step: number) => step.toString())
-                Button('刷新').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_PILL).height(28).padding({ left: 9, right: 9 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.loadPlanetPairDistance() })
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              if (this.planetPairDistanceLoading) {
-                Row({ space: 8 }) {
-                  LoadingProgress().width(20).height(20).color(this.nmAccent())
-                  Text('正在计算两天体之间的距离变化…').fontSize(11).fontColor(this.nmSub())
-                }.width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 6 })
-              } else if (this.planetPairDistanceError.length > 0) {
-                Text(this.planetPairDistanceError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              } else if (this.planetPairDistanceData.length === 0) {
-                Text('尚未生成距离曲线。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              } else {
-                Text(this.planetPairFirstName + ' ↔ ' + this.planetPairSecondName + ' · 前后 ' + this.planetPairDays.toString() + ' 天')
-                  .fontSize(11).fontColor(this.nmText()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-                Stack({ alignContent: Alignment.Center }) {
-                  Row() {
-                    ForEach(this.planetPairDistanceData, (point: PlanetPairDistancePoint) => {
-                      Row({ space: 1 }) {
-                        Column().width(this.planetPairSegmentWidth())
-                          .height(this.planetPairBarHeight(point.linearDistance, this.planetPairLinearMin, this.planetPairLinearMax))
-                          .backgroundColor(this.nmAccent()).borderRadius(1)
-                        if (this.planetPairAngularAvailable) {
-                          Column().width(this.planetPairSegmentWidth())
-                            .height(this.planetPairBarHeight(point.angularDistance, this.planetPairAngularMin, this.planetPairAngularMax))
-                            .backgroundColor('#E8B24B').borderRadius(1)
-                        }
-                      }.width(this.planetPairBarWidth()).height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
-                    }, (point: PlanetPairDistancePoint, index: number) => index.toString())
-                  }.width('100%').height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
-                }.width('100%').height(96).padding({ left: 6, right: 6 })
-                Row() {
-                  Text('-' + this.planetPairDays.toString() + '天').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Start)
-                  Text('现在').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.Center)
-                  Text('+' + this.planetPairDays.toString() + '天').fontSize(9).fontColor(this.nmSub()).layoutWeight(1).textAlign(TextAlign.End)
-                }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
-                Text(this.planetPairAngularAvailable ? '蓝色线性距离：' + this.planetPairLinearMin.toFixed(3) + ' - ' + this.planetPairLinearMax.toFixed(3) + ' AU；金色角距离：' + this.planetPairAngularMin.toFixed(1) + ' - ' + this.planetPairAngularMax.toFixed(1) + '°' : '蓝色为线性距离；与观测地球比较时，表观角距离不适用。')
-                  .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-                InfoRow({ label: '当前线性距离', value: this.planetPairLinearLabel(this.planetPairDistanceData[this.planetPairCurrentIndex()].linearDistance) })
-                if (this.planetPairAngularAvailable) {
-                  InfoRow({ label: '当前角距离', value: (this.planetPairDistanceData[this.planetPairCurrentIndex()].angularDistance ?? 0).toFixed(1) + '°' })
-                }
-              }
-            }
-          } else if (this.astroTab === 7) {
-            Text(I18n.t('i0132')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-            Row({ space: 4 }) {
-              ForEach(['日月食', '行星凌日'], (label: string, index: number) => {
-                Text(label).fontSize(10).fontColor(this.eclipseMode === index ? this.nmText() : this.nmSub())
-                  .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-                  .backgroundColor(this.eclipseMode === index ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.eclipseMode !== index) {
-                      this.eclipseMode = index
-                      if (index === 0) this.loadEclipses()
-                      else this.loadPlanetaryTransits()
-                    }
-                  })
-              }, (label: string) => label)
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 8 })
-            if (this.eclipseMode === 0) {
-            Row({ space: 6 }) {
-              Button('计算日月食').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.reloadEclipses() })
-            }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 6 })
-            Text('预测范围').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach([12, 36, 60], (months: number) => {
-                Text(months === 12 ? '未来 1 年' : '未来 ' + (months / 12).toString() + ' 年').fontSize(10)
-                  .fontColor(this.eclipseMonths === months ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.eclipseMonths === months ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.eclipseMonths !== months) {
-                      this.eclipseMonths = months
-                      this.reloadEclipses()
-                    }
-                  })
-              }, (months: number) => months.toString())
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            Text('开始日期').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Scroll() {
-              Row({ space: 4 }) {
-                ForEach([0, 1, 7, 30], (offsetDays: number) => {
-                  Text(this.eclipseStartOptionLabel(offsetDays)).fontSize(10)
-                    .fontColor(this.eclipseStartOffsetDays === offsetDays ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.eclipseStartOffsetDays === offsetDays ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.eclipseStartOffsetDays !== offsetDays) {
-                        this.eclipseStartOffsetDays = offsetDays
-                        this.reloadEclipses()
-                      }
-                    })
-                }, (offsetDays: number) => offsetDays.toString())
-                Button(this.eclipseStartOffsetDays < 0 ? this.eclipseStartOptionLabel(-1) : '指定日期').fontSize(10)
-                  .fontColor(this.eclipseStartOffsetDays < 0 ? this.nmText() : this.nmSub())
-                  .height(26).padding({ left: 9, right: 9 })
-                  .backgroundColor(this.eclipseStartOffsetDays < 0 ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.chooseEclipseStartDate() })
-              }.padding({ left: 2, right: 2 })
-            }.width('100%').height(30).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ bottom: 6 })
-            Text('事件类别').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 4 }) {
-              ForEach(['全部', '日食', '月食'], (label: string, index: number) => {
-                Text(label).fontSize(10).fontColor(this.eclipseKindFilter === index ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.eclipseKindFilter === index ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL).clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.eclipseKindFilter = index })
-              }, (label: string) => label)
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            Text('食的类型').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-            Row({ space: 3 }) {
-              ForEach(['全部', '全食', '环食', '偏食', '半影食'], (label: string, index: number) => {
-                Text(label).fontSize(9).fontColor(this.eclipseTypeFilter === index ? this.nmText() : this.nmSub())
-                  .padding({ left: 7, right: 7, top: 4, bottom: 4 })
-                  .backgroundColor(this.eclipseTypeFilter === index ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL).clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.eclipseTypeFilter = index })
-              }, (label: string) => label)
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            Text('从' + this.eclipseStartOptionLabel(this.eclipseStartOffsetDays) + '开始的未来 ' + (this.eclipseMonths / 12).toString() + ' 年日食与月食（点击可把时间跳到食甚时刻）。')
-              .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-            if (this.eclipseLoading) {
-              Row({ space: 8 }) {
-                LoadingProgress().width(22).height(22).color(this.nmAccent())
-                Text('正在推算日月食…').fontSize(11).fontColor(this.nmSub())
-              }.width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 6 })
-            } else if (this.eclipseError.length > 0) {
-              Text(this.eclipseError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            } else if (this.eclipseData.length === 0) {
-              Text('点击“计算日月食”生成预测。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            } else if (this.filteredEclipses().length === 0) {
-              Text('当前筛选条件下没有日月食。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            }
-            ForEach(this.filteredEclipses(), (e: EclipseItem) => {
-              Column({ space: 1 }) {
-                Row() {
-                  Text(((e.kind === 'solar') ? '日' : '月') + (e.type ?? ''))
-                    .fontSize(11).fontColor(this.nmAccent()).width(56)
-                  Text(this.fmtDateTime(e.date)).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                  Text('食分 ' + (e.magnitude ?? 0).toFixed(2)).fontSize(10).fontColor(this.nmSub()).width(62)
-                }.width('100%').padding({ left: 8, right: 8 })
-                if (e.kind === 'solar' && e.saros !== undefined) {
-                  Text('沙罗周期 ' + (e.saros ?? 0).toString() + '   ' + (Math.abs(e.pathWidthKm ?? 0) > 0.1
-                    ? '中心路径宽 ' + Math.abs(e.pathWidthKm ?? 0).toFixed(0) + ' 千米' : '非中心食'))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 }).maxLines(1)
-                }
-                if (e.durationMin !== undefined && Math.abs(e.durationMin ?? 0) > 0.001) {
-                  Text('中心食持续 ' + Math.abs(e.durationMin ?? 0).toFixed(1) + ' 分钟   中心点 '
-                    + (e.centralLat ?? 0).toFixed(1) + '°, ' + (e.centralLng ?? 0).toFixed(1) + '°   路径偏离 ' + (e.gamma ?? 0).toFixed(3))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                }
-                if (e.kind === 'lunar') {
-                  Text('沙罗周期 ' + (e.saros ?? 0).toString() + '   路径偏离 ' + (e.gamma ?? 0).toFixed(3)
-                    + '   半影食分 ' + (e.penumbralMagnitude ?? 0).toFixed(2)
-                    + '   本影食分 ' + (e.umbralMagnitude ?? 0).toFixed(2))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 }).maxLines(1)
-                  Text((e.visibility ?? '本地条件未知') + '   月亮高度 ' + (e.localMoonAltitude ?? 0).toFixed(1) + '°')
-                    .fontSize(9).fontColor(this.nmAccent()).width('100%').padding({ left: 12 })
-                }
-                if (e.kind === 'solar' && e.localVisible === true) {
-                  Text('本地食甚 ' + this.fmtClock(e.localMax) + '   食分 ' + (e.localMagnitude ?? 0).toFixed(2)
-                    + '   太阳高度 ' + (e.localSunAltitude ?? 0).toFixed(1) + '°')
-                    .fontSize(9).fontColor(this.nmAccent()).width('100%').padding({ left: 12 })
-                  Text((e.localFirstContactLabel ?? '初亏') + ' ' + this.fmtClock(e.localFirstContact)
-                    + '   ' + (e.localLastContactLabel ?? '复圆') + ' ' + this.fmtClock(e.localLastContact))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                  if (e.localCentralType !== undefined) {
-                    Text('本地' + e.localCentralType + '：' + this.fmtClock(e.localCentralStart)
-                      + ' - ' + this.fmtClock(e.localCentralEnd))
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                  }
-                } else if (e.kind === 'solar' && e.localVisible === false) {
-                  Text('本地不可见').fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                }
-                if (e.note !== undefined) {
-                  Text(e.note ?? '').fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                }
-              }.width('100%').padding({ top: 4, bottom: 4 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { if (e.jd !== undefined) this.callNative('setJD', String(e.jd)) })
-            }, (e: EclipseItem, index: number) => e.jd !== undefined ? e.jd.toFixed(6) : index.toString())
-            } else {
-              Row({ space: 6 }) {
-                Button('计算行星凌日').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    this.planetaryTransitData = []
-                    this.planetaryTransitError = ''
-                    this.planetaryTransitLoaded = false
-                    this.loadPlanetaryTransits()
-                  })
-              }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 6 })
-              Text('预测范围').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
-              Row({ space: 4 }) {
-                ForEach([5, 20, 50], (years: number) => {
-                  Text('未来 ' + years.toString() + ' 年').fontSize(10)
-                    .fontColor(this.planetaryTransitYears === years ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.planetaryTransitYears === years ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                    .onClick(() => {
-                      if (this.planetaryTransitYears !== years) {
-                        this.planetaryTransitYears = years
-                        this.planetaryTransitData = []
-                        this.planetaryTransitError = ''
-                        this.planetaryTransitLoaded = false
-                        this.loadPlanetaryTransits()
-                      }
-                    })
-                }, (years: number) => years.toString())
-              }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-              Text('水星或金星从太阳圆面前通过。接触时刻和可见时长均按当前观测地点计算。')
-                .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
-              if (this.planetaryTransitLoading) {
-                Row({ space: 8 }) {
-                  LoadingProgress().width(22).height(22).color(this.nmAccent())
-                  Text('正在推算行星凌日…').fontSize(11).fontColor(this.nmSub())
-                }.width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 6 })
-              } else if (!this.planetaryTransitLoaded) {
-                Text('点击“计算行星凌日”开始推算。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              } else if (this.planetaryTransitError.length > 0) {
-                Text(this.planetaryTransitError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              } else if (this.planetaryTransitData.length === 0) {
-                Text('未来 ' + this.planetaryTransitYears.toString() + ' 年内没有水星或金星凌日。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-              }
-              ForEach(this.planetaryTransitData, (transit: PlanetaryTransitItem) => {
-                Column({ space: 2 }) {
-                  Row() {
-                    Text((transit.planet ?? '行星') + '凌日').fontSize(11).fontColor(this.nmAccent()).width(60)
-                    Text(this.fmtDateTime(transit.date)).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                    Text('食分 ' + (transit.magnitude ?? 0).toFixed(3)).fontSize(10).fontColor(this.nmSub()).width(68)
-                  }.width('100%').padding({ left: 8, right: 8 })
-                  Text('C1 ' + this.fmtClock(transit.firstContact) + '   C2 ' + this.fmtClock(transit.secondContact)
-                    + '   食甚 ' + this.fmtClock(transit.middle) + '   C3 ' + this.fmtClock(transit.thirdContact) + '   C4 ' + this.fmtClock(transit.lastContact))
-                    .fontSize(9).fontColor('#CCFFFFFF').width('100%').padding({ left: 12, right: 8 }).maxLines(2)
-                  Text('最小距日中心 ' + (transit.minimumSeparation ?? 0).toFixed(3) + '°   全程 ' + (transit.durationMin ?? 0).toFixed(1) + ' 分钟')
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                  if (transit.localVisible === true) {
-                    Text('本地可见 ' + (transit.observableDurationMin ?? 0).toFixed(1) + ' 分钟   食甚太阳高度 ' + (transit.sunAltitude ?? 0).toFixed(1) + '°')
-                      .fontSize(9).fontColor(this.nmAccent()).width('100%').padding({ left: 12 })
-                  } else {
-                    Text('本地不可见（食甚太阳高度 ' + (transit.sunAltitude ?? 0).toFixed(1) + '°）')
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                  }
-                }.width('100%').padding({ top: 5, bottom: 5 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { if (transit.jd !== undefined) this.callNative('setJD', String(transit.jd)) })
-              }, (transit: PlanetaryTransitItem, index: number) => transit.jd !== undefined ? transit.jd.toFixed(6) : index.toString())
-            }
-          } else if (this.astroTab === 8) {
-            Text(I18n.t('i0133')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-            Button(I18n.t('i0240')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { this.loadAlmanac() })
-            if (this.almanacLoading) {
-              Row({ space: 8 }) {
-                LoadingProgress().width(20).height(20).color(this.nmAccent())
-                Text('正在计算年历…').fontSize(11).fontColor(this.nmSub())
-              }.width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-            } else if (this.almanacError.length > 0) {
-              Text(this.almanacError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8 })
-            } else if (this.almanacData.size === 0) {
-              Text('尚未生成年历。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8 })
-            } else if (this.almanacData.size > 0) {
-              if (this.almanacSeasons.length > 0) {
-                Text((this.almanacSeasonYear.length > 0 ? this.almanacSeasonYear + ' 年' : '本年') + '四季节点')
-                  .fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-                ForEach(this.almanacSeasons, (event: SeasonEvent) => {
-                  Row() {
-                    Text(event.label ?? '').fontSize(11).fontColor(this.nmAccent()).width(42)
-                    Text(this.fmtDateTime(event.date)).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                    Text('持续 ' + (event.durationDays ?? 0).toFixed(1) + ' 天').fontSize(10).fontColor(this.nmSub()).width(88)
-                  }.width('100%').height(28).padding({ left: 8, right: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => { this.jumpToAlmanacSeason(event) })
-                }, (event: SeasonEvent, index: number) => (event.jd ?? index).toString())
-                Row()
-                  .width('100%').height(0.5)
-                  .backgroundColor(this.nmBorder())
-                  .margin({ top: 4, bottom: 4 })
-              }
-              Text(I18n.t('s0372')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              InfoRow({ label: I18n.t('s0365'), value: this.jdToDateStr(this.almanacData.get('sunRise') ?? '0') })
-              InfoRow({ label: I18n.t('s0366'), value: this.jdToDateStr(this.almanacData.get('sunSet') ?? '0') })
-              InfoRow({ label: I18n.t('s0701'), value: this.jdToDateStr(this.almanacData.get('sunTransit') ?? '0') })
-              InfoRow({ label: '昼长', value: this.almanacHoursLabel('daylightHours') })
-              InfoRow({ label: '夜长', value: this.almanacHoursLabel('nightHours') })
-              Text('晨昏蒙影').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 8, bottom: 2 })
-              InfoRow({ label: '民用晨光', value: this.jdToDateStr(this.almanacData.get('civilRise') ?? '0') })
-              InfoRow({ label: '民用昏影', value: this.jdToDateStr(this.almanacData.get('civilSet') ?? '0') })
-              InfoRow({ label: '航海晨光', value: this.jdToDateStr(this.almanacData.get('nauticalRise') ?? '0') })
-              InfoRow({ label: '航海昏影', value: this.jdToDateStr(this.almanacData.get('nauticalSet') ?? '0') })
-              InfoRow({ label: '天文晨光', value: this.jdToDateStr(this.almanacData.get('astronomicalRise') ?? '0') })
-              InfoRow({ label: '天文昏影', value: this.jdToDateStr(this.almanacData.get('astronomicalSet') ?? '0') })
-              Row()
-                .width('100%').height(0.5)
-                .backgroundColor(this.nmBorder())
-                .margin({ top: 4, bottom: 4 })
-              Text(I18n.t('s0373')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
-              InfoRow({ label: I18n.t('s0367'), value: this.jdToDateStr(this.almanacData.get('moonRise') ?? '0') })
-              InfoRow({ label: I18n.t('s0368'), value: this.jdToDateStr(this.almanacData.get('moonSet') ?? '0') })
-              InfoRow({ label: I18n.t('s0701'), value: this.jdToDateStr(this.almanacData.get('moonTransit') ?? '0') })
-              InfoRow({ label: I18n.t('s0369'), value: parseFloat(this.almanacData.get('moonPhase') ?? '0').toFixed(1) + '%' })
-            }
-          } else {
-            Text('月相预报').fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 2 })
-            Text('按月球相对太阳的地心黄经差计算新月、上弦、满月和下弦。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-            Row({ space: 6 }) {
-              ForEach([30, 90], (days: number) => {
-                Text('未来 ' + days.toString() + ' 天').fontSize(10)
-                  .fontColor(this.moonPhaseDays === days ? this.nmText() : this.nmSub())
-                  .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                  .backgroundColor(this.moonPhaseDays === days ? this.nmAccent() : this.nmBg()).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .onClick(() => {
-                    if (this.moonPhaseDays !== days) {
-                      this.moonPhaseDays = days
-                      this.loadMoonPhases()
-                    }
-                  })
-              }, (days: number) => days.toString())
-              Button('刷新月相').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
-                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                .onClick(() => { this.loadMoonPhases() })
-            }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-            if (this.moonPhaseLoading) {
-              Row({ space: 8 }) {
-                LoadingProgress().width(22).height(22).color(this.nmAccent())
-                Text('正在计算月相…').fontSize(11).fontColor(this.nmSub())
-              }.width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 6 })
-            } else if (this.moonPhaseError.length > 0) {
-              Text(this.moonPhaseError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            } else if (this.moonPhaseData.length === 0) {
-              Text('点击“刷新月相”生成预报。').fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6 })
-            }
-            ForEach(this.moonPhaseData, (item: MoonPhaseItem) => {
-              Column({ space: 2 }) {
-                Row() {
-                  Text(item.phase ?? '').fontSize(11).fontColor(this.nmAccent()).width(56)
-                  Text(this.fmtDateTime(item.date)).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                  Text('照亮 ' + (item.illumination ?? 0).toFixed(0) + '%').fontSize(10).fontColor(this.nmSub()).width(70)
-                }.width('100%').padding({ left: 8, right: 8 })
-                Text('高度 ' + (item.altitude ?? 0).toFixed(1) + '°   方位 ' + (item.azimuth ?? 0).toFixed(1) + '°')
-                  .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-                Text('升 ' + this.fmtClock(item.rise) + '  中天 ' + this.fmtClock(item.transit) + '  落 ' + this.fmtClock(item.set))
-                  .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
-              }.width('100%').padding({ top: 5, bottom: 5 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .onClick(() => { this.jumpToMoonPhase(item) })
-            }, (item: MoonPhaseItem, index: number) => (item.jd ?? index).toString())
-          }
-        }.width('100%')
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-        .id('astro-content').opacity(this.astroContentOpacity).translate({ x: this.astroContentOffsetX })
-        .onScroll(() => { this.publishAstroPanelState() })
+      })
         } else if (this.activePanel === 'help') {
       HelpPanel({
         tools: this.tools,
