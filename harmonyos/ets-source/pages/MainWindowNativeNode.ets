@@ -38,6 +38,7 @@ import {
   chromeZoomButtonTop
 } from '../common/ui/ChromeGeometry'
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot } from '../common/derive/gyro'
+import { dateToJD, jdToLocalTimeText, astroGroupForTab, graphModeLabel, hourOffsetLabel, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
@@ -1072,7 +1073,7 @@ export struct WindowNativeNode {
 
   private foldAngleChanged = (angles: Array<number>): void => {
     if (angles.length > 0 && Number.isFinite(angles[0])) {
-      this.foldAngleValue = this.clamp(angles[0], 0, 180)
+      this.foldAngleValue = clamp(angles[0], 0, 180)
       this.hasUsableFoldAngle = this.foldAngleValue > 0 && this.foldAngleValue < 180
       this.updateResponsiveLayout('foldAngleChange')
     }
@@ -1088,7 +1089,7 @@ export struct WindowNativeNode {
       // is a neutral visual split until the sensor delivers a live value.
       return 110
     }
-    return this.clamp(this.foldAngleValue, 0, 180)
+    return clamp(this.foldAngleValue, 0, 180)
   }
 
   private refreshFoldState(source: string): void {
@@ -1642,12 +1643,12 @@ export struct WindowNativeNode {
         const savedAstroTab = Number(saved.astroTab)
         if (Number.isInteger(savedAstroTab) && savedAstroTab >= 0 && savedAstroTab <= 9) {
           this.astroStore.astroTab = savedAstroTab
-          this.astroStore.astroGroup = this.astroGroupForTab(savedAstroTab)
+          this.astroStore.astroGroup = astroGroupForTab(savedAstroTab)
         }
         const savedPositionMode = Number(saved.positionMode)
         if (Number.isInteger(savedPositionMode) && savedPositionMode >= 0 && savedPositionMode <= 2) this.astroStore.positionMode = savedPositionMode
         const savedCelestialMagnitude = Number(saved.celestialPositionMagnitude)
-        if (Number.isFinite(savedCelestialMagnitude)) this.astroStore.celestialPositionMagnitude = this.clamp(savedCelestialMagnitude, -5, 25)
+        if (Number.isFinite(savedCelestialMagnitude)) this.astroStore.celestialPositionMagnitude = clamp(savedCelestialMagnitude, -5, 25)
         if (saved.celestialPositionCategory !== undefined) this.astroStore.celestialPositionCategory = saved.celestialPositionCategory as string
         if (saved.celestialPositionHorizontal !== undefined) this.astroStore.celestialPositionHorizontal = saved.celestialPositionHorizontal === 'true'
         const savedEphemerisMode = Number(saved.ephemerisMode)
@@ -2714,7 +2715,7 @@ export struct WindowNativeNode {
       if (r.ok !== true || r.jd === undefined) { return }
       const jd: number = r.jd as number
       // 固定走本地 jd 格式化：jdToLocalTimeText 返回定长 'YYYY-MM-DD HH:mm:ss'，截取后 5 位为 HH:mm
-      const text: string = this.jdToLocalTimeText(jd + this.utcOffsetHours / 24.0).substring(11, 16)
+      const text: string = jdToLocalTimeText(jd + this.utcOffsetHours / 24.0).substring(11, 16)
       if (text !== this.dockClockText) {
         this.dockClockText = text
       }
@@ -2765,12 +2766,12 @@ export struct WindowNativeNode {
 
   private clampedViewCoordinateOffsetX(base: number): number {
     const width = this.viewCoordinateOverlayWidth()
-    return this.clamp(this.viewCoordinateOffsetX, 8 - base, this.skyWidth - width - 8 - base)
+    return clamp(this.viewCoordinateOffsetX, 8 - base, this.skyWidth - width - 8 - base)
   }
 
   private clampedViewCoordinateOffsetY(base: number): number {
     const height = 92
-    return this.clamp(this.viewCoordinateOffsetY, 8 - base, this.skyHeight - height - 8 - base)
+    return clamp(this.viewCoordinateOffsetY, 8 - base, this.skyHeight - height - 8 - base)
   }
 
   private handleViewCoordinateTouch(event: TouchEvent): void {
@@ -3276,13 +3277,13 @@ export struct WindowNativeNode {
 
   private scriptControlX(): number {
     const maxX = Math.max(8, this.skyWidth - this.scriptControlWidth() - 8)
-    return this.clamp(12 + this.scriptStore.scriptControlOffsetX, 8, maxX)
+    return clamp(12 + this.scriptStore.scriptControlOffsetX, 8, maxX)
   }
 
   private scriptControlY(): number {
     const safeTop = this.scriptControlSafeTop()
     const maxY = Math.max(safeTop, this.skyHeight - this.scriptControlHeight() - 12)
-    return this.clamp(safeTop + this.scriptStore.scriptControlOffsetY, safeTop, maxY)
+    return clamp(safeTop + this.scriptStore.scriptControlOffsetY, safeTop, maxY)
   }
 
   private handleScriptControlDragTouch(event: TouchEvent): void {
@@ -5754,7 +5755,7 @@ export struct WindowNativeNode {
 
   private resolveRtsCalendarStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
     if (this.astroStore.rtsCalendarStartOffsetDays < 0) {
-      onReady(this.dateToJD(this.astroStore.rtsCalendarStartYear, this.astroStore.rtsCalendarStartMonth, this.astroStore.rtsCalendarStartDay, 0, 0))
+      onReady(dateToJD(this.astroStore.rtsCalendarStartYear, this.astroStore.rtsCalendarStartMonth, this.astroStore.rtsCalendarStartDay, 0, 0))
       return
     }
     if (this.astroStore.rtsCalendarStartOffsetDays === 0) {
@@ -5864,7 +5865,7 @@ export struct WindowNativeNode {
 
   private resolveEphemerisStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
     if (this.astroStore.ephemerisStartOffsetDays < 0) {
-      onReady(this.dateToJD(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth, this.ephemerisStore.ephemerisStartDay, 0, 0))
+      onReady(dateToJD(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth, this.ephemerisStore.ephemerisStartDay, 0, 0))
       return
     }
     if (this.astroStore.ephemerisStartOffsetDays === 0) {
@@ -6164,7 +6165,7 @@ export struct WindowNativeNode {
 
   private resolveGraphStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
     if (this.astroStore.graphStartOffsetDays < 0) {
-      onReady(this.dateToJD(this.astroStore.graphStartYear, this.astroStore.graphStartMonth, this.astroStore.graphStartDay, 0, 0))
+      onReady(dateToJD(this.astroStore.graphStartYear, this.astroStore.graphStartMonth, this.astroStore.graphStartDay, 0, 0))
       return
     }
     if (this.astroStore.graphStartOffsetDays === 0) {
@@ -6336,7 +6337,7 @@ export struct WindowNativeNode {
 
   private resolveEclipseStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
     if (this.astroStore.eclipseStartOffsetDays < 0) {
-      onReady(this.dateToJD(this.astroStore.eclipseStartYear, this.astroStore.eclipseStartMonth, this.astroStore.eclipseStartDay, 0, 0))
+      onReady(dateToJD(this.astroStore.eclipseStartYear, this.astroStore.eclipseStartMonth, this.astroStore.eclipseStartDay, 0, 0))
       return
     }
     if (this.astroStore.eclipseStartOffsetDays === 0) {
@@ -6607,15 +6608,6 @@ export struct WindowNativeNode {
   }
 
   // ---- 天文计算辅助：高度曲线 ----
-  private hourOffsetLabel(t: number): string {
-    const h: number = Math.floor(t)
-    const mi: number = Math.round((t - h) * 60)
-    if (h === 0 && mi === 0) return '此刻'
-    let s: string = ''
-    if (h > 0) s += h.toString() + ' 小时'
-    if (mi > 0) s += mi.toString() + ' 分'
-    return s + '后'
-  }
 
   private altAzMaxLabel(): string {
     let m: number = -999
@@ -6626,7 +6618,7 @@ export struct WindowNativeNode {
       if (v > m) { m = v; t = p.t !== undefined ? p.t : 0 }
     }
     if (m < -90) return '--'
-    return m.toFixed(1) + '°（' + this.hourOffsetLabel(t) + '）'
+    return m.toFixed(1) + '°（' + hourOffsetLabel(t) + '）'
   }
 
   private altAzNowLabel(): string {
@@ -6743,7 +6735,7 @@ export struct WindowNativeNode {
         time = point.t ?? 0
       }
     }
-    return closest > 180 ? '--' : closest.toFixed(1) + '°（' + this.hourOffsetLabel(time) + '）'
+    return closest > 180 ? '--' : closest.toFixed(1) + '°（' + hourOffsetLabel(time) + '）'
   }
 
   private planetMetricLabel(metric: string): string {
@@ -6823,33 +6815,24 @@ export struct WindowNativeNode {
   }
 
   private hecDistanceToRadius(distanceAU: number): number {
-    if (distanceAU <= 1) return this.clamp(24 + distanceAU * 33, 24, 57)
+    if (distanceAU <= 1) return clamp(24 + distanceAU * 33, 24, 57)
     if (distanceAU <= 5) return 57 + (distanceAU - 1) * 7.5
     if (distanceAU <= 15) return 87 + (distanceAU - 5) * 2.6
-    return this.clamp(113 + (distanceAU - 15) * 1.35, 113, 133)
+    return clamp(113 + (distanceAU - 15) * 1.35, 113, 133)
   }
 
-  private hecPlanetOrbitRadius(englishName: string): number {
-    for (const orbit of HELIOCENTRIC_PLANET_ORBITS) {
-      if (orbit.englishName === englishName) return orbit.visualRadius
-    }
-    return 0
-  }
 
   private hecOrbitVerticalRadius(englishName: string): number {
-    const radius = this.hecPlanetOrbitRadius(englishName)
+    const radius = hecPlanetOrbitRadius(englishName)
     return radius > 0 ? radius * 0.86 : 0
   }
 
   private hecPointDistance(position: HeliocentricPosition): number {
     if (position.displayRadius !== undefined) return position.displayRadius
-    const planetRadius = this.hecPlanetOrbitRadius(position.englishName)
+    const planetRadius = hecPlanetOrbitRadius(position.englishName)
     return planetRadius > 0 ? planetRadius : this.hecDistanceToRadius(position.distanceAU)
   }
 
-  private hecPointAngle(position: HeliocentricPosition): number {
-    return position.displayLongitude ?? position.longitude
-  }
 
   private hecPointHorizontalRadius(position: HeliocentricPosition): number {
     return this.hecPointDistance(position)
@@ -6873,12 +6856,12 @@ export struct WindowNativeNode {
   }
 
   private hecPointX(position: HeliocentricPosition): number {
-    const angle = (360 - this.hecPointAngle(position)) * Math.PI / 180
+    const angle = (360 - hecPointAngle(position)) * Math.PI / 180
     return 146 + this.hecPointHorizontalRadius(position) * Math.sin(angle)
   }
 
   private hecPointY(position: HeliocentricPosition): number {
-    const angle = (360 - this.hecPointAngle(position)) * Math.PI / 180
+    const angle = (360 - hecPointAngle(position)) * Math.PI / 180
     return 146 - this.hecPointVerticalRadius(position) * Math.cos(angle)
   }
 
@@ -6937,7 +6920,7 @@ export struct WindowNativeNode {
             isComet: position.isComet,
             isSelectedMinor: position.isSelectedMinor,
             displayLongitude: position.longitude + angularOffset,
-            displayRadius: this.clamp(baseRadius + radialOffset, 22, 136),
+            displayRadius: clamp(baseRadius + radialOffset, 22, 136),
           }
           let collides: boolean = false
           for (const existing of placed) {
@@ -7044,11 +7027,6 @@ export struct WindowNativeNode {
     return value.length > 0 ? parseFloat(value).toFixed(1) + ' 小时' : '--'
   }
 
-  private astroGroupForTab(tab: number): number {
-    if (tab === 0 || tab === 1 || tab === 6) return 1
-    if (tab === 3 || tab === 7 || tab === 8) return 2
-    return 0
-  }
 
   private astroGroupItems(): Array<TabItem> {
     return [
@@ -7136,7 +7114,7 @@ export struct WindowNativeNode {
         return
       }
       this.astroStore.astroTab = tab
-      this.astroStore.astroGroup = this.astroGroupForTab(tab)
+      this.astroStore.astroGroup = astroGroupForTab(tab)
       this.astroPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
       this.astroStore.astroContentOffsetX = direction * 10
       this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut, onFinish: () => {
@@ -7206,7 +7184,7 @@ export struct WindowNativeNode {
       } else {
         detail = this.astroStore.planetTimeSeriesDays.toString() + ' 天 · 每 ' + this.astroStore.planetTimeSeriesStepHours.toString() + ' 小时'
       }
-      this.astroStore.astroCalcSnapshot = this.graphModeLabel(this.astroStore.graphMode) + ' · ' + this.graphTargetLabel() + ' · '
+      this.astroStore.astroCalcSnapshot = graphModeLabel(this.astroStore.graphMode) + ' · ' + this.graphTargetLabel() + ' · '
         + this.graphStartOptionLabel(this.astroStore.graphStartOffsetDays) + ' · ' + detail
       return
     }
@@ -7234,14 +7212,6 @@ export struct WindowNativeNode {
     this.astroStore.astroCalcSnapshot = ''
   }
 
-  private graphModeLabel(mode: number): string {
-    if (mode === 0) return '高度曲线'
-    if (mode === 1) return '方位角曲线'
-    if (mode === 2) return '全年高度'
-    if (mode === 3) return '月度可观测性'
-    if (mode === 4) return '月距曲线'
-    return '双变量时间曲线'
-  }
 
   private loadAstroTab(id: number): void {
     this.updateAstroCalcSnapshot()
@@ -8643,8 +8613,8 @@ export struct WindowNativeNode {
     const constellation = this.selectedSkyCultureMakerConstellation()
     const image = constellation?.image
     if (constellation === undefined || image === undefined || image.size.length !== 2) return
-    const pixelX = this.clamp(x / Math.max(1, this.skyCultureMakerStore.artworkRenderWidth) * image.size[0], 0, image.size[0])
-    const pixelY = this.clamp(y / Math.max(1, this.skyCultureMakerStore.artworkRenderHeight) * image.size[1], 0, image.size[1])
+    const pixelX = clamp(x / Math.max(1, this.skyCultureMakerStore.artworkRenderWidth) * image.size[0], 0, image.size[0])
+    const pixelY = clamp(y / Math.max(1, this.skyCultureMakerStore.artworkRenderHeight) * image.size[1], 0, image.size[1])
     this.callInteractive('setSkyCultureMakerArtworkAnchor', JSON.stringify({
       constellationId: constellation.id,
       anchorIndex: this.skyCultureMakerStore.artworkAnchorIndex,
@@ -9869,19 +9839,9 @@ private loadPlanetPositions(): void {
     })
   }
 
-  private dateToJD(year: number, month: number, day: number, hour: number, minute: number): number {
-    if (month <= 2) {
-      year -= 1
-      month += 12
-    }
-    const A = Math.floor(year / 100)
-    const B = 2 - A + Math.floor(A / 4)
-    const jdDay = Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + B - 1524.5
-    return jdDay + hour / 24.0 + minute / 1440.0
-  }
 
   private applyManualTime(): void {
-    const jd = this.dateToJD(this.timeStore.manualYear, this.timeStore.manualMonth, this.timeStore.manualDay, this.timeStore.manualHour, this.timeStore.manualMinute)
+    const jd = dateToJD(this.timeStore.manualYear, this.timeStore.manualMonth, this.timeStore.manualDay, this.timeStore.manualHour, this.timeStore.manualMinute)
     this.callInteractive('setJD', jd.toFixed(6), (r: StellariumBridgeResponse) => {
       this.refreshState()
       this.flashHint(String(this.timeStore.manualMonth).padStart(2, '0') + '-' + String(this.timeStore.manualDay).padStart(2, '0') + ' ' + String(this.timeStore.manualHour).padStart(2, '0') + ':' + String(this.timeStore.manualMinute).padStart(2, '0'))
@@ -10787,8 +10747,8 @@ private loadPlanetPositions(): void {
         // place it below instead so it stays fully reachable and visible.
         const placeAbove = targetY - 58 >= top
         this.setGyroGuidePose(
-          this.clamp(targetX - 22, left, Math.max(left, right - 44)),
-          this.clamp(targetY + (placeAbove ? -58 : 14) - 22, top, Math.max(top, bottom - 44)),
+          clamp(targetX - 22, left, Math.max(left, right - 44)),
+          clamp(targetY + (placeAbove ? -58 : 14) - 22, top, Math.max(top, bottom - 44)),
           placeAbove ? 90 : -90
         )
         return
@@ -10807,8 +10767,8 @@ private loadPlanetPositions(): void {
         const edgeScaleY = Math.abs(Math.sin(radians)) > 0.0001 ? halfH / Math.abs(Math.sin(radians)) : Number.POSITIVE_INFINITY
         const edgeScale = Math.min(edgeScaleX, edgeScaleY)
         this.setGyroGuidePose(
-          this.clamp(centerX + Math.cos(radians) * edgeScale - 22, left, Math.max(left, right - 44)),
-          this.clamp(centerY + Math.sin(radians) * edgeScale - 22, top, Math.max(top, bottom - 44)),
+          clamp(centerX + Math.cos(radians) * edgeScale - 22, left, Math.max(left, right - 44)),
+          clamp(centerY + Math.sin(radians) * edgeScale - 22, top, Math.max(top, bottom - 44)),
           angle
         )
         return
@@ -10843,8 +10803,8 @@ private loadPlanetPositions(): void {
     const edgeScaleY = Math.abs(dy) > 0.0001 ? halfH / Math.abs(dy) : Number.POSITIVE_INFINITY
     const edgeScale = Math.min(edgeScaleX, edgeScaleY)
     this.setGyroGuidePose(
-      this.clamp(centerX + dx * edgeScale - 22, left, Math.max(left, right - 44)),
-      this.clamp(centerY + dy * edgeScale - 22, top, Math.max(top, bottom - 44)),
+      clamp(centerX + dx * edgeScale - 22, left, Math.max(left, right - 44)),
+      clamp(centerY + dy * edgeScale - 22, top, Math.max(top, bottom - 44)),
       angle
     )
   }
@@ -10891,7 +10851,7 @@ private loadPlanetPositions(): void {
     const forwardX = -normalX
     const forwardY = -normalY
     const forwardZ = -normalZ
-    const targetAlt = this.clamp(Math.asin(this.clamp(forwardZ, -1, 1)) * 180 / Math.PI + this.gyroStore.gyroOffsetAlt, -90, 90)
+    const targetAlt = clamp(Math.asin(clamp(forwardZ, -1, 1)) * 180 / Math.PI + this.gyroStore.gyroOffsetAlt, -90, 90)
     // A display pointing near the zenith or nadir has no meaningful heading:
     // tiny sensor noise can map to any azimuth and makes the horizon slide
     // sideways while lifting the Pad. alpha is the fused compass heading and
@@ -11661,8 +11621,8 @@ private loadPlanetPositions(): void {
   }
 
   private objectDetailMarkerSize(): number {
-    const fov = this.clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
-    return this.clamp(32 * Math.pow(60 / fov, 0.35), 24, 58)
+    const fov = clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
+    return clamp(32 * Math.pow(60 / fov, 0.35), 24, 58)
   }
 
   private requestSelectedDetails(expectedName: string): void {
@@ -11882,8 +11842,8 @@ private loadPlanetPositions(): void {
     let best: number[] = []
     let bestDistance = Number.MAX_VALUE
     for (let index = 0; index < candidates.length; index++) {
-      const candidateX = this.clamp(candidates[index][0], minX, maxX)
-      const candidateY = this.clamp(candidates[index][1], minY, maxY)
+      const candidateX = clamp(candidates[index][0], minX, maxX)
+      const candidateY = clamp(candidates[index][1], minY, maxY)
       let clear = true
       for (let obstacleIndex = 0; obstacleIndex < obstacles.length; obstacleIndex++) {
         if (this.pointOverlapsUiObstacle(candidateX, candidateY, obstacles[obstacleIndex], 12)) {
@@ -11963,7 +11923,7 @@ private loadPlanetPositions(): void {
     if (bottom - top < 96) {
       bottom = Math.max(bottom, top + 96)
     }
-    const targetY = this.clamp((top + bottom) / 2, top + 20, bottom - 20)
+    const targetY = clamp((top + bottom) / 2, top + 20, bottom - 20)
     hilog.info(0x0000, 'StellariumArkUI', 'compact-safe h=%{public}d usable=%{public}d snap=%{public}s drag=%{public}s sheetTop=%{public}d top=%{public}d bottom=%{public}d targetY=%{public}d',
       Math.round(this.skyHeight), Math.round(this.compactPanelUsableHeight()), this.compactPanelSnapRatio.toString(), this.compactPanelDragOffsetY.toString(), Math.round(sheetTop), Math.round(top), Math.round(bottom), Math.round(targetY))
     return [this.skyWidth / 2, targetY]
@@ -11987,15 +11947,6 @@ private loadPlanetPositions(): void {
   }
 
   // 精确到角秒：地球自转约 15″/秒，300ms 刷新时用户能直接看到坐标连续变化。
-  private fmtDegMin(deg: number): string {
-    const sign = deg < 0 ? '-' : ''
-    let totalSeconds = Math.round(Math.abs(deg) * 3600)
-    const d = Math.floor(totalSeconds / 3600)
-    totalSeconds -= d * 3600
-    const m = Math.floor(totalSeconds / 60)
-    const s = totalSeconds - m * 60
-    return sign + d.toString() + '°' + (m < 10 ? '0' + m : m.toString()) + '\'' + (s < 10 ? '0' + s : s.toString()) + '″'
-  }
 
   // 天体名称由核心的官方 .qm 资源提供。ArkUI 只负责排版，不再维护
   // 第二套恒星、行星或深空天体译名。
@@ -12015,32 +11966,22 @@ private loadPlanetPositions(): void {
     return this.planetZh(englishName) !== englishName ? this.planetZh(englishName) : this.zhNameOf(englishName)
   }
 
-  private messierNumberOf(raw: string): string {
-    const compact = raw.trim().replace(/\s+/g, '')
-    if (!/^M\d+$/i.test(compact)) { return '' }
-    const number = Number(compact.substring(1))
-    return number >= 1 && number <= 110 ? number.toString() : ''
-  }
 
   private celestialTitle(nativeName: string, englishName: string): string {
     const localizedNative = this.zhNameOf(nativeName)
     return localizedNative.length > 0 ? localizedNative : englishName
   }
 
-  private minorPlanetNumberOf(raw: string): string {
-    const match = raw.trim().match(/^\(?(\d{1,7})\)?(?:\s|$)/)
-    return match !== null ? match[1] : ''
-  }
 
   private celestialSubtitle(title: string, englishName: string): string {
     const parts: string[] = []
     if (englishName.length > 0 && title.trim().toLowerCase() !== englishName.trim().toLowerCase()) {
       parts.push(englishName.trim())
     }
-    const messier = this.messierNumberOf(englishName)
+    const messier = messierNumberOf(englishName)
     if (messier.length > 0) { parts.push(I18n.format('search_catalog_number', ['M' + messier])) }
     if (this.searchStore.searchCategory === 'asteroid') {
-      const number = this.minorPlanetNumberOf(englishName)
+      const number = minorPlanetNumberOf(englishName)
       if (number.length > 0) { parts.push(I18n.format('search_permanent_number', [number])) }
     }
     return parts.join(' · ')
@@ -12262,7 +12203,7 @@ private loadPlanetPositions(): void {
         this.updateGyroTargetGuide(true)
       }
       this.objectDetailStore.selectedCoordAlt = showObservedInfo && (hasAlt || hasAz)
-        ? (I18n.t('coord_alt') + ' ' + (hasAlt ? this.fmtDegMin(result.altitude as number) : '--') + '  ' + I18n.t('coord_az') + ' ' + (hasAz ? this.fmtDegMin(result.azimuth as number) : '--'))
+        ? (I18n.t('coord_alt') + ' ' + (hasAlt ? fmtDegMin(result.altitude as number) : '--') + '  ' + I18n.t('coord_az') + ' ' + (hasAz ? fmtDegMin(result.azimuth as number) : '--'))
         : ''
       this.objectDetailStore.selectedHourAngle = showObservedInfo && result.hourAngle && result.hourAngle.length > 0 ? result.hourAngle : ''
       this.objectDetailStore.selectedMeanSiderealTime = showObservedInfo && result.meanSiderealTime && result.meanSiderealTime.length > 0 ? result.meanSiderealTime : ''
@@ -12447,7 +12388,7 @@ private loadPlanetPositions(): void {
       if (r.ok !== true || r.jd === undefined) { return }
       const jd: number = r.jd as number
       // jd 是 UTC；加上观测地 UTC 偏移后再格式化，与 getState 的 timeText 口径保持一致
-      const text: string = r.formattedTime ?? this.jdToLocalTimeText(jd + this.utcOffsetHours / 24.0)
+      const text: string = r.formattedTime ?? jdToLocalTimeText(jd + this.utcOffsetHours / 24.0)
       if (text !== this.timeStore.observationTimeText) {
         this.timeStore.observationTimeText = text
       }
@@ -12460,13 +12401,6 @@ private loadPlanetPositions(): void {
   }
 
   /** 儒略日 -> 'YYYY-MM-DD HH:mm:ss' 本地显示文本（入参需已含 UTC 偏移）。 */
-  private jdToLocalTimeText(jd: number): string {
-    // 用 UTC 取值避免设备时区二次偏移（jd 已带观测地偏移）
-    const d = new Date((jd - 2440587.5) * 86400000)
-    const p2 = (n: number): string => n < 10 ? '0' + n : n.toString()
-    return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()) + ' ' +
-      p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds())
-  }
 
   private formatObservationTime(raw: string): string {
     if (!raw || raw.length === 0) {
@@ -12490,15 +12424,12 @@ private loadPlanetPositions(): void {
     return text.replace('T', ' ')
   }
 
-  private clamp(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value))
-  }
 
   private locationMapWidth(): number {
     if (this.isExpandedLayout) {
       return 292
     }
-    return this.clamp(this.skyWidth * 0.92 - 32, 276, 620)
+    return clamp(this.skyWidth * 0.92 - 32, 276, 620)
   }
 
   private locationMapHeight(): number {
@@ -12507,8 +12438,8 @@ private loadPlanetPositions(): void {
 
   private setPickerLocation(name: string, latitude: number, longitude: number, altitude: number, status: ResourceStr): void {
     this.locationPickerStore.locationPickerName = name
-    this.locationPickerStore.locationPickerLatitude = this.clamp(latitude, -90, 90)
-    this.locationPickerStore.locationPickerLongitude = this.clamp(longitude, -180, 180)
+    this.locationPickerStore.locationPickerLatitude = clamp(latitude, -90, 90)
+    this.locationPickerStore.locationPickerLongitude = clamp(longitude, -180, 180)
     this.locationPickerStore.locationPickerAltitude = Math.round(altitude)
     this.locationPickerStore.locationPickerStatus = status
   }
@@ -12516,8 +12447,8 @@ private loadPlanetPositions(): void {
   private updatePickerFromMap(x: number, y: number): void {
     const width = this.locationPickerStore.mapRenderWidth
     const height = this.locationPickerStore.mapRenderHeight
-    const latitude = 90 - this.clamp(y, 0, height) / height * 180
-    const longitude = this.clamp(x, 0, width) / width * 360 - 180
+    const latitude = 90 - clamp(y, 0, height) / height * 180
+    const longitude = clamp(x, 0, width) / width * 360 - 180
     this.setPickerLocation(I18n.t('custom_location'), latitude, longitude, this.locationPickerStore.locationPickerAltitude, I18n.t('m_map_selected'))
     this.locationStore.locSearchQuery = ''
   }
@@ -12602,11 +12533,6 @@ private loadPlanetPositions(): void {
     setTimeout(() => { this.loadObserverInfo(true) }, 500)
   }
 
-  private distance(x0: number, y0: number, x1: number, y1: number): number {
-    const dx = x1 - x0
-    const dy = y1 - y0
-    return Math.sqrt(dx * dx + dy * dy)
-  }
 
 
   private touchWindowX(point: TouchObject): number {
@@ -12931,7 +12857,7 @@ private loadPlanetPositions(): void {
   }
 
   private approximateTimeZoneDisplay(longitude: number): string {
-    const offset = this.clamp(Math.round(longitude / 15), -12, 14)
+    const offset = clamp(Math.round(longitude / 15), -12, 14)
     if (offset === 0) {
       return 'UTC'
     }
@@ -13572,10 +13498,10 @@ private loadPlanetPositions(): void {
     const now = Date.now()
     const tapInterval = this.lastSkyTapAt > 0 ? now - this.lastSkyTapAt : 0
     const withinTime = this.lastSkyTapAt > 0 && tapInterval <= 800
-    const withinDistance = this.distance(x, y, this.lastSkyTapX, this.lastSkyTapY) <= 28
+    const withinDistance = distance(x, y, this.lastSkyTapX, this.lastSkyTapY) <= 28
     if (this.lastSkyTapAt > 0) {
       hilog.info(0x0000, 'StellariumArkUI', 'sky tap interval=' + tapInterval.toString() +
-        'ms distance=' + this.distance(x, y, this.lastSkyTapX, this.lastSkyTapY).toFixed(1) +
+        'ms distance=' + distance(x, y, this.lastSkyTapX, this.lastSkyTapY).toFixed(1) +
         ' double=' + (withinTime && withinDistance).toString())
     }
     if (withinTime && withinDistance) {
@@ -13648,8 +13574,8 @@ private loadPlanetPositions(): void {
       return
     }
     if (event.action === 2 && this.mouseSkyPressed) {
-      const distance = this.distance(x, y, this.mouseSkyStartX, this.mouseSkyStartY)
-      if (distance > 3) {
+      const moveDistance = distance(x, y, this.mouseSkyStartX, this.mouseSkyStartY)
+      if (moveDistance > 3) {
         this.resetSkyTapSequence()
         if (!this.mouseSkyMoved && this.gyroStore.gyroscopeEnabled) {
           this.stopGyroscope(true)
@@ -13777,7 +13703,7 @@ private loadPlanetPositions(): void {
     // Keep only a light stabilizer. The previous low-pass values made the
     // camera visibly trail behind the finger, especially beside an open menu.
     const base = this.isFoldTabletLayout ? 0.96 : (this.isExpandedLayout ? 0.97 : 0.94)
-    return this.clamp(1 - Math.pow(1 - base, Math.max(1, dtMs) / 16.67), 0.88, 0.995)
+    return clamp(1 - Math.pow(1 - base, Math.max(1, dtMs) / 16.67), 0.88, 0.995)
   }
 
   private emitFluidDrag(targetX: number, targetY: number, now: number, sampleVelocity: boolean = true): void {
@@ -13949,10 +13875,10 @@ private loadPlanetPositions(): void {
         this.skyTouchY2 = this.touchWindowY(points[1])
         this.pinchCenterX = (this.touchWindowX(points[0]) + this.skyTouchX2) / 2
         this.pinchCenterY = (this.touchWindowY(points[0]) + this.skyTouchY2) / 2
-        this.pinchStartDistance = this.distance(
+        this.pinchStartDistance = distance(
           this.touchWindowX(points[0]), this.touchWindowY(points[0]),
           this.touchWindowX(points[1]), this.touchWindowY(points[1]))
-        this.pinchStartFov = this.clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
+        this.pinchStartFov = clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
         this.pinchLastScale = 1
         this.pinchLastNativePushMs = Date.now()
         this.pinchNativePushPending = false
@@ -13994,11 +13920,11 @@ private loadPlanetPositions(): void {
         this.pinchCenterY = (y + this.skyTouchY2) / 2
         this.nativeDragActive = false
         this.stopSkyInertia()
-        const currentDistance = this.distance(
+        const currentDistance = distance(
           x, y, this.touchWindowX(points[1]), this.touchWindowY(points[1]))
         if (!this.pinchActive || this.pinchStartDistance <= 1) {
           this.pinchStartDistance = currentDistance
-          this.pinchStartFov = this.clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
+          this.pinchStartFov = clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
           this.pinchActive = true
           this.pinchLastScale = 1
           this.pinchLastNativePushMs = Date.now()
@@ -14009,7 +13935,7 @@ private loadPlanetPositions(): void {
         } else {
           const scale = currentDistance / this.pinchStartDistance
           this.pinchLastScale = scale
-          const estimatedFov = this.clamp(this.pinchStartFov / Math.max(0.25, scale), 4, 180)
+          const estimatedFov = clamp(this.pinchStartFov / Math.max(0.25, scale), 4, 180)
           this.fovSliderValue = estimatedFov
           this.currentFovText = estimatedFov.toFixed(1) + '°'
           this.pinchNativePushPending = true
@@ -14046,7 +13972,7 @@ private loadPlanetPositions(): void {
         return
       }
 
-      const totalMove = this.distance(x, y, this.touchStartX, this.touchStartY)
+      const totalMove = distance(x, y, this.touchStartX, this.touchStartY)
       // 阈值放宽到 16vp:uitest/mock 注入的触摸常有几像素位移,
       // 4vp 会把"轻点"误判成"拖动",导致 selectAt 不触发。
       if (totalMove > 16) {
@@ -14894,10 +14820,10 @@ private loadPlanetPositions(): void {
   private guideCardWidth(): number { return Math.max(200, Math.min(440, this.skyWidth - 24)) }
   private guideCardHeight(): number { return Math.max(160, Math.min(390, this.skyHeight - this.scriptControlSafeTop() - 24)) }
   private guideCardX(): number {
-    return this.clamp((this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2) + this.scriptStore.scriptControlOffsetX, 8, Math.max(8, this.skyWidth - this.guideCardWidth() - 8))
+    return clamp((this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2) + this.scriptStore.scriptControlOffsetX, 8, Math.max(8, this.skyWidth - this.guideCardWidth() - 8))
   }
   private guideCardY(): number {
-    return this.clamp(this.skyHeight - this.guideCardHeight() - 16 + this.scriptStore.scriptControlOffsetY,
+    return clamp(this.skyHeight - this.guideCardHeight() - 16 + this.scriptStore.scriptControlOffsetY,
       this.scriptControlSafeTop(), Math.max(this.scriptControlSafeTop(), this.skyHeight - this.guideCardHeight() - 12))
   }
 
@@ -15106,11 +15032,11 @@ private loadPlanetPositions(): void {
   }
 
   private clampedObjectCardOffsetX(base: number, width: number): number {
-    return this.clamp(this.cardOffsetX, 8 - base, this.skyWidth - width - 8 - base)
+    return clamp(this.cardOffsetX, 8 - base, this.skyWidth - width - 8 - base)
   }
 
   private clampedObjectCardOffsetY(base: number, height: number): number {
-    return this.clamp(this.cardOffsetY, 8 - base, this.skyHeight - height - 8 - base)
+    return clamp(this.cardOffsetY, 8 - base, this.skyHeight - height - 8 - base)
   }
 
   private bottomCardWidth(): number {
@@ -15118,13 +15044,13 @@ private loadPlanetPositions(): void {
     if (!this.isExpandedLayout && !this.isFoldHoverLayout) { return Math.min(380, Math.max(286, this.skyWidth - 58)) }
     if (!this.isExpandedLayout) { return Math.min(318, Math.max(280, this.skyWidth - 52)) }
     // Keep the same responsive width while other panels open and close.
-    return this.clamp(this.skyWidth * 0.38, 340, 480)
+    return clamp(this.skyWidth * 0.38, 340, 480)
   }
 
   private bottomCardHeight(): number {
     if (this.isExpandedLayout) { return Math.min(440, Math.max(360, this.skyHeight - 176)) }
     if (this.isFoldHoverLayout) { return Math.min(380, Math.max(320, this.skyHeight - this.hoverConsoleTop() - 104)) }
-    return this.clamp(this.skyHeight * 0.56, 320, 420)
+    return clamp(this.skyHeight * 0.56, 320, 420)
   }
 
   private expandedMainPanelLeft(): number {
@@ -15142,7 +15068,7 @@ private loadPlanetPositions(): void {
   }
 
   private expandedDetailSummaryWidth(): number {
-    return this.clamp(this.expandedDetailAvailableWidth(), 140, 300)
+    return clamp(this.expandedDetailAvailableWidth(), 140, 300)
   }
 
   private canShowExpandedDetailSummary(): boolean {
@@ -15174,7 +15100,7 @@ private loadPlanetPositions(): void {
 
   // 平板检查器固定贴在左侧：保留大部分星图，并给底部 Dock 留出触控空间。
   private tabletInspectorWidth(): number {
-    return this.clamp(this.skyWidth * 0.32, 340, 390)
+    return clamp(this.skyWidth * 0.32, 340, 390)
   }
 
   private tabletInspectorX(): number {
@@ -15390,9 +15316,9 @@ private loadPlanetPositions(): void {
   }
 
   private hoverSkyPaneHeight(): number {
-    const angle = this.clamp(this.responsiveFoldAngle(), 55, 150)
-    const ratio = this.clamp(0.43 + ((angle - 55) / 95) * 0.13, 0.43, 0.56)
-    return this.clamp(this.skyHeight * ratio, 240, Math.max(280, this.skyHeight - 320))
+    const angle = clamp(this.responsiveFoldAngle(), 55, 150)
+    const ratio = clamp(0.43 + ((angle - 55) / 95) * 0.13, 0.43, 0.56)
+    return clamp(this.skyHeight * ratio, 240, Math.max(280, this.skyHeight - 320))
   }
 
   private hoverConsoleTop(): number {
@@ -15407,7 +15333,7 @@ private loadPlanetPositions(): void {
     const usable = this.compactPanelUsableHeight()
     const minH = usable * 0.6
     const maxH = usable * 0.9
-    return this.clamp(usable * this.compactPanelSnapRatio - this.compactPanelDragOffsetY, minH - 28, maxH + 22)
+    return clamp(usable * this.compactPanelSnapRatio - this.compactPanelDragOffsetY, minH - 28, maxH + 22)
   }
 
   private isCompactMorePoint(x: number, y: number): boolean {
@@ -15419,7 +15345,7 @@ private loadPlanetPositions(): void {
 
   private updateCompactPanelDrag(offsetY: number): void {
     const usable = this.compactPanelUsableHeight()
-    this.compactPanelDragOffsetY = this.clamp(offsetY, -usable * 0.34, usable * 0.12)
+    this.compactPanelDragOffsetY = clamp(offsetY, -usable * 0.34, usable * 0.12)
   }
 
   private settleCompactPanelDrag(): void {
@@ -15490,7 +15416,7 @@ private loadPlanetPositions(): void {
     const right = this.EDGE_MARGIN
     const available = Math.max(280, this.skyWidth - this.expandedDockOccupiedLeft() - right)
     const squeeze = Math.max(0, this.expandedDockOccupiedLeft() - this.EDGE_MARGIN)
-    return this.clamp(640 - squeeze * 0.55, 320, Math.min(640, available))
+    return clamp(640 - squeeze * 0.55, 320, Math.min(640, available))
   }
 
   private expandedDockLeft(): number {
