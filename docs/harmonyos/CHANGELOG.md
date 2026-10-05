@@ -1,3 +1,22 @@
+## [2026-10-02] DevEco Code - Phase 5d：抽取 `objectInspectorModelOverlay` 叠层并收口 Phase 5
+
+- **背景/范围**：Phase 5（overlay）最后一片。把 `pages/MainWindowNativeNode.ets` 的 `@Builder private objectInspectorModelOverlay()`（47 行，含 `@Builder` 前缀）下沉到 `harmonyos/ets-source/panels/overlay/ObjectInspectorModelOverlay.ets`（80 行）。**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 3/9），不迁 V2。
+- **分工（§13.1 规则 4/6）**：`objectMediaStore.objectInspectorModelImmersive` 判定留在宿主调用点；模型数据（`objectInspectorModelPixelMap` / `objectInspectorProceduralKind` / `objectInspectorModelOverlayOpacity`）经 `@ObjectLink objectMediaStore` 引用语义读取——**跨组件传 `image.PixelMap` 必须走 `@ObjectLink`**（Phase 5c 实测 `@Prop` 深拷贝会致 `Image.onError`）；标题 `objectDetailStore.selectedName`、模式提示 `objectInspectorModelNotice()`、顶部安全区 `mediaPreviewTopInset()` 由宿主算好以 `@Prop`（titleText/noticeText/topInset）传入；关闭/重置/舞台手势三个动作回注宿主（`onCloseOverlay` / `onResetView` / `onStageTouch`），旋转与双指缩放算法及触摸计数仍留宿主。
+- **单容器根（规则 7）**：根为全屏 `Stack`（`zIndex(1100)` + `hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)` 逐字保留），内含背景拦截层与内容 `Column`；`object-model-close` / `object-model-stage` 两个 id 锚点、`HitTestMode.Block/None`、`ImageFit.Contain`、`UI_RADIUS_PILL` 逐字保留（契约 42 锚点不变）。
+- **单体手术**（`pages/MainWindowNativeNode.ets`）：**19,134 → 19,098 行，净 −36**：删 `@Builder`（按边界签名正则删除、非行号算术，并收起合并处多出的一个空行）、调用点改为 `if (this.objectMediaStore.objectInspectorModelImmersive) { ObjectInspectorModelOverlay({...}) }`、新增 1 行 import。提取后先 `grep` 新文件 `this.` 残留：仅 store、3 个 @Prop、3 个回调，全为组件自身成员。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（2 文件 0 错）→ `devecocli build`（`-SkipEngine -SkipDeploy -SkipResources`）**BUILD SUCCESSFUL**（41 s）→ `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好（177 文件）→ 全量 `*-ohos*.mjs` 扫描：失败 7 个，**全部为 §13.6 存量环境类**（4 个 `-pad` 与 `mist-performance` 需设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS hdc 假设）。
+- **测试同步（规则 8）**：`scripts/test-ohos-model-scroll.mjs` 与 `scripts/test-ohos-procedural-model.mjs` 原先从单体切 `private objectInspectorModelOverlay()` 文本，本片改为直接读新组件文件（断言 `onStageTouch(event)` / `BLOCK_HIERARCHY` / `object-model-close`），并保留宿主的 `onModelTouch: ... handleObjectInspectorModelTouch` 与 `inlineModelSize` 断言 → 5/5 与 12/12 全绿。
+- **真机**：本片**未连真机**——`hdc list targets` 为空、`tconn 192.168.3.95:40565` 失败，改用模拟器 `Pura 90 Pro`（`127.0.0.1:5555`，x86_64 UI-only）。
+  - **模拟器已验证**：`install -r` 成功 → `aa start -a QAbility -b com.cnchensh.stellarium` → `aa dump -l` 确认 `state #FOREGROUND`、`pidof`=13010 存活；`devecocli ui click (189,2602)` 打开「搜索」面板（`ui layout` 出现 `panel-close` / `panel-content-zh_CN` / `search-browser-scroll`），再点 `panel-close` 关闭，全程 `pidof` 存活（排除规则 9 运行期退出）。
+  - **模拟器无法覆盖（待真机）**：三维模型叠层本体（打开 → 旋转/双指缩放 → 关闭）。原因：模拟器为 `QAbility.engineLessEmulatorUiOnly()` UI-only 通道，**无 Stellarium/Qt 引擎**，无法选中天体、无法解码模型纹理/程序化模型，`objectInspectorModelImmersive` 永远为 false，入口不可达（§3·补）。该片以 `test-ohos-model-scroll.mjs` / `test-ohos-procedural-model.mjs` 静态覆盖新组件文件，**待真机走查**。
+- **测后恢复**：未改动任何持久化设置（仅打开/关闭搜索面板）。
+- **本片新踩的坑**：新组件表头注释若含字面 `.id('...')`，`check-ohos-ui-contract.mjs` 的 `totalIdAnchors`（正则 `\.id\(`，扫全部 `.ets`）会把注释里的 `.id(` 计入，误报锚点 42→44。改为在注释里以 `object-model-close` / `object-model-stage` 指代，不写字面 `.id(`。
+- **Phase 5 收口结论**：4 个 overlay **全部组件化、无遗留**——
+  1. `polarScopeOverlay` → `panels/overlay/PolarScopeOverlay.ets`（Phase 5a，`e443afe7dc`）；
+  2. `objectInspectorMediaPreviewOverlay` → `panels/overlay/ObjectInspectorMediaPreviewOverlay.ets`（Phase 5b，`8b944f2307`）；
+  3. `skyCultureArtPreviewOverlay` → `panels/overlay/SkyCultureArtPreviewOverlay.ets`（Phase 5c，`332f18be5e`）；
+  4. `objectInspectorModelOverlay` → `panels/overlay/ObjectInspectorModelOverlay.ets`（Phase 5d，本片）。
+  宿主 `build()` 中对应位置只剩 `if (可见性) { <Component>({...}) }`，无参数化 `@Builder`、无 `@BuilderParam`。下一步：**Phase 6 六个壳层**（`scriptFocusShell` 212 / `compactShell` 165 / `hoverObservatoryShell` 142 / `expandedShell` 128 / `harmonyShell` 90 / `interactiveGuideShell` 78）。
 ## [2026-10-02] DevEco Code - Phase 5c：抽取 `skyCultureArtPreviewOverlay` 叠层
 
 - **背景/范围**：Phase 5（overlay，每片只做一个）第三片。把 `pages/MainWindowNativeNode.ets` 的 `@Builder private skyCultureArtPreviewOverlay()`（60 行）下沉到 `harmonyos/ets-source/panels/overlay/SkyCultureArtPreviewOverlay.ets`（88 行）。**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 3/9），不迁 V2。

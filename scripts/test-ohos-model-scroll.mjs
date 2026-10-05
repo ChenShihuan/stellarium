@@ -4,6 +4,9 @@ import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 
 const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
+// 全屏三维模型叠层已下沉为 ObjectInspectorModelOverlay 组件（Phase 5d）：组件把舞台手势转交宿主注入的
+// onStageTouch -> handleObjectInspectorModelTouch；旋转/双指缩放的算法与内部触摸状态仍在宿主。
+const modelOverlay = readFileSync(new URL('../harmonyos/ets-source/panels/overlay/ObjectInspectorModelOverlay.ets', import.meta.url), 'utf8');
 // 三维模型的舞台与触摸回调已下沉为 TabletInspectorModelBlock 组件（本轮搬迁），
 // 组件只负责把手势事件转交给宿主注入的 onModelTouch 回调；旋转/缩放算法仍留在宿主。
 const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/object/TabletInspectorMedia.ets', import.meta.url), 'utf8');
@@ -39,10 +42,10 @@ test('compact and wide cards reserve at least 40vp per side', () => {
 });
 
 test('inline and full screen retain unrestricted rotation and pinch with cleanup', () => {
-  const overlay = source.slice(source.indexOf('private objectInspectorModelOverlay()'), source.indexOf('private handleObjectInspectorModelTouch'));
-  assert.match(overlay, /handleObjectInspectorModelTouch\(event\)/);
-  assert.match(overlay, /HitTestMode.BLOCK_HIERARCHY/);
-  assert.match(overlay, /object-model-close/);
+  assert.match(modelOverlay, /onStageTouch\(event\)/);
+  assert.match(modelOverlay, /HitTestMode.BLOCK_HIERARCHY/);
+  assert.match(modelOverlay, /object-model-close/);
+  assert.match(source, /onStageTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
   const handler = source.slice(source.indexOf('private handleObjectInspectorModelTouch'), source.indexOf('private objectInspectorInlineModelSize'));
   assert.match(handler, /rotateObjectInspectorModel\(deltaX, deltaY\)/);
   assert.match(handler, /objectInspectorModelScale \* scaleFactor/);
