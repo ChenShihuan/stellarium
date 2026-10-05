@@ -1587,7 +1587,6 @@ export struct WindowNativeNode {
   private readonly RAIL_GYRO_OFFSET: number = 116
   private railTop(): number { return this.EDGE_MARGIN }
   private railHeight(): number { return 0 }
-  private drawerLeft(): number { return this.EDGE_MARGIN }
   private drawerWidth(): number { return this.isFoldTabletLayout ? 214 : 206 }
   private onRailTap(panel: string, keepDrawer: boolean = false): void {
     this.setPanel(panel)
@@ -2383,13 +2382,6 @@ export struct WindowNativeNode {
   }
 
   // 启动期自动定位（只触发一次）。GPS 可用时更新为真实位置，不可用时回退到已保存/默认位置。
-  private triggerAutoLocate(): void {
-    if (this.autoLocateStarted) { return }
-    this.autoLocateStarted = true
-    hilog.info(0x0000, 'StellariumArkUI', 'auto-locate on startup -> useDeviceLocation()')
-    this.useDeviceLocation()
-  }
-
   aboutToDisappear(): void {
     if (this.guideTimer >= 0) clearInterval(this.guideTimer)
     this.guideTimer = -1
@@ -3192,12 +3184,6 @@ export struct WindowNativeNode {
       this.panelPresentationOffsetY = this.isExpandedLayout ? 0 : 18
     })
     this.scheduleSelectedObjectForUiChange(220)
-  }
-
-  private runOnTouchUp(event: TouchEvent, action: () => void): void {
-    if (event.type === TouchType.Up) {
-      action()
-    }
   }
 
   private callNative(name: string, payload: string = ''): StellariumBridgeResponse {
@@ -4140,14 +4126,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private pauseScript(): void {
-    this.flashHint('当前脚本引擎不支持暂停，请使用停止')
-  }
-
-  private resumeScript(): void {
-    this.flashHint('当前脚本引擎不支持暂停，请使用停止')
-  }
-
   private continueNativeScript(): void {
     if (!this.scriptRunning || this.replaying) return
     this.callInteractive('continueScript', '', (r: StellariumBridgeResponse) => {
@@ -4975,9 +4953,6 @@ export struct WindowNativeNode {
   private setCCD(v: boolean): void {
     this.ccdOn = v
     this.callNativeWhenReady('setCCD', v ? '1' : '0', () => { this.loadOculars(false) })
-  }
-  private cycleOcular(kind: string, dir: string): void {
-    this.callNativeWhenReady('cycle' + kind, dir, () => { this.loadOculars(false) })
   }
   private selectOcularInstrument(kind: string, index: number): void {
     this.callNativeWhenReady('selectOcularInstrument', kind.toLowerCase() + '|' + index.toString(), () => {
@@ -5935,22 +5910,6 @@ export struct WindowNativeNode {
         this.flashHint(r.error ?? I18n.t('msg_apply_failed'))
         this.refreshState()
       }
-    })
-  }
-
-  private adjustTime(hours: number): void {
-    this.callInteractive('advanceTime', hours.toString(), (r: StellariumBridgeResponse) => {
-      hilog.info(0x0000, 'StellariumArkUI', 'adjustTime %{public}d ok=%{public}s', hours, r.ok === true ? '1' : '0')
-      this.refreshState()
-    })
-  }
-
-  private setTimeNow(): void {
-    const jd = Date.now() / 86400000.0 + 2440587.5
-    this.observationTimeText = this.formatLocalDateTime(new Date())
-    this.callInteractive('setJD', jd.toString(), (r: StellariumBridgeResponse) => {
-      hilog.info(0x0000, 'StellariumArkUI', 'setTimeNow ok=%{public}s', r.ok === true ? '1' : '0')
-      this.refreshState()
     })
   }
 
@@ -8998,10 +8957,6 @@ export struct WindowNativeNode {
     this.skyCultureTimeYearInput = clamped.toString()
   }
 
-  private skyCultureRangeModeIndex(): number {
-    return this.skyCultureRangeFiltering ? 1 : 0
-  }
-
   private setSkyCultureRange(startYear: number, endYear: number): void {
     const maxYear = this.skyCultureFilterMaxYear()
     const start = Math.max(-40000, Math.min(maxYear, Math.round(startYear)))
@@ -9042,12 +8997,6 @@ export struct WindowNativeNode {
     return '公元 ' + this.skyCultureTimeYear + ' 年'
   }
 
-  private skyCultureClassificationFilterIndex(): number {
-    const values: string[] = ['all', 'traditional', 'ethnographic', 'historical', 'single', 'comparative', 'personal', 'incomplete']
-    const index = values.indexOf(this.skyCultureClassificationFilter)
-    return index >= 0 ? index : 0
-  }
-
   private skyCultureClassificationFilterLabels(): string[] {
     return ['全部类型', '传统传承', '民族志记录', '历史复原', '单一史料', '比较呈现', '个人创作', '资料待完善']
   }
@@ -9061,17 +9010,6 @@ export struct WindowNativeNode {
     const labels = this.skyCultureClassificationFilterLabels()
     const index = values.indexOf(this.skyCultureClassificationFilter)
     return labels[index >= 0 ? index : 0]
-  }
-
-  private skyCultureRegionFilterIndex(): number {
-    const values: string[] = [
-      'all', 'Australasia', 'Central America', 'Eastern Asia', 'Eastern Europe', 'Melanesia',
-      'Northern Africa', 'Northern America', 'Northern Asia', 'Northern Europe', 'Polynesia',
-      'South America', 'South-eastern Asia', 'Southern Africa', 'Southern Asia', 'Southern Europe',
-      'Western Asia', 'Western Europe', 'World'
-    ]
-    const index = values.indexOf(this.skyCultureRegionFilter)
-    return index >= 0 ? index : 0
   }
 
   private skyCultureRegionFilterLabels(): string[] {
@@ -10015,24 +9953,6 @@ export struct WindowNativeNode {
     }
   }
 
-  private defaultSkyCultureMakerDraft(): SkyCultureMakerDraft {
-    return {
-      schemaVersion: 1,
-      id: '',
-      name: '',
-      author: '',
-      license: 'CC BY 4.0',
-      region: '',
-      classification: ['traditional'],
-      native_lang: 'zh_CN',
-      beginTime: 0,
-      endTime: 0,
-      introduction: '',
-      description: '',
-      constellations: []
-    }
-  }
-
   private skyCultureMakerDraftFromResponse(response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined {
     const values = response as Record<string, Object>
     if (values['draft'] === undefined) return undefined
@@ -10634,10 +10554,6 @@ export struct WindowNativeNode {
       return { panel: '', kind: 'unavailable' }
     }
     return { panel: '', kind: 'unavailable' }
-  }
-
-  private pluginFeaturePanel(id: string): string {
-    return this.pluginFeatureRoute(id).panel
   }
 
   private pluginFeatureDestination(id: string): string {
@@ -11716,10 +11632,6 @@ private loadPlanetPositions(): void {
     { label: '6小时后', value: 21600, major: false },
     { label: '12小时后', value: 43200, major: true }
   ]
-  private tickPercent(value: number): number {
-    return ((value + 43200) / 86400) * 100
-  }
-
   /** Apply speed at given step index. Clamps to valid range. */
   private applySpeedStep(index: number): void {
     const len: number = this.SPEED_STEPS.length
@@ -11899,28 +11811,6 @@ private loadPlanetPositions(): void {
         this.stopTimeWheelInertia(true)
       }
     }, 16) as number
-  }
-
-  private advanceTimeWheel(steps: number, refreshTicks: boolean = true): void {
-    if (steps === 0) { return }
-    const local = this.timeWheelTargetMs > 0
-      ? new Date(this.timeWheelTargetMs)
-      : new Date(Date.UTC(this.timeWheelStore.timeWheelYear, this.timeWheelStore.timeWheelMonth - 1, this.timeWheelStore.timeWheelDay,
-      this.timeWheelStore.timeWheelHour, this.timeWheelStore.timeWheelMinute, this.timeWheelStore.timeWheelSecond))
-    if (this.timeWheelStore.timeWheelUnit === 'year') { local.setUTCFullYear(local.getUTCFullYear() + steps) }
-    else if (this.timeWheelStore.timeWheelUnit === 'month') { local.setUTCMonth(local.getUTCMonth() + steps) }
-    else if (this.timeWheelStore.timeWheelUnit === 'day') { local.setUTCDate(local.getUTCDate() + steps) }
-    else if (this.timeWheelStore.timeWheelUnit === 'hour') { local.setUTCHours(local.getUTCHours() + steps) }
-    else if (this.timeWheelStore.timeWheelUnit === 'minute') { local.setUTCMinutes(local.getUTCMinutes() + steps) }
-    else { local.setUTCSeconds(local.getUTCSeconds() + steps) }
-    this.setTimeWheelStopped()
-    if (this.timeWheelStore.timeWheelUnit === 'year' || this.timeWheelStore.timeWheelUnit === 'month' ||
-      this.timeWheelStore.timeWheelUnit === 'hour' || this.timeWheelStore.timeWheelUnit === 'minute') {
-      this.timeWheelTargetMs = local.getTime()
-      this.startTimeWheelTransition(refreshTicks)
-      return
-    }
-    this.applyTimeWheelDate(local, refreshTicks, true)
   }
 
   private timeWheelVelocityMultiplier(speed: number): number {
@@ -13285,42 +13175,9 @@ private loadPlanetPositions(): void {
   // Interpolate directly on the unit sphere. Linear interpolation of the
   // forward and screen-up vectors independently makes a non-rigid camera and
   // is the source of the apparent jump when the view crosses the zenith.
-  private gyroSlerpUnitVector(from: number[], to: number[], amount: number): number[] {
-    const a = this.gyroNormalizeVector(from)
-    const b = this.gyroNormalizeVector(to)
-    const dot = this.clamp(this.gyroDot(a, b), -1, 1)
-    if (dot > 0.9995) {
-      return this.gyroNormalizeVector([
-        a[0] + (b[0] - a[0]) * amount,
-        a[1] + (b[1] - a[1]) * amount,
-        a[2] + (b[2] - a[2]) * amount
-      ])
-    }
-    const angle = Math.acos(dot)
-    const sinAngle = Math.sin(angle)
-    const fromWeight = Math.sin((1 - amount) * angle) / sinAngle
-    const toWeight = Math.sin(amount * angle) / sinAngle
-    return this.gyroNormalizeVector([
-      a[0] * fromWeight + b[0] * toWeight,
-      a[1] * fromWeight + b[1] * toWeight,
-      a[2] * fromWeight + b[2] * toWeight
-    ])
-  }
-
   // Parallel-transport the screen's up axis along the celestial sphere from
   // one look direction to the next. This provides a continuous tangent-plane
   // basis at zenith and nadir instead of rebuilding one from an Euler angle.
-  private gyroParallelTransportUp(oldForward: number[], newForward: number[], oldUp: number[]): number[] {
-    const axis = this.gyroCross(oldForward, newForward)
-    const axisLength = Math.sqrt(this.gyroDot(axis, axis))
-    if (axisLength < 0.000001) {
-      return this.gyroOrthonormalizeUp(newForward, oldUp)
-    }
-    const normalizedAxis = [axis[0] / axisLength, axis[1] / axisLength, axis[2] / axisLength]
-    const angle = Math.atan2(axisLength, this.clamp(this.gyroDot(oldForward, newForward), -1, 1)) * 180 / Math.PI
-    return this.gyroOrthonormalizeUp(newForward, this.gyroRotateAboutAxis(oldUp, normalizedAxis, angle))
-  }
-
   // The rotation-vector sensor reports in the ENU (east/north/up) world frame,
   // while the engine view direction and setGyroView use the bridge alt-az frame
   // (azimuth = atan2(y, x), x points south). The two frames differ only by a
@@ -13336,17 +13193,6 @@ private loadPlanetPositions(): void {
 
   // Legacy quaternion implementation retained temporarily only to keep this
   // restoration narrowly scoped. It is not subscribed or called.
-  private calibrateGyroscopeQuaternionUnused(): void {
-    if (!this.gyroscopeEnabled) { return }
-    this.gyroCalibrated = false
-    this.gyroAnchorValid = false
-    this.gyroAnchorQuat = []
-    this.gyroAnchorFwd = []
-    this.gyroAnchorUp = []
-    this.gyroHeadingSyncInFlight = false
-    this.gyroscopeStatus = '正在校准'
-  }
-
   // Capture the engine's current sky view plus the device pose as the anchor.
   // After this, the gyro tracks only the *relative* tablet rotation from the
   // anchor, which is independent of landscape/portrait and of the engine's
@@ -13440,29 +13286,6 @@ private loadPlanetPositions(): void {
   // Magnetic x up points east; up x east points north.
   // This gives a true device pose without applying a second correction to an
   // already fused rotation quaternion.
-  private gyroForwardFromGravityAndMagnetic(): number[] {
-    if (this.gyroGravityDevice.length !== 3 || this.gyroMagneticDevice.length !== 3) { return [] }
-    const gravity = this.gyroFilteredGravityDevice.length === 3
-      ? this.gyroFilteredGravityDevice : this.gyroGravityDevice
-    const magneticField = this.gyroFilteredMagneticDevice.length === 3
-      ? this.gyroFilteredMagneticDevice : this.gyroMagneticDevice
-    const up = this.gyroNormalizeVector(gravity)
-    const magnetic = this.gyroNormalizeVector(magneticField)
-    const eastRaw = this.gyroCross(magnetic, up)
-    const eastLength = Math.sqrt(eastRaw[0] * eastRaw[0] + eastRaw[1] * eastRaw[1] + eastRaw[2] * eastRaw[2])
-    if (eastLength < 0.12) { return [] }
-    const east = [eastRaw[0] / eastLength, eastRaw[1] / eastLength, eastRaw[2] / eastLength]
-    const north = this.gyroNormalizeVector(this.gyroCross(up, east))
-    // The observer looks through the rear of the display, i.e. device -Z.
-    const rearNormal = [0, 0, -1]
-    const enu = [
-      rearNormal[0] * east[0] + rearNormal[1] * east[1] + rearNormal[2] * east[2],
-      rearNormal[0] * north[0] + rearNormal[1] * north[1] + rearNormal[2] * north[2],
-      rearNormal[0] * up[0] + rearNormal[1] * up[1] + rearNormal[2] * up[2]
-    ]
-    return this.gyroNormalizeVector(this.gyroBridgeFromEnu(enu))
-  }
-
   // Heading from magnetic north with tilt compensation. `GRAVITY` supplies
   // the physical up axis and the horizontal component of the magnetic field
   // supplies magnetic north, so this remains meaningful while the tablet is
@@ -13523,23 +13346,6 @@ private loadPlanetPositions(): void {
     hilog.info(0x0000, 'StellariumArkUI',
       '[GYRO_PROBE] reason=%{public}s callbacks=%{public}d dispatch=%{public}d invalid=%{public}d',
       reason, this.gyroCallbackCount, this.gyroDispatchCount, this.gyroInvalidEventCount)
-  }
-
-  private gyroEffectiveAzOffset(): number {
-    return this.gyroOffsetAz + this.gyroCompassAzAlignment
-  }
-
-  private alignGyroToMagneticNorth(): void {
-    if (!Number.isFinite(this.gyroMagneticHeading) || !Number.isFinite(this.gyroLastAz)) {
-      this.flashHint('罗盘数据尚未就绪')
-      return
-    }
-    // Bridge azimuth is measured from south; a conventional compass bearing
-    // is measured clockwise from north, hence the fixed 180-degree conversion.
-    const expectedBridgeAz = this.wrapGyroAzimuth(this.gyroMagneticHeading + 180)
-    const correction = this.shortestGyroAzimuthDelta(this.gyroLastAz, expectedBridgeAz)
-    this.gyroCompassAzAlignment += correction
-    this.flashHint('已按' + this.gyroCompassText + '对齐')
   }
 
   private onRotationVectorDirect(data: sensor.RotationVectorResponse): void {
@@ -13668,125 +13474,6 @@ private loadPlanetPositions(): void {
   // Retained as a reference implementation for diagnosing sensor-fusion
   // differences. The active implementation above intentionally does not
   // anchor the sky view to an arbitrary startup pose.
-  private onRotationVectorData(data: sensor.RotationVectorResponse): void {
-    if (!Number.isFinite(data.x) || !Number.isFinite(data.y) || !Number.isFinite(data.z) || !Number.isFinite(data.w)) { return }
-    this.gyroLastRawQ = [data.x, data.y, data.z, data.w]
-    // This probe is intentionally independent of calibration and view-motion
-    // thresholds. It proves whether the device delivers rotation samples.
-    this.gyroRawEventCount += 1
-    if (this.gyroRawEventCount % 120 === 0) {
-      this.callNativeFire('gyroDiagnostic', data.x.toFixed(3) + '|' + data.y.toFixed(3) + '|' + data.z.toFixed(3) + '|' + this.gyroRawEventCount.toString())
-    }
-    // ROTATION_VECTOR is already consumed as a device-to-world pose in the
-    // active path above; keep the retained anchor path consistent with it.
-    const orientation = this.gyroNormalizeQuaternion([data.x, data.y, data.z, data.w])
-
-    if (this.gyroFirstReading) {
-      this.gyroFirstReading = false
-    }
-
-    // First valid reading: anchor the device pose to the live sky view.
-    if (!this.gyroAnchorValid) {
-      this.syncGyroAnchor(orientation)
-      return
-    }
-    if (!this.gyroCalibrated) { return }
-
-    // Relative rotation of the tablet from the anchor pose to now, in the
-    // device->world (ENU) frame. The anchor vectors are stored in ENU too, so
-    // rotating them by rel reproduces exactly how far the tablet has turned.
-    const rel = this.gyroMultiplyQuaternions(orientation, this.gyroConjugateQuaternion(this.gyroAnchorQuat))
-    const fwdEnu = this.gyroRotateVector(rel, this.gyroAnchorFwd)
-    const upEnu = this.gyroRotateVector(rel, this.gyroAnchorUp)
-    // Rotate the calibrated camera basis as one rigid pose. Do not rebuild the
-    // up vector from world zenith here: that basis has no unique direction at
-    // the zenith/nadir and makes the scene flip while crossing either pole.
-    let fwd = this.gyroBridgeFromEnu(fwdEnu)
-    let up = this.gyroBridgeFromEnu(upEnu)
-
-    // Manual calibration nudges, applied to the whole pose so up stays
-    // consistent with the view direction. These operate in the bridge frame.
-    const yaw = this.gyroOffsetAz
-    if (yaw !== 0) {
-      fwd = this.gyroRotateAboutVertical(fwd, yaw)
-      up = this.gyroRotateAboutVertical(up, yaw)
-    }
-    if (this.gyroOffsetAlt !== 0) {
-      // Tilt around the horizontal axis at right angles to the current
-      // heading, so the manual nudge raises the view instead of shearing it.
-      const h = Math.sqrt(fwd[0] * fwd[0] + fwd[1] * fwd[1])
-      if (h > 0.001) {
-        const axis: number[] = [fwd[1] / h, -fwd[0] / h, 0]
-        fwd = this.gyroRotateAboutAxis(fwd, axis, this.gyroOffsetAlt)
-        up = this.gyroRotateAboutAxis(up, axis, this.gyroOffsetAlt)
-      }
-    }
-    fwd = this.gyroNormalizeVector(fwd)
-    up = this.gyroOrthonormalizeUp(fwd, up)
-
-    const now = Date.now()
-    if (this.gyroFwd.length !== 3 || this.gyroUp.length !== 3) {
-      // First sample after (re)calibration: adopt the pose outright.
-      this.gyroFwd = fwd
-      this.gyroUp = up
-      this.gyroLastSampleMs = now
-    } else {
-      let dt = this.gyroLastSampleMs > 0 ? (now - this.gyroLastSampleMs) / 1000 : 1 / 60
-      this.gyroLastSampleMs = now
-      if (!(dt > 0)) { dt = 1 / 60 }
-      if (dt > 0.25) { dt = 0.25 }
-      // Time-constant low pass, so the feel no longer depends on the sensor
-      // delivery rate. The old filter used a fixed per-sample alpha *and* a
-      // 0.18 degree dead zone that returned without storing the new pose:
-      // during slow panning the stored pose froze until the error grew past
-      // roughly a degree, then the view jumped. That was the stutter.
-      let tau = 0.09
-      if (this.gyroscopeSensitivityText === 'Low') { tau = 0.16 }
-      else if (this.gyroscopeSensitivityText === 'High') { tau = 0.05 }
-      const a = 1 - Math.exp(-dt / tau)
-      const sFwd = this.gyroNormalizeVector([
-        this.gyroFwd[0] + (fwd[0] - this.gyroFwd[0]) * a,
-        this.gyroFwd[1] + (fwd[1] - this.gyroFwd[1]) * a,
-        this.gyroFwd[2] + (fwd[2] - this.gyroFwd[2]) * a
-      ])
-      const sUp = [
-        this.gyroUp[0] + (up[0] - this.gyroUp[0]) * a,
-        this.gyroUp[1] + (up[1] - this.gyroUp[1]) * a,
-        this.gyroUp[2] + (up[2] - this.gyroUp[2]) * a
-      ]
-      this.gyroFwd = sFwd
-      this.gyroUp = this.gyroOrthonormalizeUp(sFwd, sUp)
-    }
-
-    // Sample at the device rate, but keep the ArkTS-to-Qt queue bounded. The
-    // native renderer receives the latest complete pose about 30 times/sec.
-    if (now - this.gyroLastDispatchMs < 33) { return }
-    // Skip only the bridge call when nothing moved — never the state update.
-    if (this.gyroSentFwd.length === 3) {
-      const d = this.clamp(this.gyroSentFwd[0] * this.gyroFwd[0] + this.gyroSentFwd[1] * this.gyroFwd[1] + this.gyroSentFwd[2] * this.gyroFwd[2], -1, 1)
-      if (Math.acos(d) * 180 / Math.PI < 0.01 && now - this.gyroLastDispatchMs < 250) { return }
-    }
-    this.gyroSentFwd = this.gyroFwd
-    this.gyroLastDispatchMs = now
-
-    const altAz = this.gyroVectorAltAz(this.gyroFwd)
-    this.gyroLastAz = altAz[0]
-    this.gyroLastAlt = altAz[1]
-    // Dedicated direct-pose command: moveToAltAz would drop the up vector and
-    // restart an interpolation on every sample.
-    this.callNativeFire('setGyroView', this.gyroLastAz.toFixed(3) + '|' + this.gyroLastAlt.toFixed(3) + '|'
-      + this.gyroUp[0].toFixed(5) + '|' + this.gyroUp[1].toFixed(5) + '|' + this.gyroUp[2].toFixed(5))
-    this.gyroEventCount += 1
-    if (this.gyroEventCount % 4 === 0) {
-      this.gyroscopeStatus = I18n.t('m_gyro_working')
-      const raw = this.gyroLastRawQ
-      const diagMsg = '[GYROSAMP] rawQ=' + raw[0].toFixed(4) + ',' + raw[1].toFixed(4) + ',' + raw[2].toFixed(4) + ',' + raw[3].toFixed(4) +
-        ' sentAz=' + this.gyroLastAz.toFixed(2) + ' sentAlt=' + this.gyroLastAlt.toFixed(2) +
-        ' up=' + this.gyroUp[0].toFixed(3) + ',' + this.gyroUp[1].toFixed(3) + ',' + this.gyroUp[2].toFixed(3) +
-        ' offAz=' + this.gyroOffsetAz + ' offAlt=' + this.gyroOffsetAlt
-      hilog.info(0x0000, 'StellariumArkUI', '%{public}s', diagMsg)
-    }
-  }
   private searchObject(name: string, catalogModuleId: string = '', exactSelectionPayload: string = '', placement: string = ''): void {
     const query = name.trim()
     if (query.length === 0) {
@@ -13856,11 +13543,6 @@ private loadPlanetPositions(): void {
         this.flashHint(I18n.t('i0072').replace('%s', query))
       }
     })
-  }
-
-  private isConstellationSelection(result: StellariumBridgeResponse): boolean {
-    const type = ((result.type ?? '') + ' ' + (result.objectType ?? '')).toLowerCase()
-    return type.indexOf('constellation') >= 0 || type.indexOf('星座') >= 0
   }
 
   // 拉取当前选中天体的信息并刷新详情面板。
@@ -14076,60 +13758,6 @@ private loadPlanetPositions(): void {
 
   private clearObjectDetailConnector(): void {
     this.objectDetailConnectorLength = 0
-  }
-
-  private placeObjectCardAwayFromTarget(targetX: number, targetY: number): boolean {
-    const width = this.detailCardWidth()
-    const height = this.detailCardHeight()
-    const currentX = this.detailCardX()
-    const currentY = this.detailCardY()
-    if (!this.pointInsideRect(targetX, targetY, currentX, currentY, currentX + width, currentY + height, 24)) {
-      return false
-    }
-
-    const edge = 12
-    const topEdge = this.isExpandedLayout ? Math.max(52, this.EDGE_MARGIN + 20) : 56
-    const dockTop = Math.max(topEdge + height, this.skyHeight - 76)
-    const maxX = Math.max(edge, this.skyWidth - width - edge)
-    const maxY = Math.max(topEdge, dockTop - height - edge)
-    const sideY = this.clamp(targetY - height / 2, topEdge, maxY)
-    const horizontalX = this.clamp(targetX - width / 2, edge, maxX)
-    const candidates: number[][] = [
-      [edge, sideY], [maxX, sideY],
-      [horizontalX, topEdge], [horizontalX, maxY],
-      [edge, topEdge], [maxX, topEdge], [edge, maxY], [maxX, maxY]
-    ]
-    const panelLeft = this.expandedMainPanelLeft()
-    const panelTop = this.panelTop()
-    const panelRight = panelLeft + this.panelWidth
-    const panelBottom = panelTop + this.panelMaxHeight
-    let bestX = currentX
-    let bestY = currentY
-    let bestDistance = Number.MAX_VALUE
-    for (let index = 0; index < candidates.length; index++) {
-      const candidateX = candidates[index][0]
-      const candidateY = candidates[index][1]
-      const candidateRight = candidateX + width
-      const candidateBottom = candidateY + height
-      if (this.pointInsideRect(targetX, targetY, candidateX, candidateY, candidateRight, candidateBottom, 24)) continue
-      if (candidateBottom > dockTop) continue
-      if (this.isExpandedLayout && this.panelVisible &&
-        this.rectsOverlap(candidateX, candidateY, candidateRight, candidateBottom, panelLeft - 10, panelTop - 10, panelRight + 10, panelBottom + 10)) continue
-      const distance = Math.pow(candidateX - currentX, 2) + Math.pow(candidateY - currentY, 2)
-      if (distance < bestDistance) {
-        bestDistance = distance
-        bestX = candidateX
-        bestY = candidateY
-      }
-    }
-    if (!Number.isFinite(bestDistance) || bestDistance === Number.MAX_VALUE || bestDistance < 1) return false
-    const baseX = this.baseBottomCardX()
-    const baseY = this.isFoldHoverLayout ? this.baseHoverBottomCardY() : this.baseBottomCardY()
-    this.getUIContext().animateTo({ duration: 300, curve: curves.springMotion(0.48, 0.88) }, () => {
-      this.cardOffsetX = this.clampedObjectCardOffsetX(baseX, width) + bestX - currentX
-      this.cardOffsetY = this.clampedObjectCardOffsetY(baseY, height) + bestY - currentY
-    })
-    return true
   }
 
   private refreshObjectDetailConnector(): void {
@@ -14580,14 +14208,6 @@ private loadPlanetPositions(): void {
     return [this.skyWidth / 2, targetY]
   }
 
-  private placeSelectedObjectInCompactSafeArea(mode: string = 'focus'): void {
-    if (this.isExpandedLayout || (!this.panelVisible && !this.infoWinVisible) || this.selectedStatus !== 'Selected') {
-      return
-    }
-    const target = this.compactSafeTargetPoint()
-    this.navigateSelectedObjectTo(target[0], target[1], mode)
-  }
-
   private expandedSafeTargetPoint(): number[] {
     const left = this.panelVisible ? this.expandedMainPanelLeft() + this.panelWidth + 18 : this.EDGE_MARGIN + 64
     const right = this.panelVisible ? this.skyWidth - this.EDGE_MARGIN
@@ -14603,51 +14223,6 @@ private loadPlanetPositions(): void {
       return [this.skyWidth / 2, this.skyHeight / 2]
     }
     return [(left + right) / 2, (top + bottom) / 2]
-  }
-
-  private easeSelectedObjectTo(x: number, y: number): void {
-    const centerX = this.skyWidth / 2
-    const centerY = this.skyHeight / 2
-    // Native panView moves the scene, so its x axis is the inverse of the
-    // apparent object motion. A positive screen target must therefore pan
-    // left, otherwise the selected body is pushed further under a right panel.
-    const dx = centerX - x
-    // Native panView moves the scene, not the selected marker. Both apparent
-    // screen axes are inverse: sending the old y sign made a 9/10 bottom
-    // sheet push the marker downward and a top inspector keep it under the
-    // card instead of moving it into the remaining sky.
-    const dy = y - centerY
-    const steps = 9
-    let step = 0
-    let previousX = 0
-    let previousY = 0
-    const timer = setInterval(() => {
-      if (!this.panelVisible && !this.infoWinVisible) {
-        clearInterval(timer)
-        if (this.expandedTargetPlacementTimer === timer) this.expandedTargetPlacementTimer = 0
-        return
-      }
-      step++
-      const p = (1 - Math.cos(Math.PI * step / steps)) / 2
-      const nextX = Math.round(dx * p)
-      const nextY = Math.round(dy * p)
-      this.callNativeFire('dragView', `0|0|${nextX - previousX}|${nextY - previousY}`)
-      previousX = nextX
-      previousY = nextY
-      if (step >= steps) {
-        clearInterval(timer)
-        if (this.expandedTargetPlacementTimer === timer) this.expandedTargetPlacementTimer = 0
-      }
-    }, 36) as number
-    this.expandedTargetPlacementTimer = timer
-  }
-
-  private placeSelectedObjectInExpandedSafeArea(mode: string = 'focus'): void {
-    if (!this.isExpandedLayout || (!this.panelVisible && !this.infoWinVisible) || this.selectedStatus !== 'Selected') {
-      return
-    }
-    const target = this.expandedSafeTargetPoint()
-    this.navigateSelectedObjectTo(target[0], target[1], mode)
   }
 
   // 精确到角秒：地球自转约 15″/秒，300ms 刷新时用户能直接看到坐标连续变化。
@@ -17169,15 +16744,6 @@ private loadPlanetPositions(): void {
 
   // The floating panel sits above the sky touch surface.  Keep its gestures
   // owned by ArkUI so a Slider/Scroll drag can never become a sky pan.
-  private handleFloatingPanelTouch(event: TouchEvent): void {
-    this.resetPanelIdle()
-    if (event.type === TouchType.Down) {
-      this.stopSkyInertia()
-      this.cancelRecordingViewCheckpoint()
-      this.skyTouchFeedback = false
-    }
-  }
-
   private stopSkyInertia(resetVelocity: boolean = true): void {
     if (this.skyInertiaTimer !== 0) {
       clearInterval(this.skyInertiaTimer)
@@ -18761,19 +18327,6 @@ private loadPlanetPositions(): void {
   // 默认收起（仅一行概要），点头部展开为可滚动的富详情卡（约半屏）。
   // 它独立于右侧菜单面板（activePanel），选中天体时不再强制切换菜单，
   // 因此不会打扰用户正在进行的操作。
-  private infoWinLeft(): number {
-    const availLeft = this.panelVisible ? this.expandedMainPanelLeft() + this.panelWidth + 18 : this.EDGE_MARGIN + 64
-    const availRight = this.skyWidth - this.EDGE_MARGIN
-    const band = availRight - availLeft
-    const w = Math.min(band, 560)
-    return availLeft + (band - w) / 2
-  }
-  private infoWinWidth(): number {
-    const availLeft = this.panelVisible ? this.expandedMainPanelLeft() + this.panelWidth + 18 : this.EDGE_MARGIN + 64
-    const availRight = this.skyWidth - this.EDGE_MARGIN
-    const band = availRight - availLeft
-    return Math.min(band, 560)
-  }
   private infoWinDetailH(): number {
     return Math.min(this.skyHeight * 0.42, 400)
   }
@@ -18813,10 +18366,6 @@ private loadPlanetPositions(): void {
       this.trackingText = enabled ? 'Off' : 'On'
       this.flashHint('跟踪状态更新失败，请重试')
     })
-  }
-
-  private toggleTracking(): void {
-    this.setTrackingState(this.trackingText !== 'On')
   }
 
   private setObjectDetailConnector(enabled: boolean, syncNative: boolean = true): void {
@@ -18943,14 +18492,6 @@ private loadPlanetPositions(): void {
     if (this.isExpandedLayout) { return Math.min(440, Math.max(360, this.skyHeight - 176)) }
     if (this.isFoldHoverLayout) { return Math.min(380, Math.max(320, this.skyHeight - this.hoverConsoleTop() - 104)) }
     return this.clamp(this.skyHeight * 0.56, 320, 420)
-  }
-
-  private bottomCardSwiperHeight(): number {
-    return this.isExpandedLayout ? 170 : 156
-  }
-
-  private bottomCardHitHeight(): number {
-    return this.bottomCardHeight()
   }
 
   private expandedMainPanelLeft(): number {
@@ -19096,13 +18637,6 @@ private loadPlanetPositions(): void {
     const top = this.detailCardY()
     return x >= left - 8 && x <= left + this.detailCardWidth() + 8 &&
       y >= top - 8 && y <= top + this.detailCardHeight() + 8
-  }
-
-  private isTabletObjectInspectorPoint(x: number, y: number): boolean {
-    if (!this.useTabletObjectInspector() || !this.infoWinVisible || this.selectedName.length === 0) { return false }
-    const left = this.tabletInspectorX()
-    const top = this.tabletInspectorY()
-    return x >= left - 8 && x <= left + this.tabletInspectorWidth() + 8 && y >= top - 8 && y <= top + this.tabletInspectorHeight() + 8
   }
 
   private handleExpandedDetailSummaryTap(x: number, y: number): boolean {
@@ -19287,26 +18821,6 @@ private loadPlanetPositions(): void {
       return false
     }
     return y >= this.skyHeight - 92 && x >= this.skyWidth * 0.72 && x <= this.skyWidth - 18
-  }
-
-  private isCompactDrawerPoint(x: number, y: number): boolean {
-    if (this.isExpandedLayout) {
-      return false
-    }
-    const drawerW = this.skyWidth * (this.isFoldHoverLayout ? 0.42 : 0.64)
-    const rightMargin = this.isFoldHoverLayout ? 34 : 18
-    const drawerX = this.skyWidth - rightMargin - drawerW
-    const drawerBottom = this.skyHeight - 90
-    const drawerY = drawerBottom - this.compactPanelHeight()
-    return x >= drawerX - 12 && x <= this.skyWidth - rightMargin + 12 && y >= drawerY - 18 && y <= drawerBottom + 10
-  }
-
-  private handleCompactMoreTap(x: number, y: number): boolean {
-    if (!this.isCompactMorePoint(x, y)) {
-      return false
-    }
-    this.setPanel('more')
-    return true
   }
 
   private updateCompactPanelDrag(offsetY: number): void {
@@ -19887,11 +19401,6 @@ private loadPlanetPositions(): void {
 
   private objectInspectorSearchText(): string {
     return (this.selectedCatalogId + ' ' + this.selectedEnglishName + ' ' + this.selectedName).toLowerCase()
-  }
-
-  private objectInspectorFileUri(relativePath: string): string {
-    const path = this.objectInspectorFilePath(relativePath)
-    return path.length > 0 ? fileUri.getUriFromPath(path) : ''
   }
 
   private objectInspectorFilePath(relativePath: string): string {
@@ -21534,9 +21043,6 @@ private loadPlanetPositions(): void {
   }
 
   // 夜间模式颜色方案
-  private nm(): string {
-    return this.nightMode ? 'rgba(180, 40, 20, 0.30)' : 'rgba(11, 17, 38, 0.85)'
-  }
   private nmText(): string {
     return this.nightMode ? '#FF6644' : '#E5FFFFFF'
   }
@@ -21598,10 +21104,6 @@ private loadPlanetPositions(): void {
       case 'Slow': return I18n.t('sens_slow')
       default: return en
     }
-  }
-
-  private trackStatusZh(en: string): string {
-    return I18n.trackStatus(en)
   }
 
   private selectedStatusZh(en: string): string {
