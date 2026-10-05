@@ -1,3 +1,31 @@
+## [2026-10-02] DevEco Code - 修复：Dock 开/关面板时入口重建、宽度过渡不流畅（Phase 3at / 7202 回归）
+
+- **现象（用户报告，`d7a2bc9768`/Phase 3at 之后）**：点 Dock 入口开/关面板时，入口元素像被重建；宽度在"宽 ↔ 窄"（紧凑档 `92% ↔ 76%`）间切换不自然。`7202d0e1b1`（"恢复 Dock 高亮"）之后高亮恢复正常但流畅度变差。
+- **代码定位（现行 3 个提交）**：
+  - 3at 前：Dock 是宿主的无参 `@Builder bottomDock()`，`ForEach` 键为 `item.panel + '/' + languageRevision`，`active` 以 `this.dockActionActive(item)` 传入。
+  - `d7a2bc9768`（3at）把 Dock 下沉为 `panels/shell/BottomDock.ets`，激活判定改为宿主回注的**普通成员闭包** `isActive` —— 闭包不被 V1 观测，`BottomDock` 从不重绘 → **高亮冻结**；键值稳定，故**不重建、流畅**。
+  - `7202d0e1b1` 把 `activePanel` 改成 `@Prop`（让组件重绘）**并把它并入 ForEach 键** `...+(active?'1':'0')` —— 高亮恢复，但每次开/关/切面板激活项的键翻转 → 该入口**销毁重建**。
+- **A/B 定位（真机 `git worktree` 三点构建安装）**：在 `harmonyos/ets-source/panels/shell/DockButton.ets` 临时加 `aboutToAppear` 计数日志（`[dock-probe] DockButton appear icon=...`，测试后已删）后：
+  - `d7a2bc9768^`（3at 前）：点"图层"后 probe 恒为 **5**（无重建），激活蓝采样 `x=789..862`（图层）→ **高亮跟随 + 无重建 + 流畅**。
+  - `7202d0e1b1^`（3at）：`setPanel layers` 后 probe 仍 **5**（无重建），蓝色像素 **0** → **高亮冻结、无重建**（7202 提交信息所述"高亮在 3at 丢失"属实）。
+  - 现行 HEAD（`7202d0e1b1`）：开"图层" probe 5→**6**（`[dock-probe] ... icon=layers` 于 `setPanel` 同帧新建），关闭再 +1 → **高亮跟随但入口重建**。
+  - **结论**：重建由 `7202d0e1b1` 的"激活态入键"引入（非 3at 本体）；3at 引入的是高亮冻结。
+- **根因（ArkUI V1 事实，已用 `devecocli docs` 核对）**：`ForEach` 对**键值未变**的数组项**不重新执行 `itemGenerator`**，复用组件时 `@Prop` 不更新（FAQ `faqs-arkui-619` 问题一/三；官方《ForEach：循环渲染》"键值存在则直接渲染该键值所对应的组件"）。因此 `active` 既不能只经 `@Prop`/闭包传（会冻结），也不能并入键值（会重建）。
+- **修法（两条性质同时成立）**：
+  - 新增 `harmonyos/ets-source/state/DockStore.ets`（8 行，`@Observed class DockStore { activePanel; panelVisible }`）。
+  - `BottomDock.ets`（67 → 79 行）：`activePanel` / `panelVisible` 保留为 `@Prop` 并加 `@Watch('syncActiveState')`，同步进 `@State private activeState: DockStore`；`ForEach` 键恢复为**稳定键** `item.panel + '/' + languageRevision`；调用改为 `panelId: item.panel, activeState: this.activeState`。`aboutToAppear()` 首次同步。
+  - `DockButton.ets`（53 → 62 行）：去掉 `@Prop active`，改为 `@Prop panelId` + `@ObjectLink activeState: DockStore`，在组件内 `isActive()` 就地求值。
+  - 由此：激活态变化经 `@ObjectLink` **深观察**触发入口重渲染（不重建）；键值稳定故 `ForEach` 不销毁子项；宽度动画所在的 `BottomDock` Row **不会被重建**，过渡不被打断。未使用 `@BuilderParam`（§13.1 规则 9）。
+- **三项客观取证（真机 Mate 80 Pro `192.168.50.108:40565`）**：
+  1. **宽度插值**：`snapshot_display` 单张约 320 ms，而生产动画是快弹簧（`springMotion(0.46,0.86)`，实际约 0.5 s 落定），无法以 100–200 ms 间隔取样。故用**仅用于测量**的临时构建（`BottomDock` 的 `.animation` 临时改 `{duration:3000, curve: Curve.EaseInOut}`，测后已还原）连拍 12 帧，图标横向跨度单调过渡：`940→929→913→890→866→844→821→805→798→797` —— **确为中间值序列（插值），非一步跳变**；生产弹簧下同法也捕获到中间帧 `931`。三次测量 `probe` 恒为 5。
+  2. **元素同一性**：`aboutToAppear` 计数在启动后恒为 **5**，开/切/关面板均不新增（修复前每次开/关激活项各 +1）；`devecocli ui layout` 中"搜索/时间/位置/图层/更多功能"文本节点坐标仅随宽度档位整体平移，无节点短暂消失/坐标跳变。
+  3. **高亮**：开"图层"后激活色采样 `x=789..862`（`#70C8FF`，`B−R = 255−112 = 143`）；切"时间"后蓝移到 `x=417..491`；关闭后蓝色像素 0。验收沿用 `7202d0e1b1` 的 `B−R≈143` 方法。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check` 三文件 No errors → 构建 **BUILD SUCCESSFUL**（签名 HAP 708.8 MB）→ `check-ohos-ui-contract.mjs`（33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点 / 184 文件）全绿 → 全量 `*ohos*.mjs` 扫描 35 个仅 §13.6 的 7 个存量环境类失败（4 个 `-pad` 需设备、`mist-performance` 需设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS 假设），无新增；`audit-ohos-resource-coverage.mjs` 重写的审计文档已 `git checkout` 还原 → 真机最终构建复测：`pidof` 恒存活（28079），开"图层"高亮 `789..862`、关后面板收起。未改动任何持久化设置。
+- **本片新踩的坑 / 固化结论**：
+  1. **`curves.springMotion(...)` 忽略 `duration` 参数**：弹簧按自身 response 落定，把 `duration` 从 300 调到 3000 不影响时长 —— 需要"慢动作"取样时必须临时换成 `Curve.EaseInOut` 之类显式时长曲线。
+  2. **`%LOCALAPPDATA%\Temp\deveco` 下的 `git worktree` 会被清理**：工作树目录被清空、`git worktree list` 显示 `prunable`；且 worktree 里 `-SkipEngine -SkipDeploy -SkipResources` 仍会断言 `build/libstellarium-harmonyos`、`build/src/libstellarium.so` 与 `build/_deps/{md4c,nlopt}`，需分别建 junction/拷贝到主仓同名目录。
+  3. **无线调试会掉线**：`hdc list targets` 变 `[Empty]` 后用 `hdc tconn <ip:port>` 可恢复（IP 未变时）。
+  4. **应用冷启后第一次点击可能被吞**（`devecocli ui click` 与 `uitest uiInput` 均观察到）：交互取证应对同一目标重试一次，或以 `hilog setPanel` 佐证确实命中。
 ## [2026-10-02] DevEco Code - 修复：详情卡页头三枚摘要（星等/星座/距离）切换天体不刷新（Phase 3ad 回归）
 
 - **现象（真机复现）**：搜 `Mars` 选中 → 页头摘要 星等 `1.09` / 星座 `巨蟹座` / 距离 `1.6550 AU`；再搜 `Saturn` 选中 → 同屏标题 `土星`、类型、实时高度、时角、模型均更新，但这三枚摘要仍是火星旧值。上一片 ffmpeg 专项已记为“附带观察”，本片修复。

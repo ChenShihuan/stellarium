@@ -2,6 +2,7 @@ import { curves } from '@kit.ArkUI'
 import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 import { ShellAction } from '../../pages/StellariumTypes'
 import { DockButton } from './DockButton'
+import { DockStore } from '../../state/DockStore'
 
 // 主界面底部 Dock 栏（原宿主无参 @Builder bottomDock）。
 //
@@ -9,17 +10,21 @@ import { DockButton } from './DockButton'
 // 触摸、点按与面板触摸回注宿主（§13.1 规则 6）。
 // 视觉与几何逐字保留（含原有两处 onTouch 叠加，后者生效、并已内含 notePanelTouch）。
 //
-// `activePanel` / `panelVisible` 必须是可观测的 @Prop，且激活判定要在组件自身的
-// 渲染作用域里求值：若“是否当前面板”只经宿主回注的普通闭包传入，本组件就观测不到
-// 面板切换，激活态会冻结在首帧（Phase 3at 回归）。故把当前面板 id 作为数据传入，
-// 并与 panelVisible 一并纳入 ForEach 键，使激活项变化时重建子项。
+// 激活态为什么经 @ObjectLink 而不是 @Prop（Phase 3at / 7202 / 2026-10-02 修复）：
+//  - ForEach 对**键值未变**的数组项不会重新执行 itemGenerator，把 active 作为 @Prop
+//    直接传入会在复用后冻结（Phase 3at 回归：高亮不跟随）。
+//  - 把激活态并入 ForEach 键值虽能让高亮跟随，却让激活项**销毁重建**（7202 回归：
+//    开/关面板时入口元素重建、过渡不流畅）。
+//  - 正解：键值保持稳定（item.panel + languageRevision），激活态放进 @Observed 的
+//    DockStore、以 @ObjectLink 注入每个入口；宿主经 @Prop 传入的 activePanel /
+//    panelVisible 用 @Watch 同步进 store，入口只重渲染、不重建（V1 深观察）。
 
 @Component
 export struct BottomDock {
   @Prop actions: ShellAction[]
   @Prop isExpanded: boolean
-  @Prop panelVisible: boolean
-  @Prop activePanel: string
+  @Prop @Watch('syncActiveState') panelVisible: boolean
+  @Prop @Watch('syncActiveState') activePanel: string
   @Prop chromeOpacity: number
   @Prop isGlass: boolean
   @Prop widthPercent: number
@@ -31,8 +36,15 @@ export struct BottomDock {
   onDockTap: (item: ShellAction) => void = () => {}
   onPanelTouch: (event: TouchEvent) => void = () => {}
 
-  private dockItemActive(item: ShellAction): boolean {
-    return this.panelVisible && item.panel === this.activePanel
+  @State private activeState: DockStore = new DockStore()
+
+  aboutToAppear(): void {
+    this.syncActiveState()
+  }
+
+  private syncActiveState(): void {
+    this.activeState.activePanel = this.activePanel
+    this.activeState.panelVisible = this.panelVisible
   }
 
   build() {
@@ -40,12 +52,12 @@ export struct BottomDock {
       // 所有屏幕统一使用五个入口；手机仅改变面板的呈现方式，不改变动作集合。
       ForEach(this.actions, (item: ShellAction) => {
         DockButton({
-          icon: item.icon, label: item.label, active: this.dockItemActive(item),
+          icon: item.icon, label: item.label, panelId: item.panel, activeState: this.activeState,
           iconSize: this.iconSize, labelFontSize: this.labelFontSize, itemHeight: this.itemHeight,
           onTouchEvent: (event: TouchEvent) => { this.onDockTouch(event) },
           onTap: () => { this.onDockTap(item) }
         })
-      }, (item: ShellAction) => item.panel + '/' + this.languageRevision.toString() + '/' + (this.dockItemActive(item) ? '1' : '0'))
+      }, (item: ShellAction) => item.panel + '/' + this.languageRevision.toString())
     }
       .height(this.isExpanded ? 48 : 66)
       .width(this.isExpanded ? '100%' : this.widthPercent + '%')
