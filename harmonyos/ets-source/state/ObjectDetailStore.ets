@@ -1,6 +1,14 @@
 import { StellariumBridgeResponse, ObjectDetailField, ObjectDetailModel, SatellitePass, SkyCultureDescriptionBlock } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
+// 宿主 → ObjectDetailStore 的卫星过境助手注入（§13.1 规则 6 / §14.8 规则 2）。
+// loadSelectedSatellitePasses 复用未随本片下沉的宿主助手（requestSatellitePasses 走交互桥，
+// selectedObjectIsArtificialSatellite 读本 store 字段）；按 §14.5「额外注入」具名回注。
+export interface ObjectDetailHostHooks {
+  selectedObjectIsArtificialSatellite(): boolean
+  requestSatellitePasses(expectedName: string): void
+}
+
 // 选中天体的详情数据（原宿主 @State 的 selected*/objectInfo 簇）。
 // 详情卡片、信息行与平板检查器都读这份数据，故独立成一个 store。
 @Observed
@@ -72,11 +80,17 @@ export class ObjectDetailStore {
   // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
+  // 宿主卫星过境助手注入（§14 B2R-4 loadSelectedSatellitePasses）。
+  private hooks: ObjectDetailHostHooks | null = null
 
   // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
   attachPort(port: CommandPort, onChanged: () => void): void {
     this.port = port
     this.onChanged = onChanged
+  }
+
+  attachHooks(hooks: ObjectDetailHostHooks): void {
+    this.hooks = hooks
   }
 
   // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
@@ -115,5 +129,18 @@ export class ObjectDetailStore {
         this.notifyChanged()
       }
     })
+  }
+
+  // 选中天体为人工卫星且尚未请求过时触发过境查询（原宿主 loadSelectedSatellitePasses，函数体逐字搬入）。
+  // 差异仅：this.selectedObjectIsArtificialSatellite() → hooks.selectedObjectIsArtificialSatellite()、
+  // this.objectDetailStore.<f> → this.<f>、this.requestSatellitePasses → hooks.requestSatellitePasses。
+  loadSelectedSatellitePasses(): void {
+    const hooks = this.hooks
+    if (hooks === null) {
+      return
+    }
+    if (!hooks.selectedObjectIsArtificialSatellite() || this.selectedName.length === 0 || this.selectedSatellitePassesRequested) return
+    this.selectedSatellitePassesRequested = true
+    hooks.requestSatellitePasses(this.selectedName)
   }
 }
