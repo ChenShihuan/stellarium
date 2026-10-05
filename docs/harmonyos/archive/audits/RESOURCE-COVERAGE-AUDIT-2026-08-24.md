@@ -106,3 +106,12 @@
 5. **P2：** 为天空文化补齐官方可用语言资源；当前 `en`、`zh_CN` 之外不要假称已完成多语言。
 
 本报告只做静态资源覆盖审计；“已接入”表示代码入口存在，不替代平板/模拟器上的真实渲染验证。
+
+## 决策（2026-10-02，用户确认）
+
+`models/`（17.8 MiB）与 `atmosphere/`（58.7 MiB）**均不纳入 HAP**，保持现状（HAP 708.8 MiB）：
+
+- `models/`：打开 `astro/flag_use_obj_models` 后，Ida/Vesta/Gaspra/Halley/67P 等小天体改用实测形状网格渲染；App 未暴露该开关，界面无差别。**后续若要露出"真实形状模型"开关，此项为必须，届时再按 bash 白名单补入两平台同步脚本（并解压 `moon-vertices-indices.bin.7z`）。**
+- `atmosphere/`：仅在把大气模型从默认 `preetham` 切换到轻量/ShowMySky 时使用；本套 GLES2 构建已用 `ENABLE_SHOWMYSKY` 编译掉高质量路径。**维持不打包，未来评估时须连同编译开关一起决策。**
+
+结论同步记录：`docs/harmonyos/CHANGELOG.md` 与本文"未随包家族与原因"表。
