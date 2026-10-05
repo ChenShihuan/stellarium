@@ -1,3 +1,23 @@
+## [2026-10-01] DevEco Code - Phase 4a：`panelContent` 首批 4 个分支抽组件（catalogs / angleMeasure / audio / scenery3d）
+
+- **范围**：Phase 4 第一片 —— 把单体 `panelContent()` 里**体量最小的 4 个分支**下沉为组件（判定条件 `activePanel === '<name>'` 留在宿主）；**本片不做表驱动 `PanelHost`**（待分支搬至多数后再统一）。落位沿用 Phase 4 面板宿主目录 `harmonyos/ets-source/panels/panels/`。
+- **改动文件**：
+  - 新增 `harmonyos/ets-source/panels/panels/` 下 4 个组件：`CatalogsPanel.ets`（77 行）、`AngleMeasurePanel.ets`（57）、`AudioPanel.ets`（40）、`Scenery3dPanel.ets`（68）；
+  - 改 `harmonyos/ets-source/pages/MainWindowNativeNode.ets`：+4 行 import、4 个分支体替换为组件调用（`git diff --stat` = +53/−167，净 −114），**25,059 → 24,945** 行。
+- **抽法**：`AngleMeasurePanel` 用既有的 `@ObjectLink ToolsStore`（宿主零字段改写）；`AudioPanel` / `Scenery3dPanel` / `CatalogsPanel` 的展示值以 `@Prop` 传入（宿主仍是写方：未搬字段、未新建 store）；`AudioEngine`（原生桥）、`resourceText`（纯文本助手）与下载/开关/选中动作全部按 §13.1 规则 6 回注回调，组件内不 import 桥。
+- **成员名雷区规避**：星表卡片描边用 `cardBorderColor`（避开 `borderColor`）、三维地景开关用 `pluginEnabled`（避开 `enabled`）。
+- **真机（`com.cnchensh.stellarium`，Mate 80 Pro `192.168.3.95:40565`，CLI 显式 `--bundle`，关键步骤后 `aa dump -l` 复核前台）**：`pidof com.cnchensh.stellarium` 全程 = 30480（存活）。逐面板走查 + 实时刷新实证：
+  - `catalogs`：面板标题「星表下载」，`panel-content` 内渲染「当前版本可能已包含全部星表」——当前构建 `OFFLINE_APPGALLERY_BUILD = true`，**只有离线静态分支可达**；下载列表与实时刷新需非 appgallery 构建（记「待真机」）。
+  - `angleMeasure`：渲染标题/说明/开关键/触摸说明；**点按 Toggle 后**「重置测量」「结束测量」两键**即时出现**（`@ObjectLink ToolsStore` 条件刷新实证），点「结束测量」后即时消失并复原。
+  - `audio`：渲染「音频控制」/「背景音乐」开关/「音量 70%」/Slider；**拖动 Slider 后** `Text` 由 `70%` 即时变 `100%`（`@Prop` 展示值 + 回调回注刷新实证）；实测后把音量拖回（落回 75%，该值为进程内瞬时态、不写入 `stellariumSettings`）。
+  - `scenery3d`：渲染标题/说明/开关键/场景卡「Testscene」；**点按 Toggle 后** hilog 实证 `setScenery3dEnabled "1"` → `getScenery3dList` 全链路往返，再次点按恢复 `"0"`。
+  - 相邻界面冒烟：`more` hub 正常渲染，「观测工作区」「天体数据与扩展」入口可见，`pidof` 存活。
+- **跳过的分支（按任务要求：最小但已是组件调用者不再包一层）**：`observeHub`/`dataHub`/`automationHub`（各 6 行，体内已是 `HubActionList` 组件调用）、`bookmarks`（9 行，已是 `BookmarkPanel`）、`pointerCoordinates`（10 行，已是 `PointerCoordinatesPanel`）、`tools`（16 行，已是 `ToolsPanel`）、`telescope`（23 行，已是 `Lx200Panel`）、`skyCultureMaker`（26 行，已是 `SkyCultureMakerPanel`）、`layers`（28 行，体内调用 7 个 `view*Tab` `@Builder`，按任务「本片不顺手动」）。
+  - 本片 4 个分支体内**均无**参数化 `@Builder`、**均无** `this.panelContent()`，因此无需因这两条规则换分支。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（5 个改动文件）无错 → `devecocli build` BUILD SUCCESSFUL → `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好（扫描文件数 144）→ 全量 `*-ohos*.mjs` 扫描失败项与 §13.6 存量**完全一致**（7 个环境/设备类），无新增。
+- **测试同步**：无脚本引用这 4 个分支的 UI（`git grep` 仅命中与 UI 无关的资源审计 `scenery3d/` 目录名），无需改脚本。
+- **测试期间改动的持久化设置**：无（`angleMeasure` 开关已复原；`scenery3d` 已点回 `"0"`；`audio` 只改进程内 `audioVolume`，不落 `stellariumSettings`；未动语言/时间/位置/选中天体）。
+- **本片新踩的坑**：无。按协议用 Node 括号配对脚本（按分支签名定位、跳过字符串/注释）替换分支体，避免行号算术；删改后先 grep 新组件里的宿主前缀残留再构建。
 ## [2026-10-01] DevEco Code - Phase 3at 修复：BottomDock 点按后激活高亮不显示（回归）
 
 - **现象**：同日真机验收确认，点 BottomDock 五个入口后，被点项图标/文字保持灰（`#E5FFFFFF` / `#99FFFFFF`），**不变蓝**（`#70C8FF`）；面板切换与触摸命中本身正常（hilog `[DOCK] up item=place` → `setPanel place`）。逐项像素采样 max(B−R) 仅 2–3；正常激活态应≈143（纯 `#70C8FF`，B−R=255−112；上一版验收记的相邻 `CompactQuickButton` 激活环为 66，含抗锯齿）。

@@ -127,6 +127,10 @@ import { DockClockLayer, PadPanelHandle, PanelHandle } from '../panels/shell/Pan
 import { ScriptKeyButton } from '../panels/tools/ScriptKeyButton'
 import { GuideButton } from '../panels/guide/GuideButton'
 import { GuideLibrary } from '../panels/guide/GuideLibrary'
+import { AngleMeasurePanel } from '../panels/panels/AngleMeasurePanel'
+import { AudioPanel } from '../panels/panels/AudioPanel'
+import { Scenery3dPanel } from '../panels/panels/Scenery3dPanel'
+import { CatalogsPanel } from '../panels/panels/CatalogsPanel'
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
   NebulaTextureItem, NebulaTextureStatus, NebulaTextureRefreshResponse, SkyCultureMakerArtworkAnchor, SkyCultureMakerArtwork, SkyCultureMakerConstellation,
@@ -21762,64 +21766,15 @@ private loadPlanetPositions(): void {
         .padding({ left: 4, right: 4 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
 	    } else if (this.activePanel === 'catalogs') {
-	      if (OFFLINE_APPGALLERY_BUILD) {
-	        Column() {
-	          Text(I18n.t('m_all_catalogs_included')).fontSize(14).fontColor('#E5FFFFFF').margin({ top: 8 })
-	        }.width('100%').height(120).justifyContent(FlexAlign.Center)
-	      } else {
-	      // 星表下载面板
-	      if (this.catalogLoading) {
-        Column() {
-          Text(I18n.t('c_loading_catalogs')).fontSize(13).fontColor('#99FFFFFF')
-        }.width('100%').height(120).justifyContent(FlexAlign.Center)
-      } else if (this.catalogList.length === 0) {
-        Column() {
-          Text(I18n.t('m_no_catalogs')).fontSize(14).fontColor('#E5FFFFFF').margin({ top: 8 })
-          Text(I18n.t('m_all_catalogs_included')).fontSize(12).fontColor('#CC8FB6FF').margin({ top: 6 })
-        }.width('100%').height(120).justifyContent(FlexAlign.Center)
-      } else {
-        Scroll() {
-          Column({ space: 8 }) {
-            ForEach(this.catalogList, (c: StarCatalogItem) => {
-              Column({ space: 4 }) {
-                Row() {
-                  Column() {
-                    Text(c.name)
-                      .fontSize(14).fontColor('#E5FFFFFF').fontWeight(FontWeight.Medium)
-                      .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-                    if (c.size.length > 0) {
-                      Text('大小 ' + c.size)
-                        .fontSize(11).fontColor('#99FFFFFF').margin({ top: 2 })
-                    }
-                  }.layoutWeight(1)
-                  if (c.checked) {
-                    Text(I18n.t('c_installed'))
-                      .fontSize(11).fontColor('#7FB3DC')
-                      .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                      .backgroundColor('rgba(91,147,191,0.15)').borderRadius(UI_RADIUS_CONTROL)
-                  } else {
-                    Button(this.catalogBusy && this.catalogDownloadingId === c.id ? '下载中' : '下载')
-                      .fontSize(12).fontColor('#E5FFFFFF')
-                      .backgroundColor(this.catalogBusy ? 'rgba(255,255,255,0.10)' : 'rgba(107,163,214,0.35)')
-                      .borderRadius(UI_RADIUS_CONTROL).height(32).padding({ left: 14, right: 14 })
-                      .enabled(!this.catalogBusy)
-                      .onClick(() => { this.startCatalogDownload(c.id) })
-                  }
-                }.width('100%')
-                if (this.catalogBusy && this.catalogDownloadingId === c.id && this.catalogMsg.length > 0) {
-                  Text(this.catalogMsg).fontSize(11).fontColor('#99FFFFFF').width('100%')
-                }
-              }
-              .width('100%')
-              .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-              .backgroundColor('rgba(255,255,255,0.04)')
-              .borderRadius(UI_RADIUS_CONTROL)
-              .border({ width: 1, color: this.nmBorder() })
-            }, (c: StarCatalogItem) => c.id)
-          }.width('100%').padding({ left: 2, right: 2 })
-        }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-      }
-      }
+      CatalogsPanel({
+        loading: this.catalogLoading,
+        items: this.catalogList,
+        busy: this.catalogBusy,
+        downloadingId: this.catalogDownloadingId,
+        msg: this.catalogMsg,
+        cardBorderColor: this.nmBorder(),
+        onDownload: (id: string) => { this.startCatalogDownload(id) }
+      })
     } else if (this.activePanel === 'bookmarks') {
       BookmarkPanel({
         store: this.bookmarkStore,
@@ -22215,43 +22170,15 @@ private loadPlanetPositions(): void {
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else if (this.activePanel === 'angleMeasure') {
-      Scroll() {
-        Column({ space: 10 }) {
-          Row() {
-            Column({ space: 3 }) {
-              Text(I18n.t('panel_angle_measure')).fontSize(15).fontColor(this.nmText()).width('100%')
-              Text(I18n.t('angle_measure_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2)
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            Toggle({ type: ToggleType.Switch, isOn: this.tools.angleMeasureEnabled })
-              .enabled(!this.tools.angleMeasurePending)
-              .onChange((isOn: boolean) => { this.toggleAngleMeasure(isOn) })
-          }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 })
-            .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.tools.angleMeasureEnabled) {
-            Row({ space: 8 }) {
-              Button(I18n.t('angle_measure_reset')).fontSize(11).fontColor(this.nmText())
-                .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1)
-                .onClick(() => { this.resetAngleMeasure() })
-              Button(I18n.t('angle_measure_finish')).fontSize(11).fontColor('#FFFFFF')
-                .backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1)
-                .enabled(!this.tools.angleMeasurePending)
-                .onClick(() => { this.toggleAngleMeasure(false) })
-            }.width('100%')
-          }
-          if (this.tools.angleMeasureHasStart && !this.tools.angleMeasureHasEnd) {
-            Text(I18n.t('angle_measure_second_point')).fontSize(12).fontColor('#FFD59A').width('100%')
-              .padding({ left: 10, right: 10, top: 10, bottom: 10 })
-              .backgroundColor('rgba(194, 128, 36, 0.14)').borderRadius(UI_RADIUS_CONTROL)
-          }
-          if (this.tools.angleMeasureHasEnd && this.tools.angleMeasureText.length > 0) {
-            Column({ space: 4 }) {
-              Text(I18n.t('angle_measure_result')).fontSize(11).fontColor(this.nmSub()).width('100%')
-              Text(this.tools.angleMeasureText).fontSize(24).fontColor(this.nmAccent()).width('100%')
-            }.width('100%').padding(12).backgroundColor('rgba(91,147,191,0.12)').borderRadius(UI_RADIUS_CONTROL)
-          }
-          Text(I18n.t('angle_measure_touch_hint')).fontSize(11).fontColor(this.nmSub()).width('100%').maxLines(3)
-          }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+      AngleMeasurePanel({
+        store: this.tools,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        panelColor: this.nmBg(),
+        accentColor: this.nmAccent(),
+        onToggle: (enabled: boolean) => { this.toggleAngleMeasure(enabled) },
+        onReset: () => { this.resetAngleMeasure() }
+      })
     } else if (this.activePanel === 'navStars') {
       Scroll() {
         Column({ space: 10 }) {
@@ -22552,46 +22479,19 @@ private loadPlanetPositions(): void {
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else if (this.activePanel === 'scenery3d') {
-      Scroll() {
-        Column({ space: 10 }) {
-          Row() {
-            Column({ space: 2 }) {
-              Text(I18n.pluginName('Scenery3d')).fontSize(14).fontColor(this.nmText()).fontWeight(FontWeight.Medium)
-              Text('保留原版三维场景的介绍、作者、版权和模型来源信息').fontSize(10).fontColor(this.nmSub()).maxLines(2)
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            Toggle({ type: ToggleType.Switch, isOn: this.scenery3dEnabled })
-              .width(42).height(24).selectedColor(this.nmAccent())
-              .onChange((enabled: boolean) => { this.setScenery3dEnabled(enabled) })
-          }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 })
-            .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.scenery3dLoading && this.scenery3dItems.length === 0) {
-            Row({ space: 8 }) {
-              LoadingProgress().width(18).height(18).color(this.nmAccent())
-              Text(I18n.t('msg_loading')).fontSize(11).fontColor(this.nmSub())
-            }.width('100%').height(44).justifyContent(FlexAlign.Center)
-          }
-          if (this.scenery3dItems.length === 0 && !this.scenery3dLoading) {
-            Text('原版没有可用的三维地景资源').fontSize(11).fontColor(this.nmSub()).width('100%').textAlign(TextAlign.Center).padding(16)
-          }
-          ForEach(this.scenery3dItems, (scene: Scenery3dItem) => {
-            Column({ space: 4 }) {
-              Row() {
-                Text(scene.name.length > 0 ? scene.name : scene.id).fontSize(13).fontColor(this.nmText()).fontWeight(FontWeight.Medium).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                if (scene.current === true) Text('当前').fontSize(9).fontColor(this.nmAccent())
-                if (this.scenery3dLoadingId === scene.id) LoadingProgress().width(16).height(16).color(this.nmAccent())
-              }.width('100%')
-              Text(this.resourceText(scene.description, I18n.t('resource_not_provided'))).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-              Text(I18n.t('resource_author') + ': ' + this.resourceText(scene.author, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + this.resourceText(scene.copyright, I18n.t('resource_not_provided'))).fontSize(9).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-              if (scene.planet || scene.landscape || scene.modelScenery) {
-                Text((scene.planet ? '星球: ' + scene.planet : '') + (scene.landscape ? ' · 地景: ' + scene.landscape : '') + (scene.modelScenery ? ' · 模型: ' + scene.modelScenery : '')).fontSize(9).fontColor('#66FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-              }
-              if (scene.source) Text(I18n.t('resource_source') + ': ' + scene.source).fontSize(8).fontColor('#55FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              if (scene.descriptionSource) Text('介绍文件: ' + scene.descriptionSource).fontSize(8).fontColor('#55FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor(scene.current === true ? 'rgba(80,140,200,0.18)' : this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.setScenery3dScene(scene.id) })
-          }, (scene: Scenery3dItem) => scene.id)
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+      Scenery3dPanel({
+        pluginEnabled: this.scenery3dEnabled,
+        loading: this.scenery3dLoading,
+        items: this.scenery3dItems,
+        loadingId: this.scenery3dLoadingId,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        panelColor: this.nmBg(),
+        accentColor: this.nmAccent(),
+        resourceText: (value: string | undefined, fallback: string) => this.resourceText(value, fallback),
+        onToggleEnabled: (enabled: boolean) => { this.setScenery3dEnabled(enabled) },
+        onSelectScene: (id: string) => { this.setScenery3dScene(id) }
+      })
     } else if (this.activePanel === 'skyCultureMaker') {
       SkyCultureMakerPanel({
         store: this.skyCultureMakerStore,
@@ -23089,38 +22989,24 @@ private loadPlanetPositions(): void {
         onCollapseLog: () => { this.tools.logVisible = false }
       })
     } else if (this.activePanel === 'audio') {
-      // 音频控制面板
-      Scroll() {
-        Column({ space: 10 }) {
-          Text(I18n.t('panel_audio_ctrl')).fontSize(15).fontColor(this.nmText()).width('100%').margin({ top: 4 })
-          Row() {
-            Text(I18n.t('audio_toggle')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.musicEnabled })
-              .onChange((isOn: boolean) => {
-                this.musicEnabled = isOn
-                const engine = AudioEngine.getInstance()
-                if (isOn) { engine.start().then(() => { engine.setMuted(false) }) } else { engine.setMuted(true) }
-                this.persistMusicEnabled()
-                this.flashHint(isOn ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
-              })
-          }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text(I18n.t('audio_volume')).fontSize(13).fontColor('#E5FFFFFF').width(72)
-            Text(Math.round(this.audioVolume * 100) + '%').fontSize(13).fontColor(this.nmText()).margin({ right: 8 })
-            Slider({ value: this.audioVolume, min: 0, max: 1, step: 0.05, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .width('40%')
-              .blockColor(this.nmAccent())
-              .trackColor(this.nmBg())
-              .selectedColor(this.nmAccent())
-              .showSteps(false)
-              .onChange((val: number) => {
-                this.audioVolume = val
-                AudioEngine.getInstance().setVolume(val)
-              })
-          }.height(40).width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+      AudioPanel({
+        musicEnabled: this.musicEnabled,
+        audioVolume: this.audioVolume,
+        textColor: this.nmText(),
+        panelColor: this.nmBg(),
+        accentColor: this.nmAccent(),
+        onToggleMusic: (enabled: boolean) => {
+          this.musicEnabled = enabled
+          const engine = AudioEngine.getInstance()
+          if (enabled) { engine.start().then(() => { engine.setMuted(false) }) } else { engine.setMuted(true) }
+          this.persistMusicEnabled()
+          this.flashHint(enabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
+        },
+        onVolumeChange: (value: number) => {
+          this.audioVolume = value
+          AudioEngine.getInstance().setVolume(value)
+        }
+      })
     } else {
       InfoRow({ label: I18n.t('i0057'), value: this.isExpandedLayout ? I18n.t('s0703') : I18n.t('s0704') })
       InfoRow({ label: I18n.t('i0058'), value: 'Stellarium Core' })
