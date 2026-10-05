@@ -3,14 +3,16 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 
-const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
 const ability = readFileSync(new URL('../harmonyos/ets-source/qability/QAbility.ets', import.meta.url), 'utf8');
 // Phase 4l：astro 分支体已下沉到 panels/astro/AstroPanel.ets，UI 断言改读组件文件。
 const panel = readFileSync(new URL('../harmonyos/ets-source/panels/astro/AstroPanel.ets', import.meta.url), 'utf8');
-function method(name) {
-  const begin = source.indexOf('  private ' + name + '(');
+// D7：selectAstroTab / selectAstroGroup / selectAstroFilter 已下沉 capability/AstroCalcController.ets，
+// 行为断言改读控制器文件（原宿主 fixture 同步为控制器形状：hooks.animateAstroIn/Out + astroPanelOnScreen）。
+const controllerSource = readFileSync(new URL('../harmonyos/ets-source/capability/AstroCalcController.ets', import.meta.url), 'utf8');
+function ctlMethod(name) {
+  const begin = controllerSource.indexOf('  ' + name + '(');
   assert.ok(begin >= 0, name);
-  return source.slice(begin, source.indexOf('\n  }', begin) + 4);
+  return controllerSource.slice(begin, controllerSource.indexOf('\n  }', begin) + 4);
 }
 // Phase A1-2：astroGroupForTab / astroTabItemsForGroup 已迁到 common/derive/astro.ets，
 // 宿主不再有它们的 private 方法；从纯函数模块取（通过函数作用域传给 Controller）。
@@ -22,30 +24,38 @@ function deriveFn(name) {
 }
 function harness() {
   const code = 'class Controller {\n' + ['selectAstroTab', 'selectAstroGroup', 'selectAstroFilter']
-    .map(method).join('\n') + '\n}';
-  const Controller = new Function('Curve', 'astroGroupForTab', 'astroTabItemsForGroup', stripTypeScriptTypes(code) + '; return Controller;')(
-    { EaseIn: 'in', EaseOut: 'out' },
+    .map(ctlMethod).join('\n') + '\n}';
+  const Controller = new Function('astroGroupForTab', 'astroTabItemsForGroup', stripTypeScriptTypes(code) + '; return Controller;')(
     new Function(deriveFn('astroGroupForTab') + '; return astroGroupForTab;')(),
     new Function('I18n', deriveFn('astroTabItemsForGroup') + '; return astroTabItemsForGroup;')({ t: k => k }));
   const controller = new Controller();
   const callbacks = [];
   const animations = [];
   const loads = [];
-  Object.assign(controller, {
-    // §14 B2A：loadAstroTab 已下沉 state/AstroStore.ets，改由 astroStore 上的方法触发；
-    // loadWutTargets 在本提交仍留宿主（后续提交再下沉 WutStore）。
-    astroStore: { astroTab: 5, astroGroup: 0, astroContentOpacity: 1, astroContentOffsetX: 0, loadAstroTab: tab => loads.push(tab) },
-    astroRequestedTab: -1, astroTransitionId: 0,
-    panelVisible: true, activePanel: 'astro',
-    wutStore: { wutPeriod: 'evening', wutMinAltitude: 0, wutMaxMagnitude: 6, wutDirection: 'all', loadWutTargets: () => loads.push('wut') },
-    astroPanelScroller: { scrollTo: () => {} },
-    publishAstroPanelState: () => {}, saveAppSettings: () => {},
-    getUIContext: () => ({ animateTo: (options, update) => {
-      animations.push(options);
-      update();
-      if (options.onFinish) callbacks.push(options.onFinish);
-    } }),
-  });
+  // D7 fixture：控制器注入 (port, media, astro/ephemeris/wut/search store, hooks)，此处只装配
+  // 三个被测方法用到的 astroStore / wutStore / hooks 与两个草稿字段。
+  controller.astroStore = { astroTab: 5, astroGroup: 0, astroContentOpacity: 1, astroContentOffsetX: 0, loadAstroTab: tab => loads.push(tab) };
+  controller.wutStore = { wutPeriod: 'evening', wutMinAltitude: 0, wutMaxMagnitude: 6, wutDirection: 'all', loadWutTargets: () => loads.push('wut') };
+  controller.astroRequestedTab = -1;
+  controller.astroTransitionId = 0;
+  controller.panelVisible = true;
+  controller.activePanel = 'astro';
+  controller.hooks = {
+    publishAstroPanelState: () => {},
+    astroPanelOnScreen: () => controller.panelVisible !== false && controller.activePanel === 'astro',
+    scrollAstroPanelToTop: () => {},
+    saveAppSettings: () => {},
+    animateAstroIn: (durationMs, onFinish, action) => {
+      animations.push({ duration: durationMs, curve: 'in' });
+      action();
+      callbacks.push(onFinish);
+    },
+    animateAstroOut: (durationMs, onFinish, action) => {
+      animations.push({ duration: durationMs, curve: 'out' });
+      action();
+      callbacks.push(onFinish);
+    }
+  };
   return { controller, animations, loads, flush: () => { while (callbacks.length) callbacks.shift()(); } };
 }
 
