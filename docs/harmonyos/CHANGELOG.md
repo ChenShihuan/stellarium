@@ -1,3 +1,19 @@
+## [2026-10-04] DevEco Code - 记录：平板/折叠分支的验证结论与两项限制（补充 d5799a0175 的"未验证"项）
+
+- **模拟器为何不可用（先排障）**：`MatePad Pro 13`（tablet）与 `Mate X7`（foldable）**均无法启动**（`devecocli emulator start` 后状态仍为 `stopped`、无任何模拟器进程）。根因是 **Hyper-V/VBS 正在运行**：`systeminfo` 报 `Virtualization-based security: Status: Running` / `Hyper-V Requirements: A hypervisor has been detected`。HarmonyOS 模拟器需要独占的 hypervisor，与 Hyper-V 冲突；磁盘空间（C: 63GB / D: 67GB / E: 828GB 可用）与残留进程均已排除。修复需关闭 VBS/Hyper-V 并**重启** —— 属系统级改动，本片未擅自执行。
+- **替代验证（真机强制走平板分支）**：在宿主 `updateResponsiveLayout()` 末尾临时置 `nextMode = 'expanded'`，让手机跑**与平板完全相同的代码路径**，构建装真机后截图确认：
+  - `+/−` **横排**（`chromeZoomHorizontal = true`，一行 44 + 4 间隙）；
+  - 双行 FOV 胶囊（`FOV` / `60.0°`）位于**屏幕左缘**（`chromeRowPosXLeft() = EDGE_MARGIN`）；
+  - 时钟位于**屏幕右缘**（`chromeRowPosXRight() = skyWidth - EDGE_MARGIN - dockWidth`）；
+  - 即：均**不再贴 dock 两端**。折叠展开态与平板同属 `expanded` 分支（因此该截图同时覆盖折叠展开）；折叠半折 `hover` 与手机 `compact` 同属紧凑几何（此前已在手机验证）。
+  - **验证后临时强制已移除**并复核：`TEMP:` 区分大小写命中 **0**；layout 日志回到 `uiMode=compact hover=false foldTablet=false expanded=false`；`git status` 已跟踪文件干净（未留痕）。
+- **两项限制（如实记录，不在本轮掩盖）**：
+  1. **"三件套独立于 dock、开关面板不横移"未能直接观测**：三件套与常驻时钟共用可见条件（`!panelVisible && !polarScopeVisible`），**面板打开时它本来就隐藏**；而它可见时 `expandedDockOccupiedLeft()` 恒走"无面板"分支，dock 不会右移。⇒ 当初"面板挤动 dock 会让三件套横移"的担忧，对**三件套本身**其实不成立。
+  2. **手机屏宽下两种锚定策略几何重合**：强制 expanded 时 `expandedDockWidth()` 受 `available`（≈254vp）约束、`expandedDockLeft()` 恰好等于 `EDGE_MARGIN`，故"贴屏幕缘"与"跟随 dock 两端"在该屏宽下算出同一个 x，**无法区分**；要看出差别必须有**真平板/宽屏**（`expandedDockWidth` 饱和到 640 并被居中）。
+  ⇒ 综合两条：平板的"贴屏幕左右缘"目前应定性为**设计选择**（用户已批的 B 方案——读数贴屏幕两端、按钮横排），而**不是**"修掉了一个已复现的横向漂移"。若后续拿到真平板，应补一次"面板开合前后三件套 x 不变"的对照走查（届时需要放开 `!panelVisible` 之外的可见条件或用其它方式让二者同屏）。
+- **顺带发现（缺失命令）**：**没有可语义驱动"打开面板"的 CLI 命令**（目录中仅 `getAstroPanelState` 可查询状态），本轮开面板只能用坐标点击（`uinput -T -c` 点 dock 的"时间"项）——与之前记录的"观测列表标签切换 / 行内动作无命令"同类，建议后续补 `openPanel`/`setPanel` 之类的语义命令。
+- **未改动任何交付代码**：本片只做验证与记录；`d5799a0175` 的交付内容不变。
+
 ## [2026-10-04] DevEco Code - dock 上方 chrome 重构（FOV 读数 / 缩放按钮 + 平板适配）、命中错位修复、握姿方案实测结论、死代码清理
 
 - **需求（用户）**：① FOV 读数移到左侧、与右侧常驻时钟左右对称；② 缩放按钮 `+/−` 抬到**紧贴 FOV 上方**（单手不必下探到 dock 边缘），但**不要**挪到左上角；③ 平板/折叠屏此前只适配了手机——平板 dock 位于一侧且宽度封顶，需按平板布局适配；④ 评估"智感握姿自动换边"；⑤ 点击缩放按钮不要再弹"视场 xx°"；⑥ `FOV 20.8°` 单行太长、与时钟不对称，要更好的思路；⑦ 清掉无入口的视场预设死分支。
