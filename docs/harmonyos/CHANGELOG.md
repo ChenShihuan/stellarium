@@ -1,3 +1,11 @@
+## [2026-09-30] DevEco Code - Phase 2：抽出命令桥 BridgeClient（libentry.so 唯一出口）
+
+- **新增文件：** `harmonyos/ets-source/bridge/BridgeClient.ets` —— `request()`（发送并解析回包，失败统一 `{ ok:false, error:'bridge parse failed' }`）、`send()`（fire-and-forget 原始回包）、`requestWhenReady()`（未就绪时短退避重试）、`requestInteractive()`（50 ms × 40 交互轮询）。
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets` —— `callNative` / `callNativeFire` / `callNativeWhenReady` 改为薄委托并保留录制钩子 `recordAcceptedCommand`；`callInteractive` 及其 203 个调用点完全不动；删除 `import { command } from 'libentry.so'`，改为 `import { BridgeClient } from '../bridge/BridgeClient'`（ArkTS 侧不再直接触碰 NAPI 导出）。
+- **行为等价性核对：** ① `callNative`——原来在 try 内 parse 后记录，现由 `BridgeClient.request` 负责 parse、宿主在 `ok === true` 时记录，parse 失败同样不记录；② `callNativeFire`——原来 `command()` 抛错即静默忽略，现 `send()` 返回空串即早退，同样不记录；③ `callNativeWhenReady`——重试循环搬入桥，成功时仍只经宿主包装函数记录一次再回调 `onOk`，记录与回调顺序不变。
+- **验证结果：** `arkts_check` 无错误；`BUILD SUCCESSFUL in 57 s 858 ms`；`node scripts/check-ohos-ui-contract.mjs` 通过；模拟器 `127.0.0.1:5555` 安装启动成功，点击 Dock「时间」仍能打开时间面板（标题「时间 --」、`panel-close` 锚点、速度 chips 倒带/实时/快进 均在），说明经桥的命令链在 UI-only 模式下行为未变。
+- **遗留（待后续切片）：** `qability/QAbility.ets` 仍直接 `import { command } from 'libentry.so'` 用于 `setApplicationForeground` 生命周期通知，未纳入本次桥封装。
+
 ## [2026-09-30] DevEco Code - Phase 1b：把纯函数 getIcon 抽到 common/ui/ShellIcons
 
 - **新增文件：** `harmonyos/ets-source/common/ui/ShellIcons.ets` —— `export function getIcon(icon: string, isActive: boolean): Resource`，图标名到 `$r('app.media.*')` 的纯映射（原方法体逐行搬移）。
