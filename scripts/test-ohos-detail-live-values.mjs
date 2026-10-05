@@ -4,27 +4,30 @@ import { test } from 'node:test';
 
 const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
 const getterBody = source.match(/private selectedDisplayValue\(key: string\): string \{([\s\S]*?)\n  \}/)[1];
-const getter = new Function('key', getterBody);
+// Phase A1-3：zhNameOf 已迁到 common/derive/labels.ets，宿主方法体改用自由变量调用它；
+// 提取出来的函数体通过形参拿到一个替身（本测试只验 selectedDisplayValue 读的是当前状态）。
+const getter = new Function('key', 'zhNameOf', getterBody);
+const zhNameOf = value => value;
 const fields = [...getterBody.matchAll(/case '(selected\w+)':/g)].map(match => match[1]);
 
 // 选中天体的取值统一改由 ObjectDetailStore 承载（本轮状态搬迁），
 // 因此下面的假宿主改为注入 objectDetailStore，断言“取值读的是当前状态”这一不变式。
 
 test('every selected-object value resolves current state rather than a builder snapshot', () => {
-  const state = { zhNameOf: value => value, objectDetailStore: {} };
+  const state = { objectDetailStore: {} };
   for (const field of fields) {
     state.objectDetailStore[field] = 'first';
-    assert.equal(getter.call(state, field), 'first', field);
+    assert.equal(getter.call(state, field, zhNameOf), 'first', field);
     state.objectDetailStore[field] = 'second';
-    assert.equal(getter.call(state, field), 'second', field);
+    assert.equal(getter.call(state, field, zhNameOf), 'second', field);
   }
 });
 
 test('hidden or unavailable coordinates do not retain their last value', () => {
   const state = { objectDetailStore: { selectedCoordApparentAltAz: '', selectedCoordAlt: 'fallback' } };
-  assert.equal(getter.call(state, 'selectedCoordApparentAltAz'), 'fallback');
+  assert.equal(getter.call(state, 'selectedCoordApparentAltAz', zhNameOf), 'fallback');
   state.objectDetailStore.selectedCoordAlt = '';
-  assert.equal(getter.call(state, 'selectedCoordApparentAltAz'), '');
+  assert.equal(getter.call(state, 'selectedCoordApparentAltAz', zhNameOf), '');
 });
 
 test('structured row resolves replaced fields and handles fields that disappear', () => {

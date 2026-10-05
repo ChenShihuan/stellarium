@@ -8,8 +8,9 @@
 //   - gyroStore / layerStore / nightModeStore / telescopeStore / observingListStore /
 //     skyCultureViewStore / viewSettingsStore 七个 @Observed store 走 @ObjectLink（宿主源均为 @State 实例）；组件内对其属性的写入会被宿主观测到（规则 4）。
 //   - 其余标量/数组状态走 @Prop，主题色由宿主算好后传入（panelColor）。
-//   - 宿主私有动作（sensZh / flashHint / handleChip / refreshState / saveScreenshot /
-//     observing* / setLanguage / setSkyCulture / triggerAction 等）按规则 6 回注。
+//   - sensZh 已直连 common/derive/labels（§14.2 A1-3）；宿主私有动作（flashHint /
+//     handleChip / refreshState / saveScreenshot / observing* / setLanguage /
+//     setSkyCulture / triggerAction 等）按规则 6 回注。
 //   - 原 `useMetricUnits = <x>; callInteractive('setConfigString', ...)` 合并为
 //     setLegacyDistanceUnit(useMetric) 单一回调；观测列表清空合并为 clearObservingList()；
 //     观测项点选合并为 selectObservingTarget(name)。
@@ -30,6 +31,7 @@ import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 import { InfoRow } from '../../common/ui/InfoRow'
 import { GyroscopeRow, LanguageRow } from '../settings/DeviceAndLanguageRows'
 import { QuickChipRow } from '../QuickChipRow'
+import { sensZh } from '../../common/derive/labels'
 
 @Component
 export struct ConfigFallbackPanel {
@@ -44,7 +46,6 @@ export struct ConfigFallbackPanel {
   @Prop fovText: string
   @Prop selectedLanguage: string
   @Prop panelColor: string
-  sensZh: (en: string) => string = (en: string) => en
   observingDisplayName: (name: string) => string = (name: string) => name
   selectObservingTarget: (name: string) => void = () => {}
   removeObservingTarget: (name: string) => void = () => {}
@@ -66,7 +67,7 @@ export struct ConfigFallbackPanel {
       InfoRow({ label: I18n.t('i0058'), value: 'Stellarium Core' })
       InfoRow({ label: I18n.t('i0059'), value: this.fovText })
       InfoRow({ label: I18n.t('i0060'), value: this.gyroStore.gyroscopeStatus })
-      InfoRow({ label: I18n.t('i0061'), value: this.sensZh(this.gyroStore.gyroscopeSensitivityText) })
+      InfoRow({ label: I18n.t('i0061'), value: sensZh(this.gyroStore.gyroscopeSensitivityText) })
       GyroscopeRow({ isOn: this.gyroStore.gyroscopeEnabled, onToggle: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) } })
       LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
       Row() {

@@ -39,6 +39,7 @@ import {
 } from '../common/ui/ChromeGeometry'
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot } from '../common/derive/gyro'
 import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
+import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute } from '../common/derive/labels'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
@@ -3516,16 +3517,12 @@ export struct WindowNativeNode {
     return this.scriptStore.scriptMetadata[filename]
   }
 
-  private resourceText(value: string | undefined, fallback: string): string {
-    return value !== undefined && value.trim().length > 0 ? value.trim() : fallback
-  }
-
   private scriptMetaLine(filename: string): string {
     const metadata = this.scriptMeta(filename)
     if (metadata === undefined) { return I18n.t('resource_not_provided') }
     const values: string[] = []
-    values.push(I18n.t('resource_author') + ': ' + this.resourceText(metadata.author, I18n.t('resource_not_provided')))
-    values.push(I18n.t('resource_license') + ': ' + this.resourceText(metadata.license, I18n.t('resource_not_provided')))
+    values.push(I18n.t('resource_author') + ': ' + resourceText(metadata.author, I18n.t('resource_not_provided')))
+    values.push(I18n.t('resource_license') + ': ' + resourceText(metadata.license, I18n.t('resource_not_provided')))
     if (metadata.version && metadata.version.trim().length > 0) { values.push(I18n.t('resource_version') + ': ' + metadata.version.trim()) }
     return values.join(' · ')
   }
@@ -4872,7 +4869,7 @@ export struct WindowNativeNode {
       this.coordinateText = this.locationStore.formatDegrees(result.latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(result.longitude, 'E', 'W')
       if (result.locationName !== undefined && result.locationName.length > 0) {
         const planetName = result.planetName && result.planetName.length > 0 ? result.planetName : 'Earth'
-        this.locationText = this.locationPickerStore.locationDisplayName(result.locationName) + ' · ' + this.planetZh(planetName)
+        this.locationText = this.locationPickerStore.locationDisplayName(result.locationName) + ' · ' + planetZh(planetName)
       }
       if (result.altitude !== undefined) {
         this.altitudeText = result.altitude.toFixed(0) + ' m'
@@ -5588,7 +5585,7 @@ export struct WindowNativeNode {
     if (this.astroStore.astroTab === 0) {
       if (this.astroStore.positionMode === 0 && this.astroStore.planetPositions.length > 0) {
         return { title: '地平位置', headers: ['天体', '赤经(当日)', '赤纬(当日)', '高度(度)', '方位(度)', '星等', '距离(AU)', '视直径(角分)', '中天'],
-          rows: this.astroStore.planetPositions.map((item: PlanetPosition) => [this.planetZh(item.name), item.rightAscension, item.declination, item.altitude, item.azimuth, item.magnitude, item.distanceAU, item.angularSizeArcmin, item.transit]) }
+          rows: this.astroStore.planetPositions.map((item: PlanetPosition) => [planetZh(item.name), item.rightAscension, item.declination, item.altitude, item.azimuth, item.magnitude, item.distanceAU, item.angularSizeArcmin, item.transit]) }
       }
       if (this.astroStore.positionMode === 1 && this.astroStore.hecPositions.length > 0) {
         return { title: '日心黄道位置', headers: ['天体', '英文名', '黄纬(度)', '黄经(度)', '日心距离(AU)', '彗星', '已选小天体'],
@@ -5630,7 +5627,7 @@ export struct WindowNativeNode {
       }
     } else if (this.astroStore.astroTab === 5 && this.wutStore.wutTargets.length > 0) {
       return { title: '今晚可观测天体', headers: ['天体', '英文名', '类型', '观测时刻', '高度(度)', '方位(度)', '星等', '角尺寸(角分)', '升起', '中天', '落下'],
-        rows: this.wutStore.wutTargets.map((item: WutTarget) => [this.zhNameOf(item.name ?? ''), item.englishName, item.type, this.wutStore.wutObservationTime, item.altitude, item.azimuth, item.magnitude, item.angularSizeArcmin, item.rise, item.transit, item.set]) }
+        rows: this.wutStore.wutTargets.map((item: WutTarget) => [zhNameOf(item.name ?? ''), item.englishName, item.type, this.wutStore.wutObservationTime, item.altitude, item.azimuth, item.magnitude, item.angularSizeArcmin, item.rise, item.transit, item.set]) }
     } else if (this.astroStore.astroTab === 6) {
       if (this.astroStore.planetCalcMode === 0 && this.astroStore.planetCalcData.length > 0) {
         return { title: '行星计算', headers: ['天体', '英文名', '赤经', '赤纬', '高度(度)', '方位(度)', '星等', '距离(AU)', '距日(度)', '相位(%)', '升起', '中天', '落下'],
@@ -6255,7 +6252,7 @@ export struct WindowNativeNode {
 
   private graphTargetLabel(): string {
     if (this.objectDetailStore.selectedName.length === 0) return '尚未选择天体'
-    return this.zhNameOf(this.objectDetailStore.selectedName)
+    return zhNameOf(this.objectDetailStore.selectedName)
   }
 
   private updatePlanetTimeSeriesRanges(data: Array<PlanetTimeSeriesPoint>): void {
@@ -8643,47 +8640,14 @@ export struct WindowNativeNode {
     })
   }
 
-  private pluginFeatureRoute(id: string): PluginFeatureRoute {
-    if (id === 'Oculars') return { panel: 'oculars', kind: 'control' }
-    if (id === 'Satellites') return { panel: 'satellites', kind: 'control' }
-    if (id === 'MeteorShowers') return { panel: 'meteorshowers', kind: 'control' }
-    if (id === 'AngleMeasure') return { panel: 'angleMeasure', kind: 'control' }
-    if (id === 'MosaicCamera') return { panel: 'mosaicCamera', kind: 'control' }
-    if (id === 'ArchaeoLines') return { panel: 'archaeoLines', kind: 'control' }
-    if (id === 'NavStars') return { panel: 'navStars', kind: 'control' }
-    if (id === 'PointerCoordinates') return { panel: 'pointerCoordinates', kind: 'control' }
-    if (id === 'Scenery3d') return { panel: 'scenery3d', kind: 'control' }
-    if (id === 'TelescopeControl') return { panel: 'telescope', kind: 'control' }
-    if (id === 'EquationOfTime') return { panel: 'time', kind: 'host' }
-    if (id === 'TimeNavigator') return { panel: 'time', kind: 'host' }
-    if (id === 'Calendars') return { panel: 'astro', kind: 'host', astroTab: 8 }
-    if (id === 'Observability') return { panel: 'astro', kind: 'host', astroTab: 4, graphMode: 3 }
-    if (id === 'ObjectVisibility') return { panel: 'astro', kind: 'host', astroTab: 4, graphMode: 3 }
-    if (id === 'TextUserInterface' || id === 'Text User Interface') return { panel: 'commands', kind: 'host' }
-    if (id === 'NebulaTextures') return { panel: 'nebulaTextures', kind: 'control' }
-    if (id === 'SkyCultureMaker') return { panel: 'skyCultureMaker', kind: 'control' }
-    if (id === 'Planes') return { panel: '', kind: 'network' }
-    if (id === 'Exoplanets' || id === 'Pulsars' || id === 'Quasars' || id === 'Novae' || id === 'Supernovae') {
-      return { panel: 'search', kind: 'catalog', catalogModuleId: id }
-    }
-    if (id === 'OnlineQueries' || id === 'RemoteControl' || id === 'RemoteSync') {
-      return { panel: '', kind: 'offline' }
-    }
-    if (id === 'LensDistortionEstimator' || id === 'SolarSystemEditor' || id === 'Vts' ||
-      id === 'Oculus' || id === 'SimpleDrawLine' || id === 'HelloStelModule') {
-      return { panel: '', kind: 'unavailable' }
-    }
-    return { panel: '', kind: 'unavailable' }
-  }
-
   private pluginFeatureDestination(id: string): string {
-    const route = this.pluginFeatureRoute(id)
-    if (route.kind === 'control') return I18n.format('plugin_destination_control', [this.pluginHostName(route.panel)])
-    if (route.kind === 'catalog') return I18n.format('plugin_destination_catalog', [this.pluginZh(id)])
+    const route = pluginFeatureRoute(id)
+    if (route.kind === 'control') return I18n.format('plugin_destination_control', [pluginHostName(route.panel)])
+    if (route.kind === 'catalog') return I18n.format('plugin_destination_catalog', [pluginZh(id)])
     if (route.kind === 'host') {
-      let destination = this.pluginHostName(route.panel)
-      if (id === 'ObjectVisibility') destination += ' > ' + this.pluginZh('Observability')
-      else destination += ' > ' + this.pluginZh(id)
+      let destination = pluginHostName(route.panel)
+      if (id === 'ObjectVisibility') destination += ' > ' + pluginZh('Observability')
+      else destination += ' > ' + pluginZh(id)
       return I18n.format('plugin_destination_host', [destination])
     }
     if (route.kind === 'network') return I18n.t('plugin_network_disabled')
@@ -8692,31 +8656,14 @@ export struct WindowNativeNode {
   }
 
   private pluginFeatureIsActionable(id: string): boolean {
-    const kind = this.pluginFeatureRoute(id).kind
+    const kind = pluginFeatureRoute(id).kind
     return kind === 'control' || kind === 'catalog' || kind === 'host'
   }
 
   private pluginFeatureActionLabel(id: string): string {
-    return this.pluginFeatureRoute(id).kind === 'catalog'
+    return pluginFeatureRoute(id).kind === 'catalog'
       ? I18n.t('plugin_open_catalog')
       : I18n.t('plugin_open_feature')
-  }
-
-  private pluginHostName(panel: string): string {
-    if (panel === 'search') return I18n.t('dock_search')
-    if (panel === 'time') return I18n.t('dock_time')
-    if (panel === 'astro') return I18n.t('i0274')
-    if (panel === 'layers') return I18n.t('i0100')
-    if (panel === 'catalogs') return I18n.t('p_catalogs')
-    if (panel === 'tools') return I18n.t('panel_tools_data')
-    if (panel === 'commands') return I18n.t('panel_commands')
-    if (panel === 'oculars') return I18n.t('panel_oculars')
-    if (panel === 'satellites') return I18n.t('panel_satellites')
-    if (panel === 'meteorshowers') return I18n.t('plugin_meteor_showers')
-    if (panel === 'angleMeasure') return I18n.t('panel_angle_measure')
-    if (panel === 'nebulaTextures') return I18n.t('nebula_texture_title')
-    if (panel === 'skyCultureMaker') return I18n.t('sky_culture_maker_title')
-    return panel
   }
 
   private loadNebulaTextureStatus(): void {
@@ -8816,7 +8763,7 @@ export struct WindowNativeNode {
   }
 
   private openPluginFeature(id: string): void {
-    const route = this.pluginFeatureRoute(id)
+    const route = pluginFeatureRoute(id)
     if (route.kind === 'offline') {
       this.flashHint(I18n.t('plugin_offline_disabled'))
       return
@@ -9189,7 +9136,7 @@ private loadPlanetPositions(): void {
 
   // Keep constellation navigation clear and light: labels and lines, no global boundaries.
   private openConstellationGuide(name: string, moduleId: string = 'ConstellationMgr', displayName: string = ''): void {
-    this.flashHint('已开启星座名称和连线，正在定位' + (displayName.length > 0 ? displayName : this.zhNameOf(name)))
+    this.flashHint('已开启星座名称和连线，正在定位' + (displayName.length > 0 ? displayName : zhNameOf(name)))
     this.callInteractive('setActionChecked', 'actionShow_Constellation_Boundaries|0', () => {
       this.layerStore.constellationBoundaries = false
       this.callInteractive('setActionChecked', 'actionShow_Constellation_Lines|1', () => {
@@ -11160,7 +11107,7 @@ private loadPlanetPositions(): void {
         } else {
           this.trackingText = 'Off'
         }
-        const displayName = this.zhNameOf(this.objectDetailStore.selectedName.length > 0 ? this.objectDetailStore.selectedName : query)
+        const displayName = zhNameOf(this.objectDetailStore.selectedName.length > 0 ? this.objectDetailStore.selectedName : query)
         this.flashHint(I18n.t('i0071').replace('%s', displayName))
       } else {
         this.applySelectedObject(result)
@@ -11848,25 +11795,15 @@ private loadPlanetPositions(): void {
 
   // 天体名称由核心的官方 .qm 资源提供。ArkUI 只负责排版，不再维护
   // 第二套恒星、行星或深空天体译名。
-  private zhNameOf(raw: string): string {
-    if (!raw || raw.length === 0) { return raw }
-    const value = raw.trim()
-    if (I18n.getLanguage() !== 'zh_CN' && I18n.getLanguage() !== 'zh_TW') { return value }
-    // Stellarium 的官方中文星名有时保留英文/拉丁名，例如“天狼 Sirius”。
-    // 主标题只显示中文部分，英文名和目录号由独立副标题承载。
-    if (!/[一-鿿]/.test(value)) { return value }
-    return value.replace(/\s+[A-Za-z][A-Za-z0-9 .-]*$/, '').trim()
-  }
-
   private observingDisplayName(englishName: string): string {
     const target = this.wutStore.wutTargets.find((item: WutTarget) => item.englishName === englishName)
     if (target !== undefined) return this.wutTargetTitle(target)
-    return this.planetZh(englishName) !== englishName ? this.planetZh(englishName) : this.zhNameOf(englishName)
+    return planetZh(englishName) !== englishName ? planetZh(englishName) : zhNameOf(englishName)
   }
 
 
   private celestialTitle(nativeName: string, englishName: string): string {
-    const localizedNative = this.zhNameOf(nativeName)
+    const localizedNative = zhNameOf(nativeName)
     return localizedNative.length > 0 ? localizedNative : englishName
   }
 
@@ -11933,11 +11870,6 @@ private loadPlanetPositions(): void {
   }
 
 
-
-  // 天体类型本地化（Planet→行星…）；支持复合类型如 "double star, pulsating variable star"。
-  private zhType(type: string): string {
-    return I18n.objectType(type)
-  }
 
   private applySelectedInfoMode(mode: string): void {
     this.infoWindowStore.informationMode = mode
@@ -12455,7 +12387,7 @@ private loadPlanetPositions(): void {
     // Update picker UI immediately (non-blocking, gives instant feedback)
     this.setPickerLocation(name, latitude, longitude, altitude, I18n.t('m_synced_to_sky'))
     this.sessionToolStore.observerPlanet = targetPlanet
-    this.locationText = this.locationPickerStore.locationDisplayName(name) + ' · ' + this.planetZh(targetPlanet)
+    this.locationText = this.locationPickerStore.locationDisplayName(name) + ' · ' + planetZh(targetPlanet)
     this.coordinateText = this.locationStore.formatDegrees(latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(longitude, 'E', 'W')
     this.altitudeText = altitude.toFixed(0) + ' m'
     this.locationPickerStore.observerTimeZone = targetPlanet === 'Earth' ? this.approximateTimeZoneDisplay(longitude) : I18n.t('tz_system')
@@ -13061,7 +12993,7 @@ private loadPlanetPositions(): void {
     const locObj = r.location as Record<string, Object>
     const planet = (r.location && locObj['planetName'] !== undefined) ? String(locObj['planetName']) : 'Earth'
     const selection = r.selected ? I18n.format('m_session_selected', [r.selected]) : I18n.t('m_session_unselected')
-    return I18n.format('m_session_summary', [(r.fovDeg ?? 0).toFixed(1), this.planetZh(planet), selection])
+    return I18n.format('m_session_summary', [(r.fovDeg ?? 0).toFixed(1), planetZh(planet), selection])
   }
 
   private sessionExport(): void {
@@ -13424,7 +13356,7 @@ private loadPlanetPositions(): void {
       hilog.info(0x0000, 'StellariumArkUI', 'selectAt result: ' + JSON.stringify(result))
       this.applySelectedObject(result)
       this.flashHint(result.found === true
-        ? I18n.t('i0074').replace('%s', this.zhNameOf(this.objectDetailStore.selectedName))
+        ? I18n.t('i0074').replace('%s', zhNameOf(this.objectDetailStore.selectedName))
         : I18n.t('i0075'))
     })
   }
@@ -14065,7 +13997,7 @@ private loadPlanetPositions(): void {
             guideRemaining: this.guideStore.guideState.remaining,
             guideTitle: I18n.t(this.currentGuide().title),
             guideCredit: I18n.t(this.currentGuide().credit),
-            guideStepTitle: this.planetZh(this.currentGuideStep().title),
+            guideStepTitle: planetZh(this.currentGuideStep().title),
             guideStepText: this.currentGuideStep().text,
             guideStepKey: this.currentGuideStep().target,
             cardWidth: this.guideCardWidth(),
@@ -14081,7 +14013,7 @@ private loadPlanetPositions(): void {
             scriptStore: this.scriptStore,
             playbackVisible: this.scriptPlaybackVisible(),
             compact: this.scriptControlCompact(),
-            displayName: this.scriptZh(this.scriptStore.scriptId.length > 0 ? this.scriptStore.scriptId : (this.scriptStore.scriptLaunchingName.length > 0 ? this.scriptStore.scriptLaunchingName : this.scriptStore.replayName)),
+            displayName: scriptZh(this.scriptStore.scriptId.length > 0 ? this.scriptStore.scriptId : (this.scriptStore.scriptLaunchingName.length > 0 ? this.scriptStore.scriptLaunchingName : this.scriptStore.replayName)),
             hasCaptions: this.visibleScriptCaptions().length > 0,
             captionText: this.visibleScriptCaptionText(),
             waitText: this.scriptWaitDisplayText(),
@@ -14178,8 +14110,8 @@ private loadPlanetPositions(): void {
                 onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
                 onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) },
                 resolve: (key: string) => this.selectedDisplayValue(key),
-                nameOf: (name: string) => this.zhNameOf(name),
-                typeOf: (type: string) => this.zhType(type),
+                nameOf: (name: string) => zhNameOf(name),
+                typeOf: (type: string) => zhType(type),
                 onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
                 onDismiss: () => { this.dismissObjectInspector() },
                 onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
@@ -14295,8 +14227,8 @@ private loadPlanetPositions(): void {
                 onCalibrate: () => { this.calibrateGyroscope() },
                 onToggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
                 resolve: (key: string) => this.selectedDisplayValue(key),
-                nameOf: (name: string) => this.zhNameOf(name),
-                typeOf: (type: string) => this.zhType(type),
+                nameOf: (name: string) => zhNameOf(name),
+                typeOf: (type: string) => zhType(type),
                 onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
                 onDismiss: () => { this.dismissObjectInspector() },
                 onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
@@ -14429,8 +14361,8 @@ private loadPlanetPositions(): void {
                 onCalibrate: () => { this.calibrateGyroscope() },
                 onToggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
                 resolve: (key: string) => this.selectedDisplayValue(key),
-                nameOf: (name: string) => this.zhNameOf(name),
-                typeOf: (type: string) => this.zhType(type),
+                nameOf: (name: string) => zhNameOf(name),
+                typeOf: (type: string) => zhType(type),
                 onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
                 onDismiss: () => { this.dismissObjectInspector() },
                 onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
@@ -14536,7 +14468,7 @@ private loadPlanetPositions(): void {
         if (this.objectMediaStore.objectInspectorMediaFullscreen) {
           ObjectInspectorMediaPreviewOverlay({
             objectMediaStore: this.objectMediaStore,
-            titleText: this.zhNameOf(this.objectDetailStore.selectedName),
+            titleText: zhNameOf(this.objectDetailStore.selectedName),
             topInset: this.mediaPreviewTopInset(),
             closeObjectInspectorMediaPreview: () => { this.closeObjectInspectorMediaPreview() },
             onObjectInspectorMediaPreviewLoaded: () => { this.onObjectInspectorMediaPreviewLoaded() },
@@ -15947,15 +15879,9 @@ private loadPlanetPositions(): void {
         }
         hilog.error(0x0000, 'StellariumArkUI',
           '[detail-media] pixel map decode failed kind=%{public}s uri=%{public}s error=%{public}s',
-          kind, expectedPath, this.describeDecodeError(err))
+          kind, expectedPath, describeDecodeError(err))
       })
     }
-  }
-
-  private describeDecodeError(err: Error): string {
-    const name = err.name !== undefined && err.name.length > 0 ? err.name : 'Error'
-    const message = err.message !== undefined && err.message.length > 0 ? err.message : 'unknown failure'
-    return name + ': ' + message
   }
 
   private failObjectInspectorModelTexture(mediaGeneration: number, reason: string): void {
@@ -16027,7 +15953,7 @@ private loadPlanetPositions(): void {
         pixelMap.readPixelsToBufferSync(pixels)
       } catch (err) {
         this.releaseDecodedImage(pixelMap, 'model-texture-fallback')
-        this.failObjectInspectorModelTexture(mediaGeneration, 'PNG readback failed: ' + this.describeDecodeError(err as Error))
+        this.failObjectInspectorModelTexture(mediaGeneration, 'PNG readback failed: ' + describeDecodeError(err as Error))
         return
       }
       this.releaseDecodedImage(pixelMap, 'model-texture-fallback')
@@ -16043,17 +15969,17 @@ private loadPlanetPositions(): void {
           ringTexture = ringPixels
         } catch (err) {
           hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] ring PNG readback failed error=%{public}s',
-            this.describeDecodeError(err as Error))
+            describeDecodeError(err as Error))
         }
         this.releaseDecodedImage(ringPixelMap, 'model-ring-texture-fallback')
         this.commitObjectInspectorModelTexture(pixels, ringTexture, mediaGeneration, expectedSelection, expectedPath, 'png')
       }, (err: Error) => {
         hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] ring PNG decode failed error=%{public}s',
-          this.describeDecodeError(err))
+          describeDecodeError(err))
         this.commitObjectInspectorModelTexture(pixels, undefined, mediaGeneration, expectedSelection, expectedPath, 'png')
       }, { width: 512, height: 2 })
     }, (err: Error) => {
-      this.failObjectInspectorModelTexture(mediaGeneration, 'PNG decode failed: ' + this.describeDecodeError(err))
+      this.failObjectInspectorModelTexture(mediaGeneration, 'PNG decode failed: ' + describeDecodeError(err))
     }, { width: 512, height: 256 })
   }
 
@@ -16109,7 +16035,7 @@ private loadPlanetPositions(): void {
           }
           hilog.warn(0x0000, 'StellariumArkUI',
             '[detail-model] ring texture unavailable path=%{public}s error=%{public}s',
-            ringRawFilePath, this.describeDecodeError(ringErr as Error))
+            ringRawFilePath, describeDecodeError(ringErr as Error))
         }
       }
       this.commitObjectInspectorModelTexture(pixels, ringTexture, mediaGeneration, expectedSelection, expectedPath, 'sidecar')
@@ -16121,12 +16047,12 @@ private loadPlanetPositions(): void {
       }
       hilog.warn(0x0000, 'StellariumArkUI',
         '[detail-model] sidecar load failed path=%{public}s error=%{public}s',
-        rawFilePath, this.describeDecodeError(err as Error))
+        rawFilePath, describeDecodeError(err as Error))
       if (pngFilePath.length > 0) {
         this.decodeObjectInspectorModelTextureFromPng(pngFilePath, ringPngFilePath, mediaGeneration, expectedSelection, expectedPath)
         return
       }
-      this.failObjectInspectorModelTexture(mediaGeneration, 'sidecar failed: ' + this.describeDecodeError(err as Error))
+      this.failObjectInspectorModelTexture(mediaGeneration, 'sidecar failed: ' + describeDecodeError(err as Error))
     }
   }
 
@@ -16414,7 +16340,7 @@ private loadPlanetPositions(): void {
       case 'selectedAirmass': return this.objectDetailStore.selectedAirmass
       case 'selectedApparentMagnitude': return this.objectDetailStore.selectedApparentMagnitude
       case 'selectedApparentSiderealTime': return this.objectDetailStore.selectedApparentSiderealTime
-      case 'selectedConstellation': return this.zhNameOf(this.objectDetailStore.selectedConstellation)
+      case 'selectedConstellation': return zhNameOf(this.objectDetailStore.selectedConstellation)
       case 'selectedCoordAlt': return this.objectDetailStore.selectedCoordAlt
       case 'selectedCoordApparentAltAz': return this.objectDetailStore.selectedCoordApparentAltAz || this.objectDetailStore.selectedCoordAlt
       case 'selectedCoordEcliptic': return this.objectDetailStore.selectedCoordEcliptic
@@ -16577,32 +16503,6 @@ private loadPlanetPositions(): void {
     return this.nightModeStore.nightMode ? '#41160F' : '#172338'
   }
 
-  // ===== 中文映射（数据层英文名 → 界面中文） =====
-  private planetZh(en: string): string {
-    switch (en) {
-      case 'Sun': return I18n.t('pl_sun')
-      case 'Moon': return I18n.t('pl_moon')
-      case 'Mercury': return I18n.t('pl_mercury')
-      case 'Venus': return I18n.t('pl_venus')
-      case 'Earth': return I18n.t('pl_earth')
-      case 'Mars': return I18n.t('pl_mars')
-      case 'Jupiter': return I18n.t('pl_jupiter')
-      case 'Saturn': return I18n.t('pl_saturn')
-      case 'Uranus': return I18n.t('pl_uranus')
-      case 'Neptune': return I18n.t('pl_neptune')
-      default: return en
-    }
-  }
-
-  private sensZh(en: string): string {
-    switch (en) {
-      case 'Standard': return I18n.t('sens_standard')
-      case 'Fast': return I18n.t('sens_fast')
-      case 'Slow': return I18n.t('sens_slow')
-      default: return en
-    }
-  }
-
   private selectedStatusZh(en: string): string {
     return I18n.selectedStatus(en)
   }
@@ -16633,173 +16533,6 @@ private loadPlanetPositions(): void {
 
 
 
-
-
-
-  private pluginZh(en: string): string {
-    // 先查精确映射（保持已有 key 的一致性）
-    switch (en) {
-      case 'Angle Measure': return I18n.t('panel_angle_measure')
-      case 'ArchaeoLines': return I18n.t('plugin_archaeolines')
-      case 'Calendars': return I18n.t('plugin_calendars')
-      case 'Equation of Time': return I18n.t('plugin_equation_of_time')
-      case 'EquationOfTime': return I18n.t('plugin_equation_of_time')
-      case 'Exoplanets': return I18n.t('plugin_exoplanets')
-      case 'Lens distortion estimator': return I18n.t('plugin_lens_distortion')
-      case 'LensDistortionEstimator': return I18n.t('plugin_lens_distortion')
-      case 'Meteor Showers': return I18n.t('plugin_meteor_showers')
-      case 'Novae': return I18n.t('plugin_novae')
-      case 'Pulsars': return I18n.t('plugin_pulsars')
-      case 'Quasars': return I18n.t('plugin_quasars')
-      case 'Satellites': return I18n.t('plugin_satellites')
-      case 'Solar System Editor': return I18n.t('plugin_solar_system_editor')
-      case 'SolarSystemEditor': return I18n.t('plugin_solar_system_editor')
-      case 'Supernovae': return I18n.t('plugin_supernovae')
-      case 'TextUserInterface':
-      case 'Text User Interface': return I18n.t('plugin_text_user_interface')
-      case 'TimeNavigator': return I18n.pluginName('Time Navigator')
-      case 'Time Zone': return I18n.t('plugin_time_zone')
-      case 'Oculars': return I18n.t('panel_oculars')
-      case 'Voculars': return I18n.t('plugin_voculars')
-      case 'Observability': return I18n.t('plugin_observability')
-      case 'Remote Control': return I18n.t('plugin_remote_control')
-      case 'Screenshots': return I18n.t('plugin_screenshots')
-      case 'Sky Cultures': return I18n.t('plugin_skycultures')
-      case 'SkyCultureMaker': return I18n.pluginName('Sky Culture Maker')
-      case 'ObjectVisibility': return I18n.pluginName('Object Visibility')
-    }
-    // 回退到 PLUGIN_NAMES 字典（覆盖所有 40+ 插件）
-    const dictName = I18n.pluginName(en)
-    if (dictName !== en) return dictName
-    // 最后兜底：尝试首字母大写等微调后再查一次
-    const trimmed = en.trim()
-    return I18n.pluginName(trimmed) !== trimmed ? I18n.pluginName(trimmed) : en
-  }
-
-  // ── 插件功能描述（副标题） ──
-  private pluginDesc(en: string): string {
-    switch (en) {
-      case 'Angle Measure': return I18n.t('plugin_desc_angle_measure') as string
-      case 'ArchaeoLines': return I18n.t('plugin_desc_archaeolines') as string
-      case 'Calendars': return I18n.t('plugin_desc_calendars') as string
-      case 'Equation of Time': return I18n.t('plugin_desc_equation_of_time') as string
-      case 'Exoplanets': return I18n.t('plugin_desc_exoplanets') as string
-      case 'Lens distortion estimator': return I18n.t('plugin_desc_lens_distortion') as string
-      case 'Meteor Showers': return I18n.t('plugin_desc_meteor_showers') as string
-      case 'Novae': return I18n.t('plugin_desc_novae') as string
-      case 'Observability': return I18n.t('plugin_desc_observability') as string
-      case 'Pulsars': return I18n.t('plugin_desc_pulsars') as string
-      case 'Quasars': return I18n.t('plugin_desc_quasars') as string
-      case 'Remote Control': return I18n.t('plugin_desc_remote_control') as string
-      case 'Satellites': return I18n.t('plugin_desc_satellites') as string
-      case 'Screenshots': return I18n.t('plugin_desc_screenshots') as string
-      case 'Sky Cultures': return I18n.t('plugin_desc_skycultures') as string
-      case 'Solar System Editor': return I18n.t('plugin_desc_solar_system_editor') as string
-      case 'Supernovae': return I18n.t('plugin_desc_supernovae') as string
-      case 'TextUserInterface':
-      case 'Text User Interface': return I18n.t('plugin_desc_text_user_interface') as string
-      case 'Time Zone': return I18n.t('plugin_desc_time_zone') as string
-      case 'Oculars': return I18n.t('plugin_desc_voculars') as string
-      case 'Voculars': return I18n.t('plugin_desc_voculars') as string
-    }
-    return ''
-  }
-
-  // ── 脚本文件名 → 中文名 ──
-  private scriptZh(filename: string): string {
-    // 去掉 .ssc 后缀
-    const name = filename.replace(/\.ssc$/, '')
-    switch (name) {
-      case 'constellations_tour': return I18n.t('script_name_constellations_tour')
-      case 'modern_constellations_tour': return I18n.t('script_name_modern_constellations_tour')
-      case 'messier_marathon': return I18n.t('script_name_messier_marathon')
-      case 'BAS_Messier_Tour': return I18n.t('script_name_BAS_Messier_Tour')
-      case 'planets_tour': return I18n.t('script_name_planets_tour')
-      case 'BAS_Jupiter_Moons': return I18n.t('script_name_BAS_Jupiter_Moons')
-      case 'lunar_total': return I18n.t('script_name_lunar_total')
-      case 'lunar_partial': return I18n.t('script_name_lunar_partial')
-      case 'solar_eclipse': return I18n.t('script_name_solar_eclipse')
-      case 'transit_of_venus': return I18n.t('script_name_transit_of_venus')
-      case 'supernova': return I18n.t('script_name_supernova')
-      case 'triple_sunrise_and_sunsets': return I18n.t('script_name_triple_sunrise_and_sunsets')
-      case 'analemma': return I18n.t('script_name_analemma')
-      case 'martian_analemma': return I18n.t('script_name_martian_analemma')
-      case 'saturnian_analemma': return I18n.t('script_name_saturnian_analemma')
-      case 'uranian_analemma': return I18n.t('script_name_uranian_analemma')
-      case 'best_ngc': return I18n.t('script_name_best_ngc')
-      case 'h400_tour': return I18n.t('script_name_h400_tour')
-      case 'double_stars': return I18n.t('script_name_double_stars')
-      case 'largest_known_stars': return I18n.t('script_name_largest_known_stars')
-      case 'binocular_highlights': return I18n.t('script_name_binocular_highlights')
-      case 'binosky': return I18n.t('script_name_binosky')
-      case 'bennett': return I18n.t('script_name_bennett')
-      case 'sky_cultures': return I18n.t('script_name_sky_cultures')
-      case 'landscapes': return I18n.t('script_name_landscapes')
-      case 'screensaver': return I18n.t('script_name_screensaver')
-      case 'solar_system_screensaver': return I18n.t('script_name_solar_system_screensaver')
-      case 'skybox': return I18n.t('script_name_skybox')
-      case 'random_location': return I18n.t('script_name_random_location')
-      case 'sun': return I18n.t('script_name_sun')
-      case 'zodiac': return I18n.t('script_name_zodiac')
-      case 'phobos_phun_1': return I18n.t('script_name_phobos_phun_1')
-      case 'phobos_phun_2': return I18n.t('script_name_phobos_phun_2')
-      case 'phobos_phun_3': return I18n.t('script_name_phobos_phun_3')
-      case 'phobos_phun_4': return I18n.t('script_name_phobos_phun_4')
-      case 'phobos_phun_5': return I18n.t('script_name_phobos_phun_5')
-      case 'morsels_1': return I18n.t('script_name_morsels_1')
-      case 'morsels_2': return I18n.t('script_name_morsels_2')
-      case 'morsels_3': return I18n.t('script_name_morsels_3')
-      case 'morsels_4': return I18n.t('script_name_morsels_4')
-      case 'earth_1': return I18n.t('script_name_earth_1')
-      case 'earth_2': return I18n.t('script_name_earth_2')
-      case 'earth_3': return I18n.t('script_name_earth_3')
-      case 'earth_4': return I18n.t('script_name_earth_4')
-      case 'earth_5': return I18n.t('script_name_earth_5')
-      case 'earth_6': return I18n.t('script_name_earth_6')
-      case 'earth_7': return I18n.t('script_name_earth_7')
-      case 'startup': return I18n.t('script_name_startup')
-      default: return filename
-    }
-  }
-
-  // ── 脚本简短描述 ──
-  private scriptDesc(filename: string): string {
-    const name = filename.replace(/\.ssc$/, '')
-    switch (name) {
-      case 'constellations_tour': return I18n.t('script_desc_constellations_tour') as string
-      case 'modern_constellations_tour': return I18n.t('script_desc_constellations_tour') as string
-      case 'messier_marathon': return I18n.t('script_desc_messier_marathon') as string
-      case 'BAS_Messier_Tour': return I18n.t('script_desc_messier_marathon') as string
-      case 'planets_tour': return I18n.t('script_desc_planets_tour') as string
-      case 'BAS_Jupiter_Moons': return I18n.t('script_desc_gral') as string
-      case 'lunar_total': return I18n.t('script_desc_lunar_total') as string
-      case 'lunar_partial': return I18n.t('script_desc_gral') as string
-      case 'solar_eclipse': return I18n.t('script_desc_solar_eclipse') as string
-      case 'transit_of_venus': return I18n.t('script_desc_gral') as string
-      case 'supernova': return I18n.t('script_desc_gral') as string
-      case 'triple_sunrise_and_sunsets': return I18n.t('script_desc_gral') as string
-      case 'analemma': return I18n.t('script_desc_analemma') as string
-      case 'martian_analemma': return I18n.t('script_desc_gral') as string
-      case 'saturnian_analemma': return I18n.t('script_desc_gral') as string
-      case 'uranian_analemma': return I18n.t('script_desc_gral') as string
-      case 'best_ngc': return I18n.t('script_desc_best_ngc') as string
-      case 'h400_tour': return I18n.t('script_desc_gral') as string
-      case 'double_stars': return I18n.t('script_desc_double_stars') as string
-      case 'largest_known_stars': return I18n.t('script_desc_gral') as string
-      case 'binocular_highlights': return I18n.t('script_desc_binocular_highlights') as string
-      case 'binosky': return I18n.t('script_desc_gral') as string
-      case 'bennett': return I18n.t('script_desc_gral') as string
-      case 'sky_cultures': return I18n.t('script_desc_sky_cultures') as string
-      case 'landscapes': return I18n.t('script_desc_gral') as string
-      case 'screensaver': return I18n.t('script_desc_screensaver') as string
-      case 'solar_system_screensaver': return I18n.t('script_desc_gral') as string
-      case 'skybox': return I18n.t('script_desc_gral') as string
-      case 'random_location': return I18n.t('script_desc_random_location') as string
-      case 'sun': return I18n.t('script_desc_gral') as string
-      case 'zodiac': return I18n.t('script_desc_gral') as string
-      default: return ''
-    }
-  }
 
 
 
@@ -17043,8 +16776,8 @@ private loadPlanetPositions(): void {
         panelColor: this.nmBg(),
         borderTint: this.nmBorder(),
         accentColor: this.nmAccent(),
-        nameOf: (raw: string) => this.zhNameOf(raw),
-        typeOf: (type: string) => this.zhType(type),
+        nameOf: (raw: string) => zhNameOf(raw),
+        typeOf: (type: string) => zhType(type),
         statusOf: (en: string) => this.selectedStatusZh(en),
         displayValue: (key: string) => this.selectedDisplayValue(key),
         onChip: (id: string) => { this.handleChip(id) },
@@ -17122,7 +16855,7 @@ private loadPlanetPositions(): void {
         accentColor: this.nmAccent(),
         panelColor: this.nmBg(),
         borderTint: this.nmBorder(),
-        planetLabel: (en: string) => this.planetZh(en),
+        planetLabel: (en: string) => planetZh(en),
         contextOf: (item: LocSearchItem) => this.locationResultContext(item),
         onUseDeviceLocation: () => { this.useDeviceLocation() },
         onSearchLocations: (query: string) => { this.searchLocations(query) },
@@ -17260,7 +16993,7 @@ private loadPlanetPositions(): void {
         skyCultureViewStore: this.skyCultureViewStore,
         satelliteCatalogHealth: this.satelliteStore.satelliteCatalogHealth,
         starCatalogHealth: this.catalogStore.starCatalogHealth,
-        gyroSensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText),
+        gyroSensitivityText: sensZh(this.gyroStore.gyroscopeSensitivityText),
         textColor: this.nmText(),
         subColor: this.nmSub(),
         accentColor: this.nmAccent(),
@@ -17373,19 +17106,12 @@ private loadPlanetPositions(): void {
         panelColor: this.nmBg(),
         lineColor: this.nmBorder(),
         inputColor: this.nmInput(),
-        sensZh: (en: string) => { return this.sensZh(en) },
         configDitheringLabel: (value: string) => { return this.configDitheringLabel(value) },
         informationMaskHas: (key: string) => { return this.informationMaskHas(key) },
-        pluginZh: (en: string) => { return this.pluginZh(en) },
-        pluginDesc: (en: string) => { return this.pluginDesc(en) },
         pluginMetaLine: (plugin: PluginItem) => { return this.pluginMetaLine(plugin) },
-        pluginFeatureRoute: (id: string) => { return this.pluginFeatureRoute(id) },
         pluginFeatureDestination: (id: string) => { return this.pluginFeatureDestination(id) },
         pluginFeatureIsActionable: (id: string) => { return this.pluginFeatureIsActionable(id) },
         pluginFeatureActionLabel: (id: string) => { return this.pluginFeatureActionLabel(id) },
-        resourceText: (value: string | undefined, fallback: string) => { return this.resourceText(value, fallback) },
-        scriptZh: (filename: string) => { return this.scriptZh(filename) },
-        scriptDesc: (filename: string) => { return this.scriptDesc(filename) },
         scriptMetaLine: (filename: string) => { return this.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptSourceLine(filename) },
         hasSelectedObject: () => { return this.hasSelectedObject() },
@@ -17516,7 +17242,6 @@ private loadPlanetPositions(): void {
           planetTimeSeriesBarWidth: () => this.planetTimeSeriesBarWidth(),
           planetTimeSeriesSegmentWidth: () => this.planetTimeSeriesSegmentWidth(),
           planetTimeSeriesValueLabel: (value: number | undefined, metric: string) => this.planetTimeSeriesValueLabel(value, metric),
-          planetZh: (en: string) => this.planetZh(en),
           publishAstroPanelState: () => { this.publishAstroPanelState() },
           reloadCurrentGraph: () => { this.reloadCurrentGraph() },
           reloadEclipses: () => { this.reloadEclipses() },
@@ -17531,8 +17256,6 @@ private loadPlanetPositions(): void {
           wutDirectionLabel: (direction: string) => this.wutDirectionLabel(direction),
           wutTargetSubtitle: (target: WutTarget) => this.wutTargetSubtitle(target),
           wutTargetTitle: (target: WutTarget) => this.wutTargetTitle(target),
-          zhNameOf: (raw: string) => this.zhNameOf(raw),
-          zhType: (type: string) => this.zhType(type)
         }
       })
         } else if (this.activePanel === 'help') {
@@ -17668,7 +17391,6 @@ private loadPlanetPositions(): void {
         subColor: this.nmSub(),
         panelColor: this.nmBg(),
         accentColor: this.nmAccent(),
-        resourceText: (value: string | undefined, fallback: string) => this.resourceText(value, fallback),
         onToggleEnabled: (enabled: boolean) => { this.setScenery3dEnabled(enabled) },
         onSelectScene: (id: string) => { this.setScenery3dScene(id) }
       })
@@ -17722,8 +17444,6 @@ private loadPlanetPositions(): void {
         accentColor: this.nmAccent(),
         panelColor: this.nmBg(),
         lineColor: this.nmBorder(),
-        scriptZh: (filename: string) => { return this.scriptZh(filename) },
-        scriptDesc: (filename: string) => { return this.scriptDesc(filename) },
         scriptMetaLine: (filename: string) => { return this.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptSourceLine(filename) },
         onStartGuide: (id: string) => { this.executeGuideRequest('startGuide', id) },
@@ -17787,7 +17507,7 @@ private loadPlanetPositions(): void {
         onSearchName: (name: string) => { this.searchObject(name) },
         targetTitleOf: (target: WutTarget) => this.wutTargetTitle(target),
         targetSubtitleOf: (target: WutTarget) => this.wutTargetSubtitle(target),
-        typeOf: (type: string) => this.zhType(type),
+        typeOf: (type: string) => zhType(type),
         displayNameOf: (name: string) => this.observingDisplayName(name)
       })
     } else if (this.activePanel === 'telescope') {
@@ -17855,7 +17575,6 @@ private loadPlanetPositions(): void {
         observingListStore: this.obsListStore,
         skyCultureViewStore: this.skyCultureViewStore,
         panelColor: this.nmBg(),
-        sensZh: (en: string) => { return this.sensZh(en) },
         observingDisplayName: (name: string) => { return this.observingDisplayName(name) },
         selectObservingTarget: (name: string) => { this.searchObject(name); this.flashHint(I18n.t('i0082')) },
         removeObservingTarget: (name: string) => { this.removeObservingTarget(name) },

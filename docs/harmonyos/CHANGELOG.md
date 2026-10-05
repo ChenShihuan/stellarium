@@ -1,3 +1,22 @@
+## [2026-10-04] DevEco Code - 重构：§14 A1-3 标签/文案纯函数抽取（derive/labels.ets）
+
+- 依据：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.2（轨道 A1：零宿主依赖纯函数 → `common/derive/*.ets`）与 §14.8（A/B 专属硬规则）；判据 §2.12。本片是 A1 轨道第 3 片，抽出「标签 / 文案 / 命名」纯函数簇。
+- **开工复测**：用 §2.12 判据在当前宿主逐名核验 12 个候选函数体——**全部零宿主状态读取**（体内无 `this.<字段>`，也不读任何宿主 `@State`）、无成员写 / IO / 桥 / 路由 / 定时器 / `AppStorage` / `hilog` → 全部归 A1，**无剔除项**（无一个应留 A2）。`zhNameOf` 只读 `I18n.getLanguage()`（模块级静态，非宿主状态），归 A1；§14.8 规则 6 要求纯函数模块不得 import store —— 本模块只 import `I18n` 与 `PluginFeatureRoute` 类型，**未 import 任何 store**，也未制造对 `LanguageStore` 的依赖。
+- **新增 `harmonyos/ets-source/common/derive/labels.ets`（252 行，12 个文件级 `export function`）**：`resourceText` `describeDecodeError` `zhNameOf` `zhType` `planetZh` `sensZh` `scriptZh` `scriptDesc` `pluginZh` `pluginDesc` `pluginHostName` `pluginFeatureRoute`。函数体从宿主**逐字剪切**（保留默认值 / 分支 / 查表语义），仅改 `private`→`export function`。**import 均取自定义处**：`I18n` ← `pages/I18n`，`PluginFeatureRoute`（`pluginFeatureRoute` 返回类型）← `pages/MainWindowModels`。模块内**零 `this`、零 store/NAPI/UI import、零模块级可变变量**。
+- **宿主手术**：删除 12 个 `private` 方法声明；所有调用点 `this.<fn>(` → `<fn>(`（宿主 **61 处匹配**，含一行多匹配）并补宿主顶部具名 import。
+- **组件直连模块**：5 个面板把注入的回调改为直接 import——
+  - `panels/astro/AstroPanel.ets`：`planetZh` / `zhNameOf` / `zhType` 从 `AstroPanelHost` 接口与 `noopAstroPanelHost()` 各删 3 项（−3/−3），3 处 `this.host.<fn>(` → 模块函数；
+  - `panels/panels/SettingsPanel.ets`：`sensZh` / `pluginZh` / `pluginDesc` / `pluginFeatureRoute` / `resourceText` / `scriptZh` / `scriptDesc` 7 个成员声明删除、调用点直连（顺带删去不再使用的 `PluginFeatureRoute` 类型 import）；
+  - `panels/panels/ScriptsPanel.ets`：`scriptZh` / `scriptDesc` 2 个成员删除；
+  - `panels/panels/ConfigFallbackPanel.ets`：`sensZh` 成员删除；
+  - `panels/panels/Scenery3dPanel.ets`：`resourceText` 成员删除。
+  宿主的对应注入行随之删除（共 14 条，§14.8 规则 5 禁双写）。`panels/layers/LayerViewTabs.ets` 自带**同名私有** `resourceText`（与宿主独立），**未动**。
+- **三项复核**：宿主内 `this.<本片函数名>` 残留 = **0**；模块内 `this` = **0**（唯一命中在中文注释里，已被预检脚本按注释剥离）；12 个函数的调用点总数不变（注入式调用改为面板直连，invocations 数不变）。
+- 单体 `MainWindowNativeNode.ets` **18354 → 18074 行（−280）**；宿主 `private` 方法 **882 → 870（−12，正为本片迁出数）**；`load*` 72 不变。
+- 验证：`check-ohos-refactor-slice.mjs` 通过（括号深度 0）；`arkts_check` 7 文件（labels.ets / MainWindowNativeNode.ets / AstroPanel / SettingsPanel / ScriptsPanel / ConfigFallbackPanel / Scenery3dPanel）无错；`build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources` = **BUILD SUCCESSFUL**；`check-ohos-ui-contract.mjs` = **intact**（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 210+ 文件，未新增或改名任何 `.id()`）；切片脚本扫描仅剩 §13.6 的 7 个环境类失败，**无新增回归**；`test-ohos-detail-live-values.mjs` **7/7 全绿**（夹具把 `zhNameOf` 改为 `new Function` 的形参注入替身，宿主方法体已改用自由变量）。
+- **设备走查（模拟器 `127.0.0.1:5555`，x86_64 phone 1256×2760，UI-only 无引擎；真机离线）**：安装 → `aa start -a QAbility -b com.cnchensh.stellarium` → `pidof` = 4520 全程存活；`ui layout` 确认底部 Dock 中文标签（搜索 / 时间 / 位置 / 图层 / 更多功能）；导航「更多功能」→「天体数据与扩展」→「天文计算」打开 astro 面板，`ui layout` 确认面板标题与区块中文渲染，全程 `pidof` 仍存活。未改任何持久化设置。
+- **待真机验证（模拟器无引擎、无真实数据）**：本片产物是标签 / 文案，其**内容渲染**依赖引擎回包填充列表——`planetZh` / `zhNameOf` / `zhType`（天文计算的行星位置、WUT 目标类型）、`pluginZh` / `pluginDesc` / `pluginFeatureRoute`（设置 › 插件管理的插件列表）、`scriptZh` / `scriptDesc`（脚本面板列表）、`resourceText`（三维地景元数据）在 UI-only 模拟器上列表为空，**无法走查文案本身**；本片仅等价搬迁，请真机逐面板比对中文标签。
+- **本片新踩的坑**：①「同名遮蔽」在**面板**侧的变体——`SettingsPanel` / `ScriptsPanel` 等把被迁函数名同时用作 `@Prop` 成员名；若只把 `this.<fn>(` 改成 `<fn>(` 而**不删成员声明与宿主注入行**，会留下「成员被 import 函数遮蔽、`@Prop` 成死代码且宿主仍传参」的半迁移态。正解：成员声明、宿主注入、组件调用点三者**同片删 / 改**（本片如此）。② `test-ohos-detail-live-values.mjs` 用 `new Function('key', body)` 提取宿主方法体执行，宿主体去掉 `this.` 后自由变量 `zhNameOf` 在提取作用域未定义——夹具必须把它作为 `new Function` 的形参传入（照 A1-2 的 `deriveFn` 手法）。
 ## [2026-10-04] DevEco Code - 重构：§14 A1-2 astro 纯函数抽取（derive/astro.ets）
 
 - 依据：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.2（轨道 A1：零宿主依赖纯函数 → `common/derive/*.ets`）与 §14.8（A/B 专属硬规则）；判据 §2.12。本片是 A1 轨道第 2 片，抽出天文面板的派生纯函数簇。

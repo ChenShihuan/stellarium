@@ -2,12 +2,13 @@ import { Scenery3dItem } from '../../pages/StellariumTypes'
 import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { SceneryStore } from '../../state/SceneryStore'
+import { resourceText } from '../../common/derive/labels'
 
 // 三维地景面板（原宿主 panelContent() 的 `scenery3d` 分支，分支体原样下沉）。
 //
 // 判定条件 `activePanel === 'scenery3d'` 留在宿主。列表/加载态来自宿主的
-// @State 字段、以 @Prop 传入（宿主仍是写方）；`resourceText` 是宿主的纯文本
-// 助手，作为函数型回调注入；启用开关与选中场景回注宿主。
+// @State 字段、以 @Prop 传入（宿主仍是写方）；`resourceText` 已直连
+// common/derive/labels（§14.2 A1-3）；启用开关与选中场景回注宿主。
 
 @Component
 export struct Scenery3dPanel {
@@ -17,11 +18,6 @@ export struct Scenery3dPanel {
   @Prop subColor: string
   @Prop panelColor: string
   @Prop accentColor: string
-  resourceText: (value: string | undefined, fallback: string) => string =
-    (value: string | undefined, fallback: string): string => {
-      if (value === undefined || value.length === 0) return fallback
-      return value
-    }
   onToggleEnabled: (enabled: boolean) => void = () => {}
   onSelectScene: (id: string) => void = () => {}
 
@@ -54,8 +50,8 @@ export struct Scenery3dPanel {
               if (scene.current === true) Text('当前').fontSize(9).fontColor(this.accentColor)
               if (this.sceneryStore.scenery3dLoadingId === scene.id) LoadingProgress().width(16).height(16).color(this.accentColor)
             }.width('100%')
-            Text(this.resourceText(scene.description, I18n.t('resource_not_provided'))).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(I18n.t('resource_author') + ': ' + this.resourceText(scene.author, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + this.resourceText(scene.copyright, I18n.t('resource_not_provided'))).fontSize(9).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(resourceText(scene.description, I18n.t('resource_not_provided'))).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(I18n.t('resource_author') + ': ' + resourceText(scene.author, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + resourceText(scene.copyright, I18n.t('resource_not_provided'))).fontSize(9).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
             if (scene.planet || scene.landscape || scene.modelScenery) {
               Text((scene.planet ? '星球: ' + scene.planet : '') + (scene.landscape ? ' · 地景: ' + scene.landscape : '') + (scene.modelScenery ? ' · 模型: ' + scene.modelScenery : '')).fontSize(9).fontColor('#66FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
             }
