@@ -1,3 +1,21 @@
+## [2026-09-30] DevEco Code - Phase 3m：速度域入 TimeStore + TimeWheelController 拆分（时间域完工）
+
+- **本片目标：** 一次做完两片 —— ①（B）速度/速率域迁移；②（A）时间轮交互控制器拆分。完成后**时间域除面板 chrome 与刻意保留项外全部迁完**。
+- **B（速度/速率域 → `TimeStore`）：** 5 个字段迁入（`timeRateText` / `pendingTimeRate` / `pendingTimeRateUntilMs` / `lastSyncedTimeRate` / `lastNonZeroSpeedIndex`，原为宿主 `@State` 与普通字段），宿主引用全部改写。**写入口统一：** 新增 store 方法 `beginRateChange(rate, windowMs)` 与 `shouldIgnoreEngineRate(rate)`，`applySpeedStep` / `syncTimeRateState` 改为调用它们——原先散在两处的"待定窗口 + 重复速率去重"逻辑现在只有一份实现（含此前修「实时→倒带→实时」抖动的那段）。
+- **A（`state/TimeWheelController.ets`，新文件 218 行）：** 时间轮的**交互控制器**，刻意是**普通类（非 `@Observed`）**——14 个手势草稿字段每个触摸采样都在变，可观测化会每次采样都触发渲染。迁入 11 个方法（`handleTouch` / `selectUnit` / `applyDate` / `stopInertia` / `startInertia` / `velocityMultiplier` / `rebaseTrack` / `rebaseTrackAtCenter` / `syncFromSimulation` + 私有辅助）。**三个跨域依赖按 §11 修订 5 的约定注入**：
+  - `onSeek(jd)` —— 引擎推送（宿主 `callNativeFire('setTimeToJD')`），控制器不碰 NAPI；
+  - `onStopSpeed()` —— 拖动即暂停（宿主 `stopTimeWheelSpeed()`，写速度域）；
+  - `getUtcOffsetHours()` —— UTC 偏移仍由宿主持有。
+  宿主侧只剩 `wheel()` 懒初始化、5 处调用转发（`selectUnit` / `handleTouch` / 3× `syncFromSimulation`）与 **3 个生命周期 `stop()` 收口**（新增：`aboutToDisappear` 与切后台处，与此前 `stopViewCoordinateTimer`/`stopDockClockTimer` 同一批挂点）——**惯性定时器从此不再可能残留**。
+- **顺带删除的死代码：** `timeWheelTransitionTimer` / `timeWheelTargetMs` / `finishTimeWheelTransition()` —— 该过渡定时器**从未被启动**（唯一启动者 `advanceTimeWheel` 已在 Phase 3j 作为死代码删除），`finishTimeWheelTransition` 因此恒早退，删除行为等价。
+- **真机验证（`192.168.3.95:40565`）：**
+  1. 拖动时间轮（经控制器）：时钟 00:26 → 00:36、速度自动转「已暂停」——`handleTouch` + `applyDate` + `onSeek` + `onStopSpeed` 注入链全通。
+  2. 两次点按「快进」（速率域经 store）：副标题 `1x → 2x`，与迁移前的档位语义一致。
+  3. 点「实时」恢复 `2026-10-01 · 1x`。
+- **验证结果：** `arkts_check` 三文件无错误；`BUILD SUCCESSFUL`；契约校验通过；真机安装启动成功；测后已恢复原状态。
+- **单体行数：** 29,871 → **29,670**；`state/TimeWheelController.ets` 218 行、`state/TimeStore.ets` 扩至 33 行。
+- **时间域收口说明（剩余项与理由）：** 面板标题的 `observationTimeText`/`timeRateText` 属面板 chrome（Phase 5/6）；`manual*`/`atmo*`/`refractionOn` 的消费方是宿主方法（`applyManualTime`/`applyAtmosphere`），按设计留宿主；设置页的 `timeSettingsPending` 跨面板共享。**其余时间域（视图 + 状态 + 交互控制器 + 定时器收口）已迁完。**
+
 ## [2026-09-30] DevEco Code - Phase 3l：时间面板整体完成 + 夜视模式独立成模块（并修掉夜视被轮询弹回的既有缺陷）
 
 - **本片目标：** 一次性完成主时间面板（`activePanel === 'time'`，原分支 339 行）的组件化，并按用户要求把**夜视模式单独拆成模块**（后续主界面要加独立按钮）。
