@@ -71,6 +71,7 @@ import { Lx200Panel } from '../panels/telescope/Lx200Panel'
 import { Lx200ObjectControls } from '../panels/telescope/Lx200ObjectControls'
 import { SkyCultureMakerStore } from '../state/SkyCultureMakerStore'
 import { SkyCultureViewStore } from '../state/SkyCultureViewStore'
+import { SkyCultureSettingsStore } from '../state/SkyCultureSettingsStore'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
@@ -600,88 +601,8 @@ export struct WindowNativeNode {
   private skyCultureArtDecodeTimer: number = 0
   private skyCultureArtStatusFlushTimer: number = 0
   private skyCultureArtPendingStatuses: Record<string, string> = {}
-  @State private skyCultureTerritoryArchive: Array<SkyCultureTerritoryEntry> = []
-  @State private skyCultureHasTerritoryArchive: boolean = false
-  @State private skyCultureTerritorySegmentCount: number = 0
-  @State private skyCultureTerritoryExpanded: boolean = false
-  @State private skyCultureTerritoryMapExpanded: boolean = false
-  @State private skyCultureTerritoryMapLoading: boolean = false
-  @State private skyCultureTerritoryMapError: string = ''
-  @State private skyCultureTerritoryMapPolygons: Array<SkyCultureTerritoryPolygon> = []
-  @State private skyCultureTerritoryMapYear: number = new Date().getFullYear()
-  @State private skyCultureTerritoryMapYearInput: string = new Date().getFullYear().toString()
-  @State private skyCultureMapUseLocationRotation: boolean = false
-  @State private skyCultureObserverLatitude: number = 0
-  @State private skyCultureRegions: string[] = []
-  @State private skyCultureClassification: string = ''
-  @State private skyCultureLicense: string = ''
-  @State private skyCultureBoundariesType: string = 'none'
-  @State private skyCultureUsesCommonNames: boolean = false
-  @State private skyCultureBeginTime: number = 0
-  @State private skyCultureEndTime: number = 0
-  @State private skyCultureConstellationCount: number = 0
-  @State private skyCultureAsterismCount: number = 0
-  @State private skyCultureNativeNameCount: number = 0
-  @State private skyCultureArtCount: number = 0
-  @State private skyCultureHasAsterisms: boolean = false
-  @State private skyCultureHasZodiac: boolean = false
-  @State private skyCultureHasLunarSystem: boolean = false
-  @State private skyCultureScreenLabelMode: number = 0
-  @State private skyCultureInfoLabelMode: number = 0
-  @State private skyCultureZodiacLabelMode: number = 0
-  @State private skyCultureLunarLabelMode: number = 0
-  @State private skyCultureLabelPickerOpen: string = ''
-  @State private skyCultureScreenStyleMask: number = 4
-  @State private skyCultureInfoStyleMask: number = 4
-  @State private skyCultureNameCombinationExpanded: boolean = false
-  @State private skyCultureShortLabels: boolean = false
-  @State private skyCultureOverrideCommonNames: boolean = false
-  @State private skyCultureIsolateSelected: boolean = false
-  @State private skyCultureSinglePick: boolean = false
-  @State private skyCultureConstellationFontSize: number = 14
-  @State private skyCultureConstellationLineThickness: number = 1
-  @State private skyCultureConstellationBoundaryThickness: number = 1
-  @State private skyCultureConstellationHullsThickness: number = 1
-  @State private skyCultureZodiacThickness: number = 1
-  @State private skyCultureLunarSystemThickness: number = 1
-  @State private skyCultureConstellationArtIntensity: number = 0.5
-  @State private skyCultureConstellationLinesFadeDuration: number = 1
-  @State private skyCultureConstellationLabelsFadeDuration: number = 1
-  @State private skyCultureConstellationArtFadeDuration: number = 1
-  @State private skyCultureConstellationBoundariesFadeDuration: number = 1
-  @State private skyCultureConstellationHullsFadeDuration: number = 1
-  @State private skyCultureZodiacFadeDuration: number = 1
-  @State private skyCultureLunarSystemFadeDuration: number = 1
-  @State private skyCultureAsterismFontSize: number = 14
-  @State private skyCultureAsterismLineThickness: number = 1
-  @State private skyCultureRayHelperThickness: number = 1
-  @State private skyCultureAsterismLinesFadeDuration: number = 1
-  @State private skyCultureAsterismLabelsFadeDuration: number = 1
-  @State private skyCultureRayHelperFadeDuration: number = 1
-  @State private skyCultureColorsExpanded: boolean = false
-  @State private skyCultureVisualColors: SkyCultureVisualColors = {
-    constellationLines: '#B9D8FF', constellationLabels: '#D9E9FF', constellationBoundaries: '#DB8B8B',
-    constellationHulls: '#A66C6C', zodiac: '#FFE36E', lunarSystem: '#7DE7B5',
-    asterismLines: '#B1C7FF', asterismLabels: '#D5DEFF', rayHelpers: '#A9E2D2'
-  }
-  @State private skyCultureColorTarget: string = 'constellationLines'
-  @State private skyCultureColorInput: string = '#B9D8FF'
-  @State private skyCultureDefaultId: string = ''
-  @State private skyCultureSearchText: string = ''
-  @State private skyCultureClassificationFilter: string = 'all'
-  @State private skyCultureRegionFilter: string = 'all'
-  @State private skyCultureClassificationFilterOpen: boolean = false
-  @State private skyCultureRegionFilterOpen: boolean = false
-  @State private skyCultureTimeFiltering: boolean = false
-  @State private skyCultureRangeFiltering: boolean = false
-  @State private skyCultureTimeYear: number = new Date().getFullYear()
-  @State private skyCultureTimeYearInput: string = new Date().getFullYear().toString()
-  @State private skyCultureRangeStart: number = -40000
-  @State private skyCultureRangeEnd: number = new Date().getFullYear()
-  @State private skyCultureRangeStartInput: string = '-40000'
-  @State private skyCultureRangeEndInput: string = new Date().getFullYear().toString()
-  @State private skyCultureSimulationYear: number = new Date().getFullYear()
-  @State private skyCultureTimeFollowSimulation: boolean = false
+  // 星空文化面板设置状态簇（Phase 4g，见 state/SkyCultureSettingsStore.ets）
+  @State private skyCultureSettingsStore: SkyCultureSettingsStore = new SkyCultureSettingsStore()
   private skyCultureMapContextSettings: RenderingContextSettings = new RenderingContextSettings(true)
   private skyCultureMapContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.skyCultureMapContextSettings)
   private skyCultureMapRenderWidth: number = 0
@@ -2111,7 +2032,7 @@ export struct WindowNativeNode {
 
   private shouldFollowSkyCultureSimulationTime(): boolean {
     return this.applicationInForeground && this.activePanel === 'layers' && this.panelVisible &&
-      this.viewTab === 5 && this.skyCultureTimeFiltering && !this.skyCultureRangeFiltering && this.skyCultureTimeFollowSimulation
+      this.viewTab === 5 && this.skyCultureSettingsStore.skyCultureTimeFiltering && !this.skyCultureSettingsStore.skyCultureRangeFiltering && this.skyCultureSettingsStore.skyCultureTimeFollowSimulation
   }
 
   private stopSkyCultureTimeFollowTimer(): void {
@@ -2412,9 +2333,9 @@ export struct WindowNativeNode {
     this.callInteractive('getSimulationTime', '', (r: StellariumBridgeResponse) => {
       this.skyCultureTimeFollowRequestPending = false
       if (r.ok !== true || r.year === undefined) return
-      this.skyCultureSimulationYear = Math.round(r.year)
+      this.skyCultureSettingsStore.skyCultureSimulationYear = Math.round(r.year)
       if (force || this.shouldFollowSkyCultureSimulationTime()) {
-        this.setSkyCultureTimeYear(this.skyCultureSimulationYear)
+        this.skyCultureSettingsStore.setSkyCultureTimeYear(this.skyCultureSettingsStore.skyCultureSimulationYear)
       }
     }, () => {
       this.skyCultureTimeFollowRequestPending = false
@@ -7670,18 +7591,18 @@ export struct WindowNativeNode {
       if (r.ok === true) {
         this.currentSkyCultureId = r.cultureId !== undefined ? r.cultureId : id
         const selected = this.skyCultureList.find((item: SkyCultureItem) => item.id === this.currentSkyCultureId)
-        this.currentSkyCulture = r.culture !== undefined ? this.skyCultureDisplayName(this.currentSkyCultureId, r.culture) : (selected !== undefined ? this.skyCultureDisplayName(selected.id, selected.name) : id)
-        this.skyCultureLabelPickerOpen = ''
-        this.skyCultureClassificationFilterOpen = false
-        this.skyCultureRegionFilterOpen = false
+        this.currentSkyCulture = r.culture !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(this.currentSkyCultureId, r.culture) : (selected !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(selected.id, selected.name) : id)
+        this.skyCultureSettingsStore.skyCultureLabelPickerOpen = ''
+        this.skyCultureSettingsStore.skyCultureClassificationFilterOpen = false
+        this.skyCultureSettingsStore.skyCultureRegionFilterOpen = false
         this.skyCultureViewStore.narrationExpanded = false
         this.skyCultureViewStore.descriptionExpanded = false
         this.skyCultureViewStore.artExpanded = false
         this.closeSkyCultureArtPreview()
-        this.skyCultureTerritoryExpanded = false
-        this.skyCultureTerritoryMapExpanded = false
-        this.skyCultureTerritoryMapPolygons = []
-        this.skyCultureTerritoryMapError = ''
+        this.skyCultureSettingsStore.skyCultureTerritoryExpanded = false
+        this.skyCultureSettingsStore.skyCultureTerritoryMapExpanded = false
+        this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons = []
+        this.skyCultureSettingsStore.skyCultureTerritoryMapError = ''
         this.loadSkyCultureDetails()
         return
       }
@@ -7768,31 +7689,31 @@ export struct WindowNativeNode {
       }
       this.currentSkyCultureId = r.id !== undefined ? r.id : this.currentSkyCultureId
       this.armSkyCultureAnchor(this.currentSkyCultureId, requestId)
-      this.currentSkyCulture = r.name !== undefined ? this.skyCultureDisplayName(this.currentSkyCultureId, r.name) : this.currentSkyCulture
-      this.skyCultureLabelPickerOpen = ''
-      this.skyCultureRegions = r.region !== undefined ? r.region : []
-      this.skyCultureClassification = r.classification !== undefined ? r.classification : ''
-      this.skyCultureLicense = r.license !== undefined ? r.license : ''
-      this.skyCultureBoundariesType = r.boundariesType !== undefined ? r.boundariesType : 'none'
-      this.skyCultureUsesCommonNames = r.usesCommonNames === true
-      this.skyCultureBeginTime = r.beginTime !== undefined ? r.beginTime : 0
-      this.skyCultureEndTime = r.endTime !== undefined ? r.endTime : 0
-      this.skyCultureConstellationCount = r.constellationCount !== undefined ? r.constellationCount : 0
-      this.skyCultureAsterismCount = r.asterismCount !== undefined ? r.asterismCount : 0
-      this.skyCultureNativeNameCount = r.nativeNameCount !== undefined ? r.nativeNameCount : 0
-      this.skyCultureArtCount = r.artCount !== undefined ? r.artCount : 0
-      this.skyCultureHasAsterisms = r.hasAsterisms === true
-      this.skyCultureHasZodiac = r.hasZodiac === true
-      this.skyCultureHasLunarSystem = r.hasLunarSystem === true
-      this.skyCultureShortLabels = r.abbreviatedNames === true
-      this.skyCultureOverrideCommonNames = r.overrideCommonNames === true
-      this.skyCultureDefaultId = r.defaultId !== undefined ? r.defaultId : ''
-      this.skyCultureScreenStyleMask = this.skyCultureStyleMaskFromBridge(r.screenLabelStyle)
-      this.skyCultureInfoStyleMask = this.skyCultureStyleMaskFromBridge(r.infoLabelStyle)
-      this.skyCultureScreenLabelMode = this.skyCultureScreenLabelModeFromBridge(r.screenLabelStyle)
-      this.skyCultureInfoLabelMode = this.skyCultureScreenLabelModeFromBridge(r.infoLabelStyle)
-      this.skyCultureZodiacLabelMode = this.skyCultureScreenLabelModeFromBridge(r.zodiacLabelStyle)
-      this.skyCultureLunarLabelMode = this.skyCultureScreenLabelModeFromBridge(r.lunarSystemLabelStyle)
+      this.currentSkyCulture = r.name !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(this.currentSkyCultureId, r.name) : this.currentSkyCulture
+      this.skyCultureSettingsStore.skyCultureLabelPickerOpen = ''
+      this.skyCultureSettingsStore.skyCultureRegions = r.region !== undefined ? r.region : []
+      this.skyCultureSettingsStore.skyCultureClassification = r.classification !== undefined ? r.classification : ''
+      this.skyCultureSettingsStore.skyCultureLicense = r.license !== undefined ? r.license : ''
+      this.skyCultureSettingsStore.skyCultureBoundariesType = r.boundariesType !== undefined ? r.boundariesType : 'none'
+      this.skyCultureSettingsStore.skyCultureUsesCommonNames = r.usesCommonNames === true
+      this.skyCultureSettingsStore.skyCultureBeginTime = r.beginTime !== undefined ? r.beginTime : 0
+      this.skyCultureSettingsStore.skyCultureEndTime = r.endTime !== undefined ? r.endTime : 0
+      this.skyCultureSettingsStore.skyCultureConstellationCount = r.constellationCount !== undefined ? r.constellationCount : 0
+      this.skyCultureSettingsStore.skyCultureAsterismCount = r.asterismCount !== undefined ? r.asterismCount : 0
+      this.skyCultureSettingsStore.skyCultureNativeNameCount = r.nativeNameCount !== undefined ? r.nativeNameCount : 0
+      this.skyCultureSettingsStore.skyCultureArtCount = r.artCount !== undefined ? r.artCount : 0
+      this.skyCultureSettingsStore.skyCultureHasAsterisms = r.hasAsterisms === true
+      this.skyCultureSettingsStore.skyCultureHasZodiac = r.hasZodiac === true
+      this.skyCultureSettingsStore.skyCultureHasLunarSystem = r.hasLunarSystem === true
+      this.skyCultureSettingsStore.skyCultureShortLabels = r.abbreviatedNames === true
+      this.skyCultureSettingsStore.skyCultureOverrideCommonNames = r.overrideCommonNames === true
+      this.skyCultureSettingsStore.skyCultureDefaultId = r.defaultId !== undefined ? r.defaultId : ''
+      this.skyCultureSettingsStore.skyCultureScreenStyleMask = this.skyCultureSettingsStore.skyCultureStyleMaskFromBridge(r.screenLabelStyle)
+      this.skyCultureSettingsStore.skyCultureInfoStyleMask = this.skyCultureSettingsStore.skyCultureStyleMaskFromBridge(r.infoLabelStyle)
+      this.skyCultureSettingsStore.skyCultureScreenLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(r.screenLabelStyle)
+      this.skyCultureSettingsStore.skyCultureInfoLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(r.infoLabelStyle)
+      this.skyCultureSettingsStore.skyCultureZodiacLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(r.zodiacLabelStyle)
+      this.skyCultureSettingsStore.skyCultureLunarLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(r.lunarSystemLabelStyle)
       this.skyCultureViewStore.narration = this.cleanSkyCultureNarration(r.narration !== undefined ? r.narration : '')
       this.skyCultureViewStore.description = this.cleanSkyCultureDescription(r.description !== undefined ? r.description : '')
       this.skyCultureViewStore.descriptionBlocks = r.descriptionBlocks !== undefined ? r.descriptionBlocks : []
@@ -7801,13 +7722,13 @@ export struct WindowNativeNode {
       this.skyCultureArtStates = {}
       this.closeSkyCultureArtPreview()
       this.prepareSkyCultureArtResources(this.skyCultureViewStore.artItems, requestId)
-      this.skyCultureHasTerritoryArchive = r.hasTerritoryArchive === true
-      this.skyCultureTerritorySegmentCount = r.territorySegmentCount !== undefined ? r.territorySegmentCount : 0
-      this.skyCultureTerritoryArchive = r.territoryArchive !== undefined ? r.territoryArchive : []
+      this.skyCultureSettingsStore.skyCultureHasTerritoryArchive = r.hasTerritoryArchive === true
+      this.skyCultureSettingsStore.skyCultureTerritorySegmentCount = r.territorySegmentCount !== undefined ? r.territorySegmentCount : 0
+      this.skyCultureSettingsStore.skyCultureTerritoryArchive = r.territoryArchive !== undefined ? r.territoryArchive : []
       if (r.territorySimulationYear !== undefined) {
-        this.skyCultureSimulationYear = r.territorySimulationYear
-        if (this.skyCultureTimeFollowSimulation) this.setSkyCultureTimeYear(this.skyCultureSimulationYear)
-        if (!this.skyCultureTerritoryMapExpanded) this.setSkyCultureTerritoryMapYear(r.territorySimulationYear)
+        this.skyCultureSettingsStore.skyCultureSimulationYear = r.territorySimulationYear
+        if (this.skyCultureSettingsStore.skyCultureTimeFollowSimulation) this.skyCultureSettingsStore.setSkyCultureTimeYear(this.skyCultureSettingsStore.skyCultureSimulationYear)
+        if (!this.skyCultureSettingsStore.skyCultureTerritoryMapExpanded) this.skyCultureSettingsStore.setSkyCultureTerritoryMapYear(r.territorySimulationYear)
       }
       this.skyCultureViewStore.detailsReady = true
       this.skyCultureViewStore.pendingId = ''
@@ -7827,107 +7748,50 @@ export struct WindowNativeNode {
     return this.skyCultureViewStore.pendingId.length > 0 ? this.skyCultureViewStore.pendingId : this.currentSkyCultureId
   }
 
-  private skyCultureScreenLabelModeFromBridge(style: string | undefined): number {
-    const normalized = style !== undefined ? style.toLowerCase() : ''
-    if (normalized === 'modern') return 4
-    if (normalized.includes('translit')) return 3
-    if (normalized.includes('pronounce')) return 2
-    if (normalized.includes('native')) return 1
-    return 0
-  }
 
-  private skyCultureStyleMaskFromBridge(style: string | undefined): number {
-    if (style === undefined) return 4
-    const parts = style.replace(/_/g, ',').split(',')
-    let mask = 0
-    for (let index = 0; index < parts.length; index++) {
-      const name = parts[index].trim().toLowerCase()
-      const names: string[] = ['modern', 'ipa', 'translated', 'translit', 'pronounce', 'native', 'byname']
-      const optionIndex = names.indexOf(name)
-      if (optionIndex >= 0) mask |= (1 << optionIndex)
-    }
-    return mask
-  }
 
-  private skyCultureStyleOptions(): Array<ConfigurationOption> {
-    return [
-      { id: 'Modern', label: '现代名称' },
-      { id: 'IPA', label: '国际音标' },
-      { id: 'Translated', label: '中文译名' },
-      { id: 'Translit', label: '学术转写' },
-      { id: 'Pronounce', label: '通俗读音' },
-      { id: 'Native', label: '文化原名' },
-      { id: 'Byname', label: '别称' }
-    ]
-  }
 
-  private skyCultureStyleMaskHas(mask: number, optionIndex: number): boolean {
-    return (mask & (1 << optionIndex)) !== 0
-  }
 
-  private skyCultureStyleSummary(mask: number): string {
-    const options = this.skyCultureStyleOptions()
-    const labels: string[] = []
-    for (let index = 0; index < options.length; index++) {
-      if (this.skyCultureStyleMaskHas(mask, index)) labels.push(options[index].label)
-    }
-    return labels.length > 0 ? labels.join('、') : '不显示文化名称'
-  }
 
   private setSkyCultureStyleOption(target: string, optionIndex: number, enabled: boolean): void {
-    const oldMask = target === 'screen' ? this.skyCultureScreenStyleMask : this.skyCultureInfoStyleMask
+    const oldMask = target === 'screen' ? this.skyCultureSettingsStore.skyCultureScreenStyleMask : this.skyCultureSettingsStore.skyCultureInfoStyleMask
     const bit = 1 << optionIndex
     const nextMask = enabled ? (oldMask | bit) : (oldMask & ~bit)
-    this.callInteractive('setSkyCultureLabelStyle', target + '|' + this.skyCultureStyleValue(nextMask), (r: StellariumBridgeResponse) => {
+    this.callInteractive('setSkyCultureLabelStyle', target + '|' + this.skyCultureSettingsStore.skyCultureStyleValue(nextMask), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
       const style = target === 'screen' ? r.screenLabelStyle : r.infoLabelStyle
-      const actualMask = this.skyCultureStyleMaskFromBridge(style)
+      const actualMask = this.skyCultureSettingsStore.skyCultureStyleMaskFromBridge(style)
       if (target === 'screen') {
-        this.skyCultureScreenStyleMask = actualMask
-        this.skyCultureScreenLabelMode = this.skyCultureScreenLabelModeFromBridge(style)
+        this.skyCultureSettingsStore.skyCultureScreenStyleMask = actualMask
+        this.skyCultureSettingsStore.skyCultureScreenLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(style)
       } else {
-        this.skyCultureInfoStyleMask = actualMask
-        this.skyCultureInfoLabelMode = this.skyCultureScreenLabelModeFromBridge(style)
+        this.skyCultureSettingsStore.skyCultureInfoStyleMask = actualMask
+        this.skyCultureSettingsStore.skyCultureInfoLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(style)
       }
     })
   }
 
-  private skyCultureStyleValue(mask: number): string {
-    const options = this.skyCultureStyleOptions()
-    const values: string[] = []
-    for (let index = 0; index < options.length; index++) {
-      if (this.skyCultureStyleMaskHas(mask, index)) values.push(options[index].id)
-    }
-    return values.length > 0 ? values.join(',') : 'None'
-  }
 
   private setSkyCultureScreenLabelMode(mode: number): void {
-    this.setSkyCultureLabelMode('screen', mode, (value: number) => { this.skyCultureScreenLabelMode = value })
+    this.setSkyCultureLabelMode('screen', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureScreenLabelMode = value })
   }
 
   private setSkyCultureInfoLabelMode(mode: number): void {
-    this.setSkyCultureLabelMode('info', mode, (value: number) => { this.skyCultureInfoLabelMode = value })
+    this.setSkyCultureLabelMode('info', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureInfoLabelMode = value })
   }
 
   private setSkyCultureZodiacLabelMode(mode: number): void {
-    this.setSkyCultureLabelMode('zodiac', mode, (value: number) => { this.skyCultureZodiacLabelMode = value })
+    this.setSkyCultureLabelMode('zodiac', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureZodiacLabelMode = value })
   }
 
   private setSkyCultureLunarLabelMode(mode: number): void {
-    this.setSkyCultureLabelMode('lunar', mode, (value: number) => { this.skyCultureLunarLabelMode = value })
+    this.setSkyCultureLabelMode('lunar', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureLunarLabelMode = value })
   }
 
-  private skyCultureLabelModeOptions(target: string): string[] {
-    const options: string[] = [I18n.t('culture_translated_name'), I18n.t('culture_native_name'), I18n.t('culture_pronunciation'), I18n.t('culture_transliteration')]
-    if (target === 'zodiac' || target === 'lunar') {
-      return options
-    }
-    return options.concat([I18n.t('culture_modern_name')])
-  }
 
   private toggleSkyCultureLabelPicker(target: string): void {
     this.getUIContext().animateTo({ duration: 220, curve: curves.springMotion(0.46, 0.86) }, () => {
-      this.skyCultureLabelPickerOpen = this.skyCultureLabelPickerOpen === target ? '' : target
+      this.skyCultureSettingsStore.skyCultureLabelPickerOpen = this.skyCultureSettingsStore.skyCultureLabelPickerOpen === target ? '' : target
     })
   }
 
@@ -7946,18 +7810,12 @@ export struct WindowNativeNode {
     }
   }
 
-  private skyCultureLabelModeForTarget(target: string): number {
-    const mode = target === 'screen' ? this.skyCultureScreenLabelMode
-      : (target === 'info' ? this.skyCultureInfoLabelMode
-        : (target === 'zodiac' ? this.skyCultureZodiacLabelMode : this.skyCultureLunarLabelMode))
-    return mode >= 0 && mode < this.skyCultureLabelModeOptions(target).length ? mode : 0
-  }
 
   // 选择某个标签模式并收起该卡片的下拉（原 skyCultureLabelModePicker 内联逻辑）。
   private selectSkyCultureLabelMode(target: string, index: number): void {
     this.setSkyCultureLabelModeForTarget(target, index)
     this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.46, 0.86) }, () => {
-      this.skyCultureLabelPickerOpen = ''
+      this.skyCultureSettingsStore.skyCultureLabelPickerOpen = ''
     })
   }
 
@@ -7971,20 +7829,20 @@ export struct WindowNativeNode {
         const style = target === 'screen' ? r.screenLabelStyle
           : (target === 'info' ? r.infoLabelStyle
             : (target === 'zodiac' ? r.zodiacLabelStyle : r.lunarSystemLabelStyle))
-        apply(this.skyCultureScreenLabelModeFromBridge(style))
+        apply(this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(style))
       }
     })
   }
 
   private setSkyCultureShortLabels(enabled: boolean): void {
     this.callInteractive('setSkyCultureShortLabels', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.skyCultureShortLabels = r.abbreviatedNames === true
+      if (r.ok === true) this.skyCultureSettingsStore.skyCultureShortLabels = r.abbreviatedNames === true
     })
   }
 
   private setSkyCultureCommonNames(enabled: boolean): void {
     this.callInteractive('setSkyCultureCommonNames', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.skyCultureOverrideCommonNames = r.overrideCommonNames === true
+      if (r.ok === true) this.skyCultureSettingsStore.skyCultureOverrideCommonNames = r.overrideCommonNames === true
     })
   }
 
@@ -7992,25 +7850,25 @@ export struct WindowNativeNode {
     this.callInteractive('getConstellationFlags', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true || r.flags === undefined) return
       const flags = r.flags as Record<string, Object>
-      this.skyCultureIsolateSelected = flags['isolateSelected'] === true
-      this.skyCultureSinglePick = flags['constellationPick'] === true
+      this.skyCultureSettingsStore.skyCultureIsolateSelected = flags['isolateSelected'] === true
+      this.skyCultureSettingsStore.skyCultureSinglePick = flags['constellationPick'] === true
     })
   }
 
   private setSkyCultureConstellationIsolation(enabled: boolean): void {
     this.callInteractive('setConstellationFlag', 'isolateSelected|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      this.skyCultureIsolateSelected = enabled
-      if (!enabled && this.skyCultureSinglePick) {
+      this.skyCultureSettingsStore.skyCultureIsolateSelected = enabled
+      if (!enabled && this.skyCultureSettingsStore.skyCultureSinglePick) {
         this.setSkyCultureConstellationSinglePick(false)
       }
     })
   }
 
   private setSkyCultureConstellationSinglePick(enabled: boolean): void {
-    if (enabled && !this.skyCultureIsolateSelected) return
+    if (enabled && !this.skyCultureSettingsStore.skyCultureIsolateSelected) return
     this.callInteractive('setConstellationFlag', 'constellationPick|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.skyCultureSinglePick = enabled
+      if (r.ok === true) this.skyCultureSettingsStore.skyCultureSinglePick = enabled
     })
   }
 
@@ -8023,47 +7881,47 @@ export struct WindowNativeNode {
   private loadSkyCultureVisualSettings(): void {
     this.callInteractive('getSkyCultureVisualSettings', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      this.skyCultureConstellationFontSize = r.constellationFontSize !== undefined ? r.constellationFontSize : this.skyCultureConstellationFontSize
-      this.skyCultureConstellationLineThickness = r.constellationLineThickness !== undefined ? r.constellationLineThickness : this.skyCultureConstellationLineThickness
-      this.skyCultureConstellationBoundaryThickness = r.constellationBoundaryThickness !== undefined ? r.constellationBoundaryThickness : this.skyCultureConstellationBoundaryThickness
-      this.skyCultureConstellationHullsThickness = r.constellationHullsThickness !== undefined ? r.constellationHullsThickness : this.skyCultureConstellationHullsThickness
-      this.skyCultureZodiacThickness = r.zodiacThickness !== undefined ? r.zodiacThickness : this.skyCultureZodiacThickness
-      this.skyCultureLunarSystemThickness = r.lunarSystemThickness !== undefined ? r.lunarSystemThickness : this.skyCultureLunarSystemThickness
-      this.skyCultureConstellationArtIntensity = r.constellationArtIntensity !== undefined ? r.constellationArtIntensity : this.skyCultureConstellationArtIntensity
-      this.skyCultureConstellationLinesFadeDuration = r.constellationLinesFadeDuration !== undefined ? r.constellationLinesFadeDuration : this.skyCultureConstellationLinesFadeDuration
-      this.skyCultureConstellationLabelsFadeDuration = r.constellationLabelsFadeDuration !== undefined ? r.constellationLabelsFadeDuration : this.skyCultureConstellationLabelsFadeDuration
-      this.skyCultureConstellationArtFadeDuration = r.constellationArtFadeDuration !== undefined ? r.constellationArtFadeDuration : this.skyCultureConstellationArtFadeDuration
-      this.skyCultureConstellationBoundariesFadeDuration = r.constellationBoundariesFadeDuration !== undefined ? r.constellationBoundariesFadeDuration : this.skyCultureConstellationBoundariesFadeDuration
-      this.skyCultureConstellationHullsFadeDuration = r.constellationHullsFadeDuration !== undefined ? r.constellationHullsFadeDuration : this.skyCultureConstellationHullsFadeDuration
-      this.skyCultureZodiacFadeDuration = r.zodiacFadeDuration !== undefined ? r.zodiacFadeDuration : this.skyCultureZodiacFadeDuration
-      this.skyCultureLunarSystemFadeDuration = r.lunarSystemFadeDuration !== undefined ? r.lunarSystemFadeDuration : this.skyCultureLunarSystemFadeDuration
-      this.skyCultureAsterismFontSize = r.asterismFontSize !== undefined ? r.asterismFontSize : this.skyCultureAsterismFontSize
-      this.skyCultureAsterismLineThickness = r.asterismLineThickness !== undefined ? r.asterismLineThickness : this.skyCultureAsterismLineThickness
-      this.skyCultureRayHelperThickness = r.rayHelperThickness !== undefined ? r.rayHelperThickness : this.skyCultureRayHelperThickness
-      this.skyCultureAsterismLinesFadeDuration = r.asterismLinesFadeDuration !== undefined ? r.asterismLinesFadeDuration : this.skyCultureAsterismLinesFadeDuration
-      this.skyCultureAsterismLabelsFadeDuration = r.asterismLabelsFadeDuration !== undefined ? r.asterismLabelsFadeDuration : this.skyCultureAsterismLabelsFadeDuration
-      this.skyCultureRayHelperFadeDuration = r.rayHelperFadeDuration !== undefined ? r.rayHelperFadeDuration : this.skyCultureRayHelperFadeDuration
+      this.skyCultureSettingsStore.skyCultureConstellationFontSize = r.constellationFontSize !== undefined ? r.constellationFontSize : this.skyCultureSettingsStore.skyCultureConstellationFontSize
+      this.skyCultureSettingsStore.skyCultureConstellationLineThickness = r.constellationLineThickness !== undefined ? r.constellationLineThickness : this.skyCultureSettingsStore.skyCultureConstellationLineThickness
+      this.skyCultureSettingsStore.skyCultureConstellationBoundaryThickness = r.constellationBoundaryThickness !== undefined ? r.constellationBoundaryThickness : this.skyCultureSettingsStore.skyCultureConstellationBoundaryThickness
+      this.skyCultureSettingsStore.skyCultureConstellationHullsThickness = r.constellationHullsThickness !== undefined ? r.constellationHullsThickness : this.skyCultureSettingsStore.skyCultureConstellationHullsThickness
+      this.skyCultureSettingsStore.skyCultureZodiacThickness = r.zodiacThickness !== undefined ? r.zodiacThickness : this.skyCultureSettingsStore.skyCultureZodiacThickness
+      this.skyCultureSettingsStore.skyCultureLunarSystemThickness = r.lunarSystemThickness !== undefined ? r.lunarSystemThickness : this.skyCultureSettingsStore.skyCultureLunarSystemThickness
+      this.skyCultureSettingsStore.skyCultureConstellationArtIntensity = r.constellationArtIntensity !== undefined ? r.constellationArtIntensity : this.skyCultureSettingsStore.skyCultureConstellationArtIntensity
+      this.skyCultureSettingsStore.skyCultureConstellationLinesFadeDuration = r.constellationLinesFadeDuration !== undefined ? r.constellationLinesFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationLinesFadeDuration
+      this.skyCultureSettingsStore.skyCultureConstellationLabelsFadeDuration = r.constellationLabelsFadeDuration !== undefined ? r.constellationLabelsFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationLabelsFadeDuration
+      this.skyCultureSettingsStore.skyCultureConstellationArtFadeDuration = r.constellationArtFadeDuration !== undefined ? r.constellationArtFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationArtFadeDuration
+      this.skyCultureSettingsStore.skyCultureConstellationBoundariesFadeDuration = r.constellationBoundariesFadeDuration !== undefined ? r.constellationBoundariesFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationBoundariesFadeDuration
+      this.skyCultureSettingsStore.skyCultureConstellationHullsFadeDuration = r.constellationHullsFadeDuration !== undefined ? r.constellationHullsFadeDuration : this.skyCultureSettingsStore.skyCultureConstellationHullsFadeDuration
+      this.skyCultureSettingsStore.skyCultureZodiacFadeDuration = r.zodiacFadeDuration !== undefined ? r.zodiacFadeDuration : this.skyCultureSettingsStore.skyCultureZodiacFadeDuration
+      this.skyCultureSettingsStore.skyCultureLunarSystemFadeDuration = r.lunarSystemFadeDuration !== undefined ? r.lunarSystemFadeDuration : this.skyCultureSettingsStore.skyCultureLunarSystemFadeDuration
+      this.skyCultureSettingsStore.skyCultureAsterismFontSize = r.asterismFontSize !== undefined ? r.asterismFontSize : this.skyCultureSettingsStore.skyCultureAsterismFontSize
+      this.skyCultureSettingsStore.skyCultureAsterismLineThickness = r.asterismLineThickness !== undefined ? r.asterismLineThickness : this.skyCultureSettingsStore.skyCultureAsterismLineThickness
+      this.skyCultureSettingsStore.skyCultureRayHelperThickness = r.rayHelperThickness !== undefined ? r.rayHelperThickness : this.skyCultureSettingsStore.skyCultureRayHelperThickness
+      this.skyCultureSettingsStore.skyCultureAsterismLinesFadeDuration = r.asterismLinesFadeDuration !== undefined ? r.asterismLinesFadeDuration : this.skyCultureSettingsStore.skyCultureAsterismLinesFadeDuration
+      this.skyCultureSettingsStore.skyCultureAsterismLabelsFadeDuration = r.asterismLabelsFadeDuration !== undefined ? r.asterismLabelsFadeDuration : this.skyCultureSettingsStore.skyCultureAsterismLabelsFadeDuration
+      this.skyCultureSettingsStore.skyCultureRayHelperFadeDuration = r.rayHelperFadeDuration !== undefined ? r.rayHelperFadeDuration : this.skyCultureSettingsStore.skyCultureRayHelperFadeDuration
       if (r.skyCultureColors !== undefined) {
         const colors = r.skyCultureColors
-        this.skyCultureVisualColors = {
-          constellationLines: colors.constellationLines ?? this.skyCultureVisualColors.constellationLines,
-          constellationLabels: colors.constellationLabels ?? this.skyCultureVisualColors.constellationLabels,
-          constellationBoundaries: colors.constellationBoundaries ?? this.skyCultureVisualColors.constellationBoundaries,
-          constellationHulls: colors.constellationHulls ?? this.skyCultureVisualColors.constellationHulls,
-          zodiac: colors.zodiac ?? this.skyCultureVisualColors.zodiac,
-          lunarSystem: colors.lunarSystem ?? this.skyCultureVisualColors.lunarSystem,
-          asterismLines: colors.asterismLines ?? this.skyCultureVisualColors.asterismLines,
-          asterismLabels: colors.asterismLabels ?? this.skyCultureVisualColors.asterismLabels,
-          rayHelpers: colors.rayHelpers ?? this.skyCultureVisualColors.rayHelpers
+        this.skyCultureSettingsStore.skyCultureVisualColors = {
+          constellationLines: colors.constellationLines ?? this.skyCultureSettingsStore.skyCultureVisualColors.constellationLines,
+          constellationLabels: colors.constellationLabels ?? this.skyCultureSettingsStore.skyCultureVisualColors.constellationLabels,
+          constellationBoundaries: colors.constellationBoundaries ?? this.skyCultureSettingsStore.skyCultureVisualColors.constellationBoundaries,
+          constellationHulls: colors.constellationHulls ?? this.skyCultureSettingsStore.skyCultureVisualColors.constellationHulls,
+          zodiac: colors.zodiac ?? this.skyCultureSettingsStore.skyCultureVisualColors.zodiac,
+          lunarSystem: colors.lunarSystem ?? this.skyCultureSettingsStore.skyCultureVisualColors.lunarSystem,
+          asterismLines: colors.asterismLines ?? this.skyCultureSettingsStore.skyCultureVisualColors.asterismLines,
+          asterismLabels: colors.asterismLabels ?? this.skyCultureSettingsStore.skyCultureVisualColors.asterismLabels,
+          rayHelpers: colors.rayHelpers ?? this.skyCultureSettingsStore.skyCultureVisualColors.rayHelpers
         }
-        this.skyCultureColorInput = this.skyCultureVisualColor(this.skyCultureActiveColorTarget())
+        this.skyCultureSettingsStore.skyCultureColorInput = this.skyCultureSettingsStore.skyCultureVisualColor(this.skyCultureActiveColorTarget())
       }
     })
   }
 
-  private setSkyCultureVisualSetting(setting: string, value: number, apply: (current: number) => void): void {
+  private setSkyCultureVisualSetting(setting: string, value: number): void {
     this.callInteractive('setSkyCultureVisualSetting', setting + '|' + value.toFixed(2), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) apply(value)
+      if (r.ok === true) this.skyCultureSettingsStore.applySkyCultureVisualSetting(setting, value)
     })
   }
 
@@ -8076,35 +7934,20 @@ export struct WindowNativeNode {
     if (this.layerStore.asterismLines) options.push({ id: 'asterismLines', label: '星群连线' })
     if (this.layerStore.asterismLabels) options.push({ id: 'asterismLabels', label: '星群标签' })
     if (this.layerStore.rayHelpers) options.push({ id: 'rayHelpers', label: '辅助射线' })
-    if (this.layerStore.zodiac && this.skyCultureHasZodiac) options.push({ id: 'zodiac', label: '文化黄道' })
-    if (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) options.push({ id: 'lunarSystem', label: '月宿系统' })
+    if (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) options.push({ id: 'zodiac', label: '文化黄道' })
+    if (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) options.push({ id: 'lunarSystem', label: '月宿系统' })
     return options
   }
 
   private skyCultureActiveColorTarget(): string {
     const options = this.skyCultureColorOptions()
     for (const option of options) {
-      if (option.id === this.skyCultureColorTarget) return option.id
+      if (option.id === this.skyCultureSettingsStore.skyCultureColorTarget) return option.id
     }
     return options.length > 0 ? options[0].id : 'constellationLines'
   }
 
-  private skyCultureVisualColor(setting: string): string {
-    if (setting === 'constellationLabels') return this.skyCultureVisualColors.constellationLabels
-    if (setting === 'constellationBoundaries') return this.skyCultureVisualColors.constellationBoundaries
-    if (setting === 'constellationHulls') return this.skyCultureVisualColors.constellationHulls
-    if (setting === 'zodiac') return this.skyCultureVisualColors.zodiac
-    if (setting === 'lunarSystem') return this.skyCultureVisualColors.lunarSystem
-    if (setting === 'asterismLines') return this.skyCultureVisualColors.asterismLines
-    if (setting === 'asterismLabels') return this.skyCultureVisualColors.asterismLabels
-    if (setting === 'rayHelpers') return this.skyCultureVisualColors.rayHelpers
-    return this.skyCultureVisualColors.constellationLines
-  }
 
-  private selectSkyCultureColorTarget(setting: string): void {
-    this.skyCultureColorTarget = setting
-    this.skyCultureColorInput = this.skyCultureVisualColor(setting)
-  }
 
   private setSkyCultureVisualColor(setting: string, color: string): void {
     const normalized = color.trim().toUpperCase()
@@ -8115,7 +7958,7 @@ export struct WindowNativeNode {
     this.callInteractive('setSkyCultureVisualColor', setting + '|' + normalized, (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
       const nextColor = r.color !== undefined ? r.color : normalized
-      const colors = this.skyCultureVisualColors
+      const colors = this.skyCultureSettingsStore.skyCultureVisualColors
       const updated: SkyCultureVisualColors = {
         constellationLines: setting === 'constellationLines' ? nextColor : colors.constellationLines,
         constellationLabels: setting === 'constellationLabels' ? nextColor : colors.constellationLabels,
@@ -8127,216 +7970,73 @@ export struct WindowNativeNode {
         asterismLabels: setting === 'asterismLabels' ? nextColor : colors.asterismLabels,
         rayHelpers: setting === 'rayHelpers' ? nextColor : colors.rayHelpers
       }
-      this.skyCultureVisualColors = updated
-      if (setting === this.skyCultureActiveColorTarget()) this.skyCultureColorInput = nextColor
+      this.skyCultureSettingsStore.skyCultureVisualColors = updated
+      if (setting === this.skyCultureActiveColorTarget()) this.skyCultureSettingsStore.skyCultureColorInput = nextColor
     })
   }
 
   private applySkyCultureCustomColor(): void {
-    this.setSkyCultureVisualColor(this.skyCultureActiveColorTarget(), this.skyCultureColorInput)
+    this.setSkyCultureVisualColor(this.skyCultureActiveColorTarget(), this.skyCultureSettingsStore.skyCultureColorInput)
   }
 
   private setCurrentSkyCultureAsDefault(): void {
-    if (this.currentSkyCultureId.length === 0 || this.skyCultureDefaultId === this.currentSkyCultureId) return
+    if (this.currentSkyCultureId.length === 0 || this.skyCultureSettingsStore.skyCultureDefaultId === this.currentSkyCultureId) return
     this.callInteractive('setSkyCultureDefault', this.currentSkyCultureId, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.skyCultureDefaultId = r.defaultId !== undefined ? r.defaultId : this.currentSkyCultureId
+        this.skyCultureSettingsStore.skyCultureDefaultId = r.defaultId !== undefined ? r.defaultId : this.currentSkyCultureId
         this.flashHint('已设为默认星空文化')
       }
     })
   }
 
-  private filteredSkyCultureList(): Array<SkyCultureItem> {
-    const query = this.skyCultureSearchText.trim().toLowerCase()
-    const filtered = this.skyCultureList.filter((item: SkyCultureItem) => {
-      if (this.skyCultureClassificationFilter !== 'all' && item.classification !== this.skyCultureClassificationFilter) return false
-      if (this.skyCultureRegionFilter !== 'all' && !(item.region ?? []).includes(this.skyCultureRegionFilter)) return false
-      if (this.skyCultureTimeFiltering) {
-        const matchesTime = this.skyCultureRangeFiltering
-          ? this.skyCultureIncludesRange(item, this.skyCultureRangeStart, this.skyCultureRangeEnd)
-          : this.skyCultureIncludesYear(item, this.skyCultureTimeYear)
-        if (!matchesTime) return false
-      }
-      if (query.length === 0) return true
-      const text = this.skyCultureDisplayName(item.id, item.name) + ' ' + item.name + ' ' + item.id + ' ' + (item.region ?? []).join(' ')
-      return text.toLowerCase().includes(query)
-    })
-    filtered.sort((first: SkyCultureItem, second: SkyCultureItem) => {
-      const firstRegion = this.skyCultureRegionKey(first)
-      const secondRegion = this.skyCultureRegionKey(second)
-      if (firstRegion !== secondRegion) return firstRegion.localeCompare(secondRegion)
-      return this.skyCultureDisplayName(first.id, first.name).localeCompare(this.skyCultureDisplayName(second.id, second.name))
-    })
-    return filtered
-  }
 
-  private skyCultureRegionKey(item: SkyCultureItem): string {
-    const regions = item.region ?? []
-    return regions.length > 0 ? regions[0] : 'Other'
-  }
 
-  private skyCultureRegionHeader(list: Array<SkyCultureItem>, index: number): string {
-    if (index < 0 || index >= list.length) return ''
-    const current = this.skyCultureRegionKey(list[index])
-    if (index > 0 && this.skyCultureRegionKey(list[index - 1]) === current) return ''
-    return current === 'Other' ? '其他地区' : this.skyCultureRegionText([current])
-  }
 
-  private skyCultureIncludesYear(item: SkyCultureItem, year: number): boolean {
-    const begin = item.beginTime ?? 0
-    const end = item.endTime ?? 0
-    if (begin === 0 && end === 0) return true
-    const earliest = begin === 0 ? -40000 : begin
-    const latest = end === 0 || end >= 9000 ? this.skyCultureFilterMaxYear() : end
-    return year >= earliest && year <= latest
-  }
 
-  private skyCultureIncludesRange(item: SkyCultureItem, startYear: number, endYear: number): boolean {
-    const begin = item.beginTime ?? 0
-    const end = item.endTime ?? 0
-    if (begin === 0 && end === 0) return true
-    const earliest = begin === 0 ? -40000 : begin
-    const latest = end === 0 || end >= 9000 ? this.skyCultureFilterMaxYear() : end
-    return earliest <= endYear && latest >= startYear
-  }
 
-  private skyCultureFilterMaxYear(): number {
-    return Math.max(new Date().getFullYear(), this.skyCultureSimulationYear)
-  }
 
-  private setSkyCultureTimeYear(year: number): void {
-    const clamped = Math.max(-40000, Math.min(this.skyCultureFilterMaxYear(), Math.round(year)))
-    this.skyCultureTimeYear = clamped
-    this.skyCultureTimeYearInput = clamped.toString()
-  }
 
-  private setSkyCultureRange(startYear: number, endYear: number): void {
-    const maxYear = this.skyCultureFilterMaxYear()
-    const start = Math.max(-40000, Math.min(maxYear, Math.round(startYear)))
-    const end = Math.max(start, Math.min(maxYear, Math.round(endYear)))
-    this.skyCultureRangeStart = start
-    this.skyCultureRangeEnd = end
-    this.skyCultureRangeStartInput = start.toString()
-    this.skyCultureRangeEndInput = end.toString()
-  }
 
-  private applySkyCultureRangeInput(): void {
-    const start = parseInt(this.skyCultureRangeStartInput, 10)
-    const end = parseInt(this.skyCultureRangeEndInput, 10)
-    if (Number.isNaN(start) || Number.isNaN(end)) {
-      this.skyCultureRangeStartInput = this.skyCultureRangeStart.toString()
-      this.skyCultureRangeEndInput = this.skyCultureRangeEnd.toString()
-      return
-    }
-    this.setSkyCultureRange(start, end)
-  }
 
-  private skyCultureRangeLabel(): string {
-    const format = (year: number): string => year < 0 ? '公元前 ' + Math.abs(year) + ' 年' : '公元 ' + year + ' 年'
-    return format(this.skyCultureRangeStart) + ' 至 ' + format(this.skyCultureRangeEnd)
-  }
 
-  private applySkyCultureTimeYearInput(): void {
-    const year = parseInt(this.skyCultureTimeYearInput, 10)
-    if (Number.isNaN(year)) {
-      this.skyCultureTimeYearInput = this.skyCultureTimeYear.toString()
-      return
-    }
-    this.setSkyCultureTimeYear(year)
-  }
 
-  private skyCultureTimeFilterLabel(): string {
-    if (this.skyCultureTimeYear < 0) return '公元前 ' + Math.abs(this.skyCultureTimeYear) + ' 年'
-    return '公元 ' + this.skyCultureTimeYear + ' 年'
-  }
 
-  private skyCultureClassificationFilterLabels(): string[] {
-    return ['全部类型', '传统传承', '民族志记录', '历史复原', '单一史料', '比较呈现', '个人创作', '资料待完善']
-  }
 
-  private skyCultureClassificationFilterValues(): string[] {
-    return ['all', 'traditional', 'ethnographic', 'historical', 'single', 'comparative', 'personal', 'incomplete']
-  }
 
-  private skyCultureClassificationFilterLabel(): string {
-    const values = this.skyCultureClassificationFilterValues()
-    const labels = this.skyCultureClassificationFilterLabels()
-    const index = values.indexOf(this.skyCultureClassificationFilter)
-    return labels[index >= 0 ? index : 0]
-  }
 
-  private skyCultureRegionFilterLabels(): string[] {
-    return [
-      I18n.t('culture_all_regions'), '澳大拉西亚', '中美洲', '东亚', '东欧', '美拉尼西亚', '北非', '北美洲',
-      '北亚', '北欧', '波利尼西亚', '南美洲', '东南亚', '南部非洲', '南亚', '南欧', '西亚', '西欧', '全球'
-    ]
-  }
 
-  private skyCultureRegionFilterValues(): string[] {
-    return [
-      'all', 'Australasia', 'Central America', 'Eastern Asia', 'Eastern Europe', 'Melanesia',
-      'Northern Africa', 'Northern America', 'Northern Asia', 'Northern Europe', 'Polynesia',
-      'South America', 'South-eastern Asia', 'Southern Africa', 'Southern Asia', 'Southern Europe',
-      'Western Asia', 'Western Europe', 'World'
-    ]
-  }
 
-  private skyCultureRegionFilterLabel(): string {
-    const values = this.skyCultureRegionFilterValues()
-    const labels = this.skyCultureRegionFilterLabels()
-    const index = values.indexOf(this.skyCultureRegionFilter)
-    return labels[index >= 0 ? index : 0]
-  }
 
-  private skyCultureFilterOpen(kind: string): boolean {
-    return kind === 'classification' ? this.skyCultureClassificationFilterOpen : this.skyCultureRegionFilterOpen
-  }
 
-  private skyCultureFilterLabels(kind: string): string[] {
-    return kind === 'classification' ? this.skyCultureClassificationFilterLabels() : this.skyCultureRegionFilterLabels()
-  }
 
-  private skyCultureFilterValues(kind: string): string[] {
-    return kind === 'classification' ? this.skyCultureClassificationFilterValues() : this.skyCultureRegionFilterValues()
-  }
 
-  private skyCultureFilterValue(kind: string): string {
-    return kind === 'classification' ? this.skyCultureClassificationFilter : this.skyCultureRegionFilter
-  }
 
-  private skyCultureFilterLabel(kind: string): string {
-    return kind === 'classification' ? this.skyCultureClassificationFilterLabel() : this.skyCultureRegionFilterLabel()
-  }
 
   private setSkyCultureFilterValue(kind: string, value: string): void {
     this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.46, 0.88) }, () => {
       if (kind === 'classification') {
-        this.skyCultureClassificationFilter = value
-        this.skyCultureClassificationFilterOpen = false
+        this.skyCultureSettingsStore.skyCultureClassificationFilter = value
+        this.skyCultureSettingsStore.skyCultureClassificationFilterOpen = false
       } else {
-        this.skyCultureRegionFilter = value
-        this.skyCultureRegionFilterOpen = false
+        this.skyCultureSettingsStore.skyCultureRegionFilter = value
+        this.skyCultureSettingsStore.skyCultureRegionFilterOpen = false
       }
     })
   }
 
   private toggleSkyCultureFilter(kind: string): void {
-    const opening = !this.skyCultureFilterOpen(kind)
+    const opening = !this.skyCultureSettingsStore.skyCultureFilterOpen(kind)
     this.getUIContext().animateTo({ duration: 220, curve: curves.springMotion(0.46, 0.88) }, () => {
       if (kind === 'classification') {
-        this.skyCultureClassificationFilterOpen = opening
-        this.skyCultureRegionFilterOpen = false
+        this.skyCultureSettingsStore.skyCultureClassificationFilterOpen = opening
+        this.skyCultureSettingsStore.skyCultureRegionFilterOpen = false
       } else {
-        this.skyCultureRegionFilterOpen = opening
-        this.skyCultureClassificationFilterOpen = false
+        this.skyCultureSettingsStore.skyCultureRegionFilterOpen = opening
+        this.skyCultureSettingsStore.skyCultureClassificationFilterOpen = false
       }
     })
   }
 
-  private skyCultureFilterSelectedIndex(kind: string): number {
-    const index = this.skyCultureFilterValues(kind).indexOf(this.skyCultureFilterValue(kind))
-    return index >= 0 ? index : 0
-  }
 
 
 
@@ -8348,25 +8048,6 @@ export struct WindowNativeNode {
     return text.replace(/[\uFEFF\uFFFD\uFFFC]/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
   }
 
-  private skyCultureDisplayName(id: string, rawName: string): string {
-    if (id !== 'tibetan') return rawName
-    const language = I18n.getLanguage()
-    if (language === 'zh_CN') return '中国藏族星空文化'
-    if (language === 'zh_HK' || language === 'zh_TW') return '中國藏族星空文化'
-    if (language === 'en') return 'Tibetan Sky Culture (China)'
-    const qualifiers: Record<string, string> = {
-      'ar': 'الصين', 'bn': 'চীন', 'cs': 'Čína', 'da': 'Kina', 'de': 'China',
-      'el': 'Κίνα', 'es': 'China', 'fa': 'چین', 'fi': 'Kiina', 'fr': 'Chine',
-      'gu': 'ચીન', 'he': 'סין', 'hi': 'चीन', 'hr': 'Kina', 'hu': 'Kína',
-      'id': 'Tiongkok', 'it': 'Cina', 'ja': '中国', 'ko': '중국', 'ml': 'ചൈന',
-      'mr': 'चीन', 'ms': 'China', 'nb': 'Kina', 'ne': 'चीन', 'nl': 'China',
-      'pl': 'Chiny', 'pt': 'China', 'pt_BR': 'China', 'ro': 'China', 'ru': 'Китай',
-      'si': 'චීනය', 'sk': 'Čína', 'sl': 'Kitajska', 'sv': 'Kina', 'ta': 'சீனா',
-      'te': 'చైనా', 'th': 'จีน', 'uk': 'Китай', 'vi': 'Trung Quốc'
-    }
-    const qualifier = qualifiers[language] ?? 'China'
-    return rawName + ' (' + qualifier + ')'
-  }
 
   private skyCultureNarrationParagraphs(): string[] {
     return this.cleanSkyCultureNarration(this.skyCultureViewStore.narration).split(/\n+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0)
@@ -8842,123 +8523,40 @@ export struct WindowNativeNode {
     this.refreshObjectInspectorMedia()
   }
 
-  private skyCultureRegionText(regions: string[]): string {
-    const translated: Record<string, string> = {
-      'Australasia': '澳大拉西亚', 'Central America': '中美洲', 'Eastern Asia': '东亚',
-      'Eastern Europe': '东欧', 'Melanesia': '美拉尼西亚', 'Northern Africa': '北非',
-      'Northern America': '北美洲', 'Northern Asia': '北亚', 'Northern Europe': '北欧',
-      'Polynesia': '波利尼西亚', 'South America': '南美洲', 'South-eastern Asia': '东南亚',
-      'Southern Africa': '南部非洲', 'Southern Asia': '南亚', 'Southern Europe': '南欧',
-      'Western Asia': '西亚', 'Western Europe': '西欧', 'World': '全球',
-    }
-    const names: string[] = []
-    for (let index = 0; index < regions.length; index++) {
-      names.push(translated[regions[index]] ?? regions[index])
-    }
-    return names.length > 0 ? names.join('、') : '未标注地区'
-  }
 
-  private skyCultureClassificationText(classification: string): string {
-    const translated: Record<string, string> = {
-      'traditional': '传统传承', 'ethnographic': '民族志记录', 'historical': '历史复原',
-      'single': '单一史料', 'comparative': '比较呈现', 'personal': '个人创作', 'incomplete': '资料待完善',
-    }
-    return translated[classification] ?? '资料待完善'
-  }
 
-  private skyCultureBoundaryTypeText(boundariesType: string): string {
-    if (boundariesType === 'iau') return '国际天文学联合会边界'
-    if (boundariesType === 'own') return '本文化自定义边界'
-    return '未定义边界'
-  }
 
-  private skyCultureTimeRange(): string {
-    if (this.skyCultureBeginTime === 0 && this.skyCultureEndTime === 0) return '年代范围未标注'
-    const start = this.skyCultureBeginTime === 0 ? '早期' : this.skyCultureFormatYear(this.skyCultureBeginTime)
-    const end = this.skyCultureEndTime >= 9000 ? '至今' : (this.skyCultureEndTime === 0 ? '至今' : this.skyCultureFormatYear(this.skyCultureEndTime))
-    return start + ' 至 ' + end
-  }
 
-  private skyCultureSimulationTimeMatches(): boolean {
-    if (this.skyCultureBeginTime === 0 && this.skyCultureEndTime === 0) return true
-    const beginsBeforeYear = this.skyCultureBeginTime === 0 || this.skyCultureSimulationYear >= this.skyCultureBeginTime
-    const endsAfterYear = this.skyCultureEndTime === 0 || this.skyCultureEndTime >= 9000 || this.skyCultureSimulationYear <= this.skyCultureEndTime
-    return beginsBeforeYear && endsAfterYear
-  }
 
-  private skyCultureSimulationTimeStatus(): string {
-    if (this.skyCultureBeginTime === 0 && this.skyCultureEndTime === 0) return '当前模拟时间：该文化未标注适用年代'
-    return this.skyCultureSimulationTimeMatches()
-      ? '当前模拟时间：在该文化适用年代内'
-      : '当前模拟时间：不在该文化适用年代内'
-  }
 
-  private skyCultureFormatYear(year: number): string {
-    return year < 0 ? '公元前 ' + Math.abs(year) + ' 年' : '公元 ' + year + ' 年'
-  }
 
-  private skyCultureTerritoryIncludesYear(entry: SkyCultureTerritoryEntry, year: number): boolean {
-    const beginsBeforeYear = entry.beginTime === 0 || year >= entry.beginTime
-    const endsAfterYear = entry.endTime === 0 || entry.endTime >= 9000 || year <= entry.endTime
-    return beginsBeforeYear && endsAfterYear
-  }
 
-  private skyCultureTerritoryEntriesForSelectedYear(): Array<SkyCultureTerritoryEntry> {
-    return this.skyCultureTerritoryArchive.filter((entry: SkyCultureTerritoryEntry) => this.skyCultureTerritoryIncludesYear(entry, this.skyCultureTimeYear))
-  }
 
-  private skyCultureTerritoryMapMaxYear(): number {
-    return Math.min(10000, this.skyCultureFilterMaxYear())
-  }
 
-  private setSkyCultureTerritoryMapYear(year: number): void {
-    const clamped = Math.max(-40000, Math.min(this.skyCultureTerritoryMapMaxYear(), Math.round(year)))
-    this.skyCultureTerritoryMapYear = clamped
-    this.skyCultureTerritoryMapYearInput = clamped.toString()
-  }
 
-  private applySkyCultureTerritoryMapYearInput(): void {
-    const year = parseInt(this.skyCultureTerritoryMapYearInput, 10)
-    if (Number.isNaN(year)) {
-      this.skyCultureTerritoryMapYearInput = this.skyCultureTerritoryMapYear.toString()
-      return
-    }
-    this.setSkyCultureTerritoryMapYear(year)
-  }
 
-  private syncSkyCultureTerritoryMapYearToSimulation(): void {
-    this.setSkyCultureTerritoryMapYear(this.skyCultureSimulationYear)
-  }
 
-  private skyCultureMapRotationAngle(): number {
-    return this.skyCultureMapUseLocationRotation && this.skyCultureObserverLatitude < 0 ? 180 : 0
-  }
 
-  private skyCultureTerritoryRange(entry: SkyCultureTerritoryEntry): string {
-    const start = entry.beginTime === 0 ? '早期' : this.skyCultureFormatYear(entry.beginTime)
-    const end = entry.endTime === 0 || entry.endTime >= 9000 ? '至今' : this.skyCultureFormatYear(entry.endTime)
-    return start + ' 至 ' + end
-  }
 
   private loadSkyCultureTerritoryMap(): void {
-    if (!this.skyCultureHasTerritoryArchive || this.currentSkyCultureId.length === 0 || this.skyCultureTerritoryMapLoading) return
-    this.applySkyCultureTerritoryMapYearInput()
-    const requestedYear = this.skyCultureTerritoryMapYear
-    this.skyCultureTerritoryMapLoading = true
-    this.skyCultureTerritoryMapError = ''
+    if (!this.skyCultureSettingsStore.skyCultureHasTerritoryArchive || this.currentSkyCultureId.length === 0 || this.skyCultureSettingsStore.skyCultureTerritoryMapLoading) return
+    this.skyCultureSettingsStore.applySkyCultureTerritoryMapYearInput()
+    const requestedYear = this.skyCultureSettingsStore.skyCultureTerritoryMapYear
+    this.skyCultureSettingsStore.skyCultureTerritoryMapLoading = true
+    this.skyCultureSettingsStore.skyCultureTerritoryMapError = ''
     this.callInteractive('getSkyCultureTerritoryGeometry', requestedYear.toString(), (r: StellariumBridgeResponse) => {
-      this.skyCultureTerritoryMapLoading = false
+      this.skyCultureSettingsStore.skyCultureTerritoryMapLoading = false
       if (r.ok !== true || r.territoryPolygons === undefined || !Array.isArray(r.territoryPolygons)) {
-        this.skyCultureTerritoryMapError = '未能读取该年份的文化区域。'
+        this.skyCultureSettingsStore.skyCultureTerritoryMapError = '未能读取该年份的文化区域。'
         return
       }
-      this.skyCultureTerritoryMapPolygons = r.territoryPolygons as Array<SkyCultureTerritoryPolygon>
-      this.skyCultureTerritoryMapYear = r.year !== undefined ? Math.round(r.year) : requestedYear
-      this.skyCultureTerritoryMapExpanded = true
+      this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons = r.territoryPolygons as Array<SkyCultureTerritoryPolygon>
+      this.skyCultureSettingsStore.skyCultureTerritoryMapYear = r.year !== undefined ? Math.round(r.year) : requestedYear
+      this.skyCultureSettingsStore.skyCultureTerritoryMapExpanded = true
       this.drawSkyCultureTerritoryMap()
     }, () => {
-      this.skyCultureTerritoryMapLoading = false
-      this.skyCultureTerritoryMapError = '未能读取该年份的文化区域。'
+      this.skyCultureSettingsStore.skyCultureTerritoryMapLoading = false
+      this.skyCultureSettingsStore.skyCultureTerritoryMapError = '未能读取该年份的文化区域。'
     })
   }
 
@@ -8970,8 +8568,8 @@ export struct WindowNativeNode {
     this.skyCultureMapContext.lineWidth = 1.2
     this.skyCultureMapContext.strokeStyle = 'rgba(255, 219, 115, 0.96)'
     this.skyCultureMapContext.fillStyle = 'rgba(255, 194, 76, 0.18)'
-    for (let polygonIndex = 0; polygonIndex < this.skyCultureTerritoryMapPolygons.length; polygonIndex++) {
-      const points = this.skyCultureTerritoryMapPolygons[polygonIndex].points
+    for (let polygonIndex = 0; polygonIndex < this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons.length; polygonIndex++) {
+      const points = this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons[polygonIndex].points
       if (points.length < 3) continue
       let started = false
       let crossesDateLine = false
@@ -13933,7 +13531,7 @@ private loadPlanetPositions(): void {
     this.callInteractive('getObserverInfo', '', (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         if (r.latitude !== undefined) {
-          this.skyCultureObserverLatitude = Number(r.latitude)
+          this.skyCultureSettingsStore.skyCultureObserverLatitude = Number(r.latitude)
         }
         if (updateTimeZone && r.timeZone !== undefined && r.timeZone.length > 0 && r.timeZone !== 'system_default') {
           this.locationPickerStore.observerTimeZone = this.timezoneDisplayName(r.timeZone)
@@ -22818,7 +22416,7 @@ private loadPlanetPositions(): void {
       LayerSwitchRow({ label: I18n.t('s0525'), isOn: this.layerStore.constellationArt, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Constellation_Art', '', value) } })
       LayerSwitchRow({ label: I18n.t('s0526'), isOn: this.layerStore.zodiac, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Zodiac', '', value) } })
       LayerSwitchRow({ label: I18n.t('s0527'), isOn: this.layerStore.lunarSystem, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_LunarSystem', '', value) } })
-      if (this.skyCultureHasAsterisms) {
+      if (this.skyCultureSettingsStore.skyCultureHasAsterisms) {
         LayerSwitchRow({ label: I18n.t('s0528'), isOn: this.layerStore.asterismLines, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Asterism_Lines', '', value) } })
         LayerSwitchRow({ label: I18n.t('s0529'), isOn: this.layerStore.asterismLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Asterism_Labels', '', value) } })
         LayerSwitchRow({ label: I18n.t('s0540'), isOn: this.layerStore.rayHelpers, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ray_Helpers', '', value) } })
@@ -22857,21 +22455,21 @@ private loadPlanetPositions(): void {
             .padding({ left: 9, right: 9, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
         }
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-          SkyCultureMetaItem({ label: '地区', value: this.skyCultureRegionText(this.skyCultureRegions), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
-          SkyCultureMetaItem({ label: '分类', value: this.skyCultureClassificationText(this.skyCultureClassification), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
-          SkyCultureMetaItem({ label: '适用年代', value: this.skyCultureTimeRange(), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
-          SkyCultureMetaItem({ label: '时间匹配', value: this.skyCultureSimulationTimeStatus(), accent: this.skyCultureSimulationTimeMatches(), subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
-          SkyCultureMetaItem({ label: '星座边界', value: this.skyCultureBoundaryTypeText(this.skyCultureBoundariesType), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
-          SkyCultureMetaItem({ label: '通用名称', value: this.skyCultureUsesCommonNames ? '已收录' : '未收录', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
-          SkyCultureMetaItem({ label: '星座图形', value: this.skyCultureConstellationCount + ' 个', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
-          if (this.skyCultureAsterismCount > 0) {
-            SkyCultureMetaItem({ label: '星群', value: this.skyCultureAsterismCount + ' 个', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '地区', value: this.skyCultureSettingsStore.skyCultureRegionText(this.skyCultureSettingsStore.skyCultureRegions), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '分类', value: this.skyCultureSettingsStore.skyCultureClassificationText(this.skyCultureSettingsStore.skyCultureClassification), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '适用年代', value: this.skyCultureSettingsStore.skyCultureTimeRange(), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '时间匹配', value: this.skyCultureSettingsStore.skyCultureSimulationTimeStatus(), accent: this.skyCultureSettingsStore.skyCultureSimulationTimeMatches(), subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '星座边界', value: this.skyCultureSettingsStore.skyCultureBoundaryTypeText(this.skyCultureSettingsStore.skyCultureBoundariesType), accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '通用名称', value: this.skyCultureSettingsStore.skyCultureUsesCommonNames ? '已收录' : '未收录', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          SkyCultureMetaItem({ label: '星座图形', value: this.skyCultureSettingsStore.skyCultureConstellationCount + ' 个', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          if (this.skyCultureSettingsStore.skyCultureAsterismCount > 0) {
+            SkyCultureMetaItem({ label: '星群', value: this.skyCultureSettingsStore.skyCultureAsterismCount + ' 个', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
           }
-          if (this.skyCultureArtCount > 0) {
-            SkyCultureMetaItem({ label: '星座绘图', value: this.skyCultureArtCount + ' 幅', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          if (this.skyCultureSettingsStore.skyCultureArtCount > 0) {
+            SkyCultureMetaItem({ label: '星座绘图', value: this.skyCultureSettingsStore.skyCultureArtCount + ' 幅', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
           }
-          if (this.skyCultureNativeNameCount > 0) {
-            SkyCultureMetaItem({ label: '本土名称', value: this.skyCultureNativeNameCount + ' 个', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
+          if (this.skyCultureSettingsStore.skyCultureNativeNameCount > 0) {
+            SkyCultureMetaItem({ label: '本土名称', value: this.skyCultureSettingsStore.skyCultureNativeNameCount + ' 个', accent: false, subColor: this.nmSub(), textColor: this.nmText(), accentColor: this.nmAccent(), bgColor: this.nmBg(), cardBorder: this.nmBorder() })
           }
         }.width('100%').padding({ top: 5, bottom: 2 })
         if (this.skyCultureViewStore.artItems.length > 0) {
@@ -22959,20 +22557,20 @@ private loadPlanetPositions(): void {
           }.width('100%').padding({ left: 10, right: 10, top: 10, bottom: 6 })
             .backgroundColor(this.nmBg()).border({ width: 0.5, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL)
         }
-        if (this.skyCultureHasTerritoryArchive) {
+        if (this.skyCultureSettingsStore.skyCultureHasTerritoryArchive) {
           Text(I18n.t('culture_territory_archive')).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ top: 4 })
-          Text('所选年份 ' + this.skyCultureTimeFilterLabel() + '：' + this.skyCultureTerritoryEntriesForSelectedYear().length + ' 个有效时期；共 ' + this.skyCultureTerritorySegmentCount + ' 条档案')
+          Text('所选年份 ' + this.skyCultureSettingsStore.skyCultureTimeFilterLabel() + '：' + this.skyCultureSettingsStore.skyCultureTerritoryEntriesForSelectedYear().length + ' 个有效时期；共 ' + this.skyCultureSettingsStore.skyCultureTerritorySegmentCount + ' 条档案')
             .fontSize(10).fontColor(this.nmSub()).width('100%')
-          if (this.skyCultureTerritoryEntriesForSelectedYear().length === 0) {
+          if (this.skyCultureSettingsStore.skyCultureTerritoryEntriesForSelectedYear().length === 0) {
             Text('该文化没有覆盖所选年份的地理档案。').fontSize(10).fontColor(this.nmSub()).width('100%').margin({ top: 3 })
           }
-          if (this.skyCultureTerritoryExpanded) {
+          if (this.skyCultureSettingsStore.skyCultureTerritoryExpanded) {
             Column({ space: 4 }) {
-              ForEach(this.skyCultureTerritoryEntriesForSelectedYear(), (entry: SkyCultureTerritoryEntry, index: number) => {
+              ForEach(this.skyCultureSettingsStore.skyCultureTerritoryEntriesForSelectedYear(), (entry: SkyCultureTerritoryEntry, index: number) => {
                 Row({ space: 8 }) {
                   Column({ space: 1 }) {
                     Text(entry.name.length > 0 ? entry.name : '未命名地理档案').fontSize(10).fontColor(this.nmText()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    Text(this.skyCultureTerritoryRange(entry)).fontSize(9).fontColor(this.nmSub()).width('100%')
+                    Text(this.skyCultureSettingsStore.skyCultureTerritoryRange(entry)).fontSize(9).fontColor(this.nmSub()).width('100%')
                   }.layoutWeight(1)
                   if (entry.countryCode.length > 0) {
                     Text(entry.countryCode).fontSize(9).fontColor(this.nmAccent()).padding({ left: 5, right: 5, top: 2, bottom: 2 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
@@ -22981,55 +22579,55 @@ private loadPlanetPositions(): void {
               }, (entry: SkyCultureTerritoryEntry, index: number) => entry.name + '-' + entry.beginTime + '-' + entry.endTime + '-' + index)
             }.width('100%').margin({ top: 5 })
           }
-          Button(this.skyCultureTerritoryExpanded ? '收起地理档案' : '查看地理档案').fontSize(10).fontColor(this.nmAccent()).backgroundColor('rgba(0,0,0,0)')
-            .height(26).padding({ left: 0, right: 8 }).onClick(() => { this.skyCultureTerritoryExpanded = !this.skyCultureTerritoryExpanded })
+          Button(this.skyCultureSettingsStore.skyCultureTerritoryExpanded ? '收起地理档案' : '查看地理档案').fontSize(10).fontColor(this.nmAccent()).backgroundColor('rgba(0,0,0,0)')
+            .height(26).padding({ left: 0, right: 8 }).onClick(() => { this.skyCultureSettingsStore.skyCultureTerritoryExpanded = !this.skyCultureSettingsStore.skyCultureTerritoryExpanded })
           Row({ space: 8 }) {
             Column({ space: 1 }) {
               Text(I18n.t('culture_map')).fontSize(11).fontColor(this.nmText()).width('100%')
               Text('使用本地地图和文化资料，不联网；文化分布示意不代表现行行政区划或政治边界')
                 .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(2)
             }.layoutWeight(1)
-            Button(this.skyCultureTerritoryMapExpanded ? I18n.t('culture_update_map') : I18n.t('culture_view_map')).fontSize(10).fontColor(this.nmAccent()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 }).enabled(!this.skyCultureTerritoryMapLoading)
+            Button(this.skyCultureSettingsStore.skyCultureTerritoryMapExpanded ? I18n.t('culture_update_map') : I18n.t('culture_view_map')).fontSize(10).fontColor(this.nmAccent()).backgroundColor(this.nmBg())
+              .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 }).enabled(!this.skyCultureSettingsStore.skyCultureTerritoryMapLoading)
               .onClick(() => { this.loadSkyCultureTerritoryMap() })
-          }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ top: 3, bottom: this.skyCultureTerritoryMapExpanded ? 4 : 2 })
-          if (this.skyCultureTerritoryMapLoading) {
+          }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ top: 3, bottom: this.skyCultureSettingsStore.skyCultureTerritoryMapExpanded ? 4 : 2 })
+          if (this.skyCultureSettingsStore.skyCultureTerritoryMapLoading) {
             GraphLoadingRow({ label: '正在绘制文化区域地图…', accentColor: this.nmAccent(), subColor: this.nmSub() })
-          } else if (this.skyCultureTerritoryMapError.length > 0) {
-            Text(this.skyCultureTerritoryMapError).fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 })
-          } else if (this.skyCultureTerritoryMapExpanded) {
+          } else if (this.skyCultureSettingsStore.skyCultureTerritoryMapError.length > 0) {
+            Text(this.skyCultureSettingsStore.skyCultureTerritoryMapError).fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 })
+          } else if (this.skyCultureSettingsStore.skyCultureTerritoryMapExpanded) {
             Column({ space: 4 }) {
               Row({ space: 6 }) {
                 Text('地图年份').fontSize(10).fontColor(this.nmText()).width(52)
-                TextInput({ text: this.skyCultureTerritoryMapYearInput, placeholder: '年份' }).fontSize(11).fontColor(this.nmText()).height(28).width(86)
-                  .onChange((value: string) => { this.skyCultureTerritoryMapYearInput = value })
-                  .onSubmit(() => { this.applySkyCultureTerritoryMapYearInput() })
+                TextInput({ text: this.skyCultureSettingsStore.skyCultureTerritoryMapYearInput, placeholder: '年份' }).fontSize(11).fontColor(this.nmText()).height(28).width(86)
+                  .onChange((value: string) => { this.skyCultureSettingsStore.skyCultureTerritoryMapYearInput = value })
+                  .onSubmit(() => { this.skyCultureSettingsStore.applySkyCultureTerritoryMapYearInput() })
                 Button('同步星图时间').fontSize(9).fontColor(this.nmAccent()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 7, right: 7 })
-                  .onClick(() => { this.syncSkyCultureTerritoryMapYearToSimulation() })
+                  .onClick(() => { this.skyCultureSettingsStore.syncSkyCultureTerritoryMapYearToSimulation() })
                 Button('更新').fontSize(9).fontColor(this.nmAccent()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
-                  .enabled(!this.skyCultureTerritoryMapLoading)
+                  .enabled(!this.skyCultureSettingsStore.skyCultureTerritoryMapLoading)
                   .onClick(() => { this.loadSkyCultureTerritoryMap() })
               }.width('100%')
               Text('地图年份独立于文化目录筛选；可按星图当前时间同步。').fontSize(9).fontColor(this.nmSub()).width('100%')
               Row() {
                 Column({ space: 1 }) {
                   Text('按观测地旋转地图').fontSize(10).fontColor(this.nmText()).width('100%')
-                  Text(this.skyCultureMapUseLocationRotation
-                    ? (this.skyCultureObserverLatitude < 0 ? '南半球：地图已旋转 180°' : '北半球：保持标准方向')
+                  Text(this.skyCultureSettingsStore.skyCultureMapUseLocationRotation
+                    ? (this.skyCultureSettingsStore.skyCultureObserverLatitude < 0 ? '南半球：地图已旋转 180°' : '北半球：保持标准方向')
                     : '关闭时保持标准方向').fontSize(9).fontColor(this.nmSub()).width('100%')
                 }.layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.skyCultureMapUseLocationRotation }).width(38).height(21)
+                Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSettingsStore.skyCultureMapUseLocationRotation }).width(38).height(21)
                   .onChange((enabled: boolean) => {
-                    this.skyCultureMapUseLocationRotation = enabled
+                    this.skyCultureSettingsStore.skyCultureMapUseLocationRotation = enabled
                     this.loadObserverInfo(false)
                   })
               }.width('100%').padding({ top: 2, bottom: 2 })
-              Slider({ value: this.skyCultureTerritoryMapYear, min: -40000, max: this.skyCultureTerritoryMapMaxYear(), step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+              Slider({ value: this.skyCultureSettingsStore.skyCultureTerritoryMapYear, min: -40000, max: this.skyCultureSettingsStore.skyCultureTerritoryMapMaxYear(), step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
                 .height(24).width('100%')
-                .onChange((year: number) => { this.setSkyCultureTerritoryMapYear(year) })
-              Text('地图年份：' + this.skyCultureFormatYear(this.skyCultureTerritoryMapYear) + ' · ' + this.skyCultureTerritoryMapPolygons.length + ' 个区域轮廓')
+                .onChange((year: number) => { this.skyCultureSettingsStore.setSkyCultureTerritoryMapYear(year) })
+              Text('地图年份：' + this.skyCultureSettingsStore.skyCultureFormatYear(this.skyCultureSettingsStore.skyCultureTerritoryMapYear) + ' · ' + this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons.length + ' 个区域轮廓')
                 .fontSize(10).fontColor(this.nmSub()).width('100%')
-              if (this.skyCultureTerritoryMapPolygons.length === 0) {
+              if (this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons.length === 0) {
                 Text('该年份没有可显示的文化区域。可调整年份后更新地图。').fontSize(10).fontColor(this.nmSub()).width('100%')
               } else {
                 Stack() {
@@ -23041,14 +22639,14 @@ private loadPlanetPositions(): void {
                       this.skyCultureMapRenderHeight = Number(newArea.height)
                       this.drawSkyCultureTerritoryMap()
                     })
-                }.width('100%').aspectRatio(2).clip(true).rotate({ angle: this.skyCultureMapRotationAngle() }).backgroundColor(this.nmBg())
+                }.width('100%').aspectRatio(2).clip(true).rotate({ angle: this.skyCultureSettingsStore.skyCultureMapRotationAngle() }).backgroundColor(this.nmBg())
                   .border({ width: 1, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL)
               }
             }.width('100%').padding({ left: 8, right: 8, top: 7, bottom: 7 }).backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
           }
         }
-        if (this.skyCultureLicense.length > 0) {
-          Text('资料许可：' + this.skyCultureLicense).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+        if (this.skyCultureSettingsStore.skyCultureLicense.length > 0) {
+          Text('资料许可：' + this.skyCultureSettingsStore.skyCultureLicense).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
       }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       SkyCultureSectionHeader({ title: I18n.t('culture_section_labels'), subtitle: I18n.t('culture_section_labels_hint'), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent() })
@@ -23056,9 +22654,9 @@ private loadPlanetPositions(): void {
         SkyCultureLabelSettingCard({
           target: 'screen',
           title: '星图标注',
-          options: this.skyCultureLabelModeOptions('screen'),
-          mode: this.skyCultureLabelModeForTarget('screen'),
-          isOpen: this.skyCultureLabelPickerOpen === 'screen',
+          options: this.skyCultureSettingsStore.skyCultureLabelModeOptions('screen'),
+          mode: this.skyCultureSettingsStore.skyCultureLabelModeForTarget('screen'),
+          isOpen: this.skyCultureSettingsStore.skyCultureLabelPickerOpen === 'screen',
           subColor: this.nmSub(),
           textColor: this.nmText(),
           accentColor: this.nmAccent(),
@@ -23075,30 +22673,30 @@ private loadPlanetPositions(): void {
       }.width('100%').padding({ left: 8, right: 8, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       Row() {
         Text('使用星座短名称').fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-        Toggle({ type: ToggleType.Switch, isOn: this.skyCultureShortLabels }).width(40).height(22)
+        Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSettingsStore.skyCultureShortLabels }).width(40).height(22)
           .onChange((enabled: boolean) => { this.setSkyCultureShortLabels(enabled) })
       }.height(34).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       Row() {
         Column({ space: 1 }) {
           Text('显示国际通用名称').fontSize(11).fontColor(this.nmText()).width('100%')
-          Text(this.skyCultureUsesCommonNames ? '当前文化包含可用的国际通用名称' : '当前文化没有可用的国际通用名称')
+          Text(this.skyCultureSettingsStore.skyCultureUsesCommonNames ? '当前文化包含可用的国际通用名称' : '当前文化没有可用的国际通用名称')
             .fontSize(9).fontColor(this.nmSub()).width('100%')
         }.layoutWeight(1)
-        Toggle({ type: ToggleType.Switch, isOn: this.skyCultureOverrideCommonNames }).width(40).height(22)
-          .enabled(this.skyCultureUsesCommonNames)
-          .opacity(this.skyCultureUsesCommonNames ? 1 : 0.45)
+        Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSettingsStore.skyCultureOverrideCommonNames }).width(40).height(22)
+          .enabled(this.skyCultureSettingsStore.skyCultureUsesCommonNames)
+          .opacity(this.skyCultureSettingsStore.skyCultureUsesCommonNames ? 1 : 0.45)
           .onChange((enabled: boolean) => { this.setSkyCultureCommonNames(enabled) })
       }.height(42).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       Row() {
         Text('选中星座时单独显示').fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-        Toggle({ type: ToggleType.Switch, isOn: this.skyCultureIsolateSelected }).width(40).height(22)
+        Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSettingsStore.skyCultureIsolateSelected }).width(40).height(22)
           .onChange((enabled: boolean) => { this.setSkyCultureConstellationIsolation(enabled) })
       }.height(34).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 4 })
       Row() {
-        Text('仅保留最后选中的星座').fontSize(11).fontColor(this.skyCultureIsolateSelected ? this.nmText() : this.nmSub()).layoutWeight(1)
-        Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSinglePick }).width(40).height(22)
-          .enabled(this.skyCultureIsolateSelected)
-          .opacity(this.skyCultureIsolateSelected ? 1 : 0.45)
+        Text('仅保留最后选中的星座').fontSize(11).fontColor(this.skyCultureSettingsStore.skyCultureIsolateSelected ? this.nmText() : this.nmSub()).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSettingsStore.skyCultureSinglePick }).width(40).height(22)
+          .enabled(this.skyCultureSettingsStore.skyCultureIsolateSelected)
+          .opacity(this.skyCultureSettingsStore.skyCultureIsolateSelected ? 1 : 0.45)
           .onChange((enabled: boolean) => { this.setSkyCultureConstellationSinglePick(enabled) })
       }.height(34).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       Row({ space: 6 }) {
@@ -23110,169 +22708,169 @@ private loadPlanetPositions(): void {
       SkyCultureSectionHeader({ title: I18n.t('culture_section_readability'), subtitle: I18n.t('culture_section_readability_hint'), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent() })
       Row() {
         Text('星座标签字号').fontSize(11).fontColor(this.nmText()).width(84)
-        Text(this.skyCultureConstellationFontSize.toFixed(0)).fontSize(11).fontColor(this.nmSub()).width(28).textAlign(TextAlign.End)
-        Slider({ value: this.skyCultureConstellationFontSize, min: 8, max: 40, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+        Text(this.skyCultureSettingsStore.skyCultureConstellationFontSize.toFixed(0)).fontSize(11).fontColor(this.nmSub()).width(28).textAlign(TextAlign.End)
+        Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationFontSize, min: 8, max: 40, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
           .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationFontSize', value, (current: number) => { this.skyCultureConstellationFontSize = current }) })
+          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationFontSize', value) })
       }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
       Row() {
         Text('星座连线粗细').fontSize(11).fontColor(this.nmText()).width(84)
-        Text(this.skyCultureConstellationLineThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
-        Slider({ value: this.skyCultureConstellationLineThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+        Text(this.skyCultureSettingsStore.skyCultureConstellationLineThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
+        Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationLineThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
           .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationLineThickness', value, (current: number) => { this.skyCultureConstellationLineThickness = current }) })
+          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationLineThickness', value) })
       }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
       Row() {
         Text('星座边界粗细').fontSize(11).fontColor(this.nmText()).width(84)
-        Text(this.skyCultureConstellationBoundaryThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
-        Slider({ value: this.skyCultureConstellationBoundaryThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+        Text(this.skyCultureSettingsStore.skyCultureConstellationBoundaryThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
+        Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationBoundaryThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
           .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationBoundaryThickness', value, (current: number) => { this.skyCultureConstellationBoundaryThickness = current }) })
+          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationBoundaryThickness', value) })
       }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
       Row() {
         Text('星座绘图亮度').fontSize(11).fontColor(this.nmText()).width(84)
-        Text(Math.round(this.skyCultureConstellationArtIntensity * 100) + '%').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
-        Slider({ value: this.skyCultureConstellationArtIntensity, min: 0, max: 1, step: 0.05, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+        Text(Math.round(this.skyCultureSettingsStore.skyCultureConstellationArtIntensity * 100) + '%').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
+        Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationArtIntensity, min: 0, max: 1, step: 0.05, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
           .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationArtIntensity', value, (current: number) => { this.skyCultureConstellationArtIntensity = current }) })
+          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationArtIntensity', value) })
       }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
-      if (this.skyCultureHasAsterisms) {
+      if (this.skyCultureSettingsStore.skyCultureHasAsterisms) {
         Row() {
           Text('星群标签字号').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureAsterismFontSize.toFixed(0)).fontSize(11).fontColor(this.nmSub()).width(28).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureAsterismFontSize, min: 8, max: 40, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureAsterismFontSize.toFixed(0)).fontSize(11).fontColor(this.nmSub()).width(28).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureAsterismFontSize, min: 8, max: 40, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismFontSize', value, (current: number) => { this.skyCultureAsterismFontSize = current }) })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismFontSize', value) })
         }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
         Row() {
           Text('星群连线粗细').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureAsterismLineThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureAsterismLineThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureAsterismLineThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureAsterismLineThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismLineThickness', value, (current: number) => { this.skyCultureAsterismLineThickness = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationHulls || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismLineThickness', value) })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationHulls || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) ? 3 : 8 })
       }
       if (this.layerStore.constellationHulls) {
         Row() {
           Text('星座区域边界').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureConstellationHullsThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureConstellationHullsThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureConstellationHullsThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationHullsThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationHullsThickness', value, (current: number) => { this.skyCultureConstellationHullsThickness = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationHullsThickness', value) })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.skyCultureHasAsterisms && this.layerStore.rayHelpers) {
+      if (this.skyCultureSettingsStore.skyCultureHasAsterisms && this.layerStore.rayHelpers) {
         Row() {
           Text('辅助射线粗细').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureRayHelperThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureRayHelperThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureRayHelperThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureRayHelperThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('rayHelperThickness', value, (current: number) => { this.skyCultureRayHelperThickness = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('rayHelperThickness', value) })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.layerStore.zodiac && this.skyCultureHasZodiac) {
+      if (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) {
         Row() {
           Text('黄道线粗细').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureZodiacThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureZodiacThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureZodiacThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureZodiacThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('zodiacThickness', value, (current: number) => { this.skyCultureZodiacThickness = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.lunarSystem && this.skyCultureHasLunarSystem ? 3 : 8 })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('zodiacThickness', value) })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem ? 3 : 8 })
       }
-      if (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) {
+      if (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) {
         Row() {
           Text('月宿线粗细').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureLunarSystemThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureLunarSystemThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureLunarSystemThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureLunarSystemThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('lunarSystemThickness', value, (current: number) => { this.skyCultureLunarSystemThickness = current }) })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('lunarSystemThickness', value) })
         }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
       Text('显示过渡').fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2, bottom: 4 })
       Row() {
         Text('星座连线').fontSize(11).fontColor(this.nmText()).width(84)
-        Text(this.skyCultureConstellationLinesFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-        Slider({ value: this.skyCultureConstellationLinesFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+        Text(this.skyCultureSettingsStore.skyCultureConstellationLinesFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+        Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationLinesFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
           .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationLinesFadeDuration', value, (current: number) => { this.skyCultureConstellationLinesFadeDuration = current }) })
+          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationLinesFadeDuration', value) })
       }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
       Row() {
         Text('星座标签').fontSize(11).fontColor(this.nmText()).width(84)
-        Text(this.skyCultureConstellationLabelsFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-        Slider({ value: this.skyCultureConstellationLabelsFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+        Text(this.skyCultureSettingsStore.skyCultureConstellationLabelsFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+        Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationLabelsFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
           .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationLabelsFadeDuration', value, (current: number) => { this.skyCultureConstellationLabelsFadeDuration = current }) })
-      }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationArt || this.layerStore.constellationBoundaries || this.layerStore.constellationHulls || this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+          .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationLabelsFadeDuration', value) })
+      }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationArt || this.layerStore.constellationBoundaries || this.layerStore.constellationHulls || this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) ? 3 : 8 })
       if (this.layerStore.constellationArt) {
         Row() {
           Text('星座绘图').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureConstellationArtFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureConstellationArtFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureConstellationArtFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationArtFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationArtFadeDuration', value, (current: number) => { this.skyCultureConstellationArtFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationBoundaries || this.layerStore.constellationHulls || this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationArtFadeDuration', value) })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationBoundaries || this.layerStore.constellationHulls || this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) ? 3 : 8 })
       }
       if (this.layerStore.constellationBoundaries) {
         Row() {
           Text('星座边界').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureConstellationBoundariesFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureConstellationBoundariesFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureConstellationBoundariesFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationBoundariesFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationBoundariesFadeDuration', value, (current: number) => { this.skyCultureConstellationBoundariesFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationHulls || this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationBoundariesFadeDuration', value) })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationHulls || this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) ? 3 : 8 })
       }
       if (this.layerStore.constellationHulls) {
         Row() {
           Text('星座区域边界').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureConstellationHullsFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureConstellationHullsFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureConstellationHullsFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureConstellationHullsFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationHullsFadeDuration', value, (current: number) => { this.skyCultureConstellationHullsFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationHullsFadeDuration', value) })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.skyCultureHasAsterisms && this.layerStore.asterismLines) {
+      if (this.skyCultureSettingsStore.skyCultureHasAsterisms && this.layerStore.asterismLines) {
         Row() {
           Text('星群连线').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureAsterismLinesFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureAsterismLinesFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureAsterismLinesFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureAsterismLinesFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismLinesFadeDuration', value, (current: number) => { this.skyCultureAsterismLinesFadeDuration = current }) })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismLinesFadeDuration', value) })
         }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.asterismLabels || this.layerStore.rayHelpers ? 3 : 8 })
       }
-      if (this.skyCultureHasAsterisms && this.layerStore.asterismLabels) {
+      if (this.skyCultureSettingsStore.skyCultureHasAsterisms && this.layerStore.asterismLabels) {
         Row() {
           Text('星群标签').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureAsterismLabelsFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureAsterismLabelsFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureAsterismLabelsFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureAsterismLabelsFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismLabelsFadeDuration', value, (current: number) => { this.skyCultureAsterismLabelsFadeDuration = current }) })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismLabelsFadeDuration', value) })
         }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.rayHelpers ? 3 : 8 })
       }
-      if (this.skyCultureHasAsterisms && this.layerStore.rayHelpers) {
+      if (this.skyCultureSettingsStore.skyCultureHasAsterisms && this.layerStore.rayHelpers) {
         Row() {
           Text('辅助射线').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureRayHelperFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureRayHelperFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureRayHelperFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureRayHelperFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('rayHelperFadeDuration', value, (current: number) => { this.skyCultureRayHelperFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('rayHelperFadeDuration', value) })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.layerStore.zodiac && this.skyCultureHasZodiac) {
+      if (this.layerStore.zodiac && this.skyCultureSettingsStore.skyCultureHasZodiac) {
         Row() {
           Text('黄道线').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureZodiacFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureZodiacFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureZodiacFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureZodiacFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('zodiacFadeDuration', value, (current: number) => { this.skyCultureZodiacFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.lunarSystem && this.skyCultureHasLunarSystem ? 3 : 8 })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('zodiacFadeDuration', value) })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem ? 3 : 8 })
       }
-      if (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) {
+      if (this.layerStore.lunarSystem && this.skyCultureSettingsStore.skyCultureHasLunarSystem) {
         Row() {
           Text('月宿线').fontSize(11).fontColor(this.nmText()).width(84)
-          Text(this.skyCultureLunarSystemFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
-          Slider({ value: this.skyCultureLunarSystemFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Text(this.skyCultureSettingsStore.skyCultureLunarSystemFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureLunarSystemFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-            .onChange((value: number) => { this.setSkyCultureVisualSetting('lunarSystemFadeDuration', value, (current: number) => { this.skyCultureLunarSystemFadeDuration = current }) })
+            .onChange((value: number) => { this.setSkyCultureVisualSetting('lunarSystemFadeDuration', value) })
         }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
       Row() {
@@ -23280,11 +22878,11 @@ private loadPlanetPositions(): void {
           Text('图层颜色').fontSize(12).fontColor(this.nmSub()).width('100%')
           Text('为当前显示的文化图层分别设置颜色').fontSize(9).fontColor(this.nmSub()).width('100%')
         }.layoutWeight(1)
-        Button(this.skyCultureColorsExpanded ? '收起' : '展开').fontSize(10).fontColor(this.nmAccent()).height(28)
+        Button(this.skyCultureSettingsStore.skyCultureColorsExpanded ? '收起' : '展开').fontSize(10).fontColor(this.nmAccent()).height(28)
           .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).padding({ left: 9, right: 9 })
-          .onClick(() => { this.skyCultureColorsExpanded = !this.skyCultureColorsExpanded })
-      }.width('100%').padding({ left: 2, right: 2, top: 3, bottom: 4 }).margin({ bottom: this.skyCultureColorsExpanded ? 4 : 8 })
-      if (this.skyCultureColorsExpanded) {
+          .onClick(() => { this.skyCultureSettingsStore.skyCultureColorsExpanded = !this.skyCultureSettingsStore.skyCultureColorsExpanded })
+      }.width('100%').padding({ left: 2, right: 2, top: 3, bottom: 4 }).margin({ bottom: this.skyCultureSettingsStore.skyCultureColorsExpanded ? 4 : 8 })
+      if (this.skyCultureSettingsStore.skyCultureColorsExpanded) {
         Column({ space: 5 }) {
           if (this.skyCultureColorOptions().length === 0) {
             Text('请先在“星空及显示”中开启星座、星群、黄道或月宿图层。').fontSize(10).fontColor(this.nmSub()).width('100%')
@@ -23294,22 +22892,22 @@ private loadPlanetPositions(): void {
             ForEach(this.skyCultureColorOptions(), (option: ConfigurationOption) => {
               Row({ space: 8 }) {
                 Stack() {
-                  Circle().width(18).height(18).fill(this.skyCultureVisualColor(option.id))
+                  Circle().width(18).height(18).fill(this.skyCultureSettingsStore.skyCultureVisualColor(option.id))
                   Circle().width(18).height(18).fillOpacity(0).stroke(this.nmText()).strokeWidth(1)
                 }.width(22).height(22)
                 Text(option.label).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.skyCultureVisualColor(option.id)).fontSize(10).fontColor(this.nmSub())
+                Text(this.skyCultureSettingsStore.skyCultureVisualColor(option.id)).fontSize(10).fontColor(this.nmSub())
               }.height(34).width('100%').padding({ left: 8, right: 8 })
                 .backgroundColor(option.id === this.skyCultureActiveColorTarget() ? 'rgba(91,147,191,0.18)' : 'rgba(255,255,255,0.035)')
                 .border({ width: option.id === this.skyCultureActiveColorTarget() ? 1 : 0, color: option.id === this.skyCultureActiveColorTarget() ? this.nmAccent() : 'rgba(0,0,0,0)' })
                 .borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => { this.selectSkyCultureColorTarget(option.id) })
+                .onClick(() => { this.skyCultureSettingsStore.selectSkyCultureColorTarget(option.id) })
             }, (option: ConfigurationOption) => option.id)
             Row({ space: 8 }) {
               Text('颜色值').fontSize(11).fontColor(this.nmText()).width(48)
-              TextInput({ text: this.skyCultureColorInput, placeholder: '#RRGGBB' }).fontSize(11).fontColor(this.nmText()).height(30).layoutWeight(1)
+              TextInput({ text: this.skyCultureSettingsStore.skyCultureColorInput, placeholder: '#RRGGBB' }).fontSize(11).fontColor(this.nmText()).height(30).layoutWeight(1)
                 .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).textAlign(TextAlign.Center)
-                .onChange((value: string) => { this.skyCultureColorInput = value.toUpperCase() })
+                .onChange((value: string) => { this.skyCultureSettingsStore.skyCultureColorInput = value.toUpperCase() })
                 .onSubmit(() => { this.applySkyCultureCustomColor() })
               Button('应用').fontSize(10).fontColor(this.nmText()).height(30).backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_CONTROL)
                 .padding({ left: 9, right: 9 }).onClick(() => { this.applySkyCultureCustomColor() })
@@ -23320,7 +22918,7 @@ private loadPlanetPositions(): void {
                   Circle().width(20).height(20).fill(color).stroke(this.nmText()).strokeWidth(1)
                 }.width(28).height(28).backgroundColor('rgba(0,0,0,0)').padding(0)
                   .onClick(() => {
-                    this.skyCultureColorInput = color
+                    this.skyCultureSettingsStore.skyCultureColorInput = color
                     this.setSkyCultureVisualColor(this.skyCultureActiveColorTarget(), color)
                   })
               }, (color: string) => color)
@@ -23332,9 +22930,9 @@ private loadPlanetPositions(): void {
         SkyCultureLabelSettingCard({
           target: 'info',
           title: '资料中的名称',
-          options: this.skyCultureLabelModeOptions('info'),
-          mode: this.skyCultureLabelModeForTarget('info'),
-          isOpen: this.skyCultureLabelPickerOpen === 'info',
+          options: this.skyCultureSettingsStore.skyCultureLabelModeOptions('info'),
+          mode: this.skyCultureSettingsStore.skyCultureLabelModeForTarget('info'),
+          isOpen: this.skyCultureSettingsStore.skyCultureLabelPickerOpen === 'info',
           subColor: this.nmSub(),
           textColor: this.nmText(),
           accentColor: this.nmAccent(),
@@ -23349,14 +22947,14 @@ private loadPlanetPositions(): void {
           onSelectMode: (target: string, index: number) => { this.selectSkyCultureLabelMode(target, index) }
         })
       }.width('100%').padding({ left: 8, right: 8, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-      if (this.skyCultureHasZodiac) {
+      if (this.skyCultureSettingsStore.skyCultureHasZodiac) {
         Column() {
           SkyCultureLabelSettingCard({
             target: 'zodiac',
             title: '黄道十二宫名称',
-            options: this.skyCultureLabelModeOptions('zodiac'),
-            mode: this.skyCultureLabelModeForTarget('zodiac'),
-            isOpen: this.skyCultureLabelPickerOpen === 'zodiac',
+            options: this.skyCultureSettingsStore.skyCultureLabelModeOptions('zodiac'),
+            mode: this.skyCultureSettingsStore.skyCultureLabelModeForTarget('zodiac'),
+            isOpen: this.skyCultureSettingsStore.skyCultureLabelPickerOpen === 'zodiac',
             subColor: this.nmSub(),
             textColor: this.nmText(),
             accentColor: this.nmAccent(),
@@ -23372,14 +22970,14 @@ private loadPlanetPositions(): void {
           })
         }.width('100%').padding({ left: 8, right: 8, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
-      if (this.skyCultureHasLunarSystem) {
+      if (this.skyCultureSettingsStore.skyCultureHasLunarSystem) {
         Column() {
           SkyCultureLabelSettingCard({
             target: 'lunar',
             title: '月宿系统名称',
-            options: this.skyCultureLabelModeOptions('lunar'),
-            mode: this.skyCultureLabelModeForTarget('lunar'),
-            isOpen: this.skyCultureLabelPickerOpen === 'lunar',
+            options: this.skyCultureSettingsStore.skyCultureLabelModeOptions('lunar'),
+            mode: this.skyCultureSettingsStore.skyCultureLabelModeForTarget('lunar'),
+            isOpen: this.skyCultureSettingsStore.skyCultureLabelPickerOpen === 'lunar',
             subColor: this.nmSub(),
             textColor: this.nmText(),
             accentColor: this.nmAccent(),
@@ -23398,36 +22996,36 @@ private loadPlanetPositions(): void {
       Row() {
         Column({ space: 2 }) {
           Text('组合名称显示').fontSize(11).fontColor(this.nmText()).width('100%')
-          Text('星图：' + this.skyCultureStyleSummary(this.skyCultureScreenStyleMask) + ' · 资料：' + this.skyCultureStyleSummary(this.skyCultureInfoStyleMask))
+          Text('星图：' + this.skyCultureSettingsStore.skyCultureStyleSummary(this.skyCultureSettingsStore.skyCultureScreenStyleMask) + ' · 资料：' + this.skyCultureSettingsStore.skyCultureStyleSummary(this.skyCultureSettingsStore.skyCultureInfoStyleMask))
             .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.layoutWeight(1)
-        Button(this.skyCultureNameCombinationExpanded ? '收起' : '设置').fontSize(10).fontColor(this.nmAccent()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(28)
-          .padding({ left: 9, right: 9 }).onClick(() => { this.skyCultureNameCombinationExpanded = !this.skyCultureNameCombinationExpanded })
-      }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.skyCultureNameCombinationExpanded ? 4 : 8 })
-      if (this.skyCultureNameCombinationExpanded) {
+        Button(this.skyCultureSettingsStore.skyCultureNameCombinationExpanded ? '收起' : '设置').fontSize(10).fontColor(this.nmAccent()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(28)
+          .padding({ left: 9, right: 9 }).onClick(() => { this.skyCultureSettingsStore.skyCultureNameCombinationExpanded = !this.skyCultureSettingsStore.skyCultureNameCombinationExpanded })
+      }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.skyCultureSettingsStore.skyCultureNameCombinationExpanded ? 4 : 8 })
+      if (this.skyCultureSettingsStore.skyCultureNameCombinationExpanded) {
         Column({ space: 3 }) {
           Text('星图标签').fontSize(11).fontColor(this.nmSub()).width('100%')
-          ForEach(this.skyCultureStyleOptions(), (option: ConfigurationOption, optionIndex: number) => {
+          ForEach(this.skyCultureSettingsStore.skyCultureStyleOptions(), (option: ConfigurationOption, optionIndex: number) => {
             Row() {
               Text(option.label).fontSize(10).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.skyCultureStyleMaskHas(this.skyCultureScreenStyleMask, optionIndex) }).width(38).height(21)
+              Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSettingsStore.skyCultureStyleMaskHas(this.skyCultureSettingsStore.skyCultureScreenStyleMask, optionIndex) }).width(38).height(21)
                 .onChange((enabled: boolean) => { this.setSkyCultureStyleOption('screen', optionIndex, enabled) })
             }.height(29).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.025)').borderRadius(UI_RADIUS_CONTROL)
           }, (option: ConfigurationOption) => 'screen-' + option.id)
           Text('资料卡标签').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 5 })
-          ForEach(this.skyCultureStyleOptions(), (option: ConfigurationOption, optionIndex: number) => {
+          ForEach(this.skyCultureSettingsStore.skyCultureStyleOptions(), (option: ConfigurationOption, optionIndex: number) => {
             Row() {
               Text(option.label).fontSize(10).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.skyCultureStyleMaskHas(this.skyCultureInfoStyleMask, optionIndex) }).width(38).height(21)
+              Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSettingsStore.skyCultureStyleMaskHas(this.skyCultureSettingsStore.skyCultureInfoStyleMask, optionIndex) }).width(38).height(21)
                 .onChange((enabled: boolean) => { this.setSkyCultureStyleOption('info', optionIndex, enabled) })
             }.height(29).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.025)').borderRadius(UI_RADIUS_CONTROL)
           }, (option: ConfigurationOption) => 'info-' + option.id)
         }.width('100%').padding({ left: 8, right: 8, top: 6, bottom: 6 }).backgroundColor('rgba(91,147,191,0.06)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
       Row() {
-        Text(this.skyCultureDefaultId === this.currentSkyCultureId ? '当前已是默认文化' : '启动时使用此文化').fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
+        Text(this.skyCultureSettingsStore.skyCultureDefaultId === this.currentSkyCultureId ? '当前已是默认文化' : '启动时使用此文化').fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
         Button('设为默认').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-          .enabled(this.skyCultureDefaultId !== this.currentSkyCultureId)
+          .enabled(this.skyCultureSettingsStore.skyCultureDefaultId !== this.currentSkyCultureId)
           .onClick(() => { this.setCurrentSkyCultureAsDefault() })
         Button('重新载入').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
           .onClick(() => { this.callInteractive('reloadSkyCulture', '', () => { this.loadSkyCultureList() }) })
@@ -23435,15 +23033,15 @@ private loadPlanetPositions(): void {
     }
     SkyCultureSectionHeader({ title: I18n.t('culture_section_select'), subtitle: I18n.t('culture_section_select_hint'), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent() })
     Column({ space: 5 }) {
-      TextInput({ text: this.skyCultureSearchText, placeholder: I18n.t('culture_search_placeholder') }).fontSize(11).height(38)
+      TextInput({ text: this.skyCultureSettingsStore.skyCultureSearchText, placeholder: I18n.t('culture_search_placeholder') }).fontSize(11).height(38)
         .width('100%').backgroundColor('rgba(255,255,255,0.06)').borderRadius(UI_RADIUS_CONTROL)
-        .onChange((value: string) => { this.skyCultureSearchText = value })
+        .onChange((value: string) => { this.skyCultureSettingsStore.skyCultureSearchText = value })
       Column({ space: 6 }) {
         SkyCultureFilterPicker({
           kind: 'classification',
-          labels: this.skyCultureFilterLabels('classification'),
-          selectedIndex: this.skyCultureFilterSelectedIndex('classification'),
-          isOpen: this.skyCultureFilterOpen('classification'),
+          labels: this.skyCultureSettingsStore.skyCultureFilterLabels('classification'),
+          selectedIndex: this.skyCultureSettingsStore.skyCultureFilterSelectedIndex('classification'),
+          isOpen: this.skyCultureSettingsStore.skyCultureFilterOpen('classification'),
           subColor: this.nmSub(),
           textColor: this.nmText(),
           accentColor: this.nmAccent(),
@@ -23455,13 +23053,13 @@ private loadPlanetPositions(): void {
           pickerOption: this.nmPickerOption(),
           inputColor: this.nmInput(),
           onToggle: (kind: string) => { this.toggleSkyCultureFilter(kind) },
-          onPick: (kind: string, index: number) => { this.setSkyCultureFilterValue(kind, this.skyCultureFilterValues(kind)[index]) }
+          onPick: (kind: string, index: number) => { this.setSkyCultureFilterValue(kind, this.skyCultureSettingsStore.skyCultureFilterValues(kind)[index]) }
         })
         SkyCultureFilterPicker({
           kind: 'region',
-          labels: this.skyCultureFilterLabels('region'),
-          selectedIndex: this.skyCultureFilterSelectedIndex('region'),
-          isOpen: this.skyCultureFilterOpen('region'),
+          labels: this.skyCultureSettingsStore.skyCultureFilterLabels('region'),
+          selectedIndex: this.skyCultureSettingsStore.skyCultureFilterSelectedIndex('region'),
+          isOpen: this.skyCultureSettingsStore.skyCultureFilterOpen('region'),
           subColor: this.nmSub(),
           textColor: this.nmText(),
           accentColor: this.nmAccent(),
@@ -23473,12 +23071,12 @@ private loadPlanetPositions(): void {
           pickerOption: this.nmPickerOption(),
           inputColor: this.nmInput(),
           onToggle: (kind: string) => { this.toggleSkyCultureFilter(kind) },
-          onPick: (kind: string, index: number) => { this.setSkyCultureFilterValue(kind, this.skyCultureFilterValues(kind)[index]) }
+          onPick: (kind: string, index: number) => { this.setSkyCultureFilterValue(kind, this.skyCultureSettingsStore.skyCultureFilterValues(kind)[index]) }
         })
       }.width('100%')
     }.width('100%').padding({ bottom: 5 })
-    if (this.skyCultureSearchText.trim().length > 0 || this.skyCultureClassificationFilter !== 'all' || this.skyCultureRegionFilter !== 'all' || this.skyCultureTimeFiltering) {
-      Text(I18n.t('culture_filter_summary') + '：' + this.skyCultureClassificationFilterLabel() + ' · ' + this.skyCultureRegionFilterLabel() + ' · ' + this.filteredSkyCultureList().length + ' ' + I18n.t('culture_match_count'))
+    if (this.skyCultureSettingsStore.skyCultureSearchText.trim().length > 0 || this.skyCultureSettingsStore.skyCultureClassificationFilter !== 'all' || this.skyCultureSettingsStore.skyCultureRegionFilter !== 'all' || this.skyCultureSettingsStore.skyCultureTimeFiltering) {
+      Text(I18n.t('culture_filter_summary') + '：' + this.skyCultureSettingsStore.skyCultureClassificationFilterLabel() + ' · ' + this.skyCultureSettingsStore.skyCultureRegionFilterLabel() + ' · ' + this.skyCultureSettingsStore.filteredSkyCultureList(this.skyCultureList).length + ' ' + I18n.t('culture_match_count'))
         .fontSize(10).fontColor(this.nmAccent()).width('100%').padding({ left: 9, right: 9, top: 6, bottom: 6 })
         .backgroundColor('rgba(80,140,200,0.10)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 5 })
     }
@@ -23487,73 +23085,73 @@ private loadPlanetPositions(): void {
         Text(I18n.t('culture_filter_by_year')).fontSize(11).fontColor(this.nmText()).width('100%')
         Text(I18n.t('culture_filter_by_year_hint')).fontSize(9).fontColor(this.nmSub()).width('100%')
       }.layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: this.skyCultureTimeFiltering }).width(40).height(22)
+      Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSettingsStore.skyCultureTimeFiltering }).width(40).height(22)
         .onChange((enabled: boolean) => {
-          this.skyCultureTimeFiltering = enabled
+          this.skyCultureSettingsStore.skyCultureTimeFiltering = enabled
           this.syncSkyCultureTimeFollowTimer()
         })
-    }.height(42).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.skyCultureTimeFiltering ? 4 : 7 })
-    if (this.skyCultureTimeFiltering) {
+    }.height(42).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.skyCultureSettingsStore.skyCultureTimeFiltering ? 4 : 7 })
+    if (this.skyCultureSettingsStore.skyCultureTimeFiltering) {
       Column({ space: 5 }) {
         Row({ space: 8 }) {
           Text('筛选方式').fontSize(10).fontColor(this.nmSub()).width(52)
           Row({ space: 4 }) {
-            Button('单个年份').fontSize(10).fontColor(this.skyCultureRangeFiltering ? this.nmSub() : this.nmText())
-              .backgroundColor(this.skyCultureRangeFiltering ? this.nmBg() : 'rgba(80,140,200,0.20)')
+            Button('单个年份').fontSize(10).fontColor(this.skyCultureSettingsStore.skyCultureRangeFiltering ? this.nmSub() : this.nmText())
+              .backgroundColor(this.skyCultureSettingsStore.skyCultureRangeFiltering ? this.nmBg() : 'rgba(80,140,200,0.20)')
               .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 9, right: 9 })
               .onClick(() => {
-                this.skyCultureRangeFiltering = false
-                this.skyCultureTimeFollowSimulation = false
+                this.skyCultureSettingsStore.skyCultureRangeFiltering = false
+                this.skyCultureSettingsStore.skyCultureTimeFollowSimulation = false
                 this.syncSkyCultureTimeFollowTimer()
               })
-            Button('年代范围').fontSize(10).fontColor(this.skyCultureRangeFiltering ? this.nmText() : this.nmSub())
-              .backgroundColor(this.skyCultureRangeFiltering ? 'rgba(80,140,200,0.20)' : this.nmBg())
+            Button('年代范围').fontSize(10).fontColor(this.skyCultureSettingsStore.skyCultureRangeFiltering ? this.nmText() : this.nmSub())
+              .backgroundColor(this.skyCultureSettingsStore.skyCultureRangeFiltering ? 'rgba(80,140,200,0.20)' : this.nmBg())
               .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 9, right: 9 })
               .onClick(() => {
-                this.skyCultureRangeFiltering = true
-                this.skyCultureTimeFollowSimulation = false
-                this.setSkyCultureRange(this.skyCultureRangeStart, this.skyCultureRangeEnd)
+                this.skyCultureSettingsStore.skyCultureRangeFiltering = true
+                this.skyCultureSettingsStore.skyCultureTimeFollowSimulation = false
+                this.skyCultureSettingsStore.setSkyCultureRange(this.skyCultureSettingsStore.skyCultureRangeStart, this.skyCultureSettingsStore.skyCultureRangeEnd)
                 this.syncSkyCultureTimeFollowTimer()
               })
           }.layoutWeight(1).justifyContent(FlexAlign.End)
         }.width('100%')
-        if (!this.skyCultureRangeFiltering) {
+        if (!this.skyCultureSettingsStore.skyCultureRangeFiltering) {
           Row({ space: 8 }) {
             Text('查看年份').fontSize(10).fontColor(this.nmSub()).width(52)
-            TextInput({ text: this.skyCultureTimeYearInput, placeholder: '年份' }).fontSize(12).fontColor(this.nmText()).height(28).width(76)
+            TextInput({ text: this.skyCultureSettingsStore.skyCultureTimeYearInput, placeholder: '年份' }).fontSize(12).fontColor(this.nmText()).height(28).width(76)
               .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).textAlign(TextAlign.Center)
-              .onChange((value: string) => { this.skyCultureTimeYearInput = value })
-              .onSubmit(() => { this.applySkyCultureTimeYearInput() })
-            Text(this.skyCultureTimeFilterLabel()).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
+              .onChange((value: string) => { this.skyCultureSettingsStore.skyCultureTimeYearInput = value })
+              .onSubmit(() => { this.skyCultureSettingsStore.applySkyCultureTimeYearInput() })
+            Text(this.skyCultureSettingsStore.skyCultureTimeFilterLabel()).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
             Button() {
               Image($r('app.media.ic_refresh')).width(14).height(14).fillColor(this.nmSub())
             }.width(30).height(28).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.setSkyCultureTimeYear(this.skyCultureFilterMaxYear()) })
+              .onClick(() => { this.skyCultureSettingsStore.setSkyCultureTimeYear(this.skyCultureSettingsStore.skyCultureFilterMaxYear()) })
           }.width('100%')
           Row({ space: 6 }) {
             Column({ space: 1 }) {
               Text('按星图模拟时间').fontSize(10).fontColor(this.nmText()).width('100%')
-              Text(this.skyCultureFormatYear(this.skyCultureSimulationYear)).fontSize(9).fontColor(this.nmSub()).width('100%')
+              Text(this.skyCultureSettingsStore.skyCultureFormatYear(this.skyCultureSettingsStore.skyCultureSimulationYear)).fontSize(9).fontColor(this.nmSub()).width('100%')
             }.layoutWeight(1)
             Button('同步').fontSize(10).fontColor(this.nmAccent()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
               .onClick(() => {
                 this.refreshSkyCultureSimulationYear(true)
-                this.setSkyCultureTimeYear(this.skyCultureSimulationYear)
+                this.skyCultureSettingsStore.setSkyCultureTimeYear(this.skyCultureSettingsStore.skyCultureSimulationYear)
               })
-            Toggle({ type: ToggleType.Switch, isOn: this.skyCultureTimeFollowSimulation }).width(38).height(21)
+            Toggle({ type: ToggleType.Switch, isOn: this.skyCultureSettingsStore.skyCultureTimeFollowSimulation }).width(38).height(21)
               .onChange((enabled: boolean) => {
-                this.skyCultureTimeFollowSimulation = enabled
+                this.skyCultureSettingsStore.skyCultureTimeFollowSimulation = enabled
                 if (enabled) {
                   this.refreshSkyCultureSimulationYear(true)
-                  this.setSkyCultureTimeYear(this.skyCultureSimulationYear)
+                  this.skyCultureSettingsStore.setSkyCultureTimeYear(this.skyCultureSettingsStore.skyCultureSimulationYear)
                 }
                 this.syncSkyCultureTimeFollowTimer()
               })
           }.width('100%').height(34).padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          Slider({ value: this.skyCultureTimeYear, min: -40000, max: this.skyCultureFilterMaxYear(), step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          Slider({ value: this.skyCultureSettingsStore.skyCultureTimeYear, min: -40000, max: this.skyCultureSettingsStore.skyCultureFilterMaxYear(), step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .blockColor(this.nmAccent()).selectedColor(this.nmAccent()).trackColor(this.nmBg())
             .showSteps(false).showTips(false).width('100%')
-            .onChange((year: number) => { this.setSkyCultureTimeYear(year) })
+            .onChange((year: number) => { this.skyCultureSettingsStore.setSkyCultureTimeYear(year) })
           Row() {
             Text('公元前 40000 年').fontSize(9).fontColor(this.nmSub()).layoutWeight(1)
             Text('当代').fontSize(9).fontColor(this.nmSub())
@@ -23561,38 +23159,38 @@ private loadPlanetPositions(): void {
         } else {
           Row({ space: 6 }) {
             Text('起止年代').fontSize(10).fontColor(this.nmSub()).width(52)
-            TextInput({ text: this.skyCultureRangeStartInput, placeholder: '起始年' }).fontSize(11).fontColor(this.nmText()).height(28).layoutWeight(1)
+            TextInput({ text: this.skyCultureSettingsStore.skyCultureRangeStartInput, placeholder: '起始年' }).fontSize(11).fontColor(this.nmText()).height(28).layoutWeight(1)
               .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).textAlign(TextAlign.Center)
-              .onChange((value: string) => { this.skyCultureRangeStartInput = value })
-              .onSubmit(() => { this.applySkyCultureRangeInput() })
+              .onChange((value: string) => { this.skyCultureSettingsStore.skyCultureRangeStartInput = value })
+              .onSubmit(() => { this.skyCultureSettingsStore.applySkyCultureRangeInput() })
             Text('至').fontSize(10).fontColor(this.nmSub())
-            TextInput({ text: this.skyCultureRangeEndInput, placeholder: '结束年' }).fontSize(11).fontColor(this.nmText()).height(28).layoutWeight(1)
+            TextInput({ text: this.skyCultureSettingsStore.skyCultureRangeEndInput, placeholder: '结束年' }).fontSize(11).fontColor(this.nmText()).height(28).layoutWeight(1)
               .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).textAlign(TextAlign.Center)
-              .onChange((value: string) => { this.skyCultureRangeEndInput = value })
-              .onSubmit(() => { this.applySkyCultureRangeInput() })
+              .onChange((value: string) => { this.skyCultureSettingsStore.skyCultureRangeEndInput = value })
+              .onSubmit(() => { this.skyCultureSettingsStore.applySkyCultureRangeInput() })
             Button() {
               Image($r('app.media.ic_refresh')).width(14).height(14).fillColor(this.nmSub())
             }.width(30).height(28).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.setSkyCultureRange(-40000, this.skyCultureFilterMaxYear()) })
+              .onClick(() => { this.skyCultureSettingsStore.setSkyCultureRange(-40000, this.skyCultureSettingsStore.skyCultureFilterMaxYear()) })
           }.width('100%')
-          Text(this.skyCultureRangeLabel()).fontSize(10).fontColor(this.nmText()).width('100%')
+          Text(this.skyCultureSettingsStore.skyCultureRangeLabel()).fontSize(10).fontColor(this.nmText()).width('100%')
         }
-        Text('匹配 ' + this.filteredSkyCultureList().length + ' 个文化').fontSize(10).fontColor(this.nmSub()).width('100%')
+        Text('匹配 ' + this.skyCultureSettingsStore.filteredSkyCultureList(this.skyCultureList).length + ' 个文化').fontSize(10).fontColor(this.nmSub()).width('100%')
       }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(80,140,200,0.08)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 7 })
     }
     if (this.skyCultureListLoading) {
       GraphLoadingRow({ label: I18n.t('culture_catalog_reading'), accentColor: this.nmAccent(), subColor: this.nmSub() })
-    } else if (this.filteredSkyCultureList().length === 0) {
-      Text(I18n.t('culture_no_matching') + '。' + (this.skyCultureTimeFiltering ? '请调整年份、类型或取消年代筛选。' : '请调整搜索或类型筛选。'))
+    } else if (this.skyCultureSettingsStore.filteredSkyCultureList(this.skyCultureList).length === 0) {
+      Text(I18n.t('culture_no_matching') + '。' + (this.skyCultureSettingsStore.skyCultureTimeFiltering ? '请调整年份、类型或取消年代筛选。' : '请调整搜索或类型筛选。'))
         .fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10, top: 14, bottom: 14 })
         .backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
     } else {
       Column({ space: 6 }) {
-        ForEach(this.filteredSkyCultureList(), (sc: SkyCultureItem, index: number) => {
+        ForEach(this.skyCultureSettingsStore.filteredSkyCultureList(this.skyCultureList), (sc: SkyCultureItem, index: number) => {
           Column({ space: 3 }) {
-            if (this.skyCultureRegionHeader(this.filteredSkyCultureList(), index).length > 0) {
+            if (this.skyCultureSettingsStore.skyCultureRegionHeader(this.skyCultureSettingsStore.filteredSkyCultureList(this.skyCultureList), index).length > 0) {
               Row() {
-                Text(this.skyCultureRegionHeader(this.filteredSkyCultureList(), index)).fontSize(10).fontColor(this.nmSub()).fontWeight(FontWeight.Medium)
+                Text(this.skyCultureSettingsStore.skyCultureRegionHeader(this.skyCultureSettingsStore.filteredSkyCultureList(this.skyCultureList), index)).fontSize(10).fontColor(this.nmSub()).fontWeight(FontWeight.Medium)
                 Divider().strokeWidth(1).color('rgba(255,255,255,0.08)').layoutWeight(1).margin({ left: 8 })
               }.width('100%').height(24).padding({ left: 4, right: 4, top: 5 })
             }
@@ -23601,8 +23199,8 @@ private loadPlanetPositions(): void {
                 Row().width(3).height(38).backgroundColor(sc.id === this.selectedSkyCultureId() ? this.nmAccent() : this.nmBorder()).borderRadius(2)
               }.width(3).height(42)
               Column({ space: 2 }) {
-                Text(this.skyCultureDisplayName(sc.id, sc.name)).fontSize(13).fontColor(this.nmText()).fontWeight(sc.id === this.selectedSkyCultureId() ? FontWeight.Medium : FontWeight.Regular).width('100%').maxLines(2).lineHeight(18).textOverflow({ overflow: TextOverflow.Ellipsis })
-                Text(this.skyCultureRegionText(sc.region ?? []) + ' · ' + this.skyCultureClassificationText(sc.classification ?? ''))
+                Text(this.skyCultureSettingsStore.skyCultureDisplayName(sc.id, sc.name)).fontSize(13).fontColor(this.nmText()).fontWeight(sc.id === this.selectedSkyCultureId() ? FontWeight.Medium : FontWeight.Regular).width('100%').maxLines(2).lineHeight(18).textOverflow({ overflow: TextOverflow.Ellipsis })
+                Text(this.skyCultureSettingsStore.skyCultureRegionText(sc.region ?? []) + ' · ' + this.skyCultureSettingsStore.skyCultureClassificationText(sc.classification ?? ''))
                   .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               }.layoutWeight(1)
               if (sc.id === this.selectedSkyCultureId()) {
