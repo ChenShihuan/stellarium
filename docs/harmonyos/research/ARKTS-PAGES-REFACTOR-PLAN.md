@@ -1654,6 +1654,6 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 
 **位置 4 法迁出判定**：`selectContinent` / `selectCountry` / `selectRegion` / `selectCityByName` **逐字等价**迁入 `capability/LocationController.ets` —— 纯 store 写（`hier*` 取/清）与 `hierCities(...).find(...)` 过滤、`locationPlanet(found)` 判定一字未改；仅 `this.<宿主 store>` → 控制器持有的 `LocationPickerStore` / `SessionToolStore`，`this.locationCtl().setLocation` → 控制器内部 `this.setLocation`。宿主 4 个调用点（`PlacePanel` 回调）改指 `this.locationCtl().selectXxx(...)`。无新文件、无新端口。
 
-**度量（ReadAllLines / UTF-8 口径）**：宿主 **8,646 → 8,587 行（−59）**、`private` 方法 **277 → 268（−9）**、`@State private` **132 不变**；`LocationController.ets` **214 → 246（+32）**。
+**度量（ReadAllLines / UTF-8 口径）**：宿主 **8,646 → 8,587 行（−59）**、`private` 方法 **277 → 268（−9）**、`@State private` **132 不变**；`LocationController.ets` **214 → 245（+31）**。
 
 **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-polar-scope` 4/4、`test-ohos-privacy-startup` 19/19 全绿；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。真机（192.168.50.108:36717）：`Smoke: PASS`；层级选择 亚洲→丹麦→哥本哈根→哥本哈根 → `getObserverInfo` `Copenhagen / 55.6759 / 12.5655 / 14` + hilog `command received: "setLocation" "Copenhagen|55.6759|12.5655|14"`；切大洲「欧洲」验证下级列刷新与地区/城市清空；`pidof` 存活、无 jscrash；测试后经「地图选点 + 应用」复原 `自定义位置 / 21.34°N / 110.38°E / 0 m`。**未走查 / 记录**：层级列无 `--id`，交互用坐标点击（缺语义命令，已记录）；`objectActionBarY` 因测试脚本切片锚点保留。
