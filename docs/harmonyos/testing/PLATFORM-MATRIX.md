@@ -62,12 +62,26 @@ Qt 侧的核实结果：安装器组件元数据（`E:\Qt\components.xml`）中�
 
 **结论**：星图部分在 Windows 模拟器上无解。唯一路径是**从源码为 OHOS x86_64 编译整个 Qt**（qtbase 起，含 Gui/Widgets/Charts/Svg/OpenGL/Quick 与 `qohos` 平台插件），成本以周计且官方不保证 qohos 的 x86 支持 —— 不建议。
 
-### 1.5 可选的"半验证"（只验壳，不验星图）
+### 1.5 "半验证"（只验壳，不验星图）—— 已实现并实测通过（2026-09-30）
 
-在 `entry/build-profile.json5` 的 `abiFilters` 增加 `"x86_64"` 后重打包，装到 x86 模拟器：
+`entry/build-profile.json5` 的 `abiFilters` **本来就同时含 `arm64-v8a` 与 `x86_64`**，`libentry.so` 一直有 x86_64 版本；
+缺的只是 Qt/Stellarium 引擎（只有 arm64）。真正挡住界面的是两道启动门控，现已在 **debug-only 条件下放行**：
 
-- **能得到**：隐私门控、Dock/面板布局、手机竖屏分支、断点适配、ArkTS 侧 CLI 流转。
-- **得不到**：星图渲染、Qt 命令桥返回的任何数据（`libstellarium.so` 是 arm64，`dlopen` 必然失败）→ **不等于"能运行此应用"**。
+- 代码侧（提交 `94379aa31f`）：`qability/QAbility.ets` 新增 `engineLessEmulatorUiOnly()`
+  = `BuildProfile.DEBUG && deviceInfo.productModel === 'emulator' && deviceInfo.abiList.includes('x86_64')`，
+  在根页面加载后放开四个门控键；`pages/ApplicationRoot.ets` 的 `aboutToAppear()` 补 `onSkyReady()`，
+  避免门控早于页面挂载导致加载层不消失。真机与 release 包上条件恒为假。
+- 模拟器本机前置条件（不涉及仓库）：`hw.ramSize` 4096 → 3072（`config.ini` + `hardware-qemu.ini`），
+  镜像 `features.ini` 的 `camera.feature` / `camera.front.back.enable` 置 `off`。
+  不改这两项时：09-28 那次模拟器自检直接报 `"Commit charge is not enough!"`；09-30 那次启动到 guest 1.27 s
+  即 crash type 2（崩溃瞬间宿主仅剩 4,713 MB 空闲，且崩溃前 0.6 s 刚打开宿主摄像头）。
+
+实测结果（Pura 90 Pro，`127.0.0.1:5555`，`abilist=x86_64`，API 26，`productModel=emulator`）：
+
+- **能得到**：ArkUI 外壳完整渲染（Dock 五项 + 右上陀螺仪/音频按钮）、面板开关与交互（时间面板标题/副标题/日期转轮/速度 chips）、断点与布局、`.id()` 锚点（`panel-close`、`panel-scroll-*`、`panel-content-*` 等）、`devecocli ui layout/click` 语义化操作与截图。
+- **得不到**：星图渲染、Qt 命令桥返回的任何数据（`libstellarium.so` 是 arm64，`dlopen` 必然失败，桥回退 `bridge not available`）→ 时间面板显示 `--`。**不等于"能运行此应用"**，引擎相关状态仍需真机复验。
+- **注意**：隐私门控在模拟器上永远拿不到同意（AppGallery 返回 `1006700003`），所以必须走上述 debug 放行；
+  该放行不得进入发布链路。
 
 ---
 
