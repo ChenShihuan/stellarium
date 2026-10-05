@@ -87,6 +87,8 @@ import { SatellitePassDetails } from '../panels/object/SatellitePassDetails'
 import { TabletInspectorMediaGroup } from '../panels/object/TabletInspectorMediaGroup'
 import { PanelHeader } from '../panels/shell/PanelHeader'
 import { DockButton } from '../panels/shell/DockButton'
+import { BottomDock } from '../panels/shell/BottomDock'
+import { CompactTopQuickControls } from '../panels/shell/CompactTopQuickControls'
 import { HubActionList } from '../panels/shell/HubActionList'
 import { ConstellationCultureView } from '../panels/object/ConstellationCultureView'
 import { SkyCultureDescriptionBlockView } from '../panels/skyculture/SkyCultureDescriptionBlockView'
@@ -124,6 +126,7 @@ import { SkyCultureMakerPanel } from '../panels/skyculture/SkyCultureMakerPanel'
 import { DockClockLayer, PadPanelHandle, PanelHandle } from '../panels/shell/PanelChromeExtras'
 import { ScriptKeyButton } from '../panels/tools/ScriptKeyButton'
 import { GuideButton } from '../panels/guide/GuideButton'
+import { GuideLibrary } from '../panels/guide/GuideLibrary'
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
   NebulaTextureItem, NebulaTextureStatus, NebulaTextureRefreshResponse, SkyCultureMakerArtworkAnchor, SkyCultureMakerArtwork, SkyCultureMakerConstellation,
@@ -15606,22 +15609,6 @@ private loadPlanetPositions(): void {
   }
 
   @Builder
-  guideLibrary() {
-    Text(I18n.t('guide_library')).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.nmText()).width('100%')
-    Text(I18n.t('guide_library_hint')).fontSize(13).fontColor(this.nmSub()).width('100%')
-    ForEach(ASTRONOMY_GUIDES, (guide: AstronomyGuide) => {
-      Button({ type: ButtonType.Normal }) {
-        Column({ space: 6 }) {
-          Text(I18n.t(guide.title)).fontSize(15).fontColor(this.nmText()).width('100%')
-          Text(guide.steps.length.toString() + ' · ' + I18n.t('guide_stations')).fontSize(12).fontColor(this.nmSub()).width('100%')
-        }.width('100%').padding(14)
-      }.id('guide-start-' + guide.id).width('100%').backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        .enabled(!this.scriptSessionActive()).onClick(() => { this.executeGuideRequest('startGuide', guide.id) })
-    }, (guide: AstronomyGuide) => guide.id)
-    Text(I18n.t('guide_legacy')).fontSize(15).fontColor(this.nmText()).width('100%').margin({ top: 12 })
-  }
-
-  @Builder
   interactiveGuideShell() {
     Stack() {
       Stack() { }.width('100%').height('100%').hitTestBehavior(HitTestMode.Block)
@@ -16030,7 +16017,21 @@ private loadPlanetPositions(): void {
           .zIndex(30)
       }
       if (this.expandedUiAllowed()) {
-        Row() { this.bottomDock() }
+        Row() {
+          BottomDock({
+            actions: this.canonicalDockActions(), isExpanded: this.isExpandedLayout,
+            panelVisible: this.panelVisible, chromeOpacity: this.phoneChromeOpacity(),
+            isGlass: this.phoneChromeIsGlass(), widthPercent: this.compactDockWidthPercent(),
+            languageRevision: this.languageRevision,
+            iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
+            labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
+            itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
+            isActive: (item: ShellAction) => this.dockActionActive(item),
+            onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
+            onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
+            onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) }
+          })
+        }
           .width(this.expandedDockWidth())
           .height(54)
           .justifyContent(FlexAlign.Center)
@@ -16182,7 +16183,21 @@ private loadPlanetPositions(): void {
           .zIndex(30)
       }
 
-      Row() { this.bottomDock() }
+      Row() {
+        BottomDock({
+          actions: this.canonicalDockActions(), isExpanded: this.isExpandedLayout,
+          panelVisible: this.panelVisible, chromeOpacity: this.phoneChromeOpacity(),
+          isGlass: this.phoneChromeIsGlass(), widthPercent: this.compactDockWidthPercent(),
+          languageRevision: this.languageRevision,
+          iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
+          labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
+          itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
+          isActive: (item: ShellAction) => this.dockActionActive(item),
+          onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
+          onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
+          onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) }
+        })
+      }
         .width('100%')
         .height(54)
         .justifyContent(FlexAlign.Center)
@@ -16280,7 +16295,21 @@ private loadPlanetPositions(): void {
           .zIndex(30)
       }
 
-      Row() { this.bottomDock() }
+      Row() {
+        BottomDock({
+          actions: this.canonicalDockActions(), isExpanded: this.isExpandedLayout,
+          panelVisible: this.panelVisible, chromeOpacity: this.phoneChromeOpacity(),
+          isGlass: this.phoneChromeIsGlass(), widthPercent: this.compactDockWidthPercent(),
+          languageRevision: this.languageRevision,
+          iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
+          labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
+          itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
+          isActive: (item: ShellAction) => this.dockActionActive(item),
+          onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
+          onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
+          onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) }
+        })
+      }
         .width('100%')
         .height(66)
         .justifyContent(FlexAlign.Center)
@@ -16293,7 +16322,24 @@ private loadPlanetPositions(): void {
       }
 
       // 手机端右上角常驻快捷区：陀螺仪 + 音频（与平板左侧栏入口一致）
-      Stack() { this.compactTopQuickControls() }
+      Stack() {
+        CompactTopQuickControls({
+          gyroActive: this.gyroStore.gyroscopeEnabled, audioActive: this.musicEnabled,
+          pressedId: this.compactQuickPressed, chromeOpacity: this.phoneChromeOpacity(),
+          textColor: this.nmText(),
+          onGyro: () => {
+            hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
+            this.resetPanelIdle()
+            this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
+          },
+          onAudio: () => {
+            hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio button CLICKED musicEnabled=%{public}s', this.musicEnabled.toString())
+            this.resetPanelIdle()
+            this.toggleMusic()
+            this.flashHint(this.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
+          }
+        })
+      }
           .position({ x: this.compactTopQuickX(), y: this.compactTopQuickY() })
           .hitTestBehavior(HitTestMode.Block)
           .zIndex(30)
@@ -16394,28 +16440,6 @@ private loadPlanetPositions(): void {
    * 这两项是观星高频功能，手机端保留顶部快捷入口；它们与底部 Dock
    * 共享同一状态和命令，不再依赖已经弃用的左侧栏。
    */
-  @Builder
-  compactTopQuickControls() {
-    Column({ space: 10 }) {
-      this.compactQuickButton('gyro', this.gyroStore.gyroscopeEnabled, () => {
-        hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
-        this.resetPanelIdle()
-        this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
-      }, false, this.compactQuickPressed === 'gyro')
-      this.compactQuickButton('audio', this.musicEnabled, () => {
-        hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio button CLICKED musicEnabled=%{public}s', this.musicEnabled.toString())
-        this.resetPanelIdle()
-        this.toggleMusic()
-        this.flashHint(this.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
-      }, false, this.compactQuickPressed === 'audio')
-    }
-      .width(44)
-      .alignItems(HorizontalAlign.Center)
-      .hitTestBehavior(HitTestMode.Block)
-      .opacity(this.phoneChromeOpacity())
-      .animation({ duration: 420, curve: Curve.EaseOut })
-  }
-
   /** 手机端右上快捷区左上角坐标（与顶部搜索栏同高，靠右缘） */
   private compactTopQuickX(): number {
     return this.skyWidth - 18 - 44
@@ -16486,33 +16510,6 @@ private loadPlanetPositions(): void {
       this.compactQuickPressed = ''
       this.handleCompactTopQuickTap(x, y)
     }
-  }
-
-  @Builder
-  compactQuickButton(icon: string, active: boolean, action: () => void, receiveTap: boolean = true, pressed: boolean = false) {
-    Row() {
-      Image(getIcon(icon, active))
-        .width(22)
-        .height(22)
-        .fillColor(active ? '#FFFFFF' : this.nmText())
-    }
-      .width(44)
-      .height(44)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(pressed ? 'rgba(169, 232, 255, 0.24)' : (active ? 'rgba(91, 147, 191, 0.60)' : 'rgba(18, 22, 36, 0.50)'))
-      .backdropBlur(active ? 28 : 36)
-      .border({ width: 1, color: active ? 'rgba(107, 163, 214, 0.42)' : 'rgba(255, 255, 255, 0.10)' })
-      .borderRadius(UI_RADIUS_PANEL)
-      .shadow({ radius: 18, color: 'rgba(0,0,0,0.30)', offsetX: 0, offsetY: 8 })
-      .scale({ x: pressed ? 0.90 : (active ? 1.05 : 1.0), y: pressed ? 0.90 : (active ? 1.05 : 1.0) })
-      .animation({ duration: pressed ? 70 : 180, curve: Curve.EaseOut })
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .onClick(() => {
-        // The compact top controls have a separate touch target over Qt.
-        // Handling the same tap twice immediately flips their state back.
-        if (receiveTap) { action() }
-      })
   }
 
   // ---- 选中天体的独立浮动详情窗口 ----
@@ -18089,42 +18086,6 @@ private loadPlanetPositions(): void {
     // Swiper body 区域也消费触摸，防止详情卡内点击穿透到星图选星。
     // Swiper 的水平滑动仍由 ArkUI 组件自身处理。
     return true
-  }
-
-  // 左侧栏外壳：承载收起动画与常驻把手
-  /** 主界面 Dock 右上常驻时钟（HH:mm）：点按直接打开时间面板。 */
-  /** Dock 时钟定位层：右端与 dock 栏对齐；空白区触摸穿透回星图，仅时钟本体拦截点击。 */
-  @Builder
-  bottomDock() {
-    Row() {
-      // 所有屏幕统一使用五个入口；手机仅改变面板的呈现方式，不改变动作集合。
-      ForEach(this.canonicalDockActions(), (item: ShellAction) => {
-        DockButton({
-          icon: item.icon, label: item.label, active: this.dockActionActive(item),
-          iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
-          labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
-          itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
-          onTouchEvent: (event: TouchEvent) => { this.handleDockTouch(event) },
-          onTap: () => { this.activateDockAction(item) }
-        })
-      }, (item: ShellAction) => item.panel + '/' + this.languageRevision.toString())
-    }
-      .height(this.isExpandedLayout ? 48 : 66)
-      .width(this.isExpandedLayout ? '100%' : this.compactDockWidthPercent() + '%')
-      .padding({ left: this.isExpandedLayout ? 4 : 6, right: this.isExpandedLayout ? 4 : 6 })
-      .justifyContent(FlexAlign.SpaceBetween)
-      .backgroundColor(this.phoneChromeIsGlass() ? 'rgba(10, 14, 26, 0.42)' : 'rgba(25, 26, 28, 0.64)')
-      .backdropBlur(this.phoneChromeIsGlass() ? 40 : 26)
-      .border({ width: 0.5, color: this.phoneChromeIsGlass() ? 'rgba(147, 215, 255, 0.10)' : 'rgba(255, 255, 255, 0.08)' })
-      .borderRadius(UI_RADIUS_PANEL)
-      .shadow({ radius: this.isExpandedLayout ? 18 : 28, color: 'rgba(0, 0, 0, 0.30)', offsetX: 0, offsetY: this.isExpandedLayout ? 8 : 14 })
-      .alignSelf(ItemAlign.Center)
-      .onTouch((event: TouchEvent) => { this.notePanelTouch(event) })
-      .opacity(this.phoneChromeOpacity() * (this.panelVisible ? 1.0 : 0.985))
-      .scale({ x: this.phoneChromeOpacity() < 1 ? 0.98 : (this.panelVisible ? 1.0 : 0.985), y: this.phoneChromeOpacity() < 1 ? 0.98 : (this.panelVisible ? 1.0 : 0.985) })
-      .translate({ y: this.panelVisible ? 0 : 2 })
-      .animation({ duration: 300, curve: curves.springMotion(0.46, 0.86) })
-      .onTouch((event: TouchEvent) => { this.handleDockTouch(event) })
   }
 
   // 手机上的常驻控件随空闲状态变为轻透玻璃；展开和平板悬停布局保持各自的面板规则。
@@ -22735,7 +22696,11 @@ private loadPlanetPositions(): void {
       // 脚本面板：脚本列表 + 录制 / 回放（#39）
       Scroll() {
         Column({ space: 10 }) {
-          this.guideLibrary()
+          GuideLibrary({
+            textColor: this.nmText(), subColor: this.nmSub(), cardBg: this.nmBg(),
+            sessionActive: this.scriptSessionActive(),
+            onStartGuide: (id: string) => { this.executeGuideRequest('startGuide', id) }
+          })
           // ===== 脚本播放列表 =====
           Text(I18n.t('i0123')).fontSize(15).fontColor(this.nmText()).width('100%').margin({ top: 4 })
           Row({ space: 8 }) {
