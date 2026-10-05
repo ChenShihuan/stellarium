@@ -121,11 +121,13 @@ test('background suspends watchdog without losing the frame or creating another 
 });
 
 test('UI submits snapshots, never executes pixel loops; selection generation guards completed frames', () => {
+  // M2-A：渲染管线整体下沉 capability/ObjectModelRenderer.ets，断言改读控制器文件。
   const ui = source('MainWindowNativeNode');
-  const renderMethod = ui.slice(ui.indexOf('  private renderObjectInspectorModel(highQuality:'), ui.indexOf('  private resetObjectInspectorModelView()'));
+  const controller = readFileSync(new URL('../harmonyos/ets-source/capability/ObjectModelRenderer.ets', import.meta.url), 'utf8');
+  const renderMethod = controller.slice(controller.indexOf('  private renderObjectInspectorModel(highQuality:'), controller.indexOf('  resetObjectInspectorModelView()'));
   assert.doesNotMatch(renderMethod, /for \(|renderProceduralModel\(|renderDetailModel\(/);
   assert.match(renderMethod, /render\(resources, frame\)/);
   assert.equal((renderMethod.match(/generation !== this.objectInspectorModelRenderGeneration/g) ?? []).length, 3);
-  assert.match(ui, /objectInspectorModelRenderClient\?\.dispose\(\)/);
+  assert.match(controller, /objectInspectorModelRenderClient\?\.dispose\(\)/);
   assert.doesNotMatch(ui, /@State private objectInspectorModelRendering/);
 });
