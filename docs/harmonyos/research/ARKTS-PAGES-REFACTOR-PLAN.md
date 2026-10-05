@@ -1519,4 +1519,37 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **未走查（待真机人工）**：`startCatalogDownload`/`pollCatalogStatus` 实际下载（当前构建无可用星表项）；望远镜 `readTelescopePosition`/`lx200Goto*`/`lx200Sync*`/`lx200Abort` 按钮（需滚至控制区）；目镜/望远镜滑杆。
 
 
+#### 15.12.7 D 轨道 D5/D6/D13 完成结论与度量（2026-10-05）
+
+> **背景**：D9/D15 之后续做 STATE-REVIEW §10.2 的三个 P1 簇 —— D5 极轴镜、D6 视图中心坐标叠层、D13 卫星行为。
+> 三控制器均 `CommandPort` + 对应 store + 具名 hooks；D5 接口 `extends BehaviorHostHooks`，D6/D13 按实测需要
+> 自定义 hook（不含 `refreshState`/`flashHint`/`panelChange`）。
+
+**新增文件**
+
+- `capability/PolarScopeController.ets`（212 行；9 法 + 4 私有字段；定时器自持 `stopPolarScopeTimer()`/`syncPolarScopeTimer()`）。
+- `capability/ViewCoordinateController.ets`（162 行；8 法 + 8 草稿字段；定时器自持）。
+- `capability/SatelliteController.ets`（152 行；8 法；无定时器）。
+
+**修改**
+
+- 宿主 `MainWindowNativeNode.ets`：删 25 法 + 11 字段声明 + 1 未用导入，增 3 惰性构造器与全部调用点改指向。
+- `scripts/test-ohos-satellite-panel.mjs`：2 用例改读控制器 + 宿主动画 hook 断言。
+
+**D5 判定**：实测 9 法（与 STATE-REVIEW 一致）。`polarScopeTopInset`/`ControlWidth`/`FooterHeight` 属 A-保留 51（§15.6-2），留宿主经 hooks 回注。桥回包 flags/location 的 `as Record<...>` 抽取收口宿主 hook（控制器禁 `as`）。
+
+**D6 判定**：STATE-REVIEW 记「16 法 + 10 私有字段」，工作区实测为 **8 行为法 + 5 几何法（A-保留 51，留宿主）+ 8 草稿字段**：`utcOffsetHours` 引用点全在 D6 方法集之外（dock 时钟 / 时间格式化 / TimeWheel 钩子），属跨域共用，按 §15.6-1 留宿主；4 个 @State 属 §2.7.1 G 类逐帧保留裸字段，按 §15.7 规则 2 留宿主、经 hooks 读写。
+
+**D13 判定**：STATE-REVIEW 记「11 法」，实测卫星域 9 个 `private` 方法 = 1 `publish*`（§15.6-4 保留，只迁调用方）+ 8 行为；`requestSatellitePasses` 归选中管线（M3-3）。实测 8 法均不调 `flashHint`；`frameSatellite` 无动画，`animateTo` hook 服务于 `selectSatelliteGroup` 的 180ms 分组过渡。
+
+**度量**：宿主 **10,939 → 10,682 行（−257）**、`private` 方法 **436 → 414（−22）**、`@State private` **132 不变**；新增 3 控制器文件。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 4 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-satellite-panel` 7/7 全绿；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。
+
+**真机（192.168.50.108:36717）**：D5 `openUiPanel polarScope` → `setPolarScopeOverlay`/`centerPolarScope`/`setFOV 4` + 1s `getPolarScopeData`；水平翻转 → `setActionChecked "actionHorizontal_Flip|1"`（已复原）；关闭 → `applySessionState` 恢复快照。D6 设置开启叠层 → 50ms `getViewCenterCoordinates` 轮询；`ui drag` 叠层 `[216,455]→[313,552]`，拖回并关闭复原。D13 `setSatellitePanelGroup beidou` → `getSatellites "beidou||40"`（已复原）。`pidof` 存活、无 jscrash。
+
+**未走查（待真机人工）**：极轴镜回中按钮；卫星 TLE 导入与「定位卫星」`frameSatellite`（需从今夜天象卡片跳转）；卫星显示开关（经单测覆盖）。
+
+
+
 
