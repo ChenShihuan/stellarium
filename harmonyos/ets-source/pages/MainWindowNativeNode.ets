@@ -145,6 +145,7 @@ import { TimePanel } from '../panels/panels/TimePanel'
 import { HelpPanel } from '../panels/panels/HelpPanel'
 import { MeteorShowersPanel } from '../panels/panels/MeteorShowersPanel'
 import { NebulaTexturesPanel } from '../panels/panels/NebulaTexturesPanel'
+import { LayersPanel } from '../panels/panels/LayersPanel'
 import { ObservingPanel } from '../panels/panels/ObservingPanel'
 import { SearchPanel } from '../panels/panels/SearchPanel'
 import { ObjectPanel } from '../panels/panels/ObjectPanel'
@@ -18068,154 +18069,82 @@ private loadPlanetPositions(): void {
         onJump: (jd: number, lock: string, title: string) => { this.gotoTonightEvent(jd, lock, title) }
       })
     } else if (this.activePanel === 'layers') {
-      Column() {
-        LayerPresetBar({ subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), onPreset: (preset: string) => { this.applyLayerPreset(preset) }, onClear: () => { this.clearMarkingLayers() } })
-        LayerTabs({ tabs: this.layerTabItems(), activeTab: this.viewTab, foldTablet: this.isFoldTabletLayout, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), onSelectTab: (id: number) => { this.selectViewTab(id) } })
-        Column({ space: 0 }) {
-          if (this.viewTab === 0) {
-            LayerSkyTab({
-              layerStore: this.layerStore,
-              layerViewStore: this.layerViewStore,
-              nightModeOn: this.nightModeStore.nightMode,
-              textColor: this.nmText(),
-              subColor: this.nmSub(),
-              accentColor: this.nmAccent(),
-              panelColor: this.nmBg(),
-              cardBorder: this.nmBorder(),
-              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
-              onSetSkyDisplay: (setting: string, value: boolean | number) => { this.setSkyDisplaySetting(setting, value) },
-              onStarMagLimit: (value: number) => { this.applyStarMagLimit(value) },
-              onMilkyWayBright: (value: number) => { this.applyMilkyWayBright(value) }
-            })
-          } else if (this.viewTab === 1) {
-            LayerSsoTab({
-              layerStore: this.layerStore,
-              layerViewStore: this.layerViewStore,
-              expandedLayout: this.isExpandedLayout,
-              textColor: this.nmText(),
-              subColor: this.nmSub(),
-              accentColor: this.nmAccent(),
-              panelColor: this.nmBg(),
-              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
-              onSetOrbitFlag: (setting: string, enabled: boolean) => { this.setOrbitDisplayFlag(setting, enabled) },
-              onSetOrbitThickness: (value: number) => { this.setOrbitDisplayThickness(value) },
-              onSetOrbitColorStyle: (index: number) => { this.setOrbitColorStyle(index) },
-              onLoadOrbitSettings: () => { this.loadOrbitDisplaySettings() },
-              onSetTrailFlag: (setting: string, enabled: boolean) => { this.setTrailDisplayFlag(setting, enabled) },
-              onSetTrailNumber: (setting: string, value: number) => { this.setTrailDisplayNumber(setting, value) },
-              onLoadTrailSettings: () => { this.loadTrailDisplaySettings() },
-              onApplyTrailColor: () => { this.applyTrailColor() },
-              onTriggerAction: (actionId: string) => { this.triggerAction(actionId) }
-            })
-          } else if (this.viewTab === 2) {
-            LayerDsoTab({
-              layerStore: this.layerStore,
-              subColor: this.nmSub(),
-              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) }
-            })
-          } else if (this.viewTab === 3) {
-            LayerMarkingsTab({
-              layerStore: this.layerStore,
-              layerViewStore: this.layerViewStore,
-              textColor: this.nmText(),
-              subColor: this.nmSub(),
-              accentColor: this.nmAccent(),
-              panelColor: this.nmBg(),
-              cardBorder: this.nmBorder(),
-              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
-              onSetFovMarker: (setting: string, value: number) => { this.setFovMarkerSetting(setting, value) }
-            })
-          } else if (this.viewTab === 4) {
-            LayerLandscapeTab({
-              layerStore: this.layerStore,
-              layerViewStore: this.layerViewStore,
-              textColor: this.nmText(),
-              subColor: this.nmSub(),
-              accentColor: this.nmAccent(),
-              panelColor: this.nmBg(),
-              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
-              onSetLandscapeFadeWithZoom: (isOn: boolean) => { this.setLandscapeFadeWithZoom(isOn) },
-              onImportLandscape: () => { this.importLandscapeFile() },
-              onSelectLandscape: (id: string, name: string) => { this.selectLandscape(id, name) },
-              onChangeLandscapeTransparency: (val: number) => { this.changeLandscapeTransparency(val) }
-            })
-          } else if (this.viewTab === 5) {
-            SkyCultureViewTab({
-              settings: this.skyCultureSettingsStore,
-              layerStore: this.layerStore,
-              skyCultureViewStore: this.skyCultureViewStore,
-              currentSkyCultureId: this.currentSkyCultureId,
-              currentSkyCultureName: this.currentSkyCulture,
-              skyCultureListLoading: this.skyCultureListLoading,
-              skyCultureList: this.skyCultureList,
-              artStates: this.skyCultureArtStates,
-              artThumbnailPixelMaps: this.skyCultureArtThumbnailPixelMaps,
-              narrationParagraphs: this.skyCultureNarrationParagraphs(),
-              textColor: this.nmText(),
-              subColor: this.nmSub(),
-              accentColor: this.nmAccent(),
-              panelColor: this.nmBg(),
-              cardBorder: this.nmBorder(),
-              inputColor: this.nmInput(),
-              pickerSurface: this.nmPickerSurface(),
-              pickerHeader: this.nmPickerHeader(),
-              pickerHeaderActive: this.nmPickerHeaderActive(),
-              pickerSelected: this.nmPickerSelected(),
-              pickerOption: this.nmPickerOption(),
-              mapContext: this.skyCultureMapContext,
-              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
-              onLoadList: () => { this.loadSkyCultureList() },
-              onSelectCulture: (id: string) => { this.selectSkyCulture(id) },
-              onRowArea: (id: string, area: Area) => { this.handleSkyCultureRowArea(id, area) },
-              onReloadList: () => { this.callInteractive('reloadSkyCulture', '', () => { this.loadSkyCultureList() }) },
-              onSelectLabelMode: (target: string, index: number) => { this.selectSkyCultureLabelMode(target, index) },
-              onSetShortLabels: (enabled: boolean) => { this.setSkyCultureShortLabels(enabled) },
-              onSetCommonNames: (enabled: boolean) => { this.setSkyCultureCommonNames(enabled) },
-              onSetIsolation: (enabled: boolean) => { this.setSkyCultureConstellationIsolation(enabled) },
-              onSetSinglePick: (enabled: boolean) => { this.setSkyCultureConstellationSinglePick(enabled) },
-              onConstellationSelection: (actionId: string, hint: string) => { this.applySkyCultureConstellationSelection(actionId, hint) },
-              onSetStyleOption: (target: string, optionIndex: number, enabled: boolean) => { this.setSkyCultureStyleOption(target, optionIndex, enabled) },
-              getColorOptions: () => this.skyCultureColorOptions(),
-              onSetVisualColor: (setting: string, color: string) => { this.setSkyCultureVisualColor(setting, color) },
-              onSetVisualSetting: (setting: string, value: number) => { this.setSkyCultureVisualSetting(setting, value) },
-              onSetDefault: () => { this.setCurrentSkyCultureAsDefault() },
-              onSyncTimeFollowTimer: () => { this.syncSkyCultureTimeFollowTimer() },
-              onRefreshSimulationYear: () => { this.refreshSkyCultureSimulationYear(true) },
-              onLoadTerritoryMap: () => { this.loadSkyCultureTerritoryMap() },
-              onMapReady: () => { this.drawSkyCultureTerritoryMap() },
-              onMapAreaChange: (width: number, height: number) => { this.skyCultureMapRenderWidth = width; this.skyCultureMapRenderHeight = height; this.drawSkyCultureTerritoryMap() },
-              onLoadObserverInfo: (force: boolean) => { this.loadObserverInfo(force) },
-              onArtDecodeError: (rawPath: string) => { this.setSkyCultureArtStatus(rawPath, 'decodeFailed') },
-              onOpenArtPreview: (art: SkyCultureArtItem) => { this.openSkyCultureArtPreview(art) }
-            })
-          } else if (this.viewTab === 6 && !OFFLINE_APPGALLERY_BUILD) {
-            LayerSurveysTab({
-              layerStore: this.layerStore,
-              subColor: this.nmSub(),
-              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) }
-            })
-          } else {
-            LayerSkyTab({
-              layerStore: this.layerStore,
-              layerViewStore: this.layerViewStore,
-              nightModeOn: this.nightModeStore.nightMode,
-              textColor: this.nmText(),
-              subColor: this.nmSub(),
-              accentColor: this.nmAccent(),
-              panelColor: this.nmBg(),
-              cardBorder: this.nmBorder(),
-              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
-              onSetSkyDisplay: (setting: string, value: boolean | number) => { this.setSkyDisplaySetting(setting, value) },
-              onStarMagLimit: (value: number) => { this.applyStarMagLimit(value) },
-              onMilkyWayBright: (value: number) => { this.applyMilkyWayBright(value) }
-            })
-          }
-        }
-          .width('100%')
-          .opacity(this.viewTabContentOpacity)
-          .translate({ x: this.viewTabContentOffsetX, y: 0 })
-      }
-        .width('100%')
+      LayersPanel({
+        layerStore: this.layerStore,
+        layerViewStore: this.layerViewStore,
+        skyCultureViewStore: this.skyCultureViewStore,
+        skyCultureSettingsStore: this.skyCultureSettingsStore,
+        nightModeOn: this.nightModeStore.nightMode,
+        viewTab: this.viewTab,
+        expandedLayout: this.isExpandedLayout,
+        foldTablet: this.isFoldTabletLayout,
+        viewTabContentOpacity: this.viewTabContentOpacity,
+        viewTabContentOffsetX: this.viewTabContentOffsetX,
+        layerTabs: this.layerTabItems(),
+        currentSkyCultureId: this.currentSkyCultureId,
+        currentSkyCultureName: this.currentSkyCulture,
+        skyCultureListLoading: this.skyCultureListLoading,
+        skyCultureList: this.skyCultureList,
+        skyCultureArtStates: this.skyCultureArtStates,
+        skyCultureArtThumbnailPixelMaps: this.skyCultureArtThumbnailPixelMaps,
+        narrationParagraphs: this.skyCultureNarrationParagraphs(),
+        mapContext: this.skyCultureMapContext,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        cardBorder: this.nmBorder(),
+        inputColor: this.nmInput(),
+        pickerSurface: this.nmPickerSurface(),
+        pickerHeader: this.nmPickerHeader(),
+        pickerHeaderActive: this.nmPickerHeaderActive(),
+        pickerSelected: this.nmPickerSelected(),
+        pickerOption: this.nmPickerOption(),
+        onPreset: (preset: string) => { this.applyLayerPreset(preset) },
+        onClear: () => { this.clearMarkingLayers() },
+        onSelectTab: (id: number) => { this.selectViewTab(id) },
+        onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
+        onSetSkyDisplay: (setting: string, value: boolean | number) => { this.setSkyDisplaySetting(setting, value) },
+        onStarMagLimit: (value: number) => { this.applyStarMagLimit(value) },
+        onMilkyWayBright: (value: number) => { this.applyMilkyWayBright(value) },
+        onSetOrbitFlag: (setting: string, enabled: boolean) => { this.setOrbitDisplayFlag(setting, enabled) },
+        onSetOrbitThickness: (value: number) => { this.setOrbitDisplayThickness(value) },
+        onSetOrbitColorStyle: (index: number) => { this.setOrbitColorStyle(index) },
+        onLoadOrbitSettings: () => { this.loadOrbitDisplaySettings() },
+        onSetTrailFlag: (setting: string, enabled: boolean) => { this.setTrailDisplayFlag(setting, enabled) },
+        onSetTrailNumber: (setting: string, value: number) => { this.setTrailDisplayNumber(setting, value) },
+        onLoadTrailSettings: () => { this.loadTrailDisplaySettings() },
+        onApplyTrailColor: () => { this.applyTrailColor() },
+        onTriggerAction: (actionId: string) => { this.triggerAction(actionId) },
+        onSetFovMarker: (setting: string, value: number) => { this.setFovMarkerSetting(setting, value) },
+        onSetLandscapeFadeWithZoom: (isOn: boolean) => { this.setLandscapeFadeWithZoom(isOn) },
+        onImportLandscape: () => { this.importLandscapeFile() },
+        onSelectLandscape: (id: string, name: string) => { this.selectLandscape(id, name) },
+        onChangeLandscapeTransparency: (val: number) => { this.changeLandscapeTransparency(val) },
+        onLoadList: () => { this.loadSkyCultureList() },
+        onSelectCulture: (id: string) => { this.selectSkyCulture(id) },
+        onRowArea: (id: string, area: Area) => { this.handleSkyCultureRowArea(id, area) },
+        onReloadList: () => { this.callInteractive('reloadSkyCulture', '', () => { this.loadSkyCultureList() }) },
+        onSelectLabelMode: (target: string, index: number) => { this.selectSkyCultureLabelMode(target, index) },
+        onSetShortLabels: (enabled: boolean) => { this.setSkyCultureShortLabels(enabled) },
+        onSetCommonNames: (enabled: boolean) => { this.setSkyCultureCommonNames(enabled) },
+        onSetIsolation: (enabled: boolean) => { this.setSkyCultureConstellationIsolation(enabled) },
+        onSetSinglePick: (enabled: boolean) => { this.setSkyCultureConstellationSinglePick(enabled) },
+        onConstellationSelection: (actionId: string, hint: string) => { this.applySkyCultureConstellationSelection(actionId, hint) },
+        onSetStyleOption: (target: string, optionIndex: number, enabled: boolean) => { this.setSkyCultureStyleOption(target, optionIndex, enabled) },
+        getColorOptions: () => this.skyCultureColorOptions(),
+        onSetVisualColor: (setting: string, color: string) => { this.setSkyCultureVisualColor(setting, color) },
+        onSetVisualSetting: (setting: string, value: number) => { this.setSkyCultureVisualSetting(setting, value) },
+        onSetDefault: () => { this.setCurrentSkyCultureAsDefault() },
+        onSyncTimeFollowTimer: () => { this.syncSkyCultureTimeFollowTimer() },
+        onRefreshSimulationYear: () => { this.refreshSkyCultureSimulationYear(true) },
+        onLoadTerritoryMap: () => { this.loadSkyCultureTerritoryMap() },
+        onMapReady: () => { this.drawSkyCultureTerritoryMap() },
+        onMapAreaChange: (width: number, height: number) => { this.skyCultureMapRenderWidth = width; this.skyCultureMapRenderHeight = height; this.drawSkyCultureTerritoryMap() },
+        onLoadObserverInfo: (force: boolean) => { this.loadObserverInfo(force) },
+        onArtDecodeError: (rawPath: string) => { this.setSkyCultureArtStatus(rawPath, 'decodeFailed') },
+        onOpenArtPreview: (art: SkyCultureArtItem) => { this.openSkyCultureArtPreview(art) }
+      })
     } else if (this.activePanel === 'pointerCoordinates') {
       PointerCoordinatesPanel({
         store: this.overlayStore,
