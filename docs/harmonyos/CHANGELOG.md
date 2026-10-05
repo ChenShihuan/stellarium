@@ -1,3 +1,19 @@
+## [2026-10-02] DevEco Code - Phase 4k：抽取 `scripts` 面板（收口 248 行分支）
+
+- **背景/范围**：`panelContent` 的 `scripts` 分支（248 行）是 4j 全链复核确认仅剩的两个含内联 UI 的分支之一（另一个是 `astro` ≈2,000 行）。本片把分支体原样下沉到 `panels/panels/ScriptsPanel.ets`，判定条件 `activePanel === 'scripts'` 留宿主；**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 9）—— 本分支原本也没有参数化 builder，故不存在冻结风险。
+- **新增文件**：`harmonyos/ets-source/panels/panels/ScriptsPanel.ets`（310 行）：1 个 `@ObjectLink tools`（ToolsStore，录制开关实时刷新）、27 个 `@Prop`（脚本列表 / 回放 / 录制 / 屏幕 MP4 / 帧序列导出状态与五色主题）、4 个函数成员（`scriptZh` / `scriptDesc` / `scriptMetaLine` / `scriptSourceLine`，因设置页共用仍留宿主）+ 20 个回注回调；`build()` 根为单个 `Scroll`。
+- **单体手术**（`pages/MainWindowNativeNode.ets`，21,485 → 21,303 行，净 −182）：分支体（248 行）替换为 `ScriptsPanel({...})`（66 行）+ 1 行 import；搬运用「读原行 + 有序列 literal 替换 + 宿主签名正则定界」（**未用行号算术**），改前断言：匹配唯一、单体括号深度 0→0、`ScriptsPanel(` 恰 1 处。
+- **成员名雷区**：分隔线颜色命名 `lineColor`（避开 `borderColor`）；根节点单容器。相对路径层级：`panels/panels/` 下引用 `../../pages/*`、`../../state/*`、`../../common/ui/*`。
+- **测试同步**：全量 `*-ohos*.mjs` 扫描仅 7 个失败，**全部为 §13.6 存量环境类**（4 个 `-pad` 需设备、`test-ohos-mist-performance` 需设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS hdc 假设）；无脚本引用被搬文本，故无需改测试。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（2 文件 0 错）→ `devecocli build`（`-SkipEngine -SkipDeploy -SkipResources`）**BUILD SUCCESSFUL** → `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好（171 文件）→ 全量脚本扫描（同上 7 个存量失败）。
+- **真机**（`com.cnchensh.stellarium`，`192.168.50.108:40565`，1280×2832；`aa dump -l` 确认 `state #FOREGROUND`；CLI 显式 `--bundle`；`pidof` 全程存活、未崩，排除规则 9 运行期退出）：
+  1. `openUiPanel scripts` → 面板就地渲染：顶部 `GuideLibrary`（导览库）、`原版脚本 · 兼容模式` 列表逐条显示 `scriptZh` / `scriptDesc` / `scriptMetaLine`（作者·许可证·版本）/ `scriptSourceLine`（来源），实证回注的函数成员链路；
+  2. 滚动到「录制操作」区，**点按录制名 `TextInput` 并键入 → 字段即时显示输入**（`onSetRecordName` → 宿主 `recordName` → `@Prop` 回流）；
+  3. **决定性证据**：切到 `time` 面板再切回 `scripts`（组件销毁重建），滚动回录制区，录制名仍为先前输入值 —— 值由宿主 `@State` 持有并经 `@Prop` 重新注入，回调链路端到端成立；
+  4. 未真正开始录制 / 未触发 MP4 录屏（避免写文件与系统授权弹窗）。
+- **测后恢复**：重启应用清除瞬态 `@State`（`recordName` 非持久化），面板已关闭。
+- **队列更新**：本片后 `panelContent` 29 分支中**仅剩 `astro` 未达标**，已写入 `§13.5`。
+
 ## [2026-10-02] DevEco Code - Phase 4j：`settings` 分支 + 末尾 `else` 收口，并全链复核
 
 - **背景/范围**：按体量取两个仍未达标的实分支 —— `settings`(约 406 行) 与末尾 `else`（历史“应用配置”回退页，约 219 行），分别抽成 `panels/panels/SettingsPanel.ets` / `ConfigFallbackPanel.ets`。分支体原样下沉、判定条件留宿主；**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 9）；跨域/桥依赖用回调回注（§13.1 规则 6）；不迁 V2。`floatingPanel`/`compactPanel` 按 4h 结论不动。
