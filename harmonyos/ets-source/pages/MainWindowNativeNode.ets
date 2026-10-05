@@ -54,6 +54,7 @@ import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
 import { SearchFilterChips } from '../panels/search/SearchFilterChips'
+import { SearchCategoryBrowse } from '../panels/search/SearchCategoryBrowse'
 import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
 import { QuickChipRow } from '../panels/QuickChipRow'
 import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
@@ -128,21 +129,9 @@ export struct WindowNativeNode {
   @State private selectedObjectType: string = ''
   @State private selectedTemperatureK: number = 0
   private searchHistory: string[] = []
-  @State private pendingPluginCatalogId: string = ''
-  @State private categoryObjects: NameItem[] = []
   @State private objectCatalogCategories: CatOption[] = []
   @State private constellationNavigationItems: ConstellationNavigationItem[] = []
-  @State private categoryObjectCount: number = 0
-  @State private categoryLoadedCount: number = 0
-  @State private categoryLoading: boolean = false
-  @State private categoryLoadFailed: boolean = false
-  @State private categoryHasMore: boolean = false
-  @State private categoryListKind: string = ''
-  @State private categoryCatalogTotal: number = 0
-  @State private categoryCatalogReady: boolean = true
-  @State private categoryCatalogMessage: string = ''
   private searchPanelScroller: Scroller = new Scroller()
-  @State private categoryModuleId: string = 'SolarSystem:planet'
   @State private selectedType: string = ''
   @State private selectedStatus: string = ''
   @State private selectedInfo: string = ''
@@ -2950,7 +2939,7 @@ export struct WindowNativeNode {
       if (panel === 'search') {
         this.loadObjectCatalogCategories()
         this.loadConstellationNavigation()
-        if (this.categoryObjects.length === 0) this.loadCategoryObjects(this.searchStore.searchCategory)
+        if (this.searchStore.categoryObjects.length === 0) this.loadCategoryObjects(this.searchStore.searchCategory)
       }
       if (panel === 'time') {
         this.loadTimeExtras()
@@ -10686,7 +10675,7 @@ export struct WindowNativeNode {
       this.searchStore.searchText = ''
       this.searchStore.searchCategory = 'module:' + route.catalogModuleId
       this.loadCategoryObjects(this.searchStore.searchCategory, route.catalogModuleId)
-      this.pendingPluginCatalogId = route.catalogModuleId
+      this.searchStore.pendingPluginCatalogId = route.catalogModuleId
     }
     this.openSubPanel(route.panel)
   }
@@ -11088,10 +11077,10 @@ private loadPlanetPositions(): void {
       }
       this.objectCatalogCategories = categories
       this.publishSearchBrowserState()
-      const pendingModuleId = this.pendingPluginCatalogId
+      const pendingModuleId = this.searchStore.pendingPluginCatalogId
       if (pendingModuleId.length > 0 && categories.some((item: CatOption) => item.moduleId === pendingModuleId)) {
-        this.pendingPluginCatalogId = ''
-        if (this.searchStore.searchCategory === 'module:' + pendingModuleId || this.categoryModuleId === pendingModuleId) {
+        this.searchStore.pendingPluginCatalogId = ''
+        if (this.searchStore.searchCategory === 'module:' + pendingModuleId || this.searchStore.categoryModuleId === pendingModuleId) {
           this.loadCategoryObjects('module:' + pendingModuleId, pendingModuleId)
         }
       }
@@ -11168,34 +11157,34 @@ private loadPlanetPositions(): void {
 
   private loadCategoryObjects(category: string, moduleIdOverride: string = ''): void {
     this.searchStore.searchCategory = category
-    this.pendingPluginCatalogId = ''
+    this.searchStore.pendingPluginCatalogId = ''
     const moduleId = moduleIdOverride.length > 0 ? moduleIdOverride : this.categoryModuleIdFor(category)
-    this.categoryModuleId = moduleId
-    this.categoryObjects = []
-    this.categoryObjectCount = 0
-    this.categoryLoadedCount = 0
-    this.categoryLoading = false
-    this.categoryLoadFailed = false
-    this.categoryHasMore = false
-    this.categoryListKind = ''
-    this.categoryCatalogTotal = 0
-    this.categoryCatalogReady = true
-    this.categoryCatalogMessage = ''
+    this.searchStore.categoryModuleId = moduleId
+    this.searchStore.categoryObjects = []
+    this.searchStore.categoryObjectCount = 0
+    this.searchStore.categoryLoadedCount = 0
+    this.searchStore.categoryLoading = false
+    this.searchStore.categoryLoadFailed = false
+    this.searchStore.categoryHasMore = false
+    this.searchStore.categoryListKind = ''
+    this.searchStore.categoryCatalogTotal = 0
+    this.searchStore.categoryCatalogReady = true
+    this.searchStore.categoryCatalogMessage = ''
     this.categoryOffset = 0
     this.categoryRequestSerial += 1
     this.publishSearchBrowserState()
     if (moduleId === 'Satellites' && !this.satelliteCatalogReady) {
       const serial = this.categoryRequestSerial
-      this.categoryLoading = true
+      this.searchStore.categoryLoading = true
       this.ensurePluginLoaded('Satellites', () => {
-        if (serial !== this.categoryRequestSerial || this.categoryModuleId !== 'Satellites') return
+        if (serial !== this.categoryRequestSerial || this.searchStore.categoryModuleId !== 'Satellites') return
         this.satelliteCatalogReady = true
-        this.categoryLoading = false
+        this.searchStore.categoryLoading = false
         this.loadMoreCategoryObjects()
       }, () => {
-        if (serial !== this.categoryRequestSerial || this.categoryModuleId !== 'Satellites') return
-        this.categoryLoading = false
-        this.categoryLoadFailed = true
+        if (serial !== this.categoryRequestSerial || this.searchStore.categoryModuleId !== 'Satellites') return
+        this.searchStore.categoryLoading = false
+        this.searchStore.categoryLoadFailed = true
       })
       return
     }
@@ -11259,7 +11248,7 @@ private loadPlanetPositions(): void {
   private publishSearchBrowserState(error: string = ''): void {
     AppStorage.setOrCreate('stellariumSearchBrowserState', JSON.stringify({
       ok: error.length === 0, error: error, page: this.searchStore.searchFilterPage || 'browse',
-      category: this.searchStore.searchCategory, moduleId: this.categoryModuleId,
+      category: this.searchStore.searchCategory, moduleId: this.searchStore.categoryModuleId,
       visibility: this.searchStore.searchVisibilityFilter, instrument: this.searchStore.searchInstrumentFilter,
       categories: this.searchAllCategoryOptions(), scrollY: this.searchPanelScroller.currentOffset()?.yOffset ?? 0
     }))
@@ -11362,13 +11351,6 @@ private loadPlanetPositions(): void {
     return this.catalogIconForObjectType(item.type ?? '', this.searchCategoryIcon(this.searchStore.searchCategory))
   }
 
-  private searchFilterMenuTitle(): string {
-    if (this.searchStore.searchFilterPage === 'categories') return I18n.t('search_browse_categories')
-    if (this.searchStore.searchFilterPage === 'root') return I18n.t('search_filter')
-    if (this.searchStore.searchFilterPage === 'visibility') return I18n.t('search_visibility')
-    return I18n.t('search_instrument')
-  }
-
   private setSearchFilterPage(page: string): void {
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
       this.searchStore.searchFilterPage = page
@@ -11380,15 +11362,15 @@ private loadPlanetPositions(): void {
   // Catalogs may contain many thousands of entries. Request small pages so the
   // first page is usable immediately and append more only when the user scrolls.
   private loadMoreCategoryObjects(): void {
-    if (this.categoryLoading || !this.categoryModuleId.length || (!this.categoryHasMore && this.categoryOffset > 0)) {
+    if (this.searchStore.categoryLoading || !this.searchStore.categoryModuleId.length || (!this.searchStore.categoryHasMore && this.categoryOffset > 0)) {
       return
     }
     const serial = this.categoryRequestSerial
     const offset = this.categoryOffset
     const category = this.searchStore.searchCategory
-    this.categoryLoading = true
-    this.categoryLoadFailed = false
-    this.callNativeWhenReady('listObjects', this.categoryModuleId + '|' + this.CATEGORY_PAGE_SIZE + '|' + offset + '|' + this.searchStore.searchVisibilityFilter + '|' + this.searchStore.searchInstrumentFilter, (result) => {
+    this.searchStore.categoryLoading = true
+    this.searchStore.categoryLoadFailed = false
+    this.callNativeWhenReady('listObjects', this.searchStore.categoryModuleId + '|' + this.CATEGORY_PAGE_SIZE + '|' + offset + '|' + this.searchStore.searchVisibilityFilter + '|' + this.searchStore.searchInstrumentFilter, (result) => {
       if (serial !== this.categoryRequestSerial) { return }
       const items = Array.isArray(result.items) ? result.items as string[] : []
       const keys = Array.isArray(result.keys) ? result.keys as string[] : []
@@ -11397,7 +11379,7 @@ private loadPlanetPositions(): void {
       const magnitudes = Array.isArray(result.magnitudes) ? result.magnitudes as number[] : []
       const visibleNow = Array.isArray(result.visibleNow) ? result.visibleNow as boolean[] : []
       const seen: Record<string, boolean> = {}
-      for (const existing of this.categoryObjects) {
+      for (const existing of this.searchStore.categoryObjects) {
         if (existing.name.length > 0) { seen[existing.name] = true }
       }
       const browse: NameItem[] = []
@@ -11411,23 +11393,23 @@ private loadPlanetPositions(): void {
         const title = this.celestialTitle(items[i], key)
         browse.push({ name: key, zh: title, subtitle: this.celestialSubtitle(title, key), type: types[i] ?? '', altitude: altitudes[i], magnitude: magnitudes[i], visibleNow: visibleNow[i] === true })
       }
-      const combined = this.categoryObjects.concat(browse)
-      this.categoryObjects = combined
-      this.categoryLoadedCount = combined.length
-      this.categoryObjectCount = typeof result.count === 'number' && result.count > 0 ? result.count : combined.length
+      const combined = this.searchStore.categoryObjects.concat(browse)
+      this.searchStore.categoryObjects = combined
+      this.searchStore.categoryLoadedCount = combined.length
+      this.searchStore.categoryObjectCount = typeof result.count === 'number' && result.count > 0 ? result.count : combined.length
       this.categoryOffset = offset + items.length
-      this.categoryHasMore = result.hasMore === true && items.length > 0
-      this.categoryListKind = result.listKind ?? ''
-      this.categoryCatalogTotal = typeof result.catalogTotal === 'number' ? result.catalogTotal : this.categoryObjectCount
-      this.categoryCatalogReady = result.catalogReady !== false
-      this.categoryCatalogMessage = result.catalogMessage !== undefined ? String(result.catalogMessage) : ''
-      this.categoryLoading = false
-      this.categoryLoadFailed = false
+      this.searchStore.categoryHasMore = result.hasMore === true && items.length > 0
+      this.searchStore.categoryListKind = result.listKind ?? ''
+      this.searchStore.categoryCatalogTotal = typeof result.catalogTotal === 'number' ? result.catalogTotal : this.searchStore.categoryObjectCount
+      this.searchStore.categoryCatalogReady = result.catalogReady !== false
+      this.searchStore.categoryCatalogMessage = result.catalogMessage !== undefined ? String(result.catalogMessage) : ''
+      this.searchStore.categoryLoading = false
+      this.searchStore.categoryLoadFailed = false
     }, 0, 100, 60, (_failure) => {
       if (serial !== this.categoryRequestSerial) { return }
-      this.categoryLoading = false
-      this.categoryLoadFailed = true
-      this.categoryHasMore = false
+      this.searchStore.categoryLoading = false
+      this.searchStore.categoryLoadFailed = true
+      this.searchStore.categoryHasMore = false
     })
   }
 
@@ -11669,9 +11651,9 @@ private loadPlanetPositions(): void {
       this.languageSwitchTimer = -1
       this.callNativeWhenReady('setLanguage', lang, () => {
         if (this.languageRefreshSerial !== languageSerial) return
-        const selectedCategoryModuleId = this.categoryModuleId
+        const selectedCategoryModuleId = this.searchStore.categoryModuleId
         this.objectCatalogCategories = []
-        this.categoryObjects = []
+        this.searchStore.categoryObjects = []
         this.searchStore.searchSuggestions = []
         this.constellationNavigationItems = []
         this.loadObjectCatalogCategories(languageSerial)
@@ -22620,86 +22602,32 @@ private loadPlanetPositions(): void {
           onSelect: (item: SearchSug) => { this.selectSearchSuggestion(item) }
         })
       } else {
-        Row({ space: 10 }) {
-          Row({ space: 10 }) {
-            Image(getIcon(this.searchCategoryIcon(this.searchStore.searchCategory), false)).width(22).height(22).objectFit(ImageFit.Contain).fillColor('#8FD3FF')
-            Column({ space: 3 }) {
-              Text(I18n.t('search_browse_categories')).fontSize(11).fontColor(this.nmSub()).width('100%')
-              Text(this.searchCategoryLabel()).fontSize(14).fontColor(this.nmText()).width('100%').maxLines(2)
-            }.layoutWeight(1)
-            Image(getIcon('chevron_right', false)).width(16).height(16).fillColor(this.nmSub())
-          }
-            .layoutWeight(1).height(66).padding({ left: 12, right: 12 })
-            .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-            .id('search-category-picker').clickEffect({ level: ClickEffectLevel.LIGHT })
-            .onClick(() => { this.setSearchFilterPage('categories') })
-          Button(I18n.t('search_filter')).fontSize(13).height(48).padding({ left: 16, right: 16 })
-            .backgroundColor(this.nmBg()).fontColor(this.nmText()).borderRadius(UI_RADIUS_CONTROL)
-            .id('search-filter-picker').clickEffect({ level: ClickEffectLevel.LIGHT })
-            .onClick(() => { this.setSearchFilterPage('root') })
-        }.width('100%').margin({ bottom: 8 })
-        if (this.searchVisibilityLabel().length > 0 || this.searchInstrumentLabel().length > 0) {
-          SearchFilterChips({
-            visibilityLabel: this.searchVisibilityLabel(),
-            instrumentLabel: this.searchInstrumentLabel(),
-            textColor: this.nmText(),
-            panelColor: this.nmBg(),
-            onClearVisibility: () => { this.selectSearchVisibilityFilter('all') },
-            onClearInstrument: () => { this.selectSearchInstrumentFilter('all') }
-          })
-        }
-        Row() {
-          Text(I18n.t('search_catalog_objects')).fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
-          Text(this.categoryLoadFailed ? I18n.t('search_load_failed_retry') :
-            (this.categoryLoading ? (this.categoryLoadedCount > 0 ? I18n.format('search_catalog_loading_more', [this.categoryLoadedCount.toString()]) : I18n.t('search_catalog_loading')) :
-              (this.categoryCatalogMessage.length > 0 ? this.categoryCatalogMessage :
-                (this.categoryObjectCount > 0 ? (this.categoryListKind === 'named'
-                  ? I18n.t('search_all_stars') + ' ' + this.categoryObjectCount.toString() + ' · ' + I18n.format('search_catalog_loaded_count', [this.categoryLoadedCount.toString(), this.categoryCatalogTotal.toString()])
-                  : I18n.format('search_catalog_loaded_count', [this.categoryLoadedCount.toString(), this.categoryObjectCount.toString()]))
-                  : I18n.t('search_catalog_empty')))))
-            .fontSize(10).fontColor(this.nmSub())
-            .onClick(() => { if (this.categoryLoadFailed) { this.loadCategoryObjects(this.searchStore.searchCategory) } })
-        }.width('100%').padding({ left: 2, right: 2 }).margin({ top: 10, bottom: 6 })
-        Scroll() {
-          Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-            ForEach(this.categoryObjects, (item: NameItem) => {
-              Row({ space: 8 }) {
-                Image(getIcon(this.categoryObjectIcon(item), false)).width(22).height(22).fillColor(item.visibleNow === false ? this.nmSub() : '#91C8E8')
-                Column({ space: 2 }) {
-                  Text(item.zh ?? item.name ?? '')
-                    .fontSize(12).minFontSize(10).fontColor(this.nmText()).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  if (this.categoryObservationSubtitle(item).length > 0) {
-                    Text(this.categoryObservationSubtitle(item)).fontSize(9).minFontSize(8).fontColor(item.visibleNow === true ? '#7FB3DC' : this.nmSub()).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }
-                }
-                .layoutWeight(1).alignItems(HorizontalAlign.Start)
-              }
-                .width('49%').height(78).alignItems(VerticalAlign.Center)
-                .padding({ left: 10, right: 8, top: 7, bottom: 7 })
-                .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-                .margin({ bottom: 6 })
-                .transition(TransitionEffect.asymmetric(
-                  TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
-                    .combine(TransitionEffect.translate({ x: 0, y: 8 }).animation({ duration: 220, curve: curves.springMotion(0.48, 0.86) })),
-                  TransitionEffect.OPACITY.animation({ duration: 120, curve: Curve.EaseIn })
-                ))
-                .clickEffect({ level: ClickEffectLevel.LIGHT })
-                .onClick(() => {
-                  if (this.searchStore.searchCategory === 'constellation') {
-                    this.openConstellationGuide(item.name ?? '', this.categoryModuleId)
-                  } else {
-                    this.searchObject(item.name ?? '', this.categoryModuleId)
-                  }
-                })
-            }, (item: NameItem) => this.searchStore.searchCategory + '/' + item.name + '/' + this.languageRevision.toString())
-            if (this.categoryLoading && this.categoryObjects.length > 0) {
-              Text(I18n.t('search_loading_more')).fontSize(11).fontColor(this.nmSub()).padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            } else if (this.categoryHasMore) {
-              Text(I18n.t('search_load_more')).fontSize(11).fontColor(this.nmSub()).padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        SearchCategoryBrowse({
+          store: this.searchStore,
+          categoryIconKey: this.searchCategoryIcon(this.searchStore.searchCategory),
+          categoryLabel: this.searchCategoryLabel(),
+          visibilityLabel: this.searchVisibilityLabel(),
+          instrumentLabel: this.searchInstrumentLabel(),
+          languageRevision: this.languageRevision,
+          textColor: this.nmText(),
+          subColor: this.nmSub(),
+          panelColor: this.nmBg(),
+          iconFor: (item: NameItem) => { return this.categoryObjectIcon(item) },
+          subtitleFor: (item: NameItem) => { return this.categoryObservationSubtitle(item) },
+          onOpenCategories: () => { this.setSearchFilterPage('categories') },
+          onOpenFilters: () => { this.setSearchFilterPage('root') },
+          onRetry: () => { this.loadCategoryObjects(this.searchStore.searchCategory) },
+          onLoadMore: () => { this.loadMoreCategoryObjects() },
+          onSelectObject: (item: NameItem) => {
+            if (this.searchStore.searchCategory === 'constellation') {
+              this.openConstellationGuide(item.name ?? '', this.searchStore.categoryModuleId)
+            } else {
+              this.searchObject(item.name ?? '', this.searchStore.categoryModuleId)
             }
-          }.width('100%').padding({ left: 2, right: 6 })
-        }.width('100%').height(222).scrollable(ScrollDirection.Vertical).scrollBar(BarState.Auto)
-          .onReachEnd(() => { this.loadMoreCategoryObjects() })
+          },
+          onClearVisibility: () => { this.selectSearchVisibilityFilter('all') },
+          onClearInstrument: () => { this.selectSearchInstrumentFilter('all') }
+        })
       }
 
       // 常见星座快速导航：名称直接使用 Stellarium 当前语言的官方翻译。

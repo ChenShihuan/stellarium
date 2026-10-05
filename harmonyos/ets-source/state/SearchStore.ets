@@ -1,4 +1,4 @@
-import { SearchSug } from '../pages/StellariumTypes'
+import { NameItem, SearchSug } from '../pages/StellariumTypes'
 
 // 搜索域状态：输入文本与候选建议。
 //
@@ -14,4 +14,18 @@ export class SearchStore {
   searchCategory: string = 'planet'
   searchVisibilityFilter: string = 'all'
   searchInstrumentFilter: string = 'all'
+
+  // ==== 分类浏览（原宿主 @State）====
+  categoryObjects: NameItem[] = []
+  categoryObjectCount: number = 0
+  categoryLoadedCount: number = 0
+  categoryLoading: boolean = false
+  categoryLoadFailed: boolean = false
+  categoryHasMore: boolean = false
+  categoryListKind: string = ''
+  categoryCatalogTotal: number = 0
+  categoryCatalogReady: boolean = true
+  categoryCatalogMessage: string = ''
+  categoryModuleId: string = ''
+  pendingPluginCatalogId: string = ''
 }
