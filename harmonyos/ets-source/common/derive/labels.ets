@@ -5,6 +5,7 @@
 
 import { I18n } from '../../pages/I18n'
 import { PluginFeatureRoute } from '../../pages/MainWindowModels'
+import { clamp } from './astro'
 
 // 资源文案：空值 / 全空白时回退到给定占位文本。
 export function resourceText(value: string | undefined, fallback: string): string {
@@ -328,4 +329,14 @@ export function timezoneDisplayName(ianaTz: string): string {
     return region + ' / ' + city
   }
   return ianaTz
+}
+
+// 经度 → 粗略时区显示文本（计划 §14.5 B2R-2 时区助手；原宿主 private approximateTimeZoneDisplay，
+// 逐字迁出）。纯函数：只用入参 + clamp，供 LocationPickerStore.loadObserverInfo 与宿主 setLocation 共用。
+export function approximateTimeZoneDisplay(longitude: number): string {
+  const offset = clamp(Math.round(longitude / 15), -12, 14)
+  if (offset === 0) {
+    return 'UTC'
+  }
+  return 'UTC' + (offset > 0 ? '+' : '') + offset.toString()
 }
