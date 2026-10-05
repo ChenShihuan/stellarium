@@ -18,7 +18,8 @@ export interface CatalogHostHooks {
   clearPendingPluginCatalogId(): void
   searchCategory(): string
   categoryModuleId(): string
-  // 未随本片下沉的搜索域动作（B3 loadCategoryObjects / CLI publishSearchBrowserState）。
+  // 搜索域动作（§14 B3-3 起 loadCategoryObjects 已下沉 SearchStore，宿主适配器转发；
+  // CLI 发布点 publishSearchBrowserState 仍留宿主）。
   loadCategoryObjects(category: string, moduleIdOverride: string): void
   publishSearchBrowserState(): void
 }

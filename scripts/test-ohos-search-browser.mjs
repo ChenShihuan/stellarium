@@ -38,11 +38,11 @@ test('choosing a category returns to results without clearing observing filters'
   const loads = [];
   const errors = [];
   Object.assign(controller, { searchStore: { searchFilterPage: 'categories', searchVisibilityFilter: 'above',
-    searchInstrumentFilter: 'binocular' },
+    searchInstrumentFilter: 'binocular', loadCategoryObjects: category => loads.push(category) },
     searchAllCategoryOptions: () => [{ code: 'satellite' }],
     getUIContext: () => ({ animateTo: (_options, callback) => callback() }),
     searchPanelScroller: { scrollTo: () => {} },
-    loadCategoryObjects: category => loads.push(category), publishSearchBrowserState: error => errors.push(error) });
+    publishSearchBrowserState: error => errors.push(error) });
   controller.selectSearchFilterCategory('satellite');
   assert.equal(controller.searchStore.searchFilterPage, '');
   assert.deepEqual(loads, ['satellite']);
