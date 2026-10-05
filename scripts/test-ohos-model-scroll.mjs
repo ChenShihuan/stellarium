@@ -13,6 +13,8 @@ const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/obj
 // 详情卡外壳（页头 + 页签 + Scroll）已在本轮下沉为 UnifiedObjectDetailCard 组件，
 // 卡片内的 Scroll/scroller 与滚动位置上报告搬到该组件文件。
 const detailCard = readFileSync(new URL('../harmonyos/ets-source/panels/object/UnifiedObjectDetailCard.ets', import.meta.url), 'utf8');
+// 手机/折叠半折壳已下沉为 CompactShell 组件（Phase 6b）：详情卡第三处调用点随之搬到该文件。
+const compactShell = readFileSync(new URL('../harmonyos/ets-source/panels/shell/CompactShell.ets', import.meta.url), 'utf8');
 const stageStart = mediaComponents.indexOf(".id('object-model-inline-stage')");
 const stage = mediaComponents.slice(stageStart, mediaComponents.indexOf('Text(this.modelNotice)', stageStart));
 
@@ -22,7 +24,7 @@ test('only the bounded model captures touch; the outer card isolates the sky', (
   assert.doesNotMatch(stage, /PanDirection|onGestureJudgeBegin|parallelGesture/);
   assert.match(mediaComponents.slice(stageStart - 230, stageStart), /width\(this\.inlineModelSize\)\.height\(this\.inlineModelSize\)/);
   assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
-  assert.equal((source.match(/height\(this.detailCardHeight\(\)\)\s*\.zIndex\(\d+\)\s*\.hitTestBehavior\(HitTestMode.BLOCK_HIERARCHY\)/g) ?? []).length, 3);
+  assert.equal(((source + compactShell).match(/height\(this\.(?:detailCardHeight\(\)|detailHeight)\)\s*\.zIndex\(\d+\)\s*\.hitTestBehavior\(HitTestMode\.BLOCK_HIERARCHY\)/g) ?? []).length, 3);
   assert.match(source, /scroller: this\.objectDetailScroller/);
   assert.match(detailCard, /Scroll\(this\.scroller\)/);
   assert.match(detailCard, /stellariumObjectDetailScrollY.*currentOffset\(\)\?\.yOffset/);
