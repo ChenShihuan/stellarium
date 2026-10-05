@@ -62,6 +62,11 @@ import { LayerStore } from '../state/LayerStore'
 import { LayerSwitchRow } from '../panels/layers/LayerSwitchRow'
 import { LayerPresetBar } from '../panels/layers/LayerPresetBar'
 import { LayerTabs } from '../panels/layers/LayerTabs'
+import { TelescopeStore } from '../state/TelescopeStore'
+import { OcularSelector } from '../panels/telescope/OcularSelector'
+import { OcularMetric } from '../panels/telescope/OcularMetric'
+import { Lx200Panel } from '../panels/telescope/Lx200Panel'
+import { Lx200ObjectControls } from '../panels/telescope/Lx200ObjectControls'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
@@ -97,19 +102,19 @@ import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
   NebulaTextureItem, NebulaTextureStatus, NebulaTextureRefreshResponse, SkyCultureMakerArtworkAnchor, SkyCultureMakerArtwork, SkyCultureMakerConstellation,
   SkyCultureMakerDraft, SkyCultureMakerIssue, SkyCultureMakerValidation, TelescopeControlResponse, TelescopeProfile, TelescopeProfilesResponse,
-  LX200_DEVICE_MODELS, TELESCOPE_SIMULATOR_MODEL, HeliocentricOrbit, ConfigurationOption, SkyCultureVisualColors, CelestialPositionOptions,
+  TELESCOPE_SIMULATOR_MODEL, HeliocentricOrbit, ConfigurationOption, SkyCultureVisualColors, CelestialPositionOptions,
   CelestialPositionCategory, PhenomenaOptions, PhenomenaStartOption, EphemerisOptions, RtsCalendarOptions, EclipseOptions,
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
   HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS, TimeTick, TonightPlanetRow, StarCatalogItem, StarCatalogRaw,
   StarCatalogsResponse, StarCatalogStatusResponse, LimitMagnitudeResponse, GyroGuideProjection, SkyUiObstacle, BookmarkItem,
   BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, OFFLINE_APPGALLERY_BUILD,
-  OcularInstrumentItem, OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
+  OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   MosaicCameraData, EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, SatellitesResponse, CatalogHealthEntry,
   CatalogHealthResponse, MeteorShowersData, MeteorShowerItem, MeteorShowersResponse, Scenery3dResponse, LogResponse,
   AboutResponse, ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
   RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptStatusResponse, ScriptCaption, ScriptCaptionsResponse,
-  CommandCatalogEntry, CommandCatalogResponse, OcularSelInfo
+  CommandCatalogEntry, CommandCatalogResponse
 } from './MainWindowModels'
 
 @Component
@@ -264,7 +269,6 @@ export struct WindowNativeNode {
   @StorageLink('i18nLang') private i18nLang: string = I18n.systemLanguage()
   @State private languageRevision: number = 0
   @State private bridgeSyncStarted: boolean = false
-  @State private equatorialMount: boolean = false
   @State private nightModeStore: NightModeStore = new NightModeStore()
   private pendingNightMode: boolean | undefined = undefined
   private pendingNightModeUntilMs: number = 0
@@ -828,67 +832,9 @@ export struct WindowNativeNode {
   @State private catalogDownloadingId: string = ''
   @State private catalogMsg: string = ''
   @State private bookmarkStore: BookmarkStore = new BookmarkStore()
-  // 望远镜/目镜配置（Oculars）
-  @State private ocularMode: boolean = false
-  @State private telradOn: boolean = false
-  @State private crosshairsOn: boolean = false
-  @State private ccdOn: boolean = false
-  @State private ocularNames: string[] = []
-  @State private telescopeNames: string[] = []
-  @State private lensNames: string[] = []
-  @State private ccdNames: string[] = []
-  @State private ocularIndex: number = -1
-  @State private telescopeIndex: number = -1
-  @State private lensIndex: number = -1
-  @State private ccdIndex: number = -1
-  @State private ocularItems: OcularInstrumentItem[] = []
-  @State private telescopeItems: OcularInstrumentItem[] = []
-  @State private lensItems: OcularInstrumentItem[] = []
-  @State private ccdItems: OcularInstrumentItem[] = []
-  @State private ocularLoading: boolean = false
-  @State private ocularStatusMessage: string = ''
+  // 望远镜/目镜配置（Oculars）：状态已迁入 TelescopeStore（Phase 3al）；加载请求序号由宿主自持
+  @State private telescopeStore: TelescopeStore = new TelescopeStore()
   private ocularLoadRequestId: number = 0
-  @State private ocularReady: boolean = false
-  @State private ocularCcdReady: boolean = false
-  @State private ocularHasSelection: boolean = false
-  @State private ocularRequireSelection: boolean = true
-  @State private ocularAutoLimitMagnitude: boolean = true
-  @State private ocularHideGridsLines: boolean = true
-  @State private ocularAutoScaleTelrad: boolean = true
-  @State private ocularAutoScaleCcd: boolean = true
-  @State private ocularSemiTransparentMask: boolean = false
-  @State private ocularMaskOpacity: number = 85
-  @State private ocularShowResolutionCriteria: boolean = false
-  @State private ocularAutoSetMountForCcd: boolean = false
-  @State private ocularHorizontalCoordinates: boolean = false
-  @State private ocularSensorCropOverlay: boolean = false
-  @State private ocularSensorPixelGrid: boolean = false
-  @State private ocularFocuserOverlay: boolean = false
-  @State private ocularScaleImageCircle: boolean = true
-  @State private ocularMaxExposureTimeForCcd: boolean = false
-  @State private ocularShowContour: boolean = false
-  @State private ocularShowCardinals: boolean = false
-  @State private ocularAlignCrosshair: boolean = false
-  @State private ocularSmallFocuserOverlay: boolean = false
-  @State private ocularMediumFocuserOverlay: boolean = true
-  @State private ocularLargeFocuserOverlay: boolean = false
-  @State private ocularDmsDegrees: boolean = false
-  @State private ocularInitFov: boolean = false
-  @State private ocularInitDirection: boolean = false
-  @State private ocularOagLimits: boolean = true
-  @State private ocularCcdCropHSize: number = 250
-  @State private ocularCcdCropVSize: number = 250
-  @State private ocularCcdPrismRotation: number = 0
-  @State private ocularGuiPanelEnabled: boolean = true
-  @State private ocularMagnification: number = 0
-  @State private ocularActualFov: number = 0
-  @State private ocularExitPupil: number = 0
-  @State private ocularLimitMagnitude: number = 0
-  @State private ocularCcdFovX: number = 0
-  @State private ocularCcdFovY: number = 0
-  @State private ocularCcdPixelScaleX: number = 0
-  @State private ocularCcdPixelScaleY: number = 0
-  @State private ocularCcdRotation: number = 0
   @State private pointerCoordinatesLoading: boolean = false
   @State private pointerCoordinatesStatus: string = ''
   @State private pointerCoordinatesEnabled: boolean = false
@@ -1006,27 +952,6 @@ export struct WindowNativeNode {
   @State private skyTouchFeedbackMulti: boolean = false
   @State private skyTouchX2: number = 0
   @State private skyTouchY2: number = 0
-	  @State private lx200Host: string = ''
-	  @State private lx200Port: string = ''
-	  @State private lx200Profiles: TelescopeProfile[] = []
-	  @State private lx200SelectedSlot: number = 1
-	  @State private lx200Name: string = 'Offline Telescope Simulator'
-	  @State private lx200Protocol: string = 'simulated'
-	  @State private lx200DeviceModel: string = TELESCOPE_SIMULATOR_MODEL
-  @State private lx200Equinox: string = 'J2000'
-  @State private lx200CommandDelayMs: number = 0
-  @State private lx200Circles: string = '1, 2, 4'
-  @State private lx200TargetSource: string = 'selected'
-  @State private lx200Busy: boolean = false
-  @State private lx200EditingNew: boolean = false
-  @State private lx200Status: ResourceStr = I18n.t('m_telescope_idle')
-	  @State private lx200Scope: ResourceStr = I18n.t('m_telescope_scope_unknown')
-	  @State private lx200Transport: ResourceStr = I18n.t('m_telescope_transport_simulated')
-	  @State private lx200ConnectionState: string = 'not_tested'
-	  @State private lx200Position: string = ''
-  @State private lx200LivePositionEnabled: boolean = false
-  @State private lx200PositionUpdatedAt: string = ''
-  @State private lx200PositionUpdateState: string = 'idle'
   private lx200LivePositionTimer: number = 0
   private lx200LivePositionRequestPending: boolean = false
   private lx200LivePositionRequestId: number = 0
@@ -2060,8 +1985,8 @@ export struct WindowNativeNode {
                     this.callNativeWhenReady('setNightMode', this.nightModeStore.nightMode ? 'true' : 'false', () => {})
         }
         if (saved.equatorialMount !== undefined) {
-          this.equatorialMount = saved.equatorialMount as boolean
-          this.callNativeWhenReady('setActionChecked', 'actionSwitch_Equatorial_Mount|' + (this.equatorialMount ? '1' : '0'), () => {})
+          this.telescopeStore.equatorialMount = saved.equatorialMount as boolean
+          this.callNativeWhenReady('setActionChecked', 'actionSwitch_Equatorial_Mount|' + (this.telescopeStore.equatorialMount ? '1' : '0'), () => {})
         }
         if (saved.gyroscopeEnabled !== undefined) {
           this.gyroStore.gyroscopeEnabled = false
@@ -2117,7 +2042,7 @@ export struct WindowNativeNode {
   private saveAppSettings(): void {
     AppStorage.setOrCreate("stellariumSettings", JSON.stringify({
       nightMode: this.nightModeStore.nightMode,
-      equatorialMount: this.equatorialMount,
+      equatorialMount: this.telescopeStore.equatorialMount,
       gyroscopeEnabled: this.gyroStore.gyroscopeEnabled,
       gyroscopeSensitivityText: this.gyroStore.gyroscopeSensitivityText,
       selectedLanguage: this.selectedLanguage,
@@ -2350,8 +2275,8 @@ export struct WindowNativeNode {
   }
 
   private shouldRefreshTelescopePosition(): boolean {
-    return this.lx200LivePositionEnabled && this.applicationInForeground && this.panelVisible &&
-      this.activePanel === 'telescope' && !this.lx200EditingNew
+    return this.telescopeStore.lx200LivePositionEnabled && this.applicationInForeground && this.panelVisible &&
+      this.activePanel === 'telescope' && !this.telescopeStore.lx200EditingNew
   }
 
   private stopTelescopeLivePosition(markStale: boolean = true): void {
@@ -2361,8 +2286,8 @@ export struct WindowNativeNode {
     }
     this.lx200LivePositionRequestPending = false
     this.lx200LivePositionRequestId++
-    if (markStale && this.lx200Position.length > 0) {
-      this.lx200PositionUpdateState = 'stale'
+    if (markStale && this.telescopeStore.lx200Position.length > 0) {
+      this.telescopeStore.lx200PositionUpdateState = 'stale'
     }
   }
 
@@ -2385,28 +2310,28 @@ export struct WindowNativeNode {
   private refreshTelescopeLivePosition(): void {
     if (!this.shouldRefreshTelescopePosition() || this.lx200LivePositionRequestPending) return
     this.lx200LivePositionRequestPending = true
-    this.lx200PositionUpdateState = 'updating'
+    this.telescopeStore.lx200PositionUpdateState = 'updating'
     const requestId = ++this.lx200LivePositionRequestId
     this.callInteractive('getTelescopePosition', this.lx200Payload(), (result: TelescopeControlResponse) => {
       if (requestId !== this.lx200LivePositionRequestId) return
       this.lx200LivePositionRequestPending = false
       if (result.ok === true) {
-        this.lx200ConnectionState = 'available'
-        this.lx200Position = (result.ra ?? '--:--:--') + ' / ' + (result.dec ?? '--°--:--')
-        this.lx200PositionUpdatedAt = this.telescopeUpdateTime()
-        this.lx200PositionUpdateState = 'fresh'
+        this.telescopeStore.lx200ConnectionState = 'available'
+        this.telescopeStore.lx200Position = (result.ra ?? '--:--:--') + ' / ' + (result.dec ?? '--°--:--')
+        this.telescopeStore.lx200PositionUpdatedAt = this.telescopeUpdateTime()
+        this.telescopeStore.lx200PositionUpdateState = 'fresh'
         this.scheduleTelescopeLivePosition(1000)
         return
       }
-      if (result.state === 'available' || result.state === 'unavailable') this.lx200ConnectionState = result.state
-      this.lx200PositionUpdateState = 'error'
-      this.lx200Status = this.telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
+      if (result.state === 'available' || result.state === 'unavailable') this.telescopeStore.lx200ConnectionState = result.state
+      this.telescopeStore.lx200PositionUpdateState = 'error'
+      this.telescopeStore.lx200Status = this.telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
       this.scheduleTelescopeLivePosition(1800)
     }, (result: StellariumBridgeResponse) => {
       if (requestId !== this.lx200LivePositionRequestId) return
       this.lx200LivePositionRequestPending = false
-      this.lx200PositionUpdateState = 'error'
-      this.lx200Status = result.error ?? I18n.t('m_telescope_position_failed')
+      this.telescopeStore.lx200PositionUpdateState = 'error'
+      this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_position_failed')
       this.scheduleTelescopeLivePosition(1800)
     })
   }
@@ -2421,9 +2346,9 @@ export struct WindowNativeNode {
   }
 
   private setTelescopeLivePosition(enabled: boolean): void {
-    this.lx200LivePositionEnabled = enabled
+    this.telescopeStore.lx200LivePositionEnabled = enabled
     if (enabled) {
-      this.lx200PositionUpdateState = 'updating'
+      this.telescopeStore.lx200PositionUpdateState = 'updating'
       this.syncTelescopeLivePosition()
     } else {
       this.stopTelescopeLivePosition()
@@ -4339,87 +4264,87 @@ export struct WindowNativeNode {
   // ===== 望远镜/目镜配置（Oculars 插件桥）=====
   private loadOculars(showLoading: boolean = true): void {
     const requestId = ++this.ocularLoadRequestId
-    if (showLoading) this.ocularLoading = true
+    if (showLoading) this.telescopeStore.ocularLoading = true
     this.callNativeWhenReady('getOculars', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.ocularLoadRequestId) return
-      this.ocularLoading = false
+      this.telescopeStore.ocularLoading = false
       const resp = r as OcularsResponse
       const o = resp.oculars
       if (!o) {
-        this.ocularStatusMessage = I18n.t('ocular_status_unavailable')
+        this.telescopeStore.ocularStatusMessage = I18n.t('ocular_status_unavailable')
         return
       }
-      this.ocularMode = o.ocularMode
-      this.telradOn = o.telrad
-      this.crosshairsOn = o.crosshairs
-      this.ccdOn = o.ccd
-      this.ocularNames = o.ocularNames
-      this.telescopeNames = o.telescopeNames
-      this.lensNames = o.lensNames
-      this.ccdNames = o.ccdNames
-      this.ocularIndex = o.ocularIndex
-      this.telescopeIndex = o.telescopeIndex
-      this.lensIndex = o.lensIndex
-      this.ccdIndex = o.ccdIndex
-      this.ocularItems = o.ocularItems ?? []
-      this.telescopeItems = o.telescopeItems ?? []
-      this.lensItems = o.lensItems ?? []
-      this.ccdItems = o.ccdItems ?? []
-      this.ocularReady = o.ocularReady
-      this.ocularCcdReady = o.ccdReady
-      this.ocularHasSelection = o.hasSelection
-      this.ocularRequireSelection = o.requireSelection
-      this.ocularAutoLimitMagnitude = o.autoLimitMagnitude
-      this.ocularHideGridsLines = o.hideGridsLines
-      this.ocularAutoScaleTelrad = o.autoScaleTelrad
-      this.ocularAutoScaleCcd = o.autoScaleCcd
-      this.ocularSemiTransparentMask = o.semiTransparentMask
-      this.ocularMaskOpacity = o.maskOpacity
-      this.ocularShowResolutionCriteria = o.showResolutionCriteria
-      this.ocularAutoSetMountForCcd = o.autoSetMountForCcd
-      this.ocularHorizontalCoordinates = o.horizontalCoordinates
-      this.ocularSensorCropOverlay = o.sensorCropOverlay
-      this.ocularSensorPixelGrid = o.sensorPixelGrid
-      this.ocularFocuserOverlay = o.focuserOverlay
-      this.ocularScaleImageCircle = o.scaleImageCircle
-      this.ocularMaxExposureTimeForCcd = o.maxExposureTimeForCcd
-      this.ocularShowContour = o.showContour
-      this.ocularShowCardinals = o.showCardinals
-      this.ocularAlignCrosshair = o.alignCrosshair
-      this.ocularSmallFocuserOverlay = o.smallFocuserOverlay
-      this.ocularMediumFocuserOverlay = o.mediumFocuserOverlay
-      this.ocularLargeFocuserOverlay = o.largeFocuserOverlay
-      this.ocularDmsDegrees = o.dmsDegrees
-      this.ocularInitFov = o.initFov
-      this.ocularInitDirection = o.initDirection
-      this.ocularOagLimits = o.oagLimits
-      this.ocularCcdCropHSize = o.ccdCropHSize ?? 250
-      this.ocularCcdCropVSize = o.ccdCropVSize ?? 250
-      this.ocularCcdPrismRotation = o.ccdPrismRotation ?? 0
-      this.ocularGuiPanelEnabled = o.guiPanelEnabled
-      this.ocularMagnification = o.magnification ?? 0
-      this.ocularActualFov = o.actualFov ?? 0
-      this.ocularExitPupil = o.exitPupil ?? 0
-      this.ocularLimitMagnitude = o.limitMagnitude ?? 0
-      this.ocularCcdFovX = o.ccdFovX ?? 0
-      this.ocularCcdFovY = o.ccdFovY ?? 0
-      this.ocularCcdPixelScaleX = o.ccdPixelScaleX ?? 0
-      this.ocularCcdPixelScaleY = o.ccdPixelScaleY ?? 0
-      this.ocularCcdRotation = o.ccdRotation ?? 0
-      this.ocularStatusMessage = this.ocularReady ? '' : I18n.t('ocular_status_no_config')
+      this.telescopeStore.ocularMode = o.ocularMode
+      this.telescopeStore.telradOn = o.telrad
+      this.telescopeStore.crosshairsOn = o.crosshairs
+      this.telescopeStore.ccdOn = o.ccd
+      this.telescopeStore.ocularNames = o.ocularNames
+      this.telescopeStore.telescopeNames = o.telescopeNames
+      this.telescopeStore.lensNames = o.lensNames
+      this.telescopeStore.ccdNames = o.ccdNames
+      this.telescopeStore.ocularIndex = o.ocularIndex
+      this.telescopeStore.telescopeIndex = o.telescopeIndex
+      this.telescopeStore.lensIndex = o.lensIndex
+      this.telescopeStore.ccdIndex = o.ccdIndex
+      this.telescopeStore.ocularItems = o.ocularItems ?? []
+      this.telescopeStore.telescopeItems = o.telescopeItems ?? []
+      this.telescopeStore.lensItems = o.lensItems ?? []
+      this.telescopeStore.ccdItems = o.ccdItems ?? []
+      this.telescopeStore.ocularReady = o.ocularReady
+      this.telescopeStore.ocularCcdReady = o.ccdReady
+      this.telescopeStore.ocularHasSelection = o.hasSelection
+      this.telescopeStore.ocularRequireSelection = o.requireSelection
+      this.telescopeStore.ocularAutoLimitMagnitude = o.autoLimitMagnitude
+      this.telescopeStore.ocularHideGridsLines = o.hideGridsLines
+      this.telescopeStore.ocularAutoScaleTelrad = o.autoScaleTelrad
+      this.telescopeStore.ocularAutoScaleCcd = o.autoScaleCcd
+      this.telescopeStore.ocularSemiTransparentMask = o.semiTransparentMask
+      this.telescopeStore.ocularMaskOpacity = o.maskOpacity
+      this.telescopeStore.ocularShowResolutionCriteria = o.showResolutionCriteria
+      this.telescopeStore.ocularAutoSetMountForCcd = o.autoSetMountForCcd
+      this.telescopeStore.ocularHorizontalCoordinates = o.horizontalCoordinates
+      this.telescopeStore.ocularSensorCropOverlay = o.sensorCropOverlay
+      this.telescopeStore.ocularSensorPixelGrid = o.sensorPixelGrid
+      this.telescopeStore.ocularFocuserOverlay = o.focuserOverlay
+      this.telescopeStore.ocularScaleImageCircle = o.scaleImageCircle
+      this.telescopeStore.ocularMaxExposureTimeForCcd = o.maxExposureTimeForCcd
+      this.telescopeStore.ocularShowContour = o.showContour
+      this.telescopeStore.ocularShowCardinals = o.showCardinals
+      this.telescopeStore.ocularAlignCrosshair = o.alignCrosshair
+      this.telescopeStore.ocularSmallFocuserOverlay = o.smallFocuserOverlay
+      this.telescopeStore.ocularMediumFocuserOverlay = o.mediumFocuserOverlay
+      this.telescopeStore.ocularLargeFocuserOverlay = o.largeFocuserOverlay
+      this.telescopeStore.ocularDmsDegrees = o.dmsDegrees
+      this.telescopeStore.ocularInitFov = o.initFov
+      this.telescopeStore.ocularInitDirection = o.initDirection
+      this.telescopeStore.ocularOagLimits = o.oagLimits
+      this.telescopeStore.ocularCcdCropHSize = o.ccdCropHSize ?? 250
+      this.telescopeStore.ocularCcdCropVSize = o.ccdCropVSize ?? 250
+      this.telescopeStore.ocularCcdPrismRotation = o.ccdPrismRotation ?? 0
+      this.telescopeStore.ocularGuiPanelEnabled = o.guiPanelEnabled
+      this.telescopeStore.ocularMagnification = o.magnification ?? 0
+      this.telescopeStore.ocularActualFov = o.actualFov ?? 0
+      this.telescopeStore.ocularExitPupil = o.exitPupil ?? 0
+      this.telescopeStore.ocularLimitMagnitude = o.limitMagnitude ?? 0
+      this.telescopeStore.ocularCcdFovX = o.ccdFovX ?? 0
+      this.telescopeStore.ocularCcdFovY = o.ccdFovY ?? 0
+      this.telescopeStore.ocularCcdPixelScaleX = o.ccdPixelScaleX ?? 0
+      this.telescopeStore.ocularCcdPixelScaleY = o.ccdPixelScaleY ?? 0
+      this.telescopeStore.ocularCcdRotation = o.ccdRotation ?? 0
+      this.telescopeStore.ocularStatusMessage = this.telescopeStore.ocularReady ? '' : I18n.t('ocular_status_no_config')
     }, 0, 100, 15, () => {
-      if (requestId === this.ocularLoadRequestId) this.ocularLoading = false
-      this.ocularStatusMessage = I18n.t('ocular_status_unavailable')
+      if (requestId === this.ocularLoadRequestId) this.telescopeStore.ocularLoading = false
+      this.telescopeStore.ocularStatusMessage = I18n.t('ocular_status_unavailable')
     })
   }
 
   private setOcularMode(v: boolean): void {
-    this.ocularMode = v
+    this.telescopeStore.ocularMode = v
     this.callNativeWhenReady('setOcularMode', v ? '1' : '0', (r: StellariumBridgeResponse) => {
       const response = r as OcularModeResponse
-      this.ocularMode = response.applied === true
+      this.telescopeStore.ocularMode = response.applied === true
       if (v && response.selectionRequired === true) {
-        this.ocularStatusMessage = I18n.t('ocular_status_select_target')
+        this.telescopeStore.ocularStatusMessage = I18n.t('ocular_status_select_target')
       }
       this.loadOculars(false)
     })
@@ -4708,15 +4633,15 @@ export struct WindowNativeNode {
     }
   }
   private setTelrad(v: boolean): void {
-    this.telradOn = v
+    this.telescopeStore.telradOn = v
     this.callNativeWhenReady('setTelrad', v ? '1' : '0', () => { this.loadOculars(false) })
   }
   private setCrosshairs(v: boolean): void {
-    this.crosshairsOn = v
+    this.telescopeStore.crosshairsOn = v
     this.callNativeWhenReady('setCrosshairs', v ? '1' : '0', () => { this.loadOculars(false) })
   }
   private setCCD(v: boolean): void {
-    this.ccdOn = v
+    this.telescopeStore.ccdOn = v
     this.callNativeWhenReady('setCCD', v ? '1' : '0', () => { this.loadOculars(false) })
   }
   private selectOcularInstrument(kind: string, index: number): void {
@@ -4730,7 +4655,7 @@ export struct WindowNativeNode {
     })
   }
   private changeOcularCcdRotation(value: number, mode: SliderChangeMode): void {
-    this.ocularCcdRotation = value
+    this.telescopeStore.ocularCcdRotation = value
     if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
       this.callNativeWhenReady('setOcularSetting', 'ccdRotation|' + value.toFixed(1), () => {
         this.loadOculars(false)
@@ -4738,23 +4663,23 @@ export struct WindowNativeNode {
     }
   }
   private changeOcularMaskOpacity(value: number, mode: SliderChangeMode): void {
-    this.ocularMaskOpacity = Math.round(value)
+    this.telescopeStore.ocularMaskOpacity = Math.round(value)
     if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-      this.callNativeWhenReady('setOcularSetting', 'maskOpacity|' + this.ocularMaskOpacity.toString(), () => {
+      this.callNativeWhenReady('setOcularSetting', 'maskOpacity|' + this.telescopeStore.ocularMaskOpacity.toString(), () => {
         this.loadOculars(false)
       })
     }
   }
   private changeOcularPrismRotation(value: number, mode: SliderChangeMode): void {
-    this.ocularCcdPrismRotation = value
+    this.telescopeStore.ocularCcdPrismRotation = value
     if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
       this.callNativeWhenReady('setOcularSetting', 'prismRotation|' + value.toFixed(1), () => { this.loadOculars(false) })
     }
   }
   private changeOcularCropSize(setting: string, value: number, mode: SliderChangeMode): void {
     const size = Math.round(value)
-    if (setting === 'ccdCropHSize') this.ocularCcdCropHSize = size
-    else this.ocularCcdCropVSize = size
+    if (setting === 'ccdCropHSize') this.telescopeStore.ocularCcdCropHSize = size
+    else this.telescopeStore.ocularCcdCropVSize = size
     if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
       this.callNativeWhenReady('setOcularSetting', setting + '|' + size.toString(), () => { this.loadOculars(false) })
     }
@@ -4817,27 +4742,6 @@ export struct WindowNativeNode {
       default: return key
     }
   }
-  private ocularInstrumentItems(kind: string): OcularInstrumentItem[] {
-    if (kind === 'Ocular') return this.ocularItems
-    if (kind === 'Telescope') return this.telescopeItems
-    if (kind === 'Lens') return this.lensItems
-    return this.ccdItems
-  }
-  private ocularInstrumentIndex(kind: string): number {
-    if (kind === 'Ocular') return this.ocularIndex
-    if (kind === 'Telescope') return this.telescopeIndex
-    if (kind === 'Lens') return this.lensIndex
-    return this.ccdIndex
-  }
-  private ocularInstrumentSummary(kind: string, item: OcularInstrumentItem): string {
-    if (kind === 'Ocular') {
-      if (item.binocular === true) return I18n.t('ocular_binocular') + ' · ' + (item.apparentFov ?? 0).toFixed(1) + '°'
-      return (item.focalLength ?? 0).toFixed(1) + ' mm · ' + (item.apparentFov ?? 0).toFixed(1) + '°'
-    }
-    if (kind === 'Telescope') return 'D ' + (item.diameter ?? 0).toFixed(0) + ' mm · f/' + (item.focalRatio ?? 0).toFixed(1)
-    if (kind === 'Lens') return (item.multiplier ?? 1).toFixed(2) + '×'
-    return (item.resolutionX ?? 0).toString() + ' × ' + (item.resolutionY ?? 0).toString()
-  }
   @Builder
   private archaeoToggleRow(label: ResourceStr, enabled: boolean, setting: string) {
     Row() {
@@ -4849,19 +4753,6 @@ export struct WindowNativeNode {
       .backgroundColor(enabled ? 'rgba(107,163,214,0.12)' : this.nmBg())
       .border({ width: 1, color: enabled ? 'rgba(107,163,214,0.18)' : this.nmBorder() })
       .borderRadius(UI_RADIUS_CONTROL)
-  }
-  private ocularSelInfo(kind: string): OcularSelInfo {
-    const info = new OcularSelInfo()
-    let names: string[] = []
-    let idx: number = -1
-    if (kind == 'Ocular') { names = this.ocularNames; idx = this.ocularIndex }
-    else if (kind == 'Telescope') { names = this.telescopeNames; idx = this.telescopeIndex }
-    else if (kind == 'Lens') { names = this.lensNames; idx = this.lensIndex }
-    else { names = this.ccdNames; idx = this.ccdIndex }
-    if (idx >= 0 && idx < names.length) { info.name = names[idx] }
-    else { info.name = '（无）' }
-    info.countText = (idx < 0 ? '—' : (idx + 1).toString()) + ' / ' + names.length.toString()
-    return info
   }
 
   // ===== 卫星（Satellites 插件桥）=====
@@ -11551,46 +11442,46 @@ private loadPlanetPositions(): void {
 
   private lx200Payload(): string {
     return JSON.stringify({
-      slot: this.lx200SelectedSlot,
-      targetSource: this.lx200TargetSource
+      slot: this.telescopeStore.lx200SelectedSlot,
+      targetSource: this.telescopeStore.lx200TargetSource
     })
   }
 
   private applyTelescopeProfile(profile: TelescopeProfile): void {
     this.stopTelescopeLivePosition(false)
-    this.lx200SelectedSlot = profile.slot
-    this.lx200Name = profile.name
-    this.lx200Protocol = profile.protocol
-    this.lx200DeviceModel = profile.deviceModel
-    this.lx200Host = profile.host
-    this.lx200Port = profile.port.toString()
-    this.lx200Equinox = profile.equinox
-    this.lx200CommandDelayMs = profile.commandDelayMs
-    this.lx200Circles = profile.circles.join(', ')
-	this.lx200ConnectionState = profile.protocol === 'simulated' ? 'available' : (profile.state ?? 'not_tested')
-	this.lx200Position = ''
-	this.lx200PositionUpdatedAt = ''
-	this.lx200PositionUpdateState = 'idle'
+    this.telescopeStore.lx200SelectedSlot = profile.slot
+    this.telescopeStore.lx200Name = profile.name
+    this.telescopeStore.lx200Protocol = profile.protocol
+    this.telescopeStore.lx200DeviceModel = profile.deviceModel
+    this.telescopeStore.lx200Host = profile.host
+    this.telescopeStore.lx200Port = profile.port.toString()
+    this.telescopeStore.lx200Equinox = profile.equinox
+    this.telescopeStore.lx200CommandDelayMs = profile.commandDelayMs
+    this.telescopeStore.lx200Circles = profile.circles.join(', ')
+	this.telescopeStore.lx200ConnectionState = profile.protocol === 'simulated' ? 'available' : (profile.state ?? 'not_tested')
+	this.telescopeStore.lx200Position = ''
+	this.telescopeStore.lx200PositionUpdatedAt = ''
+	this.telescopeStore.lx200PositionUpdateState = 'idle'
 	if (profile.protocol === 'simulated') {
-	  this.lx200Transport = I18n.t('m_telescope_transport_simulated')
-	  this.lx200Scope = I18n.t('m_telescope_scope_offline')
-	  this.lx200Status = I18n.t('m_telescope_simulator_ready')
-	} else if (this.lx200ConnectionState === 'unavailable') {
-	  this.lx200Status = profile.lastError ?? I18n.t('m_telescope_unavailable')
-	} else if (this.lx200ConnectionState === 'available') {
-	  this.lx200Status = I18n.t('m_telescope_available')
+	  this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_simulated')
+	  this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_offline')
+	  this.telescopeStore.lx200Status = I18n.t('m_telescope_simulator_ready')
+	} else if (this.telescopeStore.lx200ConnectionState === 'unavailable') {
+	  this.telescopeStore.lx200Status = profile.lastError ?? I18n.t('m_telescope_unavailable')
+	} else if (this.telescopeStore.lx200ConnectionState === 'available') {
+	  this.telescopeStore.lx200Status = I18n.t('m_telescope_available')
 	} else {
-	  this.lx200Status = I18n.t('m_telescope_not_tested')
+	  this.telescopeStore.lx200Status = I18n.t('m_telescope_not_tested')
     }
-    this.lx200EditingNew = false
+    this.telescopeStore.lx200EditingNew = false
     this.scheduleTelescopeLivePosition(500)
   }
 
   private applyTelescopeProfiles(result: TelescopeProfilesResponse): void {
     const profiles = result.profiles ?? []
-    this.lx200Profiles = profiles
+    this.telescopeStore.lx200Profiles = profiles
     const selectedSlot = result.selectedSlot ?? (profiles.length > 0 ? profiles[0].slot : 1)
-    this.lx200SelectedSlot = selectedSlot
+    this.telescopeStore.lx200SelectedSlot = selectedSlot
     const selected = profiles.find((profile: TelescopeProfile) => profile.slot === selectedSlot)
     if (selected !== undefined) {
       this.applyTelescopeProfile(selected)
@@ -11598,42 +11489,42 @@ private loadPlanetPositions(): void {
   }
 
   private validateTelescopeEditorStatus(): void {
-	if (this.lx200Protocol === 'simulated') {
-	  this.lx200Transport = I18n.t('m_telescope_transport_simulated')
-	  this.lx200Scope = I18n.t('m_telescope_scope_offline')
-	  this.lx200ConnectionState = 'available'
+	if (this.telescopeStore.lx200Protocol === 'simulated') {
+	  this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_simulated')
+	  this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_offline')
+	  this.telescopeStore.lx200ConnectionState = 'available'
 	  return
 	}
-    this.callInteractive('getTelescopeControl', this.lx200Host.trim() + '|' + this.lx200Port.trim(), (result: TelescopeControlResponse) => {
+    this.callInteractive('getTelescopeControl', this.telescopeStore.lx200Host.trim() + '|' + this.telescopeStore.lx200Port.trim(), (result: TelescopeControlResponse) => {
       this.applyTelescopeEndpointStatus(result)
     })
   }
 
   private applyTelescopeEndpointStatus(result: TelescopeControlResponse): void {
     if (result.ok !== true) {
-      this.lx200Scope = I18n.t('m_telescope_scope_invalid')
-      this.lx200Transport = I18n.t('m_telescope_transport_tcp')
+      this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_invalid')
+      this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_tcp')
       return
     }
 	if (result.simulated === true || result.scope === 'offline_simulator') {
-	  this.lx200Transport = I18n.t('m_telescope_transport_simulated')
-	  this.lx200Scope = I18n.t('m_telescope_scope_offline')
-	  this.lx200ConnectionState = 'available'
+	  this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_simulated')
+	  this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_offline')
+	  this.telescopeStore.lx200ConnectionState = 'available'
 	  return
 	}
-    this.lx200Transport = I18n.t('m_telescope_transport_tcp')
+    this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_tcp')
     const scope = result.scope as string
-    if (scope === 'local_device') this.lx200Scope = I18n.t('m_telescope_scope_local')
-    else if (scope === 'local_or_lan') this.lx200Scope = I18n.t('m_telescope_scope_lan')
-    else if (scope === 'public_or_unclassified' || scope === 'hostname_or_unclassified') this.lx200Scope = I18n.t('m_telescope_scope_blocked')
-    else this.lx200Scope = I18n.t('m_telescope_scope_unknown')
-	this.lx200ConnectionState = result.state ?? this.lx200ConnectionState
+    if (scope === 'local_device') this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_local')
+    else if (scope === 'local_or_lan') this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_lan')
+    else if (scope === 'public_or_unclassified' || scope === 'hostname_or_unclassified') this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_blocked')
+    else this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_unknown')
+	this.telescopeStore.lx200ConnectionState = result.state ?? this.telescopeStore.lx200ConnectionState
   }
 
   private loadTelescopeControlStatus(): void {
     this.callInteractive('getTelescopeProfiles', '', (result: TelescopeProfilesResponse) => {
       if (result.ok !== true) {
-        this.lx200Status = result.error ?? I18n.t('m_telescope_load_failed')
+        this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_load_failed')
         return
       }
       this.applyTelescopeProfiles(result)
@@ -11645,69 +11536,69 @@ private loadPlanetPositions(): void {
   }
 
   private selectTelescopeProfile(slot: number): void {
-    if (slot === this.lx200SelectedSlot && !this.lx200EditingNew) return
+    if (slot === this.telescopeStore.lx200SelectedSlot && !this.telescopeStore.lx200EditingNew) return
     this.callInteractive('selectTelescopeProfile', slot.toString(), (result: TelescopeProfilesResponse) => {
       if (result.ok === true) {
         this.applyTelescopeProfiles(result)
         this.validateTelescopeEditorStatus()
       } else {
-        this.lx200Status = result.error ?? I18n.t('m_telescope_load_failed')
+        this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_load_failed')
       }
     })
   }
 
   private beginNewTelescopeProfile(): void {
     this.stopTelescopeLivePosition(false)
-    const used = new Set<number>(this.lx200Profiles.map((profile: TelescopeProfile) => profile.slot))
+    const used = new Set<number>(this.telescopeStore.lx200Profiles.map((profile: TelescopeProfile) => profile.slot))
     let slot = 1
     while (slot <= 9 && used.has(slot)) slot += 1
     if (slot > 9) {
-      this.lx200Status = I18n.t('m_telescope_slots_full')
+      this.telescopeStore.lx200Status = I18n.t('m_telescope_slots_full')
       return
     }
-    this.lx200SelectedSlot = slot
-	this.lx200Name = I18n.format('m_telescope_simulator_name', [slot.toString()]) as string
-	this.lx200Protocol = 'simulated'
-	this.lx200DeviceModel = TELESCOPE_SIMULATOR_MODEL
-	this.lx200Host = ''
-	this.lx200Port = ''
-    this.lx200Equinox = 'J2000'
-    this.lx200CommandDelayMs = 0
-    this.lx200Circles = '1, 2, 4'
-	this.lx200EditingNew = true
-	this.lx200ConnectionState = 'available'
-	this.lx200Position = ''
-	this.lx200PositionUpdatedAt = ''
-	this.lx200PositionUpdateState = 'idle'
+    this.telescopeStore.lx200SelectedSlot = slot
+	this.telescopeStore.lx200Name = I18n.format('m_telescope_simulator_name', [slot.toString()]) as string
+	this.telescopeStore.lx200Protocol = 'simulated'
+	this.telescopeStore.lx200DeviceModel = TELESCOPE_SIMULATOR_MODEL
+	this.telescopeStore.lx200Host = ''
+	this.telescopeStore.lx200Port = ''
+    this.telescopeStore.lx200Equinox = 'J2000'
+    this.telescopeStore.lx200CommandDelayMs = 0
+    this.telescopeStore.lx200Circles = '1, 2, 4'
+	this.telescopeStore.lx200EditingNew = true
+	this.telescopeStore.lx200ConnectionState = 'available'
+	this.telescopeStore.lx200Position = ''
+	this.telescopeStore.lx200PositionUpdatedAt = ''
+	this.telescopeStore.lx200PositionUpdateState = 'idle'
 	this.validateTelescopeEditorStatus()
   }
 
   private selectTelescopeProtocol(protocol: string): void {
-	if (protocol === this.lx200Protocol) return
+	if (protocol === this.telescopeStore.lx200Protocol) return
 	this.stopTelescopeLivePosition(false)
-	this.lx200Protocol = protocol
-	this.lx200Position = ''
-	this.lx200PositionUpdatedAt = ''
-	this.lx200PositionUpdateState = 'idle'
+	this.telescopeStore.lx200Protocol = protocol
+	this.telescopeStore.lx200Position = ''
+	this.telescopeStore.lx200PositionUpdatedAt = ''
+	this.telescopeStore.lx200PositionUpdateState = 'idle'
 	if (protocol === 'simulated') {
-	  this.lx200DeviceModel = TELESCOPE_SIMULATOR_MODEL
-	  this.lx200Host = ''
-	  this.lx200Port = ''
-	  this.lx200ConnectionState = 'available'
-	  this.lx200Status = I18n.t('m_telescope_simulator_ready')
+	  this.telescopeStore.lx200DeviceModel = TELESCOPE_SIMULATOR_MODEL
+	  this.telescopeStore.lx200Host = ''
+	  this.telescopeStore.lx200Port = ''
+	  this.telescopeStore.lx200ConnectionState = 'available'
+	  this.telescopeStore.lx200Status = I18n.t('m_telescope_simulator_ready')
 	} else {
-	  this.lx200DeviceModel = 'Meade LX200 (compatible)'
-	  this.lx200Host = '127.0.0.1'
-	  this.lx200Port = '4030'
-	  this.lx200ConnectionState = 'not_tested'
-	  this.lx200Status = I18n.t('m_telescope_not_tested')
+	  this.telescopeStore.lx200DeviceModel = 'Meade LX200 (compatible)'
+	  this.telescopeStore.lx200Host = '127.0.0.1'
+	  this.telescopeStore.lx200Port = '4030'
+	  this.telescopeStore.lx200ConnectionState = 'not_tested'
+	  this.telescopeStore.lx200Status = I18n.t('m_telescope_not_tested')
 	}
 	this.validateTelescopeEditorStatus()
   }
 
   private telescopeCircleValues(): number[] {
     const values: number[] = []
-    const parts = this.lx200Circles.split(',')
+    const parts = this.telescopeStore.lx200Circles.split(',')
     for (let index = 0; index < parts.length; index += 1) {
       const value = Number(parts[index].trim())
       if (Number.isFinite(value) && value > 0 && value <= 180 && !values.includes(value)) {
@@ -11720,74 +11611,74 @@ private loadPlanetPositions(): void {
   }
 
   private saveTelescopeProfile(): void {
-    const port = Number(this.lx200Port.trim())
-	const invalidEndpoint = this.lx200Protocol === 'lx200_tcp' &&
-	  (this.lx200Host.trim().length === 0 || !Number.isInteger(port) || port < 1 || port > 65535)
-	if (this.lx200Name.trim().length === 0 || invalidEndpoint) {
-      this.lx200Status = I18n.t('m_telescope_invalid_profile')
+    const port = Number(this.telescopeStore.lx200Port.trim())
+	const invalidEndpoint = this.telescopeStore.lx200Protocol === 'lx200_tcp' &&
+	  (this.telescopeStore.lx200Host.trim().length === 0 || !Number.isInteger(port) || port < 1 || port > 65535)
+	if (this.telescopeStore.lx200Name.trim().length === 0 || invalidEndpoint) {
+      this.telescopeStore.lx200Status = I18n.t('m_telescope_invalid_profile')
       return
     }
     const profile: TelescopeProfile = {
-      slot: this.lx200SelectedSlot,
-      name: this.lx200Name.trim(),
-	  protocol: this.lx200Protocol,
-      deviceModel: this.lx200DeviceModel,
-      host: this.lx200Host.trim(),
-	  port: this.lx200Protocol === 'simulated' ? 0 : port,
-      equinox: this.lx200Equinox,
-      commandDelayMs: this.lx200CommandDelayMs,
+      slot: this.telescopeStore.lx200SelectedSlot,
+      name: this.telescopeStore.lx200Name.trim(),
+	  protocol: this.telescopeStore.lx200Protocol,
+      deviceModel: this.telescopeStore.lx200DeviceModel,
+      host: this.telescopeStore.lx200Host.trim(),
+	  port: this.telescopeStore.lx200Protocol === 'simulated' ? 0 : port,
+      equinox: this.telescopeStore.lx200Equinox,
+      commandDelayMs: this.telescopeStore.lx200CommandDelayMs,
       circles: this.telescopeCircleValues()
     }
-    this.lx200Busy = true
+    this.telescopeStore.lx200Busy = true
     this.callInteractive('saveTelescopeProfile', JSON.stringify(profile), (result: TelescopeProfilesResponse) => {
-      this.lx200Busy = false
+      this.telescopeStore.lx200Busy = false
       if (result.ok !== true) {
-        this.lx200Status = result.error ?? I18n.t('m_telescope_save_failed')
+        this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_save_failed')
         return
       }
       this.applyTelescopeProfiles(result)
-      this.lx200Status = I18n.t('m_telescope_saved')
+      this.telescopeStore.lx200Status = I18n.t('m_telescope_saved')
       this.validateTelescopeEditorStatus()
-    }, () => { this.lx200Busy = false })
+    }, () => { this.telescopeStore.lx200Busy = false })
   }
 
   private deleteTelescopeProfile(): void {
-    if (this.lx200EditingNew) {
+    if (this.telescopeStore.lx200EditingNew) {
       this.loadTelescopeControlStatus()
       return
     }
-    this.callInteractive('deleteTelescopeProfile', this.lx200SelectedSlot.toString(), (result: TelescopeProfilesResponse) => {
+    this.callInteractive('deleteTelescopeProfile', this.telescopeStore.lx200SelectedSlot.toString(), (result: TelescopeProfilesResponse) => {
       if (result.ok === true) {
         this.applyTelescopeProfiles(result)
-        this.lx200Status = I18n.t('m_telescope_deleted')
+        this.telescopeStore.lx200Status = I18n.t('m_telescope_deleted')
         this.validateTelescopeEditorStatus()
       } else {
-        this.lx200Status = result.error ?? I18n.t('m_telescope_delete_failed')
+        this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_delete_failed')
       }
     })
   }
 
   private testTelescopeConnection(): void {
-    if (this.lx200EditingNew) {
-      this.lx200Status = I18n.t('m_telescope_save_before_test')
+    if (this.telescopeStore.lx200EditingNew) {
+      this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_test')
       return
     }
     this.stopTelescopeLivePosition(false)
-    this.lx200Busy = true
-    this.lx200Status = I18n.t('m_telescope_connecting')
+    this.telescopeStore.lx200Busy = true
+    this.telescopeStore.lx200Status = I18n.t('m_telescope_connecting')
     this.callInteractive('testTelescopeConnection', this.lx200Payload(), (result: TelescopeControlResponse) => {
-	  this.lx200Busy = false
+	  this.telescopeStore.lx200Busy = false
 	  this.applyTelescopeEndpointStatus(result)
-	  this.lx200ConnectionState = result.ok === true ? 'available' : 'unavailable'
-	  this.lx200Status = result.ok === true
+	  this.telescopeStore.lx200ConnectionState = result.ok === true ? 'available' : 'unavailable'
+	  this.telescopeStore.lx200Status = result.ok === true
 		? (result.simulated === true ? I18n.t('m_telescope_simulator_ready') : I18n.t('m_telescope_available'))
 		: this.telescopeErrorText(result, I18n.t('m_telescope_test_failed'))
 	  this.scheduleTelescopeLivePosition()
 	}, (result: StellariumBridgeResponse) => {
 	  const response = result as TelescopeControlResponse
-	  this.lx200Busy = false
-	  if (response.state === 'available' || response.state === 'unavailable') this.lx200ConnectionState = response.state
-	  this.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_test_failed'))
+	  this.telescopeStore.lx200Busy = false
+	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
+	  this.telescopeStore.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_test_failed'))
 	  this.scheduleTelescopeLivePosition()
 	})
   }
@@ -11806,98 +11697,98 @@ private loadPlanetPositions(): void {
 
   private applyLx200Result(result: StellariumBridgeResponse): void {
 	const response = result as TelescopeControlResponse
-	this.lx200Busy = false
+	this.telescopeStore.lx200Busy = false
     if (result.ok === true) {
-	  this.lx200ConnectionState = 'available'
+	  this.telescopeStore.lx200ConnectionState = 'available'
       const target = result.target && result.target.length > 0 ? result.target : I18n.t('m_telescope_target_default')
       const mode = result.mode === 'sync' ? I18n.t('m_telescope_mode_sync') : I18n.t('m_telescope_mode_goto')
 	  const coord = result.ra && result.dec ? ' · ' + result.ra + ' / ' + result.dec : ''
-	  this.lx200Status = I18n.format('m_telescope_command_sent', [mode as string, target as string, coord])
+	  this.telescopeStore.lx200Status = I18n.format('m_telescope_command_sent', [mode as string, target as string, coord])
 	  if (result.mode === 'goto') this.setTelescopeLivePosition(true)
     } else {
-	  if (response.state === 'available' || response.state === 'unavailable') this.lx200ConnectionState = response.state
-	  this.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_disconnected'))
+	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
+	  this.telescopeStore.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_disconnected'))
     }
 	this.scheduleTelescopeLivePosition()
   }
 
   private lx200GotoSelected(): void {
-	if (this.lx200EditingNew) {
-	  this.lx200Status = I18n.t('m_telescope_save_before_control')
+	if (this.telescopeStore.lx200EditingNew) {
+	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
 	  return
 	}
 	this.stopTelescopeLivePosition(false)
-	this.lx200Busy = true
-	this.lx200Status = I18n.t('m_telescope_sending_goto')
+	this.telescopeStore.lx200Busy = true
+	this.telescopeStore.lx200Status = I18n.t('m_telescope_sending_goto')
     this.callInteractive('telescopeLx200GotoSelected', this.lx200Payload(),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result))
   }
 
   private lx200SyncSelected(): void {
-	if (this.lx200EditingNew) {
-	  this.lx200Status = I18n.t('m_telescope_save_before_control')
+	if (this.telescopeStore.lx200EditingNew) {
+	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
 	  return
 	}
 	this.stopTelescopeLivePosition(false)
-	this.lx200Busy = true
-	this.lx200Status = I18n.t('m_telescope_sending_sync')
+	this.telescopeStore.lx200Busy = true
+	this.telescopeStore.lx200Status = I18n.t('m_telescope_sending_sync')
     this.callInteractive('telescopeLx200SyncSelected', this.lx200Payload(),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result))
   }
 
   private lx200Abort(): void {
-	if (this.lx200EditingNew) {
-	  this.lx200Status = I18n.t('m_telescope_save_before_control')
+	if (this.telescopeStore.lx200EditingNew) {
+	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
 	  return
 	}
     this.stopTelescopeLivePosition(false)
-    this.lx200Busy = true
+    this.telescopeStore.lx200Busy = true
     this.callInteractive('telescopeLx200Abort', this.lx200Payload(), (result) => {
 	  const response = result as TelescopeControlResponse
-	  this.lx200Busy = false
-	  if (response.state === 'available' || response.state === 'unavailable') this.lx200ConnectionState = response.state
-	  this.lx200Status = result.ok === true ? I18n.t('m_telescope_stop_sent') :
+	  this.telescopeStore.lx200Busy = false
+	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
+	  this.telescopeStore.lx200Status = result.ok === true ? I18n.t('m_telescope_stop_sent') :
 		this.telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
 	  this.scheduleTelescopeLivePosition()
 	}, (result: StellariumBridgeResponse) => {
 	  const response = result as TelescopeControlResponse
-	  this.lx200Busy = false
-	  if (response.state === 'available' || response.state === 'unavailable') this.lx200ConnectionState = response.state
-	  this.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
+	  this.telescopeStore.lx200Busy = false
+	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
+	  this.telescopeStore.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
 	  this.scheduleTelescopeLivePosition()
 	})
   }
 
   private readTelescopePosition(center: boolean = false): void {
-	if (this.lx200EditingNew) {
-	  this.lx200Status = I18n.t('m_telescope_save_before_control')
+	if (this.telescopeStore.lx200EditingNew) {
+	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
 	  return
 	}
 	this.stopTelescopeLivePosition(false)
-	this.lx200Busy = true
-	this.lx200Status = center ? I18n.t('m_telescope_centering') : I18n.t('m_telescope_reading_position')
+	this.telescopeStore.lx200Busy = true
+	this.telescopeStore.lx200Status = center ? I18n.t('m_telescope_centering') : I18n.t('m_telescope_reading_position')
 	const command = center ? 'centerScreenOnTelescope' : 'getTelescopePosition'
 	this.callInteractive(command, this.lx200Payload(), (result: TelescopeControlResponse) => {
-	  this.lx200Busy = false
+	  this.telescopeStore.lx200Busy = false
 	  if (result.ok === true) {
-		this.lx200ConnectionState = 'available'
-		this.lx200Position = (result.ra ?? '--:--:--') + ' / ' + (result.dec ?? '--°--:--')
-		this.lx200PositionUpdatedAt = this.telescopeUpdateTime()
-		this.lx200PositionUpdateState = 'fresh'
-		this.lx200Status = center ? I18n.t('m_telescope_centered') : I18n.t('m_telescope_position_updated')
+		this.telescopeStore.lx200ConnectionState = 'available'
+		this.telescopeStore.lx200Position = (result.ra ?? '--:--:--') + ' / ' + (result.dec ?? '--°--:--')
+		this.telescopeStore.lx200PositionUpdatedAt = this.telescopeUpdateTime()
+		this.telescopeStore.lx200PositionUpdateState = 'fresh'
+		this.telescopeStore.lx200Status = center ? I18n.t('m_telescope_centered') : I18n.t('m_telescope_position_updated')
 	  } else {
-		if (result.state === 'available' || result.state === 'unavailable') this.lx200ConnectionState = result.state
-		this.lx200Status = this.telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
+		if (result.state === 'available' || result.state === 'unavailable') this.telescopeStore.lx200ConnectionState = result.state
+		this.telescopeStore.lx200Status = this.telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
 	  }
 	  this.scheduleTelescopeLivePosition()
 	}, (result: StellariumBridgeResponse) => {
 	  const response = result as TelescopeControlResponse
-	  this.lx200Busy = false
-	  if (response.state === 'available' || response.state === 'unavailable') this.lx200ConnectionState = response.state
-	  this.lx200PositionUpdateState = 'error'
-	  this.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_position_failed'))
+	  this.telescopeStore.lx200Busy = false
+	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
+	  this.telescopeStore.lx200PositionUpdateState = 'error'
+	  this.telescopeStore.lx200Status = this.telescopeErrorText(response, I18n.t('m_telescope_position_failed'))
 	  this.scheduleTelescopeLivePosition()
 	})
   }
@@ -19143,58 +19034,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   }
 
   @Builder
-  ocularSelector(kind: string, label: string) {
-    Column({ space: 6 }) {
-      Row() {
-        Text(label).fontSize(12).fontColor(this.nmSub()).layoutWeight(1)
-        Text(this.ocularSelInfo(kind).countText).fontSize(10).fontColor(this.nmSub())
-      }.width('100%').padding({ left: 2, right: 2 })
-      if (this.ocularInstrumentItems(kind).length === 0 && kind !== 'Lens') {
-        Text(I18n.t('ocular_no_devices')).fontSize(11).fontColor(this.nmSub())
-          .width('100%').height(42).textAlign(TextAlign.Center)
-          .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-      } else {
-        Scroll() {
-          Row({ space: 7 }) {
-            if (kind === 'Lens') {
-              Button(I18n.t('ocular_no_lens'))
-                .fontSize(11).fontColor(this.lensIndex < 0 ? '#FFFFFF' : this.nmSub())
-                .height(48).padding({ left: 14, right: 14 })
-                .backgroundColor(this.lensIndex < 0 ? this.nmAccent() : this.nmBg())
-                .border({ width: 1, color: this.lensIndex < 0 ? this.nmAccent() : this.nmBorder() })
-                .borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => { this.selectOcularInstrument(kind, -1) })
-            }
-            ForEach(this.ocularInstrumentItems(kind), (item: OcularInstrumentItem) => {
-              Button() {
-                Column({ space: 2 }) {
-                  Text(item.name.length > 0 ? item.name : label)
-                    .fontSize(11).fontColor(this.ocularInstrumentIndex(kind) === item.index ? '#FFFFFF' : this.nmText())
-                    .fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(this.ocularInstrumentSummary(kind, item))
-                    .fontSize(9).fontColor(this.ocularInstrumentIndex(kind) === item.index ? '#D8EEFF' : this.nmSub())
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                }.alignItems(HorizontalAlign.Start)
-              }
-              .height(48).constraintSize({ minWidth: 116, maxWidth: 180 }).padding({ left: 12, right: 12 })
-              .backgroundColor(this.ocularInstrumentIndex(kind) === item.index ? this.nmAccent() : this.nmBg())
-              .border({ width: 1, color: this.ocularInstrumentIndex(kind) === item.index ? this.nmAccent() : this.nmBorder() })
-              .borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.selectOcularInstrument(kind, item.index) })
-            }, (item: OcularInstrumentItem) => kind + '-' + item.index.toString())
-          }.height(50)
-        }.width('100%').height(52).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-      }
-    }.width('100%')
-  }
-  @Builder
-  ocularMetric(label: string, value: string) {
-    Column({ space: 2 }) {
-      Text(label).fontSize(10).fontColor(this.nmSub()).maxLines(1)
-      Text(value).fontSize(14).fontColor(this.nmText()).fontWeight(FontWeight.Medium).maxLines(1)
-    }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-  }
-  @Builder
   iconButton(item: ShellAction) {
     Column() {
       Image(getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
@@ -19389,7 +19228,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
     if (cur) {
       try { obj = JSON.parse(cur) as Record<string, boolean | string> } catch (e) { }
     }
-    obj['equatorialMount'] = this.equatorialMount
+    obj['equatorialMount'] = this.telescopeStore.equatorialMount
     AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
   }
 
@@ -20397,7 +20236,12 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         Text(this.speechStatus).fontSize(10).fontColor('#FFAA00').width('100%').padding({ left: 4, right: 4 })
       }
 		      if (!OFFLINE_APPGALLERY_BUILD) {
-		        this.lx200ObjectControls()
+		        Lx200ObjectControls({
+          store: this.telescopeStore,
+          onGoto: () => { this.lx200GotoSelected() },
+          onSync: () => { this.lx200SyncSelected() },
+          onAbort: () => { this.lx200Abort() }
+        })
 		      }
       } // end object selectedName else
     } else if (this.activePanel === 'time') {
@@ -20629,7 +20473,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             .margin({ top: 2, bottom: 8 })
           Text(I18n.t('i0114')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
           LayerSwitchRow({ label: I18n.t('s0300'), isOn: this.nightModeStore.nightMode, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Night_Mode', '', value) } })
-          LayerSwitchRow({ label: I18n.t('s0301'), isOn: this.equatorialMount, onToggle: (value: boolean) => { this.applyLayerSwitch('actionSwitch_Equatorial_Mount', '', value) } })
+          LayerSwitchRow({ label: I18n.t('s0301'), isOn: this.telescopeStore.equatorialMount, onToggle: (value: boolean) => { this.applyLayerSwitch('actionSwitch_Equatorial_Mount', '', value) } })
           LayerSwitchRow({ label: I18n.t('s0302'), isOn: this.autoZoomResets, onToggle: (value: boolean) => { this.applyLayerSwitch('setAutoZoomResets', 'setAutoZoomResets', value) } })
           Row()
             .width('100%').height(0.5)
@@ -23428,18 +23272,18 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
     } else if (this.activePanel === 'oculars') {
       Scroll() {
         Column({ space: 12 }) {
-          if (this.ocularLoading) {
+          if (this.telescopeStore.ocularLoading) {
             Row({ space: 8 }) {
               LoadingProgress().width(18).height(18).color(this.nmAccent())
               Text(I18n.t('ocular_status_loading')).fontSize(11).fontColor(this.nmSub())
             }.width('100%').height(44).justifyContent(FlexAlign.Center)
           }
-          if (this.ocularStatusMessage.length > 0) {
-            Text(this.ocularStatusMessage).fontSize(11).fontColor('#FFD59A').width('100%').maxLines(3)
+          if (this.telescopeStore.ocularStatusMessage.length > 0) {
+            Text(this.telescopeStore.ocularStatusMessage).fontSize(11).fontColor('#FFD59A').width('100%').maxLines(3)
               .padding({ left: 12, right: 12, top: 10, bottom: 10 })
               .backgroundColor('rgba(194, 128, 36, 0.14)').borderRadius(UI_RADIUS_CONTROL)
           }
-          if (this.ocularRequireSelection && !this.ocularHasSelection) {
+          if (this.telescopeStore.ocularRequireSelection && !this.telescopeStore.ocularHasSelection) {
             Row({ space: 10 }) {
               Column({ space: 3 }) {
                 Text(I18n.t('ocular_select_target_title')).fontSize(12).fontColor(this.nmText()).fontWeight(FontWeight.Medium)
@@ -23454,73 +23298,73 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           Text(I18n.t('ocular_section_modes')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
           Row() {
             Text(I18n.t('c_ocular_mode')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularMode })
-              .enabled(this.ocularReady)
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularMode })
+              .enabled(this.telescopeStore.ocularReady)
               .onChange((isOn: boolean) => { this.setOcularMode(isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('c_telrad')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.telradOn })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.telradOn })
               .onChange((isOn: boolean) => { this.setTelrad(isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('c_crosshair')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.crosshairsOn })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.crosshairsOn })
               .onChange((isOn: boolean) => { this.setCrosshairs(isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('c_ccd_frame')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ccdOn })
-              .enabled(this.ocularCcdReady)
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ccdOn })
+              .enabled(this.telescopeStore.ocularCcdReady)
               .onChange((isOn: boolean) => { this.setCCD(isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.ocularMagnification > 0 || this.ocularCcdFovX > 0) {
+          if (this.telescopeStore.ocularMagnification > 0 || this.telescopeStore.ocularCcdFovX > 0) {
             Text(I18n.t('ocular_section_result')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
             Column({ space: 9 }) {
-              if (this.ocularMagnification > 0) {
+              if (this.telescopeStore.ocularMagnification > 0) {
                 Row({ space: 12 }) {
-                  this.ocularMetric(I18n.t('ocular_magnification'), this.ocularMagnification.toFixed(1) + '×')
-                  this.ocularMetric(I18n.t('ocular_actual_fov'), this.ocularActualFov.toFixed(3) + '°')
+                  OcularMetric({ label: I18n.t('ocular_magnification'), value: this.telescopeStore.ocularMagnification.toFixed(1) + '×', subColor: this.nmSub(), textColor: this.nmText() })
+                  OcularMetric({ label: I18n.t('ocular_actual_fov'), value: this.telescopeStore.ocularActualFov.toFixed(3) + '°', subColor: this.nmSub(), textColor: this.nmText() })
                 }.width('100%')
                 Row({ space: 12 }) {
-                  this.ocularMetric(I18n.t('ocular_exit_pupil'), this.ocularExitPupil.toFixed(2) + ' mm')
-                  this.ocularMetric(I18n.t('ocular_limit_magnitude'), this.ocularLimitMagnitude.toFixed(1) + ' mag')
+                  OcularMetric({ label: I18n.t('ocular_exit_pupil'), value: this.telescopeStore.ocularExitPupil.toFixed(2) + ' mm', subColor: this.nmSub(), textColor: this.nmText() })
+                  OcularMetric({ label: I18n.t('ocular_limit_magnitude'), value: this.telescopeStore.ocularLimitMagnitude.toFixed(1) + ' mag', subColor: this.nmSub(), textColor: this.nmText() })
                 }.width('100%')
               }
-              if (this.ocularCcdFovX > 0) {
+              if (this.telescopeStore.ocularCcdFovX > 0) {
                 Row({ space: 12 }) {
-                  this.ocularMetric(I18n.t('ocular_ccd_fov'), this.ocularCcdFovX.toFixed(3) + '° × ' + this.ocularCcdFovY.toFixed(3) + '°')
-                  this.ocularMetric(I18n.t('ocular_pixel_scale'), this.ocularCcdPixelScaleX.toFixed(2) + '"/px')
+                  OcularMetric({ label: I18n.t('ocular_ccd_fov'), value: this.telescopeStore.ocularCcdFovX.toFixed(3) + '° × ' + this.telescopeStore.ocularCcdFovY.toFixed(3) + '°', subColor: this.nmSub(), textColor: this.nmText() })
+                  OcularMetric({ label: I18n.t('ocular_pixel_scale'), value: this.telescopeStore.ocularCcdPixelScaleX.toFixed(2) + '"/px', subColor: this.nmSub(), textColor: this.nmText() })
                 }.width('100%')
               }
             }.width('100%').padding({ left: 12, right: 12, top: 10, bottom: 10 })
               .backgroundColor('rgba(91,147,191,0.10)').borderRadius(UI_RADIUS_CONTROL)
           }
           Text(I18n.t('ocular_section_devices')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
-          this.ocularSelector('Ocular', I18n.t('ocular_device_ocular'))
-          this.ocularSelector('Telescope', I18n.t('ocular_device_telescope'))
-          this.ocularSelector('Lens', I18n.t('ocular_device_lens'))
-          this.ocularSelector('CCD', 'CCD')
-          if (this.ocularCcdReady && this.ccdIndex >= 0) {
+          OcularSelector({ store: this.telescopeStore, kind: 'Ocular', label: I18n.t('ocular_device_ocular'), subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), accentColor: this.nmAccent(), lineColor: this.nmBorder(), onSelect: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) } })
+          OcularSelector({ store: this.telescopeStore, kind: 'Telescope', label: I18n.t('ocular_device_telescope'), subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), accentColor: this.nmAccent(), lineColor: this.nmBorder(), onSelect: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) } })
+          OcularSelector({ store: this.telescopeStore, kind: 'Lens', label: I18n.t('ocular_device_lens'), subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), accentColor: this.nmAccent(), lineColor: this.nmBorder(), onSelect: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) } })
+          OcularSelector({ store: this.telescopeStore, kind: 'CCD', label: 'CCD', subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), accentColor: this.nmAccent(), lineColor: this.nmBorder(), onSelect: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) } })
+          if (this.telescopeStore.ocularCcdReady && this.telescopeStore.ccdIndex >= 0) {
             Column({ space: 6 }) {
               Row() {
                 Text(I18n.t('ocular_ccd_rotation')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.ocularCcdRotation.toFixed(0) + '°').fontSize(11).fontColor(this.nmSub())
+                Text(this.telescopeStore.ocularCcdRotation.toFixed(0) + '°').fontSize(11).fontColor(this.nmSub())
               }.width('100%')
-              Slider({ value: this.ocularCcdRotation, min: -180, max: 180, step: 1, style: SliderStyle.OutSet })
+              Slider({ value: this.telescopeStore.ocularCcdRotation, min: -180, max: 180, step: 1, style: SliderStyle.OutSet })
                 .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
                 .width('100%').blockColor(this.nmAccent()).selectedColor(this.nmAccent()).trackColor(this.nmBg())
                 .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularCcdRotation(value, mode) })
             }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
               .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           }
-          if (this.ocularCcdReady && this.ccdIndex >= 0) {
+          if (this.telescopeStore.ocularCcdReady && this.telescopeStore.ccdIndex >= 0) {
             Column({ space: 6 }) {
               Row() {
                 Text(I18n.t('ocular_prism_rotation')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.ocularCcdPrismRotation.toFixed(0) + '°').fontSize(11).fontColor(this.nmSub())
+                Text(this.telescopeStore.ocularCcdPrismRotation.toFixed(0) + '°').fontSize(11).fontColor(this.nmSub())
               }.width('100%')
-              Slider({ value: this.ocularCcdPrismRotation, min: -180, max: 180, step: 1, style: SliderStyle.OutSet })
+              Slider({ value: this.telescopeStore.ocularCcdPrismRotation, min: -180, max: 180, step: 1, style: SliderStyle.OutSet })
                 .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
                 .width('100%').blockColor(this.nmAccent()).selectedColor(this.nmAccent()).trackColor(this.nmBg())
                 .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularPrismRotation(value, mode) })
@@ -23541,16 +23385,16 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           Text(I18n.t('ocular_section_advanced')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
           Row() {
             Text(I18n.t('ocular_semi_transparent_mask')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularSemiTransparentMask })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularSemiTransparentMask })
               .onChange((isOn: boolean) => { this.setOcularSetting('semiTransparentMask', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.ocularSemiTransparentMask) {
+          if (this.telescopeStore.ocularSemiTransparentMask) {
             Column({ space: 6 }) {
               Row() {
                 Text(I18n.t('ocular_mask_opacity')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.ocularMaskOpacity.toString() + '%').fontSize(11).fontColor(this.nmSub())
+                Text(this.telescopeStore.ocularMaskOpacity.toString() + '%').fontSize(11).fontColor(this.nmSub())
               }.width('100%')
-              Slider({ value: this.ocularMaskOpacity, min: 0, max: 100, step: 1, style: SliderStyle.OutSet })
+              Slider({ value: this.telescopeStore.ocularMaskOpacity, min: 0, max: 100, step: 1, style: SliderStyle.OutSet })
                 .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
                 .width('100%').blockColor(this.nmAccent()).selectedColor(this.nmAccent()).trackColor(this.nmBg())
                 .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularMaskOpacity(value, mode) })
@@ -23559,46 +23403,46 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           }
           Row() {
             Text(I18n.t('ocular_resolution_criteria')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularShowResolutionCriteria })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularShowResolutionCriteria })
               .onChange((isOn: boolean) => { this.setOcularSetting('showResolutionCriteria', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_auto_mount')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularAutoSetMountForCcd })
-              .enabled(this.ocularCcdReady)
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAutoSetMountForCcd })
+              .enabled(this.telescopeStore.ocularCcdReady)
               .onChange((isOn: boolean) => { this.setOcularSetting('autoSetMountForCcd', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_horizontal_coordinates')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularHorizontalCoordinates })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularHorizontalCoordinates })
               .onChange((isOn: boolean) => { this.setOcularSetting('horizontalCoordinates', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_sensor_crop')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularSensorCropOverlay })
-              .enabled(this.ocularCcdReady)
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularSensorCropOverlay })
+              .enabled(this.telescopeStore.ocularCcdReady)
               .onChange((isOn: boolean) => { this.setOcularSetting('sensorCropOverlay', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_sensor_pixel_grid')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularSensorPixelGrid })
-              .enabled(this.ocularCcdReady && this.ocularSensorCropOverlay)
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularSensorPixelGrid })
+              .enabled(this.telescopeStore.ocularCcdReady && this.telescopeStore.ocularSensorCropOverlay)
               .onChange((isOn: boolean) => { this.setOcularSetting('sensorPixelGrid', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.ocularCcdReady && this.ocularSensorCropOverlay) {
+          if (this.telescopeStore.ocularCcdReady && this.telescopeStore.ocularSensorCropOverlay) {
             Column({ space: 5 }) {
               Row() {
                 Text(I18n.t('ocular_crop_horizontal')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.ocularCcdCropHSize.toString() + ' px').fontSize(10).fontColor(this.nmSub())
+                Text(this.telescopeStore.ocularCcdCropHSize.toString() + ' px').fontSize(10).fontColor(this.nmSub())
               }.width('100%')
-              Slider({ value: this.ocularCcdCropHSize, min: 1, max: 1000, step: 1, style: SliderStyle.OutSet })
+              Slider({ value: this.telescopeStore.ocularCcdCropHSize, min: 1, max: 1000, step: 1, style: SliderStyle.OutSet })
                 .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
                 .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularCropSize('ccdCropHSize', value, mode) })
               Row() {
                 Text(I18n.t('ocular_crop_vertical')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                Text(this.ocularCcdCropVSize.toString() + ' px').fontSize(10).fontColor(this.nmSub())
+                Text(this.telescopeStore.ocularCcdCropVSize.toString() + ' px').fontSize(10).fontColor(this.nmSub())
               }.width('100%')
-              Slider({ value: this.ocularCcdCropVSize, min: 1, max: 1000, step: 1, style: SliderStyle.OutSet })
+              Slider({ value: this.telescopeStore.ocularCcdCropVSize, min: 1, max: 1000, step: 1, style: SliderStyle.OutSet })
                 .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
                 .onChange((value: number, mode: SliderChangeMode) => { this.changeOcularCropSize('ccdCropVSize', value, mode) })
             }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
@@ -23606,99 +23450,99 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           }
           Row() {
             Text(I18n.t('ocular_focuser_overlay')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularFocuserOverlay })
-              .enabled(this.ocularCcdReady)
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularFocuserOverlay })
+              .enabled(this.telescopeStore.ocularCcdReady)
               .onChange((isOn: boolean) => { this.setOcularSetting('focuserOverlay', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_scale_image_circle')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularScaleImageCircle })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularScaleImageCircle })
               .onChange((isOn: boolean) => { this.setOcularSetting('scaleImageCircle', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_show_contour')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularShowContour })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularShowContour })
               .onChange((isOn: boolean) => { this.setOcularSetting('showContour', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_show_cardinals')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularShowCardinals })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularShowCardinals })
               .onChange((isOn: boolean) => { this.setOcularSetting('showCardinals', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_align_crosshair')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularAlignCrosshair })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAlignCrosshair })
               .onChange((isOn: boolean) => { this.setOcularSetting('alignCrosshair', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_oag_limits')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularOagLimits })
-              .enabled(this.ocularCcdReady)
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularOagLimits })
+              .enabled(this.telescopeStore.ocularCcdReady)
               .onChange((isOn: boolean) => { this.setOcularSetting('oagLimits', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_dms_degrees')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularDmsDegrees })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularDmsDegrees })
               .onChange((isOn: boolean) => { this.setOcularSetting('dmsDegrees', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_init_fov')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularInitFov })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularInitFov })
               .onChange((isOn: boolean) => { this.setOcularSetting('initFov', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_init_direction')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularInitDirection })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularInitDirection })
               .onChange((isOn: boolean) => { this.setOcularSetting('initDirection', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_max_exposure')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularMaxExposureTimeForCcd })
-              .enabled(this.ocularCcdReady)
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularMaxExposureTimeForCcd })
+              .enabled(this.telescopeStore.ocularCcdReady)
               .onChange((isOn: boolean) => { this.setOcularSetting('maxExposureTimeForCcd', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.ocularFocuserOverlay && this.ocularCcdReady) {
+          if (this.telescopeStore.ocularFocuserOverlay && this.telescopeStore.ocularCcdReady) {
             Text(I18n.t('ocular_focuser_size')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
             Row() {
               Text(I18n.t('ocular_focuser_small')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.ocularSmallFocuserOverlay })
+              Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularSmallFocuserOverlay })
                 .onChange((isOn: boolean) => { this.setOcularSetting('smallFocuserOverlay', isOn) })
             }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
             Row() {
               Text(I18n.t('ocular_focuser_medium')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.ocularMediumFocuserOverlay })
+              Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularMediumFocuserOverlay })
                 .onChange((isOn: boolean) => { this.setOcularSetting('mediumFocuserOverlay', isOn) })
             }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
             Row() {
               Text(I18n.t('ocular_focuser_large')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.ocularLargeFocuserOverlay })
+              Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularLargeFocuserOverlay })
                 .onChange((isOn: boolean) => { this.setOcularSetting('largeFocuserOverlay', isOn) })
             }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           }
           Text(I18n.t('ocular_section_behavior')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 2 })
           Row() {
             Text(I18n.t('ocular_require_selection')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularRequireSelection })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularRequireSelection })
               .onChange((isOn: boolean) => { this.setOcularSetting('requireSelection', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_auto_limit')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularAutoLimitMagnitude })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAutoLimitMagnitude })
               .onChange((isOn: boolean) => { this.setOcularSetting('autoLimitMagnitude', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_hide_grids')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularHideGridsLines })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularHideGridsLines })
               .onChange((isOn: boolean) => { this.setOcularSetting('hideGridsLines', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_auto_scale_telrad')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularAutoScaleTelrad })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAutoScaleTelrad })
               .onChange((isOn: boolean) => { this.setOcularSetting('autoScaleTelrad', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           Row() {
             Text(I18n.t('ocular_auto_scale_ccd')).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.ocularAutoScaleCcd })
+            Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.ocularAutoScaleCcd })
               .onChange((isOn: boolean) => { this.setOcularSetting('autoScaleCcd', isOn) })
           }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
@@ -24621,7 +24465,23 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       Scroll() {
         Column({ space: 8 }) {
           Text(I18n.t('telescope_control_hint')).fontSize(10).fontColor(this.nmSub()).width('100%')
-          this.lx200Panel()
+          Lx200Panel({
+        store: this.telescopeStore,
+        textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(),
+        panelColor: this.nmBg(), inputColor: this.nmInput(), lineColor: this.nmBorder(), inputLineColor: this.nmInputBorder(),
+        onBeginNew: () => { this.beginNewTelescopeProfile() },
+        onSelectProfile: (slot: number) => { this.selectTelescopeProfile(slot) },
+        onSelectProtocol: (protocol: string) => { this.selectTelescopeProtocol(protocol) },
+        onValidateEditor: () => { this.validateTelescopeEditorStatus() },
+        onSave: () => { this.saveTelescopeProfile() },
+        onDelete: () => { this.deleteTelescopeProfile() },
+        onTest: () => { this.testTelescopeConnection() },
+        onGoto: () => { this.lx200GotoSelected() },
+        onSync: () => { this.lx200SyncSelected() },
+        onAbort: () => { this.lx200Abort() },
+        onReadPosition: (center: boolean) => { this.readTelescopePosition(center) },
+        onSetLivePosition: (enabled: boolean) => { this.setTelescopeLivePosition(enabled) }
+      })
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
     } else if (this.activePanel === 'tools') {
@@ -24766,11 +24626,11 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       // 天球投影切换
       Row() {
         Text(I18n.t('i0025')).fontSize(12).fontColor('#99FFFFFF').width(72)
-        Text(this.equatorialMount ? I18n.t('i0008') : I18n.t('i0009'))
+        Text(this.telescopeStore.equatorialMount ? I18n.t('i0008') : I18n.t('i0009'))
           .fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1)
-        Toggle({ type: ToggleType.Switch, isOn: this.equatorialMount })
+        Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.equatorialMount })
           .onChange((isOn: boolean) => {
-            this.equatorialMount = isOn
+            this.telescopeStore.equatorialMount = isOn
             this.triggerAction('actionSwitch_Equatorial_Mount')
             this.refreshState()
             this.flashHint(isOn ? I18n.t('i0008') : I18n.t('i0009'))
@@ -24958,281 +24818,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
 	  }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
 	}
 
-	@Builder
-	  lx200Panel() {
-	    Column({ space: 10 }) {
-        Row() {
-          Column({ space: 2 }) {
-            Text(I18n.t('m_telescope_devices')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.nmText())
-            Text(I18n.t('m_telescope_devices_hint')).fontSize(9).fontColor(this.nmSub()).maxLines(2)
-          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Text('+')
-            .fontSize(20).fontColor(this.nmText()).textAlign(TextAlign.Center)
-            .width(34).height(34).backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_PILL)
-            .onClick(() => { this.beginNewTelescopeProfile() })
-        }.width('100%')
 
-        Scroll() {
-          Row({ space: 6 }) {
-            ForEach(this.lx200Profiles, (profile: TelescopeProfile) => {
-              Row({ space: 6 }) {
-                Text(profile.slot.toString()).fontSize(10).fontWeight(FontWeight.Bold)
-                  .fontColor(profile.slot === this.lx200SelectedSlot ? '#FFFFFF' : this.nmSub())
-                Text(profile.name).fontSize(11).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .fontColor(profile.slot === this.lx200SelectedSlot ? '#FFFFFF' : this.nmText())
-              }
-                .height(34).padding({ left: 10, right: 12 })
-                .backgroundColor(profile.slot === this.lx200SelectedSlot && !this.lx200EditingNew ? this.nmAccent() : this.nmBg())
-                .border({ width: 1, color: profile.slot === this.lx200SelectedSlot && !this.lx200EditingNew ? this.nmAccent() : this.nmBorder() })
-                .borderRadius(UI_RADIUS_PILL)
-                .animation({ duration: 160, curve: Curve.EaseOut })
-                .onClick(() => { this.selectTelescopeProfile(profile.slot) })
-            }, (profile: TelescopeProfile) => profile.slot.toString())
-          }.padding({ left: 1, right: 1 })
-        }.width('100%').height(38).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-
-        Column({ space: 8 }) {
-          Row() {
-            Text(I18n.format('m_telescope_slot_title', [this.lx200SelectedSlot.toString()]))
-              .fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.nmText()).layoutWeight(1)
-            Text(this.lx200EditingNew ? I18n.t('m_telescope_unsaved') : I18n.t('m_telescope_saved_profile'))
-              .fontSize(9).fontColor(this.lx200EditingNew ? '#FFD59A' : '#8FD3B2')
-          }.width('100%')
-          TextInput({ text: this.lx200Name, placeholder: I18n.t('m_telescope_name') })
-            .height(38).fontSize(13).fontColor(this.nmText()).placeholderColor(this.nmSub())
-            .backgroundColor(this.nmInput()).border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
-            .onChange((value: string) => { this.lx200Name = value })
-          Row({ space: 8 }) {
-            Text(I18n.t('m_telescope_protocol_simulated')).fontSize(10).textAlign(TextAlign.Center)
-              .fontColor(this.lx200Protocol === 'simulated' ? '#FFFFFF' : this.nmSub()).height(32).layoutWeight(1).padding({ top: 7 })
-              .backgroundColor(this.lx200Protocol === 'simulated' ? this.nmAccent() : this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.selectTelescopeProtocol('simulated') })
-            Text(I18n.t('m_telescope_protocol_lx200_tcp')).fontSize(10).textAlign(TextAlign.Center)
-              .fontColor(this.lx200Protocol === 'lx200_tcp' ? '#FFFFFF' : this.nmSub()).height(32).layoutWeight(1).padding({ top: 7 })
-              .backgroundColor(this.lx200Protocol === 'lx200_tcp' ? this.nmAccent() : this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.selectTelescopeProtocol('lx200_tcp') })
-          }.width('100%')
-          if (this.lx200Protocol === 'lx200_tcp') {
-            Row({ space: 8 }) {
-              TextInput({ text: this.lx200Host, placeholder: I18n.t('i0064') })
-                .height(38).fontSize(13).fontColor(this.nmText()).placeholderColor(this.nmSub()).layoutWeight(1)
-                .backgroundColor(this.nmInput()).border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
-                .onChange((value: string) => { this.lx200Host = value; this.validateTelescopeEditorStatus() })
-              TextInput({ text: this.lx200Port, placeholder: I18n.t('i0065') })
-                .width(100).height(38).fontSize(13).fontColor(this.nmText()).placeholderColor(this.nmSub())
-                .backgroundColor(this.nmInput()).border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
-                .onChange((value: string) => { this.lx200Port = value; this.validateTelescopeEditorStatus() })
-            }.width('100%')
-          } else {
-            Text(I18n.t('m_telescope_simulator_hint')).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(3)
-              .padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          }
-          Row({ space: 6 }) {
-            Text(this.lx200Transport).fontSize(10).fontColor('#B9D9F2')
-            Text('·').fontSize(10).fontColor('#66829B')
-            Text(this.lx200Scope).fontSize(10).fontColor(this.lx200Scope === I18n.t('m_telescope_scope_blocked') ? '#FFB8B8' : '#B9D9F2')
-		Text('·').fontSize(10).fontColor('#66829B')
-		Text(this.lx200ConnectionState === 'available' ? I18n.t('m_telescope_state_available') :
-		  (this.lx200ConnectionState === 'unavailable' ? I18n.t('m_telescope_state_unavailable') : I18n.t('m_telescope_state_not_tested')))
-		  .fontSize(10).fontColor(this.lx200ConnectionState === 'available' ? '#8FD3B2' :
-		  (this.lx200ConnectionState === 'unavailable' ? '#FFB8B8' : '#FFD59A'))
-          }.width('100%')
-
-          Row() {
-            Column({ space: 2 }) {
-              Text(I18n.t('m_telescope_device_model')).fontSize(10).fontColor(this.nmSub())
-              Text(this.lx200DeviceModel).fontSize(12).fontColor(this.nmText()).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Text(this.lx200Protocol === 'simulated' ? I18n.t('m_telescope_offline_badge') : 'LX200').fontSize(9).fontColor('#B9D9F2').padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .backgroundColor('rgba(91,147,191,0.16)').borderRadius(UI_RADIUS_PILL)
-          }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-          if (this.lx200Protocol === 'lx200_tcp') {
-            Scroll() {
-              Row({ space: 6 }) {
-                ForEach(LX200_DEVICE_MODELS, (model: string) => {
-                  Text(model).fontSize(9).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    .fontColor(this.lx200DeviceModel === model ? '#FFFFFF' : this.nmSub())
-                    .height(30).padding({ left: 10, right: 10, top: 7 })
-                    .backgroundColor(this.lx200DeviceModel === model ? this.nmAccent() : this.nmBg())
-                    .borderRadius(UI_RADIUS_PILL)
-                    .onClick(() => { this.lx200DeviceModel = model })
-                }, (model: string) => model)
-              }.padding({ left: 1, right: 1 })
-            }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-          }
-
-          Row({ space: 6 }) {
-            Text(I18n.t('m_telescope_coordinate_epoch')).fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
-            ForEach(['J2000', 'JNow'], (epoch: string) => {
-              Text(epoch).fontSize(10).fontColor(this.lx200Equinox === epoch ? '#FFFFFF' : this.nmSub())
-                .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-                .backgroundColor(this.lx200Equinox === epoch ? this.nmAccent() : this.nmBg()).borderRadius(UI_RADIUS_PILL)
-                .onClick(() => { this.lx200Equinox = epoch })
-            }, (epoch: string) => epoch)
-          }.width('100%')
-
-          if (this.lx200Protocol === 'lx200_tcp') {
-            Column({ space: 4 }) {
-            Row() {
-              Text(I18n.t('m_telescope_command_delay')).fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
-              Text(this.lx200CommandDelayMs.toString() + ' ms').fontSize(10).fontColor(this.nmText())
-            }.width('100%')
-            Slider({ value: this.lx200CommandDelayMs, min: 0, max: 2000, step: 50, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .width('100%').blockColor(this.nmAccent()).selectedColor(this.nmAccent()).trackColor(this.nmBg())
-              .onChange((value: number) => { this.lx200CommandDelayMs = Math.round(value) })
-            }.width('100%')
-          }
-
-          TextInput({ text: this.lx200Circles, placeholder: I18n.t('m_telescope_fov_circles') })
-            .height(38).fontSize(12).fontColor(this.nmText()).placeholderColor(this.nmSub())
-            .backgroundColor(this.nmInput()).border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
-            .onChange((value: string) => { this.lx200Circles = value })
-          Text(I18n.t('m_telescope_fov_hint')).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(2)
-
-          Row({ space: 8 }) {
-            Button(I18n.t('m_telescope_save')).fontSize(11).fontColor('#FFFFFF').height(34).layoutWeight(1)
-              .backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_CONTROL).enabled(!this.lx200Busy)
-              .onClick(() => { this.saveTelescopeProfile() })
-            Button(this.lx200EditingNew ? I18n.t('m_telescope_cancel') : I18n.t('m_telescope_delete'))
-              .fontSize(11).fontColor('#FFD9D9').height(34).layoutWeight(1)
-              .backgroundColor('rgba(255,121,121,0.12)').borderRadius(UI_RADIUS_CONTROL)
-              .enabled(!this.lx200Busy && (this.lx200EditingNew || this.lx200Profiles.length > 1))
-              .onClick(() => { this.deleteTelescopeProfile() })
-            Button(I18n.t('m_telescope_test')).fontSize(11).fontColor(this.nmText()).height(34).layoutWeight(1)
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).enabled(!this.lx200Busy && !this.lx200EditingNew)
-              .onClick(() => { this.testTelescopeConnection() })
-          }.width('100%')
-        }.width('100%').padding(12).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_PANEL)
-
-        Column({ space: 8 }) {
-          Text(I18n.t('m_telescope_target_source')).fontSize(11).fontColor(this.nmSub()).width('100%')
-          Row({ space: 8 }) {
-            Text(I18n.t('m_telescope_selected_target')).fontSize(11)
-              .fontColor(this.lx200TargetSource === 'selected' ? '#FFFFFF' : this.nmSub()).textAlign(TextAlign.Center)
-              .height(32).layoutWeight(1).padding({ top: 7 })
-              .backgroundColor(this.lx200TargetSource === 'selected' ? this.nmAccent() : this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.lx200TargetSource = 'selected' })
-            Text(I18n.t('m_telescope_screen_center')).fontSize(11)
-              .fontColor(this.lx200TargetSource === 'screen_center' ? '#FFFFFF' : this.nmSub()).textAlign(TextAlign.Center)
-              .height(32).layoutWeight(1).padding({ top: 7 })
-              .backgroundColor(this.lx200TargetSource === 'screen_center' ? this.nmAccent() : this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.lx200TargetSource = 'screen_center' })
-          }.width('100%')
-          Row({ space: 8 }) {
-            Button(I18n.t('i0049')).height(34).fontSize(11).fontColor('#FFFFFF').layoutWeight(1)
-              .backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_PILL).enabled(!this.lx200Busy && !this.lx200EditingNew)
-              .onClick(() => { this.lx200GotoSelected() })
-            Button(I18n.t('i0050')).height(34).fontSize(11).fontColor('#B9D9F2').layoutWeight(1)
-              .backgroundColor('rgba(107,163,214,0.18)').borderRadius(UI_RADIUS_PILL).enabled(!this.lx200Busy && !this.lx200EditingNew)
-              .onClick(() => { this.lx200SyncSelected() })
-            Button(I18n.t('i0051')).height(34).fontSize(11).fontColor('#FFD9D9').layoutWeight(1)
-              .backgroundColor('rgba(255,121,121,0.12)').borderRadius(UI_RADIUS_PILL).enabled(!this.lx200Busy && !this.lx200EditingNew)
-              .onClick(() => { this.lx200Abort() })
-          }.width('100%')
-          Row({ space: 8 }) {
-            Button(I18n.t('m_telescope_read_position')).height(34).fontSize(10).fontColor(this.nmText()).layoutWeight(1)
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).enabled(!this.lx200Busy && !this.lx200EditingNew)
-              .onClick(() => { this.readTelescopePosition(false) })
-            Button(I18n.t('m_telescope_center_on_scope')).height(34).fontSize(10).fontColor('#B9D9F2').layoutWeight(1)
-              .backgroundColor('rgba(107,163,214,0.18)').borderRadius(UI_RADIUS_CONTROL).enabled(!this.lx200Busy && !this.lx200EditingNew)
-              .onClick(() => { this.readTelescopePosition(true) })
-          }.width('100%')
-		Row({ space: 8 }) {
-		  Column({ space: 2 }) {
-			Text(I18n.t('m_telescope_live_position')).fontSize(11).fontColor(this.nmText())
-			Text(I18n.t('m_telescope_live_position_hint')).fontSize(9).fontColor(this.nmSub()).maxLines(2)
-		  }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-		  Toggle({ type: ToggleType.Switch, isOn: this.lx200LivePositionEnabled })
-			.enabled(!this.lx200EditingNew)
-			.onChange((enabled: boolean) => { this.setTelescopeLivePosition(enabled) })
-		}.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
-		  .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-		if (this.lx200Position.length > 0) {
-		  Column({ space: 3 }) {
-			Text(this.lx200Position).fontSize(11).fontColor('#B9D9F2').width('100%').textAlign(TextAlign.Center)
-			Text(this.lx200PositionUpdateState === 'error' ? I18n.t('m_telescope_live_failed') :
-			  (this.lx200PositionUpdateState === 'stale' ? I18n.format('m_telescope_live_stale', [this.lx200PositionUpdatedAt]) :
-			  (this.lx200PositionUpdateState === 'updating' ? I18n.t('m_telescope_live_updating') :
-			  I18n.format('m_telescope_live_updated', [this.lx200PositionUpdatedAt]))))
-			  .fontSize(9).fontColor(this.lx200PositionUpdateState === 'error' ? '#FFB8B8' : this.nmSub())
-		  }.width('100%').padding({ top: 6, bottom: 6 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-		}
-          Row({ space: 8 }) {
-            if (this.lx200Busy) {
-              LoadingProgress().width(16).height(16).color(this.nmAccent())
-            }
-            Text(this.lx200Status).fontSize(10).fontColor(this.nmSub()).layoutWeight(1).maxLines(3)
-          }.width('100%').height(30)
-        }.width('100%').padding(12).backgroundColor('rgba(91,147,191,0.10)').borderRadius(UI_RADIUS_PANEL)
-
-        Text(I18n.t('m_telescope_unavailable_protocols')).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(3)
-        Text(I18n.t('m_telescope_connection_lifecycle')).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(3)
-      }
-      .width('100%')
-	      .margin({ top: 8, bottom: 8 })
-		  }
-
-	  @Builder
-  lx200ObjectControls() {
-    Column() {
-      Row() {
-        Text(I18n.t('i0041'))
-          .fontSize(12)
-          .fontColor('#8EA0BD')
-          .layoutWeight(1)
-      }
-        .width('100%')
-      Row() {
-	        Button(I18n.t('i0049'))
-	          .height(32)
-	          .fontSize(12)
-	          .fontColor('#FFFFFFFF')
-	          .backgroundColor('#5B93BF')
-	          .borderRadius(UI_RADIUS_PILL)
-	          .margin({ right: 8 })
-	          .onClick(() => {
-	            this.lx200GotoSelected()
-	          })
-	        Button(I18n.t('i0050'))
-	          .height(32)
-	          .fontSize(12)
-	          .fontColor('#7FB3DC')
-	          .backgroundColor('rgba(107, 163, 214, 0.20)')
-	          .border({ width: 1, color: 'rgba(107, 163, 214, 0.25)' })
-	          .borderRadius(UI_RADIUS_PILL)
-	          .margin({ right: 8 })
-	          .onClick(() => {
-	            this.lx200SyncSelected()
-	          })
-	        Button(I18n.t('i0051'))
-	          .height(32)
-	          .fontSize(12)
-	          .fontColor('#FFD9D9')
-	          .backgroundColor('rgba(255, 121, 121, 0.14)')
-	          .border({ width: 1, color: 'rgba(255, 121, 121, 0.26)' })
-	          .borderRadius(UI_RADIUS_PILL)
-	          .onClick(() => {
-	            this.lx200Abort()
-	          })
-	      }
-	        .width('100%')
-	        .margin({ top: 8 })
-	      Text(this.lx200Status)
-	        .fontSize(11)
-	        .fontColor('#99FFFFFF')
-	        .width('100%')
-	        .maxLines(2)
-	        .textOverflow({ overflow: TextOverflow.Ellipsis })
-	        .margin({ top: 8 })
-	    }
-	      .width('100%')
-	      .padding({ left: 10, right: 10, top: 10, bottom: 10 })
-	      .backgroundColor('rgba(107, 163, 214, 0.12)')
-	      .border({ width: 1, color: 'rgba(107, 163, 214, 0.20)' })
-	      .borderRadius(UI_RADIUS_CONTROL)
-	      .margin({ top: 8, bottom: 8 })
-	  }
 
 	  @Builder
   lockRow() {
