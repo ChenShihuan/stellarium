@@ -2,6 +2,12 @@ import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { AboutResponse, LogResponse } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
 
+// 宿主 → ToolsStore 的 UI 提示注入（§13.1 规则 6 / §14.8 规则 2：store 不触碰 UI）。
+// 角度测量动作（toggleAngleMeasure）回包后经宿主 flashHint 提示（原宿主 this.flashHint 逐字语义）。
+export interface ToolsHostHooks {
+  flashHint(text: ResourceStr): void
+}
+
 // 「工具 / 帮助 / 角度测量 / 录制控制」域的状态簇（Phase 3ao）。
 //
 // 本片边界：只搬**数据**字段（原宿主 `@State`），不搬任何副作用：
@@ -17,7 +23,9 @@ import { CommandPort } from '../bridge/CommandPort'
 //     `RecordingControlBar`；
 //   - 录制引擎其余字段（recordBuffer / recordMsg / recordings / replay* / video* / screenVideo* /
 //     screenCapture* / scriptControl* 拖拽瞬时量）—— 由桥回调、定时器与触摸每帧写入，留在宿主；
-//   - skyTextureStatusTimer / DelayTimer / Polls 与 angleMeasureRequestId —— 定时器/请求标识，非 UI 状态；
+//   - skyTextureStatusTimer / DelayTimer / Polls —— 定时器标识，非 UI 状态；
+//   - angleMeasureRequestId —— 请求序号随角度测量加载器/动作同片搬入 store 的 `seq`
+//    （§14 B3-1：它由 loadAngleMeasure 与 toggleAngleMeasure 共享，二者必须同一持有者）；
 //   - sessionJson / sessionExportSig / sessionHint —— 与会话续传（`sessionApply` 500ms 后二次比对）及
 //     `ContinuationSection`（astro 域）共享，刻意**不并入 ToolsStore**；2026-10-04 已并入语义更贴的
 //     `SessionToolStore`（PlacePanel 早已 `@ObjectLink sessionToolStore`）。
@@ -68,14 +76,21 @@ export class ToolsStore {
 
   // —— 桥注入（§14.1 AB-0） ——
   private port: CommandPort | null = null
-  // 原宿主的请求序号搬入 store（§14.8 规则 3）；本加载器暂未用到，供后续 B 片复用。
+  // 原宿主请求序号搬入 store（§14.8 规则 3）。§14 B3-1：angleMeasureRequestId 原与宿主动作
+  // toggleAngleMeasure 共享，现加载器与动作同片搬入，共用本 `seq`（单一持有者，宿主零副本）。
   private seq: number = 0
   private onChanged: (() => void) | null = null
+  // 宿主 UI 提示注入（§14 B3-1 toggleAngleMeasure）。
+  private hooks: ToolsHostHooks | null = null
 
   // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
   attachPort(port: CommandPort, onChanged: () => void): void {
     this.port = port
     this.onChanged = onChanged
+  }
+
+  attachHooks(hooks: ToolsHostHooks): void {
+    this.hooks = hooks
   }
 
   // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
@@ -117,6 +132,76 @@ export class ToolsStore {
       this.logText = resp.log ?? ''
       this.logVisible = true
       this.notifyChanged()
+    })
+  }
+
+  // 角度测量开关状态（原宿主 loadAngleMeasure，§14 B3-1 自 ToolsStore 同片搬入；函数体逐字）。
+  // 差异仅：this.callNativeWhenReady → port.requestWhenReady、this.tools.<f> → this.<f>、
+  // this.angleMeasureRequestId → this.seq（与 toggleAngleMeasure 共用同一序号）。
+  loadAngleMeasure(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    const requestId = ++this.seq
+    port.requestWhenReady('getAngleMeasure', '', (r: StellariumBridgeResponse) => {
+      if (requestId !== this.seq) return
+      if (r.ok !== true) return
+      this.angleMeasureEnabled = r.enabled === true
+      this.angleMeasureHasStart = r.hasStart === true
+      this.angleMeasureHasEnd = r.hasEnd === true
+      this.angleMeasureText = r.angleText ?? ''
+    })
+  }
+
+  // 切换角度测量（原宿主 toggleAngleMeasure，§14 B3-1 与 loadAngleMeasure 同片搬入；函数体逐字）。
+  // 差异仅：this.callInteractive → port.requestInteractive、this.tools.<f> → this.<f>、
+  // this.angleMeasureRequestId → this.seq、this.flashHint → hooks.flashHint（store 不触碰 UI）。
+  toggleAngleMeasure(targetEnabled?: boolean): void {
+    const hooks = this.hooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    const enabled = targetEnabled === undefined ? !this.angleMeasureEnabled : targetEnabled
+    const previousEnabled = this.angleMeasureEnabled
+    const previousHasStart = this.angleMeasureHasStart
+    const previousHasEnd = this.angleMeasureHasEnd
+    const previousText = this.angleMeasureText
+    const requestId = ++this.seq
+    this.angleMeasurePending = true
+    this.angleMeasureEnabled = enabled
+    if (!enabled) {
+      this.angleMeasureHasStart = false
+      this.angleMeasureHasEnd = false
+      this.angleMeasureText = ''
+    }
+    port.requestInteractive('setActionChecked', 'actionShow_Angle_Measure|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
+      if (requestId !== this.seq) return
+      this.angleMeasurePending = false
+      if (r.ok !== true) {
+        this.angleMeasureEnabled = previousEnabled
+        this.angleMeasureHasStart = previousHasStart
+        this.angleMeasureHasEnd = previousHasEnd
+        this.angleMeasureText = previousText
+        hooks.flashHint('角度测量插件不可用')
+        return
+      }
+      this.angleMeasureEnabled = r.checked === true
+      if (!this.angleMeasureEnabled) {
+        this.angleMeasureHasStart = false
+        this.angleMeasureHasEnd = false
+        this.angleMeasureText = ''
+      }
+      hooks.flashHint(this.angleMeasureEnabled ? '角度测量已开启，请点击两个位置' : '角度测量已关闭')
+    }, () => {
+      if (requestId !== this.seq) return
+      this.angleMeasurePending = false
+      this.angleMeasureEnabled = previousEnabled
+      this.angleMeasureHasStart = previousHasStart
+      this.angleMeasureHasEnd = previousHasEnd
+      this.angleMeasureText = previousText
+      hooks.flashHint('角度测量插件不可用')
     })
   }
 }
