@@ -1,3 +1,11 @@
+## [2026-09-30] DevEco Code - Phase 1a：抽出 UI 视觉常量到 common/ui/UiTokens
+
+- **新增文件：** `harmonyos/ets-source/common/ui/UiTokens.ets`（`UI_RADIUS_CONTROL` 14 / `UI_RADIUS_PANEL` 22 / `UI_RADIUS_SHEET` 28 / `UI_RADIUS_PILL` 999 / `UI_OPTION_ANIMATION_MS` 180）。
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets` —— 删除 5 个文件作用域常量，改为 `import ... from '../common/ui/UiTokens'`；文件内 856 处引用（663/22/7/94/70）写法不变。
+- **依据：** `ARKTS-PAGES-REFACTOR-PLAN.md` Phase 1（先用最低风险的纯叶子走通「新增子目录 → sync → 构建 → 装机 → 契约校验 → 提交」管线，同时验证新增 `common/ui/` 子目录能被 `sync-ohos-build-sources.sh` 的整树递归镜像自动带到生成工程）。
+- **验证结果：** `arkts_check` 两文件无错误；`BUILD SUCCESSFUL in 58 s 56 ms`；`node scripts/check-ohos-ui-contract.mjs` → `UI contract intact: 33 panels, 22 static ids, 17 dynamic prefixes, 41 id anchors.`；模拟器 `127.0.0.1:5555` 安装并启动成功，`devecocli ui layout` 的节点与坐标与改动前逐项一致（底部 Dock 五项 + 右上两按钮）。
+- **范围约束：** 纯搬移，行为零变更；未改 `main_pages.json`、未改 sync 脚本。
+
 ## [2026-09-30] DevEco Code - Phase 0：固化 UI 契约基线（pages/ 重构）
 
 - **新增文件：** `scripts/check-ohos-ui-contract.mjs`、`docs/harmonyos/json/ui-contract-baseline.json`。
