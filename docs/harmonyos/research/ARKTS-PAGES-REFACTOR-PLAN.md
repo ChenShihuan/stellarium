@@ -903,3 +903,178 @@ git update-ref -d refs/original/refs/heads/feat/api26-pages-refactor
 git branch -D backup/pre-build-untrack-rewrite
 git reflog expire --expire=now --all; git gc --prune=now
 ```
+
+---
+
+## 14. 续作计划二：A/B 类方法下沉（依据 STATE-REVIEW §2.12 / §2.13，2026-10-04 立）
+
+> **前置已完成**：§2.7 的域状态下沉（宿主 `@State` 333 → **132**、`state/` **48** 个 store、§2.7.1 已登记 86 个保留裸字段）。
+> 本节把"宿主里本可归组件 / 归 store 的方法"整理为两条**互不依赖**的轨道，可直接作为无人值守队列执行。
+> 协议与硬规则沿用 §13.1（九条）/ §13.2（八步）/ §13.3（陷阱）；本节只补 **A/B 专属规则**（§14.8）与切片顺序。
+
+### 14.0 目标与基线（2026-10-04 复测）
+
+| 指标 | 现状（实测） | 终态目标 | 依据 |
+|---|---:|---:|---|
+| 宿主 `private` 方法 | **942** | ≈ 640 | §2.12（305 可归组件/模块） |
+| 宿主 `private load*` | **72** | ≈ 11 | §2.13（B1 24 + B2 35 下沉；B3 11 暂留） |
+| 宿主 `@State` | 132 | 132（本计划不动状态） | §2.7.1 |
+| 已有基础设施 | `bridge/BridgeClient.ets`、`common/ui/`、48 个域 store | ＋`bridge/CommandPort.ets`、`common/derive/*.ets` | 实测 |
+
+**两类判据（§2.12/§2.13 原文）**
+- **A 类（纯派生）**：`private`、非 `void`/非 `Promise` 返回、名字非动作动词、无成员写、无 IO、无桥、无路由、无定时器、无 `AppStorage`/`localStorage`、无 `hilog`。
+  - **A1**＝零宿主状态读取（只依赖入参/静态/纯计算）**91 个** → 可直接移出，无需 V2、无需注入。
+  - **A2**＝读取宿主字段 **214 个** → 需目标位置能拿到该数据（组件已持有时随组件；否则带显式入参）。
+- **B 类（域内加载器 `load*`）**：只做"桥调用 → 解析回包 → 写本域状态"。
+  - **B1**＝仅桥＋本域 store → 注入 `CommandPort` 即可搬（**24 个**）。
+  - **B2**＝再加本域助手／他域 store 引用／CLI `publish*` → 一并注入（**35 个**；Astro 簇 19 + 其余 16）。
+  - **B3**＝还写 §2.7.1 保留的裸宿主字段 → 先把该字段处理（搬 store 或注入），即降为 B1/B2（**11 个**）。
+
+> **数字纪律**：以上取 §2.12/§2.13 的实测值；本复测宿主 `private`=942（原文 940）、`load*`=72（原文 70）。
+> **每片开工前必须用附录命令重测该片的判据与清单边界**，以重测为准，不照抄本节表格。
+
+### 14.1 Enabler（轨道 B 硬前置，1 片）：`bridge/CommandPort.ets`
+
+新增 `harmonyos/ets-source/bridge/CommandPort.ets` —— **纯接口，不 import NAPI / UI / libentry.so**（§13.1 规则 6 授权"跨域/桥/定时器依赖用注入解决"，先例 `TimeWheelController` 的 `onSeek`/`onStopSpeed`/`getUtcOffsetHours`）：
+
+```ts
+export interface CommandPort {
+  request(name: string, payload?: string): StellariumBridgeResponse
+  requestInteractive(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void): void
+  requestLongRunning(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure: (r: StellariumBridgeResponse) => void, onProgress: (r: StellariumBridgeResponse) => void, intervalMs: number, cancelled: () => boolean): void
+  fire(name: string, payload?: string): void
+}
+```
+
+**store 侧统一约定**（后续每一片照此）：
+- `private port: CommandPort | null = null`
+- `private seq: number = 0`（**原宿主的请求序号搬入 store**，禁止宿主与 store 双序号）
+- `private onChanged: (() => void) | null = null`（原宿主 `publish*` 注入点）
+- `attachPort(port: CommandPort, onChanged: () => void): void`
+
+**宿主侧**：`aboutToAppear` 里做**薄适配器**（不改行为）：
+`this.<store>.attachPort({ request: (n, p) => this.callNative(n, p), requestInteractive: (...), requestLongRunning: (...), fire: (...) }, () => this.publishXxx())`
+（端口对象用**具名实现**，避免 ArkTS 匿名对象字面量越界；参照既有 `interfaces /*Port*/` 写法。）
+
+**本片验收**：构建 + 契约通过；**先拿最小加载器 `loadAboutInfo`(9 行) 试点**搬入 `ToolsStore` 并真机验证（打开设置/关于，回包渲染正常），确认机制可用后再批量推进 B1。
+
+### 14.2 轨道 A1：91 个零宿主依赖纯函数（7 片）
+
+**落点**：新建 `harmonyos/ets-source/common/derive/<domain>.ets`，**文件级函数**（无 `this`、无状态），具名导出；宿主与组件按名 import（§13.3 已有"类型导入要找准模块"的教训，此处对函数同理）。
+
+**分域清单（依 §2.12 A1 全清单归类；开工前重测）**：
+
+| 片 | 模块 | 函数（§2.12 A1 清单按前缀归类） | 约数 |
+|---|---|---|---:|
+| A1-1 | `derive/gyro.ets` | `gyroRotateAboutAxis` `gyroMultiplyQuaternions` `gyroFilterDeviceVector` `gyroCross` `gyroRotateAboutVertical` `gyroScreenAxisForDisplay` `shortestGyroAzimuthDelta` `wrapGyroAzimuth` `gyroNormalizeVector` `gyroNormalizeQuaternion` `gyroConjugateQuaternion` `gyroDot` | 12 |
+| A1-2 | `derive/astro.ets` | `dateToJD` `jdToLocalTimeText` `astroTabItemsForGroup` `astroGroupItems` `astroGroupForTab` `rtsCalendarDurationLabel` `graphModeLabel` `graphStartOptionLabel` `hourOffsetLabel` `planetMetricLabel` `planetMetricUnit` `planetPairBodyName` `planetPairLinearLabel` `hecPointSize` `hecPointAngle` `hecDistanceLabel` `hecPlanetOrbitRadius` `lunarElongationBarHeight` `planetTimeSeriesBarHeight` `planetPairBarHeight` `messierNumberOf` `minorPlanetNumberOf` `fmtDegMin` `clamp` `distance` | 25 |
+| A1-3 | `derive/labels.ets` | `zhNameOf` `zhType` `planetZh` `sensZh` `scriptZh` `scriptDesc` `pluginZh` `pluginDesc` `pluginHostName` `pluginFeatureRoute` `resourceText` `describeDecodeError` | 12 |
+| A1-4 | `derive/skycult.ets` | `isSafeSkyCultureArtPath` `cleanSkyCultureDescription` `cleanSkyCultureNarration` `isCliPanelName` `parseObservingList` `csvCell` `formatRate` `configDitheringLabel` `informationMaskBit` `isRecordable` | 10 |
+| A1-5 | `derive/actions.ets` | `moreActions` `primaryDockActions` `skyDataHubActions` `automationHubActions` `observingHubActions` `telescopeErrorText` `telescopeUpdateTime` `validationFromResponse` `sessionSignature` `getCityPreset` `officialLocationAliases` `normalizeLocationSearchText` | 12 |
+| A1-6 | `derive/geometry.ets` | `pointInsideRect` `pointOverlapsUiObstacle` `touchScreenX` `touchScreenY` `touchWindowX` `touchWindowY` `azBarHeight` `compactTopQuickY` `baseCompactObjectPeekY` `expandedDetailSummaryHeight` `isPhoneDetailPeek` `useTabletObjectInspector` `useExpandedDetailSummary` | 13 |
+| A1-7 | `derive/catalog.ets` | `catalogIconForModule` `catalogIconForObjectType` `wutCategoryOptions` `wutCategoryKey` `wutDirectionLabel` `phenomenonCaption` /**‑**（余下按重测归入本片或前片） | ≤9 |
+
+> 合计 ≈ 91。**归属以 §2.12 A1 全清单逐名核对**；"动作数组构造"类（`*Actions`）若读取宿主字段，说明它其实是 A2，本轨道**剔除**，留给 §14.3。
+
+**每片手法（只做剪切 + 导入，禁改函数体）**
+1. 从宿主剪切函数体 → 粘入模块（保留逐字语义）。
+2. **删 `this.`**：函数内任何 `this.foo()` → `foo()`；残留 `this` 触发 `arkts-no-standalone-this`（§14.8 规则 1）。
+3. 宿主删除该 `private` 方法声明；所有调用点 `this.<fn>(` → `<fn>(`（具名 import）。
+4. 组件内的调用点同样 import 后去 `this.`。
+5. 复核：宿主内 **零残留 `this.<fn>`**、模块内 **零 `this`**、调用点数不变。
+
+**验收**：`arkts_check` → 构建 → 契约 → 相关域测试 → 真机（触及 UI 的域）。纯函数模块**可选加单测**（无 `this`、无 IO，易测）。
+
+### 14.3 轨道 A2：214 个读宿主字段的派生方法（12 片）
+
+**三去向**（按语义，不按体量）：
+
+| 去向 | 判定 | 落点 | 约数 |
+|---|---|---|---:|
+| **A2-D 文案/命名/查找表** | 读域 store 字段 | 并入该域 store 的方法，或 `derive/<域>.ets` + 显式入参 | ≈60 |
+| **A2-G 几何/布局** | 读布局字段且消费方组件本就持有该数据 | 组件文件级函数 + 显式入参（§7.5 Phase A 重叠区） | ≈100 |
+| **A2-M 媒体/纹理** | `objectInspector*` 一族（28/21/17/14/11/9 行） | 随媒体管线（`ObjectMediaStore` / 媒体助手） | ≈50 |
+
+**片序**：先做 **§2.12 列出的行数最大 25 个**中的**非热路径**（`objectInspector*` 6 个、`searchCategory*` 4 个、`categoryModuleIdFor`、`pluginFeatureDestination`、`catalogIcon*`）；**热路径放到最后单独成片**：
+- `isUiPoint`(84 行，触摸判定，Down/Move/Up 全走)、`skyZoomButtonAt`(9，dock 命中，与 `common/ui/ChromeGeometry.ets` 强耦合)、`dockActionAt`(14)、`compactQuickIdAt`(9)、`expandedSafeTargetPoint`(16)、`inferredPanelRouteDirection`(16)。
+- 这些**命中失败不报编译错**，必须"语义逐字不变"+"真机命中 + 截图对照"双验证（§13.2 步 7）。
+
+**约束**：每片 ≤ 15 个方法或 ≤ 350 行；A2 依赖 §2.7（已完成）与 §14.2 的 `derive/` 模块（可复用）。**不得**为省事把 A2 的函数留在宿主"只改调用写法"。
+
+### 14.4 轨道 B1：24 个可直接沉（6 片，最优先）
+
+| 片 | 目标 store | 方法（行数） |
+|---|---|---|
+| B1-1 | TelescopeStore | `loadOculars`(75) |
+| B1-2 | LayerViewStore ＋ ToolsStore | `loadTrailDisplaySettings`(13) `loadOrbitDisplaySettings`(12) `loadLandscapeList`(12) ＋ `loadAngleMeasure`(11) `loadAboutInfo`(9) `loadLog`(7) |
+| B1-3 | CatalogStore ＋ SearchStore | `loadStarCatalogs`(18) ＋ `loadConstellationNavigation`(27) |
+| B1-4 | MeteorStore / NavStarsStore / ArchaeoStore / MosaicStore | `loadMeteorShowers`(33) `loadNavStars`(31) `loadArchaeoLines`(30) `loadMosaicCamera`(24) |
+| B1-5 | PluginStore / CommandStore / EquationOfTimeStore / NebulaTextureStore | `loadPluginList`(34) `loadCommandCatalog`(28) `loadEquationOfTime`(19) `loadNebulaTextureStatus`(15) |
+| B1-6 | Location / SessionTool / Satellite / Script / SkyCultureSettings / ObjectDetail / Overlay | `loadSavedLocations`(20) `loadPlanetList`(11) `loadSatelliteSources`(10) `loadRecordings`(6) `loadSkyCultureConstellationSelectionFlags`(8) `loadObjectInfo`(18) `loadPointerCoordinates`(23) |
+
+> 行号/行数取 §2.13 实测；开工重测。`loadOculars`(75) 收益最大，**建议作为 B1 首片**（在 §14.1 enabler 试点之后）。
+
+### 14.5 轨道 B2：35 个（Astro 19 一片或两片；其余 16 四片）
+
+- **B2-Astro（19，1–2 片）**：`loadAlmanac` `loadAltAzCurve` `loadAnnualElevation` `loadAstroTab` `loadCelestialPositions` `loadEclipses` `loadEphemeris` `loadHeliocentricPositions` `loadLunarElongation` `loadObservabilityCalendar` `loadPhenomena` `loadPlanetaryTransits` `loadPlanetCalc` `loadPlanetPairDistance` `loadPlanetTimeSeries` `loadRTS` `loadRtsCalendar` `loadTonightAstro` `loadWutTargets`。
+  **同片搬域助手**（`updateAstroCalcSnapshot`/`beginGraphLoad`/`finishGraphLoad`/`resolveGraphStartJD`/`clearRtsSelectionResults`/`hasSelectedObject`/`hecLayoutPositions`/`wutCategoryTitle`/`planetPairBodyName`/`updatePlanetPairDistanceRanges`/`updatePlanetTimeSeriesRanges`/`publishAstroPanelState`）——多为域内逻辑；`publishAstroPanelState` 走 `onChanged` 注入。
+- **B2-其余（16，4 片）**
+  | 片 | 方法 | 额外注入 |
+  |---|---|---|
+  | B2R-1 媒体 | `loadObjectInspectorModelRawTexture`(72) | `commit/fail/decode` 媒体助手 |
+  | B2R-2 设置 | `loadConfigurationSettings`(49)、`loadObserverInfo`(17)、`loadTimeExtras`(9) | `applySelectedInfoMode`、`applyTimeSettings`、`applyAtmosphereResponse`、`syncNightModeFromEngine`、时区助手 |
+  | B2R-3 星空文化 | `loadSkyCultureList`(42)、`loadSkyCultureVisualSettings`(40)、`loadSkyCultureTerritoryMap`(21)、`loadSkyCultureMakerDraft`(21) | `loadSkyCultureDetails`、`skyCultureActiveColorTarget`、`drawSkyCultureTerritoryMap`、`applySkyCultureMakerDraft`、`ensurePluginLoaded`、`skyCultureMakerDraftFromResponse` |
+  | B2R-4 存储/检索/望远镜 | `loadObjectCatalogCategories`(32)、`loadObservingListFromStorage`(19)、`loadBookmarks`(15)、`loadBookmarksFromStorage`(13)、`loadRecordingByName`(11)、`loadScriptList`(8)、`loadSelectedSatellitePasses`(5)、`loadTelescopeControlStatus`(13) | `catalogIconForModule`、`loadCategoryObjects`、`publishSearchBrowserState`、`getUIContext`、`parseObservingList`、`saveBookmarksToStorage`、`flashHint`、`setScriptMetadata`、`requestSatellitePasses`、`lx200Payload`、`scheduleTelescopeLivePosition`（**含定时器 → store 需自持 start/stop**） |
+
+### 14.6 轨道 B3：11 个（先解其保留裸字段，再按 B1 手法下沉）
+
+| 加载器 | 行的保留裸字段 | 处理方向 |
+|---|---|---|
+| `loadSkyCultureDetails`(69) | `skyCultureArtStates`（渐进写入） | 该字段登记为"高频逐帧"→**保留宿主**，加载器改为经注入回调上报 |
+| `loadSatellites`(55) | `satelliteListElapsedMs`/`satelliteLoadTimer`（计时器） | 计时器移入 store（自持 start/stop）或注入 |
+| `loadMoreCategoryObjects`(51) / `loadCategoryObjects`(35) | `categoryOffset`（跨页游标）、`satelliteCatalogReady` | 游标搬 SearchStore |
+| `loadMoonPhases`(35) / `loadAstroCalcContext`(35) / `loadPolarScopeData`(19) | 请求进度 / 进行中标志 | 搬入对应 store（请求序号一并搬） |
+| `loadVideoRecordingState`(14) | `stopVideoStatePolling`（定时器收口） | 定时器移入 ScriptStore |
+| `loadSearchHistoryFromStorage`(13) | `searchHistory`（跨域共用） | 搬 SearchStore 后按 §14.8 规则 4 回注 |
+| `loadScenery3d`(12) | `scenery3dCurrentId`（引擎自用，已登记） | 保持登记；加载器只读/只上报 |
+| `loadCatalogHealth`(9) | `catalogHealthLoaded`/`catalogManifestPresent`（跨域共用） | 保持登记；加载器返回值经注入回调 |
+
+> 每处理完一项即从本表移除；表中"处理方向"若与 §2.7.1 登记冲突，**以 §2.7.1 为准**（那是已验证的保留决定）。
+
+### 14.7 队列总表（38 片，建议顺序）
+
+| ID | 轨道 | 内容 | 前置 | 状态 |
+|---|---|---|---|---|
+| AB-0 | B 前置 | `bridge/CommandPort.ets` + `loadAboutInfo` 试点 | — | 待做 |
+| A1-1…A1-7 | A1 | 91 个纯函数 → `common/derive/*.ets`（7 片） | — | 待做（与 AB-0 并行） |
+| B1-1…B1-6 | B1 | 24 个加载器 → store（6 片） | AB-0 | 待做 |
+| B2A-1…B2A-2 | B2 | Astro 簇 19 个（1–2 片） | AB-0、A1-2 | 待做 |
+| B2R-1…B2R-4 | B2 | 其余 16 个（4 片） | AB-0 | 待做 |
+| A2-1…A2-12 | A2 | 214 个派生方法（12 片；热路径最后） | A1 模块 | 待做 |
+| B3-1…B3-6 | B3 | 11 个加载器（先解保留字段） | B1/B2 手法 | 待做 |
+
+**建议首序**：`AB-0` → `B1-1`（`loadOculars` 75 行，收益最大）→ `A1-1…A1-7`（零风险、无前置，可整批推进）→ `B1-2…B1-6` → `B2A` → `A2 非热路径` → `B2R` → `B3` → `A2 热路径`。
+（A1 与 B1 无相互依赖，可任意交错；A2 热路径放最后，留足真机对照余量。）
+
+### 14.8 A/B 专属硬规则（叠加在 §13.1 之上）
+
+1. **文件级函数禁 `this`**：迁移后残留 `this` 触发 `arkts-no-standalone-this`；把 `this.x` 变为显式入参或模块 import。
+2. **store 不得 import NAPI/UI**：`load*` 下沉只依赖 `CommandPort` 接口；`getUIContext` 之类经注入提供（可用假 port 单测）。
+3. **请求序号随加载器搬入 store**（`private seq`）；禁止宿主与 store 双序号，禁止共享。
+4. **`publish*` → `onChanged` 注入**：store 不直接 `callNative`；刷新语义不变（同一 `@Observed` 实例仍由宿主 `@State` 持有、组件 `@ObjectLink` 消费）。
+5. **禁止双写**：加载器/派生方法搬走后，宿主不得保留同名方法副本（灰度期不允许，避免运行期走错分支）。
+6. **纯函数模块无状态**：`common/derive/*.ets` 不得 import store、不得持有模块级可变变量。
+7. **声明与调用同片搬**：一次只搬一个方法簇，声明与全部调用点在同一片内完成并同片构建（避免中间态）。
+
+### 14.9 度量与验收
+
+- 每片记录三组数字：宿主 `private` 方法数、宿主内 `this.<派生名>` 端口引用数、`load*` 方法数；写入 CHANGELOG。
+- 门槛与 §13.2 八步一致：`arkts_check` → 构建（`scripts\build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources`）→ `node scripts/check-ohos-ui-contract.mjs`（**44 锚点不变**）→ 受影响测试 → 真机（优先语义命令 `openUiPanel`，见 `MainWindowNativeNode.ets:1346`）→ 恢复被改的持久化设置 → CHANGELOG（CRLF 安全、裸 LF=0）→ 提交。
+- 累计目标：`private` 942 → ≈640；`load*` 72 → ≈11。
+
+### 14.10 风险与取舍
+
+- **A2 几何/触摸类是运行时回归热点**（命中失效不报编译错）：`isUiPoint`/`skyZoomButtonAt`/`dockActionAt`/`compactQuickIdAt`/`expandedSafeTargetPoint`/`inferredPanelRouteDirection` 单独成片、逐字迁移、真机命中 + 截图对照；其余 A2 也不得"顺手改语义"。
+- **B 轨道定时器**：`loadTelescopeControlStatus`、`loadVideoRecordingState`、`loadSatellites` 需 store 自持 start/stop，须测"面板关闭后定时器停止"。
+- **与 §7（V1 → V2）的关系**：本计划是 **V1 期瘦身**，其中 A2-G 与 §7.5 Phase A 目标重叠。**建议先做 A1 + B1**（零风险、收益明确、与 V2 无冲突），A2 的几何类可等 §7 的 V2 试点结论再决定"随组件下沉"还是"随 V2 模型下沉"，避免重复劳动。
+- **回滚**：每片独立提交；A2 热路径若真机回归，`git revert` 单片即可（不牵动 store 结构）。
