@@ -17235,6 +17235,23 @@ void StelMainView::renderOhosFrameNow()
 		drawOhosTelescopeOverlay(app.getCore());
 		const double t4 = StelApp::getTotalRunTime();
 	submitOhosFramebuffer(gl);
+
+	// The per-frame texture-upload budget must be reset exactly once per rendered
+	// frame. On the Qt desktop path StelMainView::drawEnded() does that by emitting
+	// frameFinished(), which StelTextureMgr::onFrameFinished() turns into
+	// "totalLoadTimeTaken = 0". The OHOS render pump below is the only frame driver
+	// on device and never runs drawEnded(), so that counter grew without bound: as
+	// soon as it passed the per-frame allowance (max(1e9/(2*fps), 1e9/120) ≈ 8.3 ms)
+	// every throttled StelTexture::bind() - the default, prioritizeUpload == false -
+	// started returning false permanently.
+	//
+	// Planet::drawSphere() uses exactly that call (texMap->bind(0)) and bails out
+	// silently when it fails, so the symptom was planets losing their disks for the
+	// rest of the session while halos, labels, star catalogues and all other texture
+	// users kept working - and with no diagnostic in the log at all. Emitting the
+	// same signal the desktop path emits restores the once-per-frame reset.
+	emit frameFinished();
+
 	const double t5 = StelApp::getTotalRunTime();
 
 	const int intervalMs = currentOhosRenderIntervalMs();
