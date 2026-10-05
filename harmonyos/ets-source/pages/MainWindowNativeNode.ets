@@ -1147,6 +1147,19 @@ export struct WindowNativeNode {
     // §14 B1-3：星表下载域复用同一 HostCommandPort 实例。其消费方（CatalogsPanel）为
     // @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，故 onChanged 传空实现。
     this.catalogStore.attachPort(hostPort, () => {})
+    // §14 B2R-4：目录分类加载器 loadObjectCatalogCategories 下沉 CatalogStore。它读宿主语言刷新
+    // 代际 languageRefreshSerial（单序号，宿主持有）、读写 SearchStore 的 pendingPluginCatalogId /
+    // searchCategory / categoryModuleId，并调用未随本片下沉的搜索域动作 loadCategoryObjects（B3）
+    // 与 CLI 发布点 publishSearchBrowserState —— 全部经 CatalogHostHooks 具名回注。
+    this.catalogStore.attachHooks({
+      languageSerial: (): number => this.languageRefreshSerial,
+      pendingPluginCatalogId: (): string => this.searchStore.pendingPluginCatalogId,
+      clearPendingPluginCatalogId: (): void => { this.searchStore.pendingPluginCatalogId = '' },
+      searchCategory: (): string => this.searchStore.searchCategory,
+      categoryModuleId: (): string => this.searchStore.categoryModuleId,
+      loadCategoryObjects: (category: string, moduleIdOverride: string): void => { this.loadCategoryObjects(category, moduleIdOverride) },
+      publishSearchBrowserState: (): void => { this.publishSearchBrowserState() }
+    })
     // §14 B1-4：相机拼接（MosaicCamera）与古天文辅助线（ArchaeoLines）两域复用同一实例。
     // 两者消费方均为 @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，onChanged 传空实现。
     this.mosaicStore.attachPort(hostPort, () => {})
@@ -1160,9 +1173,33 @@ export struct WindowNativeNode {
     // §14 B1-6：脚本录制 / 观测星球 / 星空文化标志 / 天体资料 / 指针坐标五域复用同一实例，
     // 其消费方均为 @ObjectLink，字段赋值即刷新，五个域都无 publish* 发布点，故 onChanged 传空实现。
     this.scriptStore.attachPort(hostPort, () => {})
+    // §14 B2R-4：脚本列表 / 资源元数据 / 录制载入加载器下沉 ScriptStore。loadRecordingByName
+    // 回包后的 UI 提示经 ScriptHostHooks.flashHint 回注（store 不触碰 UI）。
+    this.scriptStore.attachHooks({
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) }
+    })
     this.sessionToolStore.attachPort(hostPort, () => {})
     this.skyCultureSettingsStore.attachPort(hostPort, () => {})
     this.objectDetailStore.attachPort(hostPort, () => {})
+    // §14 B2R-4：卫星过境加载器 loadSelectedSatellitePasses 下沉 ObjectDetailStore，复用未随本片
+    // 下沉的宿主助手 selectedObjectIsArtificialSatellite / requestSatellitePasses（经 hooks 回注）。
+    this.objectDetailStore.attachHooks({
+      selectedObjectIsArtificialSatellite: (): boolean => this.selectedObjectIsArtificialSatellite(),
+      requestSatellitePasses: (expectedName: string): void => { this.requestSatellitePasses(expectedName) }
+    })
+    // §14 B2R-4：书签加载器 loadBookmarks / loadBookmarksFromStorage 下沉 BookmarkStore。
+    // Preferences 读写（原 getUIContext + @ohos.data.preferences）与持久化助手经 hooks 回注
+    //（store 不 import NAPI/UI 上下文，§14.8 规则 2）。
+    this.bookmarkStore.attachPort(hostPort)
+    this.bookmarkStore.attachHooks({
+      readBookmarksStorage: (): Promise<string> => this.readBookmarksStorage(),
+      saveBookmarksToStorage: (): void => { this.saveBookmarksToStorage() }
+    })
+    // §14 B2R-4：观测列表首次载入下沉 ObservingListStore；Preferences 读写经 hooks 回注。
+    this.obsListStore.attachHooks({
+      readObservingListStorage: (): Promise<string> => this.readObservingListStorage(),
+      writeObservingListStorage: (json: string): Promise<void> => this.writeObservingListStorage(json)
+    })
     this.overlayStore.attachPort(hostPort, () => {})
     // §14 B2R-3：星空文化域四加载器下沉。skyCultureSettingsStore 复用既有 HostCommandPort
     // （其 loadSkyCultureConstellationSelectionFlags 已在 B1-6 自持）；SkyCultureViewStore /
@@ -1583,9 +1620,9 @@ export struct WindowNativeNode {
     // preferences store is opened asynchronously.
     const stored = AppStorage.get<string>("observingList")
     if (stored) this.obsListStore.observingList = parseObservingList(stored)
-    this.loadObservingListFromStorage()
+    this.obsListStore.loadObservingListFromStorage()
     this.loadSearchHistoryFromStorage()
-    this.loadBookmarksFromStorage()
+    this.bookmarkStore.loadBookmarksFromStorage()
     this.registerFoldListeners()
     this.subscribeApplicationLifecycle()
     this.startupBridgeSync()
@@ -1610,7 +1647,7 @@ export struct WindowNativeNode {
       () => this.callNativeWhenReady('setLanguage', this.languageStore.selectedLanguage, () => {}),
       () => this.layerViewStore.loadLandscapeList(),
       () => this.callNativeWhenReady("getScriptList", "", (r) => {
-        if (r.ok === true && Array.isArray(r.items)) { this.scriptStore.scriptList = r.items as string[]; this.setScriptMetadata(r.details) }
+        if (r.ok === true && Array.isArray(r.items)) { this.scriptStore.scriptList = r.items as string[]; this.scriptStore.setScriptMetadata(r.details) }
       }),
       () => this.callNativeWhenReady('getProjectionList', '', (r) => {
         if (r.ok === true && r.current !== undefined) { this.currentProjection = r.current as string }
@@ -2360,7 +2397,7 @@ export struct WindowNativeNode {
         this.wutStore.loadWutTargets()
       }
       if (panel === 'search') {
-        this.loadObjectCatalogCategories()
+        this.catalogStore.loadObjectCatalogCategories(this.languageRefreshSerial)
         this.loadConstellationNavigation()
         if (this.searchStore.categoryObjects.length === 0) this.loadCategoryObjects(this.searchStore.searchCategory)
       }
@@ -2392,7 +2429,7 @@ export struct WindowNativeNode {
       } else if (panel === 'catalogs' && !OFFLINE_APPGALLERY_BUILD) {
         if (this.catalogStore.catalogList.length === 0) this.catalogStore.loadStarCatalogs()
       } else if (panel === 'bookmarks') {
-        this.loadBookmarks()
+        this.bookmarkStore.loadBookmarks()
       } else if (panel === 'oculars') {
         this.ensurePluginLoaded('Oculars', () => { this.telescopeStore.loadOculars(false) })
       } else if (panel === 'mosaicCamera') {
@@ -2422,7 +2459,7 @@ export struct WindowNativeNode {
       } else if (panel === 'help') {
         this.tools.loadAboutInfo()
       } else if (panel === 'scripts') {
-        this.loadScriptList()
+        this.scriptStore.loadScriptList()
         this.scriptStore.loadRecordings()
         this.loadVideoRecordingState()
       } else if (panel === 'telescope') {
@@ -2914,24 +2951,21 @@ export struct WindowNativeNode {
     this.saveObservingListToStorage()
   }
 
-  private async loadObservingListFromStorage(): Promise<void> {
-    try {
-      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const store = await preferences.getPreferences(ctx, OBSERVING_STORE)
-      const jsonStr: Object = await store.get('observingList', '')
-      if (typeof jsonStr === 'string' && jsonStr.length > 0) {
-        this.obsListStore.observingList = parseObservingList(jsonStr)
-      } else if (this.obsListStore.observingList.length > 0) {
-        // Migrate the pre-existing in-memory value on the first durable read.
-        await store.put('observingList', JSON.stringify(this.obsListStore.observingList))
-        await store.flush()
-      }
-      AppStorage.setOrCreate('observingList', JSON.stringify(this.obsListStore.observingList))
-    } catch (e) {
-      hilog.warn(0xD002, 'Stellarium', 'load observing list failed: %{public}s', String(e))
-    } finally {
-      this.obsListStore.observingListReady = true
-    }
+  // Preferences 原始读取助手：供 ObservingListStore.loadObservingListFromStorage 经 hooks 调用
+  //（store 不 import NAPI/UI 上下文，§14.8 规则 2）。
+  private async readObservingListStorage(): Promise<string> {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+    const store = await preferences.getPreferences(ctx, OBSERVING_STORE)
+    const jsonStr: Object = await store.get('observingList', '')
+    return typeof jsonStr === 'string' ? jsonStr : ''
+  }
+
+  // Preferences 迁移写回助手：供 store 首次读取到空库时把内存值写回。
+  private async writeObservingListStorage(json: string): Promise<void> {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+    const store = await preferences.getPreferences(ctx, OBSERVING_STORE)
+    await store.put('observingList', json)
+    await store.flush()
   }
 
   // ===== 书签本地持久化（@ohos.data.preferences）=====
@@ -2947,18 +2981,11 @@ export struct WindowNativeNode {
     }
   }
 
-  private async loadBookmarksFromStorage(): Promise<void> {
-    try {
-      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const store = await preferences.getPreferences(ctx, BOOKMARK_STORE)
-      const jsonStr: string = (await store.get('bookmarks', '[]')) as string
-      const parsed: BookmarkItem[] = JSON.parse(jsonStr)
-      if (parsed.length > 0) {
-        this.bookmarkStore.list = parsed
-      }
-    } catch (e) {
-      hilog.warn(0xD002, 'Stellarium', 'load bookmarks failed: %{public}s', String(e))
-    }
+  // Preferences 原始读取助手：供 BookmarkStore.loadBookmarksFromStorage 经 hooks 调用。
+  private async readBookmarksStorage(): Promise<string> {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+    const store = await preferences.getPreferences(ctx, BOOKMARK_STORE)
+    return (await store.get('bookmarks', '[]')) as string
   }
 
   private async saveSearchHistoryToStorage(): Promise<void> {
@@ -2988,21 +3015,7 @@ export struct WindowNativeNode {
   }
 
   // ===== 书签（C++ 桥：addBookmark / getBookmarks / deleteBookmark / gotoBookmark）=====
-  private loadBookmarks(): void {
-    this.bookmarkStore.loading = true
-    this.callNativeWhenReady('getBookmarks', '', (r: StellariumBridgeResponse) => {
-      const resp = r as BookmarksResponse
-      const list = resp.items ?? []
-      this.bookmarkStore.list = list.map((b: BookmarkRaw): BookmarkItem => ({
-        id: b.id ?? '',
-        name: b.name ?? I18n.t('bookmark_fallback'),
-        fov: b.fov ?? 60,
-        object: b.object ?? '',
-      }))
-      this.bookmarkStore.loading = false
-      this.saveBookmarksToStorage()
-    })
-  }
+  // loadBookmarks 已下沉 BookmarkStore（§14 B2R-4）。
 
   // 保存当前视图为书签。C++ 端读取当前 J2000 视方向 + 视场 + 选中天体，名称由 payload 传入。
   private addCurrentBookmark(): void {
@@ -3011,7 +3024,7 @@ export struct WindowNativeNode {
       if (r.ok === true) {
         this.bookmarkStore.draftName = ''
         this.flashHint(I18n.t('msg_bookmark_saved'))
-        this.loadBookmarks()
+        this.bookmarkStore.loadBookmarks()
       } else {
         this.flashHint(I18n.t('msg_bookmark_save_failed'))
       }
@@ -3032,7 +3045,7 @@ export struct WindowNativeNode {
     this.callNativeWhenReady('deleteBookmark', id, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.flashHint(I18n.t('msg_bookmark_deleted'))
-        this.loadBookmarks()
+        this.bookmarkStore.loadBookmarks()
       }
     })
   }
@@ -3474,23 +3487,7 @@ export struct WindowNativeNode {
     return Math.max(32, Math.min(44, (this.scriptControlWidth() - 49) / 6))
   }
 
-  private loadScriptList(): void {
-    this.callInteractive('getScriptList', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && Array.isArray(r.items)) {
-        this.scriptStore.scriptList = r.items as string[]
-        this.setScriptMetadata(r.details)
-      }
-    })
-  }
-
-  private setScriptMetadata(raw: Object | undefined): void {
-    if (!Array.isArray(raw)) { return }
-    const next: Record<string, ScriptMetadata> = {}
-    for (const item of raw as Array<ScriptMetadata>) {
-      if (item.file) { next[item.file] = item }
-    }
-    this.scriptStore.scriptMetadata = next
-  }
+  // loadScriptList / setScriptMetadata 已下沉 ScriptStore（§14 B2R-4）。
 
   private scriptMeta(filename: string): ScriptMetadata | undefined {
     return this.scriptStore.scriptMetadata[filename]
@@ -3564,7 +3561,7 @@ export struct WindowNativeNode {
       await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(destinationPath))
       this.flashHint(I18n.format('script_import_success', [fileName]))
       hilog.info(0x0000, 'StellariumArkUI', 'Imported offline script %{public}s', fileName)
-      this.loadScriptList()
+      this.scriptStore.loadScriptList()
     } catch (error) {
       hilog.error(0x0000, 'StellariumArkUI', 'Script import failed: %{public}s', String(error))
       this.flashHint(I18n.t('script_import_failed'))
@@ -3573,17 +3570,7 @@ export struct WindowNativeNode {
     }
   }
 
-  private loadRecordingByName(file: string, name: string): void {
-    this.callInteractive('loadRecording', file, (r: StellariumBridgeResponse) => {
-      const resp = r as RecordingDetailResponse
-      const cmds = resp.commands ?? []
-      if (r.ok === true) {
-        this.flashHint('已加载录制：' + name + '（' + cmds.length + ' 条命令）')
-      } else {
-        this.flashHint('加载录制失败')
-      }
-    })
-  }
+  // loadRecordingByName 已下沉 ScriptStore（§14 B2R-4）。
 
   private landscapeImportFileName(uri: string): string {
     let name = uri.substring(uri.lastIndexOf('/') + 1)
@@ -4331,7 +4318,7 @@ export struct WindowNativeNode {
             // Loading a feature plugin must not rebuild unrelated panels. The
             // catalog chips only need refreshing while the search panel is
             // visible; doing it for every plugin caused a full-shell flash.
-            if (this.activePanel === 'search') this.loadObjectCatalogCategories()
+            if (this.activePanel === 'search') this.catalogStore.loadObjectCatalogCategories(this.languageRefreshSerial)
             callback()
           }
           else {
@@ -7676,38 +7663,7 @@ private loadPlanetPositions(): void {
     })
   }
 
-  private loadObjectCatalogCategories(languageSerial: number = this.languageRefreshSerial): void {
-    this.callNativeWhenReady('getObjectCatalogCategories', '', (result: StellariumBridgeResponse) => {
-      if (this.languageRefreshSerial !== languageSerial) return
-      if (result.ok !== true || !Array.isArray(result.items)) return
-      const items = result.items as Array<Record<string, Object>>
-      const categories: CatOption[] = []
-      for (let index = 0; index < items.length; index++) {
-        const item = items[index]
-        const moduleId = item['moduleId'] !== undefined ? String(item['moduleId']) : ''
-        const label = item['label'] !== undefined ? String(item['label']) : moduleId
-        if (moduleId.length === 0) continue
-        categories.push({
-          code: 'module:' + moduleId,
-          label: label,
-          moduleId: moduleId,
-          iconKey: catalogIconForModule(moduleId),
-          group: item['group'] !== undefined ? String(item['group']) : moduleId.split(':')[0],
-          isCoreSubset: item['isCoreSubset'] === true,
-          isPluginCatalog: item['isPluginCatalog'] === true
-        })
-      }
-      this.catalogStore.objectCatalogCategories = categories
-      this.publishSearchBrowserState()
-      const pendingModuleId = this.searchStore.pendingPluginCatalogId
-      if (pendingModuleId.length > 0 && categories.some((item: CatOption) => item.moduleId === pendingModuleId)) {
-        this.searchStore.pendingPluginCatalogId = ''
-        if (this.searchStore.searchCategory === 'module:' + pendingModuleId || this.searchStore.categoryModuleId === pendingModuleId) {
-          this.loadCategoryObjects('module:' + pendingModuleId, pendingModuleId)
-        }
-      }
-    })
-  }
+  // loadObjectCatalogCategories 已下沉 CatalogStore（§14 B2R-4）。
 
   private loadConstellationNavigation(languageSerial: number = this.languageRefreshSerial): void {
     this.callNativeWhenReady('getConstellationList', '', (result: StellariumBridgeResponse) => {
@@ -8216,7 +8172,7 @@ private loadPlanetPositions(): void {
         this.searchStore.categoryObjects = []
         this.searchStore.searchSuggestions = []
         this.searchStore.constellationNavigationItems = []
-        this.loadObjectCatalogCategories(languageSerial)
+        this.catalogStore.loadObjectCatalogCategories(languageSerial)
         this.loadConstellationNavigation(languageSerial)
         this.loadCategoryObjects(this.searchStore.searchCategory, selectedCategoryModuleId)
         const query = this.searchStore.searchText.trim()
@@ -9988,11 +9944,7 @@ private loadPlanetPositions(): void {
     })
   }
 
-  private loadSelectedSatellitePasses(): void {
-    if (!this.selectedObjectIsArtificialSatellite() || this.objectDetailStore.selectedName.length === 0 || this.objectDetailStore.selectedSatellitePassesRequested) return
-    this.objectDetailStore.selectedSatellitePassesRequested = true
-    this.requestSatellitePasses(this.objectDetailStore.selectedName)
-  }
+  // loadSelectedSatellitePasses 已下沉 ObjectDetailStore（§14 B2R-4）。
 
   private moveToSelectedObject(fromLayoutChange: boolean = false): void {
     if (!this.hasSelectedObject()) {
@@ -12376,7 +12328,7 @@ private loadPlanetPositions(): void {
                 onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
                 onDismiss: () => { this.dismissObjectInspector() },
                 onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
-                onLoadPasses: () => { this.loadSelectedSatellitePasses() },
+                onLoadPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
                 onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
                 onMediaRetry: () => { this.retryObjectInspectorMedia() },
                 onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
@@ -12493,7 +12445,7 @@ private loadPlanetPositions(): void {
                 onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
                 onDismiss: () => { this.dismissObjectInspector() },
                 onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
-                onLoadPasses: () => { this.loadSelectedSatellitePasses() },
+                onLoadPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
                 onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
                 onMediaRetry: () => { this.retryObjectInspectorMedia() },
                 onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
@@ -12627,7 +12579,7 @@ private loadPlanetPositions(): void {
                 onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
                 onDismiss: () => { this.dismissObjectInspector() },
                 onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
-                onLoadPasses: () => { this.loadSelectedSatellitePasses() },
+                onLoadPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
                 onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
                 onMediaRetry: () => { this.retryObjectInspectorMedia() },
                 onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
@@ -14985,7 +14937,7 @@ private loadPlanetPositions(): void {
         onRetryMedia: () => { this.retryObjectInspectorMedia() },
         onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
         onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
-        onLoadSatPasses: () => { this.loadSelectedSatellitePasses() },
+        onLoadSatPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
         onGoto: () => { this.lx200GotoSelected() },
         onSync: () => { this.lx200SyncSelected() },
         onAbort: () => { this.lx200Abort() }
@@ -15636,7 +15588,7 @@ private loadPlanetPositions(): void {
         onSaveRecording: () => { this.saveCurrentRecording() },
         onSetRecordName: (value: string) => { this.scriptStore.recordName = value },
         onPlayRecording: (file: string) => { this.playRecording(file) },
-        onLoadRecording: (file: string, name: string) => { this.loadRecordingByName(file, name) },
+        onLoadRecording: (file: string, name: string) => { this.scriptStore.loadRecordingByName(file, name) },
         onShareRecording: (rec: RecordingEntry, idx: number) => {
           this.shareFile(rec.path ?? '', utd.UniformDataType.PLAIN_TEXT, rec.name,
             'Stellarium 操作录制', 'recording-share-' + idx.toString())
@@ -16225,7 +16177,7 @@ private loadPlanetPositions(): void {
       this.configTab = tabId
       this.configTabContentOffsetX = direction * 8
       if (tabId === 5) {
-        this.loadScriptList()
+        this.scriptStore.loadScriptList()
         this.scriptStore.loadRecordings()
         this.loadVideoRecordingState()
       } else if (tabId === 6) {

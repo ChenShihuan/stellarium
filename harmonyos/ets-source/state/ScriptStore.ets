@@ -1,6 +1,12 @@
-import { RecordingEntry, RecordingsResponse } from '../pages/MainWindowModels'
+import { RecordingEntry, RecordingsResponse, RecordingDetailResponse } from '../pages/MainWindowModels'
 import { ScriptMetadata, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
+
+// 宿主 → ScriptStore 的 UI 提示注入（§13.1 规则 6 / §14.8 规则 2：store 不触碰 UI）。
+// loadRecordingByName 回包后经宿主 flashHint 提示（原宿主 this.flashHint 逐字语义）。
+export interface ScriptHostHooks {
+  flashHint(text: ResourceStr): void
+}
 
 // 脚本 / 录制 / 视频导出域中"面板可见"的状态（原宿主的 21 个 @State）。
 //
@@ -71,11 +77,17 @@ export class ScriptStore {
   // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
+  // 宿主 UI 提示注入（§14 B2R-4 loadRecordingByName）。
+  private hooks: ScriptHostHooks | null = null
 
   // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
   attachPort(port: CommandPort, onChanged: () => void): void {
     this.port = port
     this.onChanged = onChanged
+  }
+
+  attachHooks(hooks: ScriptHostHooks): void {
+    this.hooks = hooks
   }
 
   // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
@@ -100,6 +112,51 @@ export class ScriptStore {
       const resp = r as RecordingsResponse
       this.recordings = resp.items ?? []
       this.notifyChanged()
+    })
+  }
+
+  // 脚本面板列表：桥拉取脚本名 + 资源元数据（原宿主 loadScriptList，函数体逐字搬入）。
+  // 差异仅：this.callInteractive → port.requestInteractive、this.scriptStore.<f> → this.<f>、
+  // this.setScriptMetadata → this.setScriptMetadata（同 store 方法）。
+  loadScriptList(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    port.requestInteractive('getScriptList', '', (r: StellariumBridgeResponse) => {
+      if (r.ok === true && Array.isArray(r.items)) {
+        this.scriptList = r.items as string[]
+        this.setScriptMetadata(r.details)
+      }
+    })
+  }
+
+  // 脚本资源元数据表（原宿主 setScriptMetadata，函数体逐字搬入；this.scriptStore.scriptMetadata → this.scriptMetadata）。
+  setScriptMetadata(raw: Object | undefined): void {
+    if (!Array.isArray(raw)) { return }
+    const next: Record<string, ScriptMetadata> = {}
+    for (const item of raw as Array<ScriptMetadata>) {
+      if (item.file) { next[item.file] = item }
+    }
+    this.scriptMetadata = next
+  }
+
+  // 按文件名载入录制并提示命令条数（原宿主 loadRecordingByName，函数体逐字搬入）。
+  // 差异仅：this.callInteractive → port.requestInteractive、this.flashHint → hooks.flashHint。
+  loadRecordingByName(file: string, name: string): void {
+    const hooks = this.hooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    port.requestInteractive('loadRecording', file, (r: StellariumBridgeResponse) => {
+      const resp = r as RecordingDetailResponse
+      const cmds = resp.commands ?? []
+      if (r.ok === true) {
+        hooks.flashHint('已加载录制：' + name + '（' + cmds.length + ' 条命令）')
+      } else {
+        hooks.flashHint('加载录制失败')
+      }
     })
   }
 }
