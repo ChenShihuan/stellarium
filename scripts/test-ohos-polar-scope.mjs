@@ -52,5 +52,5 @@ test('hidden shell does not intercept polar-scope sky gestures', () => {
   const uiHit = page.slice(page.indexOf('  private isUiPoint('), page.indexOf('  private handleUiTap('));
   assert.match(uiHit, /polarScopeFooterHeight\(\)[\s\S]*?return true\s*\}\s*return false/);
   const dockHit = page.slice(page.indexOf('  private isDockPoint('), page.indexOf('  private dockActionAt('));
-  assert.match(dockHit, /if \(this.polarScopeVisible\) return false/);
+  assert.match(dockHit, /if \(this.polarScopeStore.polarScopeVisible\) return false/);
 });
