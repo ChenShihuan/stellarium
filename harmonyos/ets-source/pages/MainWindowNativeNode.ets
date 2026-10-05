@@ -45,6 +45,12 @@ import { DeltaTSettingsBlock } from '../panels/time/DeltaTSettingsBlock'
 import { TimeSettingsStore } from '../state/TimeSettingsStore'
 import { TimeSettingsSection } from '../panels/settings/TimeSettingsSection'
 import { SettingsChoiceButton } from '../common/ui/SettingsChoiceButton'
+import { NightModeStore } from '../state/NightModeStore'
+import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
+import { QuickChipRow } from '../panels/QuickChipRow'
+import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
+import { TimeJumpActions } from '../panels/time/TimeJumpActions'
+import { ManualTimeBlock } from '../panels/time/ManualTimeBlock'
 import { TimeWheelStore } from '../state/TimeWheelStore'
 import { TimeWheelScrubber } from '../panels/time/TimeWheelScrubber'
 
@@ -334,7 +340,9 @@ export struct WindowNativeNode {
   @State private languageRevision: number = 0
   @State private bridgeSyncStarted: boolean = false
   @State private equatorialMount: boolean = false
-  @State private nightMode: boolean = false
+  @State private nightModeStore: NightModeStore = new NightModeStore()
+  private pendingNightMode: boolean | undefined = undefined
+  private pendingNightModeUntilMs: number = 0
   @State private flipVert: boolean = false
   @State private flipHoriz: boolean = false
   @State private pickedDate: Date = new Date()
@@ -735,7 +743,6 @@ export struct WindowNativeNode {
   @State private wutHint: string = ''
   private wutRequestSequence: number = 0
   @State private wutHasResult: boolean = false
-  @State private nightModeOn: boolean = false
   @State private atmoPressure: number = 1013
   @State private atmoTemperature: number = 10
   @State private atmoExtinction: number = 0.13
@@ -2267,9 +2274,8 @@ export struct WindowNativeNode {
       try {
         const saved = JSON.parse(settings) as Record<string, boolean | string>
         if (saved.nightMode !== undefined) {
-          this.nightMode = saved.nightMode as boolean
-          this.nightModeOn = this.nightMode
-          this.callNativeWhenReady('setNightMode', this.nightMode ? 'true' : 'false', () => {})
+          this.nightModeStore.nightMode = saved.nightMode as boolean
+                    this.callNativeWhenReady('setNightMode', this.nightModeStore.nightMode ? 'true' : 'false', () => {})
         }
         if (saved.equatorialMount !== undefined) {
           this.equatorialMount = saved.equatorialMount as boolean
@@ -2328,7 +2334,7 @@ export struct WindowNativeNode {
 
   private saveAppSettings(): void {
     AppStorage.setOrCreate("stellariumSettings", JSON.stringify({
-      nightMode: this.nightMode,
+      nightMode: this.nightModeStore.nightMode,
       equatorialMount: this.equatorialMount,
       gyroscopeEnabled: this.gyroscopeEnabled,
       gyroscopeSensitivityText: this.gyroscopeSensitivityText,
@@ -5637,12 +5643,10 @@ export struct WindowNativeNode {
     // The native Stellarium property is authoritative. The QAction is not
     // guaranteed to update when the time-panel uses the direct bridge command.
     if (result.nightMode !== undefined) {
-      this.nightMode = result.nightMode === true
-      this.nightModeOn = this.nightMode
-    } else if (result.actionShow_Night_Mode !== undefined) {
-      this.nightMode = result.actionShow_Night_Mode === true
-      this.nightModeOn = this.nightMode
-    }
+      this.syncNightModeFromEngine(result.nightMode === true)
+          } else if (result.actionShow_Night_Mode !== undefined) {
+      this.syncNightModeFromEngine(result.actionShow_Night_Mode === true)
+          }
     this.flipHoriz = result.actionHorizontal_Flip === true
     this.flipVert = result.actionVertical_Flip === true
     if (result.timeRate !== undefined) {
@@ -7449,7 +7453,7 @@ export struct WindowNativeNode {
     if (st.ok === true && st.text !== undefined) this.timeStore.siderealTimeText = st.text
 
     const nm: StellariumBridgeResponse = this.callNative('getNightMode', '')
-    if (nm.ok === true) this.nightModeOn = (nm.night === true)
+    if (nm.ok === true) this.syncNightModeFromEngine(nm.night === true)
 
     this.applyAtmosphereResponse(this.callNative('getAtmosphereParams', ''))
   }
@@ -16596,10 +16600,9 @@ private loadPlanetPositions(): void {
       case KeyCode.KEYCODE_ENTER: this.moveToSelectedObject(); return true
       case KeyCode.KEYCODE_F: this.setPanel('search'); return true
       case KeyCode.KEYCODE_N:
-        this.nightMode = !this.nightMode
-        this.nightModeOn = this.nightMode
-        this.persistNightMode()
-        this.callNativeFire('setNightMode', this.nightMode ? 'true' : 'false')
+        this.nightModeStore.nightMode = !this.nightModeStore.nightMode
+                this.persistNightMode()
+        this.callNativeFire('setNightMode', this.nightModeStore.nightMode ? 'true' : 'false')
         return true
       case KeyCode.KEYCODE_ESCAPE:
         if (this.objectInspectorModelImmersive) this.setObjectInspectorModelImmersive(false)
@@ -17011,7 +17014,7 @@ private loadPlanetPositions(): void {
           .width(120)
           .height(120)
           .borderRadius(60)
-          .backgroundColor(this.nightMode ? 'rgba(180, 40, 20, 0.15)' : 'rgba(107, 163, 214, 0.12)')
+          .backgroundColor(this.nightModeStore.nightMode ? 'rgba(180, 40, 20, 0.15)' : 'rgba(107, 163, 214, 0.12)')
           .border({ width: 1, color: 'rgba(107, 163, 214, 0.10)' })
           .shadow({ radius: 42, color: 'rgba(107, 163, 214, 0.18)', offsetX: 0, offsetY: 0 })
           .align(Alignment.Center)
@@ -17025,7 +17028,7 @@ private loadPlanetPositions(): void {
           .width(120)
           .height(120)
           .borderRadius(60)
-          .backgroundColor(this.nightMode ? 'rgba(180, 40, 20, 0.15)' : 'rgba(107, 163, 214, 0.12)')
+          .backgroundColor(this.nightModeStore.nightMode ? 'rgba(180, 40, 20, 0.15)' : 'rgba(107, 163, 214, 0.12)')
           .border({ width: 1, color: 'rgba(107, 163, 214, 0.10)' })
           .shadow({ radius: 42, color: 'rgba(107, 163, 214, 0.18)', offsetX: 0, offsetY: 0 })
           .align(Alignment.Center)
@@ -17098,7 +17101,7 @@ private loadPlanetPositions(): void {
         .height('100%')
         .backgroundColor('#A00000')
         .blendMode(BlendMode.COLOR, BlendApplyType.OFFSCREEN)
-        .opacity(this.nightMode ? 0.78 : 0)
+        .opacity(this.nightModeStore.nightMode ? 0.78 : 0)
         .animation({ duration: 450, curve: Curve.EaseInOut })
         .hitTestBehavior(HitTestMode.Transparent)
         .zIndex(98)
@@ -17106,7 +17109,7 @@ private loadPlanetPositions(): void {
         .width('100%')
         .height('100%')
         .backgroundColor('#000000')
-        .opacity(this.nightMode ? 0.48 : 0)
+        .opacity(this.nightModeStore.nightMode ? 0.48 : 0)
         .animation({ duration: 450, curve: Curve.EaseInOut })
         .hitTestBehavior(HitTestMode.Transparent)
         .zIndex(99)
@@ -20553,40 +20556,40 @@ private loadPlanetPositions(): void {
 
   // 夜间模式颜色方案
   private nmText(): string {
-    return this.nightMode ? '#FF6644' : '#E5FFFFFF'
+    return this.nightModeStore.nightMode ? '#FF6644' : '#E5FFFFFF'
   }
   private nmSub(): string {
-    return this.nightMode ? '#CC5533' : '#99FFFFFF'
+    return this.nightModeStore.nightMode ? '#CC5533' : '#99FFFFFF'
   }
   private nmAccent(): string {
-    return this.nightMode ? '#FF5533' : '#5B93BF'
+    return this.nightModeStore.nightMode ? '#FF5533' : '#5B93BF'
   }
   private nmBg(): string {
-    return this.nightMode ? 'rgba(180, 40, 20, 0.12)' : 'rgba(255,255,255,0.04)'
+    return this.nightModeStore.nightMode ? 'rgba(180, 40, 20, 0.12)' : 'rgba(255,255,255,0.04)'
   }
   private nmBorder(): string {
-    return this.nightMode ? 'rgba(200, 60, 30, 0.20)' : 'rgba(255,255,255,0.08)'
+    return this.nightModeStore.nightMode ? 'rgba(200, 60, 30, 0.20)' : 'rgba(255,255,255,0.08)'
   }
   private nmInput(): string {
-    return this.nightMode ? 'rgba(120, 30, 15, 0.50)' : 'rgba(255,255,255,0.06)'
+    return this.nightModeStore.nightMode ? 'rgba(120, 30, 15, 0.50)' : 'rgba(255,255,255,0.06)'
   }
   private nmInputBorder(): string {
-    return this.nightMode ? 'rgba(200, 60, 30, 0.25)' : 'rgba(214, 238, 255, 0.14)'
+    return this.nightModeStore.nightMode ? 'rgba(200, 60, 30, 0.25)' : 'rgba(214, 238, 255, 0.14)'
   }
   private nmPickerSurface(): string {
-    return this.nightMode ? '#32120D' : '#101A2B'
+    return this.nightModeStore.nightMode ? '#32120D' : '#101A2B'
   }
   private nmPickerHeader(): string {
-    return this.nightMode ? '#48170F' : '#18263B'
+    return this.nightModeStore.nightMode ? '#48170F' : '#18263B'
   }
   private nmPickerHeaderActive(): string {
-    return this.nightMode ? '#5D1D12' : '#1E3A54'
+    return this.nightModeStore.nightMode ? '#5D1D12' : '#1E3A54'
   }
   private nmPickerSelected(): string {
-    return this.nightMode ? '#8A2B1B' : '#285F84'
+    return this.nightModeStore.nightMode ? '#8A2B1B' : '#285F84'
   }
   private nmPickerOption(): string {
-    return this.nightMode ? '#41160F' : '#172338'
+    return this.nightModeStore.nightMode ? '#41160F' : '#172338'
   }
 
   // ===== 中文映射（数据层英文名 → 界面中文） =====
@@ -21532,13 +21535,36 @@ private loadPlanetPositions(): void {
     AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
   }
 
+  // 引擎回报的夜视状态落库。换挡瞬间 / 轮询（约每 3 s）可能回报旧值，
+  // 因此在"待定窗口"内忽略与待定值不一致的回报，避免刚打开又被旧值翻回去
+  // （与 syncTimeRateState 的去重窗口同一套路）。
+  private syncNightModeFromEngine(engineNight: boolean): void {
+    if (this.pendingNightMode !== undefined) {
+      const matches = engineNight === this.pendingNightMode
+      if (!matches && Date.now() < this.pendingNightModeUntilMs) { return }
+      this.pendingNightMode = undefined
+      this.pendingNightModeUntilMs = 0
+    }
+    this.nightModeStore.nightMode = engineNight
+  }
+
+  // 夜视模式统一入口：写状态 + 可选持久化 + 下发原生命令。
+  // 时间面板的夜视开关与（后续）主界面独立按钮都走这一个入口。
+  private applyNightMode(enabled: boolean, persist: boolean): void {
+    this.pendingNightMode = enabled
+    this.pendingNightModeUntilMs = Date.now() + 3500
+    this.nightModeStore.nightMode = enabled
+    if (persist) { this.persistNightMode() }
+    this.callNative('setNightMode', enabled ? 'true' : 'false')
+  }
+
   private persistNightMode(): void {
     let obj: Record<string, boolean | string> = {}
     const cur = AppStorage.get<string>('stellariumSettings')
     if (cur) {
       try { obj = JSON.parse(cur) as Record<string, boolean | string> } catch (e) { }
     }
-    obj['nightMode'] = this.nightMode
+    obj['nightMode'] = this.nightModeStore.nightMode
     AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
   }
 
@@ -22521,11 +22547,11 @@ private loadPlanetPositions(): void {
           })
       }
       .width("100%").margin({ top: 4, bottom: 4 })
-      this.quickChips([
+      QuickChipRow({ items: [
         { id: 'refresh', label: I18n.t('s0721') },
         { id: 'center', label: I18n.t('s0741') },
         { id: this.viewLock ? 'unlock-view' : 'lock-view', label: this.viewLock ? I18n.t('btn_unlock_view') : I18n.t('btn_lock_view') }
-      ])
+      ], onChip: (id: string) => { this.handleChip(id) } })
       Row({ space: 6 }) {
         Button(I18n.t('i0134')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
           .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
@@ -22552,11 +22578,11 @@ private loadPlanetPositions(): void {
       })
       // 时间控制按钮：[倒带][现在][停止][实时][快进][超快]
       this.timeSpeedChips()
-      this.quickChips([
+      QuickChipRow({ items: [
         { id: '-12h', label: '-12h' }, { id: '+12h', label: '+12h' },
         { id: 'sunRise', label: '日出' }, { id: 'sunTransit', label: '中天' },
         { id: 'sunSet', label: '日落' }, { id: 'astronomicalSet', label: '天文昏' }
-      ])
+      ], onChip: (id: string) => { this.handleChip(id) } })
       SiderealTimeRow({
         store: this.timeStore,
         subColor: this.nmSub()
@@ -22577,310 +22603,43 @@ private loadPlanetPositions(): void {
         onAdjust: (scale: string, direction: number) => { this.adjustJulianDate(scale, direction) },
         onApply: (scale: string) => { this.applyJulianDateInput(scale) }
       })
-      // 观测辅助：夜视模式 / 大气折射
-      Row()
-        .width('100%').height(0.5)
-        .backgroundColor(this.nmBorder())
-        .margin({ top: 8, bottom: 4 })
-      Row() {
-        Column({ space: 1 }) {
-          Text('夜视模式').fontSize(12).fontColor(this.nmText()).width('100%')
-          Text('整个界面转成红光，夜里看不刺眼、也不影响眼睛适应黑暗').fontSize(9).fontColor(this.nmSub()).width('100%')
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Toggle({ type: ToggleType.Switch, isOn: this.nightModeOn })
-          .onChange((v: boolean) => {
-            this.nightModeOn = v
-            this.nightMode = v
-            this.persistNightMode()
-            this.callNative('setNightMode', v ? 'true' : 'false')
-          })
-      }.width('100%').padding({ left: 10, right: 10, top: 4, bottom: 4 })
-      Row() {
-        Column({ space: 1 }) {
-          Text('大气折射').fontSize(12).fontColor(this.nmText()).width('100%')
-          Text('空气会把贴近地平线的天体"抬高"一点，开启后显示的是肉眼实际看到的位置').fontSize(9).fontColor(this.nmSub()).width('100%')
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Toggle({ type: ToggleType.Switch, isOn: this.refractionOn })
-          .onChange((v: boolean) => {
-            this.applyAtmosphere(v ? 1013 : 0, this.atmoTemperature, this.atmoExtinction)
-          })
-      }.width('100%').padding({ left: 10, right: 10, top: 6, bottom: 4 })
-      Row() {
-        Text('气压').fontSize(11).fontColor(this.nmSub()).width(56)
-        Slider({ value: this.atmoPressure, min: 0, max: 1100, step: 5 })
-          .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-          .layoutWeight(1)
-          .onChange((v: number) => { this.applyAtmosphere(v, this.atmoTemperature, this.atmoExtinction) })
-        Text(this.atmoPressure.toFixed(0) + ' mbar').fontSize(10).fontColor(this.nmSub()).width(72).textAlign(TextAlign.End)
-      }.width('100%').padding({ left: 10, right: 10 })
-      Row() {
-        Text('气温').fontSize(11).fontColor(this.nmSub()).width(56)
-        Slider({ value: this.atmoTemperature, min: -40, max: 50, step: 1 })
-          .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-          .layoutWeight(1)
-          .onChange((v: number) => { this.applyAtmosphere(this.atmoPressure, v, this.atmoExtinction) })
-        Text(this.atmoTemperature.toFixed(0) + ' °C').fontSize(10).fontColor(this.nmSub()).width(72).textAlign(TextAlign.End)
-      }.width('100%').padding({ left: 10, right: 10 })
-      Row() {
-        Text('消光').fontSize(11).fontColor(this.nmSub()).width(56)
-        Slider({ value: this.atmoExtinction, min: 0, max: 1, step: 0.01 })
-          .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-          .layoutWeight(1)
-          .onChange((v: number) => { this.applyAtmosphere(this.atmoPressure, this.atmoTemperature, v) })
-        Text(this.atmoExtinction.toFixed(2)).fontSize(10).fontColor(this.nmSub()).width(72).textAlign(TextAlign.End)
-      }.width('100%').padding({ left: 10, right: 10 })
-      Text('消光越大，越靠近地平线的星星被大气挡得越暗（城市雾霾天可调高）。')
-        .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-      // 天文事件快捷跳转
-      Row()
-        .width('100%').height(0.5)
-        .backgroundColor(this.nmBorder())
-        .margin({ top: 8, bottom: 4 })
-      Row() {
-        Text(I18n.t('i0111')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-      }
-      .height(18).width('100%')
-      Row({ space: 6 }) {
-        Button(I18n.t('i0146')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionNext_Rising') })
-        Button(I18n.t('i0147')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionNext_Setting') })
-        Button(I18n.t('i0148')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionNext_Transit') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      Row({ space: 6 }) {
-        Button(I18n.t('i0149')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionToday_Rising') })
-        Button(I18n.t('i0150')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionToday_Setting') })
-        Button(I18n.t('i0151')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionToday_Transit') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      Row({ space: 6 }) {
-        Button(I18n.t('i0152')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionPrevious_Rising') })
-        Button(I18n.t('i0153')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionPrevious_Setting') })
-        Button(I18n.t('i0154')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionPrevious_Transit') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      Row({ space: 6 }) {
-        Button(I18n.t('i0155')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionNext_MorningTwilight') })
-        Button(I18n.t('i0156')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionNext_EveningTwilight') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      Row({ space: 6 }) {
-        Button(I18n.t('i0157')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionPrevious_MorningTwilight') })
-        Button(I18n.t('i0158')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionPrevious_EveningTwilight') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      // 二分二至快捷跳转
-      Row()
-        .width('100%').height(0.5)
-        .backgroundColor(this.nmBorder())
-        .margin({ top: 6, bottom: 4 })
-      Row() {
-        Text(I18n.t('i0112')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-      }
-      .height(18).width('100%')
-      Row({ space: 6 }) {
-        Button(I18n.t('i0159')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionNext_March_Equinox') })
-        Button(I18n.t('i0160')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionNext_June_Solstice') })
-        Button(I18n.t('i0161')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionNext_September_Equinox') })
-        Button(I18n.t('i0162')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionNext_December_Solstice') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      Row({ space: 6 }) {
-        Button(I18n.t('i0163')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionPrevious_March_Equinox') })
-        Button(I18n.t('i0164')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionPrevious_June_Solstice') })
-        Button(I18n.t('i0165')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionPrevious_September_Equinox') })
-        Button(I18n.t('i0166')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
-          .onClick(() => { this.triggerAction('actionPrevious_December_Solstice') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      // 天文时间单位跳转
-      Row()
-        .width('100%').height(0.5)
-        .backgroundColor(this.nmBorder())
-        .margin({ top: 6, bottom: 4 })
-      Row() {
-        Text(I18n.t('i0113')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-      }
-      .height(18).width('100%')
-      // 恒星时间
-      Row({ space: 4 }) {
-        Button(I18n.t('i0173')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Sidereal_Day') })
-        Button(I18n.t('i0174')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionSubtract_Sidereal_Day') })
-        Button(I18n.t('i0175')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Sidereal_Year') })
-        Button(I18n.t('i0176')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionSubtract_Sidereal_Year') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      // 月周期
-      Row({ space: 4 }) {
-        Button(I18n.t('i0177')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Synodic_Month') })
-        Button(I18n.t('i0178')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionSubtract_Synodic_Month') })
-        Button(I18n.t('i0179')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Saros') })
-        Button(I18n.t('i0180')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionSubtract_Saros') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      // 回归年/儒略年
-      Row({ space: 4 }) {
-        Button(I18n.t('i0181')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Tropical_Year') })
-        Button(I18n.t('i0182')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionSubtract_Tropical_Year') })
-        Button(I18n.t('i0183')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Julian_Year') })
-        Button(I18n.t('i0184')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionSubtract_Julian_Year') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      // 日历月/年
-      Row({ space: 4 }) {
-        Button(I18n.t('i0185')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Calendar_Month') })
-        Button(I18n.t('i0186')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionSubtract_Calendar_Month') })
-        Button(I18n.t('i0187')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Calendar_Year') })
-        Button(I18n.t('i0188')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionSubtract_Calendar_Year') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      // 更多周期
-      Row({ space: 4 }) {
-        Button(I18n.t('i0189')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Anomalistic_Month') })
-        Button(I18n.t('i0190')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Draconic_Month') })
-        Button(I18n.t('i0191')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Metonic_Cycle') })
-        Button(I18n.t('i0192')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Inex') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      Row({ space: 4 }) {
-        Button(I18n.t('i0193')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Gaussian_Year') })
-        Button(I18n.t('i0194')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Calendar_Decade') })
-        Button(I18n.t('i0195')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Calendar_Century') })
-        Button(I18n.t('i0196')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(26).padding({ left: 8, right: 8 })
-          .onClick(() => { this.triggerAction('actionAdd_Julian_Century') })
-      }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-      // 滚动选择日期
-      Row() {
-        Text(I18n.t('i0012')).fontSize(13).fontColor(this.nmSub()).width(72)
-        Button(this.manualYear + '年' + this.manualMonth + '月' + this.manualDay + '日')
-          .fontSize(14).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1)
-          .onClick(() => {
-            this.pickedDate = new Date(this.manualYear, this.manualMonth - 1, this.manualDay)
-            this.getUIContext().showDatePickerDialog({
-              start: new Date('1900-01-01'),
-              end: new Date('2100-12-31'),
-              selected: this.pickedDate,
-              onAccept: (value: DatePickerResult) => {
-                this.manualYear = value.year ?? this.manualYear
-                this.manualMonth = (value.month ?? (this.manualMonth - 1)) + 1
-                this.manualDay = value.day ?? this.manualDay
-              },
-              onCancel: () => {}
-            })
-          })
-      }
-      .height(40).width('100%').padding({ left: 10, right: 10 })
-      .backgroundColor('rgba(255,255,255,0.045)').borderRadius(UI_RADIUS_CONTROL).margin({ top: 4, bottom: 4 })
-      // 滚动选择时间
-      Row() {
-        Text(I18n.t('i0013')).fontSize(13).fontColor(this.nmSub()).width(72)
-        Button(String(this.manualHour).padStart(2, '0') + ':' + String(this.manualMinute).padStart(2, '0'))
-          .fontSize(14).fontColor(this.nmText()).backgroundColor(this.nmInput())
-          .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1)
-          .onClick(() => {
-            this.pickedTime = new Date(2000, 0, 1, this.manualHour, this.manualMinute)
-            this.getUIContext().showTimePickerDialog({
-              selected: this.pickedTime,
-              onAccept: (value: TimePickerResult) => {
-                this.manualHour = value.hour ?? this.manualHour
-                this.manualMinute = value.minute ?? this.manualMinute
-              },
-              onCancel: () => {}
-            })
-          })
-      }
-      .height(40).width('100%').padding({ left: 10, right: 10 })
-      .backgroundColor('rgba(255,255,255,0.045)').borderRadius(UI_RADIUS_CONTROL).margin({ top: 4, bottom: 4 })
-      // 应用按钮
-      Button(I18n.t('i0046'))
-        .fontSize(14).fontColor('#FFFFFFFF').backgroundColor('#5B93BF')
-        .borderRadius(UI_RADIUS_CONTROL).height(40).width('100%').margin({ top: 4 })
-        .onClick(() => { this.applyManualTime() })
-      Button(I18n.t('i0047'))
-        .fontSize(13).fontColor('#99FFFFFF').backgroundColor(this.nmBorder())
-        .borderRadius(UI_RADIUS_CONTROL).height(36).width('100%').margin({ top: 2 })
-        .onClick(() => {
-          this.syncManualTimeFromState()
-          this.flashHint(I18n.t('i0081'))
-        })
-
-	    } else if (this.activePanel === 'place') {
+      // 观测辅助：夜视模式（独立模块，后续主界面按钮共用同一 store）/ 大气折射
+      NightModeToggleRow({
+        store: this.nightModeStore,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        onToggle: (enabled: boolean) => { this.applyNightMode(enabled, true) }
+      })
+      ObservationAidBlock({
+        refractionOn: this.refractionOn,
+        atmoPressure: this.atmoPressure,
+        atmoTemperature: this.atmoTemperature,
+        atmoExtinction: this.atmoExtinction,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        borderColorValue: this.nmBorder(),
+        onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.applyAtmosphere(pressure, temperature, extinction) }
+      })
+      // 手动指定时间
+      ManualTimeBlock({
+        manualYear: this.manualYear,
+        manualMonth: this.manualMonth,
+        manualDay: this.manualDay,
+        manualHour: this.manualHour,
+        manualMinute: this.manualMinute,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        inputColor: this.nmInput(),
+        panelColor: this.nmBg(),
+        borderColorValue: this.nmBorder(),
+        onPickDate: (year: number, monthIndex: number, day: number) => {
+          this.manualYear = year; this.manualMonth = monthIndex + 1; this.manualDay = day
+        },
+        onPickTime: (hour: number, minute: number) => { this.manualHour = hour; this.manualMinute = minute },
+        onApply: () => { this.applyManualTime() },
+        onReset: () => { this.syncManualTimeFromState(); this.flashHint(I18n.t('i0081')) }
+      })
+    } else if (this.activePanel === 'place') {
       Row() {
         Text(I18n.t('i0014')).fontSize(12).fontColor('#99FFFFFF').width(72)
         Text(this.locationText).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -23009,7 +22768,7 @@ private loadPlanetPositions(): void {
             .backgroundColor(this.nmBorder())
             .margin({ top: 2, bottom: 8 })
           Text(I18n.t('i0114')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          this.switchRow(I18n.t('s0300'), this.nightMode, 'actionShow_Night_Mode')
+          this.switchRow(I18n.t('s0300'), this.nightModeStore.nightMode, 'actionShow_Night_Mode')
           this.switchRow(I18n.t('s0301'), this.equatorialMount, 'actionSwitch_Equatorial_Mount')
           this.switchRow(I18n.t('s0302'), this.autoZoomResets, 'setAutoZoomResets', 'setAutoZoomResets')
           Row()
@@ -27246,7 +27005,7 @@ private loadPlanetPositions(): void {
       }
       .height(18).width('100%')
       Row() {
-        this.quickChips([{ id: 'east', label: I18n.t('s0725') }, { id: 'south', label: I18n.t('s0726') }, { id: 'west', label: I18n.t('s0727') }, { id: 'north', label: I18n.t('s0728') }, { id: 'zenith', label: I18n.t('i0088') }, { id: 'ncp', label: I18n.t('i0089') }])
+        QuickChipRow({ items: [{ id: 'east', label: I18n.t('s0725') }, { id: 'south', label: I18n.t('s0726') }, { id: 'west', label: I18n.t('s0727') }, { id: 'north', label: I18n.t('s0728') }, { id: 'zenith', label: I18n.t('i0088') }, { id: 'ncp', label: I18n.t('i0089') }], onChip: (id: string) => { this.handleChip(id) } })
       }
       .width('100%')
       // 分区：视场
@@ -27259,7 +27018,7 @@ private loadPlanetPositions(): void {
       }
       .height(18).width('100%')
       Row() {
-        this.quickChips([{ id: 'fov1', label: '1°' }, { id: 'fov2', label: '2°' }, { id: 'fov5', label: '5°' }, { id: 'fov10', label: '10°' }, { id: 'fov20', label: '20°' }, { id: 'fov45', label: '45°' }, { id: 'fov60', label: '60°' }, { id: 'fov90', label: '90°' }, { id: 'fov180', label: '180°' }])
+        QuickChipRow({ items: [{ id: 'fov1', label: '1°' }, { id: 'fov2', label: '2°' }, { id: 'fov5', label: '5°' }, { id: 'fov10', label: '10°' }, { id: 'fov20', label: '20°' }, { id: 'fov45', label: '45°' }, { id: 'fov60', label: '60°' }, { id: 'fov90', label: '90°' }, { id: 'fov180', label: '180°' }], onChip: (id: string) => { this.handleChip(id) } })
       }
       .width('100%')
       // 天球投影切换
@@ -27288,15 +27047,15 @@ private loadPlanetPositions(): void {
             })
         }
         Row() {
-            Image($r(this.nightMode ? 'app.media.ic_moon' : 'app.media.ic_sun')).width(16).height(16).fillColor('#E5FFFFFF')
-            Text(this.nightMode ? I18n.t('s0707') : I18n.t('s0708')).fontSize(12).fontColor('#E5FFFFFF').margin({ left: 4 })
+            Image($r(this.nightModeStore.nightMode ? 'app.media.ic_moon' : 'app.media.ic_sun')).width(16).height(16).fillColor('#E5FFFFFF')
+            Text(this.nightModeStore.nightMode ? I18n.t('s0707') : I18n.t('s0708')).fontSize(12).fontColor('#E5FFFFFF').margin({ left: 4 })
           }
           .padding({ left: 10, right: 10 }).backgroundColor('rgba(255,255,255,0.08)')
           .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1).margin({ left: 8 })
           .onClick(() => {
-            this.nightMode = !this.nightMode
+            this.nightModeStore.nightMode = !this.nightModeStore.nightMode
             this.triggerAction('actionShow_Night_Mode')
-            this.flashHint(this.nightMode ? I18n.t('s0707') : I18n.t('s0708'))
+            this.flashHint(this.nightModeStore.nightMode ? I18n.t('s0707') : I18n.t('s0708'))
           })
       }
       .width('100%').margin({ top: 4, bottom: 4 })
@@ -27327,7 +27086,7 @@ private loadPlanetPositions(): void {
           })
       }
       .width('100%').padding({ left: 10, right: 10 }).margin({ top: 2, bottom: 4 })
-      this.quickChips([{ id: 'refresh', label: I18n.t('s0721') }, { id: 'now', label: I18n.t('s0754') }])
+      QuickChipRow({ items: [{ id: 'refresh', label: I18n.t('s0721') }, { id: 'now', label: I18n.t('s0754') }], onChip: (id: string) => { this.handleChip(id) } })
       // 帮助说明
       Row() {
         Text(I18n.t('i0026')).fontSize(12).fontColor("#99FFFFFF").width(72)
@@ -27979,37 +27738,6 @@ private loadPlanetPositions(): void {
       Text(I18n.t('privacy_revoke_message'))
         .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ top: 6 })
     }.width('100%')
-  }
-
-  @Builder
-  quickChips(items: ChipItem[]) {
-    Scroll() {
-      Row({ space: 8 }) {
-        ForEach(items, (item: ChipItem) => {
-          Button(item.label)
-            .fontSize(12)
-            .fontColor('#7FB3DC')
-            .fontWeight(FontWeight.Medium)
-            .height(32)
-            .padding({ left: 14, right: 14 })
-            .backgroundColor('rgba(107, 163, 214, 0.20)')
-            .border({ width: 1, color: 'rgba(107, 163, 214, 0.25)' })
-            .borderRadius(UI_RADIUS_PILL)
-            .shadow({ radius: 12, color: 'rgba(0, 0, 0, 0.18)', offsetX: 0, offsetY: 5 })
-            .clickEffect({ level: ClickEffectLevel.LIGHT })
-            .animation({ duration: 180, curve: curves.springMotion(0.42, 0.86) })
-            .onClick(() => {
-              this.handleChip(item.id)
-            })
-        }, (item: ChipItem) => item.id)
-      }
-      .padding({ left: 1, right: 12 })
-    }
-      .width('100%')
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.Spring)
-      .margin({ top: 12 })
   }
 
   // 时间速度控制按钮 — 参考 Sky Guide 的交互范式
@@ -29008,7 +28736,7 @@ private loadPlanetPositions(): void {
       Text('实际可见数量还会受夜间、地景亮度和地平高度影响')
         .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 86, right: 10 }).margin({ bottom: 4 })
     }
-    this.switchRow(I18n.t('s0300'), this.nightMode, 'actionShow_Night_Mode')
+    this.switchRow(I18n.t('s0300'), this.nightModeStore.nightMode, 'actionShow_Night_Mode')
     this.switchRow(I18n.t('s0309'), this.flipHoriz, 'actionHorizontal_Flip')
     this.switchRow(I18n.t('s0310'), this.flipVert, 'actionVertical_Flip')
   }

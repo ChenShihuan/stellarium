@@ -1,3 +1,22 @@
+## [2026-09-30] DevEco Code - Phase 3l：时间面板整体完成 + 夜视模式独立成模块（并修掉夜视被轮询弹回的既有缺陷）
+
+- **本片目标：** 一次性完成主时间面板（`activePanel === 'time'`，原分支 339 行）的组件化，并按用户要求把**夜视模式单独拆成模块**（后续主界面要加独立按钮）。
+- **新增文件：** `panels/QuickChipRow.ets`（替代跨 5 处共享的参数化 `@Builder quickChips(items)`；`@Prop items` + `onChip`）、`panels/time/ObservationAidBlock.ets`（大气折射 + 气压/气温/消光滑杆）、`panels/time/TimeJumpActions.ets`（天文事件 / 二分二至 / 天文时间单位三段共 13 行按钮，改为**按钮表 + 嵌套 ForEach**，不再用参数化 @Builder）、`panels/time/ManualTimeBlock.ets`（日期/时间选择 + 应用/重置）、`state/NightModeStore.ets`、`common/ui/NightModeToggleRow.ets`。
+- **单体：** `quickChips` 5 处调用全部换成 `QuickChipRow({...})` 并删除该 builder；时间面板的观测辅助 / 快捷跳转 / 手动时间三段替换为 `NightModeToggleRow` + `ObservationAidBlock` + `TimeJumpActions` + `ManualTimeBlock` 调用——**该面板现在由 8 个组件与 1 个薄包装组成**。
+- **夜视模式独立（按用户要求）：**
+  - 删除**冗余镜像字段 `nightModeOn`**（其唯一读取点就是时间面板那一行，其余 6 处只是把 `nightMode` 抄过去），"真源"只剩一个；
+  - 真源 `nightMode` 迁入 `NightModeStore`（宿主以 `@State` 持有、组件以 `@ObjectLink` 订阅），宿主 `nm*()` 配色系列改读 `this.nightModeStore.nightMode`；
+  - 新增**统一入口 `applyNightMode(enabled, persist)`**（写状态 + 可选持久化 + 下发 `setNightMode`），时间面板行与**后续主界面按钮**都走这一个入口。
+  - **实测确认了方案前提**：宿主以 `@State` 持有 `@Observed` 实例时，改其属性会触发**宿主自身**重绘（截图见下），因此全应用配色仍随夜视模式实时切换。
+- **顺带修掉一个既有缺陷（夜视被轮询弹回）：** 开启夜视后，每约 3 s 的 `loadTimeExtras()` 里 `getNightMode` 会回报**旧值**并覆盖状态；合并为单一真源后该覆盖会直接把夜视关回去，且 ArkUI 的 `Toggle` 对**程序化** `isOn` 变更也会触发 `onChange`，形成"反向再发一条 `setNightMode false`"的回路。日志实证：`setNightMode "true"` 之后 2.5 s 出现 `setNightMode "false"`（期间无用户操作）。
+  - **修法（与 `syncTimeRateState` 的同款去重窗口）：** 新增 `pendingNightMode` + `pendingNightModeUntilMs(3500 ms)`；把三处引擎写入（`loadTimeExtras` 轮询、`refreshState` 的两处）统一改为 `syncNightModeFromEngine()`，在待定窗口内忽略与待定值不一致的回报；组件侧 `onChange` 仅在 `v !== store.nightMode`（即用户改变）时回调，杜绝程序化变更引发的反向命令。
+- **真机验证（`192.168.3.95:40565`）：**
+  1. 时间面板各块渲染正常：转轴/速度 chips/快捷 chips、恒星时、时间方程、ΔT（设置页）、儒略日、夜视模式行、大气折射 + 3 滑杆、快捷跳转三段、手动时间。
+  2. **大气折射开关**点按后实时翻转（证明该区域点击有效、`@Prop` 回调路径正常）。
+  3. **夜视模式**点按后：开关保持 ON **不再被弹回**，且**整个应用切换为红光**（星空/标签/面板/Dock 全红，截图 118,548 字节；关闭后恢复 141,572 字节）——夜视模块与全应用配色联动经真机确认。
+- **验证结果：** `arkts_check` 七文件无错误；`BUILD SUCCESSFUL`；契约校验通过；真机安装启动成功；测后已恢复原设置（夜视关闭）。
+- **单体行数：** 30,143 → **29,871**；新增 6 个文件承载原逻辑。
+
 ## [2026-09-30] DevEco Code - Phase 3k：时间设置标签页迁移（修掉两个跨标签页共享的参数化 @Builder）
 
 - **新增文件：** `common/ui/SettingsChoiceButton.ets`（选项按钮组件：`@Prop active/canPick` + `onPick`）、`common/ui/SettingsSwitchRow.ets`（开关行组件：`@Prop isOn/canToggle` + `onToggle`）、`state/TimeSettingsStore.ets`（7 字段：`configDateFormat`/`configTimeFormat`/`startupTimeMode`/`startupTimeStop`/`startupTodayTime`/`startupPresetLocalTime`/`timeSettingsZone`）、`panels/settings/TimeSettingsSection.ets`（日期格式 + 时间格式 + 启动时间三段）。
