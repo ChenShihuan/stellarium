@@ -58,6 +58,10 @@ import { LocationStore } from '../state/LocationStore'
 import { CityChipsRow } from '../panels/location/CityChipsRow'
 import { LocationPickerPanel } from '../panels/location/LocationPickerPanel'
 import { LocationPickerStore } from '../state/LocationPickerStore'
+import { LayerStore } from '../state/LayerStore'
+import { LayerSwitchRow } from '../panels/layers/LayerSwitchRow'
+import { LayerPresetBar } from '../panels/layers/LayerPresetBar'
+import { LayerTabs } from '../panels/layers/LayerTabs'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
@@ -264,8 +268,6 @@ export struct WindowNativeNode {
   @State private nightModeStore: NightModeStore = new NightModeStore()
   private pendingNightMode: boolean | undefined = undefined
   private pendingNightModeUntilMs: number = 0
-  @State private flipVert: boolean = false
-  @State private flipHoriz: boolean = false
   @State private pickedDate: Date = new Date()
   @State private pickedTime: Date = new Date()
   @State private observationTimeText: string = '--'
@@ -305,6 +307,7 @@ export struct WindowNativeNode {
   @State private tonightShowerJd: number = 0
   @State private tonightPlanetRows: TonightPlanetRow[] = []
   @State private locationStore: LocationStore = new LocationStore()
+  @State private layerStore: LayerStore = new LayerStore()
   @State private fovText: string = '--'
   @State private trackingText: string = 'Off'
   @State private trackingRequestPending: boolean = false
@@ -318,18 +321,11 @@ export struct WindowNativeNode {
   private readonly EDGE_MARGIN: number = 44
   @State private observingList: string[] = []
   @State private observingListReady: boolean = false
-  @State private stars: boolean = true
   @State private skyCultures: string[] = []
   @State private isLoading: boolean = true
   @State private splashGone: boolean = false
   private startupViewportCheckedAt: number = 0
   @State private currentSkyCulture: string = ""
-  @State private planets: boolean = true
-  @State private enlargePlanets: boolean = false
-  @State private enlargeSun: boolean = false
-  @State private minorBodyMarkers: boolean = false
-  @State private planetNomenclature: boolean = false
-  @State private planetOrbits: boolean = false
   @State private orbitSettingsExpanded: boolean = false
   @State private orbitIsolated: boolean = true
   @State private orbitMajorPlanets: boolean = false
@@ -345,13 +341,6 @@ export struct WindowNativeNode {
   @State private trailThickness: number = 1
   @State private trailColor: string = '#FFFFFF'
   @State private trailColorInput: string = '#FFFFFF'
-  @State private planetHints: boolean = false
-  @State private planetTrails: boolean = false
-  @State private enlargeMoon: boolean = false
-  @State private eclipticLine: boolean = true
-  @State private galacticGrid: boolean = false
-  @State private galacticEquator: boolean = false
-  @State private dsoTextures: boolean = true
   @State private viewTab: number = 0  // View面板子标签索引
   @State private configTab: number = 0  // 统一设置面板子标签索引；默认显示主设置
   @State private timeSettingsStore: TimeSettingsStore = new TimeSettingsStore()
@@ -388,41 +377,7 @@ export struct WindowNativeNode {
   private astroTransitionId: number = 0
   private astroRequestedTab: number = -1
   private astroPanelScroller: Scroller = new Scroller()
-  @State private meteors: boolean = false
-  @State private dsoLabels: boolean = true
   @State private autoZoomResets: boolean = false
-  @State private equatorLine: boolean = false
-  @State private supergalacticEq: boolean = false
-  @State private eclJ2000Line: boolean = false
-  @State private equJ2000Line: boolean = false
-  @State private celestialPoles: boolean = false
-  @State private eclipticPoles: boolean = false
-  @State private galacticPoles: boolean = false
-  @State private equinoxPoints: boolean = false
-  @State private solsticePoints: boolean = false
-  @State private antisolarPoint: boolean = false
-  @State private umbraCircle: boolean = false
-  @State private penumbraCircle: boolean = false
-  @State private compassMarks: boolean = false
-  @State private primeVerticalLine: boolean = false
-  @State private currentVerticalLine: boolean = false
-  @State private colureLines: boolean = false
-  @State private circumpolarCircles: boolean = false
-  @State private eclipticJ2000Grid: boolean = false
-  @State private equatorialJ2000Grid: boolean = false
-  @State private supergalacticGrid: boolean = false
-  @State private longitudeLine: boolean = false
-  @State private quadratureLine: boolean = false
-  @State private precessionCircles: boolean = false
-  @State private eclipticJ2000Poles: boolean = false
-  @State private equinoxJ2000Pts: boolean = false
-  @State private solsticeJ2000Pts: boolean = false
-  @State private galacticCenter: boolean = false
-  @State private supergalacticPoles: boolean = false
-  @State private apexPoints: boolean = false
-  @State private umbraCenter: boolean = false
-  @State private zenithNadir: boolean = false
-  @State private celestialJ2000Poles: boolean = false
   // 竖直视角限位：默认开。开启后手动上下拖只会在 天顶(+90°)↔天底(-90°) 之间，不会翻过头把天倒过来。
   // 卡在天顶↔天底：默认开。开启后上下滑只改高度角（到天顶/天底就停，不翻转），
   // 左右滑只改方位角——即使手指在屏幕偏左/偏右处竖直滑，画面也绝不会旋转。
@@ -431,30 +386,10 @@ export struct WindowNativeNode {
   @State private viewLock: boolean = false
   // 画面防弯曲：限制最大视场角(100°)，不能缩到"整个天空变成一个球"，地平线保持基本平直。
   @State private flatHorizon: boolean = true
-  @State private invariantPlaneLine: boolean = false
-  @State private solarEquatorLine: boolean = false
-  @State private fixedEquatorLine: boolean = false
-  @State private fixedEquatorialGrid: boolean = false
-  @State private fovMarker: boolean = false
-  @State private fovCircularMarker: boolean = false
-  @State private fovRectangularMarker: boolean = false
   @State private fovCircularMarkerSize: number = 1
   @State private fovRectangularMarkerWidth: number = 4
   @State private fovRectangularMarkerHeight: number = 3
   @State private fovRectangularMarkerRotation: number = 0
-  @State private gridlinesMaster: boolean = false
-  @State private intercardinalPts: boolean = false
-  @State private secondaryIntercardinalPts: boolean = false
-  @State private tertiaryIntercardinalPts: boolean = false
-  @State private landscapeIllum: boolean = false
-  @State private landscapeLabels: boolean = false
-  @State private zodiac: boolean = false
-  @State private lunarSystem: boolean = false
-  @State private asterismLines: boolean = false
-  @State private asterismLabels: boolean = false
-  @State private rayHelpers: boolean = false
-  @State private hipsSurveys: boolean = false
-  @State private toastSurvey: boolean = false
   // 桥接数据
   @State private landscapeList: Array<LandscapeItem> = []
   @State private landscapeLoading: boolean = false
@@ -835,38 +770,14 @@ export struct WindowNativeNode {
   @State private landscapeFadeWithZoom: boolean = true
   @State private bortleScale: number = 3
   @State private milkyWayBright: number = 3
-  @State private luminanceAdaptation: boolean = true
-  @State private starTwinkle: boolean = true
-  @State private forcedStarTwinkle: boolean = false
-  @State private bigStarHalo: boolean = true
-  @State private starSpiky: boolean = false
   @State private meteorZhr: number = 10
   @State private meteorZhrMax: number = 240000
-  @State private zodiacalLight: boolean = true
   @State private zodiacalIntensity: number = 1
   @State private starMagLimit: number = 6.0
   @State private infoLevel: number = 1
   @State private useMetricUnits: boolean = true
   // 新增面板控制
-  @State private fogEffect: boolean = false
-  @State private nebulae: boolean = false
-  @State private milkyWay: boolean = true
-  @State private ground: boolean = true
-  @State private mistHorizon: boolean = true
-  @State private constellationLines: boolean = false
-  @State private constellationLabels: boolean = false
-  @State private constellationBoundaries: boolean = false
-  @State private constellationArt: boolean = false
-  @State private constellationHulls: boolean = false
-  @State private atmosphere: boolean = true
-  @State private cardinalPoints: boolean = true
-  @State private azimuthGrid: boolean = false
-  @State private equatorialGrid: boolean = false
-  @State private eclipticGrid: boolean = false
-  @State private meridianLine: boolean = false
-  @State private horizonLine: boolean = false
   @State private planetLabels: boolean = false
-  @State private starLabels: boolean = false
   private applicationInForeground: boolean = true
   private gyroPausedForBackground: boolean = false
   // The gyro control itself becomes a live compass while it is enabled.
@@ -2124,7 +2035,7 @@ export struct WindowNativeNode {
         if (r.ok === true) { this.flatHorizon = true }
       }),
       () => this.callNativeWhenReady("setActionChecked", "actionShow_Zenith_Nadir|1", (r: StellariumBridgeResponse) => {
-        if (r.ok === true) { this.zenithNadir = true }
+        if (r.ok === true) { this.layerStore.zenithNadir = true }
       }),
       () => { if (this.SELFTEST) { this.selfTestAllActions() } },
     ]
@@ -5404,114 +5315,114 @@ export struct WindowNativeNode {
     if (result.selectedInfoMode !== undefined) {
       this.applySelectedInfoMode(result.selectedInfoMode)
     }
-    this.stars = result.actionShow_Stars === true
-    this.planets = result.actionShow_Planets === true
-    this.planetOrbits = result.actionShow_Planets_Orbits === true
-    this.planetHints = result.actionShow_Planets_Hints === true
-    if (result.actionShow_Planets_Trails !== undefined) this.planetTrails = result.actionShow_Planets_Trails === true
-    if (result.actionShow_Planets_EnlargeMoon !== undefined) this.enlargeMoon = result.actionShow_Planets_EnlargeMoon === true
-    this.nebulae = result.actionShow_Nebulas === true
-    this.milkyWay = result.actionShow_MilkyWay === true
-    this.ground = result.actionShow_Ground === true
-    this.mistHorizon = result.actionShow_MistHorizon === true
-    this.constellationLines = result.actionShow_Constellation_Lines === true
-    this.constellationLabels = result.actionShow_Constellation_Labels === true
-    this.constellationBoundaries = result.actionShow_Constellation_Boundaries === true
-    this.constellationArt = result.actionShow_Constellation_Art === true
-    this.constellationHulls = result.actionShow_Constellation_Hulls === true
-    this.atmosphere = result.actionShow_Atmosphere === true
-    this.cardinalPoints = result.actionShow_Cardinal_Points === true
-    this.intercardinalPts = result.actionShow_Intercardinal_Points === true
-    this.secondaryIntercardinalPts = result.actionShow_Secondary_Intercardinal_Points === true
-    this.tertiaryIntercardinalPts = result.actionShow_Tertiary_Intercardinal_Points === true
-    this.compassMarks = result.actionShow_Compass_Marks === true
-    this.gridlinesMaster = result.actionShow_Gridlines === true
-    this.fovMarker = result.actionShow_FOV_Center_Marker === true
-    this.fovCircularMarker = result.actionShow_FOV_Circular_Marker === true
-    this.fovRectangularMarker = result.actionShow_FOV_Rectangular_Marker === true
+    this.layerStore.stars = result.actionShow_Stars === true
+    this.layerStore.planets = result.actionShow_Planets === true
+    this.layerStore.planetOrbits = result.actionShow_Planets_Orbits === true
+    this.layerStore.planetHints = result.actionShow_Planets_Hints === true
+    if (result.actionShow_Planets_Trails !== undefined) this.layerStore.planetTrails = result.actionShow_Planets_Trails === true
+    if (result.actionShow_Planets_EnlargeMoon !== undefined) this.layerStore.enlargeMoon = result.actionShow_Planets_EnlargeMoon === true
+    this.layerStore.nebulae = result.actionShow_Nebulas === true
+    this.layerStore.milkyWay = result.actionShow_MilkyWay === true
+    this.layerStore.ground = result.actionShow_Ground === true
+    this.layerStore.mistHorizon = result.actionShow_MistHorizon === true
+    this.layerStore.constellationLines = result.actionShow_Constellation_Lines === true
+    this.layerStore.constellationLabels = result.actionShow_Constellation_Labels === true
+    this.layerStore.constellationBoundaries = result.actionShow_Constellation_Boundaries === true
+    this.layerStore.constellationArt = result.actionShow_Constellation_Art === true
+    this.layerStore.constellationHulls = result.actionShow_Constellation_Hulls === true
+    this.layerStore.atmosphere = result.actionShow_Atmosphere === true
+    this.layerStore.cardinalPoints = result.actionShow_Cardinal_Points === true
+    this.layerStore.intercardinalPts = result.actionShow_Intercardinal_Points === true
+    this.layerStore.secondaryIntercardinalPts = result.actionShow_Secondary_Intercardinal_Points === true
+    this.layerStore.tertiaryIntercardinalPts = result.actionShow_Tertiary_Intercardinal_Points === true
+    this.layerStore.compassMarks = result.actionShow_Compass_Marks === true
+    this.layerStore.gridlinesMaster = result.actionShow_Gridlines === true
+    this.layerStore.fovMarker = result.actionShow_FOV_Center_Marker === true
+    this.layerStore.fovCircularMarker = result.actionShow_FOV_Circular_Marker === true
+    this.layerStore.fovRectangularMarker = result.actionShow_FOV_Rectangular_Marker === true
     if (result.fovCircularMarkerSize !== undefined) this.fovCircularMarkerSize = result.fovCircularMarkerSize
     if (result.fovRectangularMarkerWidth !== undefined) this.fovRectangularMarkerWidth = result.fovRectangularMarkerWidth
     if (result.fovRectangularMarkerHeight !== undefined) this.fovRectangularMarkerHeight = result.fovRectangularMarkerHeight
     if (result.fovRectangularMarkerRotation !== undefined) this.fovRectangularMarkerRotation = result.fovRectangularMarkerRotation
-    this.azimuthGrid = result.actionShow_Azimuthal_Grid === true
-    this.equatorialGrid = result.actionShow_Equatorial_Grid === true
-    this.equatorialJ2000Grid = result.actionShow_Equatorial_J2000_Grid === true
-    this.eclipticGrid = result.actionShow_Ecliptic_Grid === true
-    this.meridianLine = result.actionShow_Meridian_Line === true
-    this.horizonLine = result.actionShow_Horizon_Line === true
+    this.layerStore.azimuthGrid = result.actionShow_Azimuthal_Grid === true
+    this.layerStore.equatorialGrid = result.actionShow_Equatorial_Grid === true
+    this.layerStore.equatorialJ2000Grid = result.actionShow_Equatorial_J2000_Grid === true
+    this.layerStore.eclipticGrid = result.actionShow_Ecliptic_Grid === true
+    this.layerStore.meridianLine = result.actionShow_Meridian_Line === true
+    this.layerStore.horizonLine = result.actionShow_Horizon_Line === true
     this.planetLabels = result.actionShow_Planets_Labels === true
-    this.starLabels = result.actionShow_Stars_Labels === true
-    this.dsoLabels = result.dsoLabels === true
-    this.dsoTextures = result.actionShow_DSO_Textures === true
-    this.enlargePlanets = result.actionShow_Planets_EnlargePlanets === true
-    this.enlargeSun = result.actionShow_Planets_EnlargeSun === true
-    this.minorBodyMarkers = result.actionShow_Planets_ShowMinorBodyMarkers === true
-    this.planetNomenclature = result.actionShow_Planets_Nomenclature === true
-    this.fogEffect = result.actionShow_Fog === true
-    if (result.actionShow_Ecliptic_Line !== undefined) this.eclipticLine = result.actionShow_Ecliptic_Line === true
-    if (result.actionShow_Equator_Line !== undefined) this.equatorLine = result.actionShow_Equator_Line === true
-    if (result.actionShow_Galactic_Grid !== undefined) this.galacticGrid = result.actionShow_Galactic_Grid === true
-    if (result.actionShow_Galactic_Equator_Line !== undefined) this.galacticEquator = result.actionShow_Galactic_Equator_Line === true
-    if (result.actionShow_Supergalactic_Equator_Line !== undefined) this.supergalacticEq = result.actionShow_Supergalactic_Equator_Line === true
-    if (result.actionShow_Equator_J2000_Line !== undefined) this.equJ2000Line = result.actionShow_Equator_J2000_Line === true
-    if (result.actionShow_Ecliptic_J2000_Line !== undefined) this.eclJ2000Line = result.actionShow_Ecliptic_J2000_Line === true
-    if (result.actionShow_Celestial_Poles !== undefined) this.celestialPoles = result.actionShow_Celestial_Poles === true
-    if (result.actionShow_Ecliptic_Poles !== undefined) this.eclipticPoles = result.actionShow_Ecliptic_Poles === true
-    if (result.actionShow_Galactic_Poles !== undefined) this.galacticPoles = result.actionShow_Galactic_Poles === true
-    if (result.actionShow_Equinox_Points !== undefined) this.equinoxPoints = result.actionShow_Equinox_Points === true
-    if (result.actionShow_Solstice_Points !== undefined) this.solsticePoints = result.actionShow_Solstice_Points === true
-    if (result.actionShow_Antisolar_Point !== undefined) this.antisolarPoint = result.actionShow_Antisolar_Point === true
-    if (result.actionShow_Umbra_Circle !== undefined) this.umbraCircle = result.actionShow_Umbra_Circle === true
-    if (result.actionShow_Penumbra_Circle !== undefined) this.penumbraCircle = result.actionShow_Penumbra_Circle === true
-    if (result.actionShow_Compass_Marks !== undefined) this.compassMarks = result.actionShow_Compass_Marks === true
-    if (result.actionShow_FOV_Center_Marker !== undefined) this.fovMarker = result.actionShow_FOV_Center_Marker === true
-    if (result.actionShow_FOV_Circular_Marker !== undefined) this.fovCircularMarker = result.actionShow_FOV_Circular_Marker === true
-    if (result.actionShow_FOV_Rectangular_Marker !== undefined) this.fovRectangularMarker = result.actionShow_FOV_Rectangular_Marker === true
-    if (result.actionShow_Intercardinal_Points !== undefined) this.intercardinalPts = result.actionShow_Intercardinal_Points === true
-    if (result.actionShow_Secondary_Intercardinal_Points !== undefined) this.secondaryIntercardinalPts = result.actionShow_Secondary_Intercardinal_Points === true
-    if (result.actionShow_Tertiary_Intercardinal_Points !== undefined) this.tertiaryIntercardinalPts = result.actionShow_Tertiary_Intercardinal_Points === true
-    if (result.actionShow_Prime_Vertical_Line !== undefined) this.primeVerticalLine = result.actionShow_Prime_Vertical_Line === true
-    if (result.actionShow_Current_Vertical_Line !== undefined) this.currentVerticalLine = result.actionShow_Current_Vertical_Line === true
-    if (result.actionShow_Colure_Lines !== undefined) this.colureLines = result.actionShow_Colure_Lines === true
-    if (result.actionShow_Precession_Circles !== undefined) this.precessionCircles = result.actionShow_Precession_Circles === true
-    if (result.actionShow_Circumpolar_Circles !== undefined) this.circumpolarCircles = result.actionShow_Circumpolar_Circles === true
-    if (result.actionShow_Invariable_Plane_Line !== undefined) this.invariantPlaneLine = result.actionShow_Invariable_Plane_Line === true
-    if (result.actionShow_Solar_Equator_Line !== undefined) this.solarEquatorLine = result.actionShow_Solar_Equator_Line === true
-    if (result.actionShow_Ecliptic_J2000_Grid !== undefined) this.eclipticJ2000Grid = result.actionShow_Ecliptic_J2000_Grid === true
-    if (result.actionShow_Supergalactic_Grid !== undefined) this.supergalacticGrid = result.actionShow_Supergalactic_Grid === true
-    if (result.actionShow_Fixed_Equatorial_Grid !== undefined) this.fixedEquatorialGrid = result.actionShow_Fixed_Equatorial_Grid === true
-    if (result.actionShow_Fixed_Equator_Line !== undefined) this.fixedEquatorLine = result.actionShow_Fixed_Equator_Line === true
-    if (result.actionShow_Zenith_Nadir !== undefined) this.zenithNadir = result.actionShow_Zenith_Nadir === true
-    if (result.actionShow_Celestial_J2000_Poles !== undefined) this.celestialJ2000Poles = result.actionShow_Celestial_J2000_Poles === true
-    if (result.actionShow_Ecliptic_J2000_Poles !== undefined) this.eclipticJ2000Poles = result.actionShow_Ecliptic_J2000_Poles === true
-    if (result.actionShow_Equinox_J2000_Points !== undefined) this.equinoxJ2000Pts = result.actionShow_Equinox_J2000_Points === true
-    if (result.actionShow_Solstice_J2000_Points !== undefined) this.solsticeJ2000Pts = result.actionShow_Solstice_J2000_Points === true
-    if (result.actionShow_Galactic_Center !== undefined) this.galacticCenter = result.actionShow_Galactic_Center === true
-    if (result.actionShow_Supergalactic_Poles !== undefined) this.supergalacticPoles = result.actionShow_Supergalactic_Poles === true
-    if (result.actionShow_Apex_Points !== undefined) this.apexPoints = result.actionShow_Apex_Points === true
-    if (result.actionShow_Umbra_Center_Point !== undefined) this.umbraCenter = result.actionShow_Umbra_Center_Point === true
-    if (result.actionShow_Longitude_Line !== undefined) this.longitudeLine = result.actionShow_Longitude_Line === true
-    if (result.actionShow_Quadrature_Line !== undefined) this.quadratureLine = result.actionShow_Quadrature_Line === true
-    if (result.actionShow_Ray_Helpers !== undefined) this.rayHelpers = result.actionShow_Ray_Helpers === true
-    if (result.actionShow_LandscapeIllumination !== undefined) this.landscapeIllum = result.actionShow_LandscapeIllumination === true
-    if (result.actionShow_LandscapeLabels !== undefined) this.landscapeLabels = result.actionShow_LandscapeLabels === true
-    if (result.actionShow_Zodiac !== undefined) this.zodiac = result.actionShow_Zodiac === true
-    if (result.actionShow_LunarSystem !== undefined) this.lunarSystem = result.actionShow_LunarSystem === true
-    if (result.actionShow_Asterism_Lines !== undefined) this.asterismLines = result.actionShow_Asterism_Lines === true
-    if (result.actionShow_Asterism_Labels !== undefined) this.asterismLabels = result.actionShow_Asterism_Labels === true
-    if (result.actionShow_Hips_Surveys !== undefined) this.hipsSurveys = result.actionShow_Hips_Surveys === true
-    if (result.actionShow_Toast_Survey !== undefined) this.toastSurvey = result.actionShow_Toast_Survey === true
-    this.meteors = result.meteors === true
+    this.layerStore.starLabels = result.actionShow_Stars_Labels === true
+    this.layerStore.dsoLabels = result.dsoLabels === true
+    this.layerStore.dsoTextures = result.actionShow_DSO_Textures === true
+    this.layerStore.enlargePlanets = result.actionShow_Planets_EnlargePlanets === true
+    this.layerStore.enlargeSun = result.actionShow_Planets_EnlargeSun === true
+    this.layerStore.minorBodyMarkers = result.actionShow_Planets_ShowMinorBodyMarkers === true
+    this.layerStore.planetNomenclature = result.actionShow_Planets_Nomenclature === true
+    this.layerStore.fogEffect = result.actionShow_Fog === true
+    if (result.actionShow_Ecliptic_Line !== undefined) this.layerStore.eclipticLine = result.actionShow_Ecliptic_Line === true
+    if (result.actionShow_Equator_Line !== undefined) this.layerStore.equatorLine = result.actionShow_Equator_Line === true
+    if (result.actionShow_Galactic_Grid !== undefined) this.layerStore.galacticGrid = result.actionShow_Galactic_Grid === true
+    if (result.actionShow_Galactic_Equator_Line !== undefined) this.layerStore.galacticEquator = result.actionShow_Galactic_Equator_Line === true
+    if (result.actionShow_Supergalactic_Equator_Line !== undefined) this.layerStore.supergalacticEq = result.actionShow_Supergalactic_Equator_Line === true
+    if (result.actionShow_Equator_J2000_Line !== undefined) this.layerStore.equJ2000Line = result.actionShow_Equator_J2000_Line === true
+    if (result.actionShow_Ecliptic_J2000_Line !== undefined) this.layerStore.eclJ2000Line = result.actionShow_Ecliptic_J2000_Line === true
+    if (result.actionShow_Celestial_Poles !== undefined) this.layerStore.celestialPoles = result.actionShow_Celestial_Poles === true
+    if (result.actionShow_Ecliptic_Poles !== undefined) this.layerStore.eclipticPoles = result.actionShow_Ecliptic_Poles === true
+    if (result.actionShow_Galactic_Poles !== undefined) this.layerStore.galacticPoles = result.actionShow_Galactic_Poles === true
+    if (result.actionShow_Equinox_Points !== undefined) this.layerStore.equinoxPoints = result.actionShow_Equinox_Points === true
+    if (result.actionShow_Solstice_Points !== undefined) this.layerStore.solsticePoints = result.actionShow_Solstice_Points === true
+    if (result.actionShow_Antisolar_Point !== undefined) this.layerStore.antisolarPoint = result.actionShow_Antisolar_Point === true
+    if (result.actionShow_Umbra_Circle !== undefined) this.layerStore.umbraCircle = result.actionShow_Umbra_Circle === true
+    if (result.actionShow_Penumbra_Circle !== undefined) this.layerStore.penumbraCircle = result.actionShow_Penumbra_Circle === true
+    if (result.actionShow_Compass_Marks !== undefined) this.layerStore.compassMarks = result.actionShow_Compass_Marks === true
+    if (result.actionShow_FOV_Center_Marker !== undefined) this.layerStore.fovMarker = result.actionShow_FOV_Center_Marker === true
+    if (result.actionShow_FOV_Circular_Marker !== undefined) this.layerStore.fovCircularMarker = result.actionShow_FOV_Circular_Marker === true
+    if (result.actionShow_FOV_Rectangular_Marker !== undefined) this.layerStore.fovRectangularMarker = result.actionShow_FOV_Rectangular_Marker === true
+    if (result.actionShow_Intercardinal_Points !== undefined) this.layerStore.intercardinalPts = result.actionShow_Intercardinal_Points === true
+    if (result.actionShow_Secondary_Intercardinal_Points !== undefined) this.layerStore.secondaryIntercardinalPts = result.actionShow_Secondary_Intercardinal_Points === true
+    if (result.actionShow_Tertiary_Intercardinal_Points !== undefined) this.layerStore.tertiaryIntercardinalPts = result.actionShow_Tertiary_Intercardinal_Points === true
+    if (result.actionShow_Prime_Vertical_Line !== undefined) this.layerStore.primeVerticalLine = result.actionShow_Prime_Vertical_Line === true
+    if (result.actionShow_Current_Vertical_Line !== undefined) this.layerStore.currentVerticalLine = result.actionShow_Current_Vertical_Line === true
+    if (result.actionShow_Colure_Lines !== undefined) this.layerStore.colureLines = result.actionShow_Colure_Lines === true
+    if (result.actionShow_Precession_Circles !== undefined) this.layerStore.precessionCircles = result.actionShow_Precession_Circles === true
+    if (result.actionShow_Circumpolar_Circles !== undefined) this.layerStore.circumpolarCircles = result.actionShow_Circumpolar_Circles === true
+    if (result.actionShow_Invariable_Plane_Line !== undefined) this.layerStore.invariantPlaneLine = result.actionShow_Invariable_Plane_Line === true
+    if (result.actionShow_Solar_Equator_Line !== undefined) this.layerStore.solarEquatorLine = result.actionShow_Solar_Equator_Line === true
+    if (result.actionShow_Ecliptic_J2000_Grid !== undefined) this.layerStore.eclipticJ2000Grid = result.actionShow_Ecliptic_J2000_Grid === true
+    if (result.actionShow_Supergalactic_Grid !== undefined) this.layerStore.supergalacticGrid = result.actionShow_Supergalactic_Grid === true
+    if (result.actionShow_Fixed_Equatorial_Grid !== undefined) this.layerStore.fixedEquatorialGrid = result.actionShow_Fixed_Equatorial_Grid === true
+    if (result.actionShow_Fixed_Equator_Line !== undefined) this.layerStore.fixedEquatorLine = result.actionShow_Fixed_Equator_Line === true
+    if (result.actionShow_Zenith_Nadir !== undefined) this.layerStore.zenithNadir = result.actionShow_Zenith_Nadir === true
+    if (result.actionShow_Celestial_J2000_Poles !== undefined) this.layerStore.celestialJ2000Poles = result.actionShow_Celestial_J2000_Poles === true
+    if (result.actionShow_Ecliptic_J2000_Poles !== undefined) this.layerStore.eclipticJ2000Poles = result.actionShow_Ecliptic_J2000_Poles === true
+    if (result.actionShow_Equinox_J2000_Points !== undefined) this.layerStore.equinoxJ2000Pts = result.actionShow_Equinox_J2000_Points === true
+    if (result.actionShow_Solstice_J2000_Points !== undefined) this.layerStore.solsticeJ2000Pts = result.actionShow_Solstice_J2000_Points === true
+    if (result.actionShow_Galactic_Center !== undefined) this.layerStore.galacticCenter = result.actionShow_Galactic_Center === true
+    if (result.actionShow_Supergalactic_Poles !== undefined) this.layerStore.supergalacticPoles = result.actionShow_Supergalactic_Poles === true
+    if (result.actionShow_Apex_Points !== undefined) this.layerStore.apexPoints = result.actionShow_Apex_Points === true
+    if (result.actionShow_Umbra_Center_Point !== undefined) this.layerStore.umbraCenter = result.actionShow_Umbra_Center_Point === true
+    if (result.actionShow_Longitude_Line !== undefined) this.layerStore.longitudeLine = result.actionShow_Longitude_Line === true
+    if (result.actionShow_Quadrature_Line !== undefined) this.layerStore.quadratureLine = result.actionShow_Quadrature_Line === true
+    if (result.actionShow_Ray_Helpers !== undefined) this.layerStore.rayHelpers = result.actionShow_Ray_Helpers === true
+    if (result.actionShow_LandscapeIllumination !== undefined) this.layerStore.landscapeIllum = result.actionShow_LandscapeIllumination === true
+    if (result.actionShow_LandscapeLabels !== undefined) this.layerStore.landscapeLabels = result.actionShow_LandscapeLabels === true
+    if (result.actionShow_Zodiac !== undefined) this.layerStore.zodiac = result.actionShow_Zodiac === true
+    if (result.actionShow_LunarSystem !== undefined) this.layerStore.lunarSystem = result.actionShow_LunarSystem === true
+    if (result.actionShow_Asterism_Lines !== undefined) this.layerStore.asterismLines = result.actionShow_Asterism_Lines === true
+    if (result.actionShow_Asterism_Labels !== undefined) this.layerStore.asterismLabels = result.actionShow_Asterism_Labels === true
+    if (result.actionShow_Hips_Surveys !== undefined) this.layerStore.hipsSurveys = result.actionShow_Hips_Surveys === true
+    if (result.actionShow_Toast_Survey !== undefined) this.layerStore.toastSurvey = result.actionShow_Toast_Survey === true
+    this.layerStore.meteors = result.meteors === true
     if (result.bortleScale !== undefined) this.bortleScale = Math.round(result.bortleScale as number)
     if (result.milkyWayIntensity !== undefined) this.milkyWayBright = Math.max(0, Math.min(6, Math.round((result.milkyWayIntensity as number) * 3)))
-    if (result.luminanceAdaptation !== undefined) this.luminanceAdaptation = result.luminanceAdaptation === true
-    if (result.starTwinkle !== undefined) this.starTwinkle = result.starTwinkle === true
-    if (result.forcedStarTwinkle !== undefined) this.forcedStarTwinkle = result.forcedStarTwinkle === true
-    if (result.bigStarHalo !== undefined) this.bigStarHalo = result.bigStarHalo === true
-    if (result.starSpiky !== undefined) this.starSpiky = result.starSpiky === true
+    if (result.luminanceAdaptation !== undefined) this.layerStore.luminanceAdaptation = result.luminanceAdaptation === true
+    if (result.starTwinkle !== undefined) this.layerStore.starTwinkle = result.starTwinkle === true
+    if (result.forcedStarTwinkle !== undefined) this.layerStore.forcedStarTwinkle = result.forcedStarTwinkle === true
+    if (result.bigStarHalo !== undefined) this.layerStore.bigStarHalo = result.bigStarHalo === true
+    if (result.starSpiky !== undefined) this.layerStore.starSpiky = result.starSpiky === true
     if (result.meteorZhr !== undefined) this.meteorZhr = Math.round(result.meteorZhr as number)
     if (result.meteorZhrMax !== undefined) this.meteorZhrMax = Math.max(1000, Math.round(result.meteorZhrMax as number))
-    if (result.zodiacalLight !== undefined) this.zodiacalLight = result.zodiacalLight === true
+    if (result.zodiacalLight !== undefined) this.layerStore.zodiacalLight = result.zodiacalLight === true
     if (result.zodiacalIntensity !== undefined) this.zodiacalIntensity = result.zodiacalIntensity as number
     this.autoZoomResets = result.autoZoomResets === true
     // The native Stellarium property is authoritative. The QAction is not
@@ -5521,8 +5432,8 @@ export struct WindowNativeNode {
           } else if (result.actionShow_Night_Mode !== undefined) {
       this.syncNightModeFromEngine(result.actionShow_Night_Mode === true)
           }
-    this.flipHoriz = result.actionHorizontal_Flip === true
-    this.flipVert = result.actionVertical_Flip === true
+    this.layerStore.flipHoriz = result.actionHorizontal_Flip === true
+    this.layerStore.flipVert = result.actionVertical_Flip === true
     if (result.timeRate !== undefined) {
       this.syncTimeRateState(result.timeRate as number)
     }
@@ -5698,8 +5609,8 @@ export struct WindowNativeNode {
     if (cmd === 'setViewLock') { this.viewLock = enabled }
     else if (cmd === 'setVerticalClamp') { this.verticalClamp = enabled }
     else if (cmd === 'setFlatHorizon') { this.flatHorizon = enabled }
-    else if (cmd === 'setMeteors') { this.meteors = enabled }
-    else if (cmd === 'setDsoLabels') { this.dsoLabels = enabled }
+    else if (cmd === 'setMeteors') { this.layerStore.meteors = enabled }
+    else if (cmd === 'setDsoLabels') { this.layerStore.dsoLabels = enabled }
     else if (cmd === 'setAutoZoomResets') { this.autoZoomResets = enabled }
   }
 
@@ -5745,14 +5656,14 @@ export struct WindowNativeNode {
   }
 
   private setSkyDisplaySetting(setting: string, value: boolean | number): void {
-    if (setting === 'luminanceAdaptation') this.luminanceAdaptation = value as boolean
-    else if (setting === 'starTwinkle') this.starTwinkle = value as boolean
-    else if (setting === 'forcedStarTwinkle') this.forcedStarTwinkle = value as boolean
-    else if (setting === 'bigStarHalo') this.bigStarHalo = value as boolean
-    else if (setting === 'starSpiky') this.starSpiky = value as boolean
+    if (setting === 'luminanceAdaptation') this.layerStore.luminanceAdaptation = value as boolean
+    else if (setting === 'starTwinkle') this.layerStore.starTwinkle = value as boolean
+    else if (setting === 'forcedStarTwinkle') this.layerStore.forcedStarTwinkle = value as boolean
+    else if (setting === 'bigStarHalo') this.layerStore.bigStarHalo = value as boolean
+    else if (setting === 'starSpiky') this.layerStore.starSpiky = value as boolean
     else if (setting === 'bortleScale') this.bortleScale = Math.round(value as number)
     else if (setting === 'meteorZhr') this.meteorZhr = Math.round(value as number)
-    else if (setting === 'zodiacalLight') this.zodiacalLight = value as boolean
+    else if (setting === 'zodiacalLight') this.layerStore.zodiacalLight = value as boolean
     else if (setting === 'zodiacalIntensity') this.zodiacalIntensity = value as number
     const payload = setting + '|' + (typeof value === 'boolean' ? (value ? '1' : '0') : value.toString())
     this.callInteractive('setSkyDisplaySetting', payload, (r: StellariumBridgeResponse) => {
@@ -8614,15 +8525,15 @@ export struct WindowNativeNode {
 
   private skyCultureColorOptions(): ConfigurationOption[] {
     const options: ConfigurationOption[] = []
-    if (this.constellationLines) options.push({ id: 'constellationLines', label: '星座连线' })
-    if (this.constellationLabels) options.push({ id: 'constellationLabels', label: '星座标签' })
-    if (this.constellationBoundaries) options.push({ id: 'constellationBoundaries', label: '星座边界' })
-    if (this.constellationHulls) options.push({ id: 'constellationHulls', label: '星座区域边界' })
-    if (this.asterismLines) options.push({ id: 'asterismLines', label: '星群连线' })
-    if (this.asterismLabels) options.push({ id: 'asterismLabels', label: '星群标签' })
-    if (this.rayHelpers) options.push({ id: 'rayHelpers', label: '辅助射线' })
-    if (this.zodiac && this.skyCultureHasZodiac) options.push({ id: 'zodiac', label: '文化黄道' })
-    if (this.lunarSystem && this.skyCultureHasLunarSystem) options.push({ id: 'lunarSystem', label: '月宿系统' })
+    if (this.layerStore.constellationLines) options.push({ id: 'constellationLines', label: '星座连线' })
+    if (this.layerStore.constellationLabels) options.push({ id: 'constellationLabels', label: '星座标签' })
+    if (this.layerStore.constellationBoundaries) options.push({ id: 'constellationBoundaries', label: '星座边界' })
+    if (this.layerStore.constellationHulls) options.push({ id: 'constellationHulls', label: '星座区域边界' })
+    if (this.layerStore.asterismLines) options.push({ id: 'asterismLines', label: '星群连线' })
+    if (this.layerStore.asterismLabels) options.push({ id: 'asterismLabels', label: '星群标签' })
+    if (this.layerStore.rayHelpers) options.push({ id: 'rayHelpers', label: '辅助射线' })
+    if (this.layerStore.zodiac && this.skyCultureHasZodiac) options.push({ id: 'zodiac', label: '文化黄道' })
+    if (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) options.push({ id: 'lunarSystem', label: '月宿系统' })
     return options
   }
 
@@ -10882,11 +10793,11 @@ private loadPlanetPositions(): void {
   private openConstellationGuide(name: string, moduleId: string = 'ConstellationMgr', displayName: string = ''): void {
     this.flashHint('已开启星座名称和连线，正在定位' + (displayName.length > 0 ? displayName : this.zhNameOf(name)))
     this.callInteractive('setActionChecked', 'actionShow_Constellation_Boundaries|0', () => {
-      this.constellationBoundaries = false
+      this.layerStore.constellationBoundaries = false
       this.callInteractive('setActionChecked', 'actionShow_Constellation_Lines|1', () => {
-        this.constellationLines = true
+        this.layerStore.constellationLines = true
         this.callInteractive('setActionChecked', 'actionShow_Constellation_Labels|1', () => {
-          this.constellationLabels = true
+          this.layerStore.constellationLabels = true
           this.searchObject(name, moduleId)
         })
       })
@@ -15263,7 +15174,7 @@ private loadPlanetPositions(): void {
     }
     this.resetPanelIdle()
 
-    // Layer toggles are handled by Toggle.onChange in switchRow Builder
+    // Layer toggles are handled by Toggle.onChange in the LayerSwitchRow component
     // Hardcoded coordinates removed - layout changed with grouped sections
 
     if (this.activePanel === 'search') {
@@ -20613,8 +20524,8 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       }
     } else if (this.activePanel === 'layers') {
       Column() {
-        this.layerPresetBar()
-        this.viewTabs()
+        LayerPresetBar({ subColor: this.nmSub(), textColor: this.nmText(), panelColor: this.nmBg(), onPreset: (preset: string) => { this.applyLayerPreset(preset) }, onClear: () => { this.clearMarkingLayers() } })
+        LayerTabs({ tabs: this.layerTabItems(), activeTab: this.viewTab, foldTablet: this.isFoldTabletLayout, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), onSelectTab: (id: number) => { this.selectViewTab(id) } })
         Column({ space: 0 }) {
           if (this.viewTab === 0) {
             this.viewSkyTab()
@@ -20717,17 +20628,17 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             .backgroundColor(this.nmBorder())
             .margin({ top: 2, bottom: 8 })
           Text(I18n.t('i0114')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          this.switchRow(I18n.t('s0300'), this.nightModeStore.nightMode, 'actionShow_Night_Mode')
-          this.switchRow(I18n.t('s0301'), this.equatorialMount, 'actionSwitch_Equatorial_Mount')
-          this.switchRow(I18n.t('s0302'), this.autoZoomResets, 'setAutoZoomResets', 'setAutoZoomResets')
+          LayerSwitchRow({ label: I18n.t('s0300'), isOn: this.nightModeStore.nightMode, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Night_Mode', '', value) } })
+          LayerSwitchRow({ label: I18n.t('s0301'), isOn: this.equatorialMount, onToggle: (value: boolean) => { this.applyLayerSwitch('actionSwitch_Equatorial_Mount', '', value) } })
+          LayerSwitchRow({ label: I18n.t('s0302'), isOn: this.autoZoomResets, onToggle: (value: boolean) => { this.applyLayerSwitch('setAutoZoomResets', 'setAutoZoomResets', value) } })
           Row()
             .width('100%').height(0.5)
             .backgroundColor(this.nmBorder())
             .margin({ top: 6, bottom: 4 })
           Text(I18n.t('i0116')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 8 })
-          this.switchRow(I18n.t('s0304'), this.liveMode, '')
-          this.switchRow(I18n.t('set_vert_clamp'), this.verticalClamp, '', 'setVerticalClamp')
-          this.switchRow(I18n.t('set_flat_horizon'), this.flatHorizon, '', 'setFlatHorizon')
+          LayerSwitchRow({ label: I18n.t('s0304'), isOn: this.liveMode, onToggle: (value: boolean) => { this.applyLayerSwitch('', '', value) } })
+          LayerSwitchRow({ label: I18n.t('set_vert_clamp'), isOn: this.verticalClamp, onToggle: (value: boolean) => { this.applyLayerSwitch('', 'setVerticalClamp', value) } })
+          LayerSwitchRow({ label: I18n.t('set_flat_horizon'), isOn: this.flatHorizon, onToggle: (value: boolean) => { this.applyLayerSwitch('', 'setFlatHorizon', value) } })
           Row({ space: 6 }) {
             Button(I18n.t('i0142')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
               .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
@@ -24895,25 +24806,25 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         Text(I18n.t('i0277')).fontSize(12).fontColor('#99FFFFFF').width(72)
         Row() {
               Image($r('app.media.ic_layers')).width(14).height(14).fillColor('#E5FFFFFF')
-              Text(this.flipVert ? I18n.t('s0709') : I18n.t('s0710')).fontSize(11).fontColor('#E5FFFFFF').margin({ left: 3 })
+              Text(this.layerStore.flipVert ? I18n.t('s0709') : I18n.t('s0710')).fontSize(11).fontColor('#E5FFFFFF').margin({ left: 3 })
             }
-          .padding({ left: 8, right: 8 }).backgroundColor(this.flipVert ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.08)')
+          .padding({ left: 8, right: 8 }).backgroundColor(this.layerStore.flipVert ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.08)')
           .borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1)
           .onClick(() => {
-            this.flipVert = !this.flipVert
+            this.layerStore.flipVert = !this.layerStore.flipVert
             this.triggerAction('actionVertical_Flip')
-            this.flashHint(this.flipVert ? I18n.t('msg_flip_south_up') : I18n.t('msg_flip_north_up'))
+            this.flashHint(this.layerStore.flipVert ? I18n.t('msg_flip_south_up') : I18n.t('msg_flip_north_up'))
           })
         Row() {
               Image($r('app.media.ic_refresh')).width(14).height(14).fillColor('#E5FFFFFF')
-              Text(this.flipHoriz ? I18n.t('s0711') : I18n.t('s0712')).fontSize(11).fontColor('#E5FFFFFF').margin({ left: 3 })
+              Text(this.layerStore.flipHoriz ? I18n.t('s0711') : I18n.t('s0712')).fontSize(11).fontColor('#E5FFFFFF').margin({ left: 3 })
             }
-          .padding({ left: 8, right: 8 }).backgroundColor(this.flipHoriz ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.08)')
+          .padding({ left: 8, right: 8 }).backgroundColor(this.layerStore.flipHoriz ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.08)')
           .padding({ left: 8, right: 8 }).borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1).margin({ left: 6 }).justifyContent(FlexAlign.Center)
           .onClick(() => {
-            this.flipHoriz = !this.flipHoriz
+            this.layerStore.flipHoriz = !this.layerStore.flipHoriz
             this.triggerAction('actionHorizontal_Flip')
-            this.flashHint(this.flipHoriz ? I18n.t('s0711') : I18n.t('s0712'))
+            this.flashHint(this.layerStore.flipHoriz ? I18n.t('s0711') : I18n.t('s0712'))
           })
       }
       .width('100%').padding({ left: 10, right: 10 }).margin({ top: 2, bottom: 4 })
@@ -25706,46 +25617,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   }
 
   @Builder
-  switchRow(label: ResourceStr, enabled: boolean, actionId: string, cmd?: string) {
-    Row() {
-      Text(label)
-        .fontSize(14)
-        .fontColor('#E5FFFFFF')
-        .layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: actionId === 'actionShow_Ground' ? this.ground :
-        (actionId === 'actionShow_MistHorizon' ? this.mistHorizon : enabled) })
-        .width(46)
-        .height(28)
-        .selectedColor('#5B93BF')
-        .clickEffect({ level: ClickEffectLevel.LIGHT })
-        .onChange((value: boolean) => {
-          if (actionId === 'actionShow_Ground' && value === this.ground) return
-          if (actionId === 'actionShow_MistHorizon' && value === this.mistHorizon) return
-          if (cmd) {
-            if (cmd.indexOf('setSkyDisplay') === 0) {
-              this.setSkyDisplaySetting(actionId, value)
-            } else {
-              this.setBridgeFlag(cmd, value)
-            }
-          } else {
-            this.setLayer(actionId, value)
-          }
-          this.flashHint(I18n.t(value ? 'msg_shown' : 'msg_hidden'))
-        })
-    }
-      .height(42)
-      .width('100%')
-      .padding({ left: 10, right: 8 })
-      .backgroundColor((actionId === 'actionShow_Ground' ? this.ground :
-        (actionId === 'actionShow_MistHorizon' ? this.mistHorizon : enabled)) ? 'rgba(107, 163, 214, 0.12)' : 'rgba(255, 255, 255, 0.04)')
-      .border({ width: 1, color: (actionId === 'actionShow_Ground' ? this.ground :
-        (actionId === 'actionShow_MistHorizon' ? this.mistHorizon : enabled)) ? 'rgba(107, 163, 214, 0.18)' : 'rgba(255, 255, 255, 0.05)' })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .margin({ bottom: 6 })
-      .animation({ duration: 200, curve: curves.springMotion(0.45, 0.9) })
-  }
-
-  @Builder
   navigationSwitchRow(label: ResourceStr, enabled: boolean, setting: string) {
     Row() {
       Text(label).fontSize(13).fontColor(this.nmText()).layoutWeight(1).maxLines(2)
@@ -26017,6 +25888,21 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
     return date.length > 0 ? date + ' · ' + this.timeStore.timeRateText : this.timeStore.timeRateText
   }
 
+  /** 图层开关的统一写回：setSkyDisplay* 走 setSkyDisplaySetting，其余带 cmd 的走 setBridgeFlag，
+   *  无 cmd 的走 setLayer；与原 @Builder switchRow 的 onChange 分派逐字等价（含 flashHint 提示）。 */
+  private applyLayerSwitch(actionId: string, cmd: string, value: boolean): void {
+    if (cmd.length > 0) {
+      if (cmd.indexOf('setSkyDisplay') === 0) {
+        this.setSkyDisplaySetting(actionId, value)
+      } else {
+        this.setBridgeFlag(cmd, value)
+      }
+    } else {
+      this.setLayer(actionId, value)
+    }
+    this.flashHint(I18n.t(value ? 'msg_shown' : 'msg_hidden'))
+  }
+
   private layerTabItems(): TabItem[] {
     const tabs: TabItem[] = [
       { label: I18n.t('v0000'), id: 0 },
@@ -26103,55 +25989,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
     this.applyLayerStates(states, preset === 'clean' ? '已应用纯净星空图层。' : (preset === 'observe' ? '已应用观测辅助图层。' : '已应用摄影构图图层。'))
   }
 
-  @Builder
-  layerPresetBar() {
-    Column({ space: 4 }) {
-      Text('图层预设').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-      Row({ space: 5 }) {
-        Button('纯净星空').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-          .onClick(() => { this.applyLayerPreset('clean') })
-        Button('观测辅助').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-          .onClick(() => { this.applyLayerPreset('observe') })
-        Button('摄影构图').fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-          .onClick(() => { this.applyLayerPreset('photo') })
-      }.width('100%').padding({ left: 2, right: 2 })
-      Button('清除坐标与标记').fontSize(10).fontColor(this.nmSub()).backgroundColor(this.nmBg())
-        .borderRadius(UI_RADIUS_CONTROL).height(27).padding({ left: 9, right: 9 })
-        .onClick(() => { this.clearMarkingLayers() })
-    }.width('100%').margin({ bottom: 4 })
-  }
-
-  // View 面板标签页选择器
-  @Builder viewTabs() {
-    Scroll() {
-      Row({ space: this.isFoldTabletLayout ? 5 : 6 }) {
-        ForEach(this.layerTabItems(), (tab: TabItem) => {
-          Text(tab.label)
-            .fontSize(this.isFoldTabletLayout ? 11 : 10)
-            .fontColor(this.viewTab === tab.id ? this.nmText() : this.nmSub())
-            .padding({ left: this.isFoldTabletLayout ? 10 : 8, right: this.isFoldTabletLayout ? 10 : 8, top: 5, bottom: 5 })
-            .backgroundColor(this.viewTab === tab.id ? this.nmAccent() : this.nmBg())
-            .borderRadius(UI_RADIUS_CONTROL)
-            .clickEffect({ level: ClickEffectLevel.LIGHT })
-            .animation({ duration: 180, curve: Curve.EaseInOut })
-            .onClick(() => {
-              this.selectViewTab(tab.id)
-            })
-        }, (tab: TabItem, index: number) => tab.id.toString())
-      }
-      .padding({ left: 2, right: 12 })
-    }
-    .width('100%')
-    .height(38)
-    .scrollable(ScrollDirection.Horizontal)
-    .scrollBar(BarState.Off)
-    .edgeEffect(EdgeEffect.Spring)
-    .margin({ top: 4, bottom: 10 })
-  }
-
   private selectViewTab(tabId: number): void {
     if (tabId === this.viewTab) return
     const direction = tabId > this.viewTab ? 1 : -1
@@ -26209,9 +26046,9 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   // View 面板 Sky 标签页内容
   @Builder viewSkyTab() {
     Text('天空与恒星').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 2, bottom: 6 }).padding({ left: 2 })
-    this.switchRow(I18n.t('s0530'), this.stars, 'actionShow_Stars')
-    this.switchRow(I18n.t('s0531'), this.milkyWay, 'actionShow_MilkyWay')
-    this.switchRow(I18n.t('s0532'), this.starLabels, 'actionShow_Stars_Labels')
+    LayerSwitchRow({ label: I18n.t('s0530'), isOn: this.layerStore.stars, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Stars', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0531'), isOn: this.layerStore.milkyWay, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_MilkyWay', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0532'), isOn: this.layerStore.starLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Stars_Labels', '', value) } })
     // 星等限制
     Row() {
       Text(I18n.t('i0300')).fontSize(12).fontColor(this.nmSub()).width(72)
@@ -26237,9 +26074,9 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         })
       Text(this.starMagLimit.toFixed(1)).fontSize(12).fontColor(this.nmText()).width(28).textAlign(TextAlign.End)
     }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-    this.switchRow(I18n.t('s0305'), this.atmosphere, 'actionShow_Atmosphere')
-    this.switchRow(I18n.t('s0306'), this.ground, 'actionShow_Ground')
-    this.switchRow(I18n.t('s0307'), this.fogEffect, 'actionShow_Fog')
+    LayerSwitchRow({ label: I18n.t('s0305'), isOn: this.layerStore.atmosphere, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Atmosphere', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0306'), isOn: this.layerStore.ground, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ground', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0307'), isOn: this.layerStore.fogEffect, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Fog', '', value) } })
     Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 5, bottom: 8 })
     Text('观测条件').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 }).padding({ left: 2 })
     Row() {
@@ -26249,15 +26086,15 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         .onChange((value: number) => { this.setSkyDisplaySetting('bortleScale', Math.round(value)) })
       Text('Bortle ' + this.bortleScale).fontSize(11).fontColor(this.nmText()).width(58).textAlign(TextAlign.End)
     }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-    this.switchRow('人眼动态视觉调适', this.luminanceAdaptation, 'luminanceAdaptation', 'setSkyDisplayLuminanceAdaptation')
-    this.switchRow('星星闪烁', this.starTwinkle, 'starTwinkle', 'setSkyDisplayStarTwinkle')
-    if (this.starTwinkle) {
-      this.switchRow('无大气时保持闪烁', this.forcedStarTwinkle, 'forcedStarTwinkle', 'setSkyDisplayForcedTwinkle')
+    LayerSwitchRow({ label: '人眼动态视觉调适', isOn: this.layerStore.luminanceAdaptation, onToggle: (value: boolean) => { this.applyLayerSwitch('luminanceAdaptation', 'setSkyDisplayLuminanceAdaptation', value) } })
+    LayerSwitchRow({ label: '星星闪烁', isOn: this.layerStore.starTwinkle, onToggle: (value: boolean) => { this.applyLayerSwitch('starTwinkle', 'setSkyDisplayStarTwinkle', value) } })
+    if (this.layerStore.starTwinkle) {
+      LayerSwitchRow({ label: '无大气时保持闪烁', isOn: this.layerStore.forcedStarTwinkle, onToggle: (value: boolean) => { this.applyLayerSwitch('forcedStarTwinkle', 'setSkyDisplayForcedTwinkle', value) } })
     }
-    this.switchRow('亮星光晕', this.bigStarHalo, 'bigStarHalo', 'setSkyDisplayBigStarHalo')
-    this.switchRow('星芒效果', this.starSpiky, 'starSpiky', 'setSkyDisplayStarSpiky')
-    this.switchRow('黄道光', this.zodiacalLight, 'zodiacalLight', 'setSkyDisplayZodiacalLight')
-    if (this.zodiacalLight) {
+    LayerSwitchRow({ label: '亮星光晕', isOn: this.layerStore.bigStarHalo, onToggle: (value: boolean) => { this.applyLayerSwitch('bigStarHalo', 'setSkyDisplayBigStarHalo', value) } })
+    LayerSwitchRow({ label: '星芒效果', isOn: this.layerStore.starSpiky, onToggle: (value: boolean) => { this.applyLayerSwitch('starSpiky', 'setSkyDisplayStarSpiky', value) } })
+    LayerSwitchRow({ label: '黄道光', isOn: this.layerStore.zodiacalLight, onToggle: (value: boolean) => { this.applyLayerSwitch('zodiacalLight', 'setSkyDisplayZodiacalLight', value) } })
+    if (this.layerStore.zodiacalLight) {
       Row() {
         Text('黄道光亮度').fontSize(12).fontColor(this.nmSub()).width(76)
         Slider({ value: this.zodiacalIntensity, min: 0, max: 5, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
@@ -26266,7 +26103,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         Text(this.zodiacalIntensity.toFixed(1)).fontSize(11).fontColor(this.nmText()).width(34).textAlign(TextAlign.End)
       }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
     }
-    this.switchRow(I18n.t('s0308'), this.meteors, 'setMeteors', 'setMeteors')
+    LayerSwitchRow({ label: I18n.t('s0308'), isOn: this.layerStore.meteors, onToggle: (value: boolean) => { this.applyLayerSwitch('setMeteors', 'setMeteors', value) } })
     // 银河亮度
     Row() {
       Text(I18n.t('i0212')).fontSize(12).fontColor(this.nmSub()).width(72)
@@ -26290,7 +26127,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           })
       }
     }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-    if (this.meteors) {
+    if (this.layerStore.meteors) {
       Row() {
         Text('理论流星率').fontSize(12).fontColor(this.nmSub()).width(76)
         Slider({ value: this.meteorZhrSliderPosition(), min: 0, max: 1000, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
@@ -26301,17 +26138,17 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       Text('实际可见数量还会受夜间、地景亮度和地平高度影响')
         .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 86, right: 10 }).margin({ bottom: 4 })
     }
-    this.switchRow(I18n.t('s0300'), this.nightModeStore.nightMode, 'actionShow_Night_Mode')
-    this.switchRow(I18n.t('s0309'), this.flipHoriz, 'actionHorizontal_Flip')
-    this.switchRow(I18n.t('s0310'), this.flipVert, 'actionVertical_Flip')
+    LayerSwitchRow({ label: I18n.t('s0300'), isOn: this.nightModeStore.nightMode, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Night_Mode', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0309'), isOn: this.layerStore.flipHoriz, onToggle: (value: boolean) => { this.applyLayerSwitch('actionHorizontal_Flip', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0310'), isOn: this.layerStore.flipVert, onToggle: (value: boolean) => { this.applyLayerSwitch('actionVertical_Flip', '', value) } })
   }
 
   // View 面板 SSO 标签页内容
   @Builder viewSSOTab() {
     Text('基础显示').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 2, bottom: 6 }).padding({ left: 2 })
-    this.switchRow(I18n.t('s0311'), this.planets, 'actionShow_Planets')
-    this.switchRow(I18n.t('s0312'), this.planetOrbits, 'actionShow_Planets_Orbits')
-    if (this.planetOrbits) {
+    LayerSwitchRow({ label: I18n.t('s0311'), isOn: this.layerStore.planets, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0312'), isOn: this.layerStore.planetOrbits, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_Orbits', '', value) } })
+    if (this.layerStore.planetOrbits) {
       Row() {
         Column({ space: 1 }) {
           Text('轨道显示方式').fontSize(12).fontColor(this.nmSub()).width('100%')
@@ -26383,10 +26220,10 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
     }
-    this.switchRow(I18n.t('s0314'), this.planetHints, 'actionShow_Planets_Hints')
+    LayerSwitchRow({ label: I18n.t('s0314'), isOn: this.layerStore.planetHints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_Hints', '', value) } })
     Text('高级标记').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 8, bottom: 6 }).padding({ left: 2 })
-    this.switchRow(I18n.t('s0313'), this.planetTrails, 'actionShow_Planets_Trails')
-    if (this.planetTrails) {
+    LayerSwitchRow({ label: I18n.t('s0313'), isOn: this.layerStore.planetTrails, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_Trails', '', value) } })
+    if (this.layerStore.planetTrails) {
       Row() {
         Column({ space: 1 }) {
           Text('轨迹显示方式').fontSize(12).fontColor(this.nmSub()).width('100%')
@@ -26447,13 +26284,13 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
     }
-    this.switchRow(I18n.t('s0318'), this.minorBodyMarkers, 'actionShow_Planets_ShowMinorBodyMarkers')
-    this.switchRow(I18n.t('s0319'), this.planetNomenclature, 'actionShow_Planets_Nomenclature')
+    LayerSwitchRow({ label: I18n.t('s0318'), isOn: this.layerStore.minorBodyMarkers, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_ShowMinorBodyMarkers', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0319'), isOn: this.layerStore.planetNomenclature, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_Nomenclature', '', value) } })
     if (this.isExpandedLayout) {
       Text('视直径增强').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 8, bottom: 6 }).padding({ left: 2 })
-      this.switchRow(I18n.t('s0315'), this.enlargeMoon, 'actionShow_Planets_EnlargeMoon')
-      this.switchRow(I18n.t('s0316'), this.enlargePlanets, 'actionShow_Planets_EnlargePlanets')
-      this.switchRow(I18n.t('s0317'), this.enlargeSun, 'actionShow_Planets_EnlargeSun')
+      LayerSwitchRow({ label: I18n.t('s0315'), isOn: this.layerStore.enlargeMoon, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_EnlargeMoon', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0316'), isOn: this.layerStore.enlargePlanets, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_EnlargePlanets', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0317'), isOn: this.layerStore.enlargeSun, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_EnlargeSun', '', value) } })
     }
     Row() {
       Text(I18n.t('i0281')).fontSize(12).fontColor(this.nmSub()).width(72)
@@ -26466,9 +26303,9 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   // View 面板 DSO 标签页内容
   @Builder viewDSOTab() {
     Text('显示内容').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 2, bottom: 6 }).padding({ left: 2 })
-    this.switchRow(I18n.t('s0320'), this.nebulae, 'actionShow_Nebulas')
-    this.switchRow(I18n.t('s0321'), this.dsoLabels, 'setDsoLabels', 'setDsoLabels')
-    this.switchRow(I18n.t('s0322'), this.dsoTextures, 'actionShow_DSO_Textures')
+    LayerSwitchRow({ label: I18n.t('s0320'), isOn: this.layerStore.nebulae, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Nebulas', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0321'), isOn: this.layerStore.dsoLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('setDsoLabels', 'setDsoLabels', value) } })
+    LayerSwitchRow({ label: I18n.t('s0322'), isOn: this.layerStore.dsoTextures, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_DSO_Textures', '', value) } })
   }
 
   // View 面板 Markings 标签页内容
@@ -26477,13 +26314,13 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         Text(I18n.t('view_orientation_marks')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 4, bottom: 2 }).padding({ left: 2 })
         Text(I18n.t('view_orientation_marks_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2)
           .padding({ left: 2, right: 2 }).margin({ bottom: 5 })
-        this.switchRow(I18n.t('s0533'), this.cardinalPoints, 'actionShow_Cardinal_Points')
-        this.switchRow(I18n.t('s0342'), this.compassMarks, 'actionShow_Compass_Marks')
+        LayerSwitchRow({ label: I18n.t('s0533'), isOn: this.layerStore.cardinalPoints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Cardinal_Points', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0342'), isOn: this.layerStore.compassMarks, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Compass_Marks', '', value) } })
         // 基础网格
         Text(I18n.t('i0197')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 4, bottom: 2 }).padding({ left: 2 })
-        this.switchRow(I18n.t('s0538'), this.gridlinesMaster, 'actionShow_Gridlines')
-        this.switchRow(I18n.t('s0323'), this.equatorialGrid, 'actionShow_Equatorial_Grid')
-        this.switchRow(I18n.t('s0324'), this.azimuthGrid, 'actionShow_Azimuthal_Grid')
+        LayerSwitchRow({ label: I18n.t('s0538'), isOn: this.layerStore.gridlinesMaster, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Gridlines', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0323'), isOn: this.layerStore.equatorialGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equatorial_Grid', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0324'), isOn: this.layerStore.azimuthGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Azimuthal_Grid', '', value) } })
         // 特殊线
         Row()
           .width('100%').height(0.5)
@@ -26491,13 +26328,13 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .margin({ top: 6, bottom: 4 })
         Text(I18n.t('i0198')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
           .height(18).width('100%')
-        this.switchRow(I18n.t('s0325'), this.equatorLine, 'actionShow_Equator_Line')
-        this.switchRow(I18n.t('s0326'), this.eclipticLine, 'actionShow_Ecliptic_Line')
-        this.switchRow(I18n.t('s0327'), this.meridianLine, 'actionShow_Meridian_Line')
-        this.switchRow(I18n.t('s0328'), this.horizonLine, 'actionShow_Horizon_Line')
-        this.switchRow(I18n.t('s0329'), this.galacticEquator, 'actionShow_Galactic_Equator_Line')
-        this.switchRow(I18n.t('s0330'), this.supergalacticEq, 'actionShow_Supergalactic_Equator_Line')
-        this.switchRow(I18n.t('s0331'), this.galacticGrid, 'actionShow_Galactic_Grid')
+        LayerSwitchRow({ label: I18n.t('s0325'), isOn: this.layerStore.equatorLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equator_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0326'), isOn: this.layerStore.eclipticLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0327'), isOn: this.layerStore.meridianLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Meridian_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0328'), isOn: this.layerStore.horizonLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Horizon_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0329'), isOn: this.layerStore.galacticEquator, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Galactic_Equator_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0330'), isOn: this.layerStore.supergalacticEq, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Supergalactic_Equator_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0331'), isOn: this.layerStore.galacticGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Galactic_Grid', '', value) } })
         // J2000 线
         Row()
           .width('100%').height(0.5)
@@ -26505,8 +26342,8 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .margin({ top: 6, bottom: 4 })
         Text(I18n.t('i0199')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
           .height(18).width('100%')
-        this.switchRow(I18n.t('s0332'), this.equJ2000Line, 'actionShow_Equator_J2000_Line')
-        this.switchRow(I18n.t('s0333'), this.eclJ2000Line, 'actionShow_Ecliptic_J2000_Line')
+        LayerSwitchRow({ label: I18n.t('s0332'), isOn: this.layerStore.equJ2000Line, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equator_J2000_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0333'), isOn: this.layerStore.eclJ2000Line, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_J2000_Line', '', value) } })
         // 点标记
         Row()
           .width('100%').height(0.5)
@@ -26514,14 +26351,14 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .margin({ top: 6, bottom: 4 })
         Text(I18n.t('i0200')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
           .height(18).width('100%')
-        this.switchRow(I18n.t('s0334'), this.celestialPoles, 'actionShow_Celestial_Poles')
-        this.switchRow(I18n.t('s0335'), this.eclipticPoles, 'actionShow_Ecliptic_Poles')
-        this.switchRow(I18n.t('s0336'), this.galacticPoles, 'actionShow_Galactic_Poles')
-        this.switchRow(I18n.t('s0337'), this.equinoxPoints, 'actionShow_Equinox_Points')
-        this.switchRow(I18n.t('s0338'), this.solsticePoints, 'actionShow_Solstice_Points')
-        this.switchRow(I18n.t('s0339'), this.antisolarPoint, 'actionShow_Antisolar_Point')
-        this.switchRow(I18n.t('s0340'), this.umbraCircle, 'actionShow_Umbra_Circle')
-        this.switchRow(I18n.t('s0341'), this.penumbraCircle, 'actionShow_Penumbra_Circle')
+        LayerSwitchRow({ label: I18n.t('s0334'), isOn: this.layerStore.celestialPoles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Celestial_Poles', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0335'), isOn: this.layerStore.eclipticPoles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_Poles', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0336'), isOn: this.layerStore.galacticPoles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Galactic_Poles', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0337'), isOn: this.layerStore.equinoxPoints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equinox_Points', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0338'), isOn: this.layerStore.solsticePoints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Solstice_Points', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0339'), isOn: this.layerStore.antisolarPoint, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Antisolar_Point', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0340'), isOn: this.layerStore.umbraCircle, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Umbra_Circle', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0341'), isOn: this.layerStore.penumbraCircle, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Penumbra_Circle', '', value) } })
         // 辅助标记
         Row()
           .width('100%').height(0.5)
@@ -26529,9 +26366,9 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .margin({ top: 6, bottom: 4 })
         Text(I18n.t('i0284')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
           .height(18).width('100%')
-        this.switchRow(I18n.t('s0343'), this.fovMarker, 'actionShow_FOV_Center_Marker')
-        this.switchRow(I18n.t('s0534'), this.fovCircularMarker, 'actionShow_FOV_Circular_Marker')
-        if (this.fovCircularMarker) {
+        LayerSwitchRow({ label: I18n.t('s0343'), isOn: this.layerStore.fovMarker, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_FOV_Center_Marker', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0534'), isOn: this.layerStore.fovCircularMarker, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_FOV_Circular_Marker', '', value) } })
+        if (this.layerStore.fovCircularMarker) {
           Row() {
             Text('圆形直径').fontSize(11).fontColor(this.nmSub()).width(72)
             Text(this.fovCircularMarkerSize.toFixed(1) + '°').fontSize(11).fontColor(this.nmText()).width(42).textAlign(TextAlign.End)
@@ -26541,8 +26378,8 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
               .onChange((value: number) => { this.fovCircularMarkerSize = value; this.setFovMarkerSetting('circleSize', value) })
           }.height(34).width('100%').padding({ left: 14, right: 10 }).margin({ bottom: 3 })
         }
-        this.switchRow(I18n.t('s0535'), this.fovRectangularMarker, 'actionShow_FOV_Rectangular_Marker')
-        if (this.fovRectangularMarker) {
+        LayerSwitchRow({ label: I18n.t('s0535'), isOn: this.layerStore.fovRectangularMarker, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_FOV_Rectangular_Marker', '', value) } })
+        if (this.layerStore.fovRectangularMarker) {
           Row() {
             Text('矩形宽度').fontSize(11).fontColor(this.nmSub()).width(72)
             Text(this.fovRectangularMarkerWidth.toFixed(1) + '°').fontSize(11).fontColor(this.nmText()).width(42).textAlign(TextAlign.End)
@@ -26568,9 +26405,9 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
               .onChange((value: number) => { this.fovRectangularMarkerRotation = value; this.setFovMarkerSetting('rectRotation', value) })
           }.height(34).width('100%').padding({ left: 14, right: 10 }).margin({ bottom: 3 })
         }
-        this.switchRow(I18n.t('s0344'), this.intercardinalPts, 'actionShow_Intercardinal_Points')
-        this.switchRow(I18n.t('s0536'), this.secondaryIntercardinalPts, 'actionShow_Secondary_Intercardinal_Points')
-        this.switchRow(I18n.t('s0537'), this.tertiaryIntercardinalPts, 'actionShow_Tertiary_Intercardinal_Points')
+        LayerSwitchRow({ label: I18n.t('s0344'), isOn: this.layerStore.intercardinalPts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Intercardinal_Points', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0536'), isOn: this.layerStore.secondaryIntercardinalPts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Secondary_Intercardinal_Points', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0537'), isOn: this.layerStore.tertiaryIntercardinalPts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Tertiary_Intercardinal_Points', '', value) } })
         // 更多标记线
         Row()
           .width('100%').height(0.5)
@@ -26578,13 +26415,13 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .margin({ top: 6, bottom: 4 })
         Text(I18n.t('i0285')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
           .height(18).width('100%')
-        this.switchRow(I18n.t('s0345'), this.primeVerticalLine, 'actionShow_Prime_Vertical_Line')
-        this.switchRow(I18n.t('s0346'), this.currentVerticalLine, 'actionShow_Current_Vertical_Line')
-        this.switchRow(I18n.t('s0347'), this.colureLines, 'actionShow_Colure_Lines')
-        this.switchRow(I18n.t('s0348'), this.precessionCircles, 'actionShow_Precession_Circles')
-        this.switchRow(I18n.t('s0500'), this.circumpolarCircles, 'actionShow_Circumpolar_Circles')
-        this.switchRow(I18n.t('s0501'), this.invariantPlaneLine, 'actionShow_Invariable_Plane_Line')
-        this.switchRow(I18n.t('s0502'), this.solarEquatorLine, 'actionShow_Solar_Equator_Line')
+        LayerSwitchRow({ label: I18n.t('s0345'), isOn: this.layerStore.primeVerticalLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Prime_Vertical_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0346'), isOn: this.layerStore.currentVerticalLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Current_Vertical_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0347'), isOn: this.layerStore.colureLines, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Colure_Lines', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0348'), isOn: this.layerStore.precessionCircles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Precession_Circles', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0500'), isOn: this.layerStore.circumpolarCircles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Circumpolar_Circles', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0501'), isOn: this.layerStore.invariantPlaneLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Invariable_Plane_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0502'), isOn: this.layerStore.solarEquatorLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Solar_Equator_Line', '', value) } })
         // 更多网格
         Row()
           .width('100%').height(0.5)
@@ -26592,12 +26429,12 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .margin({ top: 6, bottom: 4 })
         Text(I18n.t('i0286')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
           .height(18).width('100%')
-        this.switchRow(I18n.t('s0503'), this.equatorialJ2000Grid, 'actionShow_Equatorial_J2000_Grid')
-        this.switchRow(I18n.t('s0504'), this.eclipticJ2000Grid, 'actionShow_Ecliptic_J2000_Grid')
-        this.switchRow(I18n.t('s0505'), this.eclipticGrid, 'actionShow_Ecliptic_Grid')
-        this.switchRow(I18n.t('s0506'), this.supergalacticGrid, 'actionShow_Supergalactic_Grid')
-        this.switchRow(I18n.t('s0507'), this.fixedEquatorialGrid, 'actionShow_Fixed_Equatorial_Grid')
-        this.switchRow(I18n.t('s0508'), this.fixedEquatorLine, 'actionShow_Fixed_Equator_Line')
+        LayerSwitchRow({ label: I18n.t('s0503'), isOn: this.layerStore.equatorialJ2000Grid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equatorial_J2000_Grid', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0504'), isOn: this.layerStore.eclipticJ2000Grid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_J2000_Grid', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0505'), isOn: this.layerStore.eclipticGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_Grid', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0506'), isOn: this.layerStore.supergalacticGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Supergalactic_Grid', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0507'), isOn: this.layerStore.fixedEquatorialGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Fixed_Equatorial_Grid', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0508'), isOn: this.layerStore.fixedEquatorLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Fixed_Equator_Line', '', value) } })
         // 更多点标记
         Row()
           .width('100%').height(0.5)
@@ -26605,17 +26442,17 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .margin({ top: 6, bottom: 4 })
         Text(I18n.t('i0287')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
           .height(18).width('100%')
-        this.switchRow(I18n.t('s0509'), this.zenithNadir, 'actionShow_Zenith_Nadir')
-        this.switchRow(I18n.t('s0510'), this.celestialJ2000Poles, 'actionShow_Celestial_J2000_Poles')
-        this.switchRow(I18n.t('s0511'), this.eclipticJ2000Poles, 'actionShow_Ecliptic_J2000_Poles')
-        this.switchRow(I18n.t('s0512'), this.equinoxJ2000Pts, 'actionShow_Equinox_J2000_Points')
-        this.switchRow(I18n.t('s0513'), this.solsticeJ2000Pts, 'actionShow_Solstice_J2000_Points')
-        this.switchRow(I18n.t('s0514'), this.galacticCenter, 'actionShow_Galactic_Center')
-        this.switchRow(I18n.t('s0515'), this.supergalacticPoles, 'actionShow_Supergalactic_Poles')
-        this.switchRow(I18n.t('s0516'), this.apexPoints, 'actionShow_Apex_Points')
-        this.switchRow(I18n.t('s0517'), this.umbraCenter, 'actionShow_Umbra_Center_Point')
-        this.switchRow(I18n.t('s0518'), this.longitudeLine, 'actionShow_Longitude_Line')
-        this.switchRow(I18n.t('s0519'), this.quadratureLine, 'actionShow_Quadrature_Line')
+        LayerSwitchRow({ label: I18n.t('s0509'), isOn: this.layerStore.zenithNadir, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Zenith_Nadir', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0510'), isOn: this.layerStore.celestialJ2000Poles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Celestial_J2000_Poles', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0511'), isOn: this.layerStore.eclipticJ2000Poles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_J2000_Poles', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0512'), isOn: this.layerStore.equinoxJ2000Pts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equinox_J2000_Points', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0513'), isOn: this.layerStore.solsticeJ2000Pts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Solstice_J2000_Points', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0514'), isOn: this.layerStore.galacticCenter, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Galactic_Center', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0515'), isOn: this.layerStore.supergalacticPoles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Supergalactic_Poles', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0516'), isOn: this.layerStore.apexPoints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Apex_Points', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0517'), isOn: this.layerStore.umbraCenter, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Umbra_Center_Point', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0518'), isOn: this.layerStore.longitudeLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Longitude_Line', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0519'), isOn: this.layerStore.quadratureLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Quadrature_Line', '', value) } })
 
     }
     .width('100%')
@@ -26623,15 +26460,15 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
 
   // View 面板 Landscape 标签页内容
   @Builder viewLandscapeTab() {
-    this.switchRow(I18n.t('s0306'), this.ground, 'actionShow_Ground')
-    this.switchRow(I18n.t('mist_horizon'), this.mistHorizon, 'actionShow_MistHorizon')
+    LayerSwitchRow({ label: I18n.t('s0306'), isOn: this.layerStore.ground, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ground', '', value) } })
+    LayerSwitchRow({ label: I18n.t('mist_horizon'), isOn: this.layerStore.mistHorizon, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_MistHorizon', '', value) } })
     Text(I18n.t('mist_horizon_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10, bottom: 8 })
-    if (!this.ground) {
+    if (!this.layerStore.ground) {
       Text(I18n.t('landscape_preselect_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10, bottom: 8 })
     }
-    this.switchRow(I18n.t('s0520'), this.landscapeIllum, 'actionShow_LandscapeIllumination')
-    this.switchRow(I18n.t('s0521'), this.landscapeLabels, 'actionShow_LandscapeLabels')
-    this.switchRow(I18n.t('s0307'), this.fogEffect, 'actionShow_Fog')
+    LayerSwitchRow({ label: I18n.t('s0520'), isOn: this.layerStore.landscapeIllum, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_LandscapeIllumination', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0521'), isOn: this.layerStore.landscapeLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_LandscapeLabels', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0307'), isOn: this.layerStore.fogEffect, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Fog', '', value) } })
     Row() {
       Column() {
         Text('俯视时地景淡出').fontSize(13).fontColor('#E5FFFFFF')
@@ -26713,17 +26550,17 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   @Builder viewSkyCultureTab() {
     this.skyCultureSectionHeader(I18n.t('culture_section_layers'), I18n.t('culture_section_layers_hint'))
     Column({ space: 2 }) {
-      this.switchRow(I18n.t('s0522'), this.constellationLines, 'actionShow_Constellation_Lines')
-      this.switchRow(I18n.t('s0523'), this.constellationLabels, 'actionShow_Constellation_Labels')
-      this.switchRow(I18n.t('s0524'), this.constellationBoundaries, 'actionShow_Constellation_Boundaries')
-      this.switchRow(I18n.t('s0539'), this.constellationHulls, 'actionShow_Constellation_Hulls')
-      this.switchRow(I18n.t('s0525'), this.constellationArt, 'actionShow_Constellation_Art')
-      this.switchRow(I18n.t('s0526'), this.zodiac, 'actionShow_Zodiac')
-      this.switchRow(I18n.t('s0527'), this.lunarSystem, 'actionShow_LunarSystem')
+      LayerSwitchRow({ label: I18n.t('s0522'), isOn: this.layerStore.constellationLines, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Constellation_Lines', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0523'), isOn: this.layerStore.constellationLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Constellation_Labels', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0524'), isOn: this.layerStore.constellationBoundaries, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Constellation_Boundaries', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0539'), isOn: this.layerStore.constellationHulls, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Constellation_Hulls', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0525'), isOn: this.layerStore.constellationArt, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Constellation_Art', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0526'), isOn: this.layerStore.zodiac, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Zodiac', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0527'), isOn: this.layerStore.lunarSystem, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_LunarSystem', '', value) } })
       if (this.skyCultureHasAsterisms) {
-        this.switchRow(I18n.t('s0528'), this.asterismLines, 'actionShow_Asterism_Lines')
-        this.switchRow(I18n.t('s0529'), this.asterismLabels, 'actionShow_Asterism_Labels')
-        this.switchRow(I18n.t('s0540'), this.rayHelpers, 'actionShow_Ray_Helpers')
+        LayerSwitchRow({ label: I18n.t('s0528'), isOn: this.layerStore.asterismLines, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Asterism_Lines', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0529'), isOn: this.layerStore.asterismLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Asterism_Labels', '', value) } })
+        LayerSwitchRow({ label: I18n.t('s0540'), isOn: this.layerStore.rayHelpers, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ray_Helpers', '', value) } })
       } else if (this.skyCultureDetailsReady && this.currentSkyCultureId.length > 0) {
         Text(I18n.t('culture_no_asterisms')).fontSize(10).fontColor(this.nmSub()).width('100%')
           .padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 6 })
@@ -27034,36 +26871,36 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           Slider({ value: this.skyCultureAsterismLineThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismLineThickness', value, (current: number) => { this.skyCultureAsterismLineThickness = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.constellationHulls || this.rayHelpers || (this.zodiac && this.skyCultureHasZodiac) || (this.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationHulls || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.constellationHulls) {
+      if (this.layerStore.constellationHulls) {
         Row() {
           Text('星座区域边界').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureConstellationHullsThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureConstellationHullsThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationHullsThickness', value, (current: number) => { this.skyCultureConstellationHullsThickness = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.rayHelpers || (this.zodiac && this.skyCultureHasZodiac) || (this.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.skyCultureHasAsterisms && this.rayHelpers) {
+      if (this.skyCultureHasAsterisms && this.layerStore.rayHelpers) {
         Row() {
           Text('辅助射线粗细').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureRayHelperThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureRayHelperThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('rayHelperThickness', value, (current: number) => { this.skyCultureRayHelperThickness = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: (this.zodiac && this.skyCultureHasZodiac) || (this.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.zodiac && this.skyCultureHasZodiac) {
+      if (this.layerStore.zodiac && this.skyCultureHasZodiac) {
         Row() {
           Text('黄道线粗细').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureZodiacThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureZodiacThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('zodiacThickness', value, (current: number) => { this.skyCultureZodiacThickness = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.lunarSystem && this.skyCultureHasLunarSystem ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.lunarSystem && this.skyCultureHasLunarSystem ? 3 : 8 })
       }
-      if (this.lunarSystem && this.skyCultureHasLunarSystem) {
+      if (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) {
         Row() {
           Text('月宿线粗细').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureLunarSystemThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(32).textAlign(TextAlign.End)
@@ -27086,71 +26923,71 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         Slider({ value: this.skyCultureConstellationLabelsFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
           .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
           .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationLabelsFadeDuration', value, (current: number) => { this.skyCultureConstellationLabelsFadeDuration = current }) })
-      }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.constellationArt || this.constellationBoundaries || this.constellationHulls || this.asterismLines || this.asterismLabels || this.rayHelpers || (this.zodiac && this.skyCultureHasZodiac) || (this.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
-      if (this.constellationArt) {
+      }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationArt || this.layerStore.constellationBoundaries || this.layerStore.constellationHulls || this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+      if (this.layerStore.constellationArt) {
         Row() {
           Text('星座绘图').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureConstellationArtFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureConstellationArtFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationArtFadeDuration', value, (current: number) => { this.skyCultureConstellationArtFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.constellationBoundaries || this.constellationHulls || this.asterismLines || this.asterismLabels || this.rayHelpers || (this.zodiac && this.skyCultureHasZodiac) || (this.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationBoundaries || this.layerStore.constellationHulls || this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.constellationBoundaries) {
+      if (this.layerStore.constellationBoundaries) {
         Row() {
           Text('星座边界').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureConstellationBoundariesFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureConstellationBoundariesFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationBoundariesFadeDuration', value, (current: number) => { this.skyCultureConstellationBoundariesFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.constellationHulls || this.asterismLines || this.asterismLabels || this.rayHelpers || (this.zodiac && this.skyCultureHasZodiac) || (this.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.constellationHulls || this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.constellationHulls) {
+      if (this.layerStore.constellationHulls) {
         Row() {
           Text('星座区域边界').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureConstellationHullsFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureConstellationHullsFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('constellationHullsFadeDuration', value, (current: number) => { this.skyCultureConstellationHullsFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.asterismLines || this.asterismLabels || this.rayHelpers || (this.zodiac && this.skyCultureHasZodiac) || (this.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.asterismLines || this.layerStore.asterismLabels || this.layerStore.rayHelpers || (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.skyCultureHasAsterisms && this.asterismLines) {
+      if (this.skyCultureHasAsterisms && this.layerStore.asterismLines) {
         Row() {
           Text('星群连线').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureAsterismLinesFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureAsterismLinesFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismLinesFadeDuration', value, (current: number) => { this.skyCultureAsterismLinesFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.asterismLabels || this.rayHelpers ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.asterismLabels || this.layerStore.rayHelpers ? 3 : 8 })
       }
-      if (this.skyCultureHasAsterisms && this.asterismLabels) {
+      if (this.skyCultureHasAsterisms && this.layerStore.asterismLabels) {
         Row() {
           Text('星群标签').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureAsterismLabelsFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureAsterismLabelsFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('asterismLabelsFadeDuration', value, (current: number) => { this.skyCultureAsterismLabelsFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.rayHelpers ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.rayHelpers ? 3 : 8 })
       }
-      if (this.skyCultureHasAsterisms && this.rayHelpers) {
+      if (this.skyCultureHasAsterisms && this.layerStore.rayHelpers) {
         Row() {
           Text('辅助射线').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureRayHelperFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureRayHelperFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('rayHelperFadeDuration', value, (current: number) => { this.skyCultureRayHelperFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: (this.zodiac && this.skyCultureHasZodiac) || (this.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: (this.layerStore.zodiac && this.skyCultureHasZodiac) || (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) ? 3 : 8 })
       }
-      if (this.zodiac && this.skyCultureHasZodiac) {
+      if (this.layerStore.zodiac && this.skyCultureHasZodiac) {
         Row() {
           Text('黄道线').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureZodiacFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
           Slider({ value: this.skyCultureZodiacFadeDuration, min: 0.1, max: 10, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
             .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
             .onChange((value: number) => { this.setSkyCultureVisualSetting('zodiacFadeDuration', value, (current: number) => { this.skyCultureZodiacFadeDuration = current }) })
-        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.lunarSystem && this.skyCultureHasLunarSystem ? 3 : 8 })
+        }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: this.layerStore.lunarSystem && this.skyCultureHasLunarSystem ? 3 : 8 })
       }
-      if (this.lunarSystem && this.skyCultureHasLunarSystem) {
+      if (this.layerStore.lunarSystem && this.skyCultureHasLunarSystem) {
         Row() {
           Text('月宿线').fontSize(11).fontColor(this.nmText()).width(84)
           Text(this.skyCultureLunarSystemFadeDuration.toFixed(1) + ' 秒').fontSize(11).fontColor(this.nmSub()).width(38).textAlign(TextAlign.End)
@@ -27426,8 +27263,8 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
 
   // View 面板 Surveys 标签页内容
   @Builder viewSurveysTab() {
-    this.switchRow(I18n.t('s0600'), this.hipsSurveys, 'actionShow_Hips_Surveys')
-    this.switchRow(I18n.t('s0601'), this.toastSurvey, 'actionShow_Toast_Survey')
+    LayerSwitchRow({ label: I18n.t('s0600'), isOn: this.layerStore.hipsSurveys, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Hips_Surveys', '', value) } })
+    LayerSwitchRow({ label: I18n.t('s0601'), isOn: this.layerStore.toastSurvey, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Toast_Survey', '', value) } })
     Row() {
       Text(I18n.t('i0215')).fontSize(10).fontColor('#CC8FB6FF').width('100%').padding({ left: 2 })
     }.height(18).width('100%').margin({ top: 8 })
