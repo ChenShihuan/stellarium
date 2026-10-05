@@ -59,7 +59,7 @@ import { ObjectDataTile, ObjectMetric, ObjectScheduleTile, ObjectDetailTab, Obje
 import { ObjectDistanceNotice, SelectedLiveInfoRows, SelectedCoordinateRow, SelectedCoordinateRows } from '../panels/object/DetailLiveRows'
 import { StructuredDetailRows } from '../panels/object/StructuredDetailRows'
 import { SatellitePassDetails } from '../panels/object/SatellitePassDetails'
-import { ObjectDetailObserveTab, ObjectDetailCoordinateTab } from '../panels/object/ObjectDetailTabs'
+import { ObjectDetailObserveTab, ObjectDetailCoordinateTab, ObjectDetailDataTab } from '../panels/object/ObjectDetailTabs'
 import { TabletInspectorMediaGroup } from '../panels/object/TabletInspectorMediaGroup'
 import { ObjectDetailCardHeader, ObjectDetailCardTabs } from '../panels/object/ObjectDetailCardChrome'
 import { ConstellationCultureView } from '../panels/object/ConstellationCultureView'
@@ -18401,48 +18401,18 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           } else if (this.bottomCardIndex === 1) {
             ObjectDetailCoordinateTab({ store: this.objectDetailStore, distanceText: this.objectDistanceNoticeText(), resolve: (key: string) => this.selectedDisplayValue(key) })
           } else if (this.bottomCardIndex === 2) {
-            Text('完整资料').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
-            ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })
-            TabletInspectorMediaGroup({
-  store: this.objectMediaStore,
-  detailStore: this.objectDetailStore,
-  isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
-  imageHeight: this.objectInspectorImageHeight(),
-  iconName: this.objectInspectorIcon(),
-  inlineModelSize: this.objectInspectorInlineModelSize(),
-  modelReady: this.objectInspectorModelReady(),
-  modelRendering: this.objectInspectorModelRendering,
-  hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-  modelNotice: this.objectInspectorModelNotice(),
-  warmupText: this.objectInspectorMediaWarmupText(),
-  fallbackKind: this.objectInspectorFallbackVisualKind(),
-  starColor: this.objectInspectorStarColor(),
-  onOpen: () => { this.openObjectInspectorMediaPreview() },
-  onRetry: () => { this.retryObjectInspectorMedia() },
-  onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-  onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
-})
-            SatellitePassDetails({ store: this.objectDetailStore, tablet: false, visible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(), onLoad: () => { this.loadSelectedSatellitePasses() } })
-            ConstellationCultureView({ store: this.objectDetailStore, tablet: false, visible: this.selectedObjectIsConstellation(), textColor: this.nmText() })
-            Row({ space: 8 }) {
-              Column({ space: 7 }) {
-                if (this.objectDetailStore.selectedCoordAlt.length > 0) { ObjectDataTile({ label: '实时高度 / 方位', value: this.selectedDisplayValue('selectedCoordAlt') }) }
-                if (this.objectDetailStore.selectedMagnitude.length > 0) { ObjectDataTile({ label: I18n.t('i0007'), value: this.selectedDisplayValue('selectedMagnitude') }) }
-                if (this.objectDetailStore.selectedSize.length > 0) { ObjectDataTile({ label: I18n.t('i0290'), value: this.selectedDisplayValue('selectedSize') }) }
-                if (this.objectDetailStore.selectedApparentMagnitude.length > 0) { ObjectDataTile({ label: '大气后星等', value: this.selectedDisplayValue('selectedApparentMagnitude') }) }
-                if (this.objectDetailStore.selectedRise.length > 0) { ObjectDataTile({ label: I18n.t('s0700'), value: this.selectedDisplayValue('selectedRise') }) }
-                if (this.objectDetailStore.selectedSet.length > 0) { ObjectDataTile({ label: I18n.t('s0702'), value: this.selectedDisplayValue('selectedSet') }) }
-              }.layoutWeight(1)
-              Column({ space: 7 }) {
-                if (this.objectDetailStore.selectedCoordEq.length > 0) { ObjectDataTile({ label: '赤经 / 赤纬', value: this.selectedDisplayValue('selectedCoordEq') }) }
-                if (this.objectDetailStore.selectedDistance.length > 0) { ObjectDataTile({ label: I18n.t('i0011'), value: this.selectedDisplayValue('selectedDistance') }) }
-                if (this.objectDetailStore.selectedExtinction.length > 0) { ObjectDataTile({ label: '大气衰减', value: this.selectedDisplayValue('extinctionUnits') }) }
-                if (this.objectDetailStore.selectedAirmass.length > 0) { ObjectDataTile({ label: '气团质量', value: this.selectedDisplayValue('selectedAirmass') }) }
-                if (this.objectDetailStore.selectedTransit.length > 0) { ObjectDataTile({ label: I18n.t('s0701'), value: this.selectedDisplayValue('selectedTransit') }) }
-                if (this.objectDetailStore.selectedConstellation.length > 0) { ObjectDataTile({ label: I18n.t('i0010'), value: this.selectedDisplayValue('selectedConstellation') }) }
-              }.layoutWeight(1)
-            }.width('100%').alignItems(VerticalAlign.Top)
-            StructuredDetailRows({ store: this.objectDetailStore, tablet: false })
+            ObjectDetailDataTab({
+              store: this.objectDetailStore, mediaStore: this.objectMediaStore, tablet: false, distanceText: this.objectDistanceNoticeText(),
+              iconName: this.objectInspectorIcon(), imageHeight: this.objectInspectorImageHeight(), inlineModelSize: this.objectInspectorInlineModelSize(),
+              modelReady: this.objectInspectorModelReady(), modelRendering: this.objectInspectorModelRendering, hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+              modelNotice: this.objectInspectorModelNotice(), warmupText: this.objectInspectorMediaWarmupText(), fallbackKind: this.objectInspectorFallbackVisualKind(), starColor: this.objectInspectorStarColor(),
+              satelliteVisible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(),
+              cultureVisible: this.selectedObjectIsConstellation(), textColor: this.nmText(),
+              resolve: (key: string) => this.selectedDisplayValue(key),
+              onLoadPasses: () => { this.loadSelectedSatellitePasses() }, onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
+              onMediaRetry: () => { this.retryObjectInspectorMedia() }, onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+              onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
+            })
           } else {
             ObjectDetailActionsTab({
               viewLock: this.viewLock,
