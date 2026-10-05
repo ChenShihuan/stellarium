@@ -37,7 +37,7 @@ import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, g
 import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointColor, hecLayoutPositions, hecPointLeft, hecPointTop, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
-import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
+import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, objectActionBarY, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
 import { objectInspectorPlanetTexturePath, objectInspectorPlanetRingSpec, objectInspectorDeepSkyImageName, objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
@@ -63,6 +63,8 @@ import { DetailConnectorController, DetailConnectorHostHooks } from '../capabili
 import { LayerController, LayerHostHooks } from '../capability/LayerController'
 import { SkyTextureStatusController, SkyTextureStatusHostHooks } from '../capability/SkyTextureStatusController'
 import { NebulaTextureController, NebulaTextureHostHooks } from '../capability/NebulaTextureController'
+import { OcularController } from '../capability/OcularController'
+import { TelescopeController } from '../capability/TelescopeController'
 import { BehaviorHostHooks } from '../capability/ControllerHooks'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
@@ -214,14 +216,14 @@ import { SatelliteGroupSelector } from '../panels/satellite/SatelliteGroupSelect
 import {
   ImageDecodeSize, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
   NebulaTextureItem, NebulaTextureStatus, NebulaTextureRefreshResponse, SkyCultureMakerArtworkAnchor, SkyCultureMakerArtwork, SkyCultureMakerConstellation,
-  SkyCultureMakerDraft, SkyCultureMakerIssue, TelescopeControlResponse, TelescopeProfile, TelescopeProfilesResponse,
-  TELESCOPE_SIMULATOR_MODEL, HeliocentricOrbit, ConfigurationOption, SkyCultureVisualColors, CelestialPositionOptions,
+  SkyCultureMakerDraft, SkyCultureMakerIssue,
+  HeliocentricOrbit, ConfigurationOption, SkyCultureVisualColors, CelestialPositionOptions,
   CelestialPositionCategory, PhenomenaOptions, PhenomenaStartOption, EphemerisOptions, RtsCalendarOptions, EclipseOptions,
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
   HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS, TonightPlanetRow,
-  StarCatalogStatusResponse, GyroGuideProjection, SkyUiObstacle, BookmarkItem,
+  GyroGuideProjection, SkyUiObstacle, BookmarkItem,
   BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
-  OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
+  OcularsData, OcularsResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
   MeteorShowersData, LogResponse,
@@ -823,6 +825,10 @@ export struct WindowNativeNode {
   private skyTextureStatusControllerImpl: SkyTextureStatusController | null = null
   // D12：星云纹理控制器（惰性构造；picker/fileIo 经 MediaPort，状态在 NebulaTextureStore）。
   private nebulaTextureControllerImpl: NebulaTextureController | null = null
+  // D9：目镜/拼接相机/均时差/古天文线写回控制器（惰性构造；状态在 telescope/mosaic/equationOfTime/archaeo store）。
+  private ocularControllerImpl: OcularController | null = null
+  // D9：LX200 望远镜编辑器/控制命令控制器（惰性构造；状态在 TelescopeStore，定时器仍由 store 自持）。
+  private telescopeControllerImpl: TelescopeController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -1071,7 +1077,8 @@ export struct WindowNativeNode {
   @State private mosaicStore: MosaicStore = new MosaicStore()
   @State private equationOfTimeStore: EquationOfTimeStore = new EquationOfTimeStore()
   // 古天文辅助线域状态已下沉 state/ArchaeoStore.ets（review §2.7：Prop 风格 → Store 风格）。
-  // 加载器 loadArchaeoLines（§14 B1-4）已随桥注入搬入 store；写回请求序号 archaeoMutationId 仍由宿主自持（见下方）。
+  // 加载器 loadArchaeoLines（§14 B1-4）已随桥注入搬入 store；写回动作 setArchaeoLineSetting /
+  // applyArchaeoLineSetting 及请求序号 archaeoMutationId 已随 D9 下沉 capability/OcularController.ets。
   @State private archaeoStore: ArchaeoStore = new ArchaeoStore()
   // 卫星（Satellites）
   // 卫星域状态已下沉 state/SatelliteStore.ets（review §2.7：Prop 风格 → Store 风格）。
@@ -1095,8 +1102,7 @@ export struct WindowNativeNode {
   // satelliteFlagMutationId / satelliteListElapsedMs 已随 loadSatellites 搬入 SatelliteStore。
   private satellitePanelScroller: Scroller = new Scroller()
   private satelliteGroupScroller: Scroller = new Scroller()
-  private equationOfTimeMutationId: number = 0
-  private archaeoMutationId: number = 0
+  // equationOfTimeMutationId / archaeoMutationId 已随 D9 下沉 capability/OcularController.ets。
   // 流星雨（MeteorShowers）请求序号 meteorShowersLoadRequestId 已随 §14 B3-1 搬入 MeteorStore 的 `seq`。
   // 三维地景：直接读取原版 scenery3d.ini 与语言描述文件
   @State private scenery3dCurrentId: string = ''
@@ -1871,6 +1877,26 @@ export struct WindowNativeNode {
     return this.nebulaTextureControllerImpl
   }
 
+  // D9：目镜/拼接相机/均时差/古天文线写回控制器惰性构造。桥经 HostCommandPort；
+  // 状态整体写 TelescopeStore / MosaicStore / EquationOfTimeStore / ArchaeoStore；无 UI hook。
+  private ocularCtl(): OcularController {
+    if (this.ocularControllerImpl === null) {
+      this.ocularControllerImpl = new OcularController(
+        this.commandPort(), this.telescopeStore, this.mosaicStore, this.equationOfTimeStore, this.archaeoStore
+      )
+    }
+    return this.ocularControllerImpl
+  }
+
+  // D9：LX200 望远镜编辑器/控制命令控制器惰性构造。桥经 HostCommandPort；状态写 TelescopeStore；
+  // live-position 定时器簇仍由 TelescopeStore 自持（§14 B3-4），本控制器不自持定时器。
+  private telescopeCtl(): TelescopeController {
+    if (this.telescopeControllerImpl === null) {
+      this.telescopeControllerImpl = new TelescopeController(this.commandPort(), this.telescopeStore)
+    }
+    return this.telescopeControllerImpl
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
@@ -1916,6 +1942,8 @@ export struct WindowNativeNode {
     // CatalogHostHooks 具名回注。
     this.catalogStore.attachHooks({
       languageSerial: (): number => this.languageStore.languageRefreshSerial,
+      // D15：download 启动/轮询的 UI 提示经 CatalogHostHooks.flashHint 回注。
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
       pendingPluginCatalogId: (): string => this.searchStore.pendingPluginCatalogId,
       clearPendingPluginCatalogId: (): void => { this.searchStore.pendingPluginCatalogId = '' },
       searchCategory: (): string => this.searchStore.searchCategory,
@@ -2046,12 +2074,16 @@ export struct WindowNativeNode {
     this.bookmarkStore.attachPort(hostPort)
     this.bookmarkStore.attachHooks({
       readBookmarksStorage: (): Promise<string> => this.readBookmarksStorage(),
-      saveBookmarksToStorage: (): void => { this.saveBookmarksToStorage() }
+      saveBookmarksToStorage: (): void => { this.saveBookmarksToStorage() },
+      // D15：书签增删跳转提示经 BookmarkHostHooks.flashHint 回注。
+      flashHint: (text: ResourceStr): void => { this.flashHint(text) }
     })
     // §14 B2R-4：观测列表首次载入下沉 ObservingListStore；Preferences 读写经 hooks 回注。
     this.obsListStore.attachHooks({
       readObservingListStorage: (): Promise<string> => this.readObservingListStorage(),
-      writeObservingListStorage: (json: string): Promise<void> => this.writeObservingListStorage(json)
+      writeObservingListStorage: (json: string): Promise<void> => this.writeObservingListStorage(json),
+      // D15：persistObservingList 下沉 store；Preferences 持久化经 hooks 回注。
+      saveObservingListStorage: (): void => { this.saveObservingListToStorage() }
     })
     this.overlayStore.attachPort(hostPort, () => {})
     // §14 B2R-3：星空文化域四加载器下沉。skyCultureSettingsStore 复用既有 HostCommandPort
@@ -3482,59 +3514,9 @@ export struct WindowNativeNode {
     poll()
   }
 
-  // ===== 星表下载（C++ 桥：getStarCatalogs / downloadStarCatalog / getStarCatalogStatus）=====
-  private startCatalogDownload(id: string): void {
-    if (this.catalogStore.catalogBusy) {
-      this.flashHint(I18n.t('msg_catalog_downloading'))
-      return
-    }
-    this.catalogStore.catalogBusy = true
-    this.catalogStore.catalogDownloadingId = id
-    this.catalogStore.catalogMsg = '开始下载 ' + id + ' …'
-    this.flashHint('开始下载 ' + id)
-    const r = this.callNative('downloadStarCatalog', id)
-    if (!r || !r.ok) {
-      this.catalogStore.catalogBusy = false
-      this.catalogStore.catalogDownloadingId = ''
-      this.catalogStore.catalogMsg = '下载启动失败'
-      this.flashHint(I18n.t('msg_download_failed'))
-      return
-    }
-    this.pollCatalogStatus(id)
-  }
-
-  private pollCatalogStatus(id: string): void {
-    const timer = setInterval(() => {
-      const r = this.callNative('getStarCatalogStatus', '') as StarCatalogStatusResponse
-      if (!r || !r.ok) {
-        clearInterval(timer)
-        this.catalogStore.catalogBusy = false
-        this.catalogStore.catalogDownloadingId = ''
-        return
-      }
-      const state = r.state ?? 'downloading'
-      const bytes = r.bytes ?? 0
-      if (state === 'done') {
-        clearInterval(timer)
-        const md5ok = r.md5ok === true
-        this.catalogStore.catalogMsg = md5ok ? ('「' + id + '」下载完成并已加载') : ('「' + id + '」下载完成，校验未通过')
-        this.flashHint(this.catalogStore.catalogMsg)
-        this.catalogStore.catalogBusy = false
-        this.catalogStore.catalogDownloadingId = ''
-        this.catalogStore.loadStarCatalogs()
-      } else if (state === 'error') {
-        clearInterval(timer)
-        const err = r.error ?? '未知错误'
-        this.catalogStore.catalogMsg = '下载失败：' + err
-        this.flashHint('下载失败：' + err)
-        this.catalogStore.catalogBusy = false
-        this.catalogStore.catalogDownloadingId = ''
-      } else {
-        const mb = (bytes / (1024 * 1024)).toFixed(1)
-        this.catalogStore.catalogMsg = '下载中 ' + id + '：' + mb + ' MB'
-      }
-    }, 600)
-  }
+  // ===== 星表下载 =====
+  // startCatalogDownload / pollCatalogStatus 已随 D15 下沉 state/CatalogStore.ets
+  //（桥经 CommandPort.request，UI 提示经 CatalogHostHooks.flashHint）。
 
   // ===== 书签本地持久化（@ohos.data.preferences）=====
   private async saveObservingListToStorage(): Promise<void> {
@@ -3548,10 +3530,8 @@ export struct WindowNativeNode {
     }
   }
 
-  private persistObservingList(): void {
-    AppStorage.setOrCreate('observingList', JSON.stringify(this.obsListStore.observingList))
-    this.saveObservingListToStorage()
-  }
+  // persistObservingList 已随 D15 下沉 state/ObservingListStore.ets
+  //（AppStorage 写入 + Preferences 经 ObservingListHostHooks.saveObservingListStorage 回注）。
 
   // Preferences 原始读取助手：供 ObservingListStore.loadObservingListFromStorage 经 hooks 调用
   //（store 不 import NAPI/UI 上下文，§14.8 规则 2）。
@@ -3610,40 +3590,8 @@ export struct WindowNativeNode {
   // 顶层 HostLocationPort 适配器）。
 
   // ===== 书签（C++ 桥：addBookmark / getBookmarks / deleteBookmark / gotoBookmark）=====
-  // loadBookmarks 已下沉 BookmarkStore（§14 B2R-4）。
-
-  // 保存当前视图为书签。C++ 端读取当前 J2000 视方向 + 视场 + 选中天体，名称由 payload 传入。
-  private addCurrentBookmark(): void {
-    const name = this.bookmarkStore.draftName.trim()
-    this.callNativeWhenReady('addBookmark', name, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.bookmarkStore.draftName = ''
-        this.flashHint(I18n.t('msg_bookmark_saved'))
-        this.bookmarkStore.loadBookmarks()
-      } else {
-        this.flashHint(I18n.t('msg_bookmark_save_failed'))
-      }
-    })
-  }
-
-  private gotoBookmark(id: string): void {
-    this.callInteractive('gotoBookmark', id, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.flashHint(I18n.t('msg_navigated'))
-      } else {
-        this.flashHint(I18n.t('msg_navigation_failed'))
-      }
-    })
-  }
-
-  private deleteBookmark(id: string): void {
-    this.callNativeWhenReady('deleteBookmark', id, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.flashHint(I18n.t('msg_bookmark_deleted'))
-        this.bookmarkStore.loadBookmarks()
-      }
-    })
-  }
+  // loadBookmarks 已下沉 BookmarkStore（§14 B2R-4）；addCurrentBookmark / gotoBookmark / deleteBookmark
+  // 已随 D15 下沉 BookmarkStore（桥经 CommandPort，UI 提示经 BookmarkHostHooks.flashHint）。
 
   // ===== 脚本录制 / 回放（#39）=====
   private toggleRecordingUi(): void {
@@ -3934,149 +3882,12 @@ export struct WindowNativeNode {
   // saveScreenVideoToGallery 已随 M1-B 子组② 搬入 capability/RecordingController.ets
   // （NAPI 细节收在顶层 HostMediaPort 适配器）。
 
-  private setOcularMode(v: boolean): void {
-    this.telescopeStore.ocularMode = v
-    this.callNativeWhenReady('setOcularMode', v ? '1' : '0', (r: StellariumBridgeResponse) => {
-      const response = r as OcularModeResponse
-      this.telescopeStore.ocularMode = response.applied === true
-      if (v && response.selectionRequired === true) {
-        this.telescopeStore.ocularStatusMessage = I18n.t('ocular_status_select_target')
-      }
-      this.telescopeStore.loadOculars(false)
-    })
-  }
+  // ===== 目镜 / 拼接相机 / 均时差 / 古天文线写回 =====
+  // setOcularMode / setMosaicCamera / setEquationOfTime / setArchaeoLineSetting / applyArchaeoLineSetting /
+  // setTelrad / setCrosshairs / setCCD / selectOcularInstrument / setOcularSetting /
+  // changeOcularCcdRotation / changeOcularMaskOpacity / changeOcularPrismRotation / changeOcularCropSize /
+  // rotateOcularReticle / resetOcularInstrument 已随 D9 下沉 capability/OcularController.ets。
 
-  private setMosaicCamera(setting: string, value: string = ''): void {
-    if (this.mosaicStore.mosaicCameraPending || this.mosaicStore.mosaicCameraLoading) return
-    if (setting === 'enabled' && (value === '1') === this.mosaicStore.mosaicCameraEnabled) return
-    if (setting === 'visible' && (value === '1') === this.mosaicStore.mosaicCameraVisible) return
-    if (setting === 'camera' && value === this.mosaicStore.mosaicCameraCurrent) return
-    this.mosaicStore.mosaicCameraPending = true
-    this.callInteractive('setMosaicCamera', setting + (value.length > 0 ? '|' + value : ''), (result: StellariumBridgeResponse) => {
-      if (result.ok !== true) {
-        this.mosaicStore.mosaicCameraPending = false
-        this.mosaicStore.mosaicCameraStatus = result.error ?? I18n.t('plugin_action_failed')
-        return
-      }
-      this.mosaicStore.loadMosaicCamera(false)
-    }, () => {
-      this.mosaicStore.mosaicCameraPending = false
-      this.mosaicStore.mosaicCameraStatus = I18n.t('plugin_action_failed')
-    })
-  }
-
-  private setEquationOfTime(setting: string, enabled: boolean): void {
-    const mutationId = ++this.equationOfTimeMutationId
-    let previous: boolean | undefined
-    if (setting === 'enabled') { previous = this.equationOfTimeStore.equationOfTimeEnabled; this.equationOfTimeStore.equationOfTimeEnabled = enabled }
-    else if (setting === 'msFormat') { previous = this.equationOfTimeStore.equationOfTimeMsFormat; this.equationOfTimeStore.equationOfTimeMsFormat = enabled }
-    else if (setting === 'inverted') { previous = this.equationOfTimeStore.equationOfTimeInverted; this.equationOfTimeStore.equationOfTimeInverted = enabled }
-    else if (setting === 'enableAtStartup') { previous = this.equationOfTimeStore.equationOfTimeStartup; this.equationOfTimeStore.equationOfTimeStartup = enabled }
-    this.equationOfTimeStore.equationOfTimeStatus = ''
-    this.callInteractive('setEquationOfTime', setting + '|' + (enabled ? '1' : '0'), () => {}, () => {
-      if (mutationId !== this.equationOfTimeMutationId) return
-      if (previous !== undefined) {
-        if (setting === 'enabled') this.equationOfTimeStore.equationOfTimeEnabled = previous
-        else if (setting === 'msFormat') this.equationOfTimeStore.equationOfTimeMsFormat = previous
-        else if (setting === 'inverted') this.equationOfTimeStore.equationOfTimeInverted = previous
-        else if (setting === 'enableAtStartup') this.equationOfTimeStore.equationOfTimeStartup = previous
-      }
-      this.equationOfTimeStore.equationOfTimeStatus = I18n.t('plugin_action_failed')
-    })
-  }
-
-  private setArchaeoLineSetting(setting: string, value: string): void {
-    const mutationId = ++this.archaeoMutationId
-    const previous = this.archaeoStore.archaeoLineSettingValue(setting)
-    this.applyArchaeoLineSetting(setting, value)
-    this.archaeoStore.archaeoStatus = ''
-    this.callInteractive('setArchaeoLineSetting', setting + '|' + value, () => {}, () => {
-      if (mutationId !== this.archaeoMutationId) return
-      this.applyArchaeoLineSetting(setting, previous)
-      this.archaeoStore.archaeoStatus = I18n.t('plugin_action_failed')
-    })
-  }
-
-  private applyArchaeoLineSetting(setting: string, value: string): void {
-    const enabled = value === '1' || value === 'true'
-    switch (setting) {
-      case 'enabled': this.archaeoStore.archaeoLinesEnabled = enabled; break
-      case 'equinox': this.archaeoStore.archaeoEquinox = enabled; break
-      case 'solstices': this.archaeoStore.archaeoSolstices = enabled; break
-      case 'crossquarters': this.archaeoStore.archaeoCrossquarters = enabled; break
-      case 'majorStandstills': this.archaeoStore.archaeoMajorStandstills = enabled; break
-      case 'minorStandstills': this.archaeoStore.archaeoMinorStandstills = enabled; break
-      case 'polarCircles': this.archaeoStore.archaeoPolarCircles = enabled; break
-      case 'zenithPassage': this.archaeoStore.archaeoZenithPassage = enabled; break
-      case 'nadirPassage': this.archaeoStore.archaeoNadirPassage = enabled; break
-      case 'selectedObject': this.archaeoStore.archaeoSelectedObject = enabled; break
-      case 'selectedObjectAzimuth': this.archaeoStore.archaeoSelectedObjectAzimuth = enabled; break
-      case 'selectedObjectHourAngle': this.archaeoStore.archaeoSelectedObjectHourAngle = enabled; break
-      case 'currentSun': this.archaeoStore.archaeoCurrentSun = enabled; break
-      case 'currentMoon': this.archaeoStore.archaeoCurrentMoon = enabled; break
-      case 'currentPlanet': this.archaeoStore.archaeoCurrentPlanet = ['none', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'].indexOf(value); break
-      case 'lineWidth': this.archaeoStore.archaeoLineWidth = Math.round(Number(value)); break
-    }
-  }
-
-  private setTelrad(v: boolean): void {
-    this.telescopeStore.telradOn = v
-    this.callNativeWhenReady('setTelrad', v ? '1' : '0', () => { this.telescopeStore.loadOculars(false) })
-  }
-  private setCrosshairs(v: boolean): void {
-    this.telescopeStore.crosshairsOn = v
-    this.callNativeWhenReady('setCrosshairs', v ? '1' : '0', () => { this.telescopeStore.loadOculars(false) })
-  }
-  private setCCD(v: boolean): void {
-    this.telescopeStore.ccdOn = v
-    this.callNativeWhenReady('setCCD', v ? '1' : '0', () => { this.telescopeStore.loadOculars(false) })
-  }
-  private selectOcularInstrument(kind: string, index: number): void {
-    this.callNativeWhenReady('selectOcularInstrument', kind.toLowerCase() + '|' + index.toString(), () => {
-      this.telescopeStore.loadOculars(false)
-    })
-  }
-  private setOcularSetting(name: string, enabled: boolean): void {
-    this.callNativeWhenReady('setOcularSetting', name + '|' + (enabled ? '1' : '0'), () => {
-      this.telescopeStore.loadOculars(false)
-    })
-  }
-  private changeOcularCcdRotation(value: number, mode: SliderChangeMode): void {
-    this.telescopeStore.ocularCcdRotation = value
-    if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-      this.callNativeWhenReady('setOcularSetting', 'ccdRotation|' + value.toFixed(1), () => {
-        this.telescopeStore.loadOculars(false)
-      })
-    }
-  }
-  private changeOcularMaskOpacity(value: number, mode: SliderChangeMode): void {
-    this.telescopeStore.ocularMaskOpacity = Math.round(value)
-    if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-      this.callNativeWhenReady('setOcularSetting', 'maskOpacity|' + this.telescopeStore.ocularMaskOpacity.toString(), () => {
-        this.telescopeStore.loadOculars(false)
-      })
-    }
-  }
-  private changeOcularPrismRotation(value: number, mode: SliderChangeMode): void {
-    this.telescopeStore.ocularCcdPrismRotation = value
-    if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-      this.callNativeWhenReady('setOcularSetting', 'prismRotation|' + value.toFixed(1), () => { this.telescopeStore.loadOculars(false) })
-    }
-  }
-  private changeOcularCropSize(setting: string, value: number, mode: SliderChangeMode): void {
-    const size = Math.round(value)
-    if (setting === 'ccdCropHSize') this.telescopeStore.ocularCcdCropHSize = size
-    else this.telescopeStore.ocularCcdCropVSize = size
-    if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-      this.callNativeWhenReady('setOcularSetting', setting + '|' + size.toString(), () => { this.telescopeStore.loadOculars(false) })
-    }
-  }
-  private rotateOcularReticle(direction: string): void {
-    this.callNativeWhenReady('rotateOcularReticle', direction, () => { this.telescopeStore.loadOculars(false) })
-  }
-  private resetOcularInstrument(kind: string): void {
-    this.callNativeWhenReady('resetOcularInstrument', kind, () => { this.telescopeStore.loadOculars(false) })
-  }
   private setPointerCoordinates(setting: string, value: string): void {
     this.callNativeWhenReady('setPointerCoordinates', setting + '|' + value, (r: StellariumBridgeResponse) => {
       if (r.ok !== true) this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed')
@@ -5065,13 +4876,13 @@ export struct WindowNativeNode {
     const name = (target.englishName ?? '').trim()
     if (name.length === 0 || this.obsListStore.observingList.includes(name)) { return }
     this.obsListStore.observingList = this.obsListStore.observingList.concat([name])
-    this.persistObservingList()
+    this.obsListStore.persistObservingList()
     this.flashHint(I18n.t('i0080'))
   }
 
   private removeObservingTarget(name: string): void {
     this.obsListStore.observingList = this.obsListStore.observingList.filter((item: string) => item !== name)
-    this.persistObservingList()
+    this.obsListStore.persistObservingList()
     this.flashHint(I18n.t('i0079'))
   }
 
@@ -6972,251 +6783,10 @@ private loadPlanetPositions(): void {
   // §14 B3-4：lx200Payload / applyTelescopeProfile / applyTelescopeProfiles 已搬入 TelescopeStore
   //（它们只读写 telescopeStore 字段与 live-position 定时器，属单一域，随定时器簇同片下沉）。
 
-  private validateTelescopeEditorStatus(): void {
-	if (this.telescopeStore.lx200Protocol === 'simulated') {
-	  this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_simulated')
-	  this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_offline')
-	  this.telescopeStore.lx200ConnectionState = 'available'
-	  return
-	}
-    this.callInteractive('getTelescopeControl', this.telescopeStore.lx200Host.trim() + '|' + this.telescopeStore.lx200Port.trim(), (result: TelescopeControlResponse) => {
-      this.telescopeStore.applyTelescopeEndpointStatus(result)
-    })
-  }
-
-  // §14 B3-4：applyTelescopeEndpointStatus / loadTelescopeControlStatus 已搬入 TelescopeStore。
-
-  private selectTelescopeProfile(slot: number): void {
-    if (slot === this.telescopeStore.lx200SelectedSlot && !this.telescopeStore.lx200EditingNew) return
-    this.callInteractive('selectTelescopeProfile', slot.toString(), (result: TelescopeProfilesResponse) => {
-      if (result.ok === true) {
-        this.telescopeStore.applyTelescopeProfiles(result)
-        this.validateTelescopeEditorStatus()
-      } else {
-        this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_load_failed')
-      }
-    })
-  }
-
-  private beginNewTelescopeProfile(): void {
-    this.telescopeStore.stopTelescopeLivePosition(false)
-    const used = new Set<number>(this.telescopeStore.lx200Profiles.map((profile: TelescopeProfile) => profile.slot))
-    let slot = 1
-    while (slot <= 9 && used.has(slot)) slot += 1
-    if (slot > 9) {
-      this.telescopeStore.lx200Status = I18n.t('m_telescope_slots_full')
-      return
-    }
-    this.telescopeStore.lx200SelectedSlot = slot
-	this.telescopeStore.lx200Name = I18n.format('m_telescope_simulator_name', [slot.toString()]) as string
-	this.telescopeStore.lx200Protocol = 'simulated'
-	this.telescopeStore.lx200DeviceModel = TELESCOPE_SIMULATOR_MODEL
-	this.telescopeStore.lx200Host = ''
-	this.telescopeStore.lx200Port = ''
-    this.telescopeStore.lx200Equinox = 'J2000'
-    this.telescopeStore.lx200CommandDelayMs = 0
-    this.telescopeStore.lx200Circles = '1, 2, 4'
-	this.telescopeStore.lx200EditingNew = true
-	this.telescopeStore.lx200ConnectionState = 'available'
-	this.telescopeStore.lx200Position = ''
-	this.telescopeStore.lx200PositionUpdatedAt = ''
-	this.telescopeStore.lx200PositionUpdateState = 'idle'
-	this.validateTelescopeEditorStatus()
-  }
-
-  private selectTelescopeProtocol(protocol: string): void {
-	if (protocol === this.telescopeStore.lx200Protocol) return
-	this.telescopeStore.stopTelescopeLivePosition(false)
-	this.telescopeStore.lx200Protocol = protocol
-	this.telescopeStore.lx200Position = ''
-	this.telescopeStore.lx200PositionUpdatedAt = ''
-	this.telescopeStore.lx200PositionUpdateState = 'idle'
-	if (protocol === 'simulated') {
-	  this.telescopeStore.lx200DeviceModel = TELESCOPE_SIMULATOR_MODEL
-	  this.telescopeStore.lx200Host = ''
-	  this.telescopeStore.lx200Port = ''
-	  this.telescopeStore.lx200ConnectionState = 'available'
-	  this.telescopeStore.lx200Status = I18n.t('m_telescope_simulator_ready')
-	} else {
-	  this.telescopeStore.lx200DeviceModel = 'Meade LX200 (compatible)'
-	  this.telescopeStore.lx200Host = '127.0.0.1'
-	  this.telescopeStore.lx200Port = '4030'
-	  this.telescopeStore.lx200ConnectionState = 'not_tested'
-	  this.telescopeStore.lx200Status = I18n.t('m_telescope_not_tested')
-	}
-	this.validateTelescopeEditorStatus()
-  }
-
-  private saveTelescopeProfile(): void {
-    const port = Number(this.telescopeStore.lx200Port.trim())
-	const invalidEndpoint = this.telescopeStore.lx200Protocol === 'lx200_tcp' &&
-	  (this.telescopeStore.lx200Host.trim().length === 0 || !Number.isInteger(port) || port < 1 || port > 65535)
-	if (this.telescopeStore.lx200Name.trim().length === 0 || invalidEndpoint) {
-      this.telescopeStore.lx200Status = I18n.t('m_telescope_invalid_profile')
-      return
-    }
-    const profile: TelescopeProfile = {
-      slot: this.telescopeStore.lx200SelectedSlot,
-      name: this.telescopeStore.lx200Name.trim(),
-	  protocol: this.telescopeStore.lx200Protocol,
-      deviceModel: this.telescopeStore.lx200DeviceModel,
-      host: this.telescopeStore.lx200Host.trim(),
-	  port: this.telescopeStore.lx200Protocol === 'simulated' ? 0 : port,
-      equinox: this.telescopeStore.lx200Equinox,
-      commandDelayMs: this.telescopeStore.lx200CommandDelayMs,
-      circles: this.telescopeStore.telescopeCircleValues()
-    }
-    this.telescopeStore.lx200Busy = true
-    this.callInteractive('saveTelescopeProfile', JSON.stringify(profile), (result: TelescopeProfilesResponse) => {
-      this.telescopeStore.lx200Busy = false
-      if (result.ok !== true) {
-        this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_save_failed')
-        return
-      }
-      this.telescopeStore.applyTelescopeProfiles(result)
-      this.telescopeStore.lx200Status = I18n.t('m_telescope_saved')
-      this.validateTelescopeEditorStatus()
-    }, () => { this.telescopeStore.lx200Busy = false })
-  }
-
-  private deleteTelescopeProfile(): void {
-    if (this.telescopeStore.lx200EditingNew) {
-      this.telescopeStore.loadTelescopeControlStatus()
-      return
-    }
-    this.callInteractive('deleteTelescopeProfile', this.telescopeStore.lx200SelectedSlot.toString(), (result: TelescopeProfilesResponse) => {
-      if (result.ok === true) {
-        this.telescopeStore.applyTelescopeProfiles(result)
-        this.telescopeStore.lx200Status = I18n.t('m_telescope_deleted')
-        this.validateTelescopeEditorStatus()
-      } else {
-        this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_delete_failed')
-      }
-    })
-  }
-
-  private testTelescopeConnection(): void {
-    if (this.telescopeStore.lx200EditingNew) {
-      this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_test')
-      return
-    }
-    this.telescopeStore.stopTelescopeLivePosition(false)
-    this.telescopeStore.lx200Busy = true
-    this.telescopeStore.lx200Status = I18n.t('m_telescope_connecting')
-    this.callInteractive('testTelescopeConnection', this.telescopeStore.lx200Payload(), (result: TelescopeControlResponse) => {
-	  this.telescopeStore.lx200Busy = false
-	  this.telescopeStore.applyTelescopeEndpointStatus(result)
-	  this.telescopeStore.lx200ConnectionState = result.ok === true ? 'available' : 'unavailable'
-	  this.telescopeStore.lx200Status = result.ok === true
-		? (result.simulated === true ? I18n.t('m_telescope_simulator_ready') : I18n.t('m_telescope_available'))
-		: telescopeErrorText(result, I18n.t('m_telescope_test_failed'))
-	  this.telescopeStore.scheduleTelescopeLivePosition()
-	}, (result: StellariumBridgeResponse) => {
-	  const response = result as TelescopeControlResponse
-	  this.telescopeStore.lx200Busy = false
-	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
-	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_test_failed'))
-	  this.telescopeStore.scheduleTelescopeLivePosition()
-	})
-  }
-
-  private applyLx200Result(result: StellariumBridgeResponse): void {
-	const response = result as TelescopeControlResponse
-	this.telescopeStore.lx200Busy = false
-    if (result.ok === true) {
-	  this.telescopeStore.lx200ConnectionState = 'available'
-      const target = result.target && result.target.length > 0 ? result.target : I18n.t('m_telescope_target_default')
-      const mode = result.mode === 'sync' ? I18n.t('m_telescope_mode_sync') : I18n.t('m_telescope_mode_goto')
-	  const coord = result.ra && result.dec ? ' · ' + result.ra + ' / ' + result.dec : ''
-	  this.telescopeStore.lx200Status = I18n.format('m_telescope_command_sent', [mode as string, target as string, coord])
-	  if (result.mode === 'goto') this.telescopeStore.setTelescopeLivePosition(true)
-    } else {
-	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
-	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_disconnected'))
-    }
-	this.telescopeStore.scheduleTelescopeLivePosition()
-  }
-
-  private lx200GotoSelected(): void {
-	if (this.telescopeStore.lx200EditingNew) {
-	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
-	  return
-	}
-	this.telescopeStore.stopTelescopeLivePosition(false)
-	this.telescopeStore.lx200Busy = true
-	this.telescopeStore.lx200Status = I18n.t('m_telescope_sending_goto')
-    this.callInteractive('telescopeLx200GotoSelected', this.telescopeStore.lx200Payload(),
-      (result: StellariumBridgeResponse) => this.applyLx200Result(result),
-      (result: StellariumBridgeResponse) => this.applyLx200Result(result))
-  }
-
-  private lx200SyncSelected(): void {
-	if (this.telescopeStore.lx200EditingNew) {
-	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
-	  return
-	}
-	this.telescopeStore.stopTelescopeLivePosition(false)
-	this.telescopeStore.lx200Busy = true
-	this.telescopeStore.lx200Status = I18n.t('m_telescope_sending_sync')
-    this.callInteractive('telescopeLx200SyncSelected', this.telescopeStore.lx200Payload(),
-      (result: StellariumBridgeResponse) => this.applyLx200Result(result),
-      (result: StellariumBridgeResponse) => this.applyLx200Result(result))
-  }
-
-  private lx200Abort(): void {
-	if (this.telescopeStore.lx200EditingNew) {
-	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
-	  return
-	}
-    this.telescopeStore.stopTelescopeLivePosition(false)
-    this.telescopeStore.lx200Busy = true
-    this.callInteractive('telescopeLx200Abort', this.telescopeStore.lx200Payload(), (result) => {
-	  const response = result as TelescopeControlResponse
-	  this.telescopeStore.lx200Busy = false
-	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
-	  this.telescopeStore.lx200Status = result.ok === true ? I18n.t('m_telescope_stop_sent') :
-		telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
-	  this.telescopeStore.scheduleTelescopeLivePosition()
-	}, (result: StellariumBridgeResponse) => {
-	  const response = result as TelescopeControlResponse
-	  this.telescopeStore.lx200Busy = false
-	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
-	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
-	  this.telescopeStore.scheduleTelescopeLivePosition()
-	})
-  }
-
-  private readTelescopePosition(center: boolean = false): void {
-	if (this.telescopeStore.lx200EditingNew) {
-	  this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
-	  return
-	}
-	this.telescopeStore.stopTelescopeLivePosition(false)
-	this.telescopeStore.lx200Busy = true
-	this.telescopeStore.lx200Status = center ? I18n.t('m_telescope_centering') : I18n.t('m_telescope_reading_position')
-	const command = center ? 'centerScreenOnTelescope' : 'getTelescopePosition'
-	this.callInteractive(command, this.telescopeStore.lx200Payload(), (result: TelescopeControlResponse) => {
-	  this.telescopeStore.lx200Busy = false
-	  if (result.ok === true) {
-		this.telescopeStore.lx200ConnectionState = 'available'
-		this.telescopeStore.lx200Position = (result.ra ?? '--:--:--') + ' / ' + (result.dec ?? '--°--:--')
-		this.telescopeStore.lx200PositionUpdatedAt = telescopeUpdateTime()
-		this.telescopeStore.lx200PositionUpdateState = 'fresh'
-		this.telescopeStore.lx200Status = center ? I18n.t('m_telescope_centered') : I18n.t('m_telescope_position_updated')
-	  } else {
-		if (result.state === 'available' || result.state === 'unavailable') this.telescopeStore.lx200ConnectionState = result.state
-		this.telescopeStore.lx200Status = telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
-	  }
-	  this.telescopeStore.scheduleTelescopeLivePosition()
-	}, (result: StellariumBridgeResponse) => {
-	  const response = result as TelescopeControlResponse
-	  this.telescopeStore.lx200Busy = false
-	  if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
-	  this.telescopeStore.lx200PositionUpdateState = 'error'
-	  this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_position_failed'))
-	  this.telescopeStore.scheduleTelescopeLivePosition()
-	})
-  }
+  // validateTelescopeEditorStatus / selectTelescopeProfile / beginNewTelescopeProfile / selectTelescopeProtocol /
+  // saveTelescopeProfile / deleteTelescopeProfile / testTelescopeConnection / applyLx200Result /
+  // lx200GotoSelected / lx200SyncSelected / lx200Abort / readTelescopePosition
+  // 已随 D9 下沉 capability/TelescopeController.ets（桥经 CommandPort，状态写 TelescopeStore）。
 
   // toggleGyroscope / refreshGyroDisplayRotation 已随 M1-B 子组① 搬入 capability/SensorController.ets。
 
@@ -8450,9 +8020,9 @@ private loadPlanetPositions(): void {
         if (x >= 1225 && x <= 1310) { this.callInteractive('setTracking', '0', () => { this.refreshState() }); return true }
       }
       if (!OFFLINE_APPGALLERY_BUILD && y >= 630 && y <= 690) {
-        if (x >= 1095 && x < 1175) { this.lx200GotoSelected(); return true }
-        if (x >= 1175 && x < 1245) { this.lx200SyncSelected(); return true }
-        if (x >= 1245 && x <= 1320) { this.lx200Abort(); return true }
+        if (x >= 1095 && x < 1175) { this.telescopeCtl().lx200GotoSelected(); return true }
+        if (x >= 1175 && x < 1245) { this.telescopeCtl().lx200SyncSelected(); return true }
+        if (x >= 1245 && x <= 1320) { this.telescopeCtl().lx200Abort(); return true }
       }
     } else if (this.activePanel === 'place') {
       if (y >= 455 && y <= 505 && x >= 1300 && x <= right) { this.locationCtl().useDeviceLocation(); return true }
@@ -10159,7 +9729,7 @@ private loadPlanetPositions(): void {
       this.obsListStore.observingList = this.obsListStore.observingList.concat([this.objectDetailStore.selectedName])
       this.flashHint(I18n.t('i0080'))
     }
-    this.persistObservingList()
+    this.obsListStore.persistObservingList()
   }
 
   // 底部详情卡片触摸交互：只处理头部关闭按钮，
@@ -10417,7 +9987,7 @@ private loadPlanetPositions(): void {
             this.obsListStore.observingList = this.obsListStore.observingList.concat([this.objectDetailStore.selectedName])
             this.flashHint(I18n.t('i0080'))
           }
-          this.persistObservingList()
+          this.obsListStore.persistObservingList()
         },
         onGotoReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object') },
         onSpeak: () => { speakSelectedObject(this.commandPort(), { flashHint: (text: ResourceStr): void => this.flashHint(text), setSpeechStatus: (text: string): void => { this.guideStore.speechStatus = text } }) },
@@ -10426,9 +9996,9 @@ private loadPlanetPositions(): void {
         onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
         onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
         onLoadSatPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
-        onGoto: () => { this.lx200GotoSelected() },
-        onSync: () => { this.lx200SyncSelected() },
-        onAbort: () => { this.lx200Abort() }
+        onGoto: () => { this.telescopeCtl().lx200GotoSelected() },
+        onSync: () => { this.telescopeCtl().lx200SyncSelected() },
+        onAbort: () => { this.telescopeCtl().lx200Abort() }
       })
     } else if (this.activePanel === 'time') {
       // 观测时间/速率已移入面板标题栏副标题（panelSubtitle() 在 Builder 内直接读 @State，
@@ -10455,7 +10025,7 @@ private loadPlanetPositions(): void {
         onSelectUnit: (unit: string) => { this.wheel().selectUnit(unit) },
         onWheelTouch: (event: TouchEvent) => { this.wheel().handleTouch(event) },
         onChip: (id: string) => { this.handleChip(id) },
-        onEquationToggle: (setting: string, enabled: boolean) => { this.setEquationOfTime(setting, enabled) },
+        onEquationToggle: (setting: string, enabled: boolean) => { this.ocularCtl().setEquationOfTime(setting, enabled) },
         onAdjustJulian: (scale: string, direction: number) => { this.julianStore.adjustJulianDate(scale, direction) },
         onApplyJulian: (scale: string) => { this.julianStore.applyJulianDateInput(scale) },
         onNightMode: (enabled: boolean) => { this.nightModeStore.applyNightMode(enabled, true) },
@@ -10893,16 +10463,16 @@ private loadPlanetPositions(): void {
       CatalogsPanel({
         catalogStore: this.catalogStore,
         cardBorderColor: this.nightModeStore.nmBorder(),
-        onDownload: (id: string) => { this.startCatalogDownload(id) }
+        onDownload: (id: string) => { this.catalogStore.startCatalogDownload(id) }
       })
     } else if (this.activePanel === 'bookmarks') {
       BookmarkPanel({
         store: this.bookmarkStore,
         selectedName: this.objectDetailStore.selectedName,
         cardBorderColor: this.nightModeStore.nmBorder(),
-        onSaveView: () => { this.addCurrentBookmark() },
-        onGoto: (id: string) => { this.gotoBookmark(id) },
-        onDelete: (id: string) => { this.deleteBookmark(id) }
+        onSaveView: () => { this.bookmarkStore.addCurrentBookmark() },
+        onGoto: (id: string) => { this.bookmarkStore.gotoBookmark(id) },
+        onDelete: (id: string) => { this.bookmarkStore.deleteBookmark(id) }
       })
     } else if (this.activePanel === 'oculars') {
       OcularsPanel({
@@ -10913,18 +10483,18 @@ private loadPlanetPositions(): void {
         panelColor: this.nightModeStore.nmBg(),
         lineColor: this.nightModeStore.nmBorder(),
         onOpenSubPanel: (name: string) => { this.openSubPanel(name) },
-        onSetOcularMode: (isOn: boolean) => { this.setOcularMode(isOn) },
-        onSetTelrad: (isOn: boolean) => { this.setTelrad(isOn) },
-        onSetCrosshairs: (isOn: boolean) => { this.setCrosshairs(isOn) },
-        onSetCcd: (isOn: boolean) => { this.setCCD(isOn) },
-        onSelectInstrument: (kind: string, index: number) => { this.selectOcularInstrument(kind, index) },
-        onChangeCcdRotation: (value: number, mode: SliderChangeMode) => { this.changeOcularCcdRotation(value, mode) },
-        onChangePrismRotation: (value: number, mode: SliderChangeMode) => { this.changeOcularPrismRotation(value, mode) },
-        onResetInstrument: (target: string) => { this.resetOcularInstrument(target) },
-        onRotateReticle: (dir: string) => { this.rotateOcularReticle(dir) },
-        onSetOcularSetting: (setting: string, isOn: boolean) => { this.setOcularSetting(setting, isOn) },
-        onChangeMaskOpacity: (value: number, mode: SliderChangeMode) => { this.changeOcularMaskOpacity(value, mode) },
-        onChangeCropSize: (setting: string, value: number, mode: SliderChangeMode) => { this.changeOcularCropSize(setting, value, mode) }
+        onSetOcularMode: (isOn: boolean) => { this.ocularCtl().setOcularMode(isOn) },
+        onSetTelrad: (isOn: boolean) => { this.ocularCtl().setTelrad(isOn) },
+        onSetCrosshairs: (isOn: boolean) => { this.ocularCtl().setCrosshairs(isOn) },
+        onSetCcd: (isOn: boolean) => { this.ocularCtl().setCCD(isOn) },
+        onSelectInstrument: (kind: string, index: number) => { this.ocularCtl().selectOcularInstrument(kind, index) },
+        onChangeCcdRotation: (value: number, mode: SliderChangeMode) => { this.ocularCtl().changeOcularCcdRotation(value, mode) },
+        onChangePrismRotation: (value: number, mode: SliderChangeMode) => { this.ocularCtl().changeOcularPrismRotation(value, mode) },
+        onResetInstrument: (target: string) => { this.ocularCtl().resetOcularInstrument(target) },
+        onRotateReticle: (dir: string) => { this.ocularCtl().rotateOcularReticle(dir) },
+        onSetOcularSetting: (setting: string, isOn: boolean) => { this.ocularCtl().setOcularSetting(setting, isOn) },
+        onChangeMaskOpacity: (value: number, mode: SliderChangeMode) => { this.ocularCtl().changeOcularMaskOpacity(value, mode) },
+        onChangeCropSize: (setting: string, value: number, mode: SliderChangeMode) => { this.ocularCtl().changeOcularCropSize(setting, value, mode) }
       })
     } else if (this.activePanel === 'mosaicCamera') {
       MosaicCameraPanel({
@@ -10933,7 +10503,7 @@ private loadPlanetPositions(): void {
         subColor: this.nightModeStore.nmSub(),
         panelColor: this.nightModeStore.nmBg(),
         accentColor: this.nightModeStore.nmAccent(),
-        onSetSetting: (setting: string, value: string) => { this.setMosaicCamera(setting, value) }
+        onSetSetting: (setting: string, value: string) => { this.ocularCtl().setMosaicCamera(setting, value) }
       })
     } else if (this.activePanel === 'archaeoLines') {
       ArchaeoLinesPanel({
@@ -10943,9 +10513,9 @@ private loadPlanetPositions(): void {
         panelColor: this.nightModeStore.nmBg(),
         accentColor: this.nightModeStore.nmAccent(),
         borderTint: this.nightModeStore.nmBorder(),
-        onSetSetting: (setting: string, value: string) => { this.setArchaeoLineSetting(setting, value) },
+        onSetSetting: (setting: string, value: string) => { this.ocularCtl().setArchaeoLineSetting(setting, value) },
         onLineWidthPreview: (value: number) => { this.archaeoStore.archaeoLineWidth = value },
-        onSetLineWidth: (value: number) => { this.setArchaeoLineSetting('lineWidth', value.toString()) }
+        onSetLineWidth: (value: number) => { this.ocularCtl().setArchaeoLineSetting('lineWidth', value.toString()) }
       })
     } else if (this.activePanel === 'angleMeasure') {
       AngleMeasurePanel({
@@ -11115,7 +10685,7 @@ private loadPlanetPositions(): void {
         onOpenSearch: () => { this.openSubPanel('search') },
         onClearAll: () => {
           this.obsListStore.observingList = []
-          this.persistObservingList()
+          this.obsListStore.persistObservingList()
           this.flashHint(I18n.t('i0302'))
         },
         onSelectCategory: (category: string) => {
@@ -11139,17 +10709,17 @@ private loadPlanetPositions(): void {
         store: this.telescopeStore,
         textColor: this.nightModeStore.nmText(), subColor: this.nightModeStore.nmSub(), accentColor: this.nightModeStore.nmAccent(),
         panelColor: this.nightModeStore.nmBg(), inputColor: this.nightModeStore.nmInput(), lineColor: this.nightModeStore.nmBorder(), inputLineColor: this.nightModeStore.nmInputBorder(),
-        onBeginNew: () => { this.beginNewTelescopeProfile() },
-        onSelectProfile: (slot: number) => { this.selectTelescopeProfile(slot) },
-        onSelectProtocol: (protocol: string) => { this.selectTelescopeProtocol(protocol) },
-        onValidateEditor: () => { this.validateTelescopeEditorStatus() },
-        onSave: () => { this.saveTelescopeProfile() },
-        onDelete: () => { this.deleteTelescopeProfile() },
-        onTest: () => { this.testTelescopeConnection() },
-        onGoto: () => { this.lx200GotoSelected() },
-        onSync: () => { this.lx200SyncSelected() },
-        onAbort: () => { this.lx200Abort() },
-        onReadPosition: (center: boolean) => { this.readTelescopePosition(center) },
+        onBeginNew: () => { this.telescopeCtl().beginNewTelescopeProfile() },
+        onSelectProfile: (slot: number) => { this.telescopeCtl().selectTelescopeProfile(slot) },
+        onSelectProtocol: (protocol: string) => { this.telescopeCtl().selectTelescopeProtocol(protocol) },
+        onValidateEditor: () => { this.telescopeCtl().validateTelescopeEditorStatus() },
+        onSave: () => { this.telescopeCtl().saveTelescopeProfile() },
+        onDelete: () => { this.telescopeCtl().deleteTelescopeProfile() },
+        onTest: () => { this.telescopeCtl().testTelescopeConnection() },
+        onGoto: () => { this.telescopeCtl().lx200GotoSelected() },
+        onSync: () => { this.telescopeCtl().lx200SyncSelected() },
+        onAbort: () => { this.telescopeCtl().lx200Abort() },
+        onReadPosition: (center: boolean) => { this.telescopeCtl().readTelescopePosition(center) },
         onSetLivePosition: (enabled: boolean) => { this.telescopeStore.setTelescopeLivePosition(enabled) }
       })
     } else if (this.activePanel === 'tools') {
@@ -11202,7 +10772,7 @@ private loadPlanetPositions(): void {
         observingDisplayName: (name: string) => { return this.wutStore.observingDisplayName(name) },
         selectObservingTarget: (name: string) => { this.searchObject(name); this.flashHint(I18n.t('i0082')) },
         removeObservingTarget: (name: string) => { this.removeObservingTarget(name) },
-        clearObservingList: () => { this.obsListStore.observingList = []; this.persistObservingList(); this.flashHint(I18n.t('i0302')) },
+        clearObservingList: () => { this.obsListStore.observingList = []; this.obsListStore.persistObservingList(); this.flashHint(I18n.t('i0302')) },
         setLegacyDistanceUnit: (useMetric: boolean) => {
           this.viewSettingsStore.useMetricUnits = useMetric
           this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + (useMetric ? 'true' : 'false'), () => {})

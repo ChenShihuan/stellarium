@@ -9,6 +9,9 @@ export interface ObservingListHostHooks {
   readObservingListStorage(): Promise<string>
   // 首次读取时把内存值迁移写回 Preferences；宿主用 @ohos.data.preferences 实现。
   writeObservingListStorage(json: string): Promise<void>
+  // D15：持久化当前观测列表到 Preferences（原宿主 saveObservingListToStorage）；宿主用
+  // @ohos.data.preferences 实现，store 不 import NAPI/UI。
+  saveObservingListStorage(): void
 }
 
 // 观测列表（observing list）域状态（review §2.7："Prop 风格 → Store 风格"）。
@@ -35,6 +38,17 @@ export class ObservingListStore {
 
   attachHooks(hooks: ObservingListHostHooks): void {
     this.hooks = hooks
+  }
+
+  // D15：持久化观测列表（原宿主 persistObservingList，函数体逐字搬入）。
+  // 差异仅：AppStorage 写入不变；this.saveObservingListToStorage() → hooks.saveObservingListStorage()
+  //（Preferences NAPI 收在宿主实现）。
+  persistObservingList(): void {
+    AppStorage.setOrCreate('observingList', JSON.stringify(this.observingList))
+    const hooks = this.hooks
+    if (hooks !== null) {
+      hooks.saveObservingListStorage()
+    }
   }
 
   // 首次启动从 Preferences 载入观测列表（原宿主 loadObservingListFromStorage，函数体逐字搬入）。
