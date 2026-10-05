@@ -133,7 +133,7 @@ test('guide bridge actions use implemented commands and atmosphere payloads', as
 
 test('UI and CLI share semantic player, scrollable text and actual result', () => {
   const page = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
-  const guideUI = page.slice(page.indexOf('  interactiveGuideShell()'), page.indexOf('  scriptFocusShell()'));
+  const guideUI = page.slice(page.indexOf('  interactiveGuideShell()'), page.indexOf('  harmonyShell()'));
   assert.match(guideUI, /Scroll\(\)/);
   assert.doesNotMatch(guideUI, /maxLines|sendKey/);
   assert.doesNotMatch(guideUI, /GuideButton\(\{[^\n]*\?/);
