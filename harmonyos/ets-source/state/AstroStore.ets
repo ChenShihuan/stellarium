@@ -31,8 +31,6 @@ export interface AstroHostHooks {
   fmtDateTime(s: string | undefined): string
   hecLayoutPositions(positions: Array<HeliocentricPosition>): Array<HeliocentricPosition>
   loadPlanetPositions(): void
-  loadMoonPhases(): void
-  loadAstroCalcContext(): void
 }
 
 @Observed
@@ -197,7 +195,8 @@ export class AstroStore {
   //
   // 桥端口复用宿主同一 HostCommandPort 实例；store 只依赖 CommandPort 接口（不 import NAPI/UI）。
   // 跨 store（WutStore / EphemerisStore / objectDetailStore）与未随本片下沉的宿主加载器
-  // （loadPlanetPositions / loadMoonPhases / loadAstroCalcContext）经 AstroHostHooks 具名注入。
+  // （loadPlanetPositions）经 AstroHostHooks 具名注入；月相 / 天文计算上下文加载器已在
+  // §14 B3-2 连同其请求态一起下沉本 store（宿主计时器只调用，不再持有请求态裸字段）。
   // 请求序号/代际随对应加载器搬入本 store（各自独立字段；宿主不再保留同名序号）。
   private port: CommandPort | null = null
   private onChanged: (() => void) | null = null
@@ -214,6 +213,12 @@ export class AstroStore {
   private almanacRequestSequence: number = 0
   private hecPositionsRequestSequence: number = 0
   private celestialPositionsRequestSequence: number = 0
+  // §14 B3-2：月相 / 天文计算上下文的请求态（原宿主裸字段 moonPhaseRequestId /
+  // moonPhaseLoadingDays / astroContextRequestId / astroContextRequestPending 随加载器搬入）。
+  private moonPhaseRequestSequence: number = 0
+  private moonPhaseLoadingDays: number = 0
+  private astroContextRequestSequence: number = 0
+  private astroContextRequestPending: boolean = false
 
   // 宿主在 aboutToAppear 注入端口与发布回调（onChanged 即 publishAstroPanelState；幂等）。
   attachPort(port: CommandPort, onChanged: () => void): void {
@@ -1145,14 +1150,100 @@ export class AstroStore {
     })
   }
 
-  // 标签页分发：原宿主 loadAstroTab；loadPlanetPositions / loadMoonPhases / loadAstroCalcContext
-  // 未随本片下沉（B3 / 本片外），经 hooks 注入。
+  // §14 B3-2：月相加载器（原宿主 loadMoonPhases，函数体逐字搬入；仅
+  // this.callLongRunningInteractive → port.requestLongRunning、this.astroStore.<f> → this.<f>、
+  // this.moonPhaseRequestId/moonPhaseLoadingDays → 本 store 私有请求态）。
+  loadMoonPhases(): void {
+    this.updateAstroCalcSnapshot()
+    const days = this.moonPhaseDays
+    if (this.moonPhaseLoading && this.moonPhaseLoadingDays === days) return
+    const port = this.ensurePort()
+    if (port === null) return
+    const requestId = ++this.moonPhaseRequestSequence
+    this.moonPhaseLoadingDays = days
+    this.moonPhaseData = []
+    this.moonPhaseError = ''
+    this.moonPhaseLoading = true
+    const finish = (callback: () => void): void => {
+      if (requestId !== this.moonPhaseRequestSequence) return
+      callback()
+    }
+    // 90 天会在原生线程中逐日推进天体模型，不能使用普通交互命令的
+    // 1.5 秒超时；长任务通道会持续读取异步结果，避免首次点击误报超时。
+    port.requestLongRunning('getMoonPhases', JSON.stringify({ days: days }), (r: StellariumBridgeResponse) => {
+      finish(() => {
+        this.moonPhaseLoading = false
+        if (r.ok === true && r.moonPhases !== undefined) {
+          this.moonPhaseData = r.moonPhases as Array<MoonPhaseItem>
+        } else {
+          this.moonPhaseError = r.error ?? '月相计算未能完成，请稍后重试。'
+        }
+      })
+    }, (r: StellariumBridgeResponse) => {
+      finish(() => {
+        this.moonPhaseLoading = false
+        this.moonPhaseError = r.error ?? '月相计算等待超时，请稍后重试。'
+      })
+    }, (r: StellariumBridgeResponse) => {
+      finish(() => {
+        this.moonPhaseError = ''
+      })
+    }, days >= 90 ? 600 : 240)
+  }
+
+  // §14 B3-2：天文计算上下文加载器（原宿主 loadAstroCalcContext，函数体逐字搬入；仅
+  // this.callInteractive → port.requestInteractive、this.astroStore.astroContext → this.astroContext、
+  // this.astroContextRequestId/astroContextRequestPending → 本 store 私有请求态）。
+  loadAstroCalcContext(): void {
+    if (this.astroContextRequestPending) return
+    const port = this.ensurePort()
+    if (port === null) return
+    this.astroContextRequestPending = true
+    const requestId = ++this.astroContextRequestSequence
+    port.requestInteractive('getAstroCalcContext', '', (r: StellariumBridgeResponse) => {
+      this.astroContextRequestPending = false
+      if (requestId !== this.astroContextRequestSequence) return
+      if (r.ok !== true) {
+        this.astroContext = undefined
+        return
+      }
+      this.astroContext = {
+        jd: r.jd as number,
+        localTime: r.localTime as string,
+        observerLocation: r.observerLocation as string,
+        timeZone: r.timeZone as string,
+        latitude: Number(r.latitude),
+        longitude: Number(r.longitude),
+        altitude: Number(r.altitude),
+        meanSiderealTime: r.meanSiderealTime as string,
+        apparentSiderealTime: r.apparentSiderealTime as string,
+        meanSiderealHours: Number(r.meanSiderealHours),
+        apparentSiderealHours: Number(r.apparentSiderealHours),
+        equationOfTimeMinutes: Number(r.equationOfTimeMinutes),
+        sunAltitude: Number(r.sunAltitude),
+        sunAzimuth: Number(r.sunAzimuth),
+        moonAltitude: Number(r.moonAltitude),
+        moonAzimuth: Number(r.moonAzimuth),
+        moonIllumination: Number(r.moonIllumination),
+        offline: r.offline === true
+      }
+    }, () => {
+      this.astroContextRequestPending = false
+    })
+  }
+
+  // §14 B3-2：宿主关闭天文面板时作废在途上下文请求（原宿主 stopAstroCalcContextTimer 的
+  // `++astroContextRequestId`；只递增序号、不复位 pending，逐字保留原语义）。
+  cancelAstroCalcContext(): void {
+    ++this.astroContextRequestSequence
+  }
+
+  // 标签页分发：原宿主 loadAstroTab；loadPlanetPositions 未随本片下沉（经 hooks 注入）；
+  // loadMoonPhases / loadAstroCalcContext 已于 §14 B3-2 下沉本 store。
   loadAstroTab(id: number): void {
     this.updateAstroCalcSnapshot()
+    this.loadAstroCalcContext()
     const hooks = this.hooks
-    if (hooks !== null) {
-      hooks.loadAstroCalcContext()
-    }
     if (id === 0) {
       if (this.positionMode === 0) {
         if (hooks !== null) hooks.loadPlanetPositions()
@@ -1181,7 +1272,7 @@ export class AstroStore {
     }
     else if (id === 8) this.loadAlmanac()
     else if (id === 9) {
-      if (hooks !== null) hooks.loadMoonPhases()
+      this.loadMoonPhases()
     }
   }
 }
