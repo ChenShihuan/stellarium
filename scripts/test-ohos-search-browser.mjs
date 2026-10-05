@@ -8,6 +8,8 @@ const read = name => readFileSync(new URL('../harmonyos/ets-source/panels/search
 // 搜索面板已组件化：分类/筛选选择器在 SearchCategoryBrowse，筛选页切换在 SearchFilterMenu，目录行在 CatalogFilterRow。
 const searchPanels = ['SearchBar', 'SearchSuggestions', 'SearchFilterMenu', 'SearchFilterChips', 'CatalogFilterRow',
   'SearchCategoryBrowse', 'SearchConstellationChips', 'SearchCoordinateInput'].map(read).join('\n');
+// 搜索面板分支已下沉为 SearchPanel 组件（Phase 4e），浏览器 Scroll 的 id/align 现在组件内。
+const searchPanelFile = readFileSync(new URL('../harmonyos/ets-source/panels/panels/SearchPanel.ets', import.meta.url), 'utf8');
 
 function controllerFor(names) {
   const methods = names.map(name => {
@@ -61,7 +63,7 @@ test('UI has one category picker and one filter picker, no dense extension block
   assert.match(row, /margin\(\{ bottom: 8 \}\)/);
   assert.match(row, /width\(24\)\.height\(24\)\.objectFit\(ImageFit\.Contain\)/);
   assert.match(searchPanels, /this\.store\.searchFilterPage === 'root' \|\| this\.store\.searchFilterPage === 'categories'/);
-  assert.match(source, /align\(Alignment\.TopStart\)\s*\.id\('search-browser-scroll'\)/);
+  assert.match(searchPanelFile, /align\(Alignment\.TopStart\)\s*\.id\('search-browser-scroll'\)/);
   const commandStart = source.indexOf("if (commandName === 'setSearchBrowserPage' || commandName === 'selectSearchCategory')");
   const command = source.slice(commandStart, source.indexOf("if (commandName === 'setAstroTab'", commandStart));
   assert.match(command, /if \(!this\.panelVisible \|\| this\.activePanel !== 'search'\) this\.openPanelFromCli\('search'\)/);
