@@ -1,3 +1,20 @@
+## [2026-10-01] DevEco Code - Phase 3at 修复：BottomDock 点按后激活高亮不显示（回归）
+
+- **现象**：同日真机验收确认，点 BottomDock 五个入口后，被点项图标/文字保持灰（`#E5FFFFFF` / `#99FFFFFF`），**不变蓝**（`#70C8FF`）；面板切换与触摸命中本身正常（hilog `[DOCK] up item=place` → `setPanel place`）。逐项像素采样 max(B−R) 仅 2–3；正常激活态应≈143（纯 `#70C8FF`，B−R=255−112；上一版验收记的相邻 `CompactQuickButton` 激活环为 66，含抗锯齿）。
+- **A/B 定位（结论：Phase 3at 引入的回归，非既有缺陷）**：同设备、同方法（`devecocli ui` 点入口 → 截图裁 Dock 条采样每个入口的 max(B−R)）——
+  - 修复前 HEAD（`84d7db9af0`，含 Phase 3at）：`[closed] search=2 time=2 place=2 layers=2 more=3`；点「位置」后 `search=2 time=1 place=3 layers=3 more=3`（高亮缺失）。
+  - 临时检出 `d7a2bc9768^`（Phase 3at 之前，即 Phase 3as 末）构建安装：`[PRE 3at closed]` 全 2–3；点「位置」后 **`place=134`**（高亮正常）。→ **回归确认**。
+  - 根因：Phase 3at 把 Dock 从宿主 `@Builder bottomDock()` 下沉为 `BottomDock` 组件时，把「是否当前面板」改成宿主回注的**普通闭包** `isActive`。组件对宿主 `activePanel` 不再有可观测依赖 → `activePanel` 变化既不让 `BottomDock` 重绘，`ForEach` 也不重建子项（键只含 `item.panel/languageRevision`）→ `DockButton` 的 `@Prop active` 冻结在首帧值。修复前的宿主内联版本之所以正常，是因为 `dockActionActive(item)` 在**宿主自身的渲染作用域**里求值，依赖被登记在宿主上。
+- **修法（最小且根治；未用 `@BuilderParam`，见 §13.1 规则 9）**：给 `BottomDock` 增加数据化 `@Prop activePanel: string`；激活判定改为组件内 `private dockItemActive(item)`（= `panelVisible && item.panel === activePanel`，与原宿主 `dockActionActive` 等价），并把该结果**纳入 `ForEach` 键**（`…/1|0`）→ 面板切换或关闭时受影响子项重建、`DockButton.@Prop active` 立即刷新。宿主 3 处调用点的 `isActive: (item) => this.dockActionActive(item)` 改为 `activePanel: this.activePanel`，并删除随之零引用的 `dockActionActive`。触摸命中与 `onClick`/`activateDockAction` 语义不变。
+- **改动**：`harmonyos/ets-source/panels/shell/BottomDock.ets` **58 → 67** 行（+13/−4：新增 `@Prop activePanel`、`dockItemActive` 私有方法、改写 ForEach 键与 `active` 取值，移除 `isActive` 注入成员）；`harmonyos/ets-source/pages/MainWindowNativeNode.ets` **25,063 → 25,059** 行（3 处调用点 1:1 改写 + 删除 `dockActionActive` 4 行）。
+- **真机复验（`com.cnchensh.stellarium`，`192.168.3.95:40565`，包名已复核、CLI 显式带 `--bundle`）**：全程 `pidof com.cnchensh.stellarium` = 53691（存活）。对五个入口**各点一次**，每次截图裁 Dock 条采样 max(B−R)：
+  - `[closed]`：`search=2 time=2 place=2 layers=2 more=2`；
+  - 依次点 搜索 / 时间 / 位置 / 图层 / 更多功能：`search=143`、`time=143`、`place=143`、`layers=143`、`more=143`，且**同一时刻其余四个均为 1–3**；
+  - 再点已激活的「更多功能」关闭面板：`全 1–2`（高亮清除）。→ 与设计一致。
+- **测试同步**：无脚本引用 Dock（`git grep -l "BottomDock|bottomDock|DockButton|dockActionActive" -- scripts` = 0）。全量 35 个 `*-ohos*.mjs` 扫描后失败项与 §13.6 存量**完全一致**（7 个环境/设备类），无新增失败。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（两文件）无错 → `devecocli build` BUILD SUCCESSFUL → `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好 → 35 脚本扫描无新增失败 → 真机如上。
+- **测试期间改动的持久化设置**：无（只切换面板，未动任何开关/语言/时间/位置/选中天体）。
+- **本片新踩的坑**：① `Set-Content -Encoding UTF8`（PowerShell 5.1）会给 `.ets` 写入 **BOM + LF**，破坏仓库「无 BOM + CRLF」约定（`git` 随即告警 `LF will be replaced by CRLF`）——改文件一律用编辑工具，或改后核对 `BOM=无 且 bareLF=0`。② `[System.IO.File]::ReadAllBytes/ReadAllText` 的**相对路径按进程 CWD 解析**，与 PowerShell 的 `Set-Location` 无关 —— 核对字节必须传绝对路径，否则会拼出 `…\harmonyos\harmonyos\…` 报路径不存在。
 ## [2026-10-01] DevEco Code - Phase 3 真机验收（Mate 80 Pro / 192.168.3.95:40565）
 
 - **范围**：对 Phase 3（3u–3at）产出的域做一次真机走查，**只验收、不改 ArkTS 源码**。设备 `192.168.3.95:40565`（中文界面，1280×2832）。
