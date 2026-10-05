@@ -68,6 +68,9 @@ test('live merging preserves row order and static records while removing expired
 // 卡片三页整段也已搬进 ObjectDetailTabs，故下面同时检查宿主与组件文件。
 const tabs = readFileSync(new URL('../harmonyos/ets-source/panels/object/ObjectDetailTabs.ets', import.meta.url), 'utf8');
 const chrome = readFileSync(new URL('../harmonyos/ets-source/panels/object/ObjectDetailCardChrome.ets', import.meta.url), 'utf8');
+// Phase 6c：hover/expanded 两壳已下沉为组件，详情卡的其余两处调用点随之搬到对应组件文件。
+const hoverShell = readFileSync(new URL('../harmonyos/ets-source/panels/shell/HoverObservatoryShell.ets', import.meta.url), 'utf8');
+const expandedShell = readFileSync(new URL('../harmonyos/ets-source/panels/shell/ExpandedShell.ets', import.meta.url), 'utf8');
 
 test('detail rows and tiles come from components while the host keeps the lookups', () => {
   for (const wired of [
@@ -84,7 +87,7 @@ test('detail rows and tiles come from components while the host keeps the lookup
     assert.ok((source + tabs + chrome).includes(wired), wired);
   }
   assert.ok(tabs.includes("value: this.resolve('selectedRise')"), 'the tab components resolve tile values through the injected resolver');
-  assert.ok(source.includes('activeIndex: this.bottomCardIndex'), 'the active tab derives from live state');
+  assert.ok((source + hoverShell + expandedShell).includes('activeIndex: this.bottomCardIndex'), 'the active tab derives from live state');
 });
 
 test('tile components receive resolved values while the host keeps the lookups', () => {
@@ -93,7 +96,7 @@ test('tile components receive resolved values while the host keeps the lookups',
   }
   assert.ok(tabs.includes("value: this.resolve('selectedRise')"));
   assert.ok(chrome.includes('ObjectDetailTab({ label:'), 'the tab bar comes from the component');
-  assert.ok(source.includes('activeIndex: this.bottomCardIndex'), 'the active tab is derived from live state');
+  assert.ok((source + hoverShell + expandedShell).includes('activeIndex: this.bottomCardIndex'), 'the active tab is derived from live state');
   assert.ok(source.includes('resolve: (key: string) => this.selectedDisplayValue(key)'), 'the host injects the resolver');
   assert.ok(chrome.includes("ObjectCompactMetric({ label: I18n.t('i0007')"), 'compact metrics resolve their value in the host');
 });
