@@ -750,6 +750,8 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
 - **面板内的嵌套滚动会吞掉手势**：如搜索面板"目录天体"网格自身可滚动且占满可视区，`dumpLayout` 下无法把外层滚动拖到网格下方的块（星座 chips / 坐标输入曾因此无法交互验证）→ 需要交互验证尾部内容时，可先切到对象很少的分类让网格变短。
 - **批量改引用时必须同时补宿主 store 字段声明**：只把 `this.X` 改成 `this.store.X` 而忘了 `@State private store: XStore = new XStore()`，会让**所有**该引用推断为 `any`，构建报 `arkts-no-any-unknown`，且报错行号散落在毫不相关的业务方法里（13066/13948/18815…），极难一眼定位。**这两步必须成对执行。**
 - **类型导入要找对模块**：Phase 1c 的 `pages/MainWindowModels.ets` **只包含原单体序言区**的声明；`ObjectDetailField` / `ObjectDetailModel` / `SatellitePass` / `SkyCultureDescriptionBlock` 等类型的导出仍在 **`pages/StellariumTypes.ets`**。导入错模块会报 `declares 'X' locally, but it is not exported`。
+- **真机上同时装着两个 `QAbility` 包，且"看前台"与"跑 CLI"默认不是同一个**（2026-10-01）：仓库 `harmonyos/AppScope/app.json5` 的 `bundleName` 是发布配置 `com.joinother.skyinstrument`（versionCode 1000050），而 `scripts/build-ohos-hap-windows.ps1` 生成工程时把它覆盖为签名配置 **`com.cnchensh.stellarium`**（versionCode 1000054）并 `force-stop`/`aa start` 该包；`devecocli ui *` 作用于**前台窗口**，而 `scripts/stellarium-cli.mjs` 的 `DEFAULT_BUNDLE` 是 `com.joinother.skyinstrument` —— 一句 `openUiPanel` 就会把 skyinstrument 拉到前台，随后所有 `devecocli ui` 点击都落到它身上（曾整段误测到 v1000053）。**验收/复现一律以 `com.cnchensh.stellarium` 为准：CLI 显式带 `--bundle com.cnchensh.stellarium`，并在关键步骤后用 `aa dump -l` 复核 `state #FOREGROUND`。**
+- **`devecocli ui layout` 的 `Toggle` 节点不暴露 `checked`**：开关的真实状态只能靠截图 —— 把 ~3MB 全屏图**裁成小区域**（几十~一百 KB）再读，直接读全屏图会撑爆上下文。
 
 ### 13.4 常用命令
 

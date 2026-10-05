@@ -450,3 +450,12 @@
 - **无法读到陀螺仪内部状态**：应用自带 CLI `--command gyroDiagnostic --json` 只返回派发确认 `{"ok":true,"accepted":true,"pending":true}`，**未同步返回诊断结果**，因此无法用它区分"陀螺仪未开启/无读数"与"手势被抢占"；`devecocli ui longclick` 也没有时长参数，无法排除 600 ms 阈值因素。
 - **候选原因收敛为三条（仍未证实）**：① 长按时 `gyroscopeEnabled` 仍为关（短按开关注释：先短按再长按才有效）；② `LongPressGesture({ duration: 600 })` 阈值偏长，CLI/finger 的按压时长可能不足；③ 长按被祖先容器的拖拽手势抢占。
 - **对修法的直接影响**：三条候选里没有一个能靠"改文案"解决，**因此建议直接采用 A（设置面板 → 设备与隐私里新增「陀螺仪校准」行）**：该面板已有 `deviceAndPrivacySettings()` 承载 `gyroscopeRow()` 与灵敏度行，天然是校准入口的位置；实现时需注意打开前先收起设置面板（`panelVisible`），否则 (16,80) 处的校准面板会被设置面板遮住。
+
+**2026-10-01 真机验收复核（`com.cnchensh.stellarium` v1000054，原因已坐实）**：
+
+- **代码事实（决定性）**：`gyroCalibPanelOpen` 在全仓**只有赋 `false`**（`MainWindowNativeNode.ets:3496`、`:10285`；`GyroCalibPanel.ets:30`、`:99`），**没有任何一处把它置 `true`** → 校准面板（渲染条件 `gyroscopeEnabled && gyroCalibPanelOpen`，`:12720` / `:16047` / `:16358`）在当前构建**无任何 UI 入口**。手机右上快捷钮 `CompactQuickButton`（Phase 3at）只有 `onClick`、**无 `LongPressGesture`**；原带长按的平板左栏 `gyroButton` 已在 **Phase 3aq** 作为死代码（零引用）删除 —— 即上面的"候选原因①②③"已不适用：不是手势被抢占或阈值过长，而是**触发代码已不存在**。
+- **陀螺仪本身工作正常**：短按开启后 `toggleGyroscope enabled=true`，`[GYRO_PROBE] ... invalid=0`、`GYRO_RAW a=0.019 b=0.018 g=0.595`（读数连续）。因此"陀螺仪未开启/无读数"也不是原因。
+- **真机复现**：`devecocli ui longclick` 打在快捷钮 `(1140, 252)` 上，布局树**没有**任何校准面板节点（扫「校准/灵敏度/重置/航向/基准」= 0），且长按被当作点击使开关再次翻转。
+- **结论**：维持修法 **A**（设置 → 设备与隐私新增「陀螺仪校准」行）；实现时先收起设置面板，以免 `(16, 80)` 的校准面板被遮住。本轮验收**未改码**。
+
+**2026-10-01 验收附带记录（非第 21 条本身，新开条目）**：`BottomDock` 的 `DockButton` active 高亮在真机上不显示（面板打开后对应入口不变蓝 `#70C8FF`；像素采样 max(B−R)=3–11，而同刻 `CompactQuickButton` 激活态为 66）。疑因 `ForEach` 键不含 `active`（键不变 → 子项不重建 → `@Prop active` 陈旧），或 Phase 3at 把 `dockActionActive` 改为 `isActive` 闭包入参后依赖无法追踪；未确认属回归还是既有，留待独立切片。
