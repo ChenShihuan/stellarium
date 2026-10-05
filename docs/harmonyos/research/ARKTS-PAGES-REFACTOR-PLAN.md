@@ -818,3 +818,29 @@ devecocli ui click/drag/text --device 192.168.3.95:40565 ...
 
 
 **每个 Phase 4 面板切片前**建议先跑一次第 13.2 步 1 的"零引用扫描"，把死代码清掉再搬迁（§11 修订 6 的四类判据）。
+
+### 13.8 历史重写：从分支起点剔除 `build/` 跟踪与全部同步提交（2026-10-01，**仅本地**）
+
+**目标（用户要求）：** 从 `997c007e3`（本分支基点）起，`build/` 目录**从一开始就**不被跟踪，并从历史中剔掉所有 `chore(harmonyos): sync the tracked generated copy of MainWindowNativeNode.ets` 提交。
+
+**结果：** 区间提交 **80 → 52**（29 个纯 build 同步提交被剪掉，+1 个专门的取消跟踪提交）；区间内触碰 `build/` 的提交**只剩那一个**；`sync` 提交 **0**；**最终 HEAD 的树与重写前逐字节一致**（源码/脚本/文档/插件/C++ 全 0 差异）。
+
+**做法（可复现）：**
+
+1. `git filter-branch --prune-empty --index-filter "git rm -r --cached --ignore-unmatch build" 997c007e3..HEAD`
+   —— 每个提交的索引里都删掉 `build/`；29 个"纯 build"提交因此变为空被 `--prune-empty` 剪掉，其余提交保留（树去掉 build/）。
+2. 用 plumbing 在**分支起点**插入一个专门的取消跟踪提交（不切工作区）：临时索引 `GIT_INDEX_FILE` + `git read-tree 997c007e3` + 对 **11 个文件逐个** `git rm --cached` + `git write-tree` + `git commit-tree -p 997c007e3`，然后 `git rebase --onto <U2> <旧U> feat/api26-pages-refactor`。
+   —— 这样分支的**第一个提交**就是 `chore(git): stop tracking the generated copies under build`。
+
+**踩坑：** 在临时索引里用**目录 pathspec**（`git rm -r --cached build`）会**静默失败**，树里仍留 11 个 `build/` 条目，于是删除动作被记到了下一个不相关的提交上（表现为"Phase 0 提交也碰 build/"）。改为**显式 11 个文件路径**，并在 `commit-tree` 前断言 `git ls-tree -r <tree> -- build` 为 0。
+
+**与远端：** `origin/feat/api26-pages-refactor`（`55f6ce49f1`）是重写前本地 HEAD 的祖先；重写后所有哈希变化，故同步必须
+`git push --force-with-lease origin feat/api26-pages-refactor`。**本次未执行推送**；远端内容均已作为改写后的提交保留（例如 `05f0e93341 docs(harmonyos): trace the provenance of every removed block`）。
+
+**备份与清理：** 重写前的 `eea49e386c` 保留在 `refs/heads/backup/pre-build-untrack-rewrite` 与 `refs/original/refs/heads/feat/api26-pages-refactor`。确认无误后可删（删后旧对象才会被回收）：
+
+```powershell
+git update-ref -d refs/original/refs/heads/feat/api26-pages-refactor
+git branch -D backup/pre-build-untrack-rewrite
+git reflog expire --expire=now --all; git gc --prune=now
+```
