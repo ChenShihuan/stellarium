@@ -28,7 +28,7 @@ import { DetailModelResources, DetailModelFrame, DetailModelResult, DetailModelR
 import { StellariumBridgeResponse, SessionSnapshot, TonightEvents, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, CatOption, NameItem, SearchSug, WindowNativeNodeCreateInfo, TabItem, ChipItem, LandscapeItem, ScriptMetadata, PlanetPosition, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass, PolarScopeData } from './StellariumTypes'
 import { setLifecycleListener } from '../common/StellariumLifecycle'
 import { AudioEngine } from './StellariumAudio'
-import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES, PROJECTION_KEYS } from './I18n'
+import { I18n, LANGUAGE_DISPLAY, PROJECTION_KEYS } from './I18n'
 import { DeepSkyWarmupStatus, getDeepSkyResourceWarmupStatus, isStellariumDetailMediaPreparationFailed, resolveStellariumDetailMediaAsset } from '../qability/StellariumResourceBootstrap'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PANEL, UI_RADIUS_SHEET, UI_RADIUS_PILL, UI_OPTION_ANIMATION_MS } from '../common/ui/UiTokens'
 import { getIcon } from '../common/ui/ShellIcons'
@@ -41,9 +41,7 @@ import { SiderealTimeRow } from '../panels/time/SiderealTimeRow'
 import { EquationOfTimeBlock } from '../panels/time/EquationOfTimeBlock'
 import { EquationOfTimeStore } from '../state/EquationOfTimeStore'
 import { DeltaTStore } from '../state/DeltaTStore'
-import { DeltaTSettingsBlock } from '../panels/time/DeltaTSettingsBlock'
 import { TimeSettingsStore } from '../state/TimeSettingsStore'
-import { TimeSettingsSection } from '../panels/settings/TimeSettingsSection'
 import { SettingsChoiceButton } from '../common/ui/SettingsChoiceButton'
 import { NightModeStore } from '../state/NightModeStore'
 import { TimeWheelController } from '../state/TimeWheelController'
@@ -77,8 +75,6 @@ import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
 import { GraphLoadingRow, RtsSelectionGuide, GraphSelectionGuide } from '../panels/astro/GraphGuides'
 import { InfoRow } from '../common/ui/InfoRow'
-import { EphemerisToggleRow, InformationModeButton, InformationSwitchRow, NavigationSwitchRow, NavStarsToggleRow, ArchaeoToggleRow, MosaicCameraMetric } from '../panels/settings/SettingsRows'
-import { LanguageRow, GyroscopeRow, DevicePrivacySection } from '../panels/settings/DeviceAndLanguageRows'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
@@ -107,7 +103,6 @@ import { SearchCategoryBrowse } from '../panels/search/SearchCategoryBrowse'
 import { SearchConstellationChips } from '../panels/search/SearchConstellationChips'
 import { SearchCoordinateInput } from '../panels/search/SearchCoordinateInput'
 import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
-import { QuickChipRow } from '../panels/QuickChipRow'
 import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
 import { TimeJumpActions } from '../panels/time/TimeJumpActions'
 import { ManualTimeBlock } from '../panels/time/ManualTimeBlock'
@@ -115,7 +110,6 @@ import { TimeWheelStore } from '../state/TimeWheelStore'
 import { TimeWheelScrubber } from '../panels/time/TimeWheelScrubber'
 import { OverlayStore } from '../state/OverlayStore'
 import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
-import { ViewCoordinateSettings } from '../panels/view/ViewCoordinateSettings'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
 import { ObjectDetailConnectorLayer } from '../panels/overlay/ObjectDetailConnectorLayer'
 import { ToolsStore } from '../state/ToolsStore'
@@ -153,6 +147,8 @@ import { SatellitesPanel } from '../panels/panels/SatellitesPanel'
 import { TelescopePanel } from '../panels/panels/TelescopePanel'
 import { OcularsPanel } from '../panels/panels/OcularsPanel'
 import { SettingsQuickLegacyPanel } from '../panels/panels/SettingsQuickLegacyPanel'
+import { SettingsPanel } from '../panels/panels/SettingsPanel'
+import { ConfigFallbackPanel } from '../panels/panels/ConfigFallbackPanel'
 import { SkyCultureSectionHeader, SkyCultureMetaItem, SkyCultureLabelSettingCard, SkyCultureFilterPicker } from '../panels/skyculture/SkyCultureViewParts'
 import { SatelliteGroupSelector } from '../panels/satellite/SatelliteGroupSelector'
 import {
@@ -18278,411 +18274,103 @@ private loadPlanetPositions(): void {
         onGoCoordinates: () => { this.goToCoordinates() }
       })
     } else if (this.activePanel === 'settings') {
-      Column() {
-        Scroll() {
-          Row({ space: 5 }) {
-          ForEach([
-            { label: I18n.t('settings_device_privacy'), id: -1 },
-            { label: I18n.t('c0000'), id: 0 },
-            { label: I18n.t('c0001'), id: 1 },
-            { label: I18n.t('c0002'), id: 2 },
-            { label: I18n.t('c0003'), id: 3 },
-            { label: I18n.t('c0004'), id: 4 },
-            { label: I18n.t('c0005'), id: 5 },
-            { label: I18n.t('more_plugins_manage'), id: 6 },
-            { label: I18n.t('settings_view_navigation'), id: 7 },
-          ] as TabItem[], (tab: TabItem) => {
-            Text(tab.label)
-              .fontSize(10)
-              .fontColor(this.configTab === tab.id ? '#F4FAFF' : '#C8D4E2')
-              .padding({ left: 9, right: 9, top: 5, bottom: 5 })
-              .backgroundColor(this.configTab === tab.id ? '#397EAE' : 'rgba(255,255,255,0.09)')
-              .borderRadius(UI_RADIUS_CONTROL)
-              .clickEffect({ level: ClickEffectLevel.LIGHT })
-              .animation({ duration: 180, curve: curves.springMotion(0.5, 1.0) })
-              .onClick(() => { this.selectConfigTab(tab.id) })
-          }, (tab: TabItem, index: number) => tab.id.toString())
-          }.padding({ left: 2, right: 2 })
-        }.width('100%').height(34).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-          .margin({ top: 4, bottom: 8 }).id('config-tabs-' + this.i18nLang)
-        Column({ space: 0 }) {
-          if (this.configTab === -1) {
-            DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.nmText(), subColor: this.nmSub(), onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
-            Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 10, bottom: 10 })
-          ViewCoordinateSettings({
-            store: this.overlayStore,
-            textColor: this.nmText(),
-            subColor: this.nmSub(),
-            accentColor: this.nmAccent(),
-            panelColor: this.nmBg(),
-            lineColor: this.nmBorder(),
-            onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
-            onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
-            onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) }
-          })
-          } else if (this.configTab === 0) {
-            // Main
-            LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
-            Text('行星历表').fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 4 })
-            Text('用于行星位置计算的 JPL 数值星历。仅显示设备中已安装的文件。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 5 })
-            EphemerisToggleRow({ label: 'DE430', available: this.ephemerisDe430Available, isEnabled: this.ephemerisDe430Active, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setEphemerisEnabled('de430', this.ephemerisDe430Available, v) } })
-            EphemerisToggleRow({ label: 'DE431', available: this.ephemerisDe431Available, isEnabled: this.ephemerisDe431Active, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setEphemerisEnabled('de431', this.ephemerisDe431Available, v) } })
-            EphemerisToggleRow({ label: 'DE440', available: this.ephemerisDe440Available, isEnabled: this.ephemerisDe440Active, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setEphemerisEnabled('de440', this.ephemerisDe440Available, v) } })
-            EphemerisToggleRow({ label: 'DE441', available: this.ephemerisDe441Available, isEnabled: this.ephemerisDe441Active, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setEphemerisEnabled('de441', this.ephemerisDe441Available, v) } })
-            Row() {
-              Text(I18n.t('set_distance_units')).fontSize(12).fontColor(this.nmSub()).width(72)
-              Row({ space: 6 }) {
-                Text(I18n.t('unit_km'))
-                  .fontSize(11).fontColor(this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
-                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                  .backgroundColor(this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .onClick(() => {
-                    this.setDistanceUnit(true)
-                  })
-                Text(I18n.t('unit_mile'))
-                  .fontSize(11).fontColor(!this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
-                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                  .backgroundColor(!this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .onClick(() => {
-                    this.setDistanceUnit(false)
-                  })
-              }
-            }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-            InfoRow({ label: I18n.t('s0350'), value: 'Stellarium 26.2 for HarmonyOS' })
-            Button(I18n.t('i0251') + '设置').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 12, right: 12 }).margin({ top: 6, left: 8 })
-              .onClick(() => { this.saveAppSettings(); this.flashHint('设置已保存') })
-          } else if (this.configTab === 1) {
-            // Information
-            Row() {
-              Text(I18n.t('i0120')).fontSize(12).fontColor(this.nmSub()).width(72)
-            }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-            Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
-              InformationModeButton({ labelKey: 'i0247', active: this.informationMode === 'all', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'all') } })
-              InformationModeButton({ labelKey: 'i0248', active: this.informationMode === 'default', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'default') } })
-              InformationModeButton({ labelKey: 'i0249', active: this.informationMode === 'short', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'short') } })
-              InformationModeButton({ labelKey: 'i0250', active: this.informationMode === 'none', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'none') } })
-              InformationModeButton({ labelKey: 'information_custom_mode', active: this.informationMode === 'custom', canPick: !this.informationSettingPending, textColor: this.nmText(), subColor: this.nmSub(), activeColor: this.nmAccent(), panelColor: this.nmBg(), onPick: () => { this.selectSettingsChoice('information', 'custom') } })
-            }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
-            Row() {
-              Column() {
-                Text('详情卡指向线').fontSize(12).fontColor(this.nmText()).width('100%')
-                Text('在可见天体与详情卡之间显示细连接线').fontSize(10).fontColor(this.nmSub()).width('100%')
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              Toggle({ type: ToggleType.Switch, isOn: this.overlayStore.objectDetailConnectorVisible })
-                .width(42).height(24).selectedColor(this.nmAccent())
-                .onChange((value: boolean) => { this.setObjectDetailConnector(value) })
-            }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
-            Text('自定义信息字段').fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 4 })
-            Text('选择“自定义”后，详情卡和星体信息栏只显示下面勾选的字段。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 5 })
-            InformationSwitchRow({ label: '名称', isOn: this.informationMaskHas('name'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('name', v) } })
-            InformationSwitchRow({ label: '目录编号', isOn: this.informationMaskHas('catalog'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('catalog', v) } })
-            InformationSwitchRow({ label: '视星等', isOn: this.informationMaskHas('magnitude'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('magnitude', v) } })
-            InformationSwitchRow({ label: '赤经、赤纬（J2000）', isOn: this.informationMaskHas('raJ2000'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('raJ2000', v) } })
-            InformationSwitchRow({ label: '赤经、赤纬（历元）', isOn: this.informationMaskHas('raOfDate'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('raOfDate', v) } })
-            InformationSwitchRow({ label: '方位角、高度角', isOn: this.informationMaskHas('altAz'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('altAz', v) } })
-            InformationSwitchRow({ label: '距离', isOn: this.informationMaskHas('distance'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('distance', v) } })
-            InformationSwitchRow({ label: '时角', isOn: this.informationMaskHas('hourAngle'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('hourAngle', v) } })
-            InformationSwitchRow({ label: '升起、中天、落下时间', isOn: this.informationMaskHas('riseTransitSet'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('riseTransitSet', v) } })
-            InformationSwitchRow({ label: '大小或角直径', isOn: this.informationMaskHas('size'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('size', v) } })
-            InformationSwitchRow({ label: '轨道与光照信息', isOn: this.informationMaskHas('elongation'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('elongation', v) } })
-            InformationSwitchRow({ label: '银河坐标', isOn: this.informationMaskHas('galactic'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('galactic', v) } })
-            InformationSwitchRow({ label: '星座信息', isOn: this.informationMaskHas('constellation'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('constellation', v) } })
-            InformationSwitchRow({ label: '恒星时', isOn: this.informationMaskHas('siderealTime'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('siderealTime', v) } })
-            InformationSwitchRow({ label: '附加资料', isOn: this.informationMaskHas('extra'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setInformationField('extra', v) } })
-          } else if (this.configTab === 2) {
-            Text('天空显示设置已统一到“图层 > 天空”').fontSize(11).fontColor(this.nmSub())
-              .width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).maxLines(2)
-            Button('打开图层 > 天空').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-              .borderRadius(UI_RADIUS_CONTROL).height(34).width('100%')
-              .onClick(() => { this.viewTab = 0; this.openSubPanel('layers') })
-            Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 8, bottom: 8 })
-            Text(I18n.t('set_projection')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 2, bottom: 5 })
-            Row() {
-              Text(I18n.t('set_projection')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-              Text(I18n.projectionName(this.currentProjection)).fontSize(10).fontColor(this.nmSub()).maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-            }.width('100%').padding({ left: 10, right: 8 }).margin({ bottom: 4 })
-            Scroll() {
-              Row({ space: 6 }) {
-                ForEach(PROJECTION_KEYS, (name: string) => {
-                  Text(I18n.projectionName(name)).fontSize(10)
-                    .fontColor(this.currentProjection === name ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.currentProjection === name ? this.nmAccent() : this.nmBg())
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .animation({ duration: 180, curve: Curve.EaseOut })
-                    .onClick(() => { this.setProjection(name) })
-                }, (name: string) => name)
-              }.padding({ left: 8, right: 8 })
-            }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-            Text(I18n.projectionDesc(this.currentProjection)).fontSize(10).fontColor(this.nmSub()).width('100%')
-              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).padding({ left: 10, right: 10, top: 4, bottom: 4 })
-            Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 8, bottom: 8 })
-            Text('渲染输出').fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 2, bottom: 5 })
-            Row() {
-              Text('色彩抖动').fontSize(12).fontColor(this.nmSub()).width(72)
-              Text(this.configDitheringLabel(this.configDitheringMode)).fontSize(12).fontColor(this.nmText()).layoutWeight(1).textAlign(TextAlign.End)
-            }.height(30).width('100%').padding({ left: 10, right: 10 })
-            Scroll() {
-              Row({ space: 6 }) {
-                ForEach([
-                  { id: 'Disabled', label: '关闭' }, { id: 'Color565', label: '5/6/5 位' },
-                  { id: 'Color666', label: '6/6/6 位' }, { id: 'Color888', label: '8/8/8 位' },
-                ] as ConfigurationOption[], (option: ConfigurationOption) => {
-                  Text(option.label).fontSize(10)
-                    .fontColor(this.configDitheringMode === option.id ? this.nmText() : this.nmSub())
-                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                    .backgroundColor(this.configDitheringMode === option.id ? this.nmAccent() : this.nmBg())
-                    .borderRadius(UI_RADIUS_CONTROL)
-                    .onClick(() => { this.setConfigurationDithering(option.id) })
-                }, (option: ConfigurationOption) => option.id)
-              }.padding({ left: 8, right: 8 })
-            }.width('100%').height(31).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-            Text('抖动用于低色深屏幕的颜色过渡；通常保持 8/8/8 位。').fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ top: 4, bottom: 8 })
-            InfoRow({ label: I18n.t('s0351'), value: 'Stellarium for HarmonyOS' })
-            InfoRow({ label: I18n.t('s0352'), value: 'OpenHarmony / HarmonyOS NEXT' })
-          } else if (this.configTab === 3) {
-            TimeSettingsSection({
-              store: this.timeSettingsStore,
-              pending: this.timeSettingsPending,
-              observationTimeText: this.observationTimeText,
-              textColor: this.nmText(),
-              subColor: this.nmSub(),
-              inputColor: this.nmInput(),
-              panelColor: this.nmBg(),
-              accentColor: this.nmAccent(),
-              borderColorValue: this.nmBorder(),
-              onSelectFormat: (group: string, value: string) => { this.selectSettingsChoice(group, value) },
-              onSetStartup: (key: string, value: string) => { this.setStartupTimeSetting(key, value) }
-            })
-            DeltaTSettingsBlock({
-              store: this.deltaTStore,
-              pending: this.timeSettingsPending,
-              textColor: this.nmText(),
-              subColor: this.nmSub(),
-              panelColor: this.nmBg(),
-              inputColor: this.nmInput(),
-              accentColor: this.nmAccent(),
-              onSelect: (key: string) => { this.setStartupTimeSetting('deltaT', key) },
-              onSaveCustom: (text: string) => { this.setStartupTimeSetting('deltaCustom', text) }
-            })
-          } else if (this.configTab === 4) {
-            Text(I18n.t('tools_data_hint')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8, right: 8 }).margin({ top: 4, bottom: 8 })
-            Button(I18n.t('panel_tools_data')).fontSize(12).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-              .borderRadius(UI_RADIUS_CONTROL).height(34).width('100%').onClick(() => { this.openSubPanel('tools') })
-            Text(I18n.t('tools_single_entry_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 8, right: 8 }).margin({ top: 8 })
-          } else if (this.configTab === 5) {
-            // Scripts
-            Row() {
-              Text(I18n.t('i0122')).fontSize(12).fontColor(this.nmSub()).width(72)
-              Button(I18n.t('i0252')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
-                .onClick(() => { this.triggerAction('actionStop_Script') })
-            }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-            Row() {
-              Text(I18n.t('i0123')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 4 })
-            }.height(18).width('100%')
-            if (this.scriptLaunching) {
-              Row({ space: 6 }) {
-                LoadingProgress().width(16).height(16).color(this.nmAccent())
-                Text(I18n.format('script_starting_named', [this.scriptZh(this.scriptLaunchingName)])).fontSize(10).fontColor(this.nmSub())
-              }.width('100%').padding({ left: 8, right: 8, bottom: 4 })
-            }
-            Scroll(this.scriptListScroller) {
-              Column({ space: 2 }) {
-                ForEach(this.scriptList, (s: string) => {
-                  Column({ space: 0 }) {
-                    // 第一行：中文名
-                    Row() {
-                      Text(this.scriptZh(s)).fontSize(11).fontColor(this.nmText())
-                        .fontWeight(FontWeight.Medium).layoutWeight(1)
-                      Text('▶').fontSize(9).fontColor('#7FD0FF')
-                    }
-                    .height(28).width('100%').padding({ left: 10, right: 10 })
-                    // 第二行：简短描述
-                    if (this.scriptDesc(s)) {
-                      Text(this.scriptDesc(s))
-                        .fontSize(8).fontColor('#77FFFFFF').width('100%')
-                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                        .padding({ left: 10, right: 10, bottom: 3 })
-                    }
-                    if (this.scriptMetaLine(s).length > 0) {
-                      Text(this.scriptMetaLine(s))
-                        .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                        .padding({ left: 10, right: 10, bottom: 3 })
-                    }
-                    if (this.scriptSourceLine(s).length > 0) {
-                      Text(this.scriptSourceLine(s)).fontSize(8).fontColor('#55FFFFFF').width('100%').maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis }).padding({ left: 10, right: 10, bottom: 3 })
-                    }
-                  }
-                  .width('100%')
-                  .backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_CONTROL)
-                  .opacity(this.scriptLaunching && this.scriptLaunchingName !== s ? 0.55 : 1)
-                    .hitTestBehavior(HitTestMode.Default)
-                  .onClick(() => { this.playScriptByName(s) })
-                }, (s: string, index: number) => s)
-              }
-                .width('100%')
-            }
-              .width('100%')
-              .height(this.isExpandedLayout ? 330 : 300)
-              .scrollable(ScrollDirection.Vertical)
-              .scrollBar(BarState.Auto)
-              .edgeEffect(EdgeEffect.Spring)
-              .hitTestBehavior(HitTestMode.Default)
-          } else if (this.configTab === 6) {
-            Row() {
-              Column({ space: 3 }) {
-                Text(I18n.t('i0124')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.nmText()).width('100%')
-                Text(I18n.t('plugin_management_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(3)
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              Button(I18n.t('act_refresh')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
-                .onClick(() => { this.loadPluginList() })
-            }.width('100%').padding({ left: 8, right: 8, top: 4, bottom: 8 })
-            if (this.pluginListLoading && this.pluginList.length === 0) {
-              Row({ space: 8 }) {
-                LoadingProgress().width(18).height(18).color(this.nmAccent())
-                Text(I18n.t('msg_loading')).fontSize(11).fontColor(this.nmSub())
-              }.width('100%').justifyContent(FlexAlign.Center).margin({ top: 10 })
-            }
-            Scroll() {
-              Column({ space: 6 }) {
-                ForEach(this.pluginList, (pl: PluginItem) => {
-                  Column({ space: 5 }) {
-                    Row() {
-                      Text(this.pluginZh(pl.name)).fontSize(12).fontColor(this.nmText())
-                        .fontWeight(FontWeight.Medium).layoutWeight(1)
-                      Text(pl.loaded ? I18n.t('plugin_runtime_loaded') : I18n.t('plugin_runtime_unloaded'))
-                        .fontSize(9).fontColor(pl.loaded ? '#B9E6C4' : this.nmSub())
-                        .padding({ left: 7, right: 7, top: 3, bottom: 3 })
-                        .backgroundColor(pl.loaded ? 'rgba(70, 150, 96, 0.18)' : this.nmBg())
-                        .borderRadius(UI_RADIUS_PILL)
-                    }
-                    .height(28)
-                    if (this.resourceText(pl.description, this.pluginDesc(pl.name)).length > 0) {
-                      Text(this.resourceText(pl.description, this.pluginDesc(pl.name)))
-                        .fontSize(10).fontColor(this.nmSub()).width('100%')
-                        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }
-                    Text(I18n.t('resource_author') + ': ' + this.resourceText(pl.authors, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + this.resourceText(pl.license, I18n.t('resource_not_provided')))
-                      .fontSize(9).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    if (this.pluginMetaLine(pl).length > 0) {
-                      Text(this.pluginMetaLine(pl))
-                        .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }
-                    Row({ space: 8 }) {
-                      Text(I18n.t('plugin_all_loaded_policy')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2)
-                    }.width('100%').height(24)
-                    Text(this.pluginFeatureDestination(pl.id)).fontSize(9).fontColor(this.nmSub()).width('100%')
-                      .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    if (this.pluginFeatureIsActionable(pl.id)) {
-                      Button() {
-                        Text(this.pluginFeatureActionLabel(pl.id))
-                          .fontSize(11)
-                          .fontColor(this.nmText())
-                          .maxLines(1)
-                          .textOverflow({ overflow: TextOverflow.Ellipsis })
-                      }
-                        .id('plugin-feature-' + pl.id)
-                        .backgroundColor(this.nmAccent())
-                        .borderRadius(UI_RADIUS_CONTROL).height(30).width('100%')
-                        .padding({ left: 10, right: 10 })
-                        .hitTestBehavior(HitTestMode.Block)
-                        .zIndex(2)
-                        .onClick(() => { this.openPluginFeature(pl.id) })
-                    } else {
-                      Text(this.pluginFeatureRoute(pl.id).kind === 'offline' || this.pluginFeatureRoute(pl.id).kind === 'network'
-                        ? this.pluginFeatureRoute(pl.id).kind === 'network'
-                          ? I18n.t('plugin_network_disabled')
-                          : I18n.t('plugin_offline_disabled')
-                        : I18n.t('plugin_background_only'))
-                        .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(2)
-                    }
-                  }
-                  .width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
-                  .backgroundColor(this.nmBg())
-                  .borderRadius(UI_RADIUS_PANEL)
-                }, (pl: PluginItem) => pl.id)
-              }
-            }
-            .width('100%').height(260).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-          } else if (this.configTab === 7) {
-            Text(I18n.t('settings_view_navigation')).fontSize(13).fontColor(this.nmText()).width('100%').margin({ top: 4, bottom: 3 })
-            Text(I18n.t('settings_view_navigation_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(3).margin({ bottom: 8 })
-            Text(I18n.t('settings_view_current')).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 5 })
-            Row({ space: 8 }) {
-              Column({ space: 2 }) {
-                Text(I18n.t('settings_view_current_fov')).fontSize(10).fontColor(this.nmSub())
-                Text(this.fovText).fontSize(16).fontColor(this.nmText())
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              Button(I18n.t('settings_view_center')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-                .opacity(this.hasSelectedObject() && !this.gyroStore.gyroscopeEnabled ? 1 : 0.58)
-                .onClick(() => { this.moveToSelectedObject() })
-            }.width('100%').padding({ left: 10, right: 8, top: 7, bottom: 7 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-
-            Column({ space: 5 }) {
-              Row({ space: 8 }) {
-                Text(I18n.t('set_lock_view')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.viewLock })
-                  .width(42).height(24).selectedColor(this.nmAccent())
-                  .onChange((enabled: boolean) => { this.setViewLockState(enabled) })
-              }.width('100%')
-              Text(this.viewLock ? I18n.t('view_lock_enabled') : I18n.t('settings_view_lock_hint'))
-                .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(3)
-            }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-
-            Text(I18n.t('settings_view_startup')).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 5 })
-            Column({ space: 2 }) {
-              Text(I18n.format('settings_view_startup_fov', [this.navigationStartupFov.toFixed(1)])).fontSize(11).fontColor(this.nmText()).width('100%')
-              Text(I18n.format('settings_view_startup_direction', [this.navigationStartupAzimuth.toFixed(1), this.navigationStartupAltitude.toFixed(1)])).fontSize(10).fontColor(this.nmSub()).width('100%')
-            }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 6 })
-            Button(I18n.t('settings_view_save_current')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-              .borderRadius(UI_RADIUS_CONTROL).height(34).width('100%').margin({ bottom: 8 })
-              .onClick(() => { this.saveCurrentViewAsStartup() })
-
-            Text(I18n.t('settings_view_navigation_controls')).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ bottom: 5 })
-            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_navigation'), isOn: this.navigationMouseEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('mouseNavigation', v) } })
-            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_zoom'), isOn: this.navigationMouseZoomEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('mouseZooming', v) } })
-            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_navigation'), isOn: this.navigationMoveKeysEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('moveKeys', v) } })
-            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_zoom'), isOn: this.navigationZoomKeysEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('zoomKeys', v) } })
-            NavigationSwitchRow({ label: I18n.t('settings_view_gravity_labels'), isOn: this.navigationGravityLabelsEnabled, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('gravityLabels', v) } })
-            NavigationSwitchRow({ label: I18n.t('s0302'), isOn: this.autoZoomResets, textColor: this.nmText(), accentColor: this.nmAccent(), panelColor: this.nmBg(), borderColorValue: this.nmBorder(), onToggle: (v: boolean) => { this.setNavigationBoolean('autoZoomResets', v) } })
-
-            Text(I18n.t('settings_view_max_fov')).fontSize(12).fontColor(this.nmSub()).width('100%').margin({ top: 4, bottom: 4 })
-            Row() {
-              Text(this.navigationMaxFov.toFixed(0) + '°').fontSize(14).fontColor(this.nmText()).width(48)
-              Slider({ value: this.navigationMaxFov, min: 30, max: 360, step: 1, style: SliderStyle.OutSet })
-                .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-                .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent())
-                .showSteps(false).onChange((value: number) => { this.navigationMaxFov = Math.round(value) })
-              Button(I18n.t('settings_view_apply')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-                .onClick(() => { this.setNavigationMaxFov(this.navigationMaxFov) })
-            }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-
-            Row({ space: 6 }) {
-              Button(I18n.t('settings_save_all')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1).onClick(() => { this.saveAllCoreSettings() })
-              Button(I18n.t('settings_restore_defaults')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1).onClick(() => { this.restoreCoreDefaults() })
-            }.width('100%').margin({ top: 2, bottom: 8 })
-          }
-        }
-          .width('100%')
-          .opacity(this.configTabContentOpacity)
-          .translate({ x: this.configTabContentOffsetX, y: 0 })
-          .id('config-content-' + this.i18nLang)
-      }.width('100%')
+      SettingsPanel({
+        gyroStore: this.gyroStore,
+        overlayStore: this.overlayStore,
+        deltaTStore: this.deltaTStore,
+        timeSettingsStore: this.timeSettingsStore,
+        scroller: this.scriptListScroller,
+        configTab: this.configTab,
+        configTabContentOpacity: this.configTabContentOpacity,
+        configTabContentOffsetX: this.configTabContentOffsetX,
+        i18nLang: this.i18nLang,
+        selectedLanguage: this.selectedLanguage,
+        useMetricUnits: this.useMetricUnits,
+        isExpandedLayout: this.isExpandedLayout,
+        informationMode: this.informationMode,
+        informationSettingPending: this.informationSettingPending,
+        currentProjection: this.currentProjection,
+        configDitheringMode: this.configDitheringMode,
+        ephemerisDe430Available: this.ephemerisDe430Available,
+        ephemerisDe430Active: this.ephemerisDe430Active,
+        ephemerisDe431Available: this.ephemerisDe431Available,
+        ephemerisDe431Active: this.ephemerisDe431Active,
+        ephemerisDe440Available: this.ephemerisDe440Available,
+        ephemerisDe440Active: this.ephemerisDe440Active,
+        ephemerisDe441Available: this.ephemerisDe441Available,
+        ephemerisDe441Active: this.ephemerisDe441Active,
+        timeSettingsPending: this.timeSettingsPending,
+        observationTimeText: this.observationTimeText,
+        scriptLaunching: this.scriptLaunching,
+        scriptLaunchingName: this.scriptLaunchingName,
+        scriptList: this.scriptList,
+        pluginList: this.pluginList,
+        pluginListLoading: this.pluginListLoading,
+        fovText: this.fovText,
+        viewLock: this.viewLock,
+        navigationMouseEnabled: this.navigationMouseEnabled,
+        navigationMouseZoomEnabled: this.navigationMouseZoomEnabled,
+        navigationMoveKeysEnabled: this.navigationMoveKeysEnabled,
+        navigationZoomKeysEnabled: this.navigationZoomKeysEnabled,
+        navigationGravityLabelsEnabled: this.navigationGravityLabelsEnabled,
+        autoZoomResets: this.autoZoomResets,
+        navigationStartupFov: this.navigationStartupFov,
+        navigationStartupAzimuth: this.navigationStartupAzimuth,
+        navigationStartupAltitude: this.navigationStartupAltitude,
+        navigationMaxFov: this.navigationMaxFov,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        lineColor: this.nmBorder(),
+        inputColor: this.nmInput(),
+        sensZh: (en: string) => { return this.sensZh(en) },
+        configDitheringLabel: (value: string) => { return this.configDitheringLabel(value) },
+        informationMaskHas: (key: string) => { return this.informationMaskHas(key) },
+        pluginZh: (en: string) => { return this.pluginZh(en) },
+        pluginDesc: (en: string) => { return this.pluginDesc(en) },
+        pluginMetaLine: (plugin: PluginItem) => { return this.pluginMetaLine(plugin) },
+        pluginFeatureRoute: (id: string) => { return this.pluginFeatureRoute(id) },
+        pluginFeatureDestination: (id: string) => { return this.pluginFeatureDestination(id) },
+        pluginFeatureIsActionable: (id: string) => { return this.pluginFeatureIsActionable(id) },
+        pluginFeatureActionLabel: (id: string) => { return this.pluginFeatureActionLabel(id) },
+        resourceText: (value: string | undefined, fallback: string) => { return this.resourceText(value, fallback) },
+        scriptZh: (filename: string) => { return this.scriptZh(filename) },
+        scriptDesc: (filename: string) => { return this.scriptDesc(filename) },
+        scriptMetaLine: (filename: string) => { return this.scriptMetaLine(filename) },
+        scriptSourceLine: (filename: string) => { return this.scriptSourceLine(filename) },
+        hasSelectedObject: () => { return this.hasSelectedObject() },
+        selectConfigTab: (tabId: number) => { this.selectConfigTab(tabId) },
+        setViewCoordinatesVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
+        setViewCoordinateFamily: (family: string) => { this.setViewCoordinateFamily(family) },
+        setViewEquatorialEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) },
+        setLanguage: (lang: string) => { this.setLanguage(lang) },
+        setEphemerisEnabled: (key: string, available: boolean, enabled: boolean) => { this.setEphemerisEnabled(key, available, enabled) },
+        setDistanceUnit: (useMetric: boolean) => { this.setDistanceUnit(useMetric) },
+        setConfigurationDithering: (value: string) => { this.setConfigurationDithering(value) },
+        setProjection: (name: string) => { this.setProjection(name) },
+        saveAppSettings: () => { this.saveAppSettings() },
+        flashHint: (text: ResourceStr) => { this.flashHint(text) },
+        saveAllCoreSettings: () => { this.saveAllCoreSettings() },
+        restoreCoreDefaults: () => { this.restoreCoreDefaults() },
+        saveCurrentViewAsStartup: () => { this.saveCurrentViewAsStartup() },
+        setViewLockState: (enabled: boolean) => { this.setViewLockState(enabled) },
+        setNavigationBoolean: (setting: string, enabled: boolean) => { this.setNavigationBoolean(setting, enabled) },
+        setNavigationMaxFov: (value: number) => { this.setNavigationMaxFov(value) },
+        selectSettingsChoice: (group: string, value: string) => { this.selectSettingsChoice(group, value) },
+        setStartupTimeSetting: (key: string, value: string) => { this.setStartupTimeSetting(key, value) },
+        setInformationField: (key: string, enabled: boolean) => { this.setInformationField(key, enabled) },
+        setObjectDetailConnector: (enabled: boolean) => { this.setObjectDetailConnector(enabled) },
+        toggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
+        confirmPrivacyRevocation: () => { this.confirmPrivacyRevocation() },
+        loadPluginList: () => { this.loadPluginList() },
+        openPluginFeature: (id: string) => { this.openPluginFeature(id) },
+        playScriptByName: (filename: string) => { this.playScriptByName(filename) },
+        triggerAction: (actionId: string) => { this.triggerAction(actionId) },
+        moveToSelectedObject: () => { this.moveToSelectedObject() },
+        onOpenLayersSky: () => { this.viewTab = 0; this.openSubPanel('layers') },
+        onOpenTools: () => { this.openSubPanel('tools') }
+      })
     } else if (this.activePanel === 'astro') {
       // 天文计算窗口
       Scroll() {
@@ -21266,223 +20954,37 @@ private loadPlanetPositions(): void {
         }
       })
     } else {
-      InfoRow({ label: I18n.t('i0057'), value: this.isExpandedLayout ? I18n.t('s0703') : I18n.t('s0704') })
-      InfoRow({ label: I18n.t('i0058'), value: 'Stellarium Core' })
-      InfoRow({ label: I18n.t('i0059'), value: this.fovText })
-      InfoRow({ label: I18n.t('i0060'), value: this.gyroStore.gyroscopeStatus })
-      InfoRow({ label: I18n.t('i0061'), value: this.sensZh(this.gyroStore.gyroscopeSensitivityText) })
-      GyroscopeRow({ isOn: this.gyroStore.gyroscopeEnabled, onToggle: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) } })
-      LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
-      Row() {
-        Text(I18n.t('set_distance_units'))
-          .fontSize(14)
-          .fontColor('#E5FFFFFF')
-          .width(72)
-        Row({ space: 6 }) {
-          Text(I18n.t('unit_km'))
-            .fontSize(12)
-            .fontColor(this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
-            .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-            .backgroundColor(this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
-            .borderRadius(UI_RADIUS_CONTROL)
-            .onClick(() => {
-              this.useMetricUnits = true
-              this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=true', () => {})
-            })
-          Text(I18n.t('unit_mile'))
-            .fontSize(12)
-            .fontColor(!this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
-            .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-            .backgroundColor(!this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
-            .borderRadius(UI_RADIUS_CONTROL)
-            .onClick(() => {
-              this.useMetricUnits = false
-              this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=false', () => {})
-            })
-        }
-      }
-        .height(40)
-        .width('100%')
-      // 观测列表
-      if (this.observingList.length > 0) {
-        Row() {
-          Text(I18n.t('i0022') + ' (' + this.observingList.length + ')')
-            .fontSize(12).fontColor("#99FFFFFF")
-          Text('').layoutWeight(1)
-          Button(I18n.t('i0301'))
-            .fontSize(11).fontColor("#FF6B6B").backgroundColor("rgba(255,107,107,0.12)")
-            .borderRadius(UI_RADIUS_PILL).height(26).padding({ left: 10, right: 10 })
-            .onClick(() => {
-              this.observingList = []
-              this.persistObservingList()
-              this.flashHint(I18n.t('i0302'))
-            })
-        }
-        .height(34).width("100%").padding({ left: 10, right: 10 }).backgroundColor("rgba(255, 255, 255, 0.04)").borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 4 })
-        Scroll() {
-          Row({ space: 6 }) {
-            ForEach(this.observingList, (name: string) => {
-              Row({ space: 4 }) {
-                Text(this.observingDisplayName(name))
-                  .fontSize(11).fontColor("#E5FFFFFF")
-                Text('x')
-                  .fontSize(9).fontColor("rgba(255,255,255,0.4)")
-                  .onClick(() => {
-                    this.removeObservingTarget(name)
-                  })
-              }
-              .padding({ left: 10, right: 6, top: 3, bottom: 3 })
-              .backgroundColor("rgba(107,163,214,0.20)")
-              .borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => {
-                this.searchObject(name)
-                this.flashHint(I18n.t('i0082'))
-              })
-            }, (name: string) => name)
-          }.padding({ left: 4, right: 4 })
-        }.width("100%").height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-      }
-      InfoRow({ label: I18n.t('i0062'), value: I18n.t('s0706') })
-      // 分区：方向
-      Row()
-        .width('100%').height(0.5)
-        .backgroundColor('rgba(255,255,255,0.06)')
-        .margin({ top: 8, bottom: 4 })
-      Row() {
-        Text(I18n.t('i0275')).fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 2 })
-      }
-      .height(18).width('100%')
-      Row() {
-        QuickChipRow({ items: [{ id: 'east', label: I18n.t('s0725') }, { id: 'south', label: I18n.t('s0726') }, { id: 'west', label: I18n.t('s0727') }, { id: 'north', label: I18n.t('s0728') }, { id: 'zenith', label: I18n.t('i0088') }, { id: 'ncp', label: I18n.t('i0089') }], onChip: (id: string) => { this.handleChip(id) } })
-      }
-      .width('100%')
-      // 分区：视场
-      Row()
-        .width('100%').height(0.5)
-        .backgroundColor('rgba(255,255,255,0.06)')
-        .margin({ top: 8, bottom: 4 })
-      Row() {
-        Text(I18n.t('i0276')).fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 2 })
-      }
-      .height(18).width('100%')
-      Row() {
-        QuickChipRow({ items: [{ id: 'fov1', label: '1°' }, { id: 'fov2', label: '2°' }, { id: 'fov5', label: '5°' }, { id: 'fov10', label: '10°' }, { id: 'fov20', label: '20°' }, { id: 'fov45', label: '45°' }, { id: 'fov60', label: '60°' }, { id: 'fov90', label: '90°' }, { id: 'fov180', label: '180°' }], onChip: (id: string) => { this.handleChip(id) } })
-      }
-      .width('100%')
-      // 天球投影切换
-      Row() {
-        Text(I18n.t('i0025')).fontSize(12).fontColor('#99FFFFFF').width(72)
-        Text(this.telescopeStore.equatorialMount ? I18n.t('i0008') : I18n.t('i0009'))
-          .fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1)
-        Toggle({ type: ToggleType.Switch, isOn: this.telescopeStore.equatorialMount })
-          .onChange((isOn: boolean) => {
-            this.telescopeStore.equatorialMount = isOn
-            this.triggerAction('actionSwitch_Equatorial_Mount')
-            this.refreshState()
-            this.flashHint(isOn ? I18n.t('i0008') : I18n.t('i0009'))
-          })
-      }
-      .height(40).width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ top: 4, bottom: 4 })
-      // The offline release does not expose screenshots until the file is
-      // written through a user-accessible media path.
-      Row() {
-        if (!OFFLINE_APPGALLERY_BUILD) {
-          Button(I18n.t('i0048'))
-            .fontSize(13).fontColor('#E5FFFFFF').backgroundColor('rgba(255,255,255,0.08)')
-            .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1)
-            .onClick(() => {
-              this.saveScreenshot()
-            })
-        }
-        Row() {
-            Image($r(this.nightModeStore.nightMode ? 'app.media.ic_moon' : 'app.media.ic_sun')).width(16).height(16).fillColor('#E5FFFFFF')
-            Text(this.nightModeStore.nightMode ? I18n.t('s0707') : I18n.t('s0708')).fontSize(12).fontColor('#E5FFFFFF').margin({ left: 4 })
-          }
-          .padding({ left: 10, right: 10 }).backgroundColor('rgba(255,255,255,0.08)')
-          .borderRadius(UI_RADIUS_CONTROL).height(36).layoutWeight(1).margin({ left: 8 })
-          .onClick(() => {
-            this.nightModeStore.nightMode = !this.nightModeStore.nightMode
-            this.triggerAction('actionShow_Night_Mode')
-            this.flashHint(this.nightModeStore.nightMode ? I18n.t('s0707') : I18n.t('s0708'))
-          })
-      }
-      .width('100%').margin({ top: 4, bottom: 4 })
-      // 星空翻转
-      Row() {
-        Text(I18n.t('i0277')).fontSize(12).fontColor('#99FFFFFF').width(72)
-        Row() {
-              Image($r('app.media.ic_layers')).width(14).height(14).fillColor('#E5FFFFFF')
-              Text(this.layerStore.flipVert ? I18n.t('s0709') : I18n.t('s0710')).fontSize(11).fontColor('#E5FFFFFF').margin({ left: 3 })
-            }
-          .padding({ left: 8, right: 8 }).backgroundColor(this.layerStore.flipVert ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.08)')
-          .borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1)
-          .onClick(() => {
-            this.layerStore.flipVert = !this.layerStore.flipVert
-            this.triggerAction('actionVertical_Flip')
-            this.flashHint(this.layerStore.flipVert ? I18n.t('msg_flip_south_up') : I18n.t('msg_flip_north_up'))
-          })
-        Row() {
-              Image($r('app.media.ic_refresh')).width(14).height(14).fillColor('#E5FFFFFF')
-              Text(this.layerStore.flipHoriz ? I18n.t('s0711') : I18n.t('s0712')).fontSize(11).fontColor('#E5FFFFFF').margin({ left: 3 })
-            }
-          .padding({ left: 8, right: 8 }).backgroundColor(this.layerStore.flipHoriz ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.08)')
-          .padding({ left: 8, right: 8 }).borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1).margin({ left: 6 }).justifyContent(FlexAlign.Center)
-          .onClick(() => {
-            this.layerStore.flipHoriz = !this.layerStore.flipHoriz
-            this.triggerAction('actionHorizontal_Flip')
-            this.flashHint(this.layerStore.flipHoriz ? I18n.t('s0711') : I18n.t('s0712'))
-          })
-      }
-      .width('100%').padding({ left: 10, right: 10 }).margin({ top: 2, bottom: 4 })
-      QuickChipRow({ items: [{ id: 'refresh', label: I18n.t('s0721') }, { id: 'now', label: I18n.t('s0754') }], onChip: (id: string) => { this.handleChip(id) } })
-      // 帮助说明
-      Row() {
-        Text(I18n.t('i0026')).fontSize(12).fontColor("#99FFFFFF").width(72)
-      }
-      .height(6).width("100%").margin({ top: 2 })
-      Text(I18n.t('i0027'))
-        .fontSize(11).fontColor("#99FFFFFF").width("100%").padding({ left: 4, right: 4 })
-      Text(I18n.t('i0028'))
-        .fontSize(11).fontColor("#99FFFFFF").width("100%").padding({ left: 4, right: 4 }).margin({ top: 2 })
-      // 语言选择
-      Row() {
-        Text(I18n.t('i0029')).fontSize(12).fontColor("#99FFFFFF").width(72)
-        Text(LANGUAGE_DISPLAY[this.selectedLanguage] ?? this.selectedLanguage)
-          .fontSize(14).fontColor("#E5FFFFFF").layoutWeight(1)
-      }
-      .height(34).width("100%").padding({ left: 10, right: 10 }).backgroundColor("rgba(255, 255, 255, 0.04)").borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 4 })
-      Scroll() {
-        Row({ space: 6 }) {
-          ForEach(SUPPORTED_LANGUAGES, (lang: string) => {
-            Text(LANGUAGE_DISPLAY[lang] ?? lang)
-              .fontSize(11).fontColor(this.selectedLanguage === lang ? "#F4FAFF" : "#C8D4E2")
-              .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-              .backgroundColor(this.selectedLanguage === lang ? "rgba(107,163,214,0.35)" : "rgba(255,255,255,0.05)")
-              .borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => this.setLanguage(lang))
-          }, (lang: string) => lang)
-        }.padding({ left: 4, right: 4 })
-      }.width("100%").height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ bottom: 8 })
-      // Sky-culture selection is intentionally hidden in the offline release.
-      if (!OFFLINE_APPGALLERY_BUILD && this.skyCultures.length > 0) {
-        Row() {
-          Text(I18n.t('i0035')).fontSize(12).fontColor("#99FFFFFF").width(72)
-          Text(this.currentSkyCulture).fontSize(14).fontColor("#E5FFFFFF").layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .height(34).width("100%").padding({ left: 10, right: 10 }).backgroundColor("rgba(255, 255, 255, 0.04)").borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 4 })
-        Scroll() {
-          Row({ space: 6 }) {
-            ForEach(this.skyCultures, (culture: string) => {
-              Text(culture)
-                .fontSize(11).fontColor(this.currentSkyCulture === culture ? "#FFFFFFFF" : "#99FFFFFF")
-                .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                .backgroundColor(this.currentSkyCulture === culture ? "rgba(107,163,214,0.35)" : "rgba(255,255,255,0.05)")
-                .borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => this.setSkyCulture(culture))
-            }, (culture: string) => culture)
-          }.padding({ left: 4, right: 4 })
-        }.width("100%").height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-      }
+      ConfigFallbackPanel({
+        gyroStore: this.gyroStore,
+        layerStore: this.layerStore,
+        nightModeStore: this.nightModeStore,
+        telescopeStore: this.telescopeStore,
+        isExpandedLayout: this.isExpandedLayout,
+        fovText: this.fovText,
+        selectedLanguage: this.selectedLanguage,
+        useMetricUnits: this.useMetricUnits,
+        observingList: this.observingList,
+        currentSkyCulture: this.currentSkyCulture,
+        skyCultures: this.skyCultures,
+        panelColor: this.nmBg(),
+        sensZh: (en: string) => { return this.sensZh(en) },
+        observingDisplayName: (name: string) => { return this.observingDisplayName(name) },
+        selectObservingTarget: (name: string) => { this.searchObject(name); this.flashHint(I18n.t('i0082')) },
+        removeObservingTarget: (name: string) => { this.removeObservingTarget(name) },
+        clearObservingList: () => { this.observingList = []; this.persistObservingList(); this.flashHint(I18n.t('i0302')) },
+        setLegacyDistanceUnit: (useMetric: boolean) => {
+          this.useMetricUnits = useMetric
+          this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + (useMetric ? 'true' : 'false'), () => {})
+        },
+        handleChip: (id: string) => { this.handleChip(id) },
+        toggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
+        flashHint: (text: ResourceStr) => { this.flashHint(text) },
+        setLanguage: (lang: string) => { this.setLanguage(lang) },
+        setSkyCulture: (culture: string) => { this.setSkyCulture(culture) },
+        triggerAction: (actionId: string) => { this.triggerAction(actionId) },
+        refreshState: () => { this.refreshState() },
+        saveScreenshot: () => { this.saveScreenshot() }
+      })
     }
   }
 

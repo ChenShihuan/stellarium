@@ -1,0 +1,548 @@
+// 「设置」面板（原宿主 panelContent() 的 `settings` 分支，分支体原样下沉，Phase 4j）。
+//
+// 判定条件 `activePanel === 'settings'` 留在宿主；8 个子标签页（设备与隐私 / 主设置 /
+// 信息 / 天空 / 时间 / 数据 / 插件管理 / 视图导航）的原内联 UI 一字未改。
+//
+// 状态体系（§13.1 规则 1/5/6）：
+//   - 实时刷新的四个 @Observed store 走 @ObjectLink（gyroStore / overlayStore /
+//     deltaTStore / timeSettingsStore），宿主源均为 @State 实例。
+//   - 其余标量/字符串状态走 @Prop；主题色由宿主算好后传入（避免组件名与
+//     CustomComponent 基类属性方法冲突，边框色命名为 lineColor）。
+//   - 宿主私有助手（sensZh / configDitheringLabel / informationMaskHas / plugin* /
+//     script* 等纯查表或读宿主字段）与全部动作按规则 6 回注，组件内不改宿主 @State。
+//     `viewTab = 0; openSubPanel('layers')` 与 `openSubPanel('tools')` 合并为
+//     onOpenLayersSky / onOpenTools 两个动作回调。
+//   - 原 `Slider` 直接写宿主 `this.navigationMaxFov`；组件改为本地 @State 草稿
+//     `maxFovDraft`（aboutToAppear 与 @Prop 同步），点“应用”经 setNavigationMaxFov
+//     回注宿主 —— 与原“拖动改值、应用才下发生效”的行为一致。
+//   - 列表 Scroller（scriptListScroller）以普通成员传入（宿主仍持同一实例）。
+// 本文件不含 @BuilderParam，不含参数化 @Builder（规则 3/9）。
+
+import { curves } from '@kit.ArkUI'
+import { I18n, PROJECTION_KEYS } from '../../pages/I18n'
+import { TabItem, PluginItem } from '../../pages/StellariumTypes'
+import { ConfigurationOption, PluginFeatureRoute } from '../../pages/MainWindowModels'
+import { UI_RADIUS_CONTROL, UI_RADIUS_PILL, UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
+import { GyroStore } from '../../state/GyroStore'
+import { OverlayStore } from '../../state/OverlayStore'
+import { DeltaTStore } from '../../state/DeltaTStore'
+import { TimeSettingsStore } from '../../state/TimeSettingsStore'
+import { InfoRow } from '../../common/ui/InfoRow'
+import { EphemerisToggleRow, InformationModeButton, InformationSwitchRow, NavigationSwitchRow } from '../settings/SettingsRows'
+import { LanguageRow, DevicePrivacySection } from '../settings/DeviceAndLanguageRows'
+import { TimeSettingsSection } from '../settings/TimeSettingsSection'
+import { DeltaTSettingsBlock } from '../time/DeltaTSettingsBlock'
+import { ViewCoordinateSettings } from '../view/ViewCoordinateSettings'
+
+@Component
+export struct SettingsPanel {
+  @ObjectLink gyroStore: GyroStore
+  @ObjectLink overlayStore: OverlayStore
+  @ObjectLink deltaTStore: DeltaTStore
+  @ObjectLink timeSettingsStore: TimeSettingsStore
+  @Prop configTab: number
+  @Prop configTabContentOpacity: number
+  @Prop configTabContentOffsetX: number
+  @Prop i18nLang: string
+  @Prop selectedLanguage: string
+  @Prop useMetricUnits: boolean
+  @Prop isExpandedLayout: boolean
+  @Prop informationMode: string
+  @Prop informationSettingPending: boolean
+  @Prop currentProjection: string
+  @Prop configDitheringMode: string
+  @Prop ephemerisDe430Available: boolean
+  @Prop ephemerisDe430Active: boolean
+  @Prop ephemerisDe431Available: boolean
+  @Prop ephemerisDe431Active: boolean
+  @Prop ephemerisDe440Available: boolean
+  @Prop ephemerisDe440Active: boolean
+  @Prop ephemerisDe441Available: boolean
+  @Prop ephemerisDe441Active: boolean
+  @Prop timeSettingsPending: boolean
+  @Prop observationTimeText: string
+  @Prop scriptLaunching: boolean
+  @Prop scriptLaunchingName: string
+  @Prop scriptList: string[]
+  @Prop pluginList: PluginItem[]
+  @Prop pluginListLoading: boolean
+  @Prop fovText: string
+  @Prop viewLock: boolean
+  @Prop navigationMouseEnabled: boolean
+  @Prop navigationMouseZoomEnabled: boolean
+  @Prop navigationMoveKeysEnabled: boolean
+  @Prop navigationZoomKeysEnabled: boolean
+  @Prop navigationGravityLabelsEnabled: boolean
+  @Prop autoZoomResets: boolean
+  @Prop navigationStartupFov: number
+  @Prop navigationStartupAzimuth: number
+  @Prop navigationStartupAltitude: number
+  @Prop navigationMaxFov: number
+  @Prop textColor: string
+  @Prop subColor: string
+  @Prop accentColor: string
+  @Prop panelColor: string
+  @Prop lineColor: string
+  @Prop inputColor: string
+  scroller: Scroller = new Scroller()
+  @State private maxFovDraft: number = 180
+  sensZh: (en: string) => string = (en: string) => en
+  configDitheringLabel: (value: string) => string = () => ''
+  informationMaskHas: (key: string) => boolean = () => false
+  pluginZh: (en: string) => string = (en: string) => en
+  pluginDesc: (en: string) => string = () => ''
+  pluginMetaLine: (plugin: PluginItem) => string = () => ''
+  pluginFeatureRoute: (id: string) => PluginFeatureRoute = () => ({ panel: '', kind: '' })
+  pluginFeatureDestination: (id: string) => string = () => ''
+  pluginFeatureIsActionable: (id: string) => boolean = () => false
+  pluginFeatureActionLabel: (id: string) => string = () => ''
+  resourceText: (value: string | undefined, fallback: string) => string = (value: string | undefined, fallback: string) => value !== undefined && value.length > 0 ? value : fallback
+  scriptZh: (filename: string) => string = (filename: string) => filename
+  scriptDesc: (filename: string) => string = () => ''
+  scriptMetaLine: (filename: string) => string = () => ''
+  scriptSourceLine: (filename: string) => string = () => ''
+  hasSelectedObject: () => boolean = () => false
+  selectConfigTab: (tabId: number) => void = () => {}
+  setViewCoordinatesVisible: (visible: boolean) => void = () => {}
+  setViewCoordinateFamily: (family: string) => void = () => {}
+  setViewEquatorialEpoch: (epoch: string) => void = () => {}
+  setLanguage: (lang: string) => void = () => {}
+  setEphemerisEnabled: (key: string, available: boolean, enabled: boolean) => void = () => {}
+  setDistanceUnit: (useMetric: boolean) => void = () => {}
+  setConfigurationDithering: (value: string) => void = () => {}
+  setProjection: (name: string) => void = () => {}
+  saveAppSettings: () => void = () => {}
+  flashHint: (text: ResourceStr) => void = () => {}
+  saveAllCoreSettings: () => void = () => {}
+  restoreCoreDefaults: () => void = () => {}
+  saveCurrentViewAsStartup: () => void = () => {}
+  setViewLockState: (enabled: boolean) => void = () => {}
+  setNavigationBoolean: (setting: string, enabled: boolean) => void = () => {}
+  setNavigationMaxFov: (value: number) => void = () => {}
+  selectSettingsChoice: (group: string, value: string) => void = () => {}
+  setStartupTimeSetting: (key: string, value: string) => void = () => {}
+  setInformationField: (key: string, enabled: boolean) => void = () => {}
+  setObjectDetailConnector: (enabled: boolean) => void = () => {}
+  toggleGyroscope: (enabled: boolean) => void = () => {}
+  confirmPrivacyRevocation: () => void = () => {}
+  loadPluginList: () => void = () => {}
+  openPluginFeature: (id: string) => void = () => {}
+  playScriptByName: (filename: string) => void = () => {}
+  triggerAction: (actionId: string) => void = () => {}
+  moveToSelectedObject: () => void = () => {}
+  onOpenLayersSky: () => void = () => {}
+  onOpenTools: () => void = () => {}
+
+  aboutToAppear(): void {
+    this.maxFovDraft = this.navigationMaxFov
+  }
+
+  build() {
+
+      Column() {
+        Scroll() {
+          Row({ space: 5 }) {
+          ForEach([
+            { label: I18n.t('settings_device_privacy'), id: -1 },
+            { label: I18n.t('c0000'), id: 0 },
+            { label: I18n.t('c0001'), id: 1 },
+            { label: I18n.t('c0002'), id: 2 },
+            { label: I18n.t('c0003'), id: 3 },
+            { label: I18n.t('c0004'), id: 4 },
+            { label: I18n.t('c0005'), id: 5 },
+            { label: I18n.t('more_plugins_manage'), id: 6 },
+            { label: I18n.t('settings_view_navigation'), id: 7 },
+          ] as TabItem[], (tab: TabItem) => {
+            Text(tab.label)
+              .fontSize(10)
+              .fontColor(this.configTab === tab.id ? '#F4FAFF' : '#C8D4E2')
+              .padding({ left: 9, right: 9, top: 5, bottom: 5 })
+              .backgroundColor(this.configTab === tab.id ? '#397EAE' : 'rgba(255,255,255,0.09)')
+              .borderRadius(UI_RADIUS_CONTROL)
+              .clickEffect({ level: ClickEffectLevel.LIGHT })
+              .animation({ duration: 180, curve: curves.springMotion(0.5, 1.0) })
+              .onClick(() => { this.selectConfigTab(tab.id) })
+          }, (tab: TabItem, index: number) => tab.id.toString())
+          }.padding({ left: 2, right: 2 })
+        }.width('100%').height(34).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+          .margin({ top: 4, bottom: 8 }).id('config-tabs-' + this.i18nLang)
+        Column({ space: 0 }) {
+          if (this.configTab === -1) {
+            DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.textColor, subColor: this.subColor, onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
+            Row().width('100%').height(0.5).backgroundColor(this.lineColor).margin({ top: 10, bottom: 10 })
+          ViewCoordinateSettings({
+            store: this.overlayStore,
+            textColor: this.textColor,
+            subColor: this.subColor,
+            accentColor: this.accentColor,
+            panelColor: this.panelColor,
+            lineColor: this.lineColor,
+            onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
+            onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
+            onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) }
+          })
+          } else if (this.configTab === 0) {
+            // Main
+            LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
+            Text('行星历表').fontSize(12).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 4 })
+            Text('用于行星位置计算的 JPL 数值星历。仅显示设备中已安装的文件。').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 5 })
+            EphemerisToggleRow({ label: 'DE430', available: this.ephemerisDe430Available, isEnabled: this.ephemerisDe430Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de430', this.ephemerisDe430Available, v) } })
+            EphemerisToggleRow({ label: 'DE431', available: this.ephemerisDe431Available, isEnabled: this.ephemerisDe431Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de431', this.ephemerisDe431Available, v) } })
+            EphemerisToggleRow({ label: 'DE440', available: this.ephemerisDe440Available, isEnabled: this.ephemerisDe440Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de440', this.ephemerisDe440Available, v) } })
+            EphemerisToggleRow({ label: 'DE441', available: this.ephemerisDe441Available, isEnabled: this.ephemerisDe441Active, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setEphemerisEnabled('de441', this.ephemerisDe441Available, v) } })
+            Row() {
+              Text(I18n.t('set_distance_units')).fontSize(12).fontColor(this.subColor).width(72)
+              Row({ space: 6 }) {
+                Text(I18n.t('unit_km'))
+                  .fontSize(11).fontColor(this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                  .backgroundColor(this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
+                  .borderRadius(UI_RADIUS_CONTROL)
+                  .onClick(() => {
+                    this.setDistanceUnit(true)
+                  })
+                Text(I18n.t('unit_mile'))
+                  .fontSize(11).fontColor(!this.useMetricUnits ? '#F4FAFF' : '#C8D4E2')
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                  .backgroundColor(!this.useMetricUnits ? '#5B93BF' : 'rgba(255,255,255,0.06)')
+                  .borderRadius(UI_RADIUS_CONTROL)
+                  .onClick(() => {
+                    this.setDistanceUnit(false)
+                  })
+              }
+            }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
+            InfoRow({ label: I18n.t('s0350'), value: 'Stellarium 26.2 for HarmonyOS' })
+            Button(I18n.t('i0251') + '设置').fontSize(11).fontColor(this.textColor).backgroundColor(this.panelColor)
+              .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 12, right: 12 }).margin({ top: 6, left: 8 })
+              .onClick(() => { this.saveAppSettings(); this.flashHint('设置已保存') })
+          } else if (this.configTab === 1) {
+            // Information
+            Row() {
+              Text(I18n.t('i0120')).fontSize(12).fontColor(this.subColor).width(72)
+            }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
+            Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
+              InformationModeButton({ labelKey: 'i0247', active: this.informationMode === 'all', canPick: !this.informationSettingPending, textColor: this.textColor, subColor: this.subColor, activeColor: this.accentColor, panelColor: this.panelColor, onPick: () => { this.selectSettingsChoice('information', 'all') } })
+              InformationModeButton({ labelKey: 'i0248', active: this.informationMode === 'default', canPick: !this.informationSettingPending, textColor: this.textColor, subColor: this.subColor, activeColor: this.accentColor, panelColor: this.panelColor, onPick: () => { this.selectSettingsChoice('information', 'default') } })
+              InformationModeButton({ labelKey: 'i0249', active: this.informationMode === 'short', canPick: !this.informationSettingPending, textColor: this.textColor, subColor: this.subColor, activeColor: this.accentColor, panelColor: this.panelColor, onPick: () => { this.selectSettingsChoice('information', 'short') } })
+              InformationModeButton({ labelKey: 'i0250', active: this.informationMode === 'none', canPick: !this.informationSettingPending, textColor: this.textColor, subColor: this.subColor, activeColor: this.accentColor, panelColor: this.panelColor, onPick: () => { this.selectSettingsChoice('information', 'none') } })
+              InformationModeButton({ labelKey: 'information_custom_mode', active: this.informationMode === 'custom', canPick: !this.informationSettingPending, textColor: this.textColor, subColor: this.subColor, activeColor: this.accentColor, panelColor: this.panelColor, onPick: () => { this.selectSettingsChoice('information', 'custom') } })
+            }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
+            Row() {
+              Column() {
+                Text('详情卡指向线').fontSize(12).fontColor(this.textColor).width('100%')
+                Text('在可见天体与详情卡之间显示细连接线').fontSize(10).fontColor(this.subColor).width('100%')
+              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              Toggle({ type: ToggleType.Switch, isOn: this.overlayStore.objectDetailConnectorVisible })
+                .width(42).height(24).selectedColor(this.accentColor)
+                .onChange((value: boolean) => { this.setObjectDetailConnector(value) })
+            }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
+            Text('自定义信息字段').fontSize(12).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 4 })
+            Text('选择“自定义”后，详情卡和星体信息栏只显示下面勾选的字段。').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 5 })
+            InformationSwitchRow({ label: '名称', isOn: this.informationMaskHas('name'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('name', v) } })
+            InformationSwitchRow({ label: '目录编号', isOn: this.informationMaskHas('catalog'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('catalog', v) } })
+            InformationSwitchRow({ label: '视星等', isOn: this.informationMaskHas('magnitude'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('magnitude', v) } })
+            InformationSwitchRow({ label: '赤经、赤纬（J2000）', isOn: this.informationMaskHas('raJ2000'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('raJ2000', v) } })
+            InformationSwitchRow({ label: '赤经、赤纬（历元）', isOn: this.informationMaskHas('raOfDate'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('raOfDate', v) } })
+            InformationSwitchRow({ label: '方位角、高度角', isOn: this.informationMaskHas('altAz'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('altAz', v) } })
+            InformationSwitchRow({ label: '距离', isOn: this.informationMaskHas('distance'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('distance', v) } })
+            InformationSwitchRow({ label: '时角', isOn: this.informationMaskHas('hourAngle'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('hourAngle', v) } })
+            InformationSwitchRow({ label: '升起、中天、落下时间', isOn: this.informationMaskHas('riseTransitSet'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('riseTransitSet', v) } })
+            InformationSwitchRow({ label: '大小或角直径', isOn: this.informationMaskHas('size'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('size', v) } })
+            InformationSwitchRow({ label: '轨道与光照信息', isOn: this.informationMaskHas('elongation'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('elongation', v) } })
+            InformationSwitchRow({ label: '银河坐标', isOn: this.informationMaskHas('galactic'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('galactic', v) } })
+            InformationSwitchRow({ label: '星座信息', isOn: this.informationMaskHas('constellation'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('constellation', v) } })
+            InformationSwitchRow({ label: '恒星时', isOn: this.informationMaskHas('siderealTime'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('siderealTime', v) } })
+            InformationSwitchRow({ label: '附加资料', isOn: this.informationMaskHas('extra'), inCustomMode: this.informationMode === 'custom', canToggle: this.informationMode === 'custom' && !this.informationSettingPending, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setInformationField('extra', v) } })
+          } else if (this.configTab === 2) {
+            Text('天空显示设置已统一到“图层 > 天空”').fontSize(11).fontColor(this.subColor)
+              .width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).maxLines(2)
+            Button('打开图层 > 天空').fontSize(11).fontColor(this.textColor).backgroundColor(this.accentColor)
+              .borderRadius(UI_RADIUS_CONTROL).height(34).width('100%')
+              .onClick(() => { this.onOpenLayersSky() })
+            Row().width('100%').height(0.5).backgroundColor(this.lineColor).margin({ top: 8, bottom: 8 })
+            Text(I18n.t('set_projection')).fontSize(12).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 2, bottom: 5 })
+            Row() {
+              Text(I18n.t('set_projection')).fontSize(11).fontColor(this.textColor).layoutWeight(1)
+              Text(I18n.projectionName(this.currentProjection)).fontSize(10).fontColor(this.subColor).maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }.width('100%').padding({ left: 10, right: 8 }).margin({ bottom: 4 })
+            Scroll() {
+              Row({ space: 6 }) {
+                ForEach(PROJECTION_KEYS, (name: string) => {
+                  Text(I18n.projectionName(name)).fontSize(10)
+                    .fontColor(this.currentProjection === name ? this.textColor : this.subColor)
+                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
+                    .backgroundColor(this.currentProjection === name ? this.accentColor : this.panelColor)
+                    .borderRadius(UI_RADIUS_CONTROL)
+                    .animation({ duration: 180, curve: Curve.EaseOut })
+                    .onClick(() => { this.setProjection(name) })
+                }, (name: string) => name)
+              }.padding({ left: 8, right: 8 })
+            }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+            Text(I18n.projectionDesc(this.currentProjection)).fontSize(10).fontColor(this.subColor).width('100%')
+              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).padding({ left: 10, right: 10, top: 4, bottom: 4 })
+            Row().width('100%').height(0.5).backgroundColor(this.lineColor).margin({ top: 8, bottom: 8 })
+            Text('渲染输出').fontSize(12).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 2, bottom: 5 })
+            Row() {
+              Text('色彩抖动').fontSize(12).fontColor(this.subColor).width(72)
+              Text(this.configDitheringLabel(this.configDitheringMode)).fontSize(12).fontColor(this.textColor).layoutWeight(1).textAlign(TextAlign.End)
+            }.height(30).width('100%').padding({ left: 10, right: 10 })
+            Scroll() {
+              Row({ space: 6 }) {
+                ForEach([
+                  { id: 'Disabled', label: '关闭' }, { id: 'Color565', label: '5/6/5 位' },
+                  { id: 'Color666', label: '6/6/6 位' }, { id: 'Color888', label: '8/8/8 位' },
+                ] as ConfigurationOption[], (option: ConfigurationOption) => {
+                  Text(option.label).fontSize(10)
+                    .fontColor(this.configDitheringMode === option.id ? this.textColor : this.subColor)
+                    .padding({ left: 9, right: 9, top: 4, bottom: 4 })
+                    .backgroundColor(this.configDitheringMode === option.id ? this.accentColor : this.panelColor)
+                    .borderRadius(UI_RADIUS_CONTROL)
+                    .onClick(() => { this.setConfigurationDithering(option.id) })
+                }, (option: ConfigurationOption) => option.id)
+              }.padding({ left: 8, right: 8 })
+            }.width('100%').height(31).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+            Text('抖动用于低色深屏幕的颜色过渡；通常保持 8/8/8 位。').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10 }).margin({ top: 4, bottom: 8 })
+            InfoRow({ label: I18n.t('s0351'), value: 'Stellarium for HarmonyOS' })
+            InfoRow({ label: I18n.t('s0352'), value: 'OpenHarmony / HarmonyOS NEXT' })
+          } else if (this.configTab === 3) {
+            TimeSettingsSection({
+              store: this.timeSettingsStore,
+              pending: this.timeSettingsPending,
+              observationTimeText: this.observationTimeText,
+              textColor: this.textColor,
+              subColor: this.subColor,
+              inputColor: this.inputColor,
+              panelColor: this.panelColor,
+              accentColor: this.accentColor,
+              borderColorValue: this.lineColor,
+              onSelectFormat: (group: string, value: string) => { this.selectSettingsChoice(group, value) },
+              onSetStartup: (key: string, value: string) => { this.setStartupTimeSetting(key, value) }
+            })
+            DeltaTSettingsBlock({
+              store: this.deltaTStore,
+              pending: this.timeSettingsPending,
+              textColor: this.textColor,
+              subColor: this.subColor,
+              panelColor: this.panelColor,
+              inputColor: this.inputColor,
+              accentColor: this.accentColor,
+              onSelect: (key: string) => { this.setStartupTimeSetting('deltaT', key) },
+              onSaveCustom: (text: string) => { this.setStartupTimeSetting('deltaCustom', text) }
+            })
+          } else if (this.configTab === 4) {
+            Text(I18n.t('tools_data_hint')).fontSize(11).fontColor(this.subColor).width('100%').padding({ left: 8, right: 8 }).margin({ top: 4, bottom: 8 })
+            Button(I18n.t('panel_tools_data')).fontSize(12).fontColor(this.textColor).backgroundColor(this.accentColor)
+              .borderRadius(UI_RADIUS_CONTROL).height(34).width('100%').onClick(() => { this.onOpenTools() })
+            Text(I18n.t('tools_single_entry_hint')).fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 8, right: 8 }).margin({ top: 8 })
+          } else if (this.configTab === 5) {
+            // Scripts
+            Row() {
+              Text(I18n.t('i0122')).fontSize(12).fontColor(this.subColor).width(72)
+              Button(I18n.t('i0252')).fontSize(11).fontColor(this.textColor).backgroundColor(this.panelColor)
+                .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
+                .onClick(() => { this.triggerAction('actionStop_Script') })
+            }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
+            Row() {
+              Text(I18n.t('i0123')).fontSize(11).fontColor(this.subColor).width('100%').margin({ top: 4 })
+            }.height(18).width('100%')
+            if (this.scriptLaunching) {
+              Row({ space: 6 }) {
+                LoadingProgress().width(16).height(16).color(this.accentColor)
+                Text(I18n.format('script_starting_named', [this.scriptZh(this.scriptLaunchingName)])).fontSize(10).fontColor(this.subColor)
+              }.width('100%').padding({ left: 8, right: 8, bottom: 4 })
+            }
+            Scroll(this.scroller) {
+              Column({ space: 2 }) {
+                ForEach(this.scriptList, (s: string) => {
+                  Column({ space: 0 }) {
+                    // 第一行：中文名
+                    Row() {
+                      Text(this.scriptZh(s)).fontSize(11).fontColor(this.textColor)
+                        .fontWeight(FontWeight.Medium).layoutWeight(1)
+                      Text('▶').fontSize(9).fontColor('#7FD0FF')
+                    }
+                    .height(28).width('100%').padding({ left: 10, right: 10 })
+                    // 第二行：简短描述
+                    if (this.scriptDesc(s)) {
+                      Text(this.scriptDesc(s))
+                        .fontSize(8).fontColor('#77FFFFFF').width('100%')
+                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .padding({ left: 10, right: 10, bottom: 3 })
+                    }
+                    if (this.scriptMetaLine(s).length > 0) {
+                      Text(this.scriptMetaLine(s))
+                        .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .padding({ left: 10, right: 10, bottom: 3 })
+                    }
+                    if (this.scriptSourceLine(s).length > 0) {
+                      Text(this.scriptSourceLine(s)).fontSize(8).fontColor('#55FFFFFF').width('100%').maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis }).padding({ left: 10, right: 10, bottom: 3 })
+                    }
+                  }
+                  .width('100%')
+                  .backgroundColor(this.panelColor)
+                  .borderRadius(UI_RADIUS_CONTROL)
+                  .opacity(this.scriptLaunching && this.scriptLaunchingName !== s ? 0.55 : 1)
+                    .hitTestBehavior(HitTestMode.Default)
+                  .onClick(() => { this.playScriptByName(s) })
+                }, (s: string, index: number) => s)
+              }
+                .width('100%')
+            }
+              .width('100%')
+              .height(this.isExpandedLayout ? 330 : 300)
+              .scrollable(ScrollDirection.Vertical)
+              .scrollBar(BarState.Auto)
+              .edgeEffect(EdgeEffect.Spring)
+              .hitTestBehavior(HitTestMode.Default)
+          } else if (this.configTab === 6) {
+            Row() {
+              Column({ space: 3 }) {
+                Text(I18n.t('i0124')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.textColor).width('100%')
+                Text(I18n.t('plugin_management_hint')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3)
+              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              Button(I18n.t('act_refresh')).fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor)
+                .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
+                .onClick(() => { this.loadPluginList() })
+            }.width('100%').padding({ left: 8, right: 8, top: 4, bottom: 8 })
+            if (this.pluginListLoading && this.pluginList.length === 0) {
+              Row({ space: 8 }) {
+                LoadingProgress().width(18).height(18).color(this.accentColor)
+                Text(I18n.t('msg_loading')).fontSize(11).fontColor(this.subColor)
+              }.width('100%').justifyContent(FlexAlign.Center).margin({ top: 10 })
+            }
+            Scroll() {
+              Column({ space: 6 }) {
+                ForEach(this.pluginList, (pl: PluginItem) => {
+                  Column({ space: 5 }) {
+                    Row() {
+                      Text(this.pluginZh(pl.name)).fontSize(12).fontColor(this.textColor)
+                        .fontWeight(FontWeight.Medium).layoutWeight(1)
+                      Text(pl.loaded ? I18n.t('plugin_runtime_loaded') : I18n.t('plugin_runtime_unloaded'))
+                        .fontSize(9).fontColor(pl.loaded ? '#B9E6C4' : this.subColor)
+                        .padding({ left: 7, right: 7, top: 3, bottom: 3 })
+                        .backgroundColor(pl.loaded ? 'rgba(70, 150, 96, 0.18)' : this.panelColor)
+                        .borderRadius(UI_RADIUS_PILL)
+                    }
+                    .height(28)
+                    if (this.resourceText(pl.description, this.pluginDesc(pl.name)).length > 0) {
+                      Text(this.resourceText(pl.description, this.pluginDesc(pl.name)))
+                        .fontSize(10).fontColor(this.subColor).width('100%')
+                        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    }
+                    Text(I18n.t('resource_author') + ': ' + this.resourceText(pl.authors, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + this.resourceText(pl.license, I18n.t('resource_not_provided')))
+                      .fontSize(9).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    if (this.pluginMetaLine(pl).length > 0) {
+                      Text(this.pluginMetaLine(pl))
+                        .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    }
+                    Row({ space: 8 }) {
+                      Text(I18n.t('plugin_all_loaded_policy')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
+                    }.width('100%').height(24)
+                    Text(this.pluginFeatureDestination(pl.id)).fontSize(9).fontColor(this.subColor).width('100%')
+                      .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    if (this.pluginFeatureIsActionable(pl.id)) {
+                      Button() {
+                        Text(this.pluginFeatureActionLabel(pl.id))
+                          .fontSize(11)
+                          .fontColor(this.textColor)
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                      }
+                        .id('plugin-feature-' + pl.id)
+                        .backgroundColor(this.accentColor)
+                        .borderRadius(UI_RADIUS_CONTROL).height(30).width('100%')
+                        .padding({ left: 10, right: 10 })
+                        .hitTestBehavior(HitTestMode.Block)
+                        .zIndex(2)
+                        .onClick(() => { this.openPluginFeature(pl.id) })
+                    } else {
+                      Text(this.pluginFeatureRoute(pl.id).kind === 'offline' || this.pluginFeatureRoute(pl.id).kind === 'network'
+                        ? this.pluginFeatureRoute(pl.id).kind === 'network'
+                          ? I18n.t('plugin_network_disabled')
+                          : I18n.t('plugin_offline_disabled')
+                        : I18n.t('plugin_background_only'))
+                        .fontSize(9).fontColor(this.subColor).width('100%').maxLines(2)
+                    }
+                  }
+                  .width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
+                  .backgroundColor(this.panelColor)
+                  .borderRadius(UI_RADIUS_PANEL)
+                }, (pl: PluginItem) => pl.id)
+              }
+            }
+            .width('100%').height(260).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
+          } else if (this.configTab === 7) {
+            Text(I18n.t('settings_view_navigation')).fontSize(13).fontColor(this.textColor).width('100%').margin({ top: 4, bottom: 3 })
+            Text(I18n.t('settings_view_navigation_hint')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3).margin({ bottom: 8 })
+            Text(I18n.t('settings_view_current')).fontSize(12).fontColor(this.subColor).width('100%').margin({ bottom: 5 })
+            Row({ space: 8 }) {
+              Column({ space: 2 }) {
+                Text(I18n.t('settings_view_current_fov')).fontSize(10).fontColor(this.subColor)
+                Text(this.fovText).fontSize(16).fontColor(this.textColor)
+              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              Button(I18n.t('settings_view_center')).fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor)
+                .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
+                .opacity(this.hasSelectedObject() && !this.gyroStore.gyroscopeEnabled ? 1 : 0.58)
+                .onClick(() => { this.moveToSelectedObject() })
+            }.width('100%').padding({ left: 10, right: 8, top: 7, bottom: 7 })
+              .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
+
+            Column({ space: 5 }) {
+              Row({ space: 8 }) {
+                Text(I18n.t('set_lock_view')).fontSize(11).fontColor(this.textColor).layoutWeight(1)
+                Toggle({ type: ToggleType.Switch, isOn: this.viewLock })
+                  .width(42).height(24).selectedColor(this.accentColor)
+                  .onChange((enabled: boolean) => { this.setViewLockState(enabled) })
+              }.width('100%')
+              Text(this.viewLock ? I18n.t('view_lock_enabled') : I18n.t('settings_view_lock_hint'))
+                .fontSize(9).fontColor(this.subColor).width('100%').maxLines(3)
+            }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
+              .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
+
+            Text(I18n.t('settings_view_startup')).fontSize(12).fontColor(this.subColor).width('100%').margin({ bottom: 5 })
+            Column({ space: 2 }) {
+              Text(I18n.format('settings_view_startup_fov', [this.navigationStartupFov.toFixed(1)])).fontSize(11).fontColor(this.textColor).width('100%')
+              Text(I18n.format('settings_view_startup_direction', [this.navigationStartupAzimuth.toFixed(1), this.navigationStartupAltitude.toFixed(1)])).fontSize(10).fontColor(this.subColor).width('100%')
+            }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 })
+              .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 6 })
+            Button(I18n.t('settings_view_save_current')).fontSize(11).fontColor(this.textColor).backgroundColor(this.accentColor)
+              .borderRadius(UI_RADIUS_CONTROL).height(34).width('100%').margin({ bottom: 8 })
+              .onClick(() => { this.saveCurrentViewAsStartup() })
+
+            Text(I18n.t('settings_view_navigation_controls')).fontSize(12).fontColor(this.subColor).width('100%').margin({ bottom: 5 })
+            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_navigation'), isOn: this.navigationMouseEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('mouseNavigation', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_mouse_zoom'), isOn: this.navigationMouseZoomEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('mouseZooming', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_navigation'), isOn: this.navigationMoveKeysEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('moveKeys', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_zoom'), isOn: this.navigationZoomKeysEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('zoomKeys', v) } })
+            NavigationSwitchRow({ label: I18n.t('settings_view_gravity_labels'), isOn: this.navigationGravityLabelsEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('gravityLabels', v) } })
+            NavigationSwitchRow({ label: I18n.t('s0302'), isOn: this.autoZoomResets, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('autoZoomResets', v) } })
+
+            Text(I18n.t('settings_view_max_fov')).fontSize(12).fontColor(this.subColor).width('100%').margin({ top: 4, bottom: 4 })
+            Row() {
+              Text(this.maxFovDraft.toFixed(0) + '°').fontSize(14).fontColor(this.textColor).width(48)
+              Slider({ value: this.maxFovDraft, min: 30, max: 360, step: 1, style: SliderStyle.OutSet })
+                .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+                .layoutWeight(1).blockColor(this.accentColor).trackColor(this.panelColor).selectedColor(this.accentColor)
+                .showSteps(false).onChange((value: number) => { this.maxFovDraft = Math.round(value) })
+              Button(I18n.t('settings_view_apply')).fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor)
+                .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
+                .onClick(() => { this.setNavigationMaxFov(this.maxFovDraft) })
+            }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
+
+            Row({ space: 6 }) {
+              Button(I18n.t('settings_save_all')).fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor)
+                .borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1).onClick(() => { this.saveAllCoreSettings() })
+              Button(I18n.t('settings_restore_defaults')).fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor)
+                .borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1).onClick(() => { this.restoreCoreDefaults() })
+            }.width('100%').margin({ top: 2, bottom: 8 })
+          }
+        }
+          .width('100%')
+          .opacity(this.configTabContentOpacity)
+          .translate({ x: this.configTabContentOffsetX, y: 0 })
+          .id('config-content-' + this.i18nLang)
+      }.width('100%')
+  }
+}

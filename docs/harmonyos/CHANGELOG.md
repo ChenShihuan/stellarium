@@ -1,3 +1,25 @@
+## [2026-10-02] DevEco Code - Phase 4j：`settings` 分支 + 末尾 `else` 收口，并全链复核
+
+- **背景/范围**：按体量取两个仍未达标的实分支 —— `settings`(约 406 行) 与末尾 `else`（历史“应用配置”回退页，约 219 行），分别抽成 `panels/panels/SettingsPanel.ets` / `ConfigFallbackPanel.ets`。分支体原样下沉、判定条件留宿主；**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 9）；跨域/桥依赖用回调回注（§13.1 规则 6）；不迁 V2。`floatingPanel`/`compactPanel` 按 4h 结论不动。
+- **新增文件**：
+  - `harmonyos/ets-source/panels/panels/SettingsPanel.ets`（**548 行**）：4 个 `@ObjectLink` store（`gyroStore` / `overlayStore` / `deltaTStore` / `timeSettingsStore`）+ 44 个 `@Prop` + 46 个回注回调 + 1 个普通 `Scroller` 成员；8 个子标签页（设备与隐私 / 主设置 / 信息 / 附加 / 时间 / 数据 / 插件管理 / 视图导航）内联 UI 逐字下沉，装配既有 `DevicePrivacySection` / `ViewCoordinateSettings` / `LanguageRow` / `EphemerisToggleRow` / `InfoRow` / `InformationModeButton` / `InformationSwitchRow` / `TimeSettingsSection` / `DeltaTSettingsBlock` / `NavigationSwitchRow`；顶层 `Column().width('100%')` 保留。
+  - `harmonyos/ets-source/panels/panels/ConfigFallbackPanel.ets`（**277 行**）：4 个 `@ObjectLink` store（`gyroStore` / `layerStore` / `nightModeStore` / `telescopeStore`）+ 8 个 `@Prop` + 14 个回调；`GyroscopeRow` / `LanguageRow` / `InfoRow` / `QuickChipRow` 与观测列表、方向/视场 chips、投影切换、夜视、星空翻转、语言/星空文化选择逐字下沉；顶层 `Column().width('100%')` 包住原多根体（规则 7）。
+- **单体手术**（`pages/MainWindowNativeNode.ets`：**21,983 → 21,485 行，净 −498**；`git diff --stat` = 132 插入 / 630 删除）：两处分支体（406 / 219 行）替换为 `SettingsPanel({...})`（97 行）/ `ConfigFallbackPanel({...})`（32 行），新增 2 行 import，删 3 行已随迁而失效的 import（`LanguageRow,GyroscopeRow` / `QuickChipRow` / `SettingsRows` 及 `SUPPORTED_LANGUAGES`）。分支体用「读原行 + 有序 literal 替换 + 残余正则兜底」搬运（**未用行号算术**）。成员名避开 `borderColor`/`scale`/`onTouch`/`background`（边框色命名 `lineColor`）。
+- **口径（哪些刻意不搬）**：`settings` 的 `navigationMaxFov` 原由 `Slider.onChange` 直写宿主 `@State`；组件内改为本地 `@State maxFovDraft`（`aboutToAppear` 由 `@Prop` 同步、`onChange` 改草稿、点“应用”经 `setNavigationMaxFov` 回注宿主），**行为与“拖动改值、应用才下发生效”一致**。末尾 else 的 `useMetricUnits = <x>; callInteractive('setConfigString',…)` 合并为 `setLegacyDistanceUnit`；观测列表清空/点选合并为 `clearObservingList` / `selectObservingTarget`；`sensZh` 等宿主助手沿用回调回注。
+- **全链达标复核结论**：`panelContent` 的 `if/else if` 链 29 个分支中，**除 `astro`(≈2,000 行) 与 `scripts`(248 行) 外全部退化为「单次组件调用」**（`settings` / 末尾 `else` 本片完成）。`floatingPanel`/`compactPanel` 为宿主薄 `@Builder`（4h 定论，不参与判定）。**更正**：4h/4i 记录的「仍未达标」清单本就含 `scripts`，本片复核确认其仍在（24 个 >8 行分支中唯二仍含内联 UI 者），留待后续切片。
+- **末尾 else 的性质（复核更正）**：该分支实为**正常导航不可达的遗留回退页** —— `setPanel()` 把 `config`/`pluginManager` 归一为 `settings`，CLI `isCliPanelName` 白名单也不含未知名；故只做行为保持的组件化（保留代码），未删。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过（组件/store `this` 自洽、单体括号深度 0、`@Builder` 成对）→ `arkts_check`（3 文件 0 错）→ `devecocli build`（`-SkipEngine -SkipDeploy -SkipResources`）**BUILD SUCCESSFUL**（首次因 `common/ui/*` 相对路径写成 `../common/ui` 报 `Could not resolve`，改为 `../../common/ui` 后通过）→ `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好（>170 个 .ets）→ 全量 `*-ohos*.mjs` 扫描：失败 7 个，**全部为 §13.6 存量环境类**（4 个 `-pad` 需设备、`test-ohos-mist-performance` 需设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS hdc 假设）。
+- **测试同步**：
+  - `scripts/test-ohos-settings-choice-motion.mjs`：信息模式按钮调用点与 `pending` 门控随设置分支迁入 `SettingsPanel.ets`，改读组件文件（2 处断言）→ 4/4 全绿。
+  - `scripts/test-ohos-satellite-panel.mjs`：test 2 按宿主文本切 `satellites` 分支，该分支早已在更早切片下沉为 `SatellitesPanel.ets`（**基线即失败**，本片经 `git show HEAD:` 复核确认），同步改读组件文件 → 7/7 全绿。
+- **真机**（`com.cnchensh.stellarium`，`192.168.3.95:40565`，1280×2832；`aa dump -l` 确认 `state #FOREGROUND`；CLI 显式 `--bundle`；`pidof`=30663 全程存活、未崩，排除规则 9 运行期退出）：
+  1. `openUiPanel settings` → 面板就地渲染（标签行「设备与隐私 / 主设置 / 信息 / 附加 / 时间 / 工具 / 脚本」+「主设置」内容「界面语言 / 行星历表 / DE430 未安装」）。
+  2. **标签切换实时刷新**：点「信息」→ 内容刷新为「信息级别 / 自定义信息 / 详情卡指向线（Toggle）」；点「脚本」→ 脚本列表就地渲染（`来源: scripts/morsels_2.ssc`，证明 `scriptZh`/`scriptSourceLine`/`Scroller` 链路）；点「时间」→「日期格式」区块出现。
+  3. **点按后文本即时刷新（决定性证据）**：切「附加」→ 当前投影显示「极射」；点 chips「鱼眼」→ 同一 `Text` 节点文案**立即由「极射」变为「鱼眼」**（`@Prop currentProjection` 驱动宿主重渲染），点回「极射」**复原**。
+  4. **未走查**：`ConfigFallbackPanel` 正常导航不可达（归一 + CLI 白名单），未强制其渲染；只做静态与经宿主编译验证。
+- **测后恢复**：投影设置已点回「极射」（测前状态）；面板已 `closeUiPanel` 关闭。
+- **本片新踩的坑**：① 新组件放在 `panels/panels/` 时，`common/ui/*` 的相对路径是 **`../../common/ui/*`**（`common/` 与 `pages/` 同级），不是 `../common/ui/*` —— `arkts_check` 不解析模块路径会漏报，只有构建报 `Could not resolve`。② 末尾 else 里 `Slider` 直写宿主 `@State`，下沉组件后 `@Prop` 不可写 → 用本地 `@State` 草稿 + `aboutToAppear` 同步 + 应用时回注。
+
 ## [2026-10-02] DevEco Code - Phase 4i：收尾 `telescope` / `settings_quick_legacy` / `oculars` 三个分支
 
 - **背景/范围**：Phase 4h 收尾检查列出的「仍未达标」分支中取体量较小的 3 个 —— `telescope`(23) / `settings_quick_legacy`(180) / `oculars`(278)，各抽成 `panels/panels/*Panel.ets`。分支体原样下沉、判定条件 `activePanel === '…'` 留宿主；**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 9）；跨域/桥依赖用回调回注（§13.1 规则 6）；不迁 V2。`floatingPanel`/`compactPanel` 按 4h 结论不动。
