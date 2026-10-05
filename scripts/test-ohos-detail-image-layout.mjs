@@ -20,7 +20,7 @@ test('caption follows the image viewport, with no fixed height on the outer colu
 });
 
 test('host still feeds the media card the viewport height computed from the live viewport state', () => {
-  const call = source.slice(source.indexOf('      TabletInspectorMediaCard({'), source.indexOf('    } else if (this.objectMediaStore.objectInspectorMediaNoMatch)'));
+  const call = source.slice(source.indexOf('      TabletInspectorMediaGroup({'), source.indexOf('    } else if (this.objectDetailStore'))
   assert.match(call, /imageHeight: this\.objectInspectorImageHeight\(\)/);
   assert.match(call, /store: this\.objectMediaStore/);
 });
