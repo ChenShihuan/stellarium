@@ -1,3 +1,11 @@
+## [2026-10-01] DevEco Code - Phase 3ad：详情卡外壳的页头与页签栏组件化（ObjectDetailCardChrome）
+
+- **新增 `panels/object/ObjectDetailCardChrome.ets`**：`unifiedObjectDetailCard()` 前半段拆成两个小组件 —— `ObjectDetailCardHeader`（拖拽柄 + 标题行〔图标/名/类型/关闭〕+ 三个紧凑指标 + 实时高度方位行 + 时角行，外层 `Column()` 与卡片根容器一致）与 `ObjectDetailCardTabs`（四个 `ObjectDetailTab`，`@Prop activeIndex` + `onSelect(index)`）。
+- **入参最小化**：页头只接 `@ObjectLink store` + `iconName` / `liveInfoVisible` + 六个回调（`resolve` / `distanceSummary` / `nameOf` / `typeOf` / `onDragTouch` / `onDismiss`）—— 动态查值、名称本地化、拖拽与关闭都仍归宿主；页签栏两个入参。
+- **单体行数：** 28,519 → **28,478**（−41）；`unifiedObjectDetailCard` 由 146 行降至约 105 行（外壳剩余部分即 Scroll + 四个分支调用）。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验 / 安装启动通过；搜 `Mars` 选中后应用存活（`pidof` 有值），页头渲染 `火星` + `行星` + `✕` + `星等 1.07` / `星座 巨蟹座` / `距离 1.6651 AU` + `实时高度 方位` + `时角 1h44m56.1s` / `平恒星时 10h01m47.5s`；点"观测"页签（`ObjectDetailCardTabs` 的 `onSelect`）后内容切到 `今晚观测窗口` / `升起` / `大气影响`，页签高亮缩放同步跟随。
+- **说明（顺序调整）：** 计划中的"先搬资料页（3ac）"被本片取代 —— 若先搬资料页需向 `ObjectDetailDataTab` 转发 26 个入参（媒体区的 12 个派生值 + 4 回调），而先把外壳组件化后，"资料"页分支将随外壳整体内收，届时媒体组件的参数在外壳内部就地计算，无需跨层转发。objectInspectorModelRendering / objectInspectorModelTexturePixels **刻意不并入 @Observed store**：它们由渲染管线逐帧写入，放进被观察的 store 会造成重渲染风暴（§13.5 第 3 行已相应更新理由）。
+- **测试同步：** 无（页头/页签不切片；`test-ohos-detail-live-values` 与 `verify-ohos-object-details` 复跑通过）。
 ## [2026-10-01] DevEco Code - Phase 3ab：媒体区改写成组件（TabletInspectorMediaGroup），解除"资料"页搬迁阻塞
 
 - **新增 `panels/object/TabletInspectorMediaGroup.ets`**：宿主原**无参 @Builder `tabletInspectorMedia()`**（133 行八分支）→ 组件。分支判定随组件走；媒体状态用 `@ObjectLink store: ObjectMediaStore` 观察，"是否计划中的模型"用 `@ObjectLink detailStore: ObjectDetailStore` 观察；派生值（`imageHeight` / `iconName` / `inlineModelSize` / `modelReady` / `modelRendering` / `hasModelTexture` / `modelNotice` / `warmupText` / `fallbackKind` / `starColor`）与四个交互（`onOpen` / `onRetry` / `onModelExpand` / `onModelTouch`）全部由宿主注入。原因是 §13.1 规则 9：经 `@BuilderParam` 传递会让应用退出，只有改成组件才是正解。

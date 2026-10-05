@@ -61,6 +61,7 @@ import { StructuredDetailRows } from '../panels/object/StructuredDetailRows'
 import { SatellitePassDetails } from '../panels/object/SatellitePassDetails'
 import { ObjectDetailObserveTab, ObjectDetailCoordinateTab } from '../panels/object/ObjectDetailTabs'
 import { TabletInspectorMediaGroup } from '../panels/object/TabletInspectorMediaGroup'
+import { ObjectDetailCardHeader, ObjectDetailCardTabs } from '../panels/object/ObjectDetailCardChrome'
 import { ConstellationCultureView } from '../panels/object/ConstellationCultureView'
 import { SkyCultureDescriptionBlockView } from '../panels/skyculture/SkyCultureDescriptionBlockView'
 import { SearchBar } from '../panels/search/SearchBar'
@@ -18382,56 +18383,14 @@ private loadPlanetPositions(): void {
   @Builder
   unifiedObjectDetailCard() {
     Column() {
-      Stack({ alignContent: Alignment.Center }) {
-        Row()
-          .width(40).height(4).backgroundColor('rgba(225,241,250,0.34)').borderRadius(2)
-      }
-        .width('100%').height(26)
-        .hitTestBehavior(HitTestMode.Block)
-        .onTouch((event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) })
-      Row() {
-        Image(getIcon(this.objectInspectorIcon(), false))
-          .width(26).height(26).fillColor('#73C8FF').margin({ right: 7 })
-        Text(this.zhNameOf(this.objectDetailStore.selectedName))
-          .fontSize(18).fontWeight(FontWeight.Bold).fontColor('#FFFFFFFF')
-          .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.zhType(this.objectDetailStore.selectedType))
-          .fontSize(11).fontColor('#BDE8FF')
-          .padding({ left: 9, right: 9, top: 4, bottom: 4 })
-          .backgroundColor('rgba(91,147,191,0.18)').borderRadius(UI_RADIUS_CONTROL)
-        Text('✕')
-          .fontSize(15).fontColor('#B8CAD7').padding({ left: 12, right: 4, top: 4, bottom: 4 })
-          .onClick(() => {
-            this.dismissObjectInspector()
-          })
-      }
-      .width('100%').padding({ left: 16, right: 14, top: 10, bottom: 6 })
+ObjectDetailCardHeader({
+  store: this.objectDetailStore, iconName: this.objectInspectorIcon(), liveInfoVisible: this.selectedLiveInfoVisible(),
+  resolve: (key: string) => this.selectedDisplayValue(key), distanceSummary: () => this.objectDistanceSummary(),
+  nameOf: (name: string) => this.zhNameOf(name), typeOf: (type: string) => this.zhType(type),
+  onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) }, onDismiss: () => { this.dismissObjectInspector() }
+})
 
-      Row({ space: 4 }) {
-        ObjectCompactMetric({ label: I18n.t('i0007'), value: this.selectedDisplayValue('selectedMagnitude') })
-        ObjectCompactMetric({ label: I18n.t('i0010'), value: this.selectedDisplayValue('selectedConstellation') })
-        ObjectCompactMetric({ label: I18n.t('i0011'), value: this.objectDistanceSummary() })
-      }
-        .width('100%').padding({ left: 16, right: 16, top: 3, bottom: 7 })
-
-      Row() {
-        Text('实时高度 / 方位').fontSize(10).fontColor('#8FBBD6').width(72)
-        Text(this.objectDetailStore.selectedCoordAlt.length > 0 ? this.objectDetailStore.selectedCoordAlt : '--')
-          .fontSize(11).fontColor('#E2F5FF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.objectDetailStore.selectedCoordAlt.length > 0 ? '已定位' : '等待定位')
-          .fontSize(10).fontColor('#BDE8FF').margin({ left: 8 })
-      }
-        .height(24).width('100%').padding({ left: 16, right: 16, bottom: 4 })
-
-      SelectedLiveInfoRows({ store: this.objectDetailStore, compact: true, visible: this.selectedLiveInfoVisible() })
-
-      Row({ space: 4 }) {
-        ObjectDetailTab({ label: '观测', active: this.bottomCardIndex === 0, onSelect: () => { this.selectObjectDetailTab(0) } })
-        ObjectDetailTab({ label: '坐标', active: this.bottomCardIndex === 1, onSelect: () => { this.selectObjectDetailTab(1) } })
-        ObjectDetailTab({ label: '资料', active: this.bottomCardIndex === 2, onSelect: () => { this.selectObjectDetailTab(2) } })
-        ObjectDetailTab({ label: '操作', active: this.bottomCardIndex === 3, onSelect: () => { this.selectObjectDetailTab(3) } })
-      }
-        .width('100%').padding({ left: 16, right: 16, bottom: 8 })
+ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: number) => { this.selectObjectDetailTab(index) } })
 
       Divider().color('rgba(91,147,191,0.16)').margin({ left: 16, right: 16 })
 
