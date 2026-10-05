@@ -61,6 +61,10 @@ export interface MediaPort {
   // 选择单个文档并复制到 <filesDir>/<dirName>，返回落盘路径；用户取消时 cancelled=true。
   // 后缀过滤 / 单文件 / 文件名清洗逐字对应宿主 importNebulaTextureFile 的 picker + fileIo 段。
   pickDocumentToDir(dirName: string, fileSuffixFilters: string[], fallbackFileName: string): Promise<MediaImportResult>
+  // 选择单个 .ssc 脚本并复制到 <filesDir>/stellarium_userdir/scripts，返回落盘路径；用户取消时 cancelled=true。
+  // 后缀过滤（'Stellarium 脚本|.ssc'）/ 单文件 / 名称清洗（scriptImportFileName 语义）/ 同名碰撞改名逐字
+  // 对应原宿主 importScriptFile 的 picker + fileIo 段（D10）。
+  importScriptDocument(): Promise<MediaImportResult>
 
   // ── 对象模型渲染（M2-A ObjectModelRenderer）──
   // 由原始 RGBA 字节创建像素图（对应 image.createPixelMap(buffer, { size, RGBA_8888, UNPREMUL })）：
@@ -69,6 +73,9 @@ export interface MediaPort {
   // 把像素图读回 RGBA 字节缓冲（对应 pixelMap.readPixelsToBufferSync(buffer)，失败抛 Error）：
   // PNG 回退路径（侧车缺失时）。
   readPixelMapPixels(pixelMap: image.PixelMap, buffer: ArrayBuffer, label: string): void
+  // 读原始 RGBA 侧车（对应 fileIo.openSync/readSync/closeSync；尺寸不符或 IO 失败抛 Error）：
+  // 供 state/ObjectMediaStore 的原始模型纹理加载器经端口回注（D17；store/控制器不 import fileIo）。
+  readRawSidecar(path: string, expectedBytes: number, label: string): ArrayBuffer
 
   // ── 屏幕录制（M1-B 子组② RecordingController）──
   // 录屏工作目录（对应宿主 context.filesDir + '/recordings/videos'）。

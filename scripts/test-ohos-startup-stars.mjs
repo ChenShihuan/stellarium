@@ -178,7 +178,8 @@ test('only a ready actually presented frame with matching aspect reveals the cha
     { setOrCreate: (key, value) => published.set(key, value) }, { info() {} });
   const fixture = new Fixture();
   Object.assign(fixture, { skyWidth: 1078, skyHeight: 674, splashGone: false,
-    startupViewportCheckedAt: 0, stopTwinkle() {}, startBodyDetailWarmup() {} });
+    startupViewportCheckedAt: 0, stopTwinkle() {},
+    objectInspectorMediaCtl: () => ({ startBodyDetailWarmup() {} }) });
   for (const response of [{ pending: true }, { ok: true, ready: true, width: 1023, height: 767 },
     { ok: true, ready: false, width: 2560, height: 1600 }, { pending: true }]) {
     fixture.startupViewportCheckedAt = 0;

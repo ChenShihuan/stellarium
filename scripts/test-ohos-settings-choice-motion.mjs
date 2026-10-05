@@ -13,10 +13,17 @@ const settingsRowsSource = readFileSync(new URL('../harmonyos/ets-source/panels/
 // Phase 4j：设置面板 8 个子标签页由宿主内联下沉到 panels/panels/SettingsPanel.ets，
 // 信息模式按钮调用点与 pending 门控随之移入组件，改读组件文件。
 const settingsPanelSource = readFileSync(new URL('../harmonyos/ets-source/panels/panels/SettingsPanel.ets', import.meta.url), 'utf8');
+// D4：applyTimeSettings 随时间行为下沉 capability/TimeController.ets（UI 动画改经 hooks.animateOption）。
+const timeControllerSource = readFileSync(new URL('../harmonyos/ets-source/capability/TimeController.ets', import.meta.url), 'utf8');
 function method(name) {
   const start = source.indexOf(name);
   assert.ok(start >= 0, name);
   return source.slice(start, source.indexOf('\n  }', start));
+}
+function controllerMethod(name) {
+  const start = timeControllerSource.indexOf(name);
+  assert.ok(start >= 0, name);
+  return timeControllerSource.slice(start, timeControllerSource.indexOf('\n  }', start));
 }
 
 test('all four settings groups read current state rather than a captured selection boolean', () => {
@@ -58,8 +65,8 @@ test('selection animation follows the background, but does not animate button la
 });
 
 test('CLI and touch share time response animations and semantic settings routes', () => {
-  const apply = method('private applyTimeSettings(');
-  assert.match(apply, /getUIContext\(\)\.animateTo/);
+  const apply = controllerMethod('applyTimeSettings(');
+  assert.match(apply, /this\.hooks\.animateOption\(/);
   assert.match(apply, /this\.timeSettingsStore\.startupTimeMode = result\.startupTimeMode/);
   assert.match(apply, /this\.deltaTStore\.deltaTAlgorithm = result\.deltaTAlgorithm/);
   const route = method('private openPanelFromCli(');
