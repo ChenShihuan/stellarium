@@ -43,7 +43,7 @@ import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wut
 import { objectInspectorPlanetTexturePath, objectInspectorPlanetRingSpec, objectInspectorDeepSkyImageName, objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
-import { MediaPort, MediaSaveResult, ScreenCaptureState } from '../bridge/MediaPort'
+import { MediaPort, MediaSaveResult, ScreenCaptureState, MediaImportResult } from '../bridge/MediaPort'
 import { PlatformPort } from '../bridge/PlatformPort'
 import { SensorPort, SensorProbeInfo } from '../bridge/SensorPort'
 import { LocationPort, LocationFix } from '../bridge/LocationPort'
@@ -60,6 +60,9 @@ import { RecordingController, RecordingHostHooks } from '../capability/Recording
 import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
 import { SkyInputController, SkyInputHostHooks } from '../capability/SkyInputController'
 import { DetailConnectorController, DetailConnectorHostHooks } from '../capability/DetailConnectorController'
+import { LayerController, LayerHostHooks } from '../capability/LayerController'
+import { SkyTextureStatusController, SkyTextureStatusHostHooks } from '../capability/SkyTextureStatusController'
+import { NebulaTextureController, NebulaTextureHostHooks } from '../capability/NebulaTextureController'
 import { BehaviorHostHooks } from '../capability/ControllerHooks'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
@@ -234,9 +237,7 @@ import {
 // textures are still loading. A view that keeps reporting pending textures far
 // beyond any plausible load is escalated to an actionable retry state instead of
 // a silent hide, so the note can never stick forever without an affordance.
-const SKY_TEXTURE_STATUS_FAST_POLLS: number = 24
-const SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS: number = 2000
-const SKY_TEXTURE_STATUS_STALL_POLLS: number = 90
+// D11：三个轮询常量随 SkyTextureStatusController 下沉 capability/SkyTextureStatusController.ets。
 // The seven planets (without Earth) plus the Moon and the Sun: the bodies whose
 // detail textures are worth resolving before the user opens their cards.
 const BODY_DETAIL_TEXTURE_PATHS: Array<string> = [
@@ -404,6 +405,35 @@ class HostMediaPort implements MediaPort {
       fileIo.unlinkSync(path)
     } catch (error) {
     }
+  }
+
+  // D12：单文件导入——picker 选择 + 复制到应用私有目录（原宿主 importNebulaTextureFile 的
+  // picker / fileIo 段逐字保留：图像后缀过滤、单文件、文件名清洗、importDir 落盘）。
+  pickDocumentToDir(dirName: string, fileSuffixFilters: string[], fallbackFileName: string): Promise<MediaImportResult> {
+    const factory = this.contextFactory
+    if (factory === null) {
+      const missing: MediaImportResult = { cancelled: true, path: '' }
+      return Promise.resolve(missing)
+    }
+    const run = async (): Promise<MediaImportResult> => {
+      const context = factory()
+      const options = new picker.DocumentSelectOptions()
+      options.fileSuffixFilters = fileSuffixFilters
+      options.maxSelectNumber = 1
+      const selectedUris = await new picker.DocumentViewPicker(context).select(options)
+      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
+        const cancelled: MediaImportResult = { cancelled: true, path: '' }
+        return cancelled
+      }
+      const importDir = context.filesDir + '/' + dirName
+      fileIo.mkdirSync(importDir, true)
+      const sourceName = selectedUris[0].substring(selectedUris[0].lastIndexOf('/') + 1).replace(/[^A-Za-z0-9._-]/g, '_')
+      const sourcePath = importDir + '/' + (sourceName.length > 0 ? sourceName : fallbackFileName)
+      await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(sourcePath))
+      const imported: MediaImportResult = { cancelled: false, path: sourcePath }
+      return imported
+    }
+    return run()
   }
 
   // ── 对象模型渲染（M2-A）：worker 光栅化结果的像素图创建与 PNG 回退读回。 ──
@@ -787,6 +817,12 @@ export struct WindowNativeNode {
   private skyInputControllerImpl: SkyInputController | null = null
   // D1：详情连接线 / 详情刷新定时器控制器（惰性构造；指向线几何 @State 留宿主经 hooks 逐帧写入）。
   private detailConnectorControllerImpl: DetailConnectorController | null = null
+  // D2：图层 / 视图标签控制器（惰性构造；标签 @State 与过渡量留宿主经 hooks 读写）。
+  private layerControllerImpl: LayerController | null = null
+  // D11：SkyTexture 状态观察控制器（惰性构造；定时器自持 start/stop，状态条字段在 ToolsStore）。
+  private skyTextureStatusControllerImpl: SkyTextureStatusController | null = null
+  // D12：星云纹理控制器（惰性构造；picker/fileIo 经 MediaPort，状态在 NebulaTextureStore）。
+  private nebulaTextureControllerImpl: NebulaTextureController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -834,10 +870,7 @@ export struct WindowNativeNode {
   private bodyDetailWarmupTimer: number = 0
   private bodyDetailWarmupIndex: number = 0
   private bodyDetailWarmupPending: Array<string> = []
-  private skyTextureStatusTimer: number = 0
-  private skyTextureStatusDelayTimer: number = 0
-  private skyTextureStatusPolls: number = 0
-  private skyTextureStatusSlow: boolean = false
+  // D11：skyTextureStatus* 定时器/轮询四字段随 SkyTextureStatusController 下沉（不入 @Observed store）。
   private objectInspectorProceduralKey: string = ''
   private objectInspectorProceduralParticles: number[][] = []
   // objectInspectorModel* 的 22 个逐帧/草稿字段（纹理三量 + 环纹理三量、旋转/缩放采样、
@@ -869,7 +902,7 @@ export struct WindowNativeNode {
   // JD/MJD are edited explicitly, so the periodic native time poll does not
   // replace a partially typed number while the user is still entering it.
   @State private julianStore: JulianDateStore = new JulianDateStore()
-  private julianDateApplyInFlight: boolean = false
+  // D16：julianDateApplyInFlight 随儒略日行为并入 state/JulianDateStore.ets。
   private timeMarkLoading: boolean = false
   // manualYear/Month/Day/Hour/Minute 已并入 state/TimeStore.ets（review §2.7）。
   // selectedLanguage / languageRevision 已下沉 state/LanguageStore.ets（review §2.7）。
@@ -877,8 +910,7 @@ export struct WindowNativeNode {
   @StorageLink('i18nLang') private i18nLang: string = I18n.systemLanguage()
   @State private bridgeSyncStarted: boolean = false
   @State private nightModeStore: NightModeStore = new NightModeStore()
-  private pendingNightMode: boolean | undefined = undefined
-  private pendingNightModeUntilMs: number = 0
+  // D16：pendingNightMode / pendingNightModeUntilMs 随夜视模式行为并入 state/NightModeStore.ets。
   @State private pickedDate: Date = new Date()
   @State private locationText: string = '--'
   @State private coordinateText: string = '--'
@@ -1024,8 +1056,7 @@ export struct WindowNativeNode {
   @State private panelOffsetX: number = 0
   @State private panelOffsetY: number = 0
   private panelDataLoadTimer: number = -1
-  private viewTabTransitionId: number = 0
-  private configTabTransitionId: number = 0
+  // D2：viewTabTransitionId / configTabTransitionId 随图层/视图标签行为并入 capability/LayerController.ets。
   private panelRouteDirection: number = 1
   private widePanelScroller: Scroller = new Scroller()
   private compactPanelScroller: Scroller = new Scroller()
@@ -1605,7 +1636,7 @@ export struct WindowNativeNode {
         closePanel: (): void => this.closePanel(),
         moveToSelectedObject: (): void => this.moveToSelectedObject(),
         centerSelectedObjectFromKeyboard: (): void => this.centerSelectedObjectFromKeyboard(),
-        persistNightMode: (): void => this.persistNightMode(),
+        persistNightMode: (): void => this.nightModeStore.persistNightMode(),
         modelImmersive: (): boolean => this.objectMediaStore.objectInspectorModelImmersive,
         setModelImmersive: (value: boolean): void => this.objectModelRendererCtl().setObjectInspectorModelImmersive(value),
         // ── M3-2：触屏主路径（handleSkyTouch / emitFluidDrag）hooks ──
@@ -1645,7 +1676,7 @@ export struct WindowNativeNode {
         pauseDetailRefreshForSkyDrag: (): void => this.detailConnectorCtl().pauseDetailRefreshForSkyDrag(),
         resumeDetailRefreshAfterSkyDrag: (): void => this.detailConnectorCtl().resumeDetailRefreshAfterSkyDrag(),
         scheduleSelectedObjectForUiChange: (delay: number): void => this.scheduleSelectedObjectForUiChange(delay),
-        scheduleSkyTextureStatusCheck: (): void => this.scheduleSkyTextureStatusCheck(),
+        scheduleSkyTextureStatusCheck: (): void => this.skyTextureStatusCtl().start(),
         scheduleRecordingViewCheckpoint: (delay: number): void => this.recordingCtl().scheduleRecordingViewCheckpoint(delay),
         resetPanelIdle: (): void => this.resetPanelIdle(),
         toggleMusic: (): void => this.toggleMusic(),
@@ -1730,7 +1761,7 @@ export struct WindowNativeNode {
         detailCardHeight: (): number => this.detailCardHeight(),
         objectDetailConnectorObstacles: (): SkyUiObstacle[] => this.objectDetailConnectorObstacles(),
         refreshSelectedObject: (): void => { this.refreshSelectedObject() },
-        scheduleSkyTextureStatusCheck: (): void => { this.scheduleSkyTextureStatusCheck() },
+        scheduleSkyTextureStatusCheck: (): void => { this.skyTextureStatusCtl().start() },
         gyroGuideProjection: (): GyroGuideProjection => this.callNative('getGyroGuidePosition') as GyroGuideProjection,
         connectorVisible: (): boolean => this.overlayStore.objectDetailConnectorVisible,
         connectorX: (): number => this.objectDetailConnectorX,
@@ -1756,6 +1787,88 @@ export struct WindowNativeNode {
       this.detailConnectorControllerImpl = new DetailConnectorController(this.objectDetailStore, this.infoWindowStore, hooks)
     }
     return this.detailConnectorControllerImpl
+  }
+
+  // D2：图层 / 视图标签控制器惰性构造。桥经 HostCommandPort；标签 @State 与两组过渡量留宿主、
+  // 经 hooks 读写（§15.7 规则 2）；标签切换动画的 getUIContext().animateTo 归宿主，经
+  // animateTabIn / animateTabOut 回注（控制器不 import UI）。
+  private layerCtl(): LayerController {
+    if (this.layerControllerImpl === null) {
+      const hooks: LayerHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        setSkyDisplaySetting: (actionId: string, value: boolean): void => { this.setSkyDisplaySetting(actionId, value) },
+        setBridgeFlag: (cmd: string, value: boolean): void => { this.setBridgeFlag(cmd, value) },
+        persistEquatorialMount: (): void => { this.telescopeStore.persistEquatorialMount() },
+        persistNightMode: (): void => { this.nightModeStore.persistNightMode() },
+        syncSkyCultureTimeFollowTimer: (): void => { this.syncSkyCultureTimeFollowTimer() },
+        viewTab: (): number => this.viewTab,
+        setViewTab: (value: number): void => { this.viewTab = value },
+        viewTabContentOpacity: (): number => this.viewTabContentOpacity,
+        setViewTabContentOpacity: (value: number): void => { this.viewTabContentOpacity = value },
+        viewTabContentOffsetX: (): number => this.viewTabContentOffsetX,
+        setViewTabContentOffsetX: (value: number): void => { this.viewTabContentOffsetX = value },
+        configTab: (): number => this.configTab,
+        setConfigTab: (value: number): void => { this.configTab = value },
+        configTabContentOpacity: (): number => this.configTabContentOpacity,
+        setConfigTabContentOpacity: (value: number): void => { this.configTabContentOpacity = value },
+        configTabContentOffsetX: (): number => this.configTabContentOffsetX,
+        setConfigTabContentOffsetX: (value: number): void => { this.configTabContentOffsetX = value },
+        animateTabIn: (durationMs: number, onFinish: () => void, action: () => void): void => {
+          this.getUIContext().animateTo({ duration: durationMs, curve: Curve.EaseIn, onFinish: onFinish }, action)
+        },
+        animateTabOut: (durationMs: number, action: () => void): void => {
+          this.getUIContext().animateTo({ duration: durationMs, curve: Curve.EaseOut }, action)
+        }
+      }
+      this.layerControllerImpl = new LayerController(
+        this.commandPort(), this.layerViewStore, this.scriptStore, this.pluginStore, hooks
+      )
+    }
+    return this.layerControllerImpl
+  }
+
+  // D11：SkyTexture 状态观察控制器惰性构造。桥经 HostCommandPort；状态条四字段写 ToolsStore；
+  // 定时器自持 start()/stop()，宿主生命周期（aboutToDisappear / 缩放后触发）改调入口（§15.7 规则 3）。
+  private skyTextureStatusCtl(): SkyTextureStatusController {
+    if (this.skyTextureStatusControllerImpl === null) {
+      const hooks: SkyTextureStatusHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        }
+      }
+      this.skyTextureStatusControllerImpl = new SkyTextureStatusController(this.commandPort(), this.tools, hooks)
+    }
+    return this.skyTextureStatusControllerImpl
+  }
+
+  // D12：星云纹理控制器惰性构造。桥经 HostCommandPort；picker/fileIo 导入段经 HostMediaPort；
+  // 状态整体写 NebulaTextureStore（面板 @ObjectLink 消费）。
+  private nebulaTextureCtl(): NebulaTextureController {
+    if (this.nebulaTextureControllerImpl === null) {
+      const hooks: NebulaTextureHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        }
+      }
+      this.nebulaTextureControllerImpl = new NebulaTextureController(
+        this.commandPort(), this.hostMediaPort, this.nebulaTextureStore, hooks
+      )
+    }
+    return this.nebulaTextureControllerImpl
   }
 
   aboutToAppear(): void {
@@ -1833,6 +1946,14 @@ export struct WindowNativeNode {
     this.commandStore.attachPort(hostPort, () => {})
     this.equationOfTimeStore.attachPort(hostPort, () => {})
     this.nebulaTextureStore.attachPort(hostPort, () => {})
+    // D16：夜视模式（同步 request('setNightMode')）与儒略日（interactive setJulianDate）行为并入既有
+    // store，复用同一 HostCommandPort；两 store 无 publish* 发布点，故仅注入端口与跨域/UI hooks。
+    this.nightModeStore.attachPort(hostPort)
+    this.julianStore.attachPort(hostPort)
+    this.julianStore.attachHooks({
+      syncWheelFromSimulation: (jd: number): void => { this.wheel().syncFromSimulation(jd) },
+      refreshSimTimeLight: (): void => { this.refreshSimTimeLight() }
+    })
     // §14 B1-6：脚本录制 / 观测星球 / 星空文化标志 / 天体资料 / 指针坐标五域复用同一实例，
     // 其消费方均为 @ObjectLink，字段赋值即刷新，五个域都无 publish* 发布点，故 onChanged 传空实现。
     this.scriptStore.attachPort(hostPort, () => {})
@@ -2036,7 +2157,7 @@ export struct WindowNativeNode {
     this.locationCtl().restoreObserverLocation()
     this.timeStore.attachPort(hostPort, () => {})
     this.timeStore.attachHooks({
-      syncNightModeFromEngine: (engineNight: boolean): void => this.syncNightModeFromEngine(engineNight),
+      syncNightModeFromEngine: (engineNight: boolean): void => this.nightModeStore.syncNightModeFromEngine(engineNight),
       applyAtmosphereResponse: (response: StellariumBridgeResponse): void => this.applyAtmosphereResponse(response)
     })
     this.timeSettingsStore.attachPort(hostPort, () => {})
@@ -2284,7 +2405,7 @@ export struct WindowNativeNode {
       if (commandName === 'setLayerTab') {
         const tabId = Number(String(event['payload'] ?? '').trim())
         if (this.activePanel === 'layers' && this.panelVisible && Number.isInteger(tabId) && tabId >= 0 && tabId <= 6) {
-          this.selectViewTab(tabId)
+          this.layerCtl().selectViewTab(tabId)
           hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] layer tab=%{public}d', tabId)
         } else {
           hilog.warn(0x0000, 'StellariumArkUI', '[cli-ui] rejected layer tab=%{public}s', String(event['payload'] ?? ''))
@@ -2478,7 +2599,7 @@ export struct WindowNativeNode {
     this.skyCultureViewStore.artPreviewPixelMap = undefined
     releaseDecodedImage(this.hostMediaPort, skyCulturePixelMap, 'disappear-sky-culture-art')
     this.clearSkyCultureMakerArtworkPreview('disappear-sky-culture-maker-artwork')
-    this.stopSkyTextureStatusObserver()
+    this.skyTextureStatusCtl().stop()
     this.stopTimePanelTimers()
     this.stopViewCoordinateTimer()
     this.stopDockClockTimer()
@@ -2807,7 +2928,7 @@ export struct WindowNativeNode {
   private openPanelFromCli(panel: string): void {
     if (panel === 'settingsInformation' || panel === 'settingsTime' || panel === 'settingsPrivacy') {
       this.openPanelFromCli('settings')
-      this.selectConfigTab(panel === 'settingsInformation' ? 1 : (panel === 'settingsTime' ? 3 : -1))
+      this.layerCtl().selectConfigTab(panel === 'settingsInformation' ? 1 : (panel === 'settingsTime' ? 3 : -1))
       return
     }
     const parent = panelRouteParent(panel)
@@ -3059,7 +3180,6 @@ export struct WindowNativeNode {
       this.activePanel, this.panelNavigationStack.length, panelRouteParent(this.activePanel))
     this.goBackPanel()
   }
-
 
   private goBackPanel(): void {
     let previous = ''
@@ -3535,19 +3655,10 @@ export struct WindowNativeNode {
     }
   }
 
-
-
-
-
-
-
-
   private scriptControlSafeTop(): number {
     const safeTop = this.getUIContext().px2vp(Math.max(0, this.screenSafeTopPixels))
     return Math.max(this.EDGE_MARGIN, safeTop + 12)
   }
-
-
 
   private handleScriptControlDragTouch(event: TouchEvent): void {
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
@@ -3684,11 +3795,6 @@ export struct WindowNativeNode {
       }
     })
   }
-
-
-
-
-
 
   // loadScriptList / setScriptMetadata 已下沉 ScriptStore（§14 B2R-4）。
 
@@ -3878,7 +3984,6 @@ export struct WindowNativeNode {
       this.equationOfTimeStore.equationOfTimeStatus = I18n.t('plugin_action_failed')
     })
   }
-
 
   private setArchaeoLineSetting(setting: string, value: string): void {
     const mutationId = ++this.archaeoMutationId
@@ -4347,9 +4452,9 @@ export struct WindowNativeNode {
     // The native Stellarium property is authoritative. The QAction is not
     // guaranteed to update when the time-panel uses the direct bridge command.
     if (result.nightMode !== undefined) {
-      this.syncNightModeFromEngine(result.nightMode === true)
+      this.nightModeStore.syncNightModeFromEngine(result.nightMode === true)
           } else if (result.actionShow_Night_Mode !== undefined) {
-      this.syncNightModeFromEngine(result.actionShow_Night_Mode === true)
+      this.nightModeStore.syncNightModeFromEngine(result.actionShow_Night_Mode === true)
           }
     this.layerStore.flipHoriz = result.actionHorizontal_Flip === true
     this.layerStore.flipVert = result.actionVertical_Flip === true
@@ -4405,17 +4510,6 @@ export struct WindowNativeNode {
         this.stateRefreshQueued = false
         this.refreshState()
       }
-    })
-  }
-
-  private setLayer(actionId: string, enabled: boolean): void {
-    hilog.info(0x0000, 'StellariumArkUI', 'setLayer send %{public}s|%{public}s', actionId, enabled ? '1' : '0')
-    this.callInteractive('setActionChecked', actionId + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      hilog.info(0x0000, 'StellariumArkUI', 'setLayer %{public}s ok=%{public}s err=%{public}s', actionId, r.ok === true ? '1' : '0', r.error ?? '')
-      this.refreshState()
-      // 夜间模式和赤道仪模式切换时立即持久化，避免应用被杀死后丢失
-      if (actionId === 'actionShow_Night_Mode') { this.persistNightMode() }
-      if (actionId === 'actionSwitch_Equatorial_Mount') { this.persistEquatorialMount() }
     })
   }
 
@@ -4525,8 +4619,6 @@ export struct WindowNativeNode {
   private toggleViewLock(): void {
     this.setViewLockState(!this.viewSettingsStore.viewLock)
   }
-
-
 
   private setSkyDisplaySetting(setting: string, value: boolean | number): void {
     if (setting === 'luminanceAdaptation') this.layerStore.luminanceAdaptation = value as boolean
@@ -4790,7 +4882,6 @@ export struct WindowNativeNode {
       + ' ' + date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0')
   }
 
-
   private jumpToRts(key: string): void {
     const jd = this.astroStore.rtsData.get(key) ?? '0'
     if (parseFloat(jd) <= 0) {
@@ -4801,7 +4892,6 @@ export struct WindowNativeNode {
       if (r.ok === true) this.refreshState()
     })
   }
-
 
   private async exportCurrentAstroCsv(): Promise<void> {
     this.astroStore.updateAstroCalcSnapshot()
@@ -4839,11 +4929,6 @@ export struct WindowNativeNode {
     }
   }
 
-
-
-
-
-
   private chooseRtsCalendarStartDate(): void {
     this.pickedDate = new Date(this.astroStore.rtsCalendarStartYear, this.astroStore.rtsCalendarStartMonth - 1, this.astroStore.rtsCalendarStartDay)
     this.getUIContext().showDatePickerDialog({
@@ -4868,9 +4953,6 @@ export struct WindowNativeNode {
       if (r.ok === true) this.refreshState()
     })
   }
-
-
-
 
   private chooseEphemerisStartDate(): void {
     this.pickedDate = new Date(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth - 1, this.ephemerisStore.ephemerisStartDay)
@@ -4898,19 +4980,6 @@ export struct WindowNativeNode {
       }
     })
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   private chooseGraphStartDate(): void {
     this.pickedDate = new Date(this.astroStore.graphStartYear, this.astroStore.graphStartMonth - 1, this.astroStore.graphStartDay)
@@ -4961,19 +5030,12 @@ export struct WindowNativeNode {
     this.setPanel('search')
   }
 
-
-
-
   private jumpToObservabilityDay(day: ObservabilityDay): void {
     if (day.bestJD === undefined || day.bestJD <= 0) return
     this.callInteractive('setJD', String(day.bestJD), (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.refreshState()
     })
   }
-
-
-
-
 
   private chooseEclipseStartDate(): void {
     this.pickedDate = new Date(this.astroStore.eclipseStartYear, this.astroStore.eclipseStartMonth - 1, this.astroStore.eclipseStartDay)
@@ -4992,21 +5054,12 @@ export struct WindowNativeNode {
     })
   }
 
-
-
-
-
-
-
-
   private jumpToPhenomenon(item: PhenomenonItem): void {
     if (item.jd === undefined || item.jd <= 0) return
     this.callInteractive('setJD', String(item.jd), (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.refreshState()
     })
   }
-
-
 
   private addWutTargetToObservingList(target: WutTarget): void {
     const name = (target.englishName ?? '').trim()
@@ -5057,33 +5110,9 @@ export struct WindowNativeNode {
 
   // ---- 天文计算辅助：高度曲线 ----
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   private planetTimeSeriesValueLabel(value: number | undefined, metric: string): string {
     return (value ?? 0).toFixed(metric === 'angularSize' ? 0 : 1) + planetMetricUnit(metric)
   }
-
-
-
-
-
-
 
   private celestialPositionSubtitle(position: CelestialPosition): string {
     if (position.catalogId.length > 0 && position.catalogId !== celestialTitle(position.name, position.englishName)) return position.catalogId
@@ -5110,10 +5139,6 @@ export struct WindowNativeNode {
     if (v === undefined) return '--'
     return v.toFixed(digits) + suffix
   }
-
-
-
-
 
   private publishAstroPanelState(): void {
     AppStorage.setOrCreate('stellariumAstroPanelState', JSON.stringify({
@@ -5200,15 +5225,10 @@ export struct WindowNativeNode {
     }
   }
 
-
-
-
-
   private jumpToMoonPhase(item: MoonPhaseItem): void {
     if (item.jd === undefined || item.jd <= 0) return
     this.callInteractive('setJD', String(item.jd), () => { this.refreshState() })
   }
-
 
   private jumpToAlmanacSeason(event: SeasonEvent): void {
     if (event.jd === undefined || event.jd <= 0) return
@@ -5382,12 +5402,6 @@ export struct WindowNativeNode {
     })
   }
 
-
-
-
-
-
-
   private setSkyCultureStyleOption(target: string, optionIndex: number, enabled: boolean): void {
     const oldMask = target === 'screen' ? this.skyCultureSettingsStore.skyCultureScreenStyleMask : this.skyCultureSettingsStore.skyCultureInfoStyleMask
     const bit = 1 << optionIndex
@@ -5406,7 +5420,6 @@ export struct WindowNativeNode {
     })
   }
 
-
   private setSkyCultureScreenLabelMode(mode: number): void {
     this.setSkyCultureLabelMode('screen', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureScreenLabelMode = value })
   }
@@ -5423,7 +5436,6 @@ export struct WindowNativeNode {
     this.setSkyCultureLabelMode('lunar', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureLunarLabelMode = value })
   }
 
-
   private setSkyCultureLabelModeForTarget(target: string, mode: number): void {
     if (target === 'screen') {
       this.setSkyCultureScreenLabelMode(mode)
@@ -5436,7 +5448,6 @@ export struct WindowNativeNode {
     }
   }
 
-
   // 选择某个标签模式并收起该卡片的下拉（原 skyCultureLabelModePicker 内联逻辑）。
   private selectSkyCultureLabelMode(target: string, index: number): void {
     this.setSkyCultureLabelModeForTarget(target, index)
@@ -5444,7 +5455,6 @@ export struct WindowNativeNode {
       this.skyCultureSettingsStore.skyCultureLabelPickerOpen = ''
     })
   }
-
 
   private setSkyCultureLabelMode(target: string, mode: number, apply: (value: number) => void): void {
     const styles: string[] = ['Translated', 'Native', 'Pronounce', 'Translit', 'Modern']
@@ -5523,8 +5533,6 @@ export struct WindowNativeNode {
     return options.length > 0 ? options[0].id : 'constellationLines'
   }
 
-
-
   private setSkyCultureVisualColor(setting: string, color: string): void {
     const normalized = color.trim().toUpperCase()
     if (!/^#[0-9A-F]{6}$/.test(normalized)) {
@@ -5561,8 +5569,6 @@ export struct WindowNativeNode {
     })
   }
 
-
-
   private skyCultureArtFilePath(rawPath: string): string {
     if (!isSafeSkyCultureArtPath(rawPath)) return ''
     const path = this.stellariumFilesDir() + '/stellarium/' + rawPath
@@ -5583,7 +5589,6 @@ export struct WindowNativeNode {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext
     return context.getApplicationContext().filesDir
   }
-
 
   private setSkyCultureArtStatus(rawPath: string, status: string): void {
     if (this.skyCultureArtStates[rawPath] === status && this.skyCultureArtPendingStatuses[rawPath] === undefined) return
@@ -5898,21 +5903,6 @@ export struct WindowNativeNode {
     this.refreshObjectInspectorMedia()
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   private drawSkyCultureTerritoryMap(): void {
     const width = this.skyCultureMapRenderWidth
     const height = this.skyCultureMapRenderHeight
@@ -5993,7 +5983,6 @@ export struct WindowNativeNode {
       this.saveSkyCultureMakerDraft(true)
     }, 650) as number
   }
-
 
   private saveSkyCultureMakerDraft(silent: boolean = false, onComplete?: (success: boolean) => void): void {
     if (!this.skyCultureMakerStore.draftReady) {
@@ -6420,86 +6409,6 @@ export struct WindowNativeNode {
       : I18n.t('plugin_open_feature')
   }
 
-  private setNebulaTextureVisible(enabled: boolean): void {
-    this.setNebulaTextureFlag('setNebulaTexturesVisible', enabled, this.nebulaTextureStore.nebulaTextureStatus?.enabled === true)
-  }
-
-  private setNebulaTextureFlag(command: string, enabled: boolean, current: boolean): void {
-    if (this.nebulaTextureStore.nebulaTexturePending || this.nebulaTextureStore.nebulaTextureLoading || this.nebulaTextureStore.nebulaTextureImporting || enabled === current) return
-    this.nebulaTextureStore.nebulaTexturePending = true
-    this.callInteractive(command, enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      this.nebulaTextureStore.nebulaTexturePending = false
-      if (r.ok === true) this.nebulaTextureStore.nebulaTextureStatus = r as NebulaTextureStatus
-      else this.nebulaTextureStore.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
-    }, () => {
-      this.nebulaTextureStore.nebulaTexturePending = false
-      this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed')
-    })
-  }
-
-  private refreshNebulaTextures(): void {
-    if (this.nebulaTextureStore.nebulaTextureLoading || this.nebulaTextureStore.nebulaTexturePending || this.nebulaTextureStore.nebulaTextureImporting) return
-    this.nebulaTextureStore.nebulaTextureLoading = true
-    this.callInteractive('refreshNebulaTextures', '', (r: StellariumBridgeResponse) => {
-      this.nebulaTextureStore.nebulaTextureLoading = false
-      const status = (r as NebulaTextureRefreshResponse).status
-      if (status !== undefined) this.nebulaTextureStore.nebulaTextureStatus = status
-      this.nebulaTextureStore.nebulaTextureActionStatus = r.ok === true ? I18n.t('nebula_texture_refreshed') : (r.error ?? I18n.t('nebula_texture_action_failed'))
-    }, () => {
-      this.nebulaTextureStore.nebulaTextureLoading = false
-      this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed')
-    })
-  }
-
-  private gotoNebulaTexture(imageUrl: string): void {
-    this.callInteractive('gotoNebulaTexture', imageUrl, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) this.nebulaTextureStore.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
-    }, () => { this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed') })
-  }
-
-  private removeNebulaTexture(imageUrl: string): void {
-    this.callInteractive('removeNebulaTexture', imageUrl, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_removed')
-        this.nebulaTextureStore.loadNebulaTextureStatus()
-      } else this.nebulaTextureStore.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
-    }, () => { this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed') })
-  }
-
-  private async importNebulaTextureFile(): Promise<void> {
-    if (this.nebulaTextureStore.nebulaTextureImporting) return
-    this.nebulaTextureStore.nebulaTextureImporting = true
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const options = new picker.DocumentSelectOptions()
-      options.fileSuffixFilters = ['图像|.png|.jpg|.jpeg|.gif|.tif|.tiff']
-      options.maxSelectNumber = 1
-      const selectedUris = await new picker.DocumentViewPicker(context).select(options)
-      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
-        this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_import_cancelled')
-        this.nebulaTextureStore.nebulaTextureImporting = false
-        return
-      }
-      const importDir = context.filesDir + '/nebula-texture-imports'
-      fileIo.mkdirSync(importDir, true)
-      const sourceName = selectedUris[0].substring(selectedUris[0].lastIndexOf('/') + 1).replace(/[^A-Za-z0-9._-]/g, '_')
-      const sourcePath = importDir + '/' + (sourceName.length > 0 ? sourceName : 'texture-' + Date.now().toString() + '.png')
-      await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(sourcePath))
-      this.callInteractive('importNebulaTexture', JSON.stringify({ sourcePath: sourcePath }), (r: StellariumBridgeResponse) => {
-        this.nebulaTextureStore.nebulaTextureActionStatus = r.ok === true ? I18n.t('nebula_texture_imported') : (r.error ?? I18n.t('nebula_texture_import_failed'))
-        if (r.ok === true) this.nebulaTextureStore.loadNebulaTextureStatus()
-        this.nebulaTextureStore.nebulaTextureImporting = false
-      }, () => {
-        this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_import_failed')
-        this.nebulaTextureStore.nebulaTextureImporting = false
-      })
-    } catch (error) {
-      hilog.error(0x0000, 'StellariumArkUI', 'Nebula texture import failed: %{public}s', String(error))
-      this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_import_failed')
-      this.nebulaTextureStore.nebulaTextureImporting = false
-    }
-  }
-
   private openPluginFeature(id: string): void {
     const route = pluginFeatureRoute(id)
     if (route.kind === 'offline') {
@@ -6583,8 +6492,6 @@ private loadPlanetPositions(): void {
       this.astroStore.planetPositionsError = '行星位置计算失败，请点刷新后重试。'
     })
   }
-
-
 
   private selectLandscape(id: string, name: string): void {
     this.callInteractive('setLandscape', id, (response: StellariumBridgeResponse) => {
@@ -6735,7 +6642,6 @@ private loadPlanetPositions(): void {
 
   // loadConstellationNavigation 已随 §14 B3-1 搬入 state/SearchStore.ets（宿主调用点显式传 languageSerial）。
 
-
   // loadCategoryObjects 已下沉 state/SearchStore.ets（§14 B3-3）。
 
   private publishSearchBrowserState(error: string = ''): void {
@@ -6779,7 +6685,6 @@ private loadPlanetPositions(): void {
       this.refreshSearchFilterResults()
     })
   }
-
 
   private setSearchFilterPage(page: string): void {
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
@@ -6921,7 +6826,7 @@ private loadPlanetPositions(): void {
     // Discrete zoom is a direct view command. Do not route it through the
     // result-polling cache, which can make a tap appear to do nothing.
     this.callNativeFire('zoomStep', factor.toString())
-    this.scheduleSkyTextureStatusCheck()
+    this.skyTextureStatusCtl().start()
     setTimeout(() => {
       this.refreshState()
       this.callInteractive('getFieldOfView', '', (r: StellariumBridgeResponse) => {
@@ -6968,7 +6873,6 @@ private loadPlanetPositions(): void {
       this.flashHint('获取' + label + '时刻失败，请重试。')
     })
   }
-
 
   private applyManualTime(): void {
     const jd = dateToJD(this.timeStore.manualYear, this.timeStore.manualMonth, this.timeStore.manualDay, this.timeStore.manualHour, this.timeStore.manualMinute)
@@ -7063,119 +6967,6 @@ private loadPlanetPositions(): void {
     this.hintTimer = setTimeout(() => {
       this.actionHint = ''
     }, 1600) as number
-  }
-
-  private stopSkyTextureStatusObserver(): void {
-    if (this.skyTextureStatusTimer !== 0) {
-      clearTimeout(this.skyTextureStatusTimer)
-      this.skyTextureStatusTimer = 0
-    }
-    if (this.skyTextureStatusDelayTimer !== 0) {
-      clearTimeout(this.skyTextureStatusDelayTimer)
-      this.skyTextureStatusDelayTimer = 0
-    }
-    this.skyTextureStatusPolls = 0
-    this.skyTextureStatusSlow = false
-  }
-
-  private hideSkyTextureStatus(): void {
-    this.stopSkyTextureStatusObserver()
-    this.tools.skyTextureStatusVisible = false
-    this.tools.skyTextureStatusText = ''
-    this.tools.skyTextureStatusError = false
-  }
-
-  private updateSkyTextureStatus(result: StellariumBridgeResponse): void {
-    if (result.ok !== true) {
-      this.hideSkyTextureStatus()
-      return
-    }
-    const pending = typeof result.activeTexturePendingCount === 'number'
-      ? result.activeTexturePendingCount as number : 0
-    const errors = typeof result.activeTextureErrorCount === 'number'
-      ? result.activeTextureErrorCount as number : 0
-    const status = result.activeTextureStatus ?? ''
-    if (errors > 0 || status === 'error' || status === 'partial-error') {
-      hilog.warn(0x0000, 'StellariumArkUI', '[sky-banner] error count=%{public}d status=%{public}s',
-        errors, status)
-      this.tools.skyTextureStatusVisible = true
-      this.tools.skyTextureStatusError = true
-      this.tools.skyTextureStatusText = '当前视野有 ' + errors.toString() + ' 项资料图加载失败'
-      return
-    }
-    if (pending > 0 || status === 'loading') {
-      hilog.info(0x0000, 'StellariumArkUI', '[sky-banner] loading pending=%{public}d status=%{public}s',
-        pending, status)
-      this.tools.skyTextureStatusVisible = true
-      this.tools.skyTextureStatusError = false
-      this.tools.skyTextureStatusText = '正在载入当前视野资料图 · ' + pending.toString() + ' 项待完成'
-      return
-    }
-    this.hideSkyTextureStatus()
-  }
-
-  private pollSkyTextureStatus(): void {
-    this.skyTextureStatusPolls++
-    if (this.skyTextureStatusPolls >= SKY_TEXTURE_STATUS_FAST_POLLS) {
-      this.skyTextureStatusSlow = true
-    }
-    // A stall far past any plausible load is surfaced as an actionable error so
-    // the banner can never sit on a loading state that will never finish. This
-    // is an escalation, not a silent hide: the user keeps a retry affordance.
-    if (this.skyTextureStatusSlow && this.skyTextureStatusPolls >= SKY_TEXTURE_STATUS_STALL_POLLS) {
-      this.tools.skyTextureStatusVisible = true
-      this.tools.skyTextureStatusError = true
-      this.tools.skyTextureStatusText = '当前视野资料图仍在准备，可稍后重试'
-      this.stopSkyTextureStatusObserver()
-      return
-    }
-    this.callInteractive('getDeepSkyImageStatus', '', (result: StellariumBridgeResponse) => {
-      this.updateSkyTextureStatus(result)
-      // updateSkyTextureStatus already retracts the banner and stops polling
-      // when the bridge reports a failure.
-      if (result.ok !== true) {
-        return
-      }
-      const pending = typeof result.activeTexturePendingCount === 'number'
-        ? result.activeTexturePendingCount as number : 0
-      if (pending <= 0 || result.activeTextureStatus === 'error' || result.activeTextureStatus === 'partial-error') {
-        this.stopSkyTextureStatusObserver()
-        return
-      }
-      const delay = this.skyTextureStatusSlow ? SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS
-        : (this.skyTextureStatusPolls <= 8 ? 350 : 900)
-      this.skyTextureStatusTimer = setTimeout(() => {
-        this.skyTextureStatusTimer = 0
-        this.pollSkyTextureStatus()
-      }, delay) as number
-    }, () => {
-      // The bridge did not answer; sample again later without inventing a state.
-      const delay = this.skyTextureStatusSlow ? SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS : 900
-      this.skyTextureStatusTimer = setTimeout(() => {
-        this.skyTextureStatusTimer = 0
-        this.pollSkyTextureStatus()
-      }, delay) as number
-    })
-  }
-
-  private scheduleSkyTextureStatusCheck(): void {
-    if (this.skyTextureStatusDelayTimer !== 0) {
-      clearTimeout(this.skyTextureStatusDelayTimer)
-    }
-    this.skyTextureStatusDelayTimer = setTimeout(() => {
-      this.skyTextureStatusDelayTimer = 0
-      this.stopSkyTextureStatusObserver()
-      this.pollSkyTextureStatus()
-    }, 180) as number
-  }
-
-  private retrySkyTextureStatus(): void {
-    this.tools.skyTextureStatusError = false
-    this.tools.skyTextureStatusVisible = true
-    this.tools.skyTextureStatusText = '正在重新载入当前视野资料图'
-    this.callInteractive('retryDeepSkyImages', '', () => {
-      this.scheduleSkyTextureStatusCheck()
-    }, () => { this.tools.skyTextureStatusError = true })
   }
 
   // §14 B3-4：lx200Payload / applyTelescopeProfile / applyTelescopeProfiles 已搬入 TelescopeStore
@@ -7328,7 +7119,6 @@ private loadPlanetPositions(): void {
 	  this.telescopeStore.scheduleTelescopeLivePosition()
 	})
   }
-
 
   private applyLx200Result(result: StellariumBridgeResponse): void {
 	const response = result as TelescopeControlResponse
@@ -7567,7 +7357,6 @@ private loadPlanetPositions(): void {
       this.detailConnectorCtl().endDetailRefresh()
     })
   }
-
 
   private objectDetailConnectorObstacles(): SkyUiObstacle[] {
     const obstacles: SkyUiObstacle[] = []
@@ -7937,19 +7726,9 @@ private loadPlanetPositions(): void {
   // 天体名称由核心的官方 .qm 资源提供。ArkUI 只负责排版，不再维护
   // 第二套恒星、行星或深空天体译名。
 
-
-
   private wutTargetTitle(target: WutTarget): string {
     return celestialTitle(target.name ?? '', target.englishName ?? '')
   }
-
-
-
-
-
-
-
-
 
   private applySelectedInfoMode(mode: string): void {
     this.infoWindowStore.informationMode = mode
@@ -8283,7 +8062,7 @@ private loadPlanetPositions(): void {
         this.syncTimeRateState(r.timeRate as number)
       }
       this.wheel().syncFromSimulation(jd)
-      this.syncJulianDateFields(r, jd)
+      this.julianStore.syncJulianDateFields(r, jd)
     })
   }
 
@@ -8310,7 +8089,6 @@ private loadPlanetPositions(): void {
     }
     return text.replace('T', ' ')
   }
-
 
   // 地图几何 / 点选 / 触摸（locationMapWidth/Height、setPickerLocation、updatePickerFromMap、
   // handleLocationMapTouch）已随 §15.12 下沉 panels/location/LocationPickerPanel.ets 与
@@ -8471,7 +8249,6 @@ private loadPlanetPositions(): void {
     return (d.length >= 10 ? d.slice(5) : d) + ' ' + (t.length >= 8 ? t.slice(0, 5) : t)
   }
 
-
   private selectContinent(c: string): void {
     this.locationPickerStore.hierContinent = c
     this.locationPickerStore.hierCountry = ''
@@ -8498,9 +8275,6 @@ private loadPlanetPositions(): void {
       this.locationCtl().setLocation(found.n, found.la, found.lo, found.al, this.locationPickerStore.locationPlanet(found))
     }
   }
-
-
-
 
   private isUiPoint(x: number, y: number): boolean {
     // 录制聚焦态（控制条收起）：除顶部录制控制条外，面板/详情卡/搜索/Dock/底部条等界面
@@ -8774,9 +8548,6 @@ private loadPlanetPositions(): void {
     this.navigateSelectedObjectTo(this.skyWidth / 2, this.skyHeight / 2, 'keyboard-center')
     this.flashHint('已居中')
   }
-
-
-
 
   build() {
     Stack() {
@@ -9375,7 +9146,7 @@ private loadPlanetPositions(): void {
             Button('重试')
               .height(28).fontSize(10).fontColor('#F4FBFF')
               .backgroundColor('rgba(255,255,255,0.12)').borderRadius(UI_RADIUS_PILL)
-              .onClick(() => { this.retrySkyTextureStatus() })
+              .onClick(() => { this.skyTextureStatusCtl().retrySkyTextureStatus() })
           }
         }
           .height(38).padding({ left: 12, right: 10 })
@@ -9615,13 +9386,11 @@ private loadPlanetPositions(): void {
     }
   }
 
-
   // ── 顶部搜索栏（中等宽度，点击打开搜索面板） ──
   private bottomCardX(): number {
     const base = baseBottomCardX(this.isExpandedLayout, this.isFoldHoverLayout, this.skyWidth, this.EDGE_MARGIN, this.bottomCardWidth())
     return base + this.clampedObjectCardOffsetX(base, this.bottomCardWidth())
   }
-
 
   private bottomCardY(): number {
     const base = baseBottomCardY(this.isExpandedLayout, this.skyHeight, this.EDGE_MARGIN)
@@ -9643,7 +9412,6 @@ private loadPlanetPositions(): void {
   private detailCardHeight(): number {
     return this.bottomCardHeight()
   }
-
 
   private clampedObjectCardOffsetX(base: number, width: number): number {
     return clamp(this.cardOffsetX, 8 - base, this.skyWidth - width - 8 - base)
@@ -9667,24 +9435,16 @@ private loadPlanetPositions(): void {
     return clamp(this.skyHeight * 0.56, 320, 420)
   }
 
-
-
-
-
-
-
   private expandedDetailSummaryX(): number {
     const base = baseExpandedDetailSummaryX(this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
     return base + this.clampedObjectCardOffsetX(base, expandedDetailSummaryWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN))
   }
-
 
   private expandedDetailSummaryY(): number {
     // 上移：原先 +84 使小详情卡偏中，遮挡视野中心；贴近顶部留出更多星空可视区
     const base = baseExpandedDetailSummaryY(this.EDGE_MARGIN)
     return base + this.clampedObjectCardOffsetY(base, expandedDetailSummaryHeight())
   }
-
 
   // 平板检查器固定贴在左侧：保留大部分星图，并给底部 Dock 留出触控空间。
   private tabletInspectorWidth(): number {
@@ -9696,13 +9456,10 @@ private loadPlanetPositions(): void {
     return base + this.clampedObjectCardOffsetX(base, this.tabletInspectorWidth())
   }
 
-
   private tabletInspectorY(): number {
     const base = baseTabletInspectorY(this.EDGE_MARGIN)
     return base + this.clampedObjectCardOffsetY(base, tabletInspectorHeight(this.skyHeight, this.EDGE_MARGIN))
   }
-
-
 
   private showObjectActionBar(): boolean {
     return false
@@ -9720,7 +9477,6 @@ private loadPlanetPositions(): void {
     return this.bottomCardWidth()
   }
 
-
   private isObjectActionBarPoint(x: number, y: number): boolean {
     if (!this.showObjectActionBar()) { return false }
     const left = this.objectActionBarX()
@@ -9734,9 +9490,6 @@ private loadPlanetPositions(): void {
     const sy = this.expandedDetailSummaryY()
     return x >= sx - 8 && x <= sx + expandedDetailSummaryWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN) + 8 && y >= sy - 8 && y <= sy + expandedDetailSummaryHeight() + 8
   }
-
-
-
 
   private handleExpandedDetailSummaryTap(x: number, y: number): boolean {
     if (!this.isExpandedDetailSummaryPoint(x, y)) { return false }
@@ -9831,7 +9584,6 @@ private loadPlanetPositions(): void {
       this.cardOffsetY = this.clampedObjectCardOffsetY(baseY, height)
     }
   }
-
 
   private showFullObjectInspector(): void {
     this.infoWindowStore.infoWinVisible = true
@@ -9935,17 +9687,11 @@ private loadPlanetPositions(): void {
     return this.dockTop() - 48
   }
 
-
-
-
   // 竖排（手机·半折，列高 96）还是横排（平板，一行 44 高）：平板 dock 只有 54 高，
   // 96 高的竖排压在它上方过于突兀，横排更贴近平板的工具条语汇。
   private chromeZoomHorizontal(): boolean {
     return this.isExpandedLayout
   }
-
-
-
 
   private compactDockWidthPercent(): number {
     if (this.isFoldHoverLayout) {
@@ -9970,12 +9716,9 @@ private loadPlanetPositions(): void {
     return this.isFoldHoverLayout ? 14 : 18
   }
 
-
-
   private dockTop(): number {
     return this.isExpandedLayout ? this.skyHeight - 62 : this.skyHeight - 82
   }
-
 
   private dockActionAt(x: number, y: number): ShellAction | null {
     if (!isDockPoint(x, y, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop())) {
@@ -10055,7 +9798,6 @@ private loadPlanetPositions(): void {
     this.objectModelRendererCtl().clearObjectInspectorModelRenderer()
     releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'object-inspector')
   }
-
 
   private updateObjectInspectorMediaWarmup(kind: string): void {
     if (kind !== 'image') {
@@ -10327,9 +10069,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-
-
-
   // §14 B2R-1：ObjectMediaStore.loadObjectInspectorModelRawTexture 的原始侧车读取职责
   //（fileIo 属 NAPI，不下沉 store）——把原地内联的 open/read/close 与尺寸校验提取为本方法，
   // 经 ObjectMediaHostHooks.readRawSidecar 注入；尺寸不符或 IO 失败抛 Error，语义与原地一致。
@@ -10355,23 +10094,9 @@ private loadPlanetPositions(): void {
     }
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
   private objectInspectorInlineModelSize(): number {
     return Math.min(200, Math.max(80, this.bottomCardWidth() - 112))
   }
-
-
 
   private selectedDisplayValue(key: string): string {
     switch (key) {
@@ -10407,10 +10132,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-
-
-
-
   private selectObjectDetailTab(index: number): void {
     if (index === this.objectDetailStore.bottomCardIndex) return
     const direction = index > this.objectDetailStore.bottomCardIndex ? 1 : -1
@@ -10428,10 +10149,6 @@ private loadPlanetPositions(): void {
       this.objectDetailContentTranslateX = direction * 8
     })
   }
-
-
-
-
 
   private toggleSelectedObservingList(): void {
     const idx = this.obsListStore.observingList.indexOf(this.objectDetailStore.selectedName)
@@ -10483,16 +10200,6 @@ private loadPlanetPositions(): void {
     return I18n.selectedStatus(en)
   }
 
-
-
-
-
-
-
-
-
-
-
   // 收起当前页面按钮：把右侧浮动面板收回到左侧栏
   // 「更多」按钮：与搜索、时间、位置和图层共用同一主面板。
 
@@ -10531,45 +10238,9 @@ private loadPlanetPositions(): void {
   // 引擎回报的夜视状态落库。换挡瞬间 / 轮询（约每 3 s）可能回报旧值，
   // 因此在"待定窗口"内忽略与待定值不一致的回报，避免刚打开又被旧值翻回去
   // （与 syncTimeRateState 的去重窗口同一套路）。
-  private syncNightModeFromEngine(engineNight: boolean): void {
-    if (this.pendingNightMode !== undefined) {
-      const matches = engineNight === this.pendingNightMode
-      if (!matches && Date.now() < this.pendingNightModeUntilMs) { return }
-      this.pendingNightMode = undefined
-      this.pendingNightModeUntilMs = 0
-    }
-    this.nightModeStore.nightMode = engineNight
-  }
 
   // 夜视模式统一入口：写状态 + 可选持久化 + 下发原生命令。
   // 时间面板的夜视开关与（后续）主界面独立按钮都走这一个入口。
-  private applyNightMode(enabled: boolean, persist: boolean): void {
-    this.pendingNightMode = enabled
-    this.pendingNightModeUntilMs = Date.now() + 3500
-    this.nightModeStore.nightMode = enabled
-    if (persist) { this.persistNightMode() }
-    this.callNative('setNightMode', enabled ? 'true' : 'false')
-  }
-
-  private persistNightMode(): void {
-    let obj: Record<string, boolean | string> = {}
-    const cur = AppStorage.get<string>('stellariumSettings')
-    if (cur) {
-      try { obj = JSON.parse(cur) as Record<string, boolean | string> } catch (e) { }
-    }
-    obj['nightMode'] = this.nightModeStore.nightMode
-    AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
-  }
-
-  private persistEquatorialMount(): void {
-    let obj: Record<string, boolean | string> = {}
-    const cur = AppStorage.get<string>('stellariumSettings')
-    if (cur) {
-      try { obj = JSON.parse(cur) as Record<string, boolean | string> } catch (e) { }
-    }
-    obj['equatorialMount'] = this.telescopeStore.equatorialMount
-    AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
-  }
 
   // 平板/桌面浮动面板与手机底部面板：体内调用 this.panelContent()。
   // ArkUI 不能在子组件里调用宿主 @Builder（会整应用退出，见计划 §13.1 规则 9），
@@ -10785,9 +10456,9 @@ private loadPlanetPositions(): void {
         onWheelTouch: (event: TouchEvent) => { this.wheel().handleTouch(event) },
         onChip: (id: string) => { this.handleChip(id) },
         onEquationToggle: (setting: string, enabled: boolean) => { this.setEquationOfTime(setting, enabled) },
-        onAdjustJulian: (scale: string, direction: number) => { this.adjustJulianDate(scale, direction) },
-        onApplyJulian: (scale: string) => { this.applyJulianDateInput(scale) },
-        onNightMode: (enabled: boolean) => { this.applyNightMode(enabled, true) },
+        onAdjustJulian: (scale: string, direction: number) => { this.julianStore.adjustJulianDate(scale, direction) },
+        onApplyJulian: (scale: string) => { this.julianStore.applyJulianDateInput(scale) },
+        onNightMode: (enabled: boolean) => { this.nightModeStore.applyNightMode(enabled, true) },
         onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.applyAtmosphere(pressure, temperature, extinction) },
         onPickDate: (year: number, monthIndex: number, day: number) => {
           this.timeStore.manualYear = year; this.timeStore.manualMonth = monthIndex + 1; this.timeStore.manualDay = day
@@ -10849,7 +10520,7 @@ private loadPlanetPositions(): void {
         foldTablet: this.isFoldTabletLayout,
         viewTabContentOpacity: this.viewTabContentOpacity,
         viewTabContentOffsetX: this.viewTabContentOffsetX,
-        layerTabs: this.layerTabItems(),
+        layerTabs: this.layerCtl().layerTabItems(),
         skyCultureArtStates: this.skyCultureArtStates,
         skyCultureArtThumbnailPixelMaps: this.skyCultureArtThumbnailPixelMaps,
         narrationParagraphs: this.skyCultureViewStore.skyCultureNarrationParagraphs(),
@@ -10865,10 +10536,10 @@ private loadPlanetPositions(): void {
         pickerHeaderActive: this.nightModeStore.nmPickerHeaderActive(),
         pickerSelected: this.nightModeStore.nmPickerSelected(),
         pickerOption: this.nightModeStore.nmPickerOption(),
-        onPreset: (preset: string) => { this.applyLayerPreset(preset) },
-        onClear: () => { this.clearMarkingLayers() },
-        onSelectTab: (id: number) => { this.selectViewTab(id) },
-        onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
+        onPreset: (preset: string) => { this.layerCtl().applyLayerPreset(preset) },
+        onClear: () => { this.layerCtl().clearMarkingLayers() },
+        onSelectTab: (id: number) => { this.layerCtl().selectViewTab(id) },
+        onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
         onSetSkyDisplay: (setting: string, value: boolean | number) => { this.setSkyDisplaySetting(setting, value) },
         onStarMagLimit: (value: number) => { this.applyStarMagLimit(value) },
         onMilkyWayBright: (value: number) => { this.applyMilkyWayBright(value) },
@@ -10960,7 +10631,7 @@ private loadPlanetPositions(): void {
         onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
         onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
         onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) },
-        onApplyLayerSwitch: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
+        onApplyLayerSwitch: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
         onSpeedDown: () => { this.speedDown() },
         onTogglePause: () => { this.togglePause() },
         onSpeedUp: () => { this.speedUp() },
@@ -11070,7 +10741,7 @@ private loadPlanetPositions(): void {
         scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
         hasSelectedObject: () => { return this.objectDetailStore.hasSelectedObject() },
-        selectConfigTab: (tabId: number) => { this.selectConfigTab(tabId) },
+        selectConfigTab: (tabId: number) => { this.layerCtl().selectConfigTab(tabId) },
         setViewCoordinatesVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
         setViewCoordinateFamily: (family: string) => { this.setViewCoordinateFamily(family) },
         setViewEquatorialEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) },
@@ -11377,12 +11048,12 @@ private loadPlanetPositions(): void {
         subColor: this.nightModeStore.nmSub(),
         accentColor: this.nightModeStore.nmAccent(),
         panelColor: this.nightModeStore.nmBg(),
-        onSetVisible: (enabled: boolean) => { this.setNebulaTextureVisible(enabled) },
-        onRefresh: () => { this.refreshNebulaTextures() },
-        onImport: () => { this.importNebulaTextureFile() },
-        onSetConflictAvoidance: (value: boolean) => { this.setNebulaTextureFlag('setNebulaTextureConflictAvoidance', value, this.nebulaTextureStore.nebulaTextureStatus?.avoidAreaConflict === true) },
-        onGoto: (imageUrl: string) => { this.gotoNebulaTexture(imageUrl) },
-        onRemove: (imageUrl: string) => { this.removeNebulaTexture(imageUrl) }
+        onSetVisible: (enabled: boolean) => { this.nebulaTextureCtl().setNebulaTextureVisible(enabled) },
+        onRefresh: () => { this.nebulaTextureCtl().refreshNebulaTextures() },
+        onImport: () => { this.nebulaTextureCtl().importNebulaTextureFile() },
+        onSetConflictAvoidance: (value: boolean) => { this.nebulaTextureCtl().setNebulaTextureFlag('setNebulaTextureConflictAvoidance', value, this.nebulaTextureStore.nebulaTextureStatus?.avoidAreaConflict === true) },
+        onGoto: (imageUrl: string) => { this.nebulaTextureCtl().gotoNebulaTexture(imageUrl) },
+        onRemove: (imageUrl: string) => { this.nebulaTextureCtl().removeNebulaTexture(imageUrl) }
       })
     } else if (this.activePanel === 'scripts') {
       ScriptsPanel({
@@ -11553,53 +11224,6 @@ private loadPlanetPositions(): void {
   // 当前档位高亮，点击立即更新速度显示
 
   // ===== Sky Guide 风格：按字段选择的时间转轴 =====
-  private syncJulianDateFields(response: StellariumBridgeResponse, jd: number): void {
-    const mjd = response.mjd !== undefined ? Number(response.mjd) : jd - 2400000.5
-    this.julianStore.julianCalendarSystem = response.calendarSystem === 'julian' ? 'julian' : 'gregorian'
-    if (!this.julianStore.julianDateEditing) {
-      this.julianStore.julianDayInput = jd.toFixed(5)
-      this.julianStore.modifiedJulianDayInput = mjd.toFixed(5)
-    }
-  }
-
-  private applyJulianDateInput(scale: string): void {
-    if (this.julianDateApplyInFlight) { return }
-    const text = (scale === 'mjd' ? this.julianStore.modifiedJulianDayInput : this.julianStore.julianDayInput).trim()
-    const value = Number(text)
-    if (!Number.isFinite(value)) {
-      this.julianStore.julianDateError = I18n.t('julian_date_invalid')
-      return
-    }
-    this.julianStore.julianDateError = ''
-    this.julianDateApplyInFlight = true
-    this.callInteractive('setJulianDate', scale + '|' + value.toString(), (r: StellariumBridgeResponse) => {
-      this.julianDateApplyInFlight = false
-      if (r.ok !== true || r.jd === undefined) {
-        this.julianStore.julianDateError = r.error ?? I18n.t('julian_date_invalid')
-        return
-      }
-      this.julianStore.julianDateEditing = false
-      this.syncJulianDateFields(r, Number(r.jd))
-      this.wheel().syncFromSimulation(Number(r.jd))
-      this.refreshSimTimeLight()
-    }, (r: StellariumBridgeResponse) => {
-      this.julianDateApplyInFlight = false
-      this.julianStore.julianDateError = r.error ?? I18n.t('julian_date_invalid')
-    })
-  }
-
-  private adjustJulianDate(scale: string, direction: number): void {
-    const text = scale === 'mjd' ? this.julianStore.modifiedJulianDayInput : this.julianStore.julianDayInput
-    const value = Number(text)
-    if (!Number.isFinite(value)) {
-      this.julianStore.julianDateError = I18n.t('julian_date_invalid')
-      return
-    }
-    const adjusted = value + direction * 0.00001
-    if (scale === 'mjd') this.julianStore.modifiedJulianDayInput = adjusted.toFixed(5)
-    else this.julianStore.julianDayInput = adjusted.toFixed(5)
-    this.applyJulianDateInput(scale)
-  }
 
   /**
    * 时间类操作后刷新「时间/速度」显示。
@@ -11737,170 +11361,9 @@ private loadPlanetPositions(): void {
     else if (group === 'startup') this.setStartupTimeSetting('startupMode', value)
   }
 
-
-
   /** 面板标题行的时分秒：从 timeStore.observationTimeText 拆出第一个空格之后的部分。 */
   /** 面板副标题行的年月日（附带当前时间速率）。 */
   /** 图层开关的统一写回：setSkyDisplay* 走 setSkyDisplaySetting，其余带 cmd 的走 setBridgeFlag，
    *  无 cmd 的走 setLayer；与原 @Builder switchRow 的 onChange 分派逐字等价（含 flashHint 提示）。 */
-  private applyLayerSwitch(actionId: string, cmd: string, value: boolean): void {
-    if (cmd.length > 0) {
-      if (cmd.indexOf('setSkyDisplay') === 0) {
-        this.setSkyDisplaySetting(actionId, value)
-      } else {
-        this.setBridgeFlag(cmd, value)
-      }
-    } else {
-      this.setLayer(actionId, value)
-    }
-    this.flashHint(I18n.t(value ? 'msg_shown' : 'msg_hidden'))
-  }
-
-  private layerTabItems(): TabItem[] {
-    const tabs: TabItem[] = [
-      { label: I18n.t('v0000'), id: 0 },
-      { label: I18n.t('v0001'), id: 1 },
-      { label: I18n.t('v0002'), id: 2 },
-      { label: I18n.t('v0003'), id: 3 },
-      { label: I18n.t('v0004'), id: 4 },
-      { label: I18n.t('v0005'), id: 5 }
-    ]
-    if (!OFFLINE_APPGALLERY_BUILD) {
-      tabs.push({ label: I18n.t('v0006'), id: 6 })
-    }
-    return tabs
-  }
-
-  private markingLayerStates(enabled: boolean): Array<LayerPresetState> {
-    const states: Array<LayerPresetState> = []
-    for (const actionId of MARKING_LAYER_ACTION_IDS) {
-      states.push({ id: actionId, enabled: enabled })
-    }
-    return states
-  }
-
-  private layerPresetStates(enabled: boolean): Array<LayerPresetState> {
-    const states = this.markingLayerStates(enabled)
-    for (const actionId of CONTENT_LAYER_ACTION_IDS) {
-      states.push({ id: actionId, enabled: enabled })
-    }
-    return states
-  }
-
-  private applyLayerStates(states: Array<LayerPresetState>, successMessage: string): void {
-    this.callInteractive('setActionStates', JSON.stringify(states), (response: StellariumBridgeResponse) => {
-      if (response.ok === true) {
-        this.refreshState()
-        this.flashHint(successMessage)
-      } else {
-        this.flashHint('图层设置未能应用，请重试。')
-      }
-    })
-  }
-
-  private clearMarkingLayers(): void {
-    this.applyLayerStates(this.markingLayerStates(false), '已清除全部坐标与标记。')
-  }
-
-  private applyLayerPreset(preset: string): void {
-    let states: Array<LayerPresetState> = this.layerPresetStates(false)
-    if (preset === 'clean') {
-      states.push(
-        { id: 'actionShow_Stars', enabled: true }, { id: 'actionShow_Stars_Labels', enabled: false },
-        { id: 'actionShow_Planets', enabled: true }, { id: 'actionShow_Planets_Labels', enabled: false },
-        { id: 'actionShow_Planets_Hints', enabled: false },
-        { id: 'actionShow_Nebulas', enabled: true }, { id: 'actionShow_MilkyWay', enabled: true },
-        { id: 'actionShow_Constellation_Lines', enabled: false }, { id: 'actionShow_Constellation_Labels', enabled: false },
-        { id: 'actionShow_Constellation_Boundaries', enabled: false }, { id: 'actionShow_Constellation_Art', enabled: false },
-        { id: 'actionShow_Atmosphere', enabled: true }, { id: 'actionShow_Ground', enabled: true }
-      )
-    } else if (preset === 'observe') {
-      states.push(
-        { id: 'actionShow_Stars', enabled: true }, { id: 'actionShow_Stars_Labels', enabled: true },
-        { id: 'actionShow_Planets', enabled: true }, { id: 'actionShow_Planets_Labels', enabled: true },
-        { id: 'actionShow_Planets_Hints', enabled: true }, { id: 'actionShow_Planets_Orbits', enabled: true },
-        { id: 'actionShow_Nebulas', enabled: true }, { id: 'actionShow_DSO_Textures', enabled: true },
-        { id: 'actionShow_MilkyWay', enabled: true }, { id: 'actionShow_Constellation_Lines', enabled: true },
-        { id: 'actionShow_Constellation_Labels', enabled: true }, { id: 'actionShow_Constellation_Boundaries', enabled: false },
-        { id: 'actionShow_Constellation_Art', enabled: false }, { id: 'actionShow_Atmosphere', enabled: false },
-        { id: 'actionShow_Ground', enabled: false }, { id: 'actionShow_Fog', enabled: false },
-        { id: 'actionShow_Cardinal_Points', enabled: true }, { id: 'actionShow_Equatorial_Grid', enabled: true },
-        { id: 'actionShow_Ecliptic_Line', enabled: true }, { id: 'actionShow_Meridian_Line', enabled: true },
-        { id: 'actionShow_Horizon_Line', enabled: true }, { id: 'actionShow_FOV_Center_Marker', enabled: true }
-      )
-    } else {
-      states.push(
-        { id: 'actionShow_Stars', enabled: true }, { id: 'actionShow_Stars_Labels', enabled: false },
-        { id: 'actionShow_Planets', enabled: false }, { id: 'actionShow_Planets_Labels', enabled: false },
-        { id: 'actionShow_Planets_Hints', enabled: false },
-        { id: 'actionShow_Nebulas', enabled: true }, { id: 'actionShow_MilkyWay', enabled: true },
-        { id: 'actionShow_Constellation_Lines', enabled: false }, { id: 'actionShow_Constellation_Labels', enabled: false },
-        { id: 'actionShow_Constellation_Boundaries', enabled: false }, { id: 'actionShow_Constellation_Art', enabled: false },
-        { id: 'actionShow_Atmosphere', enabled: false }, { id: 'actionShow_Ground', enabled: false }
-      )
-    }
-    this.applyLayerStates(states, preset === 'clean' ? '已应用纯净星空图层。' : (preset === 'observe' ? '已应用观测辅助图层。' : '已应用摄影构图图层。'))
-  }
-
-  private selectViewTab(tabId: number): void {
-    if (tabId === this.viewTab) return
-    const direction = tabId > this.viewTab ? 1 : -1
-    const transitionId = ++this.viewTabTransitionId
-    hilog.info(0x0000, 'StellariumArkUI', '[layer-transition] begin id=%{public}d from=%{public}d to=%{public}d', transitionId, this.viewTab, tabId)
-    this.getUIContext().animateTo({ duration: 100, curve: Curve.EaseIn, onFinish: () => {
-      if (transitionId !== this.viewTabTransitionId) return
-      this.viewTab = tabId
-      if (tabId === 4) this.layerViewStore.loadLandscapeList()
-      this.viewTabContentOffsetX = direction * 10
-      hilog.info(0x0000, 'StellariumArkUI', '[layer-transition] swap id=%{public}d tab=%{public}d', transitionId, tabId)
-      this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
-        if (transitionId !== this.viewTabTransitionId) return
-        this.viewTabContentOpacity = 1
-        this.viewTabContentOffsetX = 0
-        this.syncSkyCultureTimeFollowTimer()
-        hilog.info(0x0000, 'StellariumArkUI', '[layer-transition] finish id=%{public}d tab=%{public}d', transitionId, tabId)
-      })
-    } }, () => {
-      this.viewTabContentOpacity = 0
-      this.viewTabContentOffsetX = (0 - direction) * 8
-    })
-  }
-
-  private selectConfigTab(tabId: number): void {
-    if (tabId === this.configTab) return
-    const direction = tabId > this.configTab ? 1 : -1
-    const transitionId = ++this.configTabTransitionId
-    hilog.info(0x0000, 'StellariumArkUI', '[settings-transition] begin id=%{public}d from=%{public}d to=%{public}d', transitionId, this.configTab, tabId)
-    this.getUIContext().animateTo({ duration: 90, curve: Curve.EaseIn, onFinish: () => {
-      if (transitionId !== this.configTabTransitionId) return
-      this.configTab = tabId
-      this.configTabContentOffsetX = direction * 8
-      if (tabId === 5) {
-        this.scriptStore.loadScriptList()
-        this.scriptStore.loadRecordings()
-        this.scriptStore.loadVideoRecordingState()
-      } else if (tabId === 6) {
-        this.pluginStore.loadPluginList()
-      }
-      hilog.info(0x0000, 'StellariumArkUI', '[settings-transition] swap id=%{public}d tab=%{public}d', transitionId, tabId)
-      this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
-        if (transitionId !== this.configTabTransitionId) return
-        this.configTabContentOpacity = 1
-        this.configTabContentOffsetX = 0
-        hilog.info(0x0000, 'StellariumArkUI', '[settings-transition] finish id=%{public}d tab=%{public}d', transitionId, tabId)
-      })
-    } }, () => {
-      if (transitionId !== this.configTabTransitionId) return
-      this.configTabContentOpacity = 0
-      this.configTabContentOffsetX = (0 - direction) * 8
-    })
-  }
-
-
-
-
-
-
-
 
 }

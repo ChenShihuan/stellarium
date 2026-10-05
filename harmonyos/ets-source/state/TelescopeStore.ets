@@ -470,4 +470,17 @@ export class TelescopeStore {
     values.sort((left: number, right: number) => left - right)
     return values
   }
+
+  // D16（PLAN §15 D 轨道 / STATE-REVIEW §10.2 第 7 法）：赤道仪开关持久化并入本 store
+  //（equatorialMount 字段即在本 store；原宿主 persistEquatorialMount 逐字迁入，
+  //  AppStorage 读写不属 NAPI，store 内直接完成）。
+  persistEquatorialMount(): void {
+    let obj: Record<string, boolean | string> = {}
+    const cur = AppStorage.get<string>('stellariumSettings')
+    if (cur) {
+      try { obj = JSON.parse(cur) as Record<string, boolean | string> } catch (e) { }
+    }
+    obj['equatorialMount'] = this.equatorialMount
+    AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
+  }
 }

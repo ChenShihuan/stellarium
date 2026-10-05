@@ -1454,3 +1454,36 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 - **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 3 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-detail-live-values.mjs` 7/7 全绿（第 4 用例改读控制器 + hooks 断言）；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。
 - **真机（192.168.50.108:36717）**：`Smoke: PASS`；`verify_ui` 走通「搜索 → 选中 Sirius → 详情卡 → 拖动星图」，`pidof` 存活、hilog 无 jscrash。连接线本体未目视确认（天狼在地平线下 −82°，按设计隐藏）；未走查：地平线上目标的连接线跟随与遮挡过渡动画（待真机人工）。
 
+
+#### 15.12.5 D 轨道 D2/D11/D12/D16 完成结论与度量（2026-10-05）
+
+> **背景**：D0/D1 之后并行推进 STATE-REVIEW §10.2 的四个"低风险"簇：D2 图层/视图标签、D11 SkyTexture
+> 状态观察、D12 星云纹理（三簇 P1 控制器），以及 D16 夜视模式/儒略日（P2 并入既有 store，不新建控制器）。
+> 三控制器接口沿用 D0 的 `extends BehaviorHostHooks`；本片续做被中断的 staged 文件并补齐 D16。
+
+**新增文件**
+
+- `capability/LayerController.ets`（251 行；10 法 + `viewTabTransitionId`/`configTabTransitionId` 2 字段 + `LayerHostHooks`）。
+- `capability/SkyTextureStatusController.ets`（166 行；6 法 + 4 字段 + 3 常量；定时器自持 `start()`/`stop()`）。
+- `capability/NebulaTextureController.ets`（113 行；6 法 + `NebulaTextureHostHooks`）。
+
+**修改**
+
+- `bridge/MediaPort.ets` **+9**：新增具名 `MediaImportResult` 与 `pickDocumentToDir`（D12 单文件导入）；宿主 `HostMediaPort` 具名实现（picker/`fileIo` 逐字保留）。
+- `state/NightModeStore.ets` **+56**：夜视三法 + `pendingNightMode`/`pendingNightModeUntilMs` + `attachPort`（`request('setNightMode')`）。
+- `state/JulianDateStore.ets` **+90**：儒略日三法 + `julianDateApplyInFlight` + `attachPort`/`attachHooks`（`wheel().syncFromSimulation` 与 `refreshSimTimeLight` 回注）。
+- `state/TelescopeStore.ets` **+13**：第 7 法 `persistEquatorialMount`（实测归 `equatorialMount` 所在 store）。
+- 宿主 `MainWindowNativeNode.ets`：删 29 法 + 6 字段，增 3 控制器惰性构造器、端口/hooks 接线与全部调用点改指向。
+
+**D16 判定**：STATE-REVIEW §10.2 建议并入 `sessionToolStore`/`OverlayStore`，但实测三簇分别只读写
+`nightModeStore`/`julianStore`/`telescopeStore`，按"以实测引用点为准"归各自域 store（语义唯一真源）。
+
+**度量**：宿主 **11,906 → 11,370 行（−536）**、`private` 方法 **492 → 466（−26）**、`@State private` **132 不变**；新增 3 文件、扩展 1 端口。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 8 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-plugin-panel-state` 4/4 / `test-ohos-settings-choice-motion` 4/4 / `test-ohos-startup-stars` 17/17 / `verify-ohos-julian-date` 通过（4 夹具同步改读控制器/store）；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。
+
+**真机（192.168.50.108:36717）**：图层开关（`setLayer`）+ 预设（`setActionStates`）、SkyTexture 轮询（`getDeepSkyImageStatus`）、星云刷新（`refreshNebulaTextures`）+ 开关（`setNebulaTexturesVisible`）、儒略日（`setJulianDate`）、夜视模式（`setNightMode true` → 整界面转红，`false` 复原）逐项经 hilog/截图实证；`pidof` 存活、无 jscrash。
+
+**未走查（待真机人工）**：图层面板「地景/文化」页地景加载（`viewTab===4`）；星云「导入图片」picker 路径；星云条目 `goto`/`remove`；标签切换两段动画的视觉本体。
+
+

@@ -65,5 +65,5 @@ test('CLI and touch share time response animations and semantic settings routes'
   const route = method('private openPanelFromCli(');
   assert.match(route, /settingsInformation/);
   assert.match(route, /settingsTime/);
-  assert.match(route, /this\.selectConfigTab\(panel === 'settingsInformation' \? 1 : \(panel === 'settingsTime' \? 3 : -1\)\)/);
+  assert.match(route, /this\.layerCtl\(\)\.selectConfigTab\(panel === 'settingsInformation' \? 1 : \(panel === 'settingsTime' \? 3 : -1\)\)/);
 });
