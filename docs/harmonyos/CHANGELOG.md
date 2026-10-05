@@ -1,3 +1,14 @@
+## [2026-10-01] DevEco Code - Phase 3v：详情媒体区拆分 + 媒体/模型状态搬迁
+
+- **新增 `state/ObjectMediaStore.ets`**：原宿主 25 个 `objectInspectorMedia*` / `objectInspectorModel*` `@State` 字段（解码/预热/失败/全屏/预览与模型沉浸、缩放、交互等）整体搬迁，宿主字段 + 声明同片补齐。
+- **新增 `panels/object/TabletInspectorMedia.ets`**：把 179 行零参 `@Builder tabletInspectorMedia()` 的八分支界面拆成五个小组件 —— `TabletInspectorMediaCard`（图卡）、`TabletInspectorNoticeRow`（无匹配/准备失败/解码失败三合一）、`TabletInspectorModelBlock`（离线三维模型）、`TabletInspectorProgressRow`（解码中/预热中）、`TabletInspectorFallbackVisual`（示意图，含原 56 行 `tabletInspectorFallbackVisual`）。**分支判定留在宿主**，派生值以 `@Prop` 传入，交互（预览/重试/放大/手势）用回调注入，媒体状态由组件 `@ObjectLink` 直接观察。
+- **单体行数：** 29,295 → **29,170**（`tabletInspectorMedia()` 179 → 133 行，另删 56 行 fallback builder）。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验（72 个 .ets）/ 安装启动通过；搜索 `Mars` 与 `Mars I`，详情卡媒体区由新 `TabletInspectorNoticeRow` 渲染（`本地资源解码失败` + `资源已找到，但当前设备无法显示此文件` + `重试`），点按重试后 hilog 实证回调链路真的重新发起解码：`[detail-media] retry request=textures/mars.png` → `[detail-media] decoding local image kind=model`；卡内 `时角 23h46m53.0s` / `平恒星时 8h03m33.0s` 等实时值正常刷新。
+- **踩坑记录（新增硬规则）：** 组件成员名 **不得与 `CustomComponent` 的属性方法同名** —— `@Prop background` 直接编译失败（`Property 'background' ... not assignable to base type 'CustomComponent'`），改名 `cardBackground`；`@Component` 的 `build()` 只能有一个容器根节点，原 `@Builder` 里并列的 `Stack` + `Text` 必须包进 `Column({ space: 8 })`（与调用点外层 `Column({ space: 8 })` 一致）。
+- **测试同步（本轮新增的必做项）：** 仓库里 23 个脚本按**文本切片**单体源码，状态/界面搬迁会打断它们。已跟随更新：`test-ohos-detail-image-layout`（改读组件文件 + store 路径 + 新增“宿主仍把视口高度接入组件”守卫）、`test-ohos-detail-live-values`（**同时清掉 Phase 3t 遗留的 5 处失败**：假宿主补 `objectDetailStore`）、`test-ohos-detail-model-geometry`、`test-ohos-distance-ui`、`test-ohos-information-policy`、`test-ohos-model-scroll`（触摸夹具补 store）、`test-ohos-procedural-model`、`test-ohos-search-browser`、`test-ohos-settings-choice-motion`、`test-ohos-polar-scope`（切片端点改 `skyCultureMakerDraftFromResponse`）、`verify-ohos-object-details`（共享 builder 计数 3→2 并新增“必须委托共享行组件”断言）、`verify-ohos-julian-date`（断言改 `JulianDateControls({`）。全量复跑：除下列**既有失败**外全绿。
+- **既有失败（先于本会话，未在本片处理）：** `test-ohos-privacy-startup`（11 处，夹具 `plain()` 未能剥离 `PrivacyConsent.ets` 的 import，
+ew Function 直接语法报错；该文件最后修改于 `101acf6cd3`，早于本会话）、`test-ohos-satellite-panel` test7（纯 C++ `computeOrbitPoints` 断言计数）、`verify-ohos-location-search`（脚本自身路径 bug，报 `E:\E:\...`）。
+- **恢复的设置：** 无（本片未改任何持久化设置）。
 ## [2026-10-01] DevEco Code - Phase 3u：详情行族组件化（ObjectDataRow / StructuredDetailRow / DetailSectionTitle）
 
 - **新增文件：** `panels/object/DetailRows.ets`（三个纯展示组件）。

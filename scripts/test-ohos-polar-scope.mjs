@@ -26,7 +26,7 @@ test('labels are centred, spaced, culled at UI edges and avoid other labels', ()
 });
 
 test('floating controls and manual hit routing share width and footer geometry', () => {
-  const overlay = page.slice(page.indexOf('  private polarScopeOverlay()'), page.indexOf('  private defaultSkyCultureMakerDraft()'));
+  const overlay = page.slice(page.indexOf('  private polarScopeOverlay()'), page.indexOf('  private skyCultureMakerDraftFromResponse('));
   assert.match(overlay, /width\(this.polarScopeControlWidth\(\)\)/);
   assert.match(overlay, /height\(this.polarScopeFooterHeight\(\)\)/);
   assert.match(overlay, /id\('polar-scope-center'\)/);

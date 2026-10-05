@@ -64,7 +64,7 @@ test('render integration uses physical vectors, original resolution and a thrott
   assert.match(rasterizer, /objectX \* lightX \+ objectY \* lightY \+ objectZ \* lightZ/);
   assert.doesNotMatch(ui, /objectInspectorModelIllumination|ModelPitch - deltaY/);
   assert.match(ui, /highQuality \? \(immersive \? 640 : 320\) : 224/);
-  assert.match(ui, /const immersive = this\.objectInspectorModelImmersive/);
+  assert.match(ui, /const immersive = this\.objectMediaStore\.objectInspectorModelImmersive/);
   assert.match(ui, /immersive: immersive/);
   assert.match(ui, /LastRenderTime >= 250/);
   assert.match(ui, /this\.objectInspectorModelTouchCount !== points.length/);
