@@ -181,6 +181,75 @@ Stack（根）
 > `bottomCardIndex` → `state/ObjectDetailStore.ets`；`uiLocked` → `state/ViewSettingsStore.ets`；并删死字段 `moduleList`。
 > 其余按类别与理由保留（详见 `docs/harmonyos/CHANGELOG.md` 同日条目）。
 
+##### 2.7.1.1 宿主控制器逻辑（永久保留）——§14 A2 的 A-保留组（2026-10-04，A2-3 片登记）
+
+> **子类定义**：宿主 `private` 方法，满足 §14.0 的 A 类形状（非 `void`/`Promise` 返回、名字非动作动词、
+> 无成员写 / 无 IO / 无桥 / 无路由 / 无定时器 / 无 `AppStorage`/`localStorage` / 无 `hilog`），且
+> **其全部宿主字段读取项均 ⊆ 上表 §2.7.1 的 86 个保留字段，且不读任何 store**。这类方法的输入全是
+> **宿主控制器状态**（布局分发、面板路由、转场/拖拽瞬态、坐标叠层读数等），按 §2.5"宿主是控制器"与
+> §14.3.1 的既定处置**登记为永久保留，不再评估下沉**（`this.EDGE_MARGIN` 等**未登记的只读常量**
+> 不计入保留集合，故读它的布局方法归 A2-4，不属于本子类）。
+>
+> **判据固定**：`reads(m) ⊆ §2.7.1 保留集合 ∧ reads(m) ∩ stores = ∅`（`reads` 为含被调宿主方法的
+> 传递闭包）。A2-3 开工逐名重测得 **49 个 / 210 行**（原 §14.3.1 占位值 31 系估值且有误抄，以本表为准）。
+
+| # | 方法 | 读取的保留字段 | 判据命中说明 |
+|---:|---|---|---|
+| 1 | `compactQuickIdAt` | `isExpandedLayout` `skyWidth` | 读布局分发 + 画布宽，无 store |
+| 2 | `responsiveFoldAngle` | `isFoldableDevice` `foldStatusValue` `hasUsableFoldAngle` `foldAngleValue` | 折叠屏机制字段 |
+| 3 | `catalogHealthText` | `catalogHealthLoaded` `catalogManifestPresent` | M 类跨域共用标志 |
+| 4 | `catalogHealthColor` | `catalogHealthLoaded` `catalogManifestPresent` | 同上 |
+| 5 | `bottomCardWidth` | `isExpandedLayout` `isFoldHoverLayout` `skyWidth` | 转场/布局瞬态 |
+| 6 | `locationMapWidth` | `isExpandedLayout` `skyWidth` | 同上 |
+| 7 | `dragFollowAlpha` | `isFoldTabletLayout` `isExpandedLayout` | 布局分发 |
+| 8 | `isCompactTopQuickPoint` | `isExpandedLayout` `skyWidth` | 布局分发 + 画布宽 |
+| 9 | `compactObjectPeekWidth` | `skyWidth` | 画布宽 |
+| 10 | `compactPanelUsableHeight` | `isFoldHoverLayout` `skyHeight` | 布局瞬态 |
+| 11 | `compactPanelHeight` | `isFoldHoverLayout` `skyHeight` `compactPanelSnapRatio` `compactPanelDragOffsetY` | D 类逐帧拖拽瞬态 |
+| 12 | `isCompactMorePoint` | `isExpandedLayout` `skyHeight` `skyWidth` | 布局分发 |
+| 13 | `expandedUiAllowed` | `isExpandedLayout` | 布局分发 |
+| 14 | `compactDockWidthPercent` | `isFoldHoverLayout` `panelVisible` | 布局 + 面板路由 |
+| 15 | `bottomCardHeight` | `isExpandedLayout` `skyHeight` `isFoldHoverLayout` `isFoldableDevice` `foldStatusValue` `hasUsableFoldAngle` `foldAngleValue` | 布局 + 折叠机制 |
+| 16 | `baseCompactObjectPeekX` | `skyWidth` | 画布宽 |
+| 17 | `hoverSkyPaneHeight` | `isFoldableDevice` `foldStatusValue` `hasUsableFoldAngle` `foldAngleValue` `skyHeight` | 折叠机制 + 画布高 |
+| 18 | `viewCoordinateOverlayLeft` | `skyWidth` `isExpandedLayout` `viewCoordinateOffsetX` | G 类逐帧读数 |
+| 19 | `viewCoordinateOverlayTop` | `isFoldHoverLayout` `isExpandedLayout` `viewCoordinateOffsetY` `skyHeight` | G 类逐帧读数 |
+| 20 | `clampedViewCoordinateOffsetX` | `isExpandedLayout` `skyWidth` `viewCoordinateOffsetX` | G 类逐帧读数 |
+| 21 | `clampedViewCoordinateOffsetY` | `viewCoordinateOffsetY` `skyHeight` | G 类逐帧读数 |
+| 22 | `objectDetailMarkerSize` | `fovSliderValue` | N 类投影/视场设置 |
+| 23 | `compactObjectPeekX` | `skyWidth` `cardOffsetX` | 画布宽 + F 类卡片拖拽量 |
+| 24 | `compactObjectPeekY` | `cardOffsetY` `skyHeight` | F 类卡片拖拽量 |
+| 25 | `hoverBottomCardY` | 折叠机制 + `skyHeight` + 布局 + `cardOffsetY` | 折叠 + F 类 |
+| 26 | `isHalfFoldedStatus` | `foldStatusValue` | 折叠机制 |
+| 27 | `polarScopeControlWidth` | `skyWidth` | 画布宽 |
+| 28 | `polarScopeFooterHeight` | `isExpandedLayout` | 布局分发 |
+| 29 | `viewCoordinateOverlayWidth` | `isExpandedLayout` `skyWidth` | 布局 + 画布宽 |
+| 30 | `locationMapHeight` | `isExpandedLayout` | 布局分发 |
+| 31 | `compactTopQuickX` | `skyWidth` | 画布宽 |
+| 32 | `detailCardWidth` | `isExpandedLayout` `isFoldHoverLayout` `skyWidth` | 布局分发 |
+| 33 | `detailCardHeight` | 布局分发 + `skyHeight` + 折叠机制 | 布局 + 折叠 |
+| 34 | `clampedObjectCardOffsetX` | `cardOffsetX` `skyWidth` | F 类卡片拖拽量 |
+| 35 | `clampedObjectCardOffsetY` | `cardOffsetY` `skyHeight` | F 类卡片拖拽量 |
+| 36 | `tabletInspectorWidth` | `skyWidth` | 画布宽 |
+| 37 | `baseHoverBottomCardY` | 折叠机制 + `skyHeight` + 布局 | 布局 + 折叠 |
+| 38 | `hoverConsoleTop` | 折叠机制 + `skyHeight` | 折叠 + 画布高 |
+| 39 | `hoverPanelTop` | 折叠机制 + `skyHeight` + `isFoldHoverLayout` + `compactPanelSnapRatio` `compactPanelDragOffsetY` | 折叠 + D 类逐帧 |
+| 40 | `chromeRowY` | `isExpandedLayout` `skyHeight` | 布局分发 |
+| 41 | `chromeZoomHorizontal` | `isExpandedLayout` | 布局分发 |
+| 42 | `compactDockLabelFontSize` | `isFoldHoverLayout` | 布局分发 |
+| 43 | `compactDockIconSize` | `isFoldHoverLayout` | 布局分发 |
+| 44 | `compactDockItemHeight` | `isFoldHoverLayout` | 布局分发 |
+| 45 | `compactPanelHorizontalPadding` | `isFoldHoverLayout` | 布局分发 |
+| 46 | `dockTop` | `isExpandedLayout` `skyHeight` | 布局分发 |
+| 47 | `objectInspectorInlineModelSize` | `isExpandedLayout` `isFoldHoverLayout` `skyWidth` | 布局分发 |
+| 48 | `phoneChromeOpacity` | `isExpandedLayout` `isFoldHoverLayout` `panelIdleOpacity` | 布局 + D 类空闲淡出瞬态 |
+| 49 | `phoneChromeIsGlass` | `isExpandedLayout` `isFoldHoverLayout` `panelIdleGlass` | 布局 + D 类空闲淡出瞬态 |
+
+> **与 §14.3.1 A2-4/A2-6 目标表的关系**：A2-4/A2-6 示例中的 `bottomCardWidth` `objectActionBarY`（读 `EDGE_MARGIN`，非本组）
+> `locationMapWidth` `responsiveFoldAngle` `compactPanelUsableHeight` `expandedUiAllowed` `isCompactMorePoint` `dragFollowAlpha`
+> `clampedViewCoordinateOffset*` `objectDetailMarkerSize` `compactQuickIdAt` 等**同时命中本组判据**，续作按"本组永久保留、
+> A2-4/A2-6 只处理**非**保留读取项（读 `EDGE_MARGIN` / `screenSafeTopPixels` / `getUIContext` 者）"的口径收敛。
+
 ### 2.8 运行时控制流：四个引擎驱动整个文件
 
 **① 启动链（一次性瀑布）**
