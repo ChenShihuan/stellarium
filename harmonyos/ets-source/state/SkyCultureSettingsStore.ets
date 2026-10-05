@@ -16,9 +16,10 @@ import { ConfigurationOption, SkyCultureVisualColors } from '../pages/MainWindow
 // 明确**不**属于本 store（留在宿主，理由见协议 §13.1 规则 5/6）：
 //   - 文化列表与当前选择 `skyCultureList` / `skyCultureListLoading` / `skyCultures` /
 //     `currentSkyCulture` / `currentSkyCultureId` —— 跨域共享，以 @Prop 传入组件；
-//   - 进度驱动的解码结果 `skyCultureArtStates` / `skyCultureArtThumbnailPixelMaps` /
-//     `skyCultureArtPreviewPixelMap` —— 逐张图片解码渐进写入，按"高频写入不入被观察 store"留在宿主，
-//     以 @Prop 传入组件；
+//   - 进度驱动的解码结果 `skyCultureArtStates` / `skyCultureArtThumbnailPixelMaps` —— 逐张图片解码渐进
+//     写入，按"高频写入不入被观察 store"留在宿主，以 @Prop 传入组件；
+//     （Phase 5c 例外：单张大图 `artPreviewPixelMap` 已收进 `SkyCultureViewStore`，供预览叠层以
+//     @ObjectLink 引用语义渲染 —— @Prop 会拷贝 PixelMap 导致 Image.onError。）
 //   - Canvas 绘图上下文与画布尺寸 `skyCultureMapContext*` / `skyCultureMapRender*` ——
 //     由宿主 `drawSkyCultureTerritoryMap()` 持有并回注；
 //   - 定时器 / 请求序号 / 锚点校正字段；
