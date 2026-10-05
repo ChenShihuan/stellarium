@@ -212,7 +212,7 @@ import {
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
   HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS, TonightPlanetRow,
   StarCatalogStatusResponse, GyroGuideProjection, SkyUiObstacle, BookmarkItem,
-  BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, OFFLINE_APPGALLERY_BUILD,
+  BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
@@ -1421,7 +1421,8 @@ export struct WindowNativeNode {
           bridgeSyncStarted: (): boolean => this.bridgeSyncStarted,
           setBridgeSyncStarted: (value: boolean): void => { this.bridgeSyncStarted = value },
           selftestEnabled: (): boolean => this.SELFTEST,
-          runSelftest: (): void => this.selfTestAllActions()
+          runSelftest: (): void => this.selfTestAllActions(),
+          restoreObserverLocation: (): void => { this.restoreObserverLocation() }
         },
         this.skyCultureViewStore, this.pluginStore, this.nightModeStore, this.telescopeStore,
         this.gyroStore, this.languageStore, this.audioStore, this.viewSettingsStore,
@@ -1855,6 +1856,9 @@ export struct WindowNativeNode {
       setSkyCultureObserverLatitude: (value: number): void => { this.skyCultureSettingsStore.skyCultureObserverLatitude = value },
       setObserverPlanet: (value: string): void => { this.sessionToolStore.observerPlanet = value }
     })
+    // 启动恢复上次观测点（含 GPS 定点）：不再每次重启回退引擎默认北京。引擎未就绪由
+    // setLocation 内的 callNativeWhenReady 重试兜底。
+    this.restoreObserverLocation()
     this.timeStore.attachPort(hostPort, () => {})
     this.timeStore.attachHooks({
       syncNightModeFromEngine: (engineNight: boolean): void => this.syncNightModeFromEngine(engineNight),
@@ -3305,6 +3309,59 @@ export struct WindowNativeNode {
     const store = await preferences.getPreferences(ctx, SEARCH_HISTORY_STORE)
     await store.put('history', json)
     await store.flush()
+  }
+
+  // ===== 观测点持久化（@ohos.data.preferences）：GPS / 选点后的位置跨重启保留 =====
+  // 原实现只把位置推给引擎、不落本地存储，重启后引擎回退默认（北京）。这里在每次 setLocation
+  // 后落盘，并在启动时静默重建。
+  private async saveObserverLocationToStorage(): Promise<void> {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const store = await preferences.getPreferences(ctx, LOCATION_STORE)
+      const rec: ObserverLocationRecord = {
+        name: this.locationPickerStore.locationPickerName,
+        latitude: this.locationPickerStore.locationPickerLatitude,
+        longitude: this.locationPickerStore.locationPickerLongitude,
+        altitude: this.locationPickerStore.locationPickerAltitude,
+        planet: this.sessionToolStore.observerPlanet
+      }
+      await store.put('location', JSON.stringify(rec))
+      await store.flush()
+    } catch (e) {
+      hilog.warn(0xD002, 'Stellarium', 'save observer location failed: %{public}s', String(e))
+    }
+  }
+
+  private async readObserverLocationStorage(): Promise<string> {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const store = await preferences.getPreferences(ctx, LOCATION_STORE)
+      return (await store.get('location', '')) as string
+    } catch (e) {
+      return ''
+    }
+  }
+
+  // 启动恢复：读持久化观测点并静默重建（引擎就绪由 setLocation 内的 callNativeWhenReady 重试兜底）。
+  private async restoreObserverLocation(): Promise<void> {
+    const json = await this.readObserverLocationStorage()
+    if (json.length === 0) {
+      return
+    }
+    let rec: ObserverLocationRecord | undefined = undefined
+    try {
+      rec = JSON.parse(json) as ObserverLocationRecord
+    } catch (e) {
+      return
+    }
+    if (rec === undefined || !Number.isFinite(rec.latitude) || !Number.isFinite(rec.longitude)) {
+      return
+    }
+    const planet = typeof rec.planet === 'string' && rec.planet.length > 0 ? rec.planet : 'Earth'
+    const name = typeof rec.name === 'string' && rec.name.length > 0 ? rec.name : I18n.t('m_current_location')
+    const altitude = Number.isFinite(rec.altitude) ? rec.altitude : 0
+    hilog.info(0x0000, 'StellariumArkUI', '[location] restoring persisted observer location')
+    this.setLocation(name, rec.latitude, rec.longitude, altitude, planet, true)
   }
 
   // ===== 书签（C++ 桥：addBookmark / getBookmarks / deleteBookmark / gotoBookmark）=====
@@ -8509,17 +8566,21 @@ private loadPlanetPositions(): void {
 
 
 
-  private setLocation(name: string, latitude: number, longitude: number, altitude: number, planet: string = 'Earth'): void {
+  private setLocation(name: string, latitude: number, longitude: number, altitude: number, planet: string = 'Earth', silent: boolean = false): void {
     const targetPlanet = planet.length > 0 ? planet : 'Earth'
     const currentPlanet = this.sessionToolStore.observerPlanet
     // Update picker UI immediately (non-blocking, gives instant feedback)
     this.setPickerLocation(name, latitude, longitude, altitude, I18n.t('m_synced_to_sky'))
     this.sessionToolStore.observerPlanet = targetPlanet
+    // 持久化观测点：GPS / 选点后的位置跨重启保留（否则重启回退引擎默认北京）。
+    this.saveObserverLocationToStorage()
     this.locationText = this.locationPickerStore.locationDisplayName(name) + ' · ' + planetZh(targetPlanet)
     this.coordinateText = this.locationStore.formatDegrees(latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(longitude, 'E', 'W')
     this.altitudeText = altitude.toFixed(0) + ' m'
     this.locationPickerStore.observerTimeZone = targetPlanet === 'Earth' ? approximateTimeZoneDisplay(longitude) : I18n.t('tz_system')
-    this.flashHint(I18n.t('i0073').replace('%s', this.locationPickerStore.locationDisplayName(name)))
+    if (!silent) {
+      this.flashHint(I18n.t('i0073').replace('%s', this.locationPickerStore.locationDisplayName(name)))
+    }
     if (targetPlanet !== currentPlanet || targetPlanet !== 'Earth') {
       this.callNativeWhenReady('setObserverPlanet', `${targetPlanet}|${latitude}|${longitude}|${altitude}`, (r: StellariumBridgeResponse) => {
         if (r.ok === true) {
