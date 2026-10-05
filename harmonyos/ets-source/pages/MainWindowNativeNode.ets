@@ -103,6 +103,11 @@ import { TimeJumpActions } from '../panels/time/TimeJumpActions'
 import { ManualTimeBlock } from '../panels/time/ManualTimeBlock'
 import { TimeWheelStore } from '../state/TimeWheelStore'
 import { TimeWheelScrubber } from '../panels/time/TimeWheelScrubber'
+import { OverlayStore } from '../state/OverlayStore'
+import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
+import { ViewCoordinateSettings } from '../panels/view/ViewCoordinateSettings'
+import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
+import { ObjectDetailConnectorLayer } from '../panels/overlay/ObjectDetailConnectorLayer'
 
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
@@ -180,7 +185,6 @@ export struct WindowNativeNode {
   private languageSwitchTimer: number = -1
   @State private cardOffsetX: number = 0
   @State private cardOffsetY: number = 0
-  @State private objectDetailConnectorVisible: boolean = true
   @State private objectDetailConnectorX: number = 0
   @State private objectDetailConnectorY: number = 0
   @State private objectDetailConnectorLength: number = 0
@@ -751,9 +755,6 @@ export struct WindowNativeNode {
   // The gyro control itself becomes a live compass while it is enabled.
   @State private liveMode: boolean = true
   @State private currentFovText: string = '--'
-  @State private viewCoordinatesVisible: boolean = false
-  @State private viewCoordinateFamily: string = 'equatorial'
-  @State private viewEquatorialEpoch: string = 'j2000'
   @State private viewCoordinatePrimaryText: string = '--'
   @State private viewCoordinateSecondaryText: string = '--'
   @State private viewCoordinateOffsetX: number = 0
@@ -799,16 +800,8 @@ export struct WindowNativeNode {
   // 望远镜/目镜配置（Oculars）：状态已迁入 TelescopeStore（Phase 3al）；加载请求序号由宿主自持
   @State private telescopeStore: TelescopeStore = new TelescopeStore()
   private ocularLoadRequestId: number = 0
-  @State private pointerCoordinatesLoading: boolean = false
-  @State private pointerCoordinatesStatus: string = ''
-  @State private pointerCoordinatesEnabled: boolean = false
-  @State private pointerCoordinatesStartup: boolean = false
-  @State private pointerCoordinatesButton: boolean = false
-  @State private pointerCoordinatesConstellation: boolean = false
-  @State private pointerCoordinatesCrossedLines: boolean = false
-  @State private pointerCoordinatesElongation: boolean = false
-  @State private pointerCoordinatesSystem: string = 'RaDecJ2000'
-  @State private pointerCoordinatesPlace: string = 'TopCenter'
+  // 视图/叠层域（指针坐标插件 + 视图中心坐标叠层 + 天体详情指向线）：状态已迁入 OverlayStore（Phase 3an）
+  @State private overlayStore: OverlayStore = new OverlayStore()
   @State private mosaicCameraEnabled: boolean = false
   @State private mosaicCameraNames: string[] = []
   @State private mosaicCameraCurrent: string = ''
@@ -1966,10 +1959,10 @@ export struct WindowNativeNode {
         }
         if (saved.musicEnabled !== undefined) { this.musicEnabled = saved.musicEnabled as boolean }
         if (saved.useMetricUnits !== undefined) { this.useMetricUnits = saved.useMetricUnits as boolean }
-        if (saved.viewCoordinatesVisible !== undefined) { this.viewCoordinatesVisible = saved.viewCoordinatesVisible as boolean }
-        if (saved.viewCoordinateFamily !== undefined) { this.viewCoordinateFamily = saved.viewCoordinateFamily as string }
-        if (saved.viewEquatorialEpoch !== undefined) { this.viewEquatorialEpoch = saved.viewEquatorialEpoch as string }
-        if (saved.objectDetailConnectorVisible !== undefined) { this.objectDetailConnectorVisible = saved.objectDetailConnectorVisible as boolean }
+        if (saved.viewCoordinatesVisible !== undefined) { this.overlayStore.viewCoordinatesVisible = saved.viewCoordinatesVisible as boolean }
+        if (saved.viewCoordinateFamily !== undefined) { this.overlayStore.viewCoordinateFamily = saved.viewCoordinateFamily as string }
+        if (saved.viewEquatorialEpoch !== undefined) { this.overlayStore.viewEquatorialEpoch = saved.viewEquatorialEpoch as string }
+        if (saved.objectDetailConnectorVisible !== undefined) { this.overlayStore.objectDetailConnectorVisible = saved.objectDetailConnectorVisible as boolean }
         const savedAstroTab = Number(saved.astroTab)
         if (Number.isInteger(savedAstroTab) && savedAstroTab >= 0 && savedAstroTab <= 9) {
           this.astroTab = savedAstroTab
@@ -2012,10 +2005,10 @@ export struct WindowNativeNode {
       selectedLanguage: this.selectedLanguage,
       useMetricUnits: this.useMetricUnits,
       musicEnabled: this.musicEnabled,
-      viewCoordinatesVisible: this.viewCoordinatesVisible,
-      viewCoordinateFamily: this.viewCoordinateFamily,
-      viewEquatorialEpoch: this.viewEquatorialEpoch,
-      objectDetailConnectorVisible: this.objectDetailConnectorVisible,
+      viewCoordinatesVisible: this.overlayStore.viewCoordinatesVisible,
+      viewCoordinateFamily: this.overlayStore.viewCoordinateFamily,
+      viewEquatorialEpoch: this.overlayStore.viewEquatorialEpoch,
+      objectDetailConnectorVisible: this.overlayStore.objectDetailConnectorVisible,
       astroTab: this.astroTab.toString(),
       astroGroup: this.astroGroup.toString(),
       positionMode: this.positionMode.toString(),
@@ -2952,13 +2945,13 @@ export struct WindowNativeNode {
   }
 
   private refreshViewCenterCoordinates(): void {
-    if (!this.viewCoordinatesVisible || !this.applicationInForeground || this.viewCoordinateRequestPending) {
+    if (!this.overlayStore.viewCoordinatesVisible || !this.applicationInForeground || this.viewCoordinateRequestPending) {
       return
     }
     this.viewCoordinateRequestPending = true
     this.callNativeWhenReady('getViewCenterCoordinates', '', (result: StellariumBridgeResponse) => {
       this.viewCoordinateRequestPending = false
-      if (!this.viewCoordinatesVisible || !this.applicationInForeground) { return }
+      if (!this.overlayStore.viewCoordinatesVisible || !this.applicationInForeground) { return }
       this.viewCoordinateSnapshot = result
       this.applyViewCoordinateSnapshot()
     }, 0, 34, 8, () => {
@@ -2968,13 +2961,13 @@ export struct WindowNativeNode {
 
   private applyViewCoordinateSnapshot(): void {
     const snapshot = this.viewCoordinateSnapshot
-    if (this.viewCoordinateFamily === 'horizontal') {
+    if (this.overlayStore.viewCoordinateFamily === 'horizontal') {
       this.viewCoordinatePrimaryText = snapshot.azimuthText ?? '--'
       this.viewCoordinateSecondaryText = snapshot.altitudeText ?? '--'
-    } else if (this.viewCoordinateFamily === 'galactic') {
+    } else if (this.overlayStore.viewCoordinateFamily === 'galactic') {
       this.viewCoordinatePrimaryText = snapshot.galacticLongitude ?? '--'
       this.viewCoordinateSecondaryText = snapshot.galacticLatitude ?? '--'
-    } else if (this.viewEquatorialEpoch === 'ofDate') {
+    } else if (this.overlayStore.viewEquatorialEpoch === 'ofDate') {
       this.viewCoordinatePrimaryText = snapshot.ofDateRa ?? '--'
       this.viewCoordinateSecondaryText = snapshot.ofDateDec ?? '--'
     } else {
@@ -2992,7 +2985,7 @@ export struct WindowNativeNode {
 
   private syncViewCoordinateTimer(): void {
     this.stopViewCoordinateTimer()
-    if (!this.viewCoordinatesVisible || !this.applicationInForeground) { return }
+    if (!this.overlayStore.viewCoordinatesVisible || !this.applicationInForeground) { return }
     this.refreshViewCenterCoordinates()
     this.viewCoordinateTimer = setInterval(() => {
       this.refreshViewCenterCoordinates()
@@ -3030,46 +3023,21 @@ export struct WindowNativeNode {
   }
 
   private setViewCoordinatesVisible(visible: boolean): void {
-    this.viewCoordinatesVisible = visible
+    this.overlayStore.viewCoordinatesVisible = visible
     this.saveAppSettings()
     this.syncViewCoordinateTimer()
   }
 
   private setViewCoordinateFamily(family: string): void {
-    this.viewCoordinateFamily = family
+    this.overlayStore.viewCoordinateFamily = family
     this.applyViewCoordinateSnapshot()
     this.saveAppSettings()
   }
 
   private setViewEquatorialEpoch(epoch: string): void {
-    this.viewEquatorialEpoch = epoch
+    this.overlayStore.viewEquatorialEpoch = epoch
     this.applyViewCoordinateSnapshot()
     this.saveAppSettings()
-  }
-
-  private viewCoordinateTitle(): string {
-    if (this.viewCoordinateFamily === 'horizontal') { return I18n.t('view_coord_horizontal') }
-    if (this.viewCoordinateFamily === 'galactic') { return I18n.t('view_coord_galactic') }
-    return I18n.t('view_coord_equatorial') + ' · ' +
-      I18n.t(this.viewEquatorialEpoch === 'ofDate' ? 'view_coord_of_date' : 'view_coord_j2000')
-  }
-
-  private viewCoordinateFamilyLabel(family: string): string {
-    if (family === 'horizontal') { return I18n.t('view_coord_horizontal') }
-    if (family === 'galactic') { return I18n.t('view_coord_galactic') }
-    return I18n.t('view_coord_equatorial')
-  }
-
-  private viewCoordinatePrimaryLabel(): string {
-    if (this.viewCoordinateFamily === 'horizontal') { return I18n.t('view_coord_azimuth') }
-    if (this.viewCoordinateFamily === 'galactic') { return I18n.t('view_coord_galactic_longitude') }
-    return I18n.t('view_coord_ra')
-  }
-
-  private viewCoordinateSecondaryLabel(): string {
-    if (this.viewCoordinateFamily === 'horizontal') { return I18n.t('view_coord_altitude') }
-    if (this.viewCoordinateFamily === 'galactic') { return I18n.t('view_coord_galactic_latitude') }
-    return I18n.t('view_coord_dec')
   }
 
   private viewCoordinateOverlayWidth(): number {
@@ -4655,56 +4623,33 @@ export struct WindowNativeNode {
     this.callNativeWhenReady('resetOcularInstrument', kind, () => { this.loadOculars(false) })
   }
   private loadPointerCoordinates(): void {
-    this.pointerCoordinatesLoading = true
+    this.overlayStore.pointerCoordinatesLoading = true
     this.callNativeWhenReady('getPointerCoordinates', '', (r: StellariumBridgeResponse) => {
-      this.pointerCoordinatesLoading = false
+      this.overlayStore.pointerCoordinatesLoading = false
       const data = (r as PointerCoordinatesResponse).pointerCoordinates
       if (r.ok !== true || data === undefined) {
-        this.pointerCoordinatesStatus = I18n.t('plugin_status_unavailable')
+        this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_status_unavailable')
         return
       }
-      this.pointerCoordinatesEnabled = data.enabled
-      this.pointerCoordinatesStartup = data.enableAtStartup
-      this.pointerCoordinatesButton = data.showCoordinatesButton
-      this.pointerCoordinatesConstellation = data.showConstellation
-      this.pointerCoordinatesCrossedLines = data.showCrossedLines
-      this.pointerCoordinatesElongation = data.showElongation
-      this.pointerCoordinatesSystem = data.coordinateSystem
-      this.pointerCoordinatesPlace = data.coordinatesPlace
-      this.pointerCoordinatesStatus = ''
+      this.overlayStore.pointerCoordinatesEnabled = data.enabled
+      this.overlayStore.pointerCoordinatesStartup = data.enableAtStartup
+      this.overlayStore.pointerCoordinatesButton = data.showCoordinatesButton
+      this.overlayStore.pointerCoordinatesConstellation = data.showConstellation
+      this.overlayStore.pointerCoordinatesCrossedLines = data.showCrossedLines
+      this.overlayStore.pointerCoordinatesElongation = data.showElongation
+      this.overlayStore.pointerCoordinatesSystem = data.coordinateSystem
+      this.overlayStore.pointerCoordinatesPlace = data.coordinatesPlace
+      this.overlayStore.pointerCoordinatesStatus = ''
     }, 0, 100, 15, () => {
-      this.pointerCoordinatesLoading = false
-      this.pointerCoordinatesStatus = I18n.t('plugin_status_unavailable')
+      this.overlayStore.pointerCoordinatesLoading = false
+      this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_status_unavailable')
     })
   }
   private setPointerCoordinates(setting: string, value: string): void {
     this.callNativeWhenReady('setPointerCoordinates', setting + '|' + value, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) this.pointerCoordinatesStatus = I18n.t('plugin_action_failed')
+      if (r.ok !== true) this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed')
       this.loadPointerCoordinates()
-    }, 0, 100, 15, () => { this.pointerCoordinatesStatus = I18n.t('plugin_action_failed') })
-  }
-  private pointerCoordinateSystemLabel(key: string): ResourceStr {
-    switch (key) {
-      case 'RaDecJ2000': return I18n.t('pointer_coord_radec_j2000')
-      case 'RaDec': return I18n.t('pointer_coord_radec_date')
-      case 'HourAngle': return I18n.t('pointer_coord_hour_angle')
-      case 'Ecliptic': return I18n.t('pointer_coord_ecliptic')
-      case 'EclipticJ2000': return I18n.t('pointer_coord_ecliptic_j2000')
-      case 'AltAzi': return I18n.t('pointer_coord_altaz')
-      case 'Galactic': return I18n.t('pointer_coord_galactic')
-      case 'Supergalactic': return I18n.t('pointer_coord_supergalactic')
-      default: return key
-    }
-  }
-  private pointerCoordinatesPlaceLabel(key: string): ResourceStr {
-    switch (key) {
-      case 'TopCenter': return I18n.t('pointer_coord_place_top_center')
-      case 'TopRight': return I18n.t('pointer_coord_place_top_right')
-      case 'RightBottomCorner': return I18n.t('pointer_coord_place_bottom_right')
-      case 'NearMouseCursor': return I18n.t('pointer_coord_place_near_pointer')
-      case 'Custom': return I18n.t('pointer_coord_place_custom')
-      default: return key
-    }
+    }, 0, 100, 15, () => { this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed') })
   }
   @Builder
   private archaeoToggleRow(label: ResourceStr, enabled: boolean, setting: string) {
@@ -12859,7 +12804,7 @@ private loadPlanetPositions(): void {
         obstacles.push(obstacle)
       }
     }
-    if (this.viewCoordinatesVisible) {
+    if (this.overlayStore.viewCoordinatesVisible) {
       obstacles.push({
         label: 'view-coordinates', left: this.viewCoordinateOverlayLeft() - 8,
         top: this.viewCoordinateOverlayTop() - 8,
@@ -12898,7 +12843,7 @@ private loadPlanetPositions(): void {
   }
 
   private refreshObjectDetailConnector(): void {
-    if (!this.objectDetailConnectorVisible || !this.infoWinVisible || this.objectDetailStore.selectedStatus !== 'Selected' ||
+    if (!this.overlayStore.objectDetailConnectorVisible || !this.infoWinVisible || this.objectDetailStore.selectedStatus !== 'Selected' ||
       this.objectDetailStore.selectedName.length === 0) {
       this.clearObjectDetailConnector()
       return
@@ -14883,7 +14828,7 @@ private loadPlanetPositions(): void {
     if (this.isDockPoint(x, y)) {
       return true
     }
-    if (this.viewCoordinatesVisible) {
+    if (this.overlayStore.viewCoordinatesVisible) {
       const coordinateLeft = this.viewCoordinateOverlayLeft()
       const coordinateTop = this.viewCoordinateOverlayTop()
       const coordinateWidth = this.viewCoordinateOverlayWidth()
@@ -16301,8 +16246,16 @@ private loadPlanetPositions(): void {
               .combine(TransitionEffect.scale({ x: 0.985, y: 0.985 }).animation({ duration: 220, curve: curves.springMotion(0.55, 0.88) })))
       }
 
-      if (this.viewCoordinatesVisible) {
-        Stack() { this.viewCenterCoordinateOverlay() }
+      if (this.overlayStore.viewCoordinatesVisible) {
+        Stack() {
+          ViewCenterCoordinateOverlay({
+            store: this.overlayStore,
+            primaryText: this.viewCoordinatePrimaryText,
+            secondaryText: this.viewCoordinateSecondaryText,
+            labelWidth: this.isExpandedLayout ? 78 : 68,
+            onHandleTouch: (event: TouchEvent) => { this.handleViewCoordinateTouch(event) }
+          })
+        }
           .width(this.viewCoordinateOverlayWidth())
           .position({ x: this.viewCoordinateOverlayLeft(), y: this.viewCoordinateOverlayTop() })
           .zIndex(12)
@@ -16366,58 +16319,6 @@ private loadPlanetPositions(): void {
       .height('100%')
       .zIndex(3)
       .hitTestBehavior(HitTestMode.Default)
-  }
-
-  @Builder
-  viewCenterCoordinateOverlay() {
-    Column({ space: 4 }) {
-      Text(this.viewCoordinateTitle())
-        .fontSize(10)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('rgba(205, 228, 244, 0.72)')
-        .width('100%')
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-      Row() {
-        Text(this.viewCoordinatePrimaryLabel())
-          .fontSize(11)
-          .fontColor('rgba(205, 228, 244, 0.66)')
-          .width(this.isExpandedLayout ? 78 : 68)
-        Text(this.viewCoordinatePrimaryText)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#F2F8FC')
-          .fontFamily('monospace')
-          .layoutWeight(1)
-          .textAlign(TextAlign.End)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%')
-      Row() {
-        Text(this.viewCoordinateSecondaryLabel())
-          .fontSize(11)
-          .fontColor('rgba(205, 228, 244, 0.66)')
-          .width(this.isExpandedLayout ? 78 : 68)
-        Text(this.viewCoordinateSecondaryText)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#F2F8FC')
-          .fontFamily('monospace')
-          .layoutWeight(1)
-          .textAlign(TextAlign.End)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%')
-    }
-      .width('100%')
-      .padding({ left: 13, right: 13, top: 9, bottom: 9 })
-      .backgroundColor('rgba(7, 16, 27, 0.70)')
-      .backdropBlur(20)
-      .border({ width: 1, color: 'rgba(154, 196, 224, 0.22)' })
-      .borderRadius(UI_RADIUS_PANEL)
-      .shadow({ radius: 16, color: 'rgba(0, 0, 0, 0.24)', offsetX: 0, offsetY: 5 })
-      .hitTestBehavior(HitTestMode.Block)
-      .onTouch((event: TouchEvent) => { this.handleViewCoordinateTouch(event) })
   }
 
   @Builder
@@ -16489,7 +16390,20 @@ private loadPlanetPositions(): void {
           ))
       }
       if (this.infoWinVisible && this.objectDetailStore.selectedName.length > 0) {
-        this.objectDetailConnectorLayer()
+        ObjectDetailConnectorLayer({
+          visible: this.overlayStore.objectDetailConnectorVisible,
+          beamLength: this.objectDetailConnectorLength,
+          beamX: this.objectDetailConnectorX,
+          beamY: this.objectDetailConnectorY,
+          beamAngle: this.objectDetailConnectorAngle,
+          animateGeometry: this.objectDetailConnectorAnimateGeometry,
+          targetOnScreen: this.objectDetailConnectorTargetOnScreen,
+          targetX: this.objectDetailConnectorTargetX,
+          targetY: this.objectDetailConnectorTargetY,
+          endX: this.objectDetailConnectorEndX,
+          endY: this.objectDetailConnectorEndY,
+          markerSize: this.objectDetailMarkerSize()
+        })
         Stack() { this.unifiedObjectDetailCard() }
           .position({ x: this.detailCardX(), y: this.detailCardY() })
           .width(this.detailCardWidth())
@@ -16578,7 +16492,20 @@ private loadPlanetPositions(): void {
         .zIndex(40)
 
       if (this.infoWinVisible && this.objectDetailStore.selectedName.length > 0) {
-        this.objectDetailConnectorLayer()
+        ObjectDetailConnectorLayer({
+          visible: this.overlayStore.objectDetailConnectorVisible,
+          beamLength: this.objectDetailConnectorLength,
+          beamX: this.objectDetailConnectorX,
+          beamY: this.objectDetailConnectorY,
+          beamAngle: this.objectDetailConnectorAngle,
+          animateGeometry: this.objectDetailConnectorAnimateGeometry,
+          targetOnScreen: this.objectDetailConnectorTargetOnScreen,
+          targetX: this.objectDetailConnectorTargetX,
+          targetY: this.objectDetailConnectorTargetY,
+          endX: this.objectDetailConnectorEndX,
+          endY: this.objectDetailConnectorEndY,
+          markerSize: this.objectDetailMarkerSize()
+        })
         Stack() { this.unifiedObjectDetailCard() }
           .position({ x: this.detailCardX(), y: this.detailCardY() })
           .width(this.detailCardWidth())
@@ -16661,7 +16588,20 @@ private loadPlanetPositions(): void {
           ))
       }
       if (this.infoWinVisible && this.objectDetailStore.selectedName.length > 0) {
-        this.objectDetailConnectorLayer()
+        ObjectDetailConnectorLayer({
+          visible: this.overlayStore.objectDetailConnectorVisible,
+          beamLength: this.objectDetailConnectorLength,
+          beamX: this.objectDetailConnectorX,
+          beamY: this.objectDetailConnectorY,
+          beamAngle: this.objectDetailConnectorAngle,
+          animateGeometry: this.objectDetailConnectorAnimateGeometry,
+          targetOnScreen: this.objectDetailConnectorTargetOnScreen,
+          targetX: this.objectDetailConnectorTargetX,
+          targetY: this.objectDetailConnectorTargetY,
+          endX: this.objectDetailConnectorEndX,
+          endY: this.objectDetailConnectorEndY,
+          markerSize: this.objectDetailMarkerSize()
+        })
         Stack() { this.unifiedObjectDetailCard() }
           .position({ x: this.detailCardX(), y: this.detailCardY() })
           .width(this.detailCardWidth())
@@ -16851,7 +16791,7 @@ private loadPlanetPositions(): void {
   }
 
   private setObjectDetailConnector(enabled: boolean, syncNative: boolean = true): void {
-    this.objectDetailConnectorVisible = enabled
+    this.overlayStore.objectDetailConnectorVisible = enabled
     this.refreshObjectDetailConnector()
     this.saveAppSettings()
     if (syncNative) {
@@ -17383,59 +17323,6 @@ private loadPlanetPositions(): void {
   }
 
   // ── 天体检查器：把实时观测、坐标和完整资料分开呈现，避免字段堆成数据清单。 ──
-  @Builder
-  objectDetailConnectorLayer() {
-    if (this.objectDetailConnectorVisible && this.objectDetailConnectorLength > 0) {
-      Row()
-        .width(this.objectDetailConnectorLength)
-        .height(6)
-        .backgroundColor('rgba(111, 196, 239, 0.12)')
-        .borderRadius(3)
-        .position({ x: this.objectDetailConnectorX - this.objectDetailConnectorLength / 2, y: this.objectDetailConnectorY - 3 })
-        .rotate({ angle: this.objectDetailConnectorAngle })
-        .animation({ duration: this.objectDetailConnectorAnimateGeometry ? 180 : 0, curve: curves.springMotion(0.42, 0.86) })
-        .hitTestBehavior(HitTestMode.None)
-        .zIndex(20)
-      Row()
-        .width(this.objectDetailConnectorLength)
-        .height(1.25)
-        .backgroundColor('rgba(198, 235, 255, 0.62)')
-        .borderRadius(1)
-        .position({ x: this.objectDetailConnectorX - this.objectDetailConnectorLength / 2, y: this.objectDetailConnectorY - 0.625 })
-        .rotate({ angle: this.objectDetailConnectorAngle })
-        .animation({ duration: this.objectDetailConnectorAnimateGeometry ? 180 : 0, curve: curves.springMotion(0.42, 0.86) })
-        .hitTestBehavior(HitTestMode.None)
-        .zIndex(20)
-      if (this.objectDetailConnectorTargetOnScreen) {
-        Circle()
-          .width(this.objectDetailMarkerSize()).height(this.objectDetailMarkerSize())
-          .fill('rgba(91,147,191,0.035)')
-          .stroke('rgba(166,224,255,0.20)').strokeWidth(5)
-          .position({ x: this.objectDetailConnectorTargetX - this.objectDetailMarkerSize() / 2, y: this.objectDetailConnectorTargetY - this.objectDetailMarkerSize() / 2 })
-          .animation({ duration: this.objectDetailConnectorAnimateGeometry ? 180 : 0, curve: curves.springMotion(0.42, 0.86) })
-          .hitTestBehavior(HitTestMode.None)
-          .zIndex(20)
-        Circle()
-          .width(this.objectDetailMarkerSize() * 0.72).height(this.objectDetailMarkerSize() * 0.72)
-          .fill('rgba(0,0,0,0)')
-          .stroke('rgba(207,239,255,0.68)').strokeWidth(1.25)
-          .position({ x: this.objectDetailConnectorTargetX - this.objectDetailMarkerSize() * 0.36, y: this.objectDetailConnectorTargetY - this.objectDetailMarkerSize() * 0.36 })
-          .animation({ duration: this.objectDetailConnectorAnimateGeometry ? 180 : 0, curve: curves.springMotion(0.42, 0.86) })
-          .hitTestBehavior(HitTestMode.None)
-          .zIndex(20)
-      } else {
-        Circle()
-          .width(10).height(10)
-          .fill('rgba(180,226,250,0.34)')
-          .stroke('rgba(220,244,255,0.74)').strokeWidth(1)
-          .position({ x: this.objectDetailConnectorEndX - 5, y: this.objectDetailConnectorEndY - 5 })
-          .animation({ duration: this.objectDetailConnectorAnimateGeometry ? 180 : 0, curve: curves.springMotion(0.42, 0.86) })
-          .hitTestBehavior(HitTestMode.None)
-          .zIndex(20)
-      }
-    }
-  }
-
   @Builder
   unifiedObjectDetailCard() {
     Column() {
@@ -20078,7 +19965,15 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       }
         .width('100%')
     } else if (this.activePanel === 'pointerCoordinates') {
-      this.pointerCoordinatesPanel()
+      PointerCoordinatesPanel({
+        store: this.overlayStore,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        lineColor: this.nmBorder(),
+        onSetSetting: (setting: string, value: string) => { this.setPointerCoordinates(setting, value) }
+      })
     } else if (this.activePanel === 'commands') {
       Column({ space: 7 }) {
         Text('统一命令控制').fontSize(13).fontColor(this.nmText()).width('100%')
@@ -20140,7 +20035,17 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             .width('100%').height(0.5)
             .backgroundColor(this.nmBorder())
             .margin({ top: 6, bottom: 8 })
-          this.viewCoordinateSettings()
+            ViewCoordinateSettings({
+              store: this.overlayStore,
+              textColor: this.nmText(),
+              subColor: this.nmSub(),
+              accentColor: this.nmAccent(),
+              panelColor: this.nmBg(),
+              lineColor: this.nmBorder(),
+              onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
+              onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
+              onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) }
+            })
           Row()
             .width('100%').height(0.5)
             .backgroundColor(this.nmBorder())
@@ -20443,7 +20348,17 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           if (this.configTab === -1) {
             this.deviceAndPrivacySettings()
             Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 10, bottom: 10 })
-            this.viewCoordinateSettings()
+          ViewCoordinateSettings({
+            store: this.overlayStore,
+            textColor: this.nmText(),
+            subColor: this.nmSub(),
+            accentColor: this.nmAccent(),
+            panelColor: this.nmBg(),
+            lineColor: this.nmBorder(),
+            onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
+            onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
+            onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) }
+          })
           } else if (this.configTab === 0) {
             // Main
             this.languageRow()
@@ -20495,7 +20410,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
                 Text('详情卡指向线').fontSize(12).fontColor(this.nmText()).width('100%')
                 Text('在可见天体与详情卡之间显示细连接线').fontSize(10).fontColor(this.nmSub()).width('100%')
               }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              Toggle({ type: ToggleType.Switch, isOn: this.objectDetailConnectorVisible })
+              Toggle({ type: ToggleType.Switch, isOn: this.overlayStore.objectDetailConnectorVisible })
                 .width(42).height(24).selectedColor(this.nmAccent())
                 .onChange((value: boolean) => { this.setObjectDetailConnector(value) })
             }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
@@ -24899,138 +24814,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       .borderRadius(UI_RADIUS_CONTROL)
       .margin({ bottom: 6 })
       .animation({ duration: 180, curve: Curve.EaseOut })
-  }
-
-  @Builder
-  pointerCoordinateToggle(label: ResourceStr, enabled: boolean, setting: string) {
-    Row() {
-      Text(label).fontSize(12).fontColor(this.nmText()).layoutWeight(1).maxLines(2)
-      Toggle({ type: ToggleType.Switch, isOn: enabled })
-        .width(46).height(28).selectedColor(this.nmAccent())
-        .onChange((value: boolean) => { this.setPointerCoordinates(setting, value ? '1' : '0') })
-    }
-      .width('100%').padding({ left: 10, right: 8, top: 7, bottom: 7 })
-      .backgroundColor(enabled ? 'rgba(107,163,214,0.12)' : this.nmBg())
-      .border({ width: 1, color: enabled ? 'rgba(107,163,214,0.18)' : this.nmBorder() })
-      .borderRadius(UI_RADIUS_CONTROL)
-      .animation({ duration: 180, curve: Curve.EaseOut })
-  }
-
-  @Builder
-  pointerCoordinatesPanel() {
-    Scroll() {
-      Column({ space: 8 }) {
-        if (this.pointerCoordinatesLoading) {
-          Row({ space: 8 }) {
-            LoadingProgress().width(18).height(18).color(this.nmAccent())
-            Text(I18n.t('pointer_coord_loading')).fontSize(11).fontColor(this.nmSub())
-          }.width('100%').height(42).justifyContent(FlexAlign.Center)
-        }
-        if (this.pointerCoordinatesStatus.length > 0) {
-          Text(this.pointerCoordinatesStatus).fontSize(11).fontColor('#FFD59A').width('100%')
-            .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-            .backgroundColor('rgba(194,128,36,0.14)').borderRadius(UI_RADIUS_CONTROL)
-        }
-        Text(I18n.t('pointer_coord_description')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(3)
-        this.pointerCoordinateToggle(I18n.t('pointer_coord_enabled'), this.pointerCoordinatesEnabled, 'enabled')
-        this.pointerCoordinateToggle(I18n.t('pointer_coord_startup'), this.pointerCoordinatesStartup, 'enableAtStartup')
-        this.pointerCoordinateToggle(I18n.t('pointer_coord_toolbar'), this.pointerCoordinatesButton, 'showCoordinatesButton')
-        Text(I18n.t('pointer_coord_system')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 3 })
-        ForEach(['RaDecJ2000', 'RaDec', 'HourAngle', 'Ecliptic', 'EclipticJ2000', 'AltAzi', 'Galactic', 'Supergalactic'], (key: string) => {
-          Row() {
-            Text(this.pointerCoordinateSystemLabel(key)).fontSize(12).fontColor(this.nmText()).layoutWeight(1).maxLines(2)
-            if (this.pointerCoordinatesSystem === key) {
-              Text('✓').fontSize(15).fontColor(this.nmAccent()).width(24).textAlign(TextAlign.Center)
-            }
-          }
-            .width('100%').padding({ left: 10, right: 8, top: 7, bottom: 7 })
-            .backgroundColor(this.pointerCoordinatesSystem === key ? 'rgba(107,163,214,0.16)' : this.nmBg())
-            .border({ width: 1, color: this.pointerCoordinatesSystem === key ? 'rgba(107,163,214,0.28)' : this.nmBorder() })
-            .borderRadius(UI_RADIUS_CONTROL)
-            .onClick(() => { this.setPointerCoordinates('coordinateSystem', key) })
-        }, (key: string) => key)
-        Text(I18n.t('pointer_coord_display_place')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 3 })
-        ForEach(['TopCenter', 'TopRight', 'RightBottomCorner', 'NearMouseCursor', 'Custom'], (key: string) => {
-          Row() {
-            Text(this.pointerCoordinatesPlaceLabel(key)).fontSize(12).fontColor(this.nmText()).layoutWeight(1)
-            if (this.pointerCoordinatesPlace === key) {
-              Text('✓').fontSize(15).fontColor(this.nmAccent()).width(24).textAlign(TextAlign.Center)
-            }
-          }
-            .width('100%').padding({ left: 10, right: 8, top: 7, bottom: 7 })
-            .backgroundColor(this.pointerCoordinatesPlace === key ? 'rgba(107,163,214,0.16)' : this.nmBg())
-            .border({ width: 1, color: this.pointerCoordinatesPlace === key ? 'rgba(107,163,214,0.28)' : this.nmBorder() })
-            .borderRadius(UI_RADIUS_CONTROL)
-            .onClick(() => { this.setPointerCoordinates('coordinatesPlace', key) })
-        }, (key: string) => key)
-        Text(I18n.t('pointer_coord_details')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 }).margin({ top: 3 })
-        this.pointerCoordinateToggle(I18n.t('pointer_coord_constellation'), this.pointerCoordinatesConstellation, 'showConstellation')
-        this.pointerCoordinateToggle(I18n.t('pointer_coord_crossed_lines'), this.pointerCoordinatesCrossedLines, 'showCrossedLines')
-        this.pointerCoordinateToggle(I18n.t('pointer_coord_elongation'), this.pointerCoordinatesElongation, 'showElongation')
-      }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 12 })
-    }
-      .width('100%').layoutWeight(1).scrollBar(BarState.Auto).scrollBarWidth(4).scrollBarColor('#33FFFFFF')
-  }
-
-  @Builder
-  viewCoordinateSettings() {
-    Column({ space: 7 }) {
-      Text(I18n.t('view_coord_center_title'))
-        .fontSize(13)
-        .fontColor(this.nmText())
-        .width('100%')
-      Row() {
-        Column({ space: 2 }) {
-          Text(I18n.t('view_coord_show_on_screen')).fontSize(13).fontColor(this.nmText()).width('100%')
-          Text(I18n.t('view_coord_show_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2)
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Toggle({ type: ToggleType.Switch, isOn: this.viewCoordinatesVisible })
-          .width(46)
-          .height(28)
-          .selectedColor(this.nmAccent())
-          .onChange((value: boolean) => { this.setViewCoordinatesVisible(value) })
-      }
-        .width('100%')
-        .padding({ left: 10, right: 8, top: 7, bottom: 7 })
-        .backgroundColor(this.viewCoordinatesVisible ? 'rgba(107, 163, 214, 0.12)' : this.nmBg())
-        .border({ width: 1, color: this.viewCoordinatesVisible ? 'rgba(107, 163, 214, 0.18)' : this.nmBorder() })
-        .borderRadius(UI_RADIUS_CONTROL)
-
-      Text(I18n.t('view_coord_system')).fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-      Row({ space: 6 }) {
-        ForEach(['equatorial', 'horizontal', 'galactic'], (family: string) => {
-          Text(this.viewCoordinateFamilyLabel(family))
-            .fontSize(11)
-            .fontColor(this.viewCoordinateFamily === family ? '#FFFFFFFF' : this.nmSub())
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .height(30)
-            .padding({ top: 6 })
-            .backgroundColor(this.viewCoordinateFamily === family ? this.nmAccent() : this.nmBg())
-            .borderRadius(UI_RADIUS_CONTROL)
-            .animation({ duration: 180, curve: Curve.EaseOut })
-            .onClick(() => { this.setViewCoordinateFamily(family) })
-        }, (family: string) => family)
-      }.width('100%')
-
-      if (this.viewCoordinateFamily === 'equatorial') {
-        Row({ space: 6 }) {
-          ForEach(['j2000', 'ofDate'], (epoch: string) => {
-            Text(I18n.t(epoch === 'j2000' ? 'view_coord_j2000' : 'view_coord_of_date'))
-              .fontSize(11)
-              .fontColor(this.viewEquatorialEpoch === epoch ? '#FFFFFFFF' : this.nmSub())
-              .textAlign(TextAlign.Center)
-              .layoutWeight(1)
-              .height(30)
-              .padding({ top: 6 })
-              .backgroundColor(this.viewEquatorialEpoch === epoch ? this.nmAccent() : this.nmBg())
-              .borderRadius(UI_RADIUS_CONTROL)
-              .animation({ duration: 180, curve: Curve.EaseOut })
-              .onClick(() => { this.setViewEquatorialEpoch(epoch) })
-          }, (epoch: string) => epoch)
-        }.width('100%')
-      }
-    }.width('100%').margin({ bottom: 8 })
   }
 
   private panelTitle(): ResourceStr {
