@@ -42,6 +42,9 @@ import { EquationOfTimeBlock } from '../panels/time/EquationOfTimeBlock'
 import { EquationOfTimeStore } from '../state/EquationOfTimeStore'
 import { DeltaTStore } from '../state/DeltaTStore'
 import { DeltaTSettingsBlock } from '../panels/time/DeltaTSettingsBlock'
+import { TimeSettingsStore } from '../state/TimeSettingsStore'
+import { TimeSettingsSection } from '../panels/settings/TimeSettingsSection'
+import { SettingsChoiceButton } from '../common/ui/SettingsChoiceButton'
 import { TimeWheelStore } from '../state/TimeWheelStore'
 import { TimeWheelScrubber } from '../panels/time/TimeWheelScrubber'
 
@@ -438,8 +441,7 @@ export struct WindowNativeNode {
   @State private dsoTextures: boolean = true
   @State private viewTab: number = 0  // View面板子标签索引
   @State private configTab: number = 0  // 统一设置面板子标签索引；默认显示主设置
-  @State private configDateFormat: string = 'yyyymmdd'
-  @State private configTimeFormat: string = '24h'
+  @State private timeSettingsStore: TimeSettingsStore = new TimeSettingsStore()
   @State private configDitheringMode: string = 'Color888'
   @State private ephemerisDe430Available: boolean = false
   @State private ephemerisDe431Available: boolean = false
@@ -452,11 +454,6 @@ export struct WindowNativeNode {
   @State private informationMode: string = 'default'
   @State private informationCustomMask: number = 0
   @State private informationSettingPending: boolean = false
-  @State private startupTimeMode: string = 'actual'
-  @State private startupTimeStop: boolean = false
-  @State private startupTodayTime: string = '12:00:00'
-  @State private startupPresetLocalTime: string = ''
-  @State private timeSettingsZone: string = ''
   @State private timeSettingsPending: boolean = false
   @State private deltaTStore: DeltaTStore = new DeltaTStore()
   @State private presetSkyTime: number = 0
@@ -5913,10 +5910,10 @@ export struct WindowNativeNode {
 
   private loadConfigurationSettings(): void {
     this.callInteractive('getDateFormat', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.format !== undefined) { this.configDateFormat = r.format as string }
+      if (r.ok === true && r.format !== undefined) { this.timeSettingsStore.configDateFormat = r.format as string }
     })
     this.callInteractive('getTimeFormat', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.format !== undefined) { this.configTimeFormat = r.format as string }
+      if (r.ok === true && r.format !== undefined) { this.timeSettingsStore.configTimeFormat = r.format as string }
     })
     this.callInteractive('getConfigString', 'astronomy/flag_use_km_for_distance', (r: StellariumBridgeResponse) => {
       if (r.ok === true && r.value !== undefined) {
@@ -6051,17 +6048,17 @@ export struct WindowNativeNode {
   private applyTimeSettings(result: StellariumBridgeResponse): void {
     if (result.ok !== true) return
     this.getUIContext().animateTo({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }, () => {
-      this.startupTimeMode = result.startupTimeMode ?? this.startupTimeMode
+      this.timeSettingsStore.startupTimeMode = result.startupTimeMode ?? this.timeSettingsStore.startupTimeMode
       this.deltaTStore.deltaTAlgorithm = result.deltaTAlgorithm ?? this.deltaTStore.deltaTAlgorithm
     })
-    this.startupTimeStop = result.startupTimeStop ?? this.startupTimeStop
-    this.startupTodayTime = result.todayTime ?? this.startupTodayTime
-    this.startupPresetLocalTime = result.presetLocalTime ?? this.startupPresetLocalTime
+    this.timeSettingsStore.startupTimeStop = result.startupTimeStop ?? this.timeSettingsStore.startupTimeStop
+    this.timeSettingsStore.startupTodayTime = result.todayTime ?? this.timeSettingsStore.startupTodayTime
+    this.timeSettingsStore.startupPresetLocalTime = result.presetLocalTime ?? this.timeSettingsStore.startupPresetLocalTime
     if (result.presetSkyTime !== undefined) this.presetSkyTime = Number(result.presetSkyTime)
-    this.configDateFormat = result.dateFormat ?? this.configDateFormat
-    this.configTimeFormat = result.timeFormat ?? this.configTimeFormat
+    this.timeSettingsStore.configDateFormat = result.dateFormat ?? this.timeSettingsStore.configDateFormat
+    this.timeSettingsStore.configTimeFormat = result.timeFormat ?? this.timeSettingsStore.configTimeFormat
     this.observationTimeText = result.formattedTime ?? this.observationTimeText
-    this.timeSettingsZone = result.timeZone ?? this.timeSettingsZone
+    this.timeSettingsStore.timeSettingsZone = result.timeZone ?? this.timeSettingsStore.timeSettingsZone
     this.deltaTStore.deltaTDescription = result.deltaTDescription ?? this.deltaTStore.deltaTDescription
     this.deltaTStore.timeDeltaTAlgorithms = result.deltaTAlgorithms ?? this.deltaTStore.timeDeltaTAlgorithms
     this.deltaTStore.timeDeltaTCustom = result.deltaTCustom ?? this.deltaTStore.timeDeltaTCustom
@@ -6086,8 +6083,8 @@ export struct WindowNativeNode {
   }
 
   private setStartupTimeSetting(key: string, value: string): void {
-    if (key === 'startupStop' && (value === '1') === this.startupTimeStop) return
-    if (key === 'startupMode' && value === this.startupTimeMode) return
+    if (key === 'startupStop' && (value === '1') === this.timeSettingsStore.startupTimeStop) return
+    if (key === 'startupMode' && value === this.timeSettingsStore.startupTimeMode) return
     this.saveTimePreference('setTimeSetting', key + '|' + value.trim(),
       key === 'applyStartup' || key === 'deltaT' || key === 'deltaCustom' ? 'time_settings_applied' : 'time_settings_saved')
   }
@@ -6145,14 +6142,6 @@ export struct WindowNativeNode {
       }
       this.flashHint(I18n.t('settings_defaults_restart'))
     })
-  }
-
-  private configDateFormatLabel(value: string): string {
-    return I18n.t('time_date_' + value)
-  }
-
-  private configTimeFormatLabel(value: string): string {
-    return I18n.t('time_clock_' + value)
   }
 
   private configDitheringLabel(value: string): string {
@@ -23501,76 +23490,19 @@ private loadPlanetPositions(): void {
             this.infoRow(I18n.t('s0351'), 'Stellarium for HarmonyOS')
             this.infoRow(I18n.t('s0352'), 'OpenHarmony / HarmonyOS NEXT')
           } else if (this.configTab === 3) {
-            Text(I18n.t('time_format_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
-            Text(this.observationTimeText).fontSize(16).fontColor(this.nmText()).width('100%')
-              .padding(12).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-            Text(I18n.t('s0354')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ top: 2, bottom: 4 })
-            Text(this.configDateFormatLabel(this.configDateFormat)).fontSize(12).fontColor(this.nmText()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-              Flex({ wrap: FlexWrap.Wrap }) {
-                ForEach([
-                  { id: 'system_default', label: '系统' }, { id: 'yyyymmdd', label: '年-月-日' },
-                  { id: 'ddmmyyyy', label: '日-月-年' }, { id: 'mmddyyyy', label: '月-日-年' },
-                  { id: 'wwyyyymmdd', label: '星期 + 年-月-日' }, { id: 'wwddmmyyyy', label: '星期 + 日-月-年' },
-                  { id: 'wwmmddyyyy', label: '星期 + 月-日-年' },
-                ] as ConfigurationOption[], (option: ConfigurationOption) => {
-                  this.settingsChoiceButton('date', option.id, this.configDateFormatLabel(option.id))
-                }, (option: ConfigurationOption) => option.id)
-              }.width('100%').padding({ left: 8, right: 8 })
-            Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 7, bottom: 7 })
-            Text(I18n.t('s0353')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ bottom: 4 })
-            Text(this.configTimeFormatLabel(this.configTimeFormat)).fontSize(12).fontColor(this.nmText()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-            Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach([
-                { id: 'system_default', label: '系统' }, { id: '24h', label: '24 小时制' }, { id: '12h', label: '12 小时制' },
-              ] as ConfigurationOption[], (option: ConfigurationOption) => {
-                this.settingsChoiceButton('time', option.id, this.configTimeFormatLabel(option.id))
-              }, (option: ConfigurationOption) => option.id)
-            }.width('100%').padding({ left: 8, right: 8 })
-            Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 7, bottom: 7 })
-            Text(I18n.t('time_startup_title')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 8 }).margin({ bottom: 4 })
-            Text(I18n.t('time_startup_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
-            Text(I18n.t('time_zone_label') + this.timeSettingsZone).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
-            Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach([
-                { id: 'actual', label: '系统当前时间' }, { id: 'today', label: '今天指定时刻' }, { id: 'preset', label: '预设时间' }
-              ] as ConfigurationOption[], (option: ConfigurationOption) => {
-                this.settingsChoiceButton('startup', option.id, I18n.t('time_mode_' + option.id))
-              }, (option: ConfigurationOption) => option.id)
-            }.width('100%').padding({ left: 8, right: 8 }).margin({ bottom: 4 })
-            this.timeSettingSwitchRow(I18n.t('time_startup_pause'), this.startupTimeStop, 'startupStop')
-            if (this.startupTimeMode === 'today') {
-              Column({ space: 6 }) {
-            Text(I18n.t('time_today_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
-            Row({ space: 6 }) {
-              TextInput({ text: this.startupTodayTime, placeholder: 'HH:mm:ss' }).height(40).layoutWeight(1).fontSize(14).fontColor(this.nmText())
-                .enabled(!this.timeSettingsPending)
-                .backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).onChange((value: string) => { this.startupTodayTime = value })
-              Button(I18n.t('time_save')).fontSize(12).height(40).enabled(!this.timeSettingsPending).padding({ left: 12, right: 12 }).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.setStartupTimeSetting('todayTime', this.startupTodayTime) })
-            }.width('100%').padding({ left: 10, right: 8 }).margin({ bottom: 6 })
-              }.width('100%').transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 6 })))
-            }
-            if (this.startupTimeMode === 'preset') {
-              Column({ space: 6 }) {
-              Text(I18n.t('time_preset_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
-              TextInput({ text: this.startupPresetLocalTime, placeholder: 'YYYY-MM-DDTHH:mm:ss' })
-                .fontSize(14).height(42).width('100%').fontColor(this.nmText()).backgroundColor(this.nmInput())
-                .borderRadius(UI_RADIUS_CONTROL).enabled(!this.timeSettingsPending)
-                .onChange((value: string) => { this.startupPresetLocalTime = value })
-              Button(I18n.t('time_save')).fontSize(12).height(40).enabled(!this.timeSettingsPending)
-                .fontColor(this.nmText()).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => { this.setStartupTimeSetting('presetLocal', this.startupPresetLocalTime.replace(' ', 'T')) })
-              }.width('100%').transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 6 })))
-            }
-            Row({ space: 6 }) {
-              Text(I18n.t('time_capture_preset')).fontSize(12).fontColor(this.nmSub()).layoutWeight(1)
-              Button(I18n.t('time_save')).fontSize(12).height(40).enabled(!this.timeSettingsPending).padding({ left: 12, right: 12 }).fontColor(this.nmText()).backgroundColor(this.nmBg())
-                .borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.setStartupTimeSetting('presetCurrent', '1') })
-            }.width('100%').padding({ left: 10, right: 8 }).margin({ bottom: 8 })
-            Button(I18n.t('time_apply_startup')).fontSize(14).height(42).width('100%')
-              .enabled(!this.timeSettingsPending).fontColor(this.nmText()).backgroundColor(this.nmAccent()).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.setStartupTimeSetting('applyStartup', '1') })
-            Text(I18n.t('time_apply_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding(8)
+            TimeSettingsSection({
+              store: this.timeSettingsStore,
+              pending: this.timeSettingsPending,
+              observationTimeText: this.observationTimeText,
+              textColor: this.nmText(),
+              subColor: this.nmSub(),
+              inputColor: this.nmInput(),
+              panelColor: this.nmBg(),
+              accentColor: this.nmAccent(),
+              borderColorValue: this.nmBorder(),
+              onSelectFormat: (group: string, value: string) => { this.selectSettingsChoice(group, value) },
+              onSetStartup: (key: string, value: string) => { this.setStartupTimeSetting(key, value) }
+            })
             DeltaTSettingsBlock({
               store: this.deltaTStore,
               pending: this.timeSettingsPending,
@@ -28430,14 +28362,23 @@ private loadPlanetPositions(): void {
 
   @Builder
   informationModeButton(mode: string, labelKey: string) {
-    this.settingsChoiceButton('information', mode, I18n.t(labelKey))
+    SettingsChoiceButton({
+      label: I18n.t(labelKey),
+      active: this.informationMode === mode,
+      canPick: !this.informationSettingPending,
+      textColor: this.nmText(),
+      subColor: this.nmSub(),
+      activeColor: this.nmAccent(),
+      panelColor: this.nmBg(),
+      onPick: () => { this.selectSettingsChoice('information', mode) }
+    })
   }
 
   private settingsChoiceSelected(group: string, value: string): boolean {
     if (group === 'information') return this.informationMode === value
-    if (group === 'date') return this.configDateFormat === value
-    if (group === 'time') return this.configTimeFormat === value
-    if (group === 'startup') return this.startupTimeMode === value
+    if (group === 'date') return this.timeSettingsStore.configDateFormat === value
+    if (group === 'time') return this.timeSettingsStore.configTimeFormat === value
+    if (group === 'startup') return this.timeSettingsStore.startupTimeMode === value
     return false
   }
 
@@ -28447,20 +28388,6 @@ private loadPlanetPositions(): void {
     else if (group === 'date') this.setConfigurationDateFormat(value)
     else if (group === 'time') this.setConfigurationTimeFormat(value)
     else if (group === 'startup') this.setStartupTimeSetting('startupMode', value)
-  }
-
-  @Builder
-  settingsChoiceButton(group: string, value: string, label: ResourceStr) {
-    Button({ type: ButtonType.Normal }) {
-      Text(label).fontSize(12).fontColor(this.settingsChoiceSelected(group, value) ? this.nmText() : this.nmSub())
-    }
-      .backgroundColor(this.settingsChoiceSelected(group, value) ? this.nmAccent() : this.nmBg())
-      .animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-      .borderRadius(UI_RADIUS_CONTROL).constraintSize({ minHeight: 40, maxWidth: '100%' })
-      .padding({ left: 12, right: 12, top: 10, bottom: 10 }).margin({ right: 6, bottom: 6 })
-      .enabled(group === 'information' ? !this.informationSettingPending : !this.timeSettingsPending)
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .onClick(() => { this.selectSettingsChoice(group, value) })
   }
 
   @Builder
@@ -28483,19 +28410,6 @@ private loadPlanetPositions(): void {
       Text((key === 'ra' ? this.mosaicCameraRA : key === 'dec' ? this.mosaicCameraDec : this.mosaicCameraRotation).toFixed(2) + '°')
         .fontSize(14).fontColor(this.nmText())
     }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  timeSettingSwitchRow(label: string, enabled: boolean, key: string) {
-    Row() {
-      Text(label).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: this.startupTimeStop }).width(42).height(24).selectedColor(this.nmAccent())
-        .enabled(!this.timeSettingsPending)
-        .onChange((value: boolean) => { this.setStartupTimeSetting(key, value ? '1' : '0') })
-    }.width('100%').padding({ left: 10, right: 8, top: 5, bottom: 5 })
-      .backgroundColor(this.startupTimeStop ? this.nmBg() : Color.Transparent).border({ width: 1, color: this.nmBorder() })
-      .animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
-      .borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 5 })
   }
 
   @Builder
