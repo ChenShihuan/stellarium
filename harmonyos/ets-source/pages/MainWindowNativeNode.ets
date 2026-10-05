@@ -55,6 +55,8 @@ import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
 import { SearchFilterChips } from '../panels/search/SearchFilterChips'
 import { SearchCategoryBrowse } from '../panels/search/SearchCategoryBrowse'
+import { SearchConstellationChips } from '../panels/search/SearchConstellationChips'
+import { SearchCoordinateInput } from '../panels/search/SearchCoordinateInput'
 import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
 import { QuickChipRow } from '../panels/QuickChipRow'
 import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
@@ -130,7 +132,6 @@ export struct WindowNativeNode {
   @State private selectedTemperatureK: number = 0
   private searchHistory: string[] = []
   @State private objectCatalogCategories: CatOption[] = []
-  @State private constellationNavigationItems: ConstellationNavigationItem[] = []
   private searchPanelScroller: Scroller = new Scroller()
   @State private selectedType: string = ''
   @State private selectedStatus: string = ''
@@ -336,8 +337,6 @@ export struct WindowNativeNode {
   @State private pointAlt: string = '45'
   @State private pointAz: string = '180'
   @State private pointResult: string = ''
-  @State private coordInputRA: string = ''
-  @State private coordInputDec: string = ''
   @State private watchAlt: number = 45
   @State private watchAz: number = 180
   @State private watchTracking: boolean = false
@@ -11111,7 +11110,7 @@ private loadPlanetPositions(): void {
       }
       navigationItems.sort((left: ConstellationNavigationItem, right: ConstellationNavigationItem) =>
         left.localizedName.localeCompare(right.localizedName))
-      this.constellationNavigationItems = navigationItems
+      this.searchStore.constellationNavigationItems = navigationItems
     })
   }
 
@@ -11655,7 +11654,7 @@ private loadPlanetPositions(): void {
         this.objectCatalogCategories = []
         this.searchStore.categoryObjects = []
         this.searchStore.searchSuggestions = []
-        this.constellationNavigationItems = []
+        this.searchStore.constellationNavigationItems = []
         this.loadObjectCatalogCategories(languageSerial)
         this.loadConstellationNavigation(languageSerial)
         this.loadCategoryObjects(this.searchStore.searchCategory, selectedCategoryModuleId)
@@ -15043,8 +15042,8 @@ private loadPlanetPositions(): void {
 
   // Jump to specific RA/Dec coordinates (J2000 equatorial).
   private goToCoordinates(): void {
-    const raStr: string = this.coordInputRA.trim()
-    const decStr: string = this.coordInputDec.trim()
+    const raStr: string = this.searchStore.coordInputRA.trim()
+    const decStr: string = this.searchStore.coordInputDec.trim()
     if (raStr.length === 0 || decStr.length === 0) { return }
     // Parse RA: support formats like "5.5", "5h30m", "05:30:00"
     let raHours: number = 0
@@ -22630,57 +22629,23 @@ private loadPlanetPositions(): void {
         })
       }
 
-      // 常见星座快速导航：名称直接使用 Stellarium 当前语言的官方翻译。
       if (this.searchStore.searchFilterPage.length === 0) {
-      Row() {
-        Text(I18n.t('constellation_chips_title') + (this.constellationNavigationItems.length > 0 ? ' ' + this.constellationNavigationItems.length.toString() : ''))
-          .fontSize(10).fontColor(this.nmSub()).width(68).alignSelf(ItemAlign.Start)
-        Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-          ForEach(this.constellationNavigationItems, (item: ConstellationNavigationItem) => {
-            Text(item.localizedName).fontSize(11).fontColor(this.nmText()).padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ right: 4, bottom: 4 })
-              .onClick(() => this.openConstellationGuide(item.englishName, 'ConstellationMgr', item.localizedName))
-          }, (item: ConstellationNavigationItem) => item.englishName + '/' + this.languageRevision.toString())
-          if (this.constellationNavigationItems.length === 0) {
-            Text(I18n.t('search_catalog_loading')).fontSize(10).fontColor(this.nmSub()).padding({ left: 8, right: 8 })
-          }
-        }.layoutWeight(1).padding({ left: 2 })
-      }.width('100%').padding({ left: 10, right: 10 }).margin({ top: 6 })
-
-      // RA/Dec 坐标跳转
-      Row() {
-        Text(I18n.t('s_coord_input')).fontSize(12).fontColor(this.nmSub()).layoutWeight(1)
-        Text(I18n.t('s_coord_format_hint')).fontSize(9).fontColor('#66FFFFFF').maxLines(2).textAlign(TextAlign.End)
-      }
-      .height(32).width('100%').padding({ left: 10, right: 10 }).margin({ top: 10 })
-      Column({ space: 6 }) {
-        Row({ space: 8 }) {
-          Text(I18n.t('view_coord_ra')).fontSize(11).fontColor(this.nmSub()).width(64)
-          TextInput({ text: this.coordInputRA, placeholder: '5.5 / 5h30m' })
-            .height(36).layoutWeight(1).fontSize(13).fontColor('#E5FFFFFF')
-            .placeholderColor(this.nmSub())
-            .backgroundColor(this.nmInput())
-            .border({ width: 1, color: 'rgba(214, 238, 255, 0.16)' })
-            .borderRadius(UI_RADIUS_CONTROL)
-            .onChange((v: string) => { this.coordInputRA = v })
-        }.width('100%')
-        Row({ space: 8 }) {
-          Text(I18n.t('view_coord_dec')).fontSize(11).fontColor(this.nmSub()).width(64)
-          TextInput({ text: this.coordInputDec, placeholder: '+45.5 / -30d15m' })
-            .height(36).layoutWeight(1).fontSize(13).fontColor('#E5FFFFFF')
-            .placeholderColor(this.nmSub())
-            .backgroundColor(this.nmInput())
-            .border({ width: 1, color: 'rgba(214, 238, 255, 0.16)' })
-            .borderRadius(UI_RADIUS_CONTROL)
-            .onChange((v: string) => { this.coordInputDec = v })
-          Button(I18n.t('s_coord_go'))
-            .height(36).fontSize(12).fontColor('#FFFFFF').backgroundColor('#5B93BF')
-            .borderRadius(UI_RADIUS_CONTROL)
-            .padding({ left: 12, right: 12 })
-            .onClick(() => { this.goToCoordinates() })
-        }.width('100%')
-      }
-      .width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 12 })
+      // 常见星座快速导航 + RA/Dec 坐标跳转（均为独立组件）
+      SearchConstellationChips({
+        store: this.searchStore,
+        languageRevision: this.languageRevision,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        panelColor: this.nmBg(),
+        onOpen: (item: ConstellationNavigationItem) => { this.openConstellationGuide(item.englishName, 'ConstellationMgr', item.localizedName) }
+      })
+      SearchCoordinateInput({
+        store: this.searchStore,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        inputColor: this.nmInput(),
+        onGo: () => { this.goToCoordinates() }
+      })
       }
         }.width('100%')
       }

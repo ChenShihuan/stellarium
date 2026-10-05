@@ -1,3 +1,14 @@
+## [2026-10-01] DevEco Code - Phase 3s：星座快捷导航 + RA/Dec 坐标输入（search 域整体迁完）
+
+- **新增文件：** `panels/search/SearchConstellationChips.ets`（常见星座快捷 chips，`@ObjectLink store` + `@Prop languageRevision` + `onOpen` 回调）、`panels/search/SearchCoordinateInput.ets`（赤经/赤纬两行输入 + 跳转按钮，`@ObjectLink store` 读写输入文本 + `onGo` 回调）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— `constellationNavigationItems` / `coordInputRA` / `coordInputDec` 三个字段迁入 `SearchStore`；两块内联 UI（约 50 行）替换为组件调用，仍由宿主的 `if (searchFilterStore.searchFilterPage.length === 0)` 包裹。
+- **两条重要教训（本条最重要）：**
+  1. **替换"处于条件语句内部的块"时，起始标记不小心包含了 `if (...) {` 那一行**，而替换文本只写了两句组件调用 → **`if` 的开括号被删掉、其闭合 `}` 变成多余括号**，导致文件括号深度 −1，编译在 6,500 行之后爆出上百条 `UI component 'Row' cannot be used in this place` / `Cannot find name 'width'` / `does not meet UI component syntax`。定位方法：写脚本扫描全文件括号净深度（HEAD=0、当前=−1）→ 再逐 hunk 统计 `{`/`}` 净差额，锁定"删了一个 `{` 没补回"的 hunk。修法是补回那一行 `if (...)`。
+  2. **`arkts_check` 会漏掉这类结构失衡**：本片修改后 `arkts_check` 对四个文件均报 "No errors"，而 `devecocli build` 立刻失败。**结论：`arkts_check` 只是快速反馈，绝不可替代构建**——已确认 §13.2 协议中"第 5 步必须同时跑构建"是正确的、不可省。
+- **验证结果：** 修复后 `BUILD SUCCESSFUL`；契约校验通过（33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点，扫描 68 个文件）；真机安装启动成功，搜索面板与分类浏览工作正常。**说明：** 尾部两个块在设备上未能交互验证——面板内"目录天体"网格自身可滚动且占满可视区，`dumpLayout` 下无法把外层滚动条拖到该区域；这两个块与已验证过的同型组件（store + `@ObjectLink` + `@Prop` + 回调）结构一致，其行为一致性未单独实测，待后续真机复核。
+- **单体行数：** 29,487 → **29,380**。
+- **search 域状态：** 输入栏 / 候选列表 / 筛选器（菜单+chips+分类行）/ 分类浏览 / 星座快捷导航 / RA/Dec 坐标输入**全部迁出**，`SearchStore` 承载 21 个字段 + 1 个纯逻辑方法。**search 域完成。**
+
 ## [2026-10-01] DevEco Code - Phase 3r：搜索分类浏览（分类网格 + 目录状态），search 域主体迁完
 
 - **新增文件：** `panels/search/SearchCategoryBrowse.ets`（分类选择行 + 筛选入口 + 已选条件 chips + 「目录天体」状态文本 + 分类对象网格；`@ObjectLink store` + 8 个 `@Prop` + 9 个回调）。
