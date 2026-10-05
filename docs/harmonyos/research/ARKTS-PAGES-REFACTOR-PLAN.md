@@ -429,3 +429,26 @@ V1 `@Component` **不允许 getter 访问器**（ArkTS 转换会丢弃，存在�
 x86_64 模拟器的 UI-only 通道（见 CHANGELOG 2026-09-30 条目）能验证布局、文案、面板开关与交互，
 但**星图与引擎相关状态全部不可验**（`libstellarium.so`/`libQt6*.so` 无 x86_64 构建，时间面板显示 `--`）。
 因此 store 与面板阶段的验收矩阵必须包含**真机（Mate 80 Pro）复验**，模拟器只作为快速结构回归。
+
+### 修订 4（重要）：store + 组件的"实时刷新"路径尚未被证实，Phase 4 的 PanelHost 可能是 Phase 3 的前置
+
+2026-09-30 尝试了 Phase 3 的首两片（`BookmarkStore`+`BookmarkPanel`、`TimeStore`+`TimeSpeedChips`），
+两片都通过构建、契约校验与"状态归属"验证（组件销毁重建后状态仍在），但**都无法证明实时刷新**：
+
+- 速度 chips 抽成 `@Component`（`@ObjectLink store` + `@Prop rateText`）后点击「快进」：
+  `applySpeedStep` 确实写入 store（重开面板即显示「快进 2x」）、副标题立刻变 `2x`，
+  但**面板开着的期间 chip 标签与高亮都不变**；点「停止」同理（标签始终「停止」，未变「继续」），
+  即 `@ObjectLink` 与 `@Prop` 都没能让该子组件重渲染。该组件由 `panelContent()` 这个 `@Builder` 体创建。
+- 为排除"重构引入回归"，已 `git revert` 回原生实现再实测：**原生版本行为完全相同**
+  （副标题 `2x`、chips 仍「快进」未高亮，截图确认）。所以这是**既有现象**，不是本次重构造成的回归。
+- 推断：本工程面板的"实时刷新"由周期性定时器（`timePanelTimer` 等）写入 @State 触发，
+  Panel 重算依赖定时器 tick，而非控件自身状态变化；UI-only 模拟器下无引擎数据、定时器不产生写入，
+  因此看不到刷新。**真机上是否实时，需要一次受控实验确认。**
+
+结论与后续顺序：
+
+1. 两片已回退（`c1a4ae7dca`、`71a524ffbe`），仓库回到 Phase 1c 状态，保持"行为零变更"。
+2. 先在**真机**（引擎存活）做受控实验建立"实时刷新基线"：原生 chips 点击后是否实时更新？
+   再把同一交互换成 `@ObjectLink` 组件对比是否等价。该实验决定 (b) 方案的最终形态。
+3. 若结论是"`panelContent` 这类 @Builder 体内创建的子组件拿不到更新"，则 **Phase 4 的 `PanelHost`
+   （面板宿主改为由 `build()` 直接实例化的组件）必须提到 Phase 3 之前**，否则 store 迁移无法保证刷新等价。
