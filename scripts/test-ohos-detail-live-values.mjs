@@ -63,9 +63,11 @@ test('live merging preserves row order and static records while removing expired
   assert.deepEqual(state.objectDetailStore.selectedDetailFields, [{ key: 'tleEpoch', value: 'epoch' }]);
 });
 
-// 详情卡片的行/贴片已全部组件化（DetailRows / DetailTiles / DetailLiveRows），宿主里不再有
-// "参数化 @Builder 内部按 key 查值"的形态 —— 那正是子树首帧冻结的来源（§13.1 规则 3）。
-// 这条守卫固定"组件收已解析的值、宿主留查值逻辑"的分工。
+// 详情卡片的行/贴片已全部组件化（DetailRows / DetailTiles / DetailLiveRows / ObjectDetailTabs），
+// 宿主里不再有"参数化 @Builder 内部按 key 查值"的形态 —— 那正是子树首帧冻结的来源（§13.1 规则 3）。
+// 卡片三页整段也已搬进 ObjectDetailTabs，故下面同时检查宿主与组件文件。
+const tabs = readFileSync(new URL('../harmonyos/ets-source/panels/object/ObjectDetailTabs.ets', import.meta.url), 'utf8');
+
 test('detail rows and tiles come from components while the host keeps the lookups', () => {
   for (const wired of [
     'ObjectDataRow({ label:',
@@ -74,22 +76,23 @@ test('detail rows and tiles come from components while the host keeps the lookup
     'ObjectScheduleTile({ label:',
     'ObjectDetailTab({ label:',
     'ObjectCompactMetric({ label:',
-    'SelectedCoordinateRows({ store: this.objectDetailStore',
+    'SelectedCoordinateRows({ store: ',
     'SelectedLiveInfoRows({ store: this.objectDetailStore',
-    'ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })'
+    'ObjectDistanceNotice({ text: this.distanceText })'
   ]) {
-    assert.ok(source.includes(wired), wired);
+    assert.ok((source + tabs).includes(wired), wired);
   }
-  assert.ok(source.includes("value: this.selectedDisplayValue('selectedRise')"), 'the host resolves tile values');
+  assert.ok(tabs.includes("value: this.resolve('selectedRise')"), 'the tab components resolve tile values through the injected resolver');
   assert.ok(source.includes('active: this.bottomCardIndex ==='), 'the active tab derives from live state');
 });
 
 test('tile components receive resolved values while the host keeps the lookups', () => {
   for (const tile of ['ObjectDataTile', 'ObjectMetric', 'ObjectScheduleTile']) {
-    assert.ok(source.includes(`${tile}({ label: `), tile);
+    assert.ok((source + tabs).includes(`${tile}({ label: `), tile);
   }
-  assert.ok(source.includes("value: this.selectedDisplayValue('selectedRise')"));
+  assert.ok(tabs.includes("value: this.resolve('selectedRise')"));
   assert.ok(source.includes('ObjectDetailTab({ label:'), 'the tab bar comes from the component');
   assert.ok(source.includes('active: this.bottomCardIndex ==='), 'the active tab is derived from live state');
+  assert.ok(source.includes('resolve: (key: string) => this.selectedDisplayValue(key)'), 'the host injects the resolver');
   assert.ok(source.includes("ObjectCompactMetric({ label: I18n.t('i0007')"), 'compact metrics resolve their value in the host');
 });
