@@ -56,6 +56,7 @@ import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panel
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
 import { ObjectDetailActionsTab } from '../panels/object/ObjectDetailActionsTab'
 import { ObjectDataTile, ObjectMetric, ObjectScheduleTile, ObjectDetailTab, ObjectCompactMetric } from '../panels/object/DetailTiles'
+import { ObjectDistanceNotice, SelectedLiveInfoRows, SelectedCoordinateRow, SelectedCoordinateRows } from '../panels/object/DetailLiveRows'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
@@ -18105,26 +18106,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-  @Builder
-  selectedLiveInfoRows(compact: boolean) {
-    if (this.selectedLiveInfoVisible()) {
-      if (compact) {
-        Row() {
-          Text('时角').fontSize(10).fontColor('#8FBBD6').width(34)
-          Text(this.objectDetailStore.selectedHourAngle.length > 0 ? this.objectDetailStore.selectedHourAngle : '--')
-            .fontSize(11).fontColor('#E2F5FF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.objectDetailStore.selectedMeanSiderealTime.length > 0 ? '平恒星时 ' + this.objectDetailStore.selectedMeanSiderealTime : '平恒星时 --')
-            .fontSize(10).fontColor('#B9D9E9').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.width('100%').height(24).padding({ left: 16, right: 16 })
-      } else {
-        Column({ space: 3 }) {
-          ObjectDataRow({ label: '时角', value: this.selectedDisplayValue('selectedHourAngle') })
-          ObjectDataRow({ label: '平恒星时', value: this.selectedDisplayValue('selectedMeanSiderealTime') })
-          ObjectDataRow({ label: '视恒星时', value: this.selectedDisplayValue('selectedApparentSiderealTime') })
-        }.width('100%')
-      }
-    }
-  }
 
   private showFullObjectInspector(): void {
     this.infoWinVisible = true
@@ -18452,7 +18433,7 @@ private loadPlanetPositions(): void {
       }
         .height(24).width('100%').padding({ left: 16, right: 16, bottom: 4 })
 
-      this.selectedLiveInfoRows(true)
+      SelectedLiveInfoRows({ store: this.objectDetailStore, compact: true, visible: this.selectedLiveInfoVisible() })
 
       Row({ space: 4 }) {
         ObjectDetailTab({ label: '观测', active: this.bottomCardIndex === 0, onSelect: () => { this.selectObjectDetailTab(0) } })
@@ -18489,7 +18470,7 @@ private loadPlanetPositions(): void {
               }.width('100%').margin({ top: 2 })
             }
             if (this.objectDetailStore.selectedDistanceStatus === 'invalid_orbit' || this.objectDetailStore.selectedTleOutdated) {
-              this.objectDistanceNotice()
+              ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })
             }
             if (this.objectDetailStore.selectedInfo.length > 0) {
               Text(this.objectDetailStore.selectedInfo).fontSize(12).fontColor('#C3DDEB').lineHeight(18).width('100%')
@@ -18497,13 +18478,13 @@ private loadPlanetPositions(): void {
             }
           } else if (this.bottomCardIndex === 1) {
             Text('当前天球位置').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
-            this.objectDistanceNotice()
-            this.selectedCoordinateRows(false)
+            ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })
+            SelectedCoordinateRows({ store: this.objectDetailStore, tablet: false })
             ObjectDataRow({ label: I18n.t('i0010'), value: this.selectedDisplayValue('selectedConstellation') })
             Text('坐标会跟随时间、位置与视角更新。').fontSize(11).fontColor('#8FBBD6').lineHeight(16).width('100%').margin({ top: 4 })
           } else if (this.bottomCardIndex === 2) {
             Text('完整资料').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
-            this.objectDistanceNotice()
+            ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })
             this.tabletInspectorMedia()
             this.satellitePassesDetails(false)
             this.selectedConstellationCultureDescriptionView(false)
@@ -19687,13 +19668,6 @@ private loadPlanetPositions(): void {
     return I18n.t('distance_' + key)
   }
 
-  @Builder
-  objectDistanceNotice() {
-    if (this.objectDistanceNoticeText().length > 0) {
-      Text(this.objectDistanceNoticeText()).fontSize(11).fontColor('#AACADB').width('100%')
-        .padding(10).backgroundColor('rgba(91,147,191,0.10)').borderRadius(UI_RADIUS_CONTROL)
-    }
-  }
 
 
   private selectObjectDetailTab(index: number): void {
@@ -19715,32 +19689,7 @@ private loadPlanetPositions(): void {
   }
 
 
-  @Builder
-  selectedCoordinateRow(label: string, key: string, tablet: boolean) {
-    Row({ space: 8 }) {
-      Text(label).fontSize(tablet ? 11 : 10).fontColor('#8FBBD6')
-        .width(tablet ? 100 : 76).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text(this.selectedDisplayValue(key) || '--').fontSize(tablet ? 12 : 11).fontColor('#E0F1F8')
-        .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-    }
-      .width('100%').height(tablet ? 34 : 32).padding({ left: 10, right: 10 })
-      .backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-  }
 
-  @Builder
-  selectedCoordinateRows(tablet: boolean) {
-    Column({ space: 4 }) {
-      this.selectedCoordinateRow('地平坐标', 'selectedCoordApparentAltAz', tablet)
-      this.selectedCoordinateRow('几何地平', 'selectedCoordGeometricAltAz', tablet)
-      this.selectedCoordinateRow('赤道坐标', 'selectedCoordEq', tablet)
-      this.selectedCoordinateRow('J2000 赤道', 'selectedCoordEqJ2000', tablet)
-      this.selectedCoordinateRow('当日黄道', 'selectedCoordEcliptic', tablet)
-      this.selectedCoordinateRow('J2000 黄道', 'selectedCoordEclipticJ2000', tablet)
-      this.selectedCoordinateRow('银道坐标', 'selectedCoordGalactic', tablet)
-      this.selectedCoordinateRow('超银道坐标', 'selectedCoordSupergalactic', tablet)
-      this.selectedCoordinateRow('视差角', 'selectedCoordParallactic', tablet)
-    }.width('100%')
-  }
 
 
   private toggleSelectedObservingList(): void {
@@ -21867,7 +21816,7 @@ private loadPlanetPositions(): void {
         this.tabletInspectorMedia()
         this.satellitePassesDetails(true)
         DetailSectionTitle({ title: '坐标参考', tablet: true })
-        this.selectedCoordinateRows(true)
+        SelectedCoordinateRows({ store: this.objectDetailStore, tablet: true })
         DetailSectionTitle({ title: '实时观测', tablet: true })
         ObjectDataRow({ label: '时角', value: this.selectedDisplayValue('selectedHourAngle') })
         ObjectDataRow({ label: '平恒星时', value: this.selectedDisplayValue('selectedMeanSiderealTime') })
