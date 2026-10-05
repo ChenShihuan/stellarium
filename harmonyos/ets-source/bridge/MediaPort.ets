@@ -19,6 +19,14 @@ export enum MediaSaveResult {
   Failed = 2,
 }
 
+// 系统录屏状态（M1-B 子组②，由宿主适配器把 media.AVScreenCaptureStateCode 映射到本枚举）。
+export enum ScreenCaptureState {
+  Started = 0,
+  Canceled = 1,
+  StoppedByUser = 2,
+  Interrupted = 3,
+}
+
 export interface MediaPort {
   // 文件是否存在（对应 fileIo.accessSync）。
   fileExists(path: string): boolean
@@ -41,4 +49,23 @@ export interface MediaPort {
   saveFileAs(sourcePath: string, fileName: string, suffixLabel: string, onDone: (result: MediaSaveResult) => void): void
   // 删除文件（对应 fileIo.unlinkSync，用于截图导出后的临时文件清理）。
   deleteFile(path: string): void
+
+  // ── 屏幕录制（M1-B 子组② RecordingController）──
+  // 录屏工作目录（对应宿主 context.filesDir + '/recordings/videos'）。
+  screenVideoDir(): string
+  // 递归建目录（对应 fileIo.mkdirSync(path, true)）。
+  makeDir(path: string): void
+  // 文件字节数（对应 fileIo.statSync(path).size；异常返回 0）。
+  fileSize(path: string): number
+  // 当前是否持有活动的录屏对象（对应宿主 screenCapture !== undefined）。
+  hasActiveScreenCapture(): boolean
+  // 开始系统录屏：适配器负责 openSync / display / media.createAVScreenCaptureRecorder 与回调注册，
+  // 状态变化经 onState 上报、错误经 onError 上报；init/start 失败时 Promise reject。
+  beginScreenCapture(filePath: string, onState: (state: ScreenCaptureState) => void, onError: (message: string) => void): Promise<void>
+  // 用户主动停止：off 回调 + stopRecording + release + 关文件。
+  stopScreenCapture(): Promise<void>
+  // 收尾释放（系统已停止/取消）：off 回调 + release + 关文件（不调 stopRecording）。
+  releaseScreenCapture(): Promise<void>
+  // 保存 MP4 到相册（对应 photoAccessHelper 的 createVideoAssetRequest + applyChanges）；成功返回 true。
+  saveVideoToGallery(path: string): Promise<boolean>
 }
