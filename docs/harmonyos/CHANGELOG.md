@@ -1,3 +1,18 @@
+## [2026-10-02] DevEco Code - Phase 4d：先搬 skyCulture 叶件（7 个 private @Builder）
+
+- **目标**：把挡着 `skyCultureMaker` / `layers` 分支的一批 skyCulture / satellite 叶件先下沉为组件（参数化 `@Builder` 参数按值捕获、子树首帧后冻结，§13.1 规则 3）。本片搬 7 个（`skyCultureArtPreviewOverlay` 属 Phase 5 叠层，未动）。
+- **新增文件**：
+  - `harmonyos/ets-source/panels/skyculture/SkyCultureViewParts.ets`（265 行）：`SkyCultureSectionHeader`、`SkyCultureMetaItem`、`SkyCultureLabelSettingCard`（原 `skyCultureLabelSettingCard` + `skyCultureLabelModePicker` **合并**为一个组件，避免十几条颜色/可选项属性二次转发）、`SkyCultureFilterOption`、`SkyCultureFilterPicker`。色值、可选项、展开态、选中下标全部由宿主以 `@Prop` 传入；切换/选中经 `onToggle` / `onSelectMode` / `onPick` 回注宿主；**无 `@BuilderParam`**。
+  - `harmonyos/ets-source/panels/satellite/SatelliteGroupSelector.ets`（48 行）：原 `satelliteGroupSelector`。组名本地化直接调 `I18n.satGroup`（宿主 `satGroupZh` 是纯查表、已删）；`Scroller` 以普通成员传入（宿主仍持同一实例，`publishSatellitePanelState` 要读 `currentOffset`），事件标志读取与桥调用经 `onGroupScroll` / `onSelect` 回注。
+- **单体手术**（`pages/MainWindowNativeNode.ets`，**24,497 → 24,440，净 −57 行**）：删 7 个 `@Builder` + 死助手 `satGroupZh` / `skyCultureFilterOptionSelected`；新增宿主助手 `skyCultureFilterSelectedIndex(kind)`（原逐项选中判定改为传下标）与 `selectSkyCultureLabelMode(target,index)`（选中并收起下拉，原内联逻辑）；改写 `viewSkyCultureTab`（5 处 section header / 10 处 meta item / 4 处 label card / 2 处 filter picker）与 satellites 分支（1 处）共 **22 个调用点**；新增 2 行 import。删除一律用 `[regex]::Escape(签名)` + `@Builder` 前缀非贪婪到 `\n  }` 的正则，未用行号算术。
+- **真机（`192.168.3.95:40565`，`pidof com.cnchensh.stellarium`=52595 全程存活）**：
+  1. 图层 → **文化**标签页：`SkyCultureSectionHeader`（"文化图层 / 选择要显示的星座与辅助图层"、"选择星空文化 / …"）、`SkyCultureMetaItem` 网格（"星座边界 / 国际天文学联合会边界"、"星座图形 / 88 个"、"星群 / 92 个"…）、`SkyCultureLabelSettingCard`（"资料中的名称 / 中文译名"）逐项渲染。
+  2. **标签模式实时刷新**：点开"资料中的名称"卡片 → 下拉出现（"✓ 中文译名 / 当前"、"文化原名"），点"文化原名"→ 卡片标题**就地**由"中文译名"变"文化原名"、卡片收起；hilog 实证 `command received: "setSkyCultureLabelStyle" "info|Native"`。再点回"中文译名"复原。
+  3. **筛选器实时刷新**：点开"类型"筛选 → 选项"✓ 全部类型 / 当前"，选"传统传承"→ 卡片值变"传统传承"、底部摘要**同步**变"当前筛选：传统传承 · 全部地区 · 0 个文化"；重开时"当前"高亮已移到"传统传承"（证明 `selectedIndex` 经 `@Prop` + 含选中态的 ForEach 键实时刷新）；点回"全部类型"复原。
+  4. **卫星分组选择器**：卫星面板底部渲染本地化分组（"阿戈斯 / 北斗 / 中星"…），点"北斗"→ hilog `command received: "getSatellites" "beidou||40"`；再点一次清空 → `getSatellites "||40"`（选中态回注与桥调用链路通）。
+- **测后恢复**：标签模式 `info` 已点回索引 0（"中文译名"，与初始一致）；筛选已还原"全部类型 / 全部地区"；卫星分组清空为初始无分组。**未**保存 / 导出 / 覆盖任何文化包。
+- **脚本同步**：`test-ohos-satellite-panel.mjs` 的"分区列表前有筛选行 + 分组选择器自带滚动容器"用例改读新组件文件 `panels/satellite/SatelliteGroupSelector.ets`，并把 `this.satelliteGroupSelector()` 断言改为 `SatelliteGroupSelector(`。
+- **本片新踩的坑**：无新增雷区。复现记录：浮层**面板本身可被拖动**（§13.3）——在面板头/可点行上起手拖拽会整体移动面板，使后续 dump 坐标全变且内容滚动"失灵"，在浮层内滚动须避开面板头与可点行（本片靠关面板重开复位）。其余 7 项脚本失败均为 §13.6 环境类（4 个 `-pad` 需设备、`mist-performance` 需设备、`location-search` 路径 bug、`search` 走 macOS hdc 路径）。
 ## [2026-10-02] DevEco Code - Phase 4c：`panelContent` 第三批 5 分支抽组件（more / time / help / meteorshowers / nebulaTextures）
 
 - **范围**：Phase 4 第三批 —— 重扫 `panelContent()` 剩余分支，排除「薄调用既有组件」的 hub 类与 `layers`、`floatingPanel`/`compactPanel`（体内调用 `this.panelContent()`）后，取**最小的 5 个分支**（`more` 62 / `nebulaTextures` 69 / `time` 71 / `meteorshowers` 87 / `help` 95 行）下沉为 `panels/panels/` 组件；判定条件 `activePanel === '<name>'` 仍留宿主；**不做表驱动 `PanelHost`**、**不迁 V2**、不新建 store（展示值 `@Prop` 传入、动作回调注入）。
