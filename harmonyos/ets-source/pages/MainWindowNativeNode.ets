@@ -1148,6 +1148,9 @@ export struct WindowNativeNode {
     // §14 B1-1：望远镜/目镜域复用同一个 HostCommandPort 实例。其消费方均为 @ObjectLink，
     // 字段赋值即刷新，且该域无 publish* 发布点，故 onChanged 传空实现。
     this.telescopeStore.attachPort(hostPort, () => {})
+    // §14 B1-2：图层视图域（地景列表 / 行星轨道 / 行星轨迹）复用同一实例；消费方均为
+    // @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，onChanged 传空实现。
+    this.layerViewStore.attachPort(hostPort, () => {})
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -1484,7 +1487,7 @@ export struct WindowNativeNode {
   private runStartupBridgeTasks(): void {
     const tasks: Array<() => void> = [
       () => this.callNativeWhenReady('setLanguage', this.languageStore.selectedLanguage, () => {}),
-      () => this.loadLandscapeList(),
+      () => this.layerViewStore.loadLandscapeList(),
       () => this.callNativeWhenReady("getScriptList", "", (r) => {
         if (r.ok === true && Array.isArray(r.items)) { this.scriptStore.scriptList = r.items as string[]; this.setScriptMetadata(r.details) }
       }),
@@ -2254,7 +2257,7 @@ export struct WindowNativeNode {
         this.loadAstroTab(this.astroStore.astroTab)
       } else if (panel === 'layers') {
         this.refreshState()
-        if (this.viewTab === 4) this.loadLandscapeList()
+        if (this.viewTab === 4) this.layerViewStore.loadLandscapeList()
       } else if (panel === 'settings') {
         this.refreshState()
         this.loadCatalogHealth()
@@ -2524,19 +2527,6 @@ export struct WindowNativeNode {
   // and WITHOUT blocking the render thread. onOk receives the FRESH result.
   private callInteractive(name: string, payload: string, onOk: (r: StellariumBridgeResponse) => void, onFailure?: (r: StellariumBridgeResponse) => void): void {
     this.callNativeWhenReady(name, payload, onOk, 0, 100, 15, onFailure)
-  }
-
-  private loadLandscapeList(): void {
-    if (this.layerViewStore.landscapeLoading) return
-    this.layerViewStore.landscapeLoading = true
-    this.callNativeWhenReady('getLandscapeList', '', (r: StellariumBridgeResponse) => {
-      this.layerViewStore.landscapeLoading = false
-      if (r.ok !== true || !Array.isArray(r.items)) return
-      this.layerViewStore.landscapeList = r.items as Array<LandscapeItem>
-      this.layerViewStore.currentLandscapeId = r.current as string
-    }, 0, 100, 15, () => {
-      this.layerViewStore.landscapeLoading = false
-    })
   }
 
   private refreshViewCenterCoordinates(): void {
@@ -3538,7 +3528,7 @@ export struct WindowNativeNode {
       this.callInteractive('importLandscape', destinationPath, (r: StellariumBridgeResponse) => {
         if (r.ok === true) {
           this.flashHint(I18n.format('landscape_import_success', [String(r.id ?? fileName)]))
-          this.loadLandscapeList()
+          this.layerViewStore.loadLandscapeList()
         } else {
           this.flashHint(I18n.t('landscape_import_failed'))
         }
@@ -4453,14 +4443,6 @@ export struct WindowNativeNode {
   }
 
   // ===== 帮助面板：关于 / 日志 / 配置导入导出 =====
-  private loadLog(): void {
-    this.callNativeWhenReady('getLog', '6000', (r: StellariumBridgeResponse) => {
-      const resp = r as LogResponse
-      this.tools.logText = resp.log ?? ''
-      this.tools.logVisible = true
-    })
-  }
-
   private exportConfig(): void {
     this.callNativeWhenReady('exportConfig', '', (r: StellariumBridgeResponse) => {
       const resp = r as ExportConfigResponse
@@ -4747,19 +4729,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private loadOrbitDisplaySettings(): void {
-    this.callInteractive('getOrbitDisplaySettings', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      this.layerViewStore.orbitIsolated = r.orbitIsolated !== undefined ? r.orbitIsolated : this.layerViewStore.orbitIsolated
-      this.layerViewStore.orbitMajorPlanets = r.orbitMajorPlanets !== undefined ? r.orbitMajorPlanets : this.layerViewStore.orbitMajorPlanets
-      this.layerViewStore.orbitPlanetsOnly = r.orbitPlanetsOnly !== undefined ? r.orbitPlanetsOnly : this.layerViewStore.orbitPlanetsOnly
-      this.layerViewStore.orbitWithMoons = r.orbitWithMoons !== undefined ? r.orbitWithMoons : this.layerViewStore.orbitWithMoons
-      this.layerViewStore.orbitPermanent = r.orbitPermanent !== undefined ? r.orbitPermanent : this.layerViewStore.orbitPermanent
-      this.layerViewStore.orbitThickness = r.orbitThickness !== undefined ? r.orbitThickness : this.layerViewStore.orbitThickness
-      this.layerViewStore.orbitColorStyle = r.orbitColorStyle !== undefined ? r.orbitColorStyle : this.layerViewStore.orbitColorStyle
-    })
-  }
-
   private setOrbitDisplayFlag(setting: string, enabled: boolean): void {
     this.callInteractive('setOrbitDisplaySetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
@@ -4783,20 +4752,6 @@ export struct WindowNativeNode {
     const style = values[index] ?? 'one_color'
     this.callInteractive('setOrbitDisplaySetting', 'colorStyle|' + style, (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.layerViewStore.orbitColorStyle = style
-    })
-  }
-
-  private loadTrailDisplaySettings(): void {
-    this.callInteractive('getTrailDisplaySettings', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      this.layerViewStore.trailIsolated = r.trailIsolated !== undefined ? r.trailIsolated : this.layerViewStore.trailIsolated
-      this.layerViewStore.trailSelectionCount = r.trailSelectionCount !== undefined ? r.trailSelectionCount : this.layerViewStore.trailSelectionCount
-      this.layerViewStore.trailYears = r.trailYears !== undefined ? r.trailYears : this.layerViewStore.trailYears
-      this.layerViewStore.trailThickness = r.trailThickness !== undefined ? r.trailThickness : this.layerViewStore.trailThickness
-      if (r.trailColor !== undefined) {
-        this.layerViewStore.trailColor = r.trailColor
-        this.layerViewStore.trailColorInput = r.trailColor
-      }
     })
   }
 
@@ -16422,10 +16377,10 @@ private loadPlanetPositions(): void {
         onSetOrbitFlag: (setting: string, enabled: boolean) => { this.setOrbitDisplayFlag(setting, enabled) },
         onSetOrbitThickness: (value: number) => { this.setOrbitDisplayThickness(value) },
         onSetOrbitColorStyle: (index: number) => { this.setOrbitColorStyle(index) },
-        onLoadOrbitSettings: () => { this.loadOrbitDisplaySettings() },
+        onLoadOrbitSettings: () => { this.layerViewStore.loadOrbitDisplaySettings() },
         onSetTrailFlag: (setting: string, enabled: boolean) => { this.setTrailDisplayFlag(setting, enabled) },
         onSetTrailNumber: (setting: string, value: number) => { this.setTrailDisplayNumber(setting, value) },
-        onLoadTrailSettings: () => { this.loadTrailDisplaySettings() },
+        onLoadTrailSettings: () => { this.layerViewStore.loadTrailDisplaySettings() },
         onApplyTrailColor: () => { this.applyTrailColor() },
         onTriggerAction: (actionId: string) => { this.triggerAction(actionId) },
         onSetFovMarker: (setting: string, value: number) => { this.setFovMarkerSetting(setting, value) },
@@ -17038,7 +16993,7 @@ private loadPlanetPositions(): void {
         onSessionExport: () => { this.sessionExport() },
         onSessionApply: () => { this.sessionApply() },
         onSessionImportText: (value: string) => { this.tools.sessionImportText = value },
-        onLoadLog: () => { this.loadLog() },
+        onLoadLog: () => { this.tools.loadLog() },
         onCollapseLog: () => { this.tools.logVisible = false }
       })
     } else if (this.activePanel === 'audio') {
@@ -17514,7 +17469,7 @@ private loadPlanetPositions(): void {
     this.getUIContext().animateTo({ duration: 100, curve: Curve.EaseIn, onFinish: () => {
       if (transitionId !== this.viewTabTransitionId) return
       this.viewTab = tabId
-      if (tabId === 4) this.loadLandscapeList()
+      if (tabId === 4) this.layerViewStore.loadLandscapeList()
       this.viewTabContentOffsetX = direction * 10
       hilog.info(0x0000, 'StellariumArkUI', '[layer-transition] swap id=%{public}d tab=%{public}d', transitionId, tabId)
       this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
