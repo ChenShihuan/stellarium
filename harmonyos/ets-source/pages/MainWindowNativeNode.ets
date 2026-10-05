@@ -129,6 +129,8 @@ import { SkyCultureMakerPanel } from '../panels/skyculture/SkyCultureMakerPanel'
 import { SkyCultureViewTab } from '../panels/skyculture/SkyCultureViewTab'
 import { DockClockLayer, PadPanelHandle, PanelHandle } from '../panels/shell/PanelChromeExtras'
 import { ScriptFocusShell } from '../panels/shell/ScriptFocusShell'
+import { CompactShell } from '../panels/shell/CompactShell'
+import { HarmonyShell } from '../panels/shell/HarmonyShell'
 import { ScriptKeyButton } from '../panels/tools/ScriptKeyButton'
 import { GuideButton } from '../panels/guide/GuideButton'
 import { GuideLibrary } from '../panels/guide/GuideLibrary'
@@ -14455,7 +14457,174 @@ private loadPlanetPositions(): void {
         RecordingFocusShell({ onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) } })
       }
       if (!this.scriptPlaybackVisible() && !(this.tools.recording && !this.tools.recordingUiExpanded) && !this.polarScopeVisible) {
-        this.harmonyShell()
+        Stack() {
+          if (this.isFoldHoverLayout) {
+            Stack() { this.hoverObservatoryShell() }
+              .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
+                .combine(TransitionEffect.scale({ x: 0.985, y: 0.985 }).animation({ duration: 220, curve: curves.springMotion(0.55, 0.88) })))
+          } else if (this.isExpandedLayout) {
+            Stack() { this.expandedShell() }
+              .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
+                .combine(TransitionEffect.scale({ x: 1.015, y: 1.015 }).animation({ duration: 220, curve: curves.springMotion(0.55, 0.88) })))
+          } else {
+            // 手机/折叠半折壳已组件化（CompactShell）；面板仍是宿主薄 @Builder（compactPanel），
+            // 无法跨组件调用（§13.1 规则 9），故在同一过渡包裹内由宿主渲染。
+            Stack() {
+              CompactShell({
+                objectDetailStore: this.objectDetailStore,
+                objectMediaStore: this.objectMediaStore,
+                overlayStore: this.overlayStore,
+                gyroStore: this.gyroStore,
+                skyHeight: this.skyHeight,
+                panelVisible: this.panelVisible,
+                isExpandedLayout: this.isExpandedLayout,
+                polarScopeVisible: this.polarScopeVisible,
+                activePanel: this.activePanel,
+                languageRevision: this.languageRevision,
+                actions: this.canonicalDockActions(),
+                chromeOpacity: this.phoneChromeOpacity(),
+                chromeIsGlass: this.phoneChromeIsGlass(),
+                dockWidthPercent: this.compactDockWidthPercent(),
+                dockIconSize: this.compactDockIconSize(),
+                dockLabelFontSize: this.compactDockLabelFontSize(),
+                dockItemHeight: this.compactDockItemHeight(),
+                dockClockText: this.dockClockText,
+                dockWidth: this.dockWidthPixels(),
+                dockLeft: this.dockLeft(),
+                dockTop: this.dockTop(),
+                musicEnabled: this.musicEnabled,
+                compactQuickPressed: this.compactQuickPressed,
+                quickX: this.compactTopQuickX(),
+                quickY: this.compactTopQuickY(),
+                infoWinVisible: this.infoWinVisible,
+                bottomCardIndex: this.bottomCardIndex,
+                liveInfoVisible: this.selectedLiveInfoVisible(),
+                contentOpacity: this.objectDetailContentOpacity,
+                contentTranslateX: this.objectDetailContentTranslateX,
+                cardWidth: this.bottomCardWidth(),
+                cardHeight: this.bottomCardHeight(),
+                viewLock: this.viewLock,
+                speechStatus: this.speechStatus,
+                inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
+                iconName: this.objectInspectorIcon(),
+                distanceText: this.objectDistanceNoticeText(),
+                distanceSummaryText: this.objectDistanceSummary(),
+                imageHeight: this.objectInspectorImageHeight(),
+                inlineModelSize: this.objectInspectorInlineModelSize(),
+                modelReady: this.objectInspectorModelReady(),
+                modelRendering: this.objectInspectorModelRendering,
+                hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+                modelNotice: this.objectInspectorModelNotice(),
+                warmupText: this.objectInspectorMediaWarmupText(),
+                fallbackKind: this.objectInspectorFallbackVisualKind(),
+                starColor: this.objectInspectorStarColor(),
+                satelliteVisible: this.selectedObjectIsArtificialSatellite(),
+                tleEpoch: this.selectedSatelliteTleEpoch(),
+                accent: this.nmAccent(),
+                cultureVisible: this.selectedObjectIsConstellation(),
+                textColor: this.nmText(),
+                connectorVisible: this.overlayStore.objectDetailConnectorVisible,
+                connectorLength: this.objectDetailConnectorLength,
+                connectorX: this.objectDetailConnectorX,
+                connectorY: this.objectDetailConnectorY,
+                connectorAngle: this.objectDetailConnectorAngle,
+                connectorAnimateGeometry: this.objectDetailConnectorAnimateGeometry,
+                connectorTargetOnScreen: this.objectDetailConnectorTargetOnScreen,
+                connectorTargetX: this.objectDetailConnectorTargetX,
+                connectorTargetY: this.objectDetailConnectorTargetY,
+                connectorEndX: this.objectDetailConnectorEndX,
+                connectorEndY: this.objectDetailConnectorEndY,
+                markerSize: this.objectDetailMarkerSize(),
+                detailX: this.detailCardX(),
+                detailY: this.detailCardY(),
+                detailWidth: this.detailCardWidth(),
+                detailHeight: this.detailCardHeight(),
+                scroller: this.objectDetailScroller,
+                onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+                onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
+                onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
+                onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) },
+                onOpenTime: () => { this.setPanel('time') },
+                onGyro: () => {
+                  hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
+                  this.resetPanelIdle()
+                  this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
+                },
+                onAudio: () => {
+                  hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio button CLICKED musicEnabled=%{public}s', this.musicEnabled.toString())
+                  this.resetPanelIdle()
+                  this.toggleMusic()
+                  this.flashHint(this.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
+                },
+                onCompactTopQuickTouch: (event: TouchEvent) => { this.handleCompactTopQuickTouch(event) },
+                onFlashHint: (text: string) => { this.flashHint(text) },
+                onCalibrate: () => { this.calibrateGyroscope() },
+                onToggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
+                resolve: (key: string) => this.selectedDisplayValue(key),
+                nameOf: (name: string) => this.zhNameOf(name),
+                typeOf: (type: string) => this.zhType(type),
+                onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
+                onDismiss: () => { this.dismissObjectInspector() },
+                onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
+                onLoadPasses: () => { this.loadSelectedSatellitePasses() },
+                onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
+                onMediaRetry: () => { this.retryObjectInspectorMedia() },
+                onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
+                onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+                onCenter: () => { this.moveToSelectedObject() },
+                onToggleLock: () => { this.toggleViewLock() },
+                onToggleObserving: () => { this.toggleSelectedObservingList() },
+                onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
+                onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
+                onSpeak: () => { this.speakSelectedObject() }
+              })
+              if (this.panelVisible) {
+                Stack({ alignContent: Alignment.Bottom }) {
+                  this.compactPanel()
+                }
+                  .width('100%')
+                  .height(this.compactPanelHeight() + 10)
+                  .position({ x: 0, y: this.skyHeight - 90 - this.compactPanelHeight() })
+                  .hitTestBehavior(HitTestMode.Transparent)
+                  .zIndex(30)
+              }
+            }
+              .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
+                .combine(TransitionEffect.scale({ x: 0.985, y: 0.985 }).animation({ duration: 220, curve: curves.springMotion(0.55, 0.88) })))
+          }
+
+          // Dock uses a dedicated top-level hit target. The expanded sky surface
+          // intentionally blocks gestures, so relying on the visual Dock's child
+          // handlers lets tablet touches be intercepted before they reach it.
+          Stack() { }
+            .width(this.dockWidthPixels())
+            .height(this.isExpandedLayout ? 62 : 82)
+            .position({ x: this.dockLeft(), y: this.dockTop() })
+            .hitTestBehavior(HitTestMode.Block)
+            .zIndex(80)
+            .onTouch((event: TouchEvent) => {
+              this.handleDockTouch(event)
+            })
+
+          HarmonyShell({
+            overlayStore: this.overlayStore,
+            gyroStore: this.gyroStore,
+            isExpandedLayout: this.isExpandedLayout,
+            viewCoordinatesVisible: this.overlayStore.viewCoordinatesVisible,
+            primaryText: this.viewCoordinatePrimaryText,
+            secondaryText: this.viewCoordinateSecondaryText,
+            overlayWidth: this.viewCoordinateOverlayWidth(),
+            overlayLeft: this.viewCoordinateOverlayLeft(),
+            overlayTop: this.viewCoordinateOverlayTop(),
+            hintTop: (this.isExpandedLayout || this.isFoldHoverLayout) ? 16 : 58,
+            actionHint: this.actionHint,
+            onHandleViewCoordinateTouch: (event: TouchEvent) => { this.handleViewCoordinateTouch(event) }
+          })
+        }
+          .width('100%')
+          .height('100%')
+          .zIndex(3)
+          .hitTestBehavior(HitTestMode.Default)
       }
       if (!this.scriptPlaybackVisible() && this.tools.recording) {
         RecordingControlBar({
@@ -14775,98 +14944,6 @@ private loadPlanetPositions(): void {
   }
 
   @Builder
-  harmonyShell() {
-      Stack() {
-        if (this.isFoldHoverLayout) {
-          Stack() { this.hoverObservatoryShell() }
-            .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
-              .combine(TransitionEffect.scale({ x: 0.985, y: 0.985 }).animation({ duration: 220, curve: curves.springMotion(0.55, 0.88) })))
-        } else if (this.isExpandedLayout) {
-          Stack() { this.expandedShell() }
-            .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
-              .combine(TransitionEffect.scale({ x: 1.015, y: 1.015 }).animation({ duration: 220, curve: curves.springMotion(0.55, 0.88) })))
-      } else {
-          Stack() { this.compactShell() }
-            .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
-              .combine(TransitionEffect.scale({ x: 0.985, y: 0.985 }).animation({ duration: 220, curve: curves.springMotion(0.55, 0.88) })))
-      }
-
-      if (this.overlayStore.viewCoordinatesVisible) {
-        Stack() {
-          ViewCenterCoordinateOverlay({
-            store: this.overlayStore,
-            primaryText: this.viewCoordinatePrimaryText,
-            secondaryText: this.viewCoordinateSecondaryText,
-            labelWidth: this.isExpandedLayout ? 78 : 68,
-            onHandleTouch: (event: TouchEvent) => { this.handleViewCoordinateTouch(event) }
-          })
-        }
-          .width(this.viewCoordinateOverlayWidth())
-          .position({ x: this.viewCoordinateOverlayLeft(), y: this.viewCoordinateOverlayTop() })
-          .zIndex(12)
-          .hitTestBehavior(HitTestMode.Default)
-          .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut }))
-      }
-
-      // Dock uses a dedicated top-level hit target. The expanded sky surface
-      // intentionally blocks gestures, so relying on the visual Dock's child
-      // handlers lets tablet touches be intercepted before they reach it.
-      Stack() { }
-        .width(this.dockWidthPixels())
-        .height(this.isExpandedLayout ? 62 : 82)
-        .position({ x: this.dockLeft(), y: this.dockTop() })
-        .hitTestBehavior(HitTestMode.Block)
-        .zIndex(80)
-        .onTouch((event: TouchEvent) => {
-          this.handleDockTouch(event)
-        })
-
-      // Gyroscope target guide: it is deliberately visual-only, so it never
-      // steals a pan, pinch, or button press from the sky and chrome layers.
-      if (this.gyroStore.gyroGuideVisible) {
-        Stack() { GyroTargetGuide({ store: this.gyroStore }) }
-          .position({ x: this.gyroStore.gyroGuideX, y: this.gyroStore.gyroGuideY })
-          .width(44)
-          .height(44)
-          .zIndex(4)
-          .hitTestBehavior(HitTestMode.None)
-          .animation({ duration: 130, curve: Curve.Linear })
-          .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut }))
-      }
-
-      // 点击反馈提示：置顶显示、不拦截触摸
-      if (this.actionHint !== '') {
-        Row() {
-          Text(this.actionHint)
-            .fontSize(13)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#FFFFFF')
-            .padding({ left: 16, right: 16, top: 9, bottom: 9 })
-            .backgroundColor('rgba(91, 147, 191, 0.92)')
-            .borderRadius(UI_RADIUS_PILL)
-            .shadow({ radius: 20, color: 'rgba(0, 0, 0, 0.30)', offsetX: 0, offsetY: 8 })
-        }
-          .hitTestBehavior(HitTestMode.None)
-          .position({ x: 0, y: (this.isExpandedLayout || this.isFoldHoverLayout) ? 16 : 58 })
-          .width('100%')
-          .justifyContent(FlexAlign.Center)
-          .zIndex(20)
-          // 提示气泡：下滑淡入、上浮淡出
-          .transition(TransitionEffect.asymmetric(
-            TransitionEffect.OPACITY.animation({ duration: 200, curve: Curve.EaseOut })
-              .combine(TransitionEffect.translate({ x: 0, y: -12 }).animation({ duration: 220, curve: Curve.Friction })),
-            TransitionEffect.OPACITY.animation({ duration: 220, curve: Curve.EaseIn })
-              .combine(TransitionEffect.translate({ x: 0, y: -8 }).animation({ duration: 220, curve: Curve.EaseIn }))
-          ))
-      }
-      }
-      .width('100%')
-      .height('100%')
-      .zIndex(3)
-      .hitTestBehavior(HitTestMode.Default)
-  }
-
-  @Builder
   expandedShell() {
     Stack() {
       Stack() { }
@@ -15132,173 +15209,6 @@ private loadPlanetPositions(): void {
           .height(this.detailCardHeight())
           .zIndex(35)
           .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
-      }
-    }
-      .width('100%')
-      .height('100%')
-      .zIndex(1)
-      .hitTestBehavior(HitTestMode.Transparent)
-  }
-
-  @Builder
-  compactShell() {
-    Stack() {
-      Column() {
-        Blank()
-          .width('100%')
-          .height('100%')
-          .hitTestBehavior(HitTestMode.Block)
-          .onTouch((event: TouchEvent) => {
-            this.handleSkyTouch(event)
-          })
-      }
-        .width('100%')
-        .height('100%')
-        .zIndex(1)
-
-      if (this.panelVisible) {
-        Stack({ alignContent: Alignment.Bottom }) {
-          this.compactPanel()
-        }
-          .width('100%')
-          .height(this.compactPanelHeight() + 10)
-          .position({ x: 0, y: this.skyHeight - 90 - this.compactPanelHeight() })
-          .hitTestBehavior(HitTestMode.Transparent)
-          .zIndex(30)
-      }
-
-      Row() {
-        BottomDock({
-          actions: this.canonicalDockActions(), isExpanded: this.isExpandedLayout,
-          panelVisible: this.panelVisible, chromeOpacity: this.phoneChromeOpacity(),
-          isGlass: this.phoneChromeIsGlass(), widthPercent: this.compactDockWidthPercent(),
-          languageRevision: this.languageRevision,
-          iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
-          labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
-          itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
-          activePanel: this.activePanel,
-          onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
-          onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
-          onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) }
-        })
-      }
-        .width('100%')
-        .height(66)
-        .justifyContent(FlexAlign.Center)
-        .position({ x: 0, y: this.skyHeight - 80 })
-        .hitTestBehavior(HitTestMode.Block)
-        .zIndex(40)
-
-      if (!this.panelVisible && !this.polarScopeVisible && this.dockClockText.length > 0) {
-        DockClockLayer({ clockText: this.dockClockText, layerWidth: this.dockWidthPixels(), posX: this.dockLeft(), posY: this.dockTop() - 48, onOpenTime: () => { this.setPanel('time') } })
-      }
-
-      // 手机端右上角常驻快捷区：陀螺仪 + 音频（与平板左侧栏入口一致）
-      Stack() {
-        CompactTopQuickControls({
-          gyroActive: this.gyroStore.gyroscopeEnabled, audioActive: this.musicEnabled,
-          pressedId: this.compactQuickPressed, chromeOpacity: this.phoneChromeOpacity(),
-          textColor: this.nmText(),
-          onGyro: () => {
-            hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
-            this.resetPanelIdle()
-            this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
-          },
-          onAudio: () => {
-            hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio button CLICKED musicEnabled=%{public}s', this.musicEnabled.toString())
-            this.resetPanelIdle()
-            this.toggleMusic()
-            this.flashHint(this.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
-          }
-        })
-      }
-          .position({ x: this.compactTopQuickX(), y: this.compactTopQuickY() })
-          .hitTestBehavior(HitTestMode.Block)
-          .zIndex(30)
-        // Keep a dedicated touch target above the Qt XComponent.  The native
-        // surface otherwise intermittently captures the compact quick buttons.
-        Stack() { }
-          .width(44)
-          .height(98)
-          .position({ x: this.compactTopQuickX(), y: this.compactTopQuickY() })
-          .hitTestBehavior(HitTestMode.Block)
-          .zIndex(31)
-          .onTouch((event: TouchEvent) => {
-            this.handleCompactTopQuickTouch(event)
-          })
-      // 陀螺仪校准面板（紧凑布局）
-      if (this.gyroStore.gyroscopeEnabled && this.gyroStore.gyroCalibPanelOpen) {
-        Stack() { GyroCalibPanel({ store: this.gyroStore, onFlashHint: (text: string) => { this.flashHint(text) }, onCalibrate: () => { this.calibrateGyroscope() }, onToggle: (enabled: boolean) => { this.toggleGyroscope(enabled) } }) }
-          .position({ x: 16, y: 80 })
-          .hitTestBehavior(HitTestMode.Block)
-          .zIndex(60)
-          .transition(TransitionEffect.asymmetric(
-            TransitionEffect.OPACITY.animation({ duration: 220, curve: Curve.EaseOut })
-              .combine(TransitionEffect.translate({ x: -20, y: 0 }).animation({ duration: 300, curve: curves.springMotion(0.5, 0.85) })),
-            TransitionEffect.OPACITY.animation({ duration: 160, curve: Curve.EaseIn })
-          ))
-      }
-      if (this.infoWinVisible && this.objectDetailStore.selectedName.length > 0) {
-        ObjectDetailConnectorLayer({
-          visible: this.overlayStore.objectDetailConnectorVisible,
-          beamLength: this.objectDetailConnectorLength,
-          beamX: this.objectDetailConnectorX,
-          beamY: this.objectDetailConnectorY,
-          beamAngle: this.objectDetailConnectorAngle,
-          animateGeometry: this.objectDetailConnectorAnimateGeometry,
-          targetOnScreen: this.objectDetailConnectorTargetOnScreen,
-          targetX: this.objectDetailConnectorTargetX,
-          targetY: this.objectDetailConnectorTargetY,
-          endX: this.objectDetailConnectorEndX,
-          endY: this.objectDetailConnectorEndY,
-          markerSize: this.objectDetailMarkerSize()
-        })
-        Stack() {
-          UnifiedObjectDetailCard({
-            store: this.objectDetailStore, mediaStore: this.objectMediaStore, scroller: this.objectDetailScroller,
-            activeIndex: this.bottomCardIndex, liveInfoVisible: this.selectedLiveInfoVisible(),
-            contentOpacity: this.objectDetailContentOpacity, contentTranslateX: this.objectDetailContentTranslateX,
-            cardWidth: this.bottomCardWidth(), cardHeight: this.bottomCardHeight(),
-            viewLock: this.viewLock, speechStatus: this.speechStatus,
-            inObservingList: this.observingList.includes(this.objectDetailStore.selectedName),
-            iconName: this.objectInspectorIcon(), distanceText: this.objectDistanceNoticeText(),
-            distanceSummaryText: this.objectDistanceSummary(),
-            imageHeight: this.objectInspectorImageHeight(), inlineModelSize: this.objectInspectorInlineModelSize(),
-            modelReady: this.objectInspectorModelReady(), modelRendering: this.objectInspectorModelRendering,
-            hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
-            modelNotice: this.objectInspectorModelNotice(), warmupText: this.objectInspectorMediaWarmupText(),
-            fallbackKind: this.objectInspectorFallbackVisualKind(), starColor: this.objectInspectorStarColor(),
-            satelliteVisible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(),
-            accent: this.nmAccent(), cultureVisible: this.selectedObjectIsConstellation(), textColor: this.nmText(),
-            resolve: (key: string) => this.selectedDisplayValue(key),
-            nameOf: (name: string) => this.zhNameOf(name), typeOf: (type: string) => this.zhType(type),
-            onDragTouch: (event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) },
-            onDismiss: () => { this.dismissObjectInspector() },
-            onSelectTab: (index: number) => { this.selectObjectDetailTab(index) },
-            onLoadPasses: () => { this.loadSelectedSatellitePasses() },
-            onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
-            onMediaRetry: () => { this.retryObjectInspectorMedia() },
-            onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-            onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
-            onCenter: () => { this.moveToSelectedObject() },
-            onToggleLock: () => { this.toggleViewLock() },
-            onToggleObserving: () => { this.toggleSelectedObservingList() },
-            onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
-            onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
-            onSpeak: () => { this.speakSelectedObject() }
-          })
-        }
-          .position({ x: this.detailCardX(), y: this.detailCardY() })
-          .width(this.detailCardWidth())
-          .height(this.detailCardHeight())
-          .zIndex(50)
-          .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
-          .transition(TransitionEffect.asymmetric(
-            TransitionEffect.OPACITY.animation({ duration: 260, curve: Curve.EaseOut })
-              .combine(TransitionEffect.translate({ x: 0, y: 40 }).animation({ duration: 420, curve: curves.springMotion(0.55, 0.85) })),
-            TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseIn })
-              .combine(TransitionEffect.translate({ x: 0, y: 20 }).animation({ duration: 200, curve: Curve.EaseIn }))
-          ))
       }
     }
       .width('100%')
