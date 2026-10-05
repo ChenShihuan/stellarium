@@ -1,8 +1,10 @@
 # 界面与窗口层级总览（UI / Window Architecture）
 
-> 建立时间：2026-09-28（DevEco Code）。**来源**：逐条从当前 ArkTS 源码核实，行号指
-> `harmonyos/ets-source/pages/MainWindowNativeNode.ets`（构建输入，与生成工程一致）、
-> `harmonyos/ets-source/qability/QAbility.ets`、`pages/ApplicationRoot.ets`、各 `*NativeNode.ets`。
+> 建立时间：2026-09-28（DevEco Code）；2026-10-02 按 pages/ 重构终态校正。
+> **来源**：逐条从当前 ArkTS 源码核实；宿主为 `harmonyos/ets-source/pages/MainWindowNativeNode.ets`
+> （构建输入，与生成工程一致），面板/壳层在 `panels/**`、状态在 `state/*Store.ets`，
+> 另涉 `harmonyos/ets-source/qability/QAbility.ets`、`pages/ApplicationRoot.ets`、各 `*NativeNode.ets`。
+> **不再内嵌易失真的行号**（重构会搬动它们），一律以组件/方法名 + 文件定位。
 > 末尾第 9 节列出与既有文档的差异 —— **本文以代码为准**。
 
 ## 0. 四层结构一览
@@ -14,7 +16,8 @@ Ability / WindowStage 层   QAbility（单 Ability、单窗口）
         │  三个互斥子层：WindowNativeNode / 启动覆盖层 / PrivacyBootstrap
 主页面叠放层               MainWindowNativeNode.build() 的根 Stack（zIndex -1 … 99）
         │  按条件挂载
-壳层                       harmonyShell → compactShell / expandedShell / hoverObservatoryShell
+壳层                       HarmonyShell → CompactShell / ExpandedShell / HoverObservatoryShell
+                           （另有 ScriptFocusShell / InteractiveGuideShell；均为 panels/shell/*.ets 组件）
 ```
 
 ## 1. 窗口层：Ability → WindowStage → 页面
@@ -26,7 +29,7 @@ Ability / WindowStage 层   QAbility（单 Ability、单窗口）
 
 | 页面 | 用途 |
 | --- | --- |
-| `pages/MainWindowNativeNode.ets` | 主窗口，**唯一的 UI 主体**（32,693 行） |
+| `pages/MainWindowNativeNode.ets` | 主窗口页面壳/装配（18,593 行；面板 UI 已下沉到 `panels/**`） |
 | `pages/FloatWindowNativeNode.ets` | 悬浮窗 |
 | `pages/SubWindowNativeNode.ets` | 子窗口 |
 | `pages/UiExtensionNativeNode.ets` | UIExtension 嵌入 |
@@ -43,7 +46,7 @@ Ability / WindowStage 层   QAbility（单 Ability、单窗口）
 | 2 | 启动覆盖层：`StartupSky()`（`HitTestMode.Block`）+ 底部 `LoadingProgress` + 加载文案 | `loadingVisible` | 「汇字」动效；`stellariumStartupSkyReady` 与 `stellariumStartupArtComplete` 同时为真后 `animateTo(STARTUP_REVEAL_MS)` 淡出并置 `loadingVisible=false` |
 | 3 | `PrivacyBootstrap()` | 原生/ Qt 未就绪 | 隐私门控宿主（未同意时不构建 Qt 内容） |
 
-## 3. 主页面叠放层：`MainWindowNativeNode.build()`（@18544）
+## 3. 主页面叠放层：`MainWindowNativeNode.build()`
 
 根 `Stack`，`backgroundColor(Color.Black)`、`focusable(true)`、`defaultFocus(true)`、`onKeyEvent(handleSkyKey)`、`onMouse(handleSkyMouse)`。
 
@@ -54,14 +57,14 @@ Ability / WindowStage 层   QAbility（单 Ability、单窗口）
 | `0` | `XComponent(SURFACE, id='stellarium_entry_gl_probe', libraryname:'entry')` | `None` | EGL / SURFACE 探针 |
 | `0` | 触摸反馈圆点 ×2（单点 / 多点） | `None` | `skyTouchFeedback`、`skyTouchFeedbackMulti`，随触点 `offset` |
 | — | 专属触摸面 `Stack()` | `None` + `onTouch(handleOverlayTouch)` | 注释明写：**不能挂在全屏 UI 父上**，否则抑制 toolbar/面板按钮的 `onClick` |
-| 条件 | `scriptFocusShell()` / `recordingFocusShell()` / `harmonyShell()` / `recordingControlBar()` / `polarScopeOverlay()` / 三组预览 Overlay | 各层自管 | 脚本回放、录制、极轴镜、星空文化美术预览、详情媒体/模型预览；互斥条件见 `:18618-18645` |
+| 条件 | `ScriptFocusShell` / `RecordingFocusShell` / `HarmonyShell`（或 `HoverObservatoryShell` / `ExpandedShell` / `CompactShell`） / `RecordingControlBar` / `PolarScopeOverlay` / 三组预览 Overlay | 各层自管 | 脚本回放、录制、极轴镜、星空文化美术预览、详情媒体/模型预览；互斥条件见宿主 `build()` 的布局分发 |
 | `92` | 星纹理状态条（`LoadingProgress` + 重试按钮） | `Transparent` | 180ms 淡入 |
 | `98` | 夜间模式红膜 `#A00000`，`blendMode(COLOR, OFFSCREEN)`，`opacity 0.78` | `Transparent` | 450ms `EaseInOut` |
 | `99` | 夜间模式黑膜 `opacity 0.48` | `Transparent` | 同上 |
 
-> 全文件 `zIndex` 实际取值分布（用于判断新加层该放哪）：`-1, 0, 1, 2, 3, 4, 10, 12, 20, 30, 31, 35, 40, 50, 60, 80, 92, 98, 99, 101, 120, 130, 1000, 1100`。
+> 宿主单体现只剩 `zIndex` 取值 `-1, 0, 3, 30, 80, 92, 98, 99`（其余组件内的 `zIndex` 见各自文件；全应用层级以 `panels/**` 为准）。
 
-## 4. 壳层与响应式断点：`updateResponsiveLayout()`（@2586）
+## 4. 壳层与响应式断点：`updateResponsiveLayout()`
 
 ### 4.1 判定输入
 
@@ -84,31 +87,35 @@ Ability / WindowStage 层   QAbility（单 Ability、单窗口）
 
 - `responsiveLayoutMode ∈ { compact, expanded, hover }`，派生出 `isExpandedLayout` / `isFoldHoverLayout` / `isFoldTabletLayout`（可折叠 && expanded && 短边 < 760）。
 - 切换动画：`getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, applyLayout)`。
-- 壳层转场（`harmonyShell()` @19203）：`OPACITY 180ms EaseOut` + `scale`（compact/hover `0.985`、expanded `1.015`，220ms `curves.springMotion(0.55, 0.88)`）。
+- 壳层转场（`HarmonyShell`，`panels/shell/HarmonyShell.ets`）：`OPACITY 180ms EaseOut` + `scale`（compact/hover `0.985`、expanded `1.015`，220ms `curves.springMotion(0.55, 0.88)`）。
 
-### 4.4 三种壳层 Builder
+### 4.4 壳层组件（`panels/shell/*.ets`）
 
-| Builder | 行号 | 结构要点 |
+| 组件 | 文件 | 结构要点 |
 | --- | --- | --- |
-| `harmonyShell()` | 19203 | 按 `isFoldHoverLayout` / `isExpandedLayout` 三选一；附带视图坐标 Overlay（zIndex 12）与 Dock 专用命中层 |
-| `expandedShell()` | 19360 | 星图面 `HitTestMode.Block` + `onTouch(handleSkyTouch)`；浮动面板 `position(panelLeft, panelTop)`、`HitTestMode.Default`、`zIndex 30`；底部 Dock `Row` 高 54 |
-| `compactShell()` | 19509 | 手机/窄窗：底部面板向上拉起 + 底部 Dock |
-| `hoverObservatoryShell()` | — | 半折「观测台」形态 |
+| `HarmonyShell` | `HarmonyShell.ets` | 按 `isFoldHoverLayout` / `isExpandedLayout` 三选一分发；承载视图坐标 Overlay 与 Dock 专用命中层 |
+| `ExpandedShell` | `ExpandedShell.ets` | 星图面 `HitTestMode.Block` + `onTouch(handleSkyTouch)`；底部 Dock `Row` 高 54 |
+| `CompactShell` | `CompactShell.ets` | 手机/窄窗：底部面板向上拉起 + 底部 Dock |
+| `HoverObservatoryShell` | `HoverObservatoryShell.ets` | 半折「观测台」形态 |
+| `ScriptFocusShell` | `ScriptFocusShell.ets` | 脚本回放焦点层 |
+| `InteractiveGuideShell` | `InteractiveGuideShell.ets` | 交互导览焦点层 |
+
+> 浮动/底部面板容器（`floatingPanel` / `compactPanel`、`position(panelLeft, panelTop)`、`HitTestMode.Default`、`zIndex 30`）按 ArkUI 限制**仍留在宿主**（不能在子组件里调用宿主 `@Builder`，见计划 §13.1 规则 9）。
 
 ## 5. 入口与面板
 
-- **Dock**：`dockButton(item: ShellAction)`（@23766）由 `ShellAction` 驱动，容器为 `bottomDock()`。
-- **面板 id**（`setPanel('id')` 实际出现值）：`search`、`layers`、`more`、`astro`、`observing`、`scripts`。
+- **Dock**：`DockButton` 组件（`panels/shell/DockButton.ets`）由 `ShellAction` 驱动。
+- **面板 id**：宿主 `setPanel('id')` 现用 `search` / `time` / `more` / `astro` / `scripts`（其余入口经 `openSubPanel` / `openPanelFromCli`）；**权威清单**是 `scripts/check-ohos-ui-contract.mjs` 校验的 33 个 `activePanel` id（基线 `docs/harmonyos/json/ui-contract-baseline.json`）。
 - **跨设备一致性约定**（`HANDOFF.md:5-9`、`research/PANEL-PLUGIN-ARCHITECTURE-ROADMAP.md`）：
   手机/平板/桌面共用一套底部 Dock（搜索 / 时间 / 位置 / 图层 / 更多）；`moreActions` 是**唯一**的低频功能清单；设备尺寸**只改变呈现**，不改变功能入口；手机与宽屏共享同一 `setPanel` 状态机；关闭按钮关闭整个面板，**不等同于返回**。
 
 ## 6. 命中测试（HitTestMode）规则
 
-实测分布（同一文件）：`Block 36` / `None 23` / `Default 23` / `Transparent 10` / `BLOCK_HIERARCHY 7`。
+实测分布（宿主单体，组件化后）：`None 5` / `Default 4` / `Transparent 4` / `Block 1`；其余组件的命中模式见各 `panels/**` 文件。
 
 | 模式 | 用在哪 | 规则 |
 | --- | --- | --- |
-| `Block` | 壳层星图触摸面（`expandedShell` 的第一层）、启动覆盖层 `StartupSky` | 承接星图手势，**但绝不能覆盖 UI 父层** |
+| `Block` | 壳层星图触摸面（`ExpandedShell` 的第一层）、启动覆盖层 `StartupSky` | 承接星图手势，**但绝不能覆盖 UI 父层** |
 | `Default` | 面板容器（如浮动面板 `zIndex 30`）、坐标 Overlay | 让**最深子控件**（Button / Slider / Scroll / TextInput）拿到手势 |
 | `None` | 纯装饰层（隐藏锚点、触摸反馈圆点、探针表面） | 不参与命中 |
 | `Transparent` | 夜间模式膜、状态条 | 自身不响应，子控件仍可响应 |
@@ -151,12 +158,19 @@ const UI_OPTION_ANIMATION_MS: number = 180   // 选项切换过渡
 ## 10. 核对方法（可复现）
 
 ```powershell
+# 契约基线（33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点）——改 UI 后必须跑
+node scripts/check-ohos-ui-contract.mjs
+node scripts/check-ohos-refactor-slice.mjs      # 切片结构自洽（括号/@Builder/引用）
+
 $m = 'harmonyos/ets-source/pages/MainWindowNativeNode.ets'
-Select-String -LiteralPath $m -Pattern 'zIndex\(' | Select-Object LineNumber, Line          # 叠放层
+Select-String -LiteralPath $m -Pattern 'zIndex\(' | Select-Object LineNumber, Line          # 宿主剩余叠放层
 Select-String -LiteralPath $m -Pattern 'HitTestMode\.' | Group-Object { $_.Line -replace '.*HitTestMode\.(\w+).*','$1' }
 Select-String -LiteralPath $m -Pattern 'updateResponsiveLayout|desktopCanvas|tabletCanvas|responsiveLayoutMode'
 Select-String -LiteralPath $m -Pattern 'setPanel\(' | Select-Object LineNumber, Line          # 面板 id
 Select-String -LiteralPath $m -Pattern '^const UI_'                                          # 视觉常量
+# 壳层/面板（组件化后按文件核对）
+Get-ChildItem harmonyos/ets-source/panels/shell -Filter *.ets                                # 六个壳 + chrome 件
+Get-ChildItem harmonyos/ets-source/state -Filter *Store.ets                                  # 各域 store
 Select-String -LiteralPath 'harmonyos/ets-source/qability/QAbility.ets' -Pattern 'loadContent|preparePrivacyHostPage|publishScreenSafeArea'
 Get-Content      'harmonyos/ets-source/pages/ApplicationRoot.ets'                            # 页面三层
 ```

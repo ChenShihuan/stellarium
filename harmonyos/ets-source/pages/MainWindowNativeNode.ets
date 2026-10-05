@@ -166,7 +166,7 @@ import {
   TELESCOPE_SIMULATOR_MODEL, HeliocentricOrbit, ConfigurationOption, SkyCultureVisualColors, CelestialPositionOptions,
   CelestialPositionCategory, PhenomenaOptions, PhenomenaStartOption, EphemerisOptions, RtsCalendarOptions, EclipseOptions,
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
-  HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS, TimeTick, TonightPlanetRow, StarCatalogItem, StarCatalogRaw,
+  HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS, TonightPlanetRow, StarCatalogItem, StarCatalogRaw,
   StarCatalogsResponse, StarCatalogStatusResponse, LimitMagnitudeResponse, GyroGuideProjection, SkyUiObstacle, BookmarkItem,
   BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
@@ -330,7 +330,6 @@ export struct WindowNativeNode {
   private pendingNightModeUntilMs: number = 0
   @State private pickedDate: Date = new Date()
   @State private pickedTime: Date = new Date()
-  @State private observationTimeText: string = '--'
   @State private locationText: string = '--'
   @State private coordinateText: string = '--'
   @State private altitudeText: string = '--'
@@ -885,7 +884,6 @@ export struct WindowNativeNode {
   private gyroOrientationSubscribed: boolean = false
   private gyroGravitySubscribed: boolean = false
   private gyroMagneticSubscribed: boolean = false
-  private readonly gyroSensitivity: number = 180
   private gyroCallback: ((data: sensor.OrientationResponse) => void) | undefined = undefined
   private gyroRotationCallback: ((data: sensor.RotationVectorResponse) => void) | undefined = undefined
   private gyroGravityCallback: ((data: sensor.GravityResponse) => void) | undefined = undefined
@@ -976,9 +974,6 @@ export struct WindowNativeNode {
     return actions[index - 1].section !== item.section
   }
   private railTop(): number { return this.EDGE_MARGIN }
-  private toggleDrawer(): void {
-    this.setPanel('more')
-  }
 
   private SELFTEST: boolean = false  // 开发自检：启动即对全部开关跑一次 findAction，验证无死开关。发布前改 false。
 
@@ -4912,7 +4907,7 @@ export struct WindowNativeNode {
       this.syncTimeRateState(result.timeRate as number)
     }
     if (result.timeText !== undefined) {
-      this.observationTimeText = result.formattedTime ?? this.formatObservationTime(result.timeText)
+      this.timeStore.observationTimeText = result.formattedTime ?? this.formatObservationTime(result.timeText)
       // 顺便校准 UTC 偏移（timeText 已含观测地偏移，jd 是纯 UTC；差值即偏移小时数）
       // 供轻量刷新 refreshSimTimeLight 使用，避免每次都跑全量 getState
       if (result.jd !== undefined) {
@@ -5018,13 +5013,6 @@ export struct WindowNativeNode {
     this.callInteractive('setOrbitDisplaySetting', 'thickness|' + thickness.toString(), (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.layerViewStore.orbitThickness = thickness
     })
-  }
-
-  private orbitColorStyleIndex(): number {
-    if (this.layerViewStore.orbitColorStyle === 'groups') return 1
-    if (this.layerViewStore.orbitColorStyle === 'major_planets') return 2
-    if (this.layerViewStore.orbitColorStyle === 'major_planets_minor_types') return 3
-    return 0
   }
 
   private setOrbitColorStyle(index: number): void {
@@ -5317,7 +5305,7 @@ export struct WindowNativeNode {
     if (result.presetSkyTime !== undefined) this.presetSkyTime = Number(result.presetSkyTime)
     this.timeSettingsStore.configDateFormat = result.dateFormat ?? this.timeSettingsStore.configDateFormat
     this.timeSettingsStore.configTimeFormat = result.timeFormat ?? this.timeSettingsStore.configTimeFormat
-    this.observationTimeText = result.formattedTime ?? this.observationTimeText
+    this.timeStore.observationTimeText = result.formattedTime ?? this.timeStore.observationTimeText
     this.timeSettingsStore.timeSettingsZone = result.timeZone ?? this.timeSettingsStore.timeSettingsZone
     this.deltaTStore.deltaTDescription = result.deltaTDescription ?? this.deltaTStore.deltaTDescription
     this.deltaTStore.timeDeltaTAlgorithms = result.deltaTAlgorithms ?? this.deltaTStore.timeDeltaTAlgorithms
@@ -7677,15 +7665,6 @@ export struct WindowNativeNode {
   }
 
 
-  private toggleSkyCultureLabelPicker(target: string): void {
-    this.getUIContext().animateTo({ duration: 220, curve: curves.springMotion(0.46, 0.86) }, () => {
-      this.skyCultureSettingsStore.skyCultureLabelPickerOpen = this.skyCultureSettingsStore.skyCultureLabelPickerOpen === target ? '' : target
-    })
-  }
-
-
-
-
   private setSkyCultureLabelModeForTarget(target: string, mode: number): void {
     if (target === 'screen') {
       this.setSkyCultureScreenLabelMode(mode)
@@ -7863,10 +7842,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private applySkyCultureCustomColor(): void {
-    this.setSkyCultureVisualColor(this.skyCultureActiveColorTarget(), this.skyCultureSettingsStore.skyCultureColorInput)
-  }
-
   private setCurrentSkyCultureAsDefault(): void {
     if (this.currentSkyCultureId.length === 0 || this.skyCultureSettingsStore.skyCultureDefaultId === this.currentSkyCultureId) return
     this.callInteractive('setSkyCultureDefault', this.currentSkyCultureId, (r: StellariumBridgeResponse) => {
@@ -7876,57 +7851,6 @@ export struct WindowNativeNode {
       }
     })
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  private setSkyCultureFilterValue(kind: string, value: string): void {
-    this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.46, 0.88) }, () => {
-      if (kind === 'classification') {
-        this.skyCultureSettingsStore.skyCultureClassificationFilter = value
-        this.skyCultureSettingsStore.skyCultureClassificationFilterOpen = false
-      } else {
-        this.skyCultureSettingsStore.skyCultureRegionFilter = value
-        this.skyCultureSettingsStore.skyCultureRegionFilterOpen = false
-      }
-    })
-  }
-
-  private toggleSkyCultureFilter(kind: string): void {
-    const opening = !this.skyCultureSettingsStore.skyCultureFilterOpen(kind)
-    this.getUIContext().animateTo({ duration: 220, curve: curves.springMotion(0.46, 0.88) }, () => {
-      if (kind === 'classification') {
-        this.skyCultureSettingsStore.skyCultureClassificationFilterOpen = opening
-        this.skyCultureSettingsStore.skyCultureRegionFilterOpen = false
-      } else {
-        this.skyCultureSettingsStore.skyCultureRegionFilterOpen = opening
-        this.skyCultureSettingsStore.skyCultureClassificationFilterOpen = false
-      }
-    })
-  }
-
-
-
 
   private cleanSkyCultureNarration(text: string): string {
     return text.replace(/[\uFEFF\uFFFD\uFFFC]/g, '').replace(/\s*\.\s*\.\s*\.\s*/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
@@ -9900,17 +9824,6 @@ private loadPlanetPositions(): void {
   private static readonly SPEED_IDX_STOP = 6
   private static readonly SPEED_IDX_REALTIME = 7
 
-  // 连续时间轴：拖动范围为前后 12 小时且精确到秒。跨天跳转由
-  // 面板下方的 +/-12h 快捷操作承担，避免小滑块退化成“按天跳”。
-  private readonly timeTicks: TimeTick[] = [
-    { label: '12小时前', value: -43200, major: true },
-    { label: '6小时前', value: -21600, major: false },
-    { label: '1小时前', value: -3600, major: false },
-    { label: '此刻', value: 0, major: true },
-    { label: '1小时后', value: 3600, major: false },
-    { label: '6小时后', value: 21600, major: false },
-    { label: '12小时后', value: 43200, major: true }
-  ]
   /** Apply speed at given step index. Clamps to valid range. */
   private applySpeedStep(index: number): void {
     const idx: number = Math.max(0, Math.min(this.SPEED_STEPS.length - 1, index))
@@ -12657,11 +12570,6 @@ private loadPlanetPositions(): void {
     return sign + mult.toFixed(0) + 'x'
   }
 
-  private formatDegrees(value: number, positive: string, negative: string): string {
-    const direction = value >= 0 ? positive : negative
-    return Math.abs(value).toFixed(2) + '°' + direction
-  }
-
   /**
    * 轻量时间刷新：只取 jd + timeRate（getSimulationTime 极轻），不做 getState 全量状态同步。
    * 用于时间面板的高频（~120ms）流式刷新，让读秒像水一样连续流动而不是每秒跳一大格。
@@ -12673,8 +12581,8 @@ private loadPlanetPositions(): void {
       const jd: number = r.jd as number
       // jd 是 UTC；加上观测地 UTC 偏移后再格式化，与 getState 的 timeText 口径保持一致
       const text: string = r.formattedTime ?? this.jdToLocalTimeText(jd + this.utcOffsetHours / 24.0)
-      if (text !== this.observationTimeText) {
-        this.observationTimeText = text
+      if (text !== this.timeStore.observationTimeText) {
+        this.timeStore.observationTimeText = text
       }
       if (r.timeRate !== undefined) {
         this.syncTimeRateState(r.timeRate as number)
@@ -14480,7 +14388,7 @@ private loadPlanetPositions(): void {
                 objectDetailStore: this.objectDetailStore,
                 objectMediaStore: this.objectMediaStore,
                 overlayStore: this.overlayStore,
-                observationTimeText: this.observationTimeText,
+                observationTimeText: this.timeStore.observationTimeText,
                 currentFovText: this.currentFovText,
                 skyWidth: this.skyWidth,
                 skyHeight: this.skyHeight,
@@ -15724,10 +15632,6 @@ private loadPlanetPositions(): void {
     if (event.type === TouchType.Cancel) {
       this.dockTouchActive = false
     }
-  }
-
-  private morePanelActive(): boolean {
-    return this.activePanel === 'more' && this.panelVisible
   }
 
   // Pad 端的详情保持为左侧检查器。它不接管星图，也不会随着实时数据刷新
@@ -17036,7 +16940,9 @@ private loadPlanetPositions(): void {
     AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
   }
 
-  // 低频功能抽屉：从侧栏右侧滑出，图标(带背景圆) + 名称 + 激活态左边框
+  // 平板/桌面浮动面板与手机底部面板：体内调用 this.panelContent()。
+  // ArkUI 不能在子组件里调用宿主 @Builder（会整应用退出，见计划 §13.1 规则 9），
+  // 故二者是刻意的宿主薄 @Builder，不是遗漏（Phase 4h 定论，Phase 6d/7 复核仍然成立）。
 
   @Builder
   floatingPanel() {
@@ -17539,7 +17445,7 @@ private loadPlanetPositions(): void {
         ephemerisDe441Available: this.ephemerisDe441Available,
         ephemerisDe441Active: this.ephemerisDe441Active,
         timeSettingsPending: this.timeSettingsPending,
-        observationTimeText: this.observationTimeText,
+        observationTimeText: this.timeStore.observationTimeText,
         scriptLaunching: this.scriptLaunching,
         scriptLaunchingName: this.scriptLaunchingName,
         scriptList: this.scriptList,
@@ -18509,16 +18415,16 @@ private loadPlanetPositions(): void {
     return ''
   }
 
-  /** 面板标题行的时分秒：从 observationTimeText 拆出第一个空格之后的部分。 */
+  /** 面板标题行的时分秒：从 timeStore.observationTimeText 拆出第一个空格之后的部分。 */
   private timePanelClockText(): string {
-    const text = this.observationTimeText
+    const text = this.timeStore.observationTimeText
     const idx = text.indexOf(' ')
     return idx > 0 ? text.substring(idx + 1) : text
   }
 
   /** 面板副标题行的年月日（附带当前时间速率）。 */
   private timePanelDateText(): string {
-    const text = this.observationTimeText
+    const text = this.timeStore.observationTimeText
     const idx = text.indexOf(' ')
     const date = idx > 0 ? text.substring(0, idx) : ''
     return date.length > 0 ? date + ' · ' + this.timeStore.timeRateText : this.timeStore.timeRateText

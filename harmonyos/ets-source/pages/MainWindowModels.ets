@@ -333,13 +333,6 @@ export const PHENOMENA_START_OPTIONS: PhenomenaStartOption[] = [
   { label: '1 年后', value: 12 },
 ]
 
-// 时间轴刻度：value=偏移天数（-365~+365），major=主刻度
-export interface TimeTick {
-  label: string
-  value: number
-  major: boolean
-}
-
 export interface TonightPlanetRow {
   name: string
   line: string

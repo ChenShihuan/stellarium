@@ -1,3 +1,17 @@
+## [2026-10-02] DevEco Code - Phase 7：收口（队列最后一片）
+
+- **背景/范围**：队列收尾。删死代码、复核宿主转发层、把 `observationTimeText` 收入 store、校正 `UI-ARCHITECTURE.md` 与根 `AGENTS.md`，并给出终态指标与剩余问题清单。行为零变更（纯搬移 + 删死代码 + 文档）。
+- **死代码（§11 修订 6 四类判据，级联复扫一次收敛）**：删 8 个零引用 `private` 方法 —— `toggleDrawer` / `orbitColorStyleIndex` / `toggleSkyCultureLabelPicker` / `applySkyCultureCustomColor` / `setSkyCultureFilterValue` / `toggleSkyCultureFilter` / `formatDegrees` / `morePanelActive`（`formatDegrees`、`orbitColorStyleIndex` 的同名活实现分别在 `LocationStore.ets`、`LayerViewTabs.ets`，宿主副本零引用）；删 2 个零引用字段 `gyroSensitivity`、`timeTicks`，并连带删掉只被 `timeTicks` 使用的 `TimeTick` 接口（`pages/MainWindowModels.ets`）与宿主 import；另修一处指向已删抽屉的陈旧注释。
+- **宿主转发层复核**：`return this.<store>.<x>` 型纯转发 getter **0 处**（唯一形似者是 `selectedDisplayValue()` 的 `switch` 分派表，不是转发层）；`observationTimeText` 从宿主 `@State` **收入 `state/TimeStore.ets`**（`timeRateText` 早已在 store），宿主 8 处读写改为 `this.timeStore.observationTimeText`；`nmText`/`nmSub`/`nmAccent`/`nmBg` 等夜视色助手经复核为 `nightMode` 的纯函数、但调用点全在宿主，下沉 `NightModeStore` 不减少行数，**记为后续可选优化**；`floatingPanel`/`compactPanel` 保留定论仍成立（体内 `this.panelContent()`，规则 9），源码注释已补说明。
+- **文档校准**：`docs/harmonyos/specs/UI-ARCHITECTURE.md` 全量校正 —— 行数 32,693 → 18,593、删除全部易失真的 `文件:行号`（改组件名 + 路径）、§4.4 改为壳层组件表（`panels/shell/*.ets`）、§6 命中分布改宿主实测、§10 补契约/切片脚本；根 `AGENTS.md` 新增 UI 结构约定条目（`panels/panels/**`、`panels/shell/**`、`state/*Store.ets`、V1-only、`.id()` 契约）；`ARKTS-PAGES-REFACTOR-PLAN.md` §5/§13.5 修正已失效的 `AGENTS.md §2.2` 引用并写入收口结论与剩余问题清单。
+- **单体手术**：`pages/MainWindowNativeNode.ets` **18,689 → 18,593 行，净 −96**；另改 `state/TimeStore.ets`（+1 字段）、`pages/MainWindowModels.ets`（−1 接口）。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（3 文件 0 错）→ `devecocli build`（`-SkipEngine -SkipDeploy -SkipResources`，**BUILD SUCCESSFUL**，67 s）→ `check-ohos-ui-contract.mjs`（33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点 / 183+ 文件，完好）→ 全量 `*-ohos*.mjs` 扫描：失败 7 个，**全部为 §13.6 存量环境类**（4 个 `-pad` 与 `mist-performance` 需显式设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS hdc 假设）；`audit-ohos-resource-coverage` 首次运行重写审计文档后退出 1、重跑即 0，已 `git checkout` 还原。
+- **真机**（`com.cnchensh.stellarium`，`192.168.50.108:40565` Mate 80 Pro，1280×2832；`aa dump -l` 确认 `state #FOREGROUND`）：
+  1. **启动存活**：`aa start -a QAbility` 后 `pidof`=31739，全程未变；`ui layout` 见底部 5 项 Dock 与 Dock 时钟。
+  2. **面板开合 + 实时刷新**：`stellarium-cli.mjs --command openUiPanel --payload time --bundle com.cnchensh.stellarium` → `{"ok":true,"accepted":true,"panel":"time"}`；`ui layout` 出现 `"时间 19:57:08"` + `"2026-10-02 · 1x"`（均来自 `timeStore.observationTimeText`）；3 秒后重取为 `"时间 19:57:18"`，证明 store 字段实时驱动标题刷新；`closeUiPanel` 后回到 Dock；`pidof` 仍 31739。
+- **测试同步（规则 8）**：无脚本读取本次删除的方法/字段名（`scripts/*.mjs` grep 为 0），无需改动测试；`observationTimeText` 移动不改变组件 `@Prop` 接口。
+- **本片新踩的坑**：编辑 `orbitColorStyleIndex` 时先误用"以调用点替换"方向造成方法体重复一次，随即以精确旧文本 → 目标文本删除重复块并复扫为 0；教训：删除只能"精确旧文本 → 目标文本"，不可反向拼装。
+- **队列状态**：§13.5 表内 1–12 **全部完成**，队列已空；剩余已知问题（陀螺仪校准面板无入口、`settings_quick_legacy` 无入口死分支、`object` 分支在 expanded 不可达、`OFFLINE_APPGALLERY_BUILD` 跳过 astro 四段）已记入 `ARKTS-PAGES-REFACTOR-PLAN.md` 收口结论。
 ## [2026-10-02] DevEco Code - Phase 6d：抽取 `interactiveGuideShell` 壳层并收口 Phase 6
 
 - **背景/范围**：Phase 6（壳层）第四片、收口片。把 `pages/MainWindowNativeNode.ets` 的 `@Builder interactiveGuideShell()`（78 行）下沉到 `harmonyos/ets-source/panels/shell/InteractiveGuideShell.ets`（116 行）。**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 3/9）；V1 状态体系不变（`@Prop` + 回调注入），不迁 V2。

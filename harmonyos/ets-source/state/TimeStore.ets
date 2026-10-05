@@ -6,6 +6,7 @@
 export class TimeStore {
   timeSpeedIndex: number = 7  // 7=1x realtime (default, new index)
   siderealTimeText: string = '--'
+  observationTimeText: string = '--'
 
   // ==== 速度/速率（原宿主 @State / 普通字段）====
   timeRateText: string = '1x'
