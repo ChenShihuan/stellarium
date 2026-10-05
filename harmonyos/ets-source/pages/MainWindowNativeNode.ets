@@ -4965,7 +4965,7 @@ export struct WindowNativeNode {
       // placement 'center' - so the row centres like every other entry point.
       this.callInteractive('searchObject', targetName, (selectResult: StellariumBridgeResponse) => {
         if (selectResult.found !== true) { return }
-        this.applySelectedObject(selectResult, false, 'center')
+          this.applySelectedObject(selectResult, false, 'center', true)
       })
     })
   }
@@ -8208,7 +8208,7 @@ private loadPlanetPositions(): void {
           })
         }
         const selectionPlacement = placement.length > 0 ? placement : (returnToAstroCalc ? '' : 'center')
-        this.applySelectedObject(result, false, selectionPlacement)
+        this.applySelectedObject(result, false, selectionPlacement, true)
         if (returnToGraph) {
           this.graphTargetPickerActive = false
           this.astroStore.astroTab = 4
@@ -8998,7 +8998,9 @@ private loadPlanetPositions(): void {
   }
 
   // fromRefresh=true 时来自“详情自动刷新”等后台轮询：仅刷新数值，绝不重置展开态、也绝不因瞬时未命中而关窗。
-  private applySelectedObject(result: StellariumBridgeResponse, fromRefresh: boolean = false, placement: string = ''): void {
+  // userReselect=true 表示这是一次“用户主动选择”（星图点选 / 搜索结果 / WUT 行）：
+  // 若用户此前手动关闭了同一目标的详情卡，再次选中它时必须重新弹出，而不是继续抑制。
+  private applySelectedObject(result: StellariumBridgeResponse, fromRefresh: boolean = false, placement: string = '', userReselect: boolean = false): void {
     if (result.ok !== true) {
       this.objectDetailStore.selectedStatus = result.error ? result.error : 'Core not ready'
       return
@@ -9013,7 +9015,9 @@ private loadPlanetPositions(): void {
       // 只有真正换了目标才重开详情。用户手动关闭同一目标后，任何后续刷新/误触
       // 都只更新数值，不能把卡片重新弹回来。
       const targetChanged = (this.objectDetailStore.selectedName !== incomingName) || (this.objectDetailStore.selectedType !== incomingType)
-      const preserveClosedDetail = !this.infoWindowStore.infoWinVisible && !targetChanged && this.dismissedObjectName === incomingName
+      const reopenDismissedDetail = userReselect && !targetChanged && !this.infoWindowStore.infoWinVisible
+        && this.dismissedObjectName === incomingName
+      const preserveClosedDetail = !userReselect && !this.infoWindowStore.infoWinVisible && !targetChanged && this.dismissedObjectName === incomingName
       const isNewSelection = targetChanged
       this.objectDetailStore.selectedName = incomingName
       this.objectDetailStore.selectedEnglishName = result.englishName && result.englishName.length > 0 ? result.englishName : ''
@@ -9114,6 +9118,12 @@ private loadPlanetPositions(): void {
         this.dismissedObjectName = ''
         this.objectDetailConnectorLength = 0
         this.objectDetailStore.selectedConstellationCultureDescriptionExpanded = false
+      }
+      // 再次点选同一目标：清除“已关闭”记录并恢复展开态，让详情页重新弹出。
+      if (reopenDismissedDetail) {
+        this.dismissedObjectName = ''
+        this.infoWindowStore.infoWinExpanded = true
+        this.fullInspectorRequested = true
       }
       if (!preserveClosedDetail) {
         this.infoWindowStore.infoWinVisible = true
@@ -10152,7 +10162,7 @@ private loadPlanetPositions(): void {
         return
       }
       hilog.info(0x0000, 'StellariumArkUI', 'selectAt result: ' + JSON.stringify(result))
-      this.applySelectedObject(result)
+      this.applySelectedObject(result, false, '', true)
       this.flashHint(result.found === true
         ? I18n.t('i0074').replace('%s', zhNameOf(this.objectDetailStore.selectedName))
         : I18n.t('i0075'))

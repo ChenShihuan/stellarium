@@ -1,3 +1,18 @@
+## [2026-10-04] DevEco Code - 修复：再次点选已选中天体时重新弹出详情卡
+
+**问题**：关闭详情卡不取消选中（设计如此）；此后再次点选**同一**天体时，`applySelectedObject` 中的 `preserveClosedDetail`（`!infoWinVisible && !targetChanged && dismissedObjectName === incomingName`）会抑制显示，导致详情卡无法重新弹出。
+
+**改动**（`harmonyos/ets-source/pages/MainWindowNativeNode.ets`，4 处）：
+- `applySelectedObject` 增加第 4 参 `userReselect: boolean = false`；新增 `reopenDismissedDetail` 判定。
+- 仅当 `userReselect && !targetChanged && !infoWinVisible && dismissedObjectName === incomingName` 时：清 `dismissedObjectName`、恢复 `infoWinExpanded = true` 与 `fullInspectorRequested = true`，并让卡片重新可见。
+- 只有**用户主动选择**路径传 `true`：星图点选 `requestSkySelection`、搜索结果/定位（`selectAndPlace` 系列）、WUT 行 `jumpToWutTarget`。**后台刷新**（`fromRefresh=true`）、CLI 命令同步、`clearSelection`、`moveToSelectedAt` 安全区导航**均不传**，行为不变。
+
+**真机验证（Mate 80 Pro，修复构建后）**
+- 搜索面板选中 M31 → 点 ✕ 关闭卡片 → **选中仍为 M31**（复现用户所述前半段）；**再次点同一条搜索结果 → 卡片重新弹出**（仙女座星系 / 星等 3.40 / 距离 2.54 M ly）✓
+- 星图点选路径：`setFOV 6` 放大 M31 后关闭卡片 → 点星图中心 → 卡片重新弹出且选中仍为 M31 ✓
+- 回归：关闭卡片后等 10s（详情自动刷新）卡片**未**自行重开 ✓；点选**其他**天体照常弹出其卡片 ✓；`pidof` 全程存活，无 jscrash。
+- 现场已恢复：FOV 60、选中清除、面板关闭。
+
 ## [2026-10-04] DevEco Code - 真机验证：§2.7 状态下沉 + §14 方法下沉 全链回归
 
 **设备**：HUAWEI Mate 80 Pro（`192.168.50.108:36717`），HEAD `5ea945005f`，`BUILD SUCCESSFUL`（708.7 MB signed HAP）。全程无 jscrash / ArkTS error。
