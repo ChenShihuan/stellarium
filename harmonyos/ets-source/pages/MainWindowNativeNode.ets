@@ -54,6 +54,9 @@ import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { GyroStore } from '../state/GyroStore'
 import { WutStore } from '../state/WutStore'
 import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
+import { LocationStore } from '../state/LocationStore'
+import { CityChipsRow } from '../panels/location/CityChipsRow'
+import { LocationSearchPanel } from '../panels/location/LocationSearchPanel'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
@@ -303,12 +306,8 @@ export struct WindowNativeNode {
   @State private tonightShowerJd: number = 0
   @State private tonightPlanetRows: TonightPlanetRow[] = []
   @State private locationPickMode: string = 'map'
-  @State private locSearchQuery: string = ''
-  @State private locSearchResults: LocSearchItem[] = []
-  @State private locSearching: boolean = false
+  @State private locationStore: LocationStore = new LocationStore()
   @State private observerTimeZone: string = ''
-  @State private savedLocations: SavedLocation[] = []
-  @State private locSearchDebounce: number = 0
   @State private hierContinent: string = ''
   @State private hierCountry: string = ''
   @State private hierRegion: string = ''
@@ -5553,7 +5552,7 @@ export struct WindowNativeNode {
     // 只有当原生确实返回了观测者经纬度时，才用原生值刷新头部位置字段，
     // 否则保留 setLocation 已应用到头部的值（避免被 planetName 等字段清成“未命名”或空值）。
     if (result.latitude !== undefined && result.longitude !== undefined) {
-      this.coordinateText = this.formatDegrees(result.latitude, 'N', 'S') + ' / ' + this.formatDegrees(result.longitude, 'E', 'W')
+      this.coordinateText = this.locationStore.formatDegrees(result.latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(result.longitude, 'E', 'W')
       if (result.locationName !== undefined && result.locationName.length > 0) {
         const planetName = result.planetName && result.planetName.length > 0 ? result.planetName : 'Earth'
         this.locationText = this.locationDisplayName(result.locationName) + ' · ' + this.planetZh(planetName)
@@ -14178,12 +14177,12 @@ private loadPlanetPositions(): void {
     const latitude = 90 - this.clamp(y, 0, height) / height * 180
     const longitude = this.clamp(x, 0, width) / width * 360 - 180
     this.setPickerLocation(I18n.t('custom_location'), latitude, longitude, this.locationPickerAltitude, I18n.t('m_map_selected'))
-    this.locSearchQuery = ''
+    this.locationStore.locSearchQuery = ''
   }
 
   private pickerCoordinateText(): string {
-    return this.formatDegrees(this.locationPickerLatitude, 'N', 'S') + ' / ' +
-      this.formatDegrees(this.locationPickerLongitude, 'E', 'W') + ' / ' +
+    return this.locationStore.formatDegrees(this.locationPickerLatitude, 'N', 'S') + ' / ' +
+      this.locationStore.formatDegrees(this.locationPickerLongitude, 'E', 'W') + ' / ' +
       this.locationPickerAltitude.toFixed(0) + ' m'
   }
 
@@ -14305,7 +14304,7 @@ private loadPlanetPositions(): void {
     this.setPickerLocation(name, latitude, longitude, altitude, I18n.t('m_synced_to_sky'))
     this.observerPlanet = targetPlanet
     this.locationText = this.locationDisplayName(name) + ' · ' + this.planetZh(targetPlanet)
-    this.coordinateText = this.formatDegrees(latitude, 'N', 'S') + ' / ' + this.formatDegrees(longitude, 'E', 'W')
+    this.coordinateText = this.locationStore.formatDegrees(latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(longitude, 'E', 'W')
     this.altitudeText = altitude.toFixed(0) + ' m'
     this.observerTimeZone = targetPlanet === 'Earth' ? this.approximateTimeZoneDisplay(longitude) : I18n.t('tz_system')
     this.flashHint(I18n.t('i0073').replace('%s', this.locationDisplayName(name)))
@@ -14445,17 +14444,17 @@ private loadPlanetPositions(): void {
       this.locationSearchScanTimer = -1
     }
     if (q.length < 1) {
-      this.locSearchResults = []
-      this.locSearching = false
+      this.locationStore.locSearchResults = []
+      this.locationStore.locSearching = false
       return
     }
     const quickResults = this.quickLocationSearch(q)
     if (quickResults.length > 0) {
-      this.locSearchResults = quickResults.slice(0, 20)
-      this.locSearching = false
+      this.locationStore.locSearchResults = quickResults.slice(0, 20)
+      this.locationStore.locSearching = false
       return
     }
-    this.locSearching = true
+    this.locationStore.locSearching = true
     this.locationSearchScanQuery = q
     this.locationSearchScanResults = []
     this.locationSearchScanKeys = new Set<string>()
@@ -14465,7 +14464,7 @@ private loadPlanetPositions(): void {
     this.locationSearchScanRegionIndex = 0
     this.locationSearchScanCityIndex = 0
     this.locationSearchLastPublishMs = 0
-    this.locSearchResults = []
+    this.locationStore.locSearchResults = []
     this.locationSearchScanTimer = setTimeout(() => { this.scanLocationSearchChunk(requestId) }, 0)
   }
 
@@ -14533,11 +14532,11 @@ private loadPlanetPositions(): void {
     const finished = this.locationSearchScanContinentIndex >= this.locationSearchScanContinents.length
     const now = Date.now()
     if (changed && (finished || now - this.locationSearchLastPublishMs >= 120)) {
-      this.locSearchResults = this.locationSearchScanResults.slice()
+      this.locationStore.locSearchResults = this.locationSearchScanResults.slice()
       this.locationSearchLastPublishMs = now
     }
     if (finished) {
-      this.locSearching = false
+      this.locationStore.locSearching = false
       this.locationSearchScanTimer = -1
       return
     }
@@ -14546,8 +14545,8 @@ private loadPlanetPositions(): void {
 
   private selectSearchLocation(item: LocSearchItem): void {
     this.setLocation(item.name, item.lat, item.lon, item.alt, item.planet)
-    this.locSearchQuery = ''
-    this.locSearchResults = []
+    this.locationStore.locSearchQuery = ''
+    this.locationStore.locSearchResults = []
       this.locationPickMode = 'map'
   }
 
@@ -14635,7 +14634,7 @@ private loadPlanetPositions(): void {
       const prefs = AppStorage.get<Record<string, Object>>('stellariumPrefs')
       if (prefs && prefs['savedLocations']) {
         const raw = prefs['savedLocations'] as Object[]
-        this.savedLocations = raw.map((item: Object): SavedLocation => {
+        this.locationStore.savedLocations = raw.map((item: Object): SavedLocation => {
           const loc = item as Record<string, string | number>
           return {
             name: (loc['name'] as string) ?? '',
@@ -14654,7 +14653,7 @@ private loadPlanetPositions(): void {
   private saveCurrentLocation(): void {
     const name = this.locationPickerName
     // 检查是否已存在
-    const exists = this.savedLocations.some((s: SavedLocation) => s.name === name)
+    const exists = this.locationStore.savedLocations.some((s: SavedLocation) => s.name === name)
     if (exists) {
       this.flashHint(I18n.t('loc_already_saved'))
       return
@@ -14666,13 +14665,13 @@ private loadPlanetPositions(): void {
       alt: this.locationPickerAltitude,
       planet: this.observerPlanet,
     }
-    this.savedLocations = [...this.savedLocations, item]
+    this.locationStore.savedLocations = [...this.locationStore.savedLocations, item]
     this.persistSavedLocations()
     this.flashHint(I18n.t('loc_saved_success'))
   }
 
   private deleteSavedLocation(name: string): void {
-    this.savedLocations = this.savedLocations.filter((s: SavedLocation) => s.name !== name)
+    this.locationStore.savedLocations = this.locationStore.savedLocations.filter((s: SavedLocation) => s.name !== name)
     this.persistSavedLocations()
   }
 
@@ -14682,7 +14681,7 @@ private loadPlanetPositions(): void {
       if (!prefs) {
         prefs = {} as Record<string, Object>
       }
-      prefs['savedLocations'] = this.savedLocations
+      prefs['savedLocations'] = this.locationStore.savedLocations
       AppStorage.setOrCreate<Record<string, Object>>('stellariumPrefs', prefs)
     } catch (e) {
       hilog.info(0x0000, 'StellariumArkUI', 'persistSavedLocations error: %{public}s', (e as Error).message ?? '')
@@ -15497,83 +15496,6 @@ private loadPlanetPositions(): void {
       .onClick(() => {
         this.locationPickMode = mode
       })
-  }
-
-  @Builder
-  locationSearchPanel() {
-    Column({ space: 4 }) {
-      Row({ space: 6 }) {
-        TextInput({ text: this.locSearchQuery, placeholder: I18n.t('loc_search_placeholder') })
-          .height(36)
-          .fontSize(13)
-          .fontColor('#E5FFFFFF')
-          .placeholderColor(this.nmSub())
-          .backgroundColor(this.nmInput())
-          .border({ width: 1, color: 'rgba(214, 238, 255, 0.14)' })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .layoutWeight(1)
-          .onChange((value: string) => {
-            this.locSearchQuery = value
-            this.locationPickerName = value.length > 0 ? value : I18n.t('custom_location')
-            clearTimeout(this.locSearchDebounce)
-            this.locSearchDebounce = setTimeout(() => { this.searchLocations(value) }, 260)
-          })
-          .onSubmit(() => {
-            clearTimeout(this.locSearchDebounce)
-            this.searchLocations(this.locSearchQuery)
-          })
-        if (this.locSearching) {
-          LoadingProgress().width(18).height(18).color('#7FB3DC')
-        } else {
-          Button() {
-            Image($r('app.media.ic_search')).width(16).height(16).fillColor('#FFFFFFFF')
-          }
-            .width(40)
-            .height(36)
-            .backgroundColor('#5B93BF')
-            .borderRadius(UI_RADIUS_CONTROL)
-            .onClick(() => {
-              clearTimeout(this.locSearchDebounce)
-              this.searchLocations(this.locSearchQuery)
-            })
-        }
-      }
-        .width('100%')
-      if (this.locSearchResults.length > 0) {
-        Text(I18n.t('loc_search_results')).fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 2, top: 2 })
-        Column({ space: 4 }) {
-          ForEach(this.locSearchResults, (item: LocSearchItem) => {
-            Row() {
-              Column() {
-                Text(item.displayName ?? item.name).fontSize(12).fontColor('#E5FFFFFF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                if (this.locationResultContext(item).length > 0) {
-                  Text(this.locationResultContext(item)).fontSize(10).fontColor('#A8C2D8').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                }
-                Text(this.formatDegrees(item.lat, 'N', 'S') + ' / ' + this.formatDegrees(item.lon, 'E', 'W'))
-                  .fontSize(10).fontColor('#8EA0BD')
-              }
-                .alignItems(HorizontalAlign.Start)
-                .layoutWeight(1)
-              Image($r('app.media.ic_location')).width(14).height(14).fillColor('#7FB3DC')
-            }
-              .width('100%')
-              .height(58)
-              .padding({ left: 10, right: 10 })
-              .backgroundColor('rgba(107, 163, 214, 0.10)')
-              .border({ width: 1, color: 'rgba(107, 163, 214, 0.15)' })
-              .borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.selectSearchLocation(item) })
-          }, (item: LocSearchItem) => item.name + item.lat.toString())
-        }
-          .width('100%')
-      } else if (this.locSearching) {
-        Text(I18n.t('search_catalog_loading')).fontSize(11).fontColor('#8EA0BD').width('100%').padding({ left: 2, top: 2 })
-      } else if (this.locSearchQuery.trim().length > 0 && !this.locSearching) {
-        Text(I18n.t('loc_no_results')).fontSize(11).fontColor('#8EA0BD').width('100%').padding({ left: 2, top: 2 })
-      }
-    }
-      .width('100%')
-      .margin({ top: 10 })
   }
 
   locationColumnScroller(kind: string): Scroller {
@@ -21125,7 +21047,13 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         Text(this.altitudeText).fontSize(14).fontColor('#E5FFFFFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.height(28).width('100%').padding({ left: 10, right: 10 })
       this.locationPickerPanel()
-      this.cityChipsRow()
+      CityChipsRow({
+        store: this.locationStore,
+        onSaveCurrent: () => { this.saveCurrentLocation() },
+        onApplyLocation: (name: string, lat: number, lon: number, alt: number, planet: string) => { this.setLocation(name, lat, lon, alt, planet) },
+        onDeleteLocation: (name: string) => { this.deleteSavedLocation(name) },
+        onChip: (id: string) => { this.handleChip(id) }
+      })
       this.observerPlanetSection()
       // These are developer scaffolding screens, not release-ready features.
       if (!OFFLINE_APPGALLERY_BUILD) {
@@ -25815,7 +25743,15 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         .width('100%')
         .margin({ top: 10 })
 
-      this.locationSearchPanel()
+      LocationSearchPanel({
+        store: this.locationStore,
+        subColor: this.nmSub(),
+        inputColor: this.nmInput(),
+        onSearch: (query: string) => { this.searchLocations(query) },
+        onNameDraft: (name: string) => { this.locationPickerName = name },
+        contextOf: (item: LocSearchItem) => this.locationResultContext(item),
+        onPickItem: (item: LocSearchItem) => { this.selectSearchLocation(item) }
+      })
 
       if (this.locationPickMode === 'map') {
         Stack() {
@@ -26154,117 +26090,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
     this.applyJulianDateInput(scale)
   }
 
-
-  @Builder
-  cityChipsRow() {
-    Column({ space: 4 }) {
-      // 已保存位置
-      Row() {
-        Text(I18n.t('loc_saved_locations')).fontSize(11).fontColor('#99FFFFFF').layoutWeight(1)
-        Button(I18n.t('loc_save_current'))
-          .fontSize(10).fontColor('#7FB3DC')
-          .height(26).padding({ left: 8, right: 8 })
-          .backgroundColor('rgba(107, 163, 214, 0.15)')
-          .border({ width: 1, color: 'rgba(107, 163, 214, 0.25)' })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .onClick(() => { this.saveCurrentLocation() })
-      }
-      .width('100%')
-      .margin({ top: 6 })
-
-      if (this.savedLocations.length === 0) {
-        Text(I18n.t('loc_no_saved')).fontSize(10).fontColor('#8EA0BD').width('100%').padding({ left: 2 })
-      } else {
-        Scroll() {
-          Row({ space: 8 }) {
-            ForEach(this.savedLocations, (s: SavedLocation) => {
-              Row() {
-                Button(s.name)
-                  .fontSize(10).fontColor('#7FB3DC')
-                  .height(28).padding({ left: 8, right: 8 })
-                  .backgroundColor('rgba(107, 163, 214, 0.20)')
-                  .border({ width: 1, color: 'rgba(107, 163, 214, 0.25)' })
-                  .borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => { this.setLocation(s.name, s.lat, s.lon, s.alt, s.planet) })
-                Text('x')
-                  .fontSize(10).fontColor('#FF9999')
-                  .margin({ left: 2 })
-                  .onClick(() => { this.deleteSavedLocation(s.name) })
-              }
-            }, (s: SavedLocation) => s.name)
-          }
-          .padding({ left: 2, right: 2 })
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .width('100%')
-      }
-
-      // 中国城市
-      Text('中国城市').fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 2 }).margin({ top: 6 })
-      Scroll() {
-        Row({ space: 8 }) {
-          ForEach([
-            { label: '北京', id: 'city_Beijing' }, { label: '上海', id: 'city_Shanghai' },
-            { label: '广州', id: 'city_Guangzhou' }, { label: '深圳', id: 'city_Shenzhen' },
-            { label: '成都', id: 'city_Chengdu' }, { label: '杭州', id: 'city_Hangzhou' },
-            { label: '武汉', id: 'city_Wuhan' }, { label: '西安', id: 'city_Xian' },
-            { label: '南京', id: 'city_Nanjing' }, { label: '重庆', id: 'city_Chongqing' },
-            { label: '哈尔滨', id: 'city_Harbin' }, { label: '拉萨', id: 'city_Lhasa' },
-            { label: '乌鲁木齐', id: 'city_Urumqi' }, { label: '香港', id: 'city_HongKong' },
-          ], (c: Record<string, string>) => {
-            Button(c.label)
-              .fontSize(11).fontColor('#7FB3DC').fontWeight(FontWeight.Medium)
-              .height(30).padding({ left: 10, right: 10 })
-              .backgroundColor('rgba(107, 163, 214, 0.20)')
-              .border({ width: 1, color: 'rgba(107, 163, 214, 0.25)' })
-              .borderRadius(UI_RADIUS_PILL)
-              .shadow({ radius: 12, color: 'rgba(0, 0, 0, 0.18)', offsetX: 0, offsetY: 4 })
-              .onClick(() => { this.handleChip(c.id) })
-          }, (c: Record<string, string>) => c.id)
-        }
-        .padding({ left: 2, right: 2 })
-      }
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
-      .width('100%')
-      // 世界城市
-      Text('世界城市').fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 2 }).margin({ top: 4 })
-      Scroll() {
-        Row({ space: 8 }) {
-          ForEach([
-            { label: '东京', id: 'city_Tokyo' }, { label: '首尔', id: 'city_Seoul' },
-            { label: '新加坡', id: 'city_Singapore' }, { label: '纽约', id: 'city_NewYork' },
-            { label: '伦敦', id: 'city_London' }, { label: '悉尼', id: 'city_Sydney' },
-            { label: '巴黎', id: 'city_Paris' }, { label: '柏林', id: 'city_Berlin' },
-            { label: '莫斯科', id: 'city_Moscow' }, { label: '迪拜', id: 'city_Dubai' },
-            { label: '孟买', id: 'city_Mumbai' }, { label: '开罗', id: 'city_Cairo' },
-            { label: '里约', id: 'city_Rio' }, { label: '洛杉矶', id: 'city_LosAngeles' },
-            { label: '多伦多', id: 'city_Toronto' }, { label: '墨西哥城', id: 'city_Mexico' },
-            { label: '曼谷', id: 'city_Bangkok' }, { label: '伊斯坦布尔', id: 'city_Istanbul' },
-            { label: '阿姆斯特丹', id: 'city_Amsterdam' }, { label: '斯德哥尔摩', id: 'city_Stockholm' },
-            { label: '雷克雅未克', id: 'city_Reykjavik' }, { label: '开普敦', id: 'city_CapeTown' },
-            { label: '布宜诺斯艾利斯', id: 'city_BuenosAires' }, { label: '檀香山', id: 'city_Honolulu' },
-          ], (c: Record<string, string>) => {
-            Button(c.label)
-              .fontSize(11).fontColor('#7FB3DC').fontWeight(FontWeight.Medium)
-              .height(30).padding({ left: 10, right: 10 })
-              .backgroundColor('rgba(107, 163, 214, 0.20)')
-              .border({ width: 1, color: 'rgba(107, 163, 214, 0.25)' })
-              .borderRadius(UI_RADIUS_PILL)
-              .shadow({ radius: 12, color: 'rgba(0, 0, 0, 0.18)', offsetX: 0, offsetY: 4 })
-              .onClick(() => { this.handleChip(c.id) })
-          }, (c: Record<string, string>) => c.id)
-        }
-        .padding({ left: 2, right: 2 })
-      }
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
-      .width('100%')
-    }
-    .width('100%')
-    .margin({ top: 12 })
-  }
   /**
    * 时间类操作后刷新「时间/速度」显示。
    * 立即刷一次（响应快），350ms 后再刷一次（引擎异步应用 JD/timeRate 需要时间窗口）。
