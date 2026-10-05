@@ -1,3 +1,22 @@
+## [2026-10-05] DevEco Code - 修复：图层「银河亮度」步进 `+` 被裁成竖条（同类第二处）
+
+**问题**：图层面板 → 银河亮度行的 `+` 按钮显示为一条竖线（横画被切掉），`−` 正常。
+
+**根因**：与上一条同源 —— `Button('+').width(36)` 且未设 padding，ArkUI `Button` 默认左右内边距把内容宽度压到约 4vp（≈14px），`+` 的横画落在内容盒外被裁掉；`−` 本身只是横条，恰好未被察觉。
+
+**改动**（`harmonyos/ets-source/panels/layers/LayerViewTabs.ets`，2 处）：银河亮度步进的 `-` / `+` 两个按钮各加 `.padding({ left: 0, right: 0 })`；尺寸/颜色/交互不变。
+
+**验证（真机 Mate 80 Pro）**：`openUiPanel layers` → 滚到「银河亮度」→ 截图后逐按钮量墨迹并裁剪目视：
+| | 修复前 | 修复后 |
+|---|---|---|
+| `+` 墨迹包围盒 | 11×24 px（竖条） | **24×25 px（完整十字）** |
+| `+` 墨迹像素 | 83 | 138 |
+| `−` 墨迹包围盒 | 13×4 px | 13×4 px（本就正常） |
+
+裁剪图目视确认 `+` 为完整十字。构建 SUCCESSFUL、契约 intact（44 锚点）。
+
+**并更正上一条的排查清单**：上条列的 5 处（`NebulaTexturesPanel`/`ObservingPanel`/`SatellitesPanel`/`SettingsPanel`/`SkyCultureViewTab`）经精确复核为**误报** —— 启发式把邻近的 `Toggle(...).width(42)` 误当成按钮宽度，这 5 处本就带显式 `.padding()`。改用「只沿 `Button` 自身属性链 + 逐按钮计算『可用内容宽度 vs 估算文字宽度』」的全量扫描（**247 个按钮**）后，同类**真缺陷只有两处**：①上条已修的录制控制条三按钮；②本条的银河亮度 `+`。修复后该扫描结果为空（另 3 个定宽≤60 的按钮为单字符 `+`/`-` 或 `ButtonType.Circle` 图标按钮，确认无碍）。
+
 ## [2026-10-05] DevEco Code - 修复：脚本录制控制条三个按钮文字被省略成"…"
 
 **问题**：开始脚本录制后，顶栏 `RecordingControlBar` 的三个按钮（操作/专注、暂停/继续、停止）文字显示为"…"。
@@ -16,7 +35,7 @@
 
 ⇒ 三按钮均为 **2 个中文字正常渲染**（≈34px/字），不再是省略号（若为"…"包围盒应仅约 30–40px 宽）。`arkts_check` 无错、构建 SUCCESSFUL、契约 intact（44 锚点）；测后已停止录制恢复现场。
 
-**顺带排查（未改，待决定）**：同类"定宽 + Button 默认内边距"的可疑项（扫描 `panels/**` 中 `Button(I18n.t(...))` 且 `.width(≤52)` 且无显式 padding）：`NebulaTexturesPanel.ets`(18: `act_refresh`/`nebula_texture_import`)、`ObservingPanel.ets`(20: `observing_refresh`)、`SatellitesPanel.ets`(42: `sat_source_delete`/`sat_refresh`/`sat_tle_import`)、`SettingsPanel.ets`(42: `settings_view_center`)、`SkyCultureViewTab.ets`(52)。其中 width 16–20 的多数是**图标按钮**（单字符/符号标签）不受影响；42/52 的需逐个确认。修复模式同本片（`.padding({ left: 0, right: 0 })` 或适度加宽）。
+**顺带排查（已更正，见下一条）**：初版列的 5 处经精确复核为**误报**（启发式把邻近 `Toggle(...).width(42)` 误当按钮宽度；这 5 处本就带显式 `.padding()`）。
 
 ## [2026-10-04] DevEco Code - M2-A：ObjectModelRenderer（PLAN §15.11 第二批 M2）
 
