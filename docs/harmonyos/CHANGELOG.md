@@ -1,3 +1,13 @@
+## [2026-10-03] DevEco Code - 回收并完成：九大天体启动预热 + 视野资料图横幅语义化（非队列片）
+
+- **来源**：这两项原是 2026-10-03 被用户中断的切片（子会话 `ses_f00aa52d2ffegjNCRrgPREWMoS`，标题 "Pre-warm 9 bodies + semantic banner"）。其实现在中断时**已写完并编译过**（源码 +96/−36），但从未提交、未写 CHANGELOG、未真机验证；其中**测试同步被丢失**。本轮从其**编译产物**（`build/.../MainWindowNativeNode.ets`，与提交态差异 `96 insertions / 36 deletions`）**回收**实现，并由主会话补回测试同步。
+- **实现（回收）**：
+  - **预热**：`BODY_DETAIL_TEXTURE_PATHS`（七大行星（不含地球）+ 月球 + 太阳）+ `bodyDetailWarmupTimer/Index/Pending` + `startBodyDetailWarmup()`/`stepBodyDetailWarmup()`/`stopBodyDetailWarmup()`，以 `setInterval` 分片推进、每项调用 `resolveStellariumDetailMediaAsset`，日志 `[body-warmup] ready|unavailable|failed|completed`。
+  - **横幅语义化（A 方案）**：`SKY_TEXTURE_STATUS_FAST_POLLS=24` 后转慢轮询（`SLOW_INTERVAL_MS=2000`）；`STALL_POLLS=90` 仍未就绪则**升级为可操作错误态**（`当前视野资料图仍在准备，可稍后重试`）并停止轮询；`updateSkyTextureStatus` 按**实时状态**驱动 —— `pending>0 || status==='loading'` → `正在载入当前视野资料图 · N 项待完成`；`errors>0 || error||partial-error` → `…项资料图加载失败`；**就绪即 `hideSkyTextureStatus()` 收起**（不再按时间收起，也不会永久停留）。
+- **测试同步（本轮补回）**：`scripts/test-ohos-startup-stars.mjs` 两处 —— ① `dismissSplash` 的夹具补 `startBodyDetailWarmup` 桩；② 旧"按时间收敛"用例整体替换为新语义断言（新常量、三条文案、stall 升级分支、就绪即收起、并加"不得出现按时间收起"的回归守卫）。
+- **验证**：切片预检 通过；`arkts_check` 通过；构建 **BUILD SUCCESSFUL**；契约 通过（33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点，**184** 个 .ets）；全量 `*ohos*.mjs` 仅 §13.6 的 7 个存量环境类失败；`test-ohos-startup-stars` **17/17 全绿**。
+- **真机未验证（设备掉线）**：安装时 `hdc list targets` 无目标（`Not match target founded`），故本片**只到"构建+契约+测试"**。待设备回连后需验：`[body-warmup] ready/completed` 日志；放大月球/行星；横幅"出现 → 就绪消失 / 停滞升级为可重试错误态"。
+- **关键范围结论（决定后续要不要动 native）**：预热的落地是 `resolveStellariumDetailMediaAsset`（**App 侧详情媒体缓存**）→ 它加快的是**详情卡**出图/出模型；而**星图放大**的"先空白后出图"走的是**引擎自身纹理**，App 侧预热触及不到。若用户诉求"放大后立即可见"针对星图，则需 **native 侧**支持，建议契约（待用户决定）：新增如 `preloadPlanetTextures`（参数：天体 id 列表）或 `prepareSkyTexturesForFov`（按当前视野预准备），落点 `src/StelOhosCommandCatalog.hpp` + `src/StelMainView.cpp`。
 
 ## [2026-10-02] DevEco Code - 资源覆盖审计结论与打包决策（都不补 models/atmosphere）
 

@@ -178,7 +178,7 @@ test('only a ready actually presented frame with matching aspect reveals the cha
     { setOrCreate: (key, value) => published.set(key, value) }, { info() {} });
   const fixture = new Fixture();
   Object.assign(fixture, { skyWidth: 1078, skyHeight: 674, splashGone: false,
-    startupViewportCheckedAt: 0, stopTwinkle() {} });
+    startupViewportCheckedAt: 0, stopTwinkle() {}, startBodyDetailWarmup() {} });
   for (const response of [{ pending: true }, { ok: true, ready: true, width: 1023, height: 767 },
     { ok: true, ready: false, width: 2560, height: 1600 }, { pending: true }]) {
     fixture.startupViewportCheckedAt = 0;
@@ -193,20 +193,68 @@ test('only a ready actually presented frame with matching aspect reveals the cha
   assert.equal(published.get('stellariumStartupSkyReady'), true);
 });
 
-test('sky-texture loading banner converges instead of sticking at N pending forever', () => {
+test('sky-texture loading banner is driven by live status instead of a timer', () => {
+
   const page = read('pages/MainWindowNativeNode.ets');
+
+  // 常量：快轮询 24 次后转慢轮询，90 次仍未就绪则升级为可操作的错误态
+
   assert.match(page, /const SKY_TEXTURE_STATUS_FAST_POLLS: number = 24/);
-  assert.match(page, /const SKY_TEXTURE_STATUS_SETTLE_POLLS: number = \d+/);
+
   assert.match(page, /const SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS: number = \d+/);
-  assert.match(page, /const SKY_TEXTURE_STATUS_FINAL_HIDE_MS: number = \d+/);
-  assert.match(page, /仍在后台准备当前视野资料图，完成后会自动显示/);
-  assert.match(page, /当前视野资料图暂未就绪，稍后自动重试/);
+
+  assert.match(page, /const SKY_TEXTURE_STATUS_STALL_POLLS: number = \d+/);
+
+  // 不再有"按时间收起"的老常量
+
+  assert.doesNotMatch(page, /SKY_TEXTURE_STATUS_FINAL_HIDE_MS|SKY_TEXTURE_STATUS_SETTLE_POLLS/);
+
+  // 三条状态文案：加载中 / 真失败 / 停滞升级
+
+  assert.match(page, /正在载入当前视野资料图 · '/);
+
+  assert.match(page, /项待完成/);
+
+  assert.match(page, /项资料图加载失败/);
+
+  assert.match(page, /当前视野资料图仍在准备，可稍后重试/);
+
+
+
+  const update = page.match(/  private updateSkyTextureStatus\(result: StellariumBridgeResponse\): void \{[\s\S]*?\n  \}/)[0];
+
+  // 有 pending / loading → 显示并报出待完成项数
+
+  assert.match(update, /if \(pending > 0 \|\| status === 'loading'\)/);
+
+  assert.match(update, /this\.tools\.skyTextureStatusVisible = true/);
+
+  assert.match(update, /this\.tools\.skyTextureStatusError = false/);
+
+  // 真失败 → 错误态（保留重试入口由视图提供）
+
+  assert.match(update, /if \(errors > 0 \|\| status === 'error' \|\| status === 'partial-error'\)/);
+
+  assert.match(update, /this\.tools\.skyTextureStatusError = true/);
+
+  // 就绪 → 立即收起（不是按时间）
+
+  assert.match(update, /this\.hideSkyTextureStatus\(\)/);
+
+
+
   const poll = page.match(/  private pollSkyTextureStatus\(\): void \{[\s\S]*?\n  \}/)[0];
-  // The slow phase keeps polling so a late-ready view still retracts the banner ...
-  assert.match(poll, /this\.skyTextureStatusSlow \? SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS/);
-  // ... and the settle branch takes it down rather than leaving a stale loading note.
-  assert.match(poll, /this\.tools\.skyTextureStatusVisible = false/);
-  assert.doesNotMatch(poll, /skyTextureStatusPolls < 24/);
+
+  // 超时升级为错误态并停止轮询，且带重试入口语义
+
+  assert.match(poll, /this\.skyTextureStatusSlow && this\.skyTextureStatusPolls >= SKY_TEXTURE_STATUS_STALL_POLLS/);
+
+  assert.match(poll, /this\.stopSkyTextureStatusObserver\(\)/);
+
+  // 关键回归守卫：不得出现"仍在加载却按时间收起"的分支
+
+  assert.doesNotMatch(poll, /skyTextureStatusPolls < 24\)/);
+
 });
 
 test('withdrawing privacy stops the host before removing native content', () => {
