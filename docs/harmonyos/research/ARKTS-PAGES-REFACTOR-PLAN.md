@@ -1941,5 +1941,28 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 
 **验证**：`check-ohos-refactor-slice` 通过（括号深度 0）；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL in 1m4s`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 251 文件）；受影响 `test-ohos-mist-horizon`（5/5）、`verify-ohos-object-details`（121 字段 / 11 段）全绿；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（4 个 `-pad` / `mist-performance` / `verify-ohos-search`）。真机（192.168.50.108:36717）：`devecocli run --skip-build` → `Smoke: PASS`；① **桥响应**（`StellariumBridgeResponse`）— CLI `searchObject Mars` 返回完整响应（`found:true` + `detailModel` + 10 条 `liveDetailFields` + `distance`/`magnitude`/`ra`/`dec`）；② **详情卡** — `ui layout` 见 `Text "火星"` + `Scroll#object-detail-content-scroll`，hilog `[detail-model] render pixel map created` + `[detail-media-card] sphere loaded …mars.png`；③ **搜索** — `openUiPanel search` 渲染 `search-browser-scroll`，点搜索框输入 `Jupiter` → 建议 `Jupiter` / `JUPITER 3 (ECHOSTAR 24)`，点选 → 详情卡 `木星` + hilog `…jupiter.png`。`pidof 23856` 全程存活、无 jscrash / 无 faultlog；测试未改动任何持久化设置。
 
-**M 轨道收尾结论（2026-10-06，M5 后）**：STATE-REVIEW §11 的 **M 轨道**（渲染管线 / 纯计算 / 类型模块从 `pages/` 归位）已完成 **6/7 片** —— M1（DetailModel 渲染管线 → `capability/` + `common/derive/`）、M2（位置参考数据三文件 → `common/location/`）、M3（`AstronomyGuide` → `common/derive/`、`AudioEngine` → `capability/`）、M6（`MediaPort` 接口隔离）、M4（扩展域模型 → `common/types/`，barrel 兜底）、M5（核心桥类型 → `common/types/`，barrel 兜底）。**pages/ 现仅余页面壳 + `I18n.ets`；M7 待做**（候选：`pages/I18n.ets` → `common/i18n/`，STATE-REVIEW §11.3 长期建议）。
+#### 15.12.22 M 轨道 M7：国际化中心迁出 pages/（2026-10-06，Barrel 兜底）
+
+> **依据**：STATE-REVIEW §11 的 **Barrel 策略**、M 轨道第 7 片（末片）。**纯路径迁移 + 一行式 barrel**，不改任何文案/常量/逻辑。
+> `pages/I18n.ets`（2,378 行，全项目最大消费者群）与页面无关却被全项目消费；开工 `git log -1` = `b4a94b5aa2`，宿主 `MainWindowNativeNode.ets` 基线 8,017 行。
+
+**§15.7-1 NAPI 判定（最终落点，与 STATE-REVIEW §11.3 原记的 `common/i18n/` 不同）**：开工核查发现 `I18n.ets` 的**唯一 import** 为 `import i18n from '@ohos.i18n'`，并在 **5 处实际调用**设备能力（`i18n.System.getAppPreferredLanguage` / `i18n.getSystemLocale` / `i18n.System.setAppPreferredLanguage` / `i18n.I18NUtil.getBestMatchLocale` / `i18n.System.getDisplayCountry`）。按 §15.7-1（`common/*` 不得 import `@ohos.*` 设备能力）与 M3 对 `AudioEngine` 的判定口径（**是否调用**设备能力，而非是否 import 其模块），**无法落 `common/i18n/`**；按该规则的明文 fallback「应改落 `capability/`」改落 **`capability/I18n.ets`**。文件整内容逐字原样（`git mv`，R100）。
+
+**做法**
+
+1. `git mv pages/I18n.ets → capability/I18n.ets`（整文件原样；该文件除 `@ohos.i18n` 外无内部 import，搬家无需改相对深度）。
+2. 在 `pages/I18n.ets` 原位新建 **2 行 shim**：说明注释 + `export * from '../capability/I18n'`。
+3. 消费者 **0 改动**（**135 处**仍 `import … from '…/pages/I18n'`，经 barrel 解析到新实体）。
+
+**default export 核查**：`grep 'export default'` = **0**；全部命名导出（`LangCode` / `SUPPORTED_LANGUAGES` / `LANGUAGE_DISPLAY` / `PROJECTION_KEYS` / `I18n`），`export *` 完整覆盖，无需 `export { default }`。
+
+**夹具同步（3 脚本）**：`scripts/check-ohos-i18n.mjs`、`scripts/sync-ohos-i18n-from-po.mjs`、`scripts/test-ohos-object-type-i18n.mjs` 改读 `capability/I18n.ets`（含构建镜像路径）。
+
+**本片新踩的坑**：`check-ohos-i18n.mjs` 长期潜伏两处夹具缺陷，被本片 root 修复暴露 —— ① Windows `root` 路径解析成 `E:\E:\…`（§13.6 同类；因脚本名不匹配全量扫描正则从未被扫到）；② TW/HK/MO 中文地名断言硬编码 `\n` 而 `countries.ts` 为 CRLF。两处均已修，不涉 I18n 内容。
+
+**度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（不动宿主）；`I18n.ets` 2,378 行（内容等价）；净 5 个跟踪文件改动（1 重命名 + 1 barrel + 3 脚本）。
+
+**验证**：预检通过；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL in 44s`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 252 文件）；`check-ohos-i18n`（源↔镜像一致）、`test-ohos-object-type-i18n`（7/7）全绿；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败。真机（192.168.50.108:36717）：新 HAP 安装成功；**设备安全锁屏**（开发者模式禁止自动解锁，`aa start`=10106102），语言切换走查**待真机人工**；未改持久化设置。
+
+**M 轨道收尾结论（2026-10-06，M7 后；7/7 全清）**：STATE-REVIEW §11 的 **M 轨道**（渲染管线 / 纯计算 / 类型模块从 `pages/` 归位）**7 片全部完成** —— M1（DetailModel 渲染管线 → `capability/` + `common/derive/`）、M2（位置参考数据三文件 → `common/location/`）、M3（`AstronomyGuide` → `common/derive/`、`AudioEngine` → `capability/`）、M6（`MediaPort` 接口隔离）、M4（扩展域模型 → `common/types/`，barrel 兜底）、M5（核心桥类型 → `common/types/`，barrel 兜底）、M7（国际化中心 → `capability/I18n.ets`，barrel 兜底；NAPI 判定见上）。**`pages/` 现仅余页面壳**（`ApplicationRoot` / `PrivacyBootstrap` / `StartupSky` / `StartupStarGeometry.ts` / `MainWindowNativeNode` / `FloatWindowNativeNode` / `SubWindowNativeNode` / `UiExtensionNativeNode`）**与 3 个一行式 barrel**（`pages/StellariumTypes.ets`→`common/types/`、`pages/MainWindowModels.ets`→`common/types/`、`pages/I18n.ets`→`capability/`）。**后续轨道备注**：消费者改直引新路径后可删这 3 个 barrel，归入 Phase 7 收口轨道。
 
