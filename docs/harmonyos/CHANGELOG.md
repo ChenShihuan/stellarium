@@ -1,3 +1,35 @@
+## [2026-10-04] DevEco Code - 重构：§14 A2-5 大项与耦合项
+- **切片**：§14 轨道 A2 第 5 片（放宽粒度第 3 片）。开工 git log -1 = 7ccb9a7e3b，工作区已跟踪文件干净（仅 .deveco/、.iis/ 未跟踪）。
+- **重测口径**：宿主 private、非 oid/Promise、非动作动词、无成员写/IO/桥/路由/定时器/AppStorage/hilog、且读 	his.<field> → A2 余项 **75 个 / 519 行**；排除 6 个热路径（留 A2-6）与已登记 A-保留 51 个后取 **45 个方法**迁移（10 个零宿主读取的 hec 几何簇 + 1 标题 + 3 天体标题 + 1 CSV + 18 天文图表尺寸/标签 + 12 夜视配色）。
+- **逐方法去向**：
+  - 日心黄道点几何簇 10 个（hecDistanceToRadius hecOrbitVerticalRadius hecPointDistance hecPointHorizontalRadius hecPointVerticalRadius hecPointX hecPointY hecPointLeft hecPointTop hecLayoutPositions）→ **common/derive/astro.ets**（复测确认均零宿主状态读取，纯函数；文件体逐字搬入，仅去 	his.）。hecLayoutPositions 仍经 AstroHostHooks 注入点回注，宿主适配器改直连模块函数。
+  - panelTitle(101) → **common/derive/labels.ets 的 panelTitleFor(activePanel, configTab, isExpandedLayout, timeText)**（宿主控制器字段与时间钟文本按 §14.8 规则 6 改显式入参；2 个调用点同片改；面板标题映射逐字保留）。
+  - celestialTitle(纯) + hecTitle + celestialPositionTitle → celestialTitle 并入 derive/labels.ets；后两者删除、3 处调用点与 2 个 AstroPanel 适配器改直连模块/内联。
+  - currentAstroCsvExport(76) → **AstroStore.astroCsvExport(wutTargets, wutObservationTime)**（跨 WutStore 读取改显式入参；天体标题改直连 celestialTitle；zhNameOf/planetZh/planetMetricLabel 直连模块；ilteredEclipses() 走 store 内方法；函数体逐字，仅改取值方式）。
+  - 天文图表尺寸/标签 18 个（ltAzRangeLabel ltAzMidpointLabel ltBarWidth ltBarHeight ltitudeCurveColor ltCurveSegmentWidth nnualBarHeight nnualBarWidth zimuthNowLabel lunarElongationBarWidth lunarElongationLineTop lunarElongationNowLabel planetTimeSeriesBarWidth planetTimeSeriesSegmentWidth planetPairBarWidth planetPairSegmentWidth planetPairCurrentIndex lmanacHoursLabel）→ **AstroStore**（读本 store 字段，	his.astroStore.X→	his.X；AstroPanelHost 适配器 lambda 改指向 store，组件接口未动）。
+  - 夜视配色 12 个（
+mText 
+mSub 
+mAccent 
+mBg 
+mBorder 
+mInput 
+mInputBorder 
+mPickerSurface 
+mPickerHeader 
+mPickerHeaderActive 
+mPickerSelected 
+mPickerOption）→ **state/NightModeStore.ets**（	his.nightModeStore.nightMode→	his.nightMode；宿主 129 处调用点改 	his.nightModeStore.nm*()）。
+- **停下**：objectDetailConnectorObstacles(45) 未迁。理由：其为**逐帧渲染连接线的宿主控制器组合**，读取 overlayStore/polarScopeStore/gyroStore/infoWindowStore 四个 store 的可见性 + selectedObjectUiObstacles() + 约 10 个 A-保留几何助手（iewCoordinateOverlay*/polarScope*/isCompactTopQuickPoint/compactTopQuickX/Y/ailTop/EDGE_MARGIN）。下沉需 17 个显式入参或约 10 个 hook 注入，会破坏"函数体逐字"且改动落在真机离线时不可验的渲染路径（模拟器无引擎、连接线不渲染）→ 按 (b) 登记为"宿主控制器逻辑（组合型）"，留待设备可用时的几何合并片。**非 A-保留**（读 store）；其调用点 selectedObjectUiObstacles 亦同因保留。
+- **补登记 A-保留**：无新增（重测 A-保留组仍 51；shouldRefresh*/canGoBackPanel 等读 pplicationInForeground/panelNavigationStack/	ools，不满足"全部读取项 ⊆ §2.7.1"故不登记，维持既有 store 谓词注入语义，未动）。
+- **body diff 摘要**：derive/astro.ets 245→349（+104，10 纯函数）；derive/labels.ets 342→453（+111，panelTitleFor+celestialTitle）；NightModeStore 13→52（+39，12 法）；AstroStore 1408→1578（+170，1 CSV + 18 尺寸/标签法 + 2 import 行）；宿主单体 **14,860→14,456（−404）**，宿主 private（附录 §2.12 口径）**658→613（−45）**。
+- **残留/双写复核**：宿主内零 	his.<45 名>、零 	his.nm*；store/模块内零 	his. 宿主前缀；无同名方法双写。
+- **验证**：check-ohos-refactor-slice.mjs 通过；rkts_check（5 个改动文件）No errors；uild-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources **BUILD SUCCESSFUL in 49.5 s**；check-ohos-ui-contract.mjs **intact（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点）**；全量 scripts/*ohos*.mjs 扫描**仅 §13.6 的 7 个环境类失败**（无回归）。
+- **模拟器冒烟（真机离线；127.0.0.1:5555，UI-only 无引擎）**：install→a start QAbility→pidof 全程存活（6240）。逐一验证 panelTitle 路径：Dock 五面板标题 时间（"时间 --"）/位置/图层/天体分类、更多功能（"更多功能"）与三个 hub（观测工作区/天体数据与扩展/脚本与自动化）文本与迁移前一致、无崩溃；另打开天文计算面板（标题"天文计算"，CSV 按钮可见）验证 astro 尺寸/标签适配器无崩溃。
+- **待真机**：天文图表尺寸/标签的真实数值渲染（高度曲线 / 年高度 / 月距 / 双变量曲线，依赖引擎数据）、stroCsvExport 的真实 CSV 内容、夜视模式切换下 12 个 
+m* 配色的实时刷新、currentAstroCsvExport 导出文件写出。
+- **A2 进度：140 / 214**（A2-1 6 + A2-2 15 + A2-3 41 + A2-4 33 + A2-5 45）。余项 ≈ 30 个 B 组（含停下的 objectDetailConnectorObstacles 与跨 store/scratch 的 location/skyculture/label/几何薄包装）+ 6 个热路径（A2-6）。
+- **踩坑**：本轮 edit 工具在宿主一处多行替换中写入了 **1 个裸 LF**（行尾不一致）→ 提交前用 (?<!\r)\n→\r\n 归一全文件并核对 crlf=lf；其余四个改动文件行尾始终 CRLF。教训：改动后必须逐文件核对裸 LF，不能只看 diff。
 ## [2026-10-04] DevEco Code - 重构：§14 A2-4 布局/几何族（A2-G）
 - **切片**：§14 轨道 A2 第 4 片（放宽粒度第 2 片）。开工 `git log -1` = `104871aa76`，工作区已跟踪文件干净。
 - **重测口径**：宿主 `private`、非 `void`/`Promise`、非动作动词、无成员写/IO/桥/路由/定时器/`AppStorage`/`hilog`、且读 `this.<field>` → A2 余项 85 个 / 578 行；排除 6 个热路径（留 A2-6）与已登记 A-保留 49 个后，按"布局/几何族（A2-G）"取 **32 个迁移 + 1 个折叠删除**。

@@ -10,11 +10,11 @@
 // 读写；AstroPanel 经 eclipseStartOptionLabel 回调展示该日期，故放被观察 store 一致）。
 // 续作第二批：RTS 日历起始日期 rtsCalendarStartYear/Month/Day 与年度高度图起始日期
 // graphStartYear/Month/Day（原宿主 @State，宿主日期选择器回调读写，AstroPanel 经 host 回调消费）。
-import { TonightEvents, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, PlanetPosition, HeliocentricPosition, CelestialPosition, StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { TonightEvents, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, PlanetPosition, HeliocentricPosition, CelestialPosition, StellariumBridgeResponse, WutTarget } from '../pages/StellariumTypes'
 import { EphemerisOptions, RtsCalendarOptions, EclipseOptions, PhenomenaOptions, HeliocentricPositionOptions, CelestialPositionOptions, AstroCsvExport } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
-import { dateToJD, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetPairBodyName } from '../common/derive/astro'
-import { zhNameOf } from '../common/derive/labels'
+import { dateToJD, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetPairBodyName, planetMetricLabel } from '../common/derive/astro'
+import { zhNameOf, planetZh, celestialTitle } from '../common/derive/labels'
 import { csvCell } from '../common/derive/skycult'
 
 // 本域辅助端口接口（§14.8：store 不 import NAPI/UI，跨 store / 未下沉宿主逻辑经具名回调注入）。
@@ -1404,5 +1404,175 @@ export class AstroStore {
     if (this.astroTab === 1 && this.ephemerisMode < 2) return true
     if (this.astroTab === 6 && this.planetCalcMode === 1) return false
     return false
+  }
+
+  // ---- A2-5：当前页的 CSV 导出模型（原宿主 private currentAstroCsvExport 逐字迁入）----
+  // 跨域读取 WutStore 的目标与观测时刻，按 §14.8 规则 6 改为显式入参；
+  // 天体标题助手改直连 common/derive/labels 的 celestialTitle。
+  astroCsvExport(wutTargets: WutTarget[], wutObservationTime: string): AstroCsvExport | undefined {
+    if (this.astroTab === 0) {
+      if (this.positionMode === 0 && this.planetPositions.length > 0) {
+        return { title: '地平位置', headers: ['天体', '赤经(当日)', '赤纬(当日)', '高度(度)', '方位(度)', '星等', '距离(AU)', '视直径(角分)', '中天'],
+          rows: this.planetPositions.map((item: PlanetPosition) => [planetZh(item.name), item.rightAscension, item.declination, item.altitude, item.azimuth, item.magnitude, item.distanceAU, item.angularSizeArcmin, item.transit]) }
+      }
+      if (this.positionMode === 1 && this.hecPositions.length > 0) {
+        return { title: '日心黄道位置', headers: ['天体', '英文名', '黄纬(度)', '黄经(度)', '日心距离(AU)', '彗星', '已选小天体'],
+          rows: this.hecPositions.map((item: HeliocentricPosition) => [celestialTitle(item.name, item.englishName), item.englishName, item.latitude, item.longitude, item.distanceAU, item.isComet, item.isSelectedMinor]) }
+      }
+      if (this.positionMode === 2 && this.celestialPositions.length > 0) {
+        return { title: '目录天体位置', headers: ['天体', '英文名', '目录编号', '坐标一', '坐标二', '高度(度)', '方位(度)', '星等', '类型', '距日(度)', '视直径(角分)', '距离(AU)', '中天'],
+          rows: this.celestialPositions.map((item: CelestialPosition) => [celestialTitle(item.name, item.englishName), item.englishName, item.catalogId, item.firstCoordinate, item.secondCoordinate, item.altitude, item.azimuth, item.magnitude, item.type, item.elongation, item.angularSizeArcmin, item.distanceAU, item.transit]) }
+      }
+    } else if (this.astroTab === 1 && this.ephemerisData.length > 0) {
+      return { title: (this.ephemerisName.length > 0 ? this.ephemerisName : '天体') + '星历', headers: ['日期时间', '天体', '英文名', '赤经(J2000)', '赤纬(J2000)', '赤经(当日)', '赤纬(当日)', '高度(度)', '方位(度)', '时角(度)', '极距(度)', '星等', '相位(%)', '距离(AU)', '距日(度)', '视直径(角分)', '气团质量'],
+        rows: this.ephemerisData.map((item: EphemerisRow) => [item.date, item.bodyName, item.bodyEnglishName, item.ra, item.dec, item.raOfDate, item.decOfDate, item.altitude, item.azimuth, item.hourAngleDegrees, item.polarDistanceDegrees, item.magnitude, item.phase !== undefined ? item.phase * 100 : undefined, item.distanceAU, item.elongationDegrees, item.angularSizeArcmin, item.airmass]) }
+    } else if (this.astroTab === 2 && this.rtsCalendarData.length > 0) {
+      return { title: (this.rtsCalendarName.length > 0 ? this.rtsCalendarName : '天体') + '升中天落日期表', headers: ['日期', '升起', '中天', '落下', '中天高度(度)', '星等', '距日(度)', '距月(度)', '状态'],
+        rows: this.rtsCalendarData.map((item: RtsCalendarDay) => [item.date, item.rise, item.transit, item.set, item.transitAltitude, item.magnitude, item.solarElongation, item.lunarElongation, item.status]) }
+    } else if (this.astroTab === 3 && this.phenomenaData.length > 0) {
+      return { title: '天象预报', headers: ['日期时间', '事件', '天体一', '天体二', '数值', '指标', '单位'],
+        rows: this.phenomenaData.map((item: PhenomenonItem) => [item.date, item.type, item.bodyA, item.bodyB, item.separation, item.metricLabel, item.metricUnit]) }
+    } else if (this.astroTab === 4) {
+      if ((this.graphMode === 0 || this.graphMode === 1) && this.altAzCurve.length > 0) {
+        return { title: this.altAzName + (this.graphMode === 0 ? '地平高度曲线' : '方位角曲线'), headers: ['儒略日', '距起点(小时)', '高度(度)', '方位(度)', '太阳高度(度)', '月亮高度(度)'],
+          rows: this.altAzCurve.map((item: AltAzPoint) => [item.jd, item.t, item.altitude, item.azimuth, item.sunAltitude, item.moonAltitude]) }
+      }
+      if (this.graphMode === 2 && this.annualElevationData.length > 0) {
+        return { title: this.annualElevationName + '全年高度', headers: ['日期', '儒略日', '高度(度)', '方位(度)'],
+          rows: this.annualElevationData.map((item: AnnualElevationPoint) => [item.date, item.jd, item.altitude, item.azimuth]) }
+      }
+      if (this.graphMode === 3 && this.observabilityData.length > 0) {
+        return { title: this.observabilityName + '观测窗口', headers: ['日期', '最佳时刻', '最高高度(度)', '可观测时长(小时)', '暗夜时长(小时)', '月面照明(%)', '月亮高度(度)'],
+          rows: this.observabilityData.map((item: ObservabilityDay) => [item.date, item.peakTime, item.maxAltitude, item.visibleHours, item.darkHours, item.moonIllumination, item.moonAltitude]) }
+      }
+      if (this.graphMode === 4 && this.lunarElongationData.length > 0) {
+        return { title: this.lunarElongationName + '月距曲线', headers: ['日期时间', '儒略日', '距起点(小时)', '月距(度)'],
+          rows: this.lunarElongationData.map((item: LunarElongationPoint) => [item.date, item.jd, item.t, item.separation]) }
+      }
+      if (this.graphMode === 5 && this.planetTimeSeriesData.length > 0) {
+        return { title: this.planetTimeSeriesName + '双变量时间曲线', headers: ['日期时间', '儒略日', '距起点(小时)', planetMetricLabel(this.planetTimeSeriesLeftMetric), planetMetricLabel(this.planetTimeSeriesRightMetric)],
+          rows: this.planetTimeSeriesData.map((item: PlanetTimeSeriesPoint) => [item.date, item.jd, item.t, item.left, item.right]) }
+      }
+    } else if (this.astroTab === 5 && wutTargets.length > 0) {
+      return { title: '今晚可观测天体', headers: ['天体', '英文名', '类型', '观测时刻', '高度(度)', '方位(度)', '星等', '角尺寸(角分)', '升起', '中天', '落下'],
+        rows: wutTargets.map((item: WutTarget) => [zhNameOf(item.name ?? ''), item.englishName, item.type, wutObservationTime, item.altitude, item.azimuth, item.magnitude, item.angularSizeArcmin, item.rise, item.transit, item.set]) }
+    } else if (this.astroTab === 6) {
+      if (this.planetCalcMode === 0 && this.planetCalcData.length > 0) {
+        return { title: '行星计算', headers: ['天体', '英文名', '赤经', '赤纬', '高度(度)', '方位(度)', '星等', '距离(AU)', '距日(度)', '相位(%)', '升起', '中天', '落下'],
+          rows: this.planetCalcData.map((item: PlanetCalcItem) => [item.name, item.englishName, item.ra, item.dec, item.altitude, item.azimuth, item.magnitude, item.distanceAU, item.elongation, item.phase !== undefined ? item.phase * 100 : undefined, item.rise, item.transit, item.set]) }
+      }
+      if (this.planetCalcMode === 1 && this.planetPairDistanceData.length > 0) {
+        return { title: this.planetPairFirstName + '与' + this.planetPairSecondName + '距离曲线', headers: ['日期时间', '儒略日', '距起点(天)', '线性距离(AU)', '角距离(度)'],
+          rows: this.planetPairDistanceData.map((item: PlanetPairDistancePoint) => [item.date, item.jd, item.t, item.linearDistance, item.angularDistance]) }
+      }
+    } else if (this.astroTab === 7) {
+      if (this.eclipseMode === 0 && this.filteredEclipses().length > 0) {
+        return { title: '日月食预报', headers: ['日期时间', '类别', '类型', '食分', '沙罗周期', '本地可见', '本地食甚', '太阳高度(度)', '月亮高度(度)', '备注'],
+          rows: this.filteredEclipses().map((item: EclipseItem) => [item.date, item.kind, item.type, item.magnitude, item.saros, item.localVisible, item.localMax, item.localSunAltitude, item.localMoonAltitude, item.note]) }
+      }
+      if (this.eclipseMode === 1 && this.planetaryTransitData.length > 0) {
+        return { title: '行星凌日预报', headers: ['日期时间', '行星', '初亏', '内切始', '食甚', '内切终', '复圆', '食分', '最小距日心(度)', '持续(分钟)', '本地可见'],
+          rows: this.planetaryTransitData.map((item: PlanetaryTransitItem) => [item.date, item.planet, item.firstContact, item.secondContact, item.middle, item.thirdContact, item.lastContact, item.magnitude, item.minimumSeparation, item.durationMin, item.localVisible]) }
+      }
+    } else if (this.astroTab === 8 && this.almanacData.size > 0) {
+      const rows: Array<Array<string | number | boolean | undefined>> = []
+      this.almanacData.forEach((value: string, key: string) => { rows.push([key, value]) })
+      for (const event of this.almanacSeasons) rows.push(['四季节点：' + (event.label ?? ''), event.date])
+      return { title: '历法与月相', headers: ['项目', '数值'], rows: rows }
+    } else if (this.astroTab === 9 && this.moonPhaseData.length > 0) {
+      return { title: '月相预报', headers: ['日期时间', '月相', '照亮(%)', '高度(度)', '方位(度)', '升起', '中天', '落下'],
+        rows: this.moonPhaseData.map((item: MoonPhaseItem) => [item.date, item.phase, item.illumination, item.altitude, item.azimuth, item.rise, item.transit, item.set]) }
+    }
+    return undefined
+  }
+
+  // ---- A2-5：天文图表尺寸/标签族（原宿主 private，逐字迁入；读本 store 字段）----
+  altAzRangeLabel(): string {
+    return '未来 ' + this.altAzHours.toString() + ' 小时'
+  }
+
+  altAzMidpointLabel(): string {
+    return '+' + (this.altAzHours / 2).toString() + 'h'
+  }
+
+  altBarWidth(): number {
+    if (this.altAzCurve.length === 0) return 4
+    return Math.max(1, Math.min(4, 292 / this.altAzCurve.length))
+  }
+
+  altBarHeight(alt: number | undefined): number {
+    const a: number = alt !== undefined ? alt : -90
+    if (a < this.altAzMinimum) return 1
+    const range: number = 90 - this.altAzMinimum
+    return Math.max(1, Math.min(96, (a - this.altAzMinimum) / range * 96))
+  }
+
+  altitudeCurveColor(altitude: number | undefined, color: string): string {
+    return (altitude ?? -90) >= this.altAzMinimum ? color : '#33FFFFFF'
+  }
+
+  altCurveSegmentWidth(): number {
+    let count: number = 1
+    if (this.altAzShowSun) count++
+    if (this.altAzShowMoon) count++
+    return Math.max(1, (this.altBarWidth() - Math.max(0, count - 1)) / count)
+  }
+
+  annualBarHeight(altitude: number | undefined): number {
+    const value: number = altitude !== undefined ? altitude : -90
+    if (value < this.annualElevationMinimum) return 1
+    const range: number = 90 - this.annualElevationMinimum
+    return Math.max(1, Math.min(96, (value - this.annualElevationMinimum) / range * 96))
+  }
+
+  annualBarWidth(): number {
+    if (this.annualElevationData.length === 0) return 3
+    return Math.max(1, Math.min(6, 292 / this.annualElevationData.length))
+  }
+
+  azimuthNowLabel(): string {
+    if (this.altAzCurve.length === 0) return '--'
+    return (this.altAzCurve[0].azimuth ?? 0).toFixed(1) + '°'
+  }
+
+  lunarElongationBarWidth(): number {
+    if (this.lunarElongationData.length === 0) return 4
+    return Math.max(1, Math.min(4, 292 / this.lunarElongationData.length))
+  }
+
+  lunarElongationLineTop(): number {
+    return Math.max(0, Math.min(95, (1 - this.lunarElongationLimit / 180) * 96))
+  }
+
+  lunarElongationNowLabel(): string {
+    if (this.lunarElongationData.length === 0) return '--'
+    return (this.lunarElongationData[0].separation ?? 0).toFixed(1) + '°'
+  }
+
+  planetTimeSeriesBarWidth(): number {
+    if (this.planetTimeSeriesData.length === 0) return 4
+    return Math.max(2, Math.min(6, 292 / this.planetTimeSeriesData.length))
+  }
+
+  planetTimeSeriesSegmentWidth(): number {
+    return Math.max(1, (this.planetTimeSeriesBarWidth() - 1) / 2)
+  }
+
+  planetPairBarWidth(): number {
+    if (this.planetPairDistanceData.length === 0) return 4
+    return Math.max(2, Math.min(6, 292 / this.planetPairDistanceData.length))
+  }
+
+  planetPairSegmentWidth(): number {
+    return Math.max(1, (this.planetPairBarWidth() - 1) / 2)
+  }
+
+  planetPairCurrentIndex(): number {
+    return Math.floor(this.planetPairDistanceData.length / 2)
+  }
+
+  almanacHoursLabel(key: string): string {
+    const value = this.almanacData.get(key) ?? ''
+    return value.length > 0 ? parseFloat(value).toFixed(1) + ' 小时' : '--'
   }
 }
