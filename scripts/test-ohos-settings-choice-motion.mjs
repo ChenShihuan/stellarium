@@ -7,6 +7,9 @@ const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNat
 // 时间设置三项由 TimeSettingsSection 承载，宿主只保留分组判定与分发。
 const buttonSource = readFileSync(new URL('../harmonyos/ets-source/common/ui/SettingsChoiceButton.ets', import.meta.url), 'utf8');
 const sectionSource = readFileSync(new URL('../harmonyos/ets-source/panels/settings/TimeSettingsSection.ets', import.meta.url), 'utf8');
+// Phase 3aq：信息模式按钮由宿主参数化 @Builder informationModeButton(mode, labelKey) 改为
+// panels/settings/SettingsRows.ets 的 InformationModeButton 组件，宿主调用点直接读当前模式。
+const settingsRowsSource = readFileSync(new URL('../harmonyos/ets-source/panels/settings/SettingsRows.ets', import.meta.url), 'utf8');
 function method(name) {
   const start = source.indexOf(name);
   assert.ok(start >= 0, name);
@@ -23,7 +26,9 @@ test('all four settings groups read current state rather than a captured selecti
   for (const group of ['information', 'date', 'time', 'startup']) {
     assert.ok(dispatch.includes(`group === '${group}'`), group);
   }
-  assert.ok(source.includes('active: this.informationMode === mode'));
+  assert.ok(source.includes("active: this.informationMode === 'all'"));
+  assert.ok(source.includes("active: this.informationMode === 'custom'"));
+  assert.ok(settingsRowsSource.includes('active: this.active'));
   assert.ok(sectionSource.includes('active: this.store.configDateFormat === option.id'));
   assert.ok(sectionSource.includes('active: this.store.configTimeFormat === option.id'));
   assert.ok(sectionSource.includes('active: this.store.startupTimeMode === option.id'));
