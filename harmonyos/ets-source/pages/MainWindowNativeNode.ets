@@ -14074,6 +14074,16 @@ private loadPlanetPositions(): void {
       if (this.isUiPoint(downX, downY)) {
         this.resetSkyTapSequence()
         this.touchStartedOnUi = true
+        // A UI touch must never inherit sky-drag ownership. This branch used to
+        // set only touchStartedOnUi, unlike the dock branch below which also
+        // clears the drag state: a gesture that began on the sky and lifted over
+        // a panel left skyTouchActive set, so every later swipe *inside the panel*
+        // cleared the "!skyTouchActive" gate in the move handler and panned the
+        // star map along with the list.
+        this.skyTouchFeedback = false
+        this.skyTouchActive = false
+        this.skyDragging = false
+        this.nativeDragActive = false
         // 手机端右上角快捷按钮（陀螺仪/音频）：XComponent 同样吞掉了 onClick，
         // 需要坐标级分派，与上方 tablet rail workaround 同理。
         if (!this.isExpandedLayout && this.isCompactTopQuickPoint(downX, downY)) {
@@ -14243,7 +14253,10 @@ private loadPlanetPositions(): void {
         }
         this.touchMoved = true
       }
-      if (this.touchMoved) {
+      // Ownership is decided on Down: only a gesture that actually started on the
+      // sky may pan it. Relying on skyTouchActive alone let a stale flag drag the
+      // sky from inside a panel, so the origin is now part of the condition.
+      if (this.touchMoved && !this.touchStartedOnUi) {
         this.nativeDragActive = true
         const now = Date.now()
         if (now - this.lastDragCommandMs >= 16) {
@@ -14284,6 +14297,12 @@ private loadPlanetPositions(): void {
           }
         }
         this.touchStartedOnUi = false
+        // Clear the same drag state the sky branch clears on lift-off: this early
+        // return used to leave it behind for the next gesture to inherit.
+        this.nativeDragActive = false
+        this.skyTouchActive = false
+        this.skyTouchFeedback = false
+        this.skyDragging = false
         return
       }
       if (this.nativeDragActive && event.type === TouchType.Up) {
