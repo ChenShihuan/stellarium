@@ -18,7 +18,7 @@ import { I18n } from '../pages/I18n'
 import { ScriptStore } from '../state/ScriptStore'
 import { ToolsStore } from '../state/ToolsStore'
 import { CommandPort } from '../bridge/CommandPort'
-import { MediaPort, ScreenCaptureState } from '../bridge/MediaPort'
+import { ScreenCapturePort, ScreenCaptureState } from '../bridge/MediaPort'
 import { StellariumBridgeResponse, SessionSnapshot } from '../pages/StellariumTypes'
 import { RecordCmd, RecordingDetailResponse } from '../pages/MainWindowModels'
 import { isRecordable } from '../common/derive/skycult'
@@ -46,7 +46,7 @@ export class RecordingController {
   private scriptStore: ScriptStore
   private tools: ToolsStore
   private port: CommandPort
-  private mediaPort: MediaPort
+  private mediaPort: ScreenCapturePort
   private hooks: RecordingHostHooks
 
   // ── 录制引擎计时 / 去重（逐帧草稿，留控制器）──
@@ -69,7 +69,7 @@ export class RecordingController {
     scriptStore: ScriptStore,
     tools: ToolsStore,
     port: CommandPort,
-    mediaPort: MediaPort,
+    mediaPort: ScreenCapturePort,
     hooks: RecordingHostHooks
   ) {
     this.scriptStore = scriptStore

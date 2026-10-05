@@ -7,7 +7,7 @@ import { StellariumBridgeResponse } from '../../pages/StellariumTypes'
 import { ScreenshotResponse } from '../../pages/MainWindowModels'
 import { I18n } from '../../pages/I18n'
 import { CommandPort } from '../../bridge/CommandPort'
-import { MediaPort, MediaSaveResult } from '../../bridge/MediaPort'
+import { FileExportPort, MediaSaveResult } from '../../bridge/MediaPort'
 
 export interface ScreenshotHints {
   flashHint(text: ResourceStr): void
@@ -18,7 +18,7 @@ export interface ScreenshotHints {
 // 触发原生截图并导出到用户存储（原宿主 saveScreenshot，逐字搬入）。
 // 差异仅：this.tools.screenshotSaving → hints.screenshotSaving()/setScreenshotSaving()；
 // this.callInteractive → port.requestInteractive；this.exportScreenshotToUserStorage → 同模块函数。
-export function saveScreenshot(port: CommandPort, mediaPort: MediaPort, hints: ScreenshotHints): void {
+export function saveScreenshot(port: CommandPort, mediaPort: FileExportPort, hints: ScreenshotHints): void {
   if (hints.screenshotSaving()) return
   hints.setScreenshotSaving(true)
   hints.flashHint(I18n.t('screenshot_preparing'))
@@ -40,7 +40,7 @@ export function saveScreenshot(port: CommandPort, mediaPort: MediaPort, hints: S
 // 逐字搬入）。差异仅：picker.DocumentViewOptions + fileIo.copy + fileIo.unlinkSync → mediaPort.saveFileAs/
 // deleteFile；context/format 组装留在适配器与调用处。
 export async function exportScreenshotToUserStorage(
-  mediaPort: MediaPort,
+  mediaPort: FileExportPort,
   response: ScreenshotResponse,
   hints: ScreenshotHints,
 ): Promise<void> {

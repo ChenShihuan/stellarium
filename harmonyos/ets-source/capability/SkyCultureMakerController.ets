@@ -21,12 +21,16 @@ import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { SkyCultureMakerConstellation, SkyCultureMakerDraft, ImageDecodeSize } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
-import { MediaPort } from '../bridge/MediaPort'
+import { DocumentImportPort, ImagePort } from '../bridge/MediaPort'
 import { decodeLocalImage, releaseDecodedImage } from '../common/media/ImageDecoder'
 import { validationFromResponse } from '../common/derive/actions'
 import { clamp } from '../common/derive/astro'
 import { SkyCultureMakerStore } from '../state/SkyCultureMakerStore'
 import { BehaviorHostHooks } from './ControllerHooks'
+
+// 本控制器的实测最小依赖组合：图像解码/存在性（fileExists / decodeLocalImage / releaseDecodedImage）
+// + 文档导入（pickDocumentToDirNamed）。ArkTS 禁交叉类型，故用本地接口显式组合两个子接口。
+interface SkyCultureMakerMediaPort extends ImagePort, DocumentImportPort {}
 
 export interface SkyCultureMakerHostHooks extends BehaviorHostHooks {
   // 应用 filesDir（宿主 getUIContext().getHostContext() 派生；控制器不 import UI 上下文）。
@@ -35,7 +39,7 @@ export interface SkyCultureMakerHostHooks extends BehaviorHostHooks {
 
 export class SkyCultureMakerController {
   private port: CommandPort
-  private mediaPort: MediaPort
+  private mediaPort: SkyCultureMakerMediaPort
   private store: SkyCultureMakerStore
   private hooks: SkyCultureMakerHostHooks
 
@@ -50,7 +54,7 @@ export class SkyCultureMakerController {
 
   constructor(
     port: CommandPort,
-    mediaPort: MediaPort,
+    mediaPort: SkyCultureMakerMediaPort,
     store: SkyCultureMakerStore,
     hooks: SkyCultureMakerHostHooks
   ) {

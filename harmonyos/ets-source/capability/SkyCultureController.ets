@@ -40,7 +40,7 @@ import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse, SkyCultureArtItem, SkyCultureItem } from '../pages/StellariumTypes'
 import { SkyCultureVisualColors } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
-import { MediaPort } from '../bridge/MediaPort'
+import { ImagePort } from '../bridge/MediaPort'
 import { decodeLocalImage, releaseDecodedImage } from '../common/media/ImageDecoder'
 import { isSafeSkyCultureArtPath } from '../common/derive/skycult'
 import { SkyCultureViewStore } from '../state/SkyCultureViewStore'
@@ -73,7 +73,7 @@ export interface SkyCultureHostHooks extends BehaviorHostHooks {
 
 export class SkyCultureController {
   private port: CommandPort
-  private mediaPort: MediaPort
+  private mediaPort: ImagePort
   private viewStore: SkyCultureViewStore
   private settingsStore: SkyCultureSettingsStore
   private hooks: SkyCultureHostHooks
@@ -97,7 +97,7 @@ export class SkyCultureController {
 
   constructor(
     port: CommandPort,
-    mediaPort: MediaPort,
+    mediaPort: ImagePort,
     viewStore: SkyCultureViewStore,
     settingsStore: SkyCultureSettingsStore,
     hooks: SkyCultureHostHooks

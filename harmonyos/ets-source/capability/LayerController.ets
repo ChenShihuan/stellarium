@@ -32,7 +32,7 @@ import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse, TabItem } from '../pages/StellariumTypes'
 import { LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, OFFLINE_APPGALLERY_BUILD } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
-import { MediaPort, MediaImportResult } from '../bridge/MediaPort'
+import { DocumentImportPort, MediaImportResult } from '../bridge/MediaPort'
 import { LayerViewStore } from '../state/LayerViewStore'
 import { LayerStore } from '../state/LayerStore'
 import { SceneryStore } from '../state/SceneryStore'
@@ -74,7 +74,7 @@ export interface LayerHostHooks extends BehaviorHostHooks {
 
 export class LayerController {
   private port: CommandPort
-  private mediaPort: MediaPort
+  private mediaPort: DocumentImportPort
   private layerViewStore: LayerViewStore
   private layerStore: LayerStore
   private sceneryStore: SceneryStore
@@ -89,7 +89,7 @@ export class LayerController {
 
   constructor(
     port: CommandPort,
-    mediaPort: MediaPort,
+    mediaPort: DocumentImportPort,
     layerViewStore: LayerViewStore,
     layerStore: LayerStore,
     sceneryStore: SceneryStore,

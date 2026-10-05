@@ -1847,3 +1847,45 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（本片不动宿主）；无 store / 端口新增；净 8 个跟踪文件改动（2 重命名 + 4 消费者 import + 2 夹具）。
 
 **验证**：预检通过；`arkts_check` 5 文件 0 error；`BUILD SUCCESSFUL in 30s`；契约 44 锚点 intact（249 文件）；受影响 `test-ohos-guide`（9/9）/ `test-ohos-mist-horizon`（5/5）全绿；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（4 个 `-pad` / `mist-performance` / `verify-ohos-search`）。真机（192.168.50.108:36717）：`devecocli run --skip-build` → `Smoke: PASS`；导览 CLI `startGuide solar-neighbours` → `getGuideState` 返回 `active/index/count` 与两条完整 `guides[]`、`guideAction next` 前进、`guideAction stop` 复位（`AstronomyGuide`/`GuidePlayer` 迁出后全链生效）；音频「更多功能 → 脚本与自动化 → 音频控制」→ AudioPanel 点「背景音乐」→ hilog `StellariumAudio: audio engine started (v2 ethereal)` + `muted = false`，再点 → `muted = true`（`AudioEngine` 迁出后 `createAudioRenderer` 成功；两次点按 off→on→off 已复原）；`pidof 4005` 全程存活、无 jscrash / 无 faultlog。
+
+#### 15.12.19 M 轨道 M6：MediaPort 接口隔离（2026-10-06，类型层重构）
+
+> **依据**：STATE-REVIEW §11 的 M 轨道第 4 片（接口隔离）。**类型层重构**，不改任何运行逻辑。`bridge/MediaPort.ets`（107 行 / 25 法）混了 5 个关注点；本片按接口隔离原则拆 5 个子接口，消费者只依赖其实测调用的最小接口；适配器 `HostMediaPort` 保持单一、`implements MediaPort` 不变。开工 `git log -1` = `b72f3c542b`。
+
+**5 个子接口（`MediaPort.ets` 107 → 123 行；`MediaPort extends` 全部）**
+
+| 子接口 | 法数 | 方法 |
+|---|---:|---|
+| `ImagePort` | 7 | `fileExists` / `openReadOnlyFile` / `closeFile` / `createImageSource` / `createPixelMap` / `releaseImageSource` / `releasePixelMap` |
+| `ObjectModelMediaPort extends ImagePort` | 3（+7 继承） | `createPixelMapFromRgba` / `readPixelMapPixels` / `readRawSidecar` |
+| `FileExportPort` | 3 | `saveFileAs` / `saveTextFileAs` / `deleteFile` |
+| `DocumentImportPort` | 4 | `pickDocumentToDir` / `pickDocumentToDirNamed` / `importScriptDocument` / `importLandscapeDocument` |
+| `ScreenCapturePort` | 8 | `screenVideoDir` / `makeDir` / `fileSize` / `hasActiveScreenCapture` / `beginScreenCapture` / `stopScreenCapture` / `releaseScreenCapture` / `saveVideoToGallery` |
+
+**子接口互相 extends 的判定**：`ObjectModelMediaPort extends ImagePort`——`ObjectModelRenderer` 的模型纹理路径必然先经 `common/media/ImageDecoder` 的 `decodeLocalImage`/`releaseDecodedImage`（即 `ImagePort`）再做 `readPixelMapPixels`/`createPixelMapFromRgba`，故令其为超集（ArkTS 接口多继承合法），使该控制器只需一个字段类型。**ArkTS 禁交叉类型**（`arkts-no-intersection-types`，本片实测确认），跨接口消费者不用 `A & B`；`SkyCultureMakerController` 需 `ImagePort + DocumentImportPort`，改用本地组合接口 `SkyCultureMakerMediaPort extends ImagePort, DocumentImportPort`。
+
+**消费者 → 最小接口对照表（以本片实测调用为准）**
+
+| 消费者 | 实测调用方法 | 最小接口 |
+|---|---|---|
+| `common/media/ImageDecoder`（`decodeLocalImage`/`releaseDecodedImage` 的 `port`） | `openReadOnlyFile` / `closeFile` / `createImageSource` / `createPixelMap` / `releaseImageSource` / `releasePixelMap` | **ImagePort** |
+| `capability/ObjectInspectorMediaController` | `fileExists`；经 `decodeLocalImage`/`releaseDecodedImage` | **ImagePort** |
+| `capability/SkyCultureController` | `fileExists`；经 `decodeLocalImage`/`releaseDecodedImage` | **ImagePort** |
+| `common/platform/Share` | `fileExists` | **ImagePort** |
+| `capability/ObjectModelRenderer` | `readPixelMapPixels` / `createPixelMapFromRgba`；经 `decodeLocalImage`/`releaseDecodedImage` | **ObjectModelMediaPort** |
+| `capability/AstroCalcController` | `saveTextFileAs` | **FileExportPort** |
+| `common/platform/Screenshot` | `saveFileAs` / `deleteFile` | **FileExportPort** |
+| `capability/LayerController` | `importLandscapeDocument` | **DocumentImportPort** |
+| `capability/NebulaTextureController` | `pickDocumentToDir` | **DocumentImportPort** |
+| `capability/ScriptPlaybackController` | `importScriptDocument` | **DocumentImportPort** |
+| `capability/RecordingController` | `screenVideoDir` / `makeDir` / `fileSize` / `hasActiveScreenCapture` / `beginScreenCapture` / `stopScreenCapture` / `releaseScreenCapture` / `saveVideoToGallery` | **ScreenCapturePort** |
+| `capability/SkyCultureMakerController` | `fileExists`；经 `decodeLocalImage`/`releaseDecodedImage`；`pickDocumentToDirNamed` | **ImagePort + DocumentImportPort**（本地组合接口 `SkyCultureMakerMediaPort`） |
+| `pages/MainWindowNativeNode`（适配器 `HostMediaPort` / 字段 `hostMediaPort`） | `implements MediaPort`；直接调 `fileExists` / `saveFileAs` / `readRawSidecar`；向 `releaseDecodedImage` / `shareFile` / `saveScreenshot` 传参 | **保持 `MediaPort` 不变** |
+
+**不改**：无任何方法体 / 调用序列 / 适配器实现 / `.id()` / `main_pages.json`；仅类型注解与 import 变更。方法签名、返回类型、注释**逐字保留**（仅搬家）；`MediaSaveResult` / `MediaImportResult` / `ScreenCaptureState` 保持导出。
+
+**度量**：净 13 文件 +79 / −46；`MediaPort.ets` 107 → 123 行；宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（不动宿主）；无 store 新增。`state/ObjectMediaStore` 与 `state/ObjectDetailStore` **不 import MediaPort**（其 `readRawSidecar` 由宿主经 hooks 回注），故本片未触碰。
+
+**验证**：`check-ohos-refactor-slice` 通过（括号深度 0）；`arkts_check` 13 文件 0 error；`BUILD SUCCESSFUL in 29s`；契约 44 锚点 intact（33 面板 / 24 静态 id / 17 动态前缀 / 249 文件）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（4 个 `-pad` / `mist-performance` / `verify-ohos-search`）。真机（192.168.50.108:36717）：`devecocli run --skip-build` → `Smoke: PASS`；图片解码经 `ImagePort` 实证（hilog `[detail-media] create image source kind=sky-culture-art-thumbnail …` + `[sky-culture-art] thumbnail ready` + `[body-warmup] ready path=textures/*.png`）；「更多功能 → 工具与数据」面板渲染正常；`pidof 12410` 存活、无 jscrash / 无 faultlog。另存为/CSV 导出、导入 picker、录屏入口因深链 + 系统 picker 未走查（仅类型收窄、调用序列逐字未改），记「待真机人工」。
+
+**本片新踩的坑**：① ArkTS 禁交叉类型（`arkts-no-intersection-types`）——跨多接口消费者只能靠子接口互相 `extends` 或本地组合接口。② 编辑工具会把部分 `.ets` 写回成裸 LF，而仓库 `.ets` 约定 CRLF（`core.autocrlf=true`）——收尾前须逐文件把裸 LF 归一回 CRLF（字节级），否则 `git status` 出现 eol 噪声。

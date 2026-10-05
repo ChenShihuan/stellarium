@@ -23,7 +23,7 @@ import { I18n } from '../pages/I18n'
 import { ScriptStatusResponse, ScriptCaptionsResponse } from '../pages/MainWindowModels'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
-import { MediaPort, MediaImportResult } from '../bridge/MediaPort'
+import { DocumentImportPort, MediaImportResult } from '../bridge/MediaPort'
 import { ScriptStore } from '../state/ScriptStore'
 import { ToolsStore } from '../state/ToolsStore'
 import { BehaviorHostHooks } from './ControllerHooks'
@@ -57,7 +57,7 @@ export class ScriptPlaybackController {
   private scriptStore: ScriptStore
   private tools: ToolsStore
   private port: CommandPort
-  private mediaPort: MediaPort
+  private mediaPort: DocumentImportPort
   private hooks: ScriptPlaybackHostHooks
 
   // ── 草稿字段（留控制器，不入被观察 store）──
@@ -74,7 +74,7 @@ export class ScriptPlaybackController {
     scriptStore: ScriptStore,
     tools: ToolsStore,
     port: CommandPort,
-    mediaPort: MediaPort,
+    mediaPort: DocumentImportPort,
     hooks: ScriptPlaybackHostHooks
   ) {
     this.scriptStore = scriptStore

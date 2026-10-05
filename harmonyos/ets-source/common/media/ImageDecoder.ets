@@ -12,14 +12,14 @@
 // 属「美术管线 + 逐帧字段」保留域，故登记保留（见 CHANGELOG / §15.11）。
 import { image } from '@kit.ImageKit'
 import { ImageDecodeSize } from '../../pages/MainWindowModels'
-import { MediaPort } from '../../bridge/MediaPort'
+import { ImagePort } from '../../bridge/MediaPort'
 
 // 从本地图片文件异步解码出像素图（原宿主 decodeLocalImage，逐字搬入）。
 // 差异仅：fileIo.openSync/closeSync → port.openReadOnlyFile/closeFile、
 // image.createImageSource → port.createImageSource、source.createPixelMap* → port.createPixelMap、
 // source.release() → port.releaseImageSource、fileIo.File 句柄变成 port 返回的 fd。
 export function decodeLocalImage(
-  port: MediaPort,
+  port: ImagePort,
   filePath: string,
   label: string,
   onSuccess: (pixelMap: image.PixelMap) => void,
@@ -59,6 +59,6 @@ export function decodeLocalImage(
 }
 
 // 释放已解码的像素图（原宿主 releaseDecodedImage，逐字搬入）。
-export function releaseDecodedImage(port: MediaPort, pixelMap: image.PixelMap | undefined, label: string): void {
+export function releaseDecodedImage(port: ImagePort, pixelMap: image.PixelMap | undefined, label: string): void {
   port.releasePixelMap(pixelMap, label)
 }

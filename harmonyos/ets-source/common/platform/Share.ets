@@ -4,7 +4,7 @@
 // 本模块**不 import NAPI/UI**（§15.7 规则 1）：文件存在性经 MediaPort、系统分享面板经
 // PlatformPort（宿主适配器转发 @kit.ShareKit systemShare + getHostContext + isExpandedLayout）；
 // UI 提示经 ShareHints.flashHint 具名注入（§13.1 规则 6）。
-import { MediaPort } from '../../bridge/MediaPort'
+import { ImagePort } from '../../bridge/MediaPort'
 import { PlatformPort } from '../../bridge/PlatformPort'
 
 export interface ShareHints {
@@ -17,7 +17,7 @@ export interface ShareHints {
 // 差异仅：fileIo.accessSync → mediaPort.fileExists；systemShare.* + ShareController.show →
 // platformPort.shareFile；catch 中的 hilog + 提示由适配器/onDone 承担。
 export function shareFile(
-  mediaPort: MediaPort,
+  mediaPort: ImagePort,
   platformPort: PlatformPort,
   path: string,
   type: string,
