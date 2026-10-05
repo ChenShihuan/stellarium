@@ -7,6 +7,9 @@ const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNat
 // 三维模型的舞台与触摸回调已下沉为 TabletInspectorModelBlock 组件（本轮搬迁），
 // 组件只负责把手势事件转交给宿主注入的 onModelTouch 回调；旋转/缩放算法仍留在宿主。
 const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/object/TabletInspectorMedia.ets', import.meta.url), 'utf8');
+// 详情卡外壳（页头 + 页签 + Scroll）已在本轮下沉为 UnifiedObjectDetailCard 组件，
+// 卡片内的 Scroll/scroller 与滚动位置上报告搬到该组件文件。
+const detailCard = readFileSync(new URL('../harmonyos/ets-source/panels/object/UnifiedObjectDetailCard.ets', import.meta.url), 'utf8');
 const stageStart = mediaComponents.indexOf(".id('object-model-inline-stage')");
 const stage = mediaComponents.slice(stageStart, mediaComponents.indexOf('Text(this.modelNotice)', stageStart));
 
@@ -17,8 +20,9 @@ test('only the bounded model captures touch; the outer card isolates the sky', (
   assert.match(mediaComponents.slice(stageStart - 230, stageStart), /width\(this\.inlineModelSize\)\.height\(this\.inlineModelSize\)/);
   assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
   assert.equal((source.match(/height\(this.detailCardHeight\(\)\)\s*\.zIndex\(\d+\)\s*\.hitTestBehavior\(HitTestMode.BLOCK_HIERARCHY\)/g) ?? []).length, 3);
-  assert.match(source, /Scroll\(this.objectDetailScroller\)/);
-  assert.match(source, /stellariumObjectDetailScrollY.*currentOffset\(\)\?\.yOffset/);
+  assert.match(source, /scroller: this\.objectDetailScroller/);
+  assert.match(detailCard, /Scroll\(this\.scroller\)/);
+  assert.match(detailCard, /stellariumObjectDetailScrollY.*currentOffset\(\)\?\.yOffset/);
 });
 
 test('compact and wide cards reserve at least 40vp per side', () => {
