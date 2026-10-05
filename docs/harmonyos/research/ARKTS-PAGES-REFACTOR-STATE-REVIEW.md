@@ -1417,7 +1417,7 @@ D4/D5/D8/D10 均因调用 `refreshState()` 或写 `activePanel`/`panelVisible` �
 | `I18n.ets` | 2,378 | ✅ | 30+ 外部消费者 | 国际化中心 | **留在 pages/，无问题** |
 | `StellariumAudio.ets` | 927 | ✅ | 1（StartupBridge） | 过程式音频引擎 | **应迁入 `common/media/`** |
 | `AstronomyGuide.ts` | 197 | ✅ | 2（GuideStore/宿主） | 导览数据模型 + 状态机 | **应迁入 `common/derive/` 或 `state/`** |
-| `location_hierarchy.ts` | 74,611 | ✅ | 2（LocationStore/LocationPickerStore） | 自动生成位置层级数据 | **应迁入 `common/data/`** |
+| `location_hierarchy.ts` | 74,611 | ✅ | 2（LocationStore/LocationPickerStore） | 自动生成位置层级数据 | **应迁入 `common/location/`** |
 | `location_names_zh.ts` | 7,350 | ✅ | 2（同上） | 城市名→中文映射 | **同上** |
 | `location_countries.ts` | 986 | ✅ | 2（同上） | ISO 国家代码→名称 | **同上** |
 | `DetailModelRenderTypes.ets` | 45 | ❌ | 1（ObjectModelRenderer） | 渲染管线类型 | **应迁入 `capability/`** |
@@ -1472,14 +1472,25 @@ Commands、Recording 等域。30+ 外部文件从 `'../pages/MainWindowModels'` 
 197 行，纯数据模型 + 状态机（GuidePlayer），无 UI、无 SDK 依赖。
 被 GuideStore 和宿主 import。应迁入 `common/derive/`（纯逻辑/数据层）。
 
-#### 11.2.4 位置数据三文件 → `common/data/`
+#### 11.2.4 位置参考数据三文件 → `common/location/`（最终决定）
 
-- `location_hierarchy.ts`（74,611 行）→ `common/data/location_hierarchy.ts`
-- `location_names_zh.ts`（7,350 行）→ `common/data/location_names_zh.ts`
-- `location_countries.ts`（986 行）→ `common/data/location_countries.ts`
+- `location_hierarchy.ts`（74,611 行）→ `common/location/hierarchy.ts`
+- `location_names_zh.ts`（7,350 行）→ `common/location/names_zh.ts`
+- `location_countries.ts`（986 行）→ `common/location/countries.ts`
 
-当前仅 LocationStore 和 LocationPickerStore 引用。迁入 `common/data/` 后改路径。
-这三文件是自动生成的静态数据，放在 pages/ 不合理。
+**为何与 `I18n.ets` 分开**（曾议合并入 `common/i18n/`，最终否决）：
+三文件中只有 `names_zh` / `countries` 是本地化资源；`location_hierarchy` 的主体是
+**经纬度/海拔/人口**（坐标数据），放 i18n 属类别错位。且三者由**同一脚本生成**
+（`generate-ohos-location-*.mjs`）、被**同两个 store 一起消费**，应保持同目录，不拆散。
+
+**为何用 `common/location/` 而非 `common/data/location/`**：现有 `common/` 子目录
+（`derive`/`media`/`platform`/`ui`）中 `media` 已属"领域型"，`common/location/` 与之一致；
+当前只有一份数据集，为它单开 `data/` 再套一层属过早抽象。**约定：该目录只放参考数据，不放逻辑**
+（逻辑归 `state/LocationStore`、`capability/LocationController`）。
+文件夹已限定 scope，文件名去掉冗余 `location_` 前缀。
+
+> 附带发现（独立小改，不阻塞迁移）：`hierarchy.ts` 外层键当前硬编码中文（`"亚洲"`），
+> 等于把本地化烘进数据键；理想应按 continent code 存储、渲染时再本地化。
 
 #### 11.2.5 DetailModel 渲染管线五文件 → `capability/`
 
@@ -1521,7 +1532,7 @@ Commands、Recording 等域。30+ 外部文件从 `'../pages/MainWindowModels'` 
 | 优先级 | 迁移 | 影响消费者数 | 风险 |
 |---|---|---|---|
 | P1 | DetailModel 管线五文件 → capability/ + common/derive/ | 5 | 低（路径替换） |
-| P2 | 位置数据三文件 → common/data/ | 2 | 低 |
+| P2 | 位置参考数据三文件 → `common/location/` | 2 | 低 |
 | P3 | ProceduralDetailModel → common/derive/ | 1 | 低 |
 | P4 | AstronomyGuide → common/derive/ | 2 | 低 |
 | P5 | StellariumAudio → common/media/ | 1 | 低 |
