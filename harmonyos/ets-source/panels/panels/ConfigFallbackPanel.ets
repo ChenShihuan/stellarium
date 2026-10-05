@@ -5,8 +5,8 @@
 // 仅当 CLI 用未知面板名打开时才可能渲染。判定条件（无名 else）留在宿主，分支体原样下沉。
 //
 // 状态体系（§13.1 规则 1/5/6）：
-//   - gyroStore / layerStore / nightModeStore / telescopeStore / observingListStore 五个
-//     @Observed store 走 @ObjectLink（宿主源均为 @State 实例）；组件内对其属性的写入会被宿主观测到（规则 4）。
+//   - gyroStore / layerStore / nightModeStore / telescopeStore / observingListStore /
+//     skyCultureViewStore 六个 @Observed store 走 @ObjectLink（宿主源均为 @State 实例）；组件内对其属性的写入会被宿主观测到（规则 4）。
 //   - 其余标量/数组状态走 @Prop，主题色由宿主算好后传入（panelColor）。
 //   - 宿主私有动作（sensZh / flashHint / handleChip / refreshState / saveScreenshot /
 //     observing* / setLanguage / setSkyCulture / triggerAction 等）按规则 6 回注。
@@ -24,6 +24,7 @@ import { LayerStore } from '../../state/LayerStore'
 import { NightModeStore } from '../../state/NightModeStore'
 import { TelescopeStore } from '../../state/TelescopeStore'
 import { ObservingListStore } from '../../state/ObservingListStore'
+import { SkyCultureViewStore } from '../../state/SkyCultureViewStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 import { InfoRow } from '../../common/ui/InfoRow'
 import { GyroscopeRow, LanguageRow } from '../settings/DeviceAndLanguageRows'
@@ -36,12 +37,11 @@ export struct ConfigFallbackPanel {
   @ObjectLink nightModeStore: NightModeStore
   @ObjectLink telescopeStore: TelescopeStore
   @ObjectLink observingListStore: ObservingListStore
+  @ObjectLink skyCultureViewStore: SkyCultureViewStore
   @Prop isExpandedLayout: boolean
   @Prop fovText: string
   @Prop selectedLanguage: string
   @Prop useMetricUnits: boolean
-  @Prop currentSkyCulture: string
-  @Prop skyCultures: string[]
   @Prop panelColor: string
   sensZh: (en: string) => string = (en: string) => en
   observingDisplayName: (name: string) => string = (name: string) => name
@@ -254,19 +254,19 @@ export struct ConfigFallbackPanel {
         }.padding({ left: 4, right: 4 })
       }.width("100%").height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ bottom: 8 })
       // Sky-culture selection is intentionally hidden in the offline release.
-      if (!OFFLINE_APPGALLERY_BUILD && this.skyCultures.length > 0) {
+      if (!OFFLINE_APPGALLERY_BUILD && this.skyCultureViewStore.skyCultures.length > 0) {
         Row() {
           Text(I18n.t('i0035')).fontSize(12).fontColor("#99FFFFFF").width(72)
-          Text(this.currentSkyCulture).fontSize(14).fontColor("#E5FFFFFF").layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.skyCultureViewStore.currentSkyCulture).fontSize(14).fontColor("#E5FFFFFF").layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .height(34).width("100%").padding({ left: 10, right: 10 }).backgroundColor("rgba(255, 255, 255, 0.04)").borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 4 })
         Scroll() {
           Row({ space: 6 }) {
-            ForEach(this.skyCultures, (culture: string) => {
+            ForEach(this.skyCultureViewStore.skyCultures, (culture: string) => {
               Text(culture)
-                .fontSize(11).fontColor(this.currentSkyCulture === culture ? "#FFFFFFFF" : "#99FFFFFF")
+                .fontSize(11).fontColor(this.skyCultureViewStore.currentSkyCulture === culture ? "#FFFFFFFF" : "#99FFFFFF")
                 .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                .backgroundColor(this.currentSkyCulture === culture ? "rgba(107,163,214,0.35)" : "rgba(255,255,255,0.05)")
+                .backgroundColor(this.skyCultureViewStore.currentSkyCulture === culture ? "rgba(107,163,214,0.35)" : "rgba(255,255,255,0.05)")
                 .borderRadius(UI_RADIUS_CONTROL)
                 .onClick(() => this.setSkyCulture(culture))
             }, (culture: string) => culture)

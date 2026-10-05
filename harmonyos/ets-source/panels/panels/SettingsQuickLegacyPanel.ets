@@ -2,8 +2,8 @@
 // 分支体原样下沉，Phase 4i）。
 //
 // 判定条件 `activePanel === 'settings_quick_legacy'` 留在宿主；分支体内的 if / ForEach
-// 全部随 UI 下沉。陀螺仪、坐标显示、夜视、望远镜赤道仪四个 store 走 @ObjectLink；面板读取
-// 的宿主 @State 标量（FOV / 投影 / 语言 / 星文化 / 距离单位 / 目录健康）走 @Prop；所有写回
+// 全部随 UI 下沉。陀螺仪、坐标显示、夜视、望远镜赤道仪、星空文化五个 store 走 @ObjectLink；面板读取
+// 的宿主 @State 标量（FOV / 投影 / 语言 / 距离单位 / 目录健康）走 @Prop；所有写回
 // 与动作（速度控制、切换投影 / 语言 / 星文化 / 单位、陀螺仪开关、隐私撤销、目录健康查表）
 // 回注宿主（§13.1 规则 6）。
 // 视觉逐字保留：Scroll 撑满（layoutWeight(1)）+ Column({ space: 0 })。
@@ -15,6 +15,7 @@ import { GyroStore } from '../../state/GyroStore'
 import { OverlayStore } from '../../state/OverlayStore'
 import { NightModeStore } from '../../state/NightModeStore'
 import { TelescopeStore } from '../../state/TelescopeStore'
+import { SkyCultureViewStore } from '../../state/SkyCultureViewStore'
 import { DevicePrivacySection } from '../settings/DeviceAndLanguageRows'
 import { ViewCoordinateSettings } from '../view/ViewCoordinateSettings'
 import { LayerSwitchRow } from '../layers/LayerSwitchRow'
@@ -25,6 +26,7 @@ export struct SettingsQuickLegacyPanel {
   @ObjectLink overlayStore: OverlayStore
   @ObjectLink nightModeStore: NightModeStore
   @ObjectLink telescopeStore: TelescopeStore
+  @ObjectLink skyCultureViewStore: SkyCultureViewStore
   @Prop autoZoomResets: boolean
   @Prop liveMode: boolean
   @Prop verticalClamp: boolean
@@ -32,8 +34,6 @@ export struct SettingsQuickLegacyPanel {
   @Prop fovSliderValue: number
   @Prop currentProjection: string
   @Prop selectedLanguage: string
-  @Prop currentSkyCulture: string
-  @Prop skyCultures: string[] = []
   @Prop useMetricUnits: boolean
   @Prop satelliteCatalogHealth: CatalogHealthEntry = {}
   @Prop starCatalogHealth: CatalogHealthEntry = {}
@@ -192,17 +192,17 @@ export struct SettingsQuickLegacyPanel {
           Text(I18n.t('set_sky_culture')).fontSize(13).fontColor(this.textColor).width('100%').margin({ top: 4, bottom: 8 })
           Row() {
             Text(I18n.t('i0035')).fontSize(12).fontColor(this.subColor).width(72)
-            Text(this.currentSkyCulture).fontSize(11).fontColor(this.textColor).layoutWeight(1).maxLines(1)
+            Text(this.skyCultureViewStore.currentSkyCulture).fontSize(11).fontColor(this.textColor).layoutWeight(1).maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-          if (this.skyCultures.length > 0) {
+          if (this.skyCultureViewStore.skyCultures.length > 0) {
             Scroll() {
               Row({ space: 6 }) {
-                ForEach(this.skyCultures, (culture: string) => {
+                ForEach(this.skyCultureViewStore.skyCultures, (culture: string) => {
                   Text(culture)
-                    .fontSize(11).fontColor(this.currentSkyCulture === culture ? '#FFFFFFFF' : '#99FFFFFF')
+                    .fontSize(11).fontColor(this.skyCultureViewStore.currentSkyCulture === culture ? '#FFFFFFFF' : '#99FFFFFF')
                     .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                    .backgroundColor(this.currentSkyCulture === culture ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
+                    .backgroundColor(this.skyCultureViewStore.currentSkyCulture === culture ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
                     .borderRadius(UI_RADIUS_CONTROL)
                     .onClick(() => { this.onSetSkyCulture(culture) })
                 }, (culture: string) => culture)

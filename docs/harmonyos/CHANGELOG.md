@@ -1,3 +1,17 @@
+## [2026-10-04] DevEco Code - 重构：星空文化残留与脚本/回放/视频导出残留并入既有 store（宿主 @State 217 → 196）
+
+- **依据**：review §2.7「Store 风格 vs Prop 风格」与 §2.13 B3（脚本域状态先入 `@Observed` store 的前置）。本批把两簇**残留字段并入已存在的 store**（不新建 store），消费方由 `@Prop` 快照改 `@ObjectLink` 订阅；动作仍由宿主回注，store 只承载状态。
+- **簇 A（星空文化列表 / 当前选择，5 字段）→ `state/SkyCultureViewStore.ets`**：`skyCultures` / `skyCultureList` / `skyCultureListLoading` / `currentSkyCulture` / `currentSkyCultureId`。消费方 `LayersPanel` / `SkyCultureViewTab` / `SettingsQuickLegacyPanel` / `ConfigFallbackPanel` 改经 `@ObjectLink skyCultureViewStore` 实时读（前两者原已持有该 store，只改引用；后两者新增 `@ObjectLink` + import）。宿主自用引用（`loadSkyCultureList` / `applySkyCulture` / 领地地图 / 默认文化设置等）一并改 `this.skyCultureViewStore.X`。
+  - **刻意留宿主**：`skyCultureArtStates` / `skyCultureArtThumbnailPixelMaps` —— 由逐张图片解码**分块（每 32ms）+ 48ms 防抖**渐进写入的进度驱动字段，属「高频写入不入被观察 store」；沿用 store 头注与计划 §13.5 的既有定论，继续以 `@Prop` 传入 `LayersPanel`/`SkyCultureViewTab`。
+- **簇 B（脚本 / 回放 / 视频导出残留，16 字段）→ `state/ScriptStore.ets`**：`scriptMetadata` / `scriptFocusActive` / `scriptRunning` / `scriptWaiting` / `scriptWaitMessage` / `scriptCaptions` / `scriptId` / `scriptRate` / `scriptControlOffsetX` / `scriptControlOffsetY` / `replaying` / `replayPaused` / `replayRate` / `replayName` / `videoArchiveFileName` / `screenVideoFileName`。`ScriptFocusShell` 新增 `@ObjectLink scriptStore`，其播放/回放四态（`scriptWaiting` / `scriptRunning` / `replaying` / `replayPaused`）由 4 个 `@Prop` 改为直接读 store；文案（displayName / captionText / waitText / rateText）与几何仍由宿主算好后 `@Prop` 下发。改造前逐字段普查确认**全部仅整体赋值**（无 `push`/下标赋值/`this.<f>.<prop> =`）。
+  - **刻意留宿主**：`recordBuffer: Array<RecordCmd>` —— 录制引擎的追加型工作缓冲（`push` + 整体重赋值），非面板入参，放观测 store 会失去刷新或每追加一次整体拷贝；沿用 store 头注约定。
+- **单体行数**：`pages/MainWindowNativeNode.ets` 18,699 → 18,670 行（−29）；宿主 `@State` **217 → 196**（−21）。
+- **验证**：`check-ohos-refactor-slice.mjs` 通过（括号深度 0、@Builder 成对、this 引用自洽）；`arkts_check` 对 8 个改动文件无错；`build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources` = **BUILD SUCCESSFUL**；`check-ohos-ui-contract.mjs` = **intact**（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 197 文件，本批未新增 `.id()`）。
+- **测试**：`test-ohos-skyculture-refresh.mjs` 5/5、`test-ohos-skyculture-text.mjs` 4/4 全绿；全量 `*ohos*.mjs` 扫描仅剩 §13.6 存量环境类失败（4 个 `-pad` 需设备、`mist-performance` 需设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` 平台假设），无本片回归。
+- **测试同步（独立提交）**：`scripts/test-ohos-privacy-startup.mjs` 第 13 项夹具补齐 `fileSize`（及 `hilog` / `LOG_DOMAIN` / `LOG_TAG`）形参 —— 生产 `hasStartupResourceFiles` 已改为用 `fileSize` 判存在，夹具漏传形参导致 `fileSize is not defined`；修后 19/19 全绿。
+- **真机走查（192.168.50.108:36717，`com.cnchensh.stellarium`）**：安装 → 启动存活（`pidof` 非空）。① 星空文化：图层 → 「文化」页签渲染 store 背书的当前文化「现代」与列表（中国宋代 / 中国满族 / 中国藏族星空文化…）；点选「中国宋代」触发 hilog `[sky-culture-anchor] id=chinese_song_dynasty`，当前文化名实时刷新为「中国宋代」（再点选后段列表项确认切换刷新），随后经 `setSkyCulture modern` 恢复原始文化。② 脚本面板：更多功能 → 自动化 → 脚本，渲染导览库、脚本列表与来源/作者元数据（`scriptMetadata`）。③ 回放壳：`playScript solar_eclipse.ssc` 使 `ScriptFocusShell` 挂载（「脚本播放中」/「日食演示」/键位 `− + [ ] N B` / 「停止」），点「+」速率 **1.0x → 2.0x 实时刷新**，点「停止」后 shell 关闭、主界面恢复；全程应用不退出。
+- **新踩的坑**：无（本批为字段并入既有 store，无 builder / 结构手术）。
+
 ## [2026-10-04] DevEco Code - 重构：Prop 风格域转 Store 第四批（mosaicCamera / observingList 残留 / audio / eclipse；宿主 @State 238 → 224，卫星测试假宿主同步）
 
 - **依据**：review §2.7「Store 风格 vs Prop 风格」。本批把 3 个 Prop 风格域 + 1 个残留簇的宿主 `@State` 下沉为 `@Observed` store（eclipse 并入既有 `AstroStore`），面板改为 `@ObjectLink` 订阅；动作仍由宿主回调注入，store 只承载状态。

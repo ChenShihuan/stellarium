@@ -3,6 +3,7 @@ import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { ScriptKeyButton } from '../tools/ScriptKeyButton'
+import { ScriptStore } from '../../state/ScriptStore'
 
 // 脚本焦点播放壳（原宿主无参 @Builder `scriptFocusShell()` 的播放分支，212 行）。
 //
@@ -12,15 +13,13 @@ import { ScriptKeyButton } from '../tools/ScriptKeyButton'
 // Phase 6d 已将导览壳抽成 `InteractiveGuideShell` 组件，宿主在此按 guideState.active
 // 二选一渲染；本组件只承载播放分支。
 //
-// 脚本状态均为宿主 @State，逐项以 @Prop 传入（简单类型按值下发，宿主改值后重绘即可刷新）；
-// 文案与尺寸由宿主算好（scriptZh / visibleScriptCaptionText / scriptWaitDisplayText /
-// scriptControl*）；动作与触摸由宿主回注。视觉 / 命中语义逐字保留。
+// 播放/回放四态（scriptWaiting / scriptRunning / replaying / replayPaused）经 @ObjectLink
+// 直接订阅 state/ScriptStore（Phase 4 residual）；文案与尺寸由宿主算好后以 @Prop 下发
+// （scriptZh / visibleScriptCaptionText / scriptWaitDisplayText / scriptControl*）；
+// 动作与触摸由宿主回注。视觉 / 命中语义逐字保留。
 @Component
 export struct ScriptFocusShell {
-  @Prop scriptWaiting: boolean
-  @Prop scriptRunning: boolean
-  @Prop replaying: boolean
-  @Prop replayPaused: boolean
+  @ObjectLink scriptStore: ScriptStore
   @Prop playbackVisible: boolean
   @Prop compact: boolean
   @Prop displayName: string
@@ -54,12 +53,12 @@ export struct ScriptFocusShell {
         Row({ space: 8 }) {
           Stack() {
             Circle({ width: 7, height: 7 })
-              .fill(this.scriptWaiting ? '#F0B44D' : '#68C8A4')
+              .fill(this.scriptStore.scriptWaiting ? '#F0B44D' : '#68C8A4')
           }
             .width(18)
             .height(18)
           Column({ space: 2 }) {
-            Text(this.scriptWaiting ? I18n.t('script_waiting') : (this.scriptRunning ? I18n.t('script_playing') : (this.replaying ? I18n.t('script_replaying') : I18n.t('script_preparing'))))
+            Text(this.scriptStore.scriptWaiting ? I18n.t('script_waiting') : (this.scriptStore.scriptRunning ? I18n.t('script_playing') : (this.scriptStore.replaying ? I18n.t('script_replaying') : I18n.t('script_preparing'))))
               .fontSize(12)
               .fontWeight(FontWeight.Medium)
               .fontColor('#F1FAFF')
@@ -91,12 +90,12 @@ export struct ScriptFocusShell {
               .lineHeight(this.compact ? 16 : 17)
               .fontColor('#F2FAFF')
               .width('100%')
-              .maxLines(this.scriptWaiting ? 1 : 4)
+              .maxLines(this.scriptStore.scriptWaiting ? 1 : 4)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-              .position({ x: 0, y: this.scriptWaiting ? 46 : 0 })
+              .position({ x: 0, y: this.scriptStore.scriptWaiting ? 46 : 0 })
               .transition(TransitionEffect.OPACITY.animation({ duration: 150, curve: Curve.EaseOut }))
-          } else if (!this.scriptWaiting) {
+          } else if (!this.scriptStore.scriptWaiting) {
             Row({ space: 8 }) {
               LoadingProgress().width(16).height(16).color('#7FB3DC')
               Text(I18n.t('script_playing'))
@@ -109,7 +108,7 @@ export struct ScriptFocusShell {
               .transition(TransitionEffect.OPACITY.animation({ duration: 150, curve: Curve.EaseOut }))
           }
 
-          if (this.scriptWaiting) {
+          if (this.scriptStore.scriptWaiting) {
             Row({ space: 8 }) {
               Image(getIcon('info', false)).width(16).height(16).fillColor('#D6EEFF')
               Text(this.waitText)
@@ -133,7 +132,7 @@ export struct ScriptFocusShell {
                 .backgroundColor('#4E89B5')
                 .borderRadius(UI_RADIUS_CONTROL)
                 .stateEffect(true)
-                .enabled(this.scriptRunning)
+                .enabled(this.scriptStore.scriptRunning)
                 .onClick(() => { this.onContinue() })
             }
               .width('100%')
@@ -151,7 +150,7 @@ export struct ScriptFocusShell {
           }
         }
           .width('100%')
-          .height(this.replaying ? 78 : 82)
+          .height(this.scriptStore.replaying ? 78 : 82)
           .backgroundColor('rgba(91, 147, 191, 0.14)')
           .border({ width: 0.5, color: 'rgba(147, 215, 255, 0.18)' })
           .borderRadius(UI_RADIUS_CONTROL)
@@ -182,9 +181,9 @@ export struct ScriptFocusShell {
             .width(36)
             .enabled(this.playbackVisible)
             .onClick(() => { this.onChangeRate(1) })
-          if (this.replaying) {
+          if (this.scriptStore.replaying) {
             Button() {
-              Image(getIcon(this.replayPaused ? 'time_realtime' : 'pause', false)).width(18).height(18)
+              Image(getIcon(this.scriptStore.replayPaused ? 'time_realtime' : 'pause', false)).width(18).height(18)
             }
               .backgroundColor('rgba(255,255,255,0.10)')
               .borderRadius(UI_RADIUS_CONTROL)
@@ -214,14 +213,14 @@ export struct ScriptFocusShell {
           .zIndex(2)
           .hitTestBehavior(HitTestMode.Default)
 
-        if (this.scriptRunning && !this.replaying) {
+        if (this.scriptStore.scriptRunning && !this.scriptStore.replaying) {
           Row({ space: 5 }) {
-            ScriptKeyButton({ label: '−', keyName: '-', btnWidth: this.keyButtonWidth, isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.onSendKey(k) } })
-            ScriptKeyButton({ label: '+', keyName: '+', btnWidth: this.keyButtonWidth, isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.onSendKey(k) } })
-            ScriptKeyButton({ label: '[', keyName: '[', btnWidth: this.keyButtonWidth, isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.onSendKey(k) } })
-            ScriptKeyButton({ label: ']', keyName: ']', btnWidth: this.keyButtonWidth, isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.onSendKey(k) } })
-            ScriptKeyButton({ label: 'N', keyName: 'N', btnWidth: this.keyButtonWidth, isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.onSendKey(k) } })
-            ScriptKeyButton({ label: 'B', keyName: 'B', btnWidth: this.keyButtonWidth, isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.onSendKey(k) } })
+            ScriptKeyButton({ label: '−', keyName: '-', btnWidth: this.keyButtonWidth, isEnabled: this.scriptStore.scriptRunning && !this.scriptStore.replaying, onKey: (k: string) => { this.onSendKey(k) } })
+            ScriptKeyButton({ label: '+', keyName: '+', btnWidth: this.keyButtonWidth, isEnabled: this.scriptStore.scriptRunning && !this.scriptStore.replaying, onKey: (k: string) => { this.onSendKey(k) } })
+            ScriptKeyButton({ label: '[', keyName: '[', btnWidth: this.keyButtonWidth, isEnabled: this.scriptStore.scriptRunning && !this.scriptStore.replaying, onKey: (k: string) => { this.onSendKey(k) } })
+            ScriptKeyButton({ label: ']', keyName: ']', btnWidth: this.keyButtonWidth, isEnabled: this.scriptStore.scriptRunning && !this.scriptStore.replaying, onKey: (k: string) => { this.onSendKey(k) } })
+            ScriptKeyButton({ label: 'N', keyName: 'N', btnWidth: this.keyButtonWidth, isEnabled: this.scriptStore.scriptRunning && !this.scriptStore.replaying, onKey: (k: string) => { this.onSendKey(k) } })
+            ScriptKeyButton({ label: 'B', keyName: 'B', btnWidth: this.keyButtonWidth, isEnabled: this.scriptStore.scriptRunning && !this.scriptStore.replaying, onKey: (k: string) => { this.onSendKey(k) } })
           }
             .height(34)
             .width('100%')

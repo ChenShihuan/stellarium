@@ -16,7 +16,8 @@ import { SkyCultureSectionHeader, SkyCultureMetaItem, SkyCultureLabelSettingCard
 //
 // 为什么拆成组件：layers 分支的第七个页签体量 819 行、约 77 个设置字段与约 40 个助手方法，
 // 组件不能调用宿主的 @Builder（规则 9）。字段与纯计算已在同片搬入 state/SkyCultureSettingsStore.ets，
-// 组件经 @ObjectLink 实时读；列表/当前选择/解码结果/canvas 上下文等跨域与高频状态以 @Prop 或
+// 组件经 @ObjectLink 实时读；列表 / 当前选择已并入 state/SkyCultureViewStore.ets（Phase 4 residual），
+// 同样经 @ObjectLink 实时读；解码结果 / canvas 上下文等高频状态以 @Prop 或
 // 普通成员传入（规则 5/6），一切 native 桥、定时器、解码、canvas 绘制经回调回注宿主。
 //
 // 本文件不含 @BuilderParam，不含参数化 @Builder；多根并列处包 Column({ space: 0 })（规则 7）。
@@ -26,10 +27,6 @@ export struct SkyCultureViewTab {
   @ObjectLink settings: SkyCultureSettingsStore
   @ObjectLink layerStore: LayerStore
   @ObjectLink skyCultureViewStore: SkyCultureViewStore
-  @Prop currentSkyCultureId: string
-  @Prop currentSkyCultureName: string
-  @Prop skyCultureListLoading: boolean
-  @Prop skyCultureList: Array<SkyCultureItem> = []
   @Prop artStates: Record<string, string> = {}
   @Prop artThumbnailPixelMaps: Record<string, image.PixelMap> = {}
   @Prop narrationParagraphs: Array<string> = []
@@ -115,7 +112,7 @@ export struct SkyCultureViewTab {
   }
 
   private selectedSkyCultureId(): string {
-    return this.skyCultureViewStore.pendingId.length > 0 ? this.skyCultureViewStore.pendingId : this.currentSkyCultureId
+    return this.skyCultureViewStore.pendingId.length > 0 ? this.skyCultureViewStore.pendingId : this.skyCultureViewStore.currentSkyCultureId
   }
 
   private artStatus(rawPath: string): string {
@@ -138,7 +135,7 @@ export struct SkyCultureViewTab {
         LayerSwitchRow({ label: I18n.t('s0528'), isOn: this.layerStore.asterismLines, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Asterism_Lines', '', value) } })
         LayerSwitchRow({ label: I18n.t('s0529'), isOn: this.layerStore.asterismLabels, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Asterism_Labels', '', value) } })
         LayerSwitchRow({ label: I18n.t('s0540'), isOn: this.layerStore.rayHelpers, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Ray_Helpers', '', value) } })
-      } else if (this.skyCultureViewStore.detailsReady && this.currentSkyCultureId.length > 0) {
+      } else if (this.skyCultureViewStore.detailsReady && this.skyCultureViewStore.currentSkyCultureId.length > 0) {
         Text(I18n.t('culture_no_asterisms')).fontSize(10).fontColor(this.subColor).width('100%')
           .padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 6 })
       }
@@ -151,7 +148,7 @@ export struct SkyCultureViewTab {
       .margin({ top: 8, bottom: 8 })
     SkyCultureSectionHeader({ title: I18n.t('culture_section_current'), subtitle: I18n.t('culture_section_current_hint'), textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor })
     Row() {
-      Text(this.currentSkyCultureName.length > 0 ? this.currentSkyCultureName : I18n.t('culture_reading'))
+      Text(this.skyCultureViewStore.currentSkyCulture.length > 0 ? this.skyCultureViewStore.currentSkyCulture : I18n.t('culture_reading'))
         .fontSize(15).fontColor(this.textColor).fontWeight(FontWeight.Medium).layoutWeight(1).maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
       if (this.skyCultureViewStore.detailsLoading && this.skyCultureViewStore.detailsReady) {
@@ -166,7 +163,7 @@ export struct SkyCultureViewTab {
       GraphLoadingRow({ label: I18n.t('culture_loading'), accentColor: this.accentColor, subColor: this.subColor })
     } else if (this.skyCultureViewStore.detailError.length > 0 && !this.skyCultureViewStore.detailsReady) {
       Text(this.skyCultureViewStore.detailError).fontSize(11).fontColor(this.subColor).width('100%').padding({ left: 8, right: 8 }).margin({ top: 6, bottom: 6 })
-    } else if (this.skyCultureViewStore.detailsReady && this.currentSkyCultureId.length > 0) {
+    } else if (this.skyCultureViewStore.detailsReady && this.skyCultureViewStore.currentSkyCultureId.length > 0) {
       Column({ space: 5 }) {
         if (this.skyCultureViewStore.detailError.length > 0) {
           Text(this.skyCultureViewStore.detailError).fontSize(10).fontColor(this.subColor).width('100%')
@@ -739,9 +736,9 @@ export struct SkyCultureViewTab {
         }.width('100%').padding({ left: 8, right: 8, top: 6, bottom: 6 }).backgroundColor('rgba(91,147,191,0.06)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
       }
       Row() {
-        Text(this.settings.skyCultureDefaultId === this.currentSkyCultureId ? '当前已是默认文化' : '启动时使用此文化').fontSize(11).fontColor(this.subColor).layoutWeight(1)
+        Text(this.settings.skyCultureDefaultId === this.skyCultureViewStore.currentSkyCultureId ? '当前已是默认文化' : '启动时使用此文化').fontSize(11).fontColor(this.subColor).layoutWeight(1)
         Button('设为默认').fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-          .enabled(this.settings.skyCultureDefaultId !== this.currentSkyCultureId)
+          .enabled(this.settings.skyCultureDefaultId !== this.skyCultureViewStore.currentSkyCultureId)
           .onClick(() => { this.onSetDefault() })
         Button('重新载入').fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
           .onClick(() => { this.onReloadList() })
@@ -792,7 +789,7 @@ export struct SkyCultureViewTab {
       }.width('100%')
     }.width('100%').padding({ bottom: 5 })
     if (this.settings.skyCultureSearchText.trim().length > 0 || this.settings.skyCultureClassificationFilter !== 'all' || this.settings.skyCultureRegionFilter !== 'all' || this.settings.skyCultureTimeFiltering) {
-      Text(I18n.t('culture_filter_summary') + '：' + this.settings.skyCultureClassificationFilterLabel() + ' · ' + this.settings.skyCultureRegionFilterLabel() + ' · ' + this.settings.filteredSkyCultureList(this.skyCultureList).length + ' ' + I18n.t('culture_match_count'))
+      Text(I18n.t('culture_filter_summary') + '：' + this.settings.skyCultureClassificationFilterLabel() + ' · ' + this.settings.skyCultureRegionFilterLabel() + ' · ' + this.settings.filteredSkyCultureList(this.skyCultureViewStore.skyCultureList).length + ' ' + I18n.t('culture_match_count'))
         .fontSize(10).fontColor(this.accentColor).width('100%').padding({ left: 9, right: 9, top: 6, bottom: 6 })
         .backgroundColor('rgba(80,140,200,0.10)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 5 })
     }
@@ -891,22 +888,22 @@ export struct SkyCultureViewTab {
           }.width('100%')
           Text(this.settings.skyCultureRangeLabel()).fontSize(10).fontColor(this.textColor).width('100%')
         }
-        Text('匹配 ' + this.settings.filteredSkyCultureList(this.skyCultureList).length + ' 个文化').fontSize(10).fontColor(this.subColor).width('100%')
+        Text('匹配 ' + this.settings.filteredSkyCultureList(this.skyCultureViewStore.skyCultureList).length + ' 个文化').fontSize(10).fontColor(this.subColor).width('100%')
       }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(80,140,200,0.08)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 7 })
     }
-    if (this.skyCultureListLoading) {
+    if (this.skyCultureViewStore.skyCultureListLoading) {
       GraphLoadingRow({ label: I18n.t('culture_catalog_reading'), accentColor: this.accentColor, subColor: this.subColor })
-    } else if (this.settings.filteredSkyCultureList(this.skyCultureList).length === 0) {
+    } else if (this.settings.filteredSkyCultureList(this.skyCultureViewStore.skyCultureList).length === 0) {
       Text(I18n.t('culture_no_matching') + '。' + (this.settings.skyCultureTimeFiltering ? '请调整年份、类型或取消年代筛选。' : '请调整搜索或类型筛选。'))
         .fontSize(11).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10, top: 14, bottom: 14 })
         .backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
     } else {
       Column({ space: 6 }) {
-        ForEach(this.settings.filteredSkyCultureList(this.skyCultureList), (sc: SkyCultureItem, index: number) => {
+        ForEach(this.settings.filteredSkyCultureList(this.skyCultureViewStore.skyCultureList), (sc: SkyCultureItem, index: number) => {
           Column({ space: 3 }) {
-            if (this.settings.skyCultureRegionHeader(this.settings.filteredSkyCultureList(this.skyCultureList), index).length > 0) {
+            if (this.settings.skyCultureRegionHeader(this.settings.filteredSkyCultureList(this.skyCultureViewStore.skyCultureList), index).length > 0) {
               Row() {
-                Text(this.settings.skyCultureRegionHeader(this.settings.filteredSkyCultureList(this.skyCultureList), index)).fontSize(10).fontColor(this.subColor).fontWeight(FontWeight.Medium)
+                Text(this.settings.skyCultureRegionHeader(this.settings.filteredSkyCultureList(this.skyCultureViewStore.skyCultureList), index)).fontSize(10).fontColor(this.subColor).fontWeight(FontWeight.Medium)
                 Divider().strokeWidth(1).color('rgba(255,255,255,0.08)').layoutWeight(1).margin({ left: 8 })
               }.width('100%').height(24).padding({ left: 4, right: 4, top: 5 })
             }
