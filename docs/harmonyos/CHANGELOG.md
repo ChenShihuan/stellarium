@@ -1,3 +1,11 @@
+## [2026-10-05] DevEco Code - E 轨道 E1：删死代码 + 位置层级选择薄胶水下沉
+
+- **删死代码（用户已确认）**：删 5 个宿主私有方法 —— `showObjectActionBar`（硬编码 `return false`）、`objectActionBarX`、`objectActionBarWidth`、`isObjectActionBarPoint`（仅被前三者与下述分支引用）、零引用 `loadFov`；并删 `isUiPoint` 体内恒假的第二判定项 `|| this.isObjectActionBarPoint(x, y)`（只删恒假项，`isObjectDetailCardPoint(...)` 第一项判定与比较边界不变）；从 geometry import 移除随之零引用的 `objectActionBarY`（其函数本体按 `scripts/test-ohos-polar-scope.mjs` 的文本切分边界保留，未删）。
+- **位置薄胶水下沉（D8 登记保留 4 法 → `capability/LocationController.ets`）**：`selectContinent` / `selectCountry` / `selectRegion` / `selectCityByName` 逐字等价迁入 —— 纯 store 写 `this.locationPickerStore.hier*` → `this.pickerStore.hier*`，`this.locationCtl().setLocation(...)` → 控制器内部 `this.setLocation(...)`；`selectCityByName` 的 `hierCities(...).find(...)` 过滤与 `locationPlanet(found)` 判定一字未改。控制器已持有 `LocationPickerStore` / `SessionToolStore`，仅新增 `HierCity` import（`../pages/StellariumTypes`）。宿主 4 个调用点（`PlacePanel` 的 `onSelectContinent/Country/Region/City`）改指 `this.locationCtl().selectXxx(...)`。
+- **度量**：宿主 **8,646 → 8,587 行（−59）**、`private` 方法 **277 → 268（−9 = 4 死方法 + `loadFov` + 4 迁出薄胶水）**、`@State private` **132 不变**；`capability/LocationController.ets` **214 → 246 行（+32）**；未新增文件。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 247+ 文件）；`test-ohos-polar-scope` 4/4、`test-ohos-privacy-startup` 19/19 全绿；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败（clipboard-pad / guide-pad / mist-horizon-pad / mist-performance / polar-scope-pad / verify-ohos-search）。
+- **真机（192.168.50.108:36717）**：`Smoke: PASS`。位置面板「按地区选」层级全链路实测（无 `--id` 的层级列经坐标点击，缺语义命令已记录）：大洲「亚洲」→ 国家「丹麦」→ 地区「哥本哈根」→ 城市「哥本哈根」，`getObserverInfo` 返回 `Copenhagen / 55.6759 / 12.5655 / 14`，hilog `command received: "setLocation" "Copenhagen|55.6759|12.5655|14"`（`selectContinent`/`selectCountry`/`selectRegion` 纯 store 写并驱动下级列刷新，`selectCityByName` → `LocationController.setLocation` 落桥）；再切大洲「欧洲」验证下级国家列刷新为「丹麦/乌克兰」、地区/城市列清空。`pidof` 52593 存活、无 jscrash。测试后经「地图选点 + 应用」复原为启动值 `自定义位置 / 21.34°N / 110.38°E / 0 m`（原值 `自定义位置 / 21.29°N / 110.38°E / 0 m`，纬度差 ~0.05° 系地图栅格分辨率，海拔与经度一致）。
+- **文档**：`ARKTS-PAGES-REFACTOR-PLAN.md` §15.12 追加 E1 完成行 + 度量。
 ## [2026-10-05] DevEco Code - D 轨道 D3（收尾片）：星空文化与制作器行为控制器
 
 - **D3（P1，最大簇）新增两个控制器**：

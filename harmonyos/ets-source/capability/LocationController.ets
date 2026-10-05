@@ -9,7 +9,7 @@
 // LocationHostHooks 具名回注（§13.1 规则 6）；观测点草稿/请求中标志留控制器（§15.7 规则 2）。
 import hilog from '@ohos.hilog'
 import { I18n } from '../pages/I18n'
-import { StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { StellariumBridgeResponse, HierCity } from '../pages/StellariumTypes'
 import { ObserverLocationRecord } from '../pages/MainWindowModels'
 import { approximateTimeZoneDisplay, planetZh } from '../common/derive/labels'
 import { CommandPort } from '../bridge/CommandPort'
@@ -58,6 +58,37 @@ export class LocationController {
     this.locationStore = locationStore
     this.sessionToolStore = sessionToolStore
     this.hooks = hooks
+  }
+
+  // 原宿主 selectContinent()：大洲选择（清空下级层级，纯 store 写）。
+  selectContinent(c: string): void {
+    this.pickerStore.hierContinent = c
+    this.pickerStore.hierCountry = ''
+    this.pickerStore.hierRegion = ''
+    this.pickerStore.hierCity = ''
+  }
+
+  // 原宿主 selectCountry()：国家选择（清空下级层级，纯 store 写）。
+  selectCountry(country: string): void {
+    this.pickerStore.hierCountry = country
+    this.pickerStore.hierRegion = ''
+    this.pickerStore.hierCity = ''
+  }
+
+  // 原宿主 selectRegion()：地区选择（清空城市，纯 store 写）。
+  selectRegion(r: string): void {
+    this.pickerStore.hierRegion = r
+    this.pickerStore.hierCity = ''
+  }
+
+  // 原宿主 selectCityByName()：城市选择并立即落地（层级城市经纬度取自 store）。
+  selectCityByName(name: string): void {
+    this.pickerStore.hierCity = name
+    const found = this.pickerStore.hierCities(this.sessionToolStore.observerPlanet).find((c: HierCity) => c.n === name)
+    if (found) {
+      // Auto-apply the selected city immediately
+      this.setLocation(found.n, found.la, found.lo, found.al, this.pickerStore.locationPlanet(found))
+    }
   }
 
   // 原宿主 useDeviceLocation()（GPS：隐私门禁 → 权限 → 定位 → setPickerLocation → applyPickerLocation）。
