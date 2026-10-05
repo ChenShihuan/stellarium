@@ -53,6 +53,7 @@ import { SearchStore } from '../state/SearchStore'
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { GyroStore } from '../state/GyroStore'
 import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
+import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
@@ -7220,36 +7221,6 @@ export struct WindowNativeNode {
     return type
   }
 
-  @Builder
-  phenomenonRelationMark(type: string) {
-    if (type === '合') {
-      Image($r('app.media.ic_phenomenon_conjunction'))
-    } else if (type === '冲') {
-      Image($r('app.media.ic_phenomenon_opposition'))
-    } else if (type.indexOf('方照') >= 0) {
-      if (type.indexOf('东') >= 0) {
-        Image($r('app.media.ic_phenomenon_quadrature_east'))
-      } else {
-        Image($r('app.media.ic_phenomenon_quadrature_west'))
-      }
-    } else if (type.indexOf('大距') >= 0) {
-      if (type.indexOf('东') >= 0) {
-        Image($r('app.media.ic_phenomenon_elongation_east'))
-      } else {
-        Image($r('app.media.ic_phenomenon_elongation_west'))
-      }
-    } else if (type.indexOf('近日点') >= 0) {
-      Image($r('app.media.ic_phenomenon_perihelion'))
-    } else if (type.indexOf('远日点') >= 0) {
-      Image($r('app.media.ic_phenomenon_aphelion'))
-    } else if (type.indexOf('顺行') >= 0) {
-      Image($r('app.media.ic_phenomenon_station_direct'))
-    } else if (type.indexOf('逆行') >= 0) {
-      Image($r('app.media.ic_phenomenon_station_retrograde'))
-    } else {
-      Image($r('app.media.ic_phenomenon_station'))
-    }
-  }
 
   private jumpToPhenomenon(item: PhenomenonItem): void {
     if (item.jd === undefined || item.jd <= 0) return
@@ -7935,22 +7906,6 @@ export struct WindowNativeNode {
     }
   }
 
-  @Builder
-  astroSelectionGuide() {
-    if (this.astroNeedsSelectedObject() && !this.hasSelectedObject()) {
-      Row({ space: 8 }) {
-        Column({ space: 2 }) {
-          Text(I18n.t('astro_selection_required')).fontSize(11).fontColor(this.nmText()).width('100%')
-          Text(I18n.t('astro_selection_required_hint')).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(2)
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Button(I18n.t('astro_select_on_map')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent())
-          .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 9, right: 9 })
-          .onClick(() => { this.openAstroTargetPicker() })
-      }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
-        .backgroundColor('rgba(91,147,191,0.12)').border({ width: 1, color: 'rgba(143,211,255,0.24)' })
-        .borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 6 })
-    }
-  }
 
   private updateAstroCalcSnapshot(): void {
     if (this.astroTab === 0) {
@@ -22081,7 +22036,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         }.width('100%').padding({ left: 8, right: 8, top: 6, bottom: 6 })
           .backgroundColor('rgba(255, 255, 255, 0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 6 })
       }
-      this.astroSelectionGuide()
+      AstroSelectionGuide({ visible: this.astroNeedsSelectedObject() && !this.hasSelectedObject(), textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), onOpenPicker: () => { this.openAstroTargetPicker() } })
       Scroll(this.astroPanelScroller) {
         Column({ space: 0 }) {
           if (this.astroTab === 0) {
@@ -22754,7 +22709,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             ForEach(this.phenomenaData, (p: PhenomenonItem) => {
               Row({ space: 8 }) {
                 Stack({ alignContent: Alignment.Center }) {
-                  this.phenomenonRelationMark(p.type ?? '')
+                  PhenomenonRelationMark({ type: p.type ?? '' })
                 }.width(52).height(44).backgroundColor(this.nmBg()).border({ width: 1, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL)
                 Column({ space: 3 }) {
                   Text(this.phenomenonCaption(p.type ?? '')).fontSize(9).fontColor(this.nmSub()).fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
