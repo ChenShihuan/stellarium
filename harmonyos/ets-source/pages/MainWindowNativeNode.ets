@@ -8912,6 +8912,14 @@ private loadPlanetPositions(): void {
 
 
   private isUiPoint(x: number, y: number): boolean {
+    // 录制聚焦态（控制条收起）：除顶部录制控制条外，面板/详情卡/搜索/Dock/底部条等界面
+    // 全部隐藏，不得留下“幽灵命中区”吞掉拖动。此前只有录制条被排除，其余隐藏界面的命中区
+    // 仍在，导致星图（含中央）多处拖不动。
+    if (this.tools.recording && !this.tools.recordingUiExpanded &&
+      !this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active)) {
+      return x >= 16 && x <= Math.max(266, this.skyWidth - 16) &&
+        y >= this.EDGE_MARGIN - 8 && y <= this.EDGE_MARGIN + 58
+    }
     if (this.guideStore.guideState.active) {
       return x >= guideCardX(this.isExpandedLayout, this.skyWidth, this.guideCardWidth(), this.scriptStore.scriptControlOffsetX) && x <= guideCardX(this.isExpandedLayout, this.skyWidth, this.guideCardWidth(), this.scriptStore.scriptControlOffsetX) + this.guideCardWidth() &&
         y >= guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY) && y <= guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY) + guideCardHeight(this.skyHeight, this.scriptControlSafeTop())
