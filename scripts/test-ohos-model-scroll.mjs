@@ -26,7 +26,7 @@ test('only the bounded model captures touch; the outer card isolates the sky', (
   assert.match(stage, /onTouch.*this\.onModelTouch\(event\)/);
   assert.doesNotMatch(stage, /PanDirection|onGestureJudgeBegin|parallelGesture/);
   assert.match(mediaComponents.slice(stageStart - 230, stageStart), /width\(this\.inlineModelSize\)\.height\(this\.inlineModelSize\)/);
-  assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
+  assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.objectModelRendererCtl\(\)\.handleObjectInspectorModelTouch\(event\) \}/);
   assert.equal(((source + compactShell + hoverShell + expandedShell).match(/height\(this\.(?:detailCardHeight\(\)|detailHeight)\)\s*\.zIndex\(\d+\)\s*\.hitTestBehavior\(HitTestMode\.BLOCK_HIERARCHY\)/g) ?? []).length, 3);
   assert.match(source, /scroller: this\.objectDetailScroller/);
   assert.match(detailCard, /Scroll\(this\.scroller\)/);
@@ -50,8 +50,11 @@ test('inline and full screen retain unrestricted rotation and pinch with cleanup
   assert.match(modelOverlay, /onStageTouch\(event\)/);
   assert.match(modelOverlay, /HitTestMode.BLOCK_HIERARCHY/);
   assert.match(modelOverlay, /object-model-close/);
-  assert.match(source, /onStageTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
-  const handler = source.slice(source.indexOf('private handleObjectInspectorModelTouch'), source.indexOf('private objectInspectorInlineModelSize'));
+  assert.match(source, /onStageTouch: \(event: TouchEvent\) => \{ this\.objectModelRendererCtl\(\)\.handleObjectInspectorModelTouch\(event\) \}/);
+  // M2-A：触摸/旋转/缩放算法整体下沉 capability/ObjectModelRenderer.ets。
+  const controller = readFileSync(new URL('../harmonyos/ets-source/capability/ObjectModelRenderer.ets', import.meta.url), 'utf8');
+  const handlerStart = controller.indexOf('  handleObjectInspectorModelTouch(');
+  const handler = controller.slice(handlerStart, controller.indexOf('\n  }', handlerStart) + 4);
   assert.match(handler, /rotateObjectInspectorModel\(deltaX, deltaY\)/);
   assert.match(handler, /objectInspectorModelScale \* scaleFactor/);
   assert.match(handler, /TouchType.Up.*TouchType.Cancel/);
@@ -60,8 +63,10 @@ test('inline and full screen retain unrestricted rotation and pinch with cleanup
 });
 
 function touchHarness() {
-  const start = source.indexOf('  private handleObjectInspectorModelTouch(');
-  const method = source.slice(start, source.indexOf('\n  }', start) + 4);
+  // M2-A：触摸处理器整体下沉 capability/ObjectModelRenderer.ets（宿主仅保留 onModelTouch 回调转发）。
+  const controllerSource = readFileSync(new URL('../harmonyos/ets-source/capability/ObjectModelRenderer.ets', import.meta.url), 'utf8');
+  const start = controllerSource.indexOf('  handleObjectInspectorModelTouch(');
+  const method = controllerSource.slice(start, controllerSource.indexOf('\n  }', start) + 4);
   const TouchType = { Down: 0, Move: 1, Up: 2, Cancel: 3 };
   // touchScreenX/Y 已直连 common/derive/geometry（§14.2 A1-6），故以函数入参注入模板。
   const touchScreenX = point => point.x;
@@ -70,8 +75,8 @@ function touchHarness() {
   const controller = new Controller();
   const moves = [];
   const renders = [];
-  // 缩放与交互标志随状态搬迁进了 ObjectMediaStore，触摸计数等内部状态仍在宿主。
-  controller.objectMediaStore = { objectInspectorModelScale: 1, objectInspectorModelInteracting: false };
+  // 缩放与交互标志在 ObjectMediaStore（控制器以 mediaStore 引用），触摸计数等内部状态在控制器。
+  controller.mediaStore = { objectInspectorModelScale: 1, objectInspectorModelInteracting: false };
   controller.objectInspectorModelTouchCount = 0;
   controller.objectInspectorModelLastPinchDistance = 0;
   Object.assign(controller, {
@@ -91,19 +96,19 @@ test('touch handler preserves horizontal, vertical and diagonal movement', () =>
   touch('Up', []);
   assert.deepEqual(moves, [[20, 0], [0, 30], [-10, -15]]);
   assert.deepEqual(renders, [true]);
-  assert.equal(controller.objectMediaStore.objectInspectorModelInteracting, false);
+  assert.equal(controller.mediaStore.objectInspectorModelInteracting, false);
 });
 
 test('two-finger pinch changes scale without orbit and cancellation resets interaction', () => {
   const { moves, controller, touch } = touchHarness();
   touch('Down', [[0, 0], [100, 0]]);
   touch('Move', [[0, 0], [110, 0]]);
-  assert.ok(controller.objectMediaStore.objectInspectorModelScale > 1);
+  assert.ok(controller.mediaStore.objectInspectorModelScale > 1);
   touch('Move', [[0, 0], [90, 0]]);
-  assert.ok(controller.objectMediaStore.objectInspectorModelScale < 1);
+  assert.ok(controller.mediaStore.objectInspectorModelScale < 1);
   assert.deepEqual(moves, []);
   touch('Cancel', []);
-  assert.equal(controller.objectMediaStore.objectInspectorModelInteracting, false);
+  assert.equal(controller.mediaStore.objectInspectorModelInteracting, false);
   assert.equal(controller.objectInspectorModelTouchCount, 0);
   assert.equal(controller.objectInspectorModelLastPinchDistance, 0);
 });

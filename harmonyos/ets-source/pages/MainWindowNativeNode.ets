@@ -19,11 +19,8 @@ import preferences from '@ohos.data.preferences'
 import { LOCATION_HIERARCHY } from './location_hierarchy'
 import { LOCATION_COUNTRY_NAMES } from './location_countries'
 import { LOCATION_ZH_NAMES } from './location_names_zh'
-import { modelIdentity, modelDrag } from './DetailModelGeometry'
 import { proceduralModelKind, proceduralParticles } from './ProceduralDetailModel'
-import { DetailModelRenderClient } from './DetailModelRenderClient'
 import { ASTRONOMY_GUIDES, AstronomyGuide, GuideState, GuideStep } from './AstronomyGuide'
-import { DetailModelResources, DetailModelFrame, DetailModelResult, DetailModelRing, DetailModelLight } from './DetailModelRenderTypes'
 
 import { StellariumBridgeResponse, SessionSnapshot, TonightEvents, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, CatOption, NameItem, SearchSug, WindowNativeNodeCreateInfo, TabItem, ChipItem, LandscapeItem, ScriptMetadata, PlanetPosition, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass } from './StellariumTypes'
 import { setLifecycleListener } from '../common/StellariumLifecycle'
@@ -58,6 +55,7 @@ import { speakSelectedObject } from '../common/SpeechService'
 import { StartupBridge, StartupHooks } from '../capability/StartupBridge'
 import { SensorController, GyroGuideLayout, SensorHostHooks } from '../capability/SensorController'
 import { RecordingController, RecordingHostHooks } from '../capability/RecordingController'
+import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
@@ -403,6 +401,32 @@ class HostMediaPort implements MediaPort {
     }
   }
 
+  // ── 对象模型渲染（M2-A）：worker 光栅化结果的像素图创建与 PNG 回退读回。 ──
+  createPixelMapFromRgba(pixels: ArrayBuffer, width: number, height: number, label: string): Promise<image.PixelMap> {
+    return image.createPixelMap(pixels, {
+      size: { width: width, height: height },
+      srcPixelFormat: image.PixelMapFormat.RGBA_8888,
+      pixelFormat: image.PixelMapFormat.RGBA_8888,
+      alphaType: image.AlphaType.UNPREMUL,
+      editable: false
+    }).then((pixelMap: image.PixelMap) => {
+      hilog.info(0x0000, 'StellariumArkUI',
+        '[detail-model] render pixel map created kind=%{public}s bytes=%{public}s',
+        label, pixelMap.getPixelBytesNumber().toString())
+      return pixelMap
+    })
+  }
+
+  readPixelMapPixels(pixelMap: image.PixelMap, buffer: ArrayBuffer, label: string): void {
+    try {
+      pixelMap.readPixelsToBufferSync(buffer)
+    } catch (err) {
+      hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] pixel readback failed kind=%{public}s error=%{public}s',
+        label, JSON.stringify(err))
+      throw err as Error
+    }
+  }
+
   // ── 屏幕录制（M1-B 子组②）：NAPI 细节收在本具名适配器，控制器只依赖端口。 ──
   private screenCapture?: media.AVScreenCaptureRecorder
   private screenCaptureFile?: fileIo.File
@@ -681,6 +705,8 @@ export struct WindowNativeNode {
   private sensorControllerImpl: SensorController | null = null
   // M1-B 子组②：录制/回放/录屏控制器（惰性构造；recordBuffer 属 §2.7.1 保留字段，经 hooks 读写）。
   private recordingControllerImpl: RecordingController | null = null
+  // M2-A：对象检查器三维模型渲染器（惰性构造；逐帧/草稿字段留控制器，可观测子集在 ObjectMediaStore）。
+  private objectModelRendererImpl: ObjectModelRenderer | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -734,29 +760,10 @@ export struct WindowNativeNode {
   private skyTextureStatusSlow: boolean = false
   private objectInspectorProceduralKey: string = ''
   private objectInspectorProceduralParticles: number[][] = []
-  private objectInspectorModelOverlaySerial: number = 0
-  private objectInspectorModelRendering: boolean = false
-  private objectInspectorModelRenderClient: DetailModelRenderClient | undefined = undefined
-  private objectInspectorModelRotation: number[] = modelIdentity()
-  private objectInspectorModelLastLighting: number[] = []
-  private objectInspectorModelLastRenderTime: number = 0
-  private objectInspectorModelTouchCount: number = 0
+  // objectInspectorModel* 的 22 个逐帧/草稿字段（纹理三量 + 环纹理三量、旋转/缩放采样、
+  // 渲染代际/挂起/播放中标志、一次性防抖定时器）已随 M2-A 搬入 capability/ObjectModelRenderer.ets，
+  // 刻意不入被观察 store（§13.3：逐帧写入入 store 会造成重渲染风暴）。
   private objectDetailScroller: Scroller = new Scroller()
-  private objectInspectorModelTexturePixels: ArrayBuffer | undefined = undefined
-  private objectInspectorModelTextureWidth: number = 0
-  private objectInspectorModelTextureHeight: number = 0
-  private objectInspectorModelTextureStride: number = 0
-  private objectInspectorModelRingTexturePixels: ArrayBuffer | undefined = undefined
-  private objectInspectorModelRingTextureWidth: number = 0
-  private objectInspectorModelRingTextureHeight: number = 0
-  private objectInspectorModelRingTextureStride: number = 0
-  private objectInspectorModelLastX: number = 0
-  private objectInspectorModelLastY: number = 0
-  private objectInspectorModelLastPinchDistance: number = 0
-  private objectInspectorModelRenderGeneration: number = 0
-  private objectInspectorModelRenderPending: boolean = false
-  private objectInspectorModelRenderHighQuality: boolean = false
-  private objectInspectorModelRenderTimer: number = 0
   // 音频域状态已下沉 state/AudioStore.ets（review §2.7：Prop 风格 → Store 风格）。
   // 程序化音乐默认开（打开应用即播放），可静音并持久化。
   @State private audioStore: AudioStore = new AudioStore()
@@ -1529,6 +1536,31 @@ export struct WindowNativeNode {
     return this.recordingControllerImpl
   }
 
+  // M2-A：对象检查器三维模型渲染器惰性构造。MediaPort / 三个 store / UI 与媒体管线保留字段
+  // 经 hooks 注入，控制器不 import NAPI/UI（§15.7 规则 1）。
+  private objectModelRendererCtl(): ObjectModelRenderer {
+    if (this.objectModelRendererImpl === null) {
+      const hooks: ObjectModelRendererHostHooks = {
+        publishModelView: (json: string): void => { AppStorage.setOrCreate('stellariumObjectModelView', json) },
+        animateOverlay: (open: boolean, body: () => void, onFinish: () => void): void => {
+          this.getUIContext().animateTo(open
+            ? { duration: 220, curve: Curve.EaseOut }
+            : { duration: 180, curve: Curve.EaseIn, onFinish: onFinish }, body)
+        },
+        mediaDecodeGeneration: (): number => this.objectInspectorMediaDecodeGeneration,
+        proceduralParticles: (): number[][] => this.objectInspectorProceduralParticles,
+        resetProcedural: (): void => {
+          this.objectInspectorProceduralKey = ''
+          this.objectInspectorProceduralParticles = []
+        }
+      }
+      this.objectModelRendererImpl = new ObjectModelRenderer(
+        this.objectMediaStore, this.objectDetailStore, this.infoWindowStore, this.hostMediaPort, hooks
+      )
+    }
+    return this.objectModelRendererImpl
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
@@ -1756,16 +1788,16 @@ export struct WindowNativeNode {
     // publishAstroPanelState，保持 CLI 侧 astroPanelState 的 wut 字段同步。
     this.wutStore.attachPort(hostPort, () => { this.publishAstroPanelState() })
     // §14 B2R-1：对象检查器原始模型纹理加载器 loadObjectInspectorModelRawTexture 下沉
-    // ObjectMediaStore。其读写的宿主逐帧裸字段（objectInspectorModelTexturePixels / RingTexture*）
-    // 与 image / fileIo / decodeLocalImage 职责经 ObjectMediaHostHooks 具名注入（store 不 import
-    // NAPI/UI）；该加载器不走桥、无 publish* 发布点，故不注入 CommandPort。
+    // ObjectMediaStore；其侧车读取（fileIo）经 readRawSidecar 回注，而 image / decodeLocalImage
+    // 相关的三个下游（PNG 回退解码 / 纹理提交 / 失败上报）已随 M2-A 移入 capability/ObjectModelRenderer.ets，
+    // 故此处三个 hooks 转发给控制器（store 仍不 import NAPI/UI，不走桥、无 publish*，不注入 CommandPort）。
     this.objectMediaStore.attachHooks({
       readRawSidecar: (path: string, expectedBytes: number, label: string): ArrayBuffer => this.readRawSidecar(path, expectedBytes, label),
       decodeObjectInspectorModelTextureFromPng: (pngFilePath: string, ringPngFilePath: string, mediaGeneration: number, expectedSelection: string, expectedPath: string): void =>
-        this.decodeObjectInspectorModelTextureFromPng(pngFilePath, ringPngFilePath, mediaGeneration, expectedSelection, expectedPath),
+        this.objectModelRendererCtl().decodeObjectInspectorModelTextureFromPng(pngFilePath, ringPngFilePath, mediaGeneration, expectedSelection, expectedPath),
       commitObjectInspectorModelTexture: (texture: ArrayBuffer, ringTexture: ArrayBuffer | undefined, mediaGeneration: number, expectedSelection: string, expectedPath: string, sourceLabel: string): void =>
-        this.commitObjectInspectorModelTexture(texture, ringTexture, mediaGeneration, expectedSelection, expectedPath, sourceLabel),
-      failObjectInspectorModelTexture: (mediaGeneration: number, reason: string): void => this.failObjectInspectorModelTexture(mediaGeneration, reason)
+        this.objectModelRendererCtl().commitObjectInspectorModelTexture(texture, ringTexture, mediaGeneration, expectedSelection, expectedPath, sourceLabel),
+      failObjectInspectorModelTexture: (mediaGeneration: number, reason: string): void => this.objectModelRendererCtl().failObjectInspectorModelTexture(mediaGeneration, reason)
     })
     // §14 B2R-2：设置 / 观测点 / 时间附加三个加载器分别下沉 TimeSettingsStore / LocationPickerStore /
     // TimeStore，均复用同一 HostCommandPort 实例。三者消费方均为 @ObjectLink（字段赋值即刷新），
@@ -1964,15 +1996,15 @@ export struct WindowNativeNode {
           this.infoWindowStore.infoWinVisible = true
           this.selectObjectDetailTab(2)
         } else if (value === 'immersive') {
-          this.setObjectInspectorModelImmersive(true)
+          this.objectModelRendererCtl().setObjectInspectorModelImmersive(true)
         } else if (value === 'close') {
-          this.setObjectInspectorModelImmersive(false)
+          this.objectModelRendererCtl().setObjectInspectorModelImmersive(false)
         } else if (value === 'reset') {
-          this.resetObjectInspectorModelView()
+          this.objectModelRendererCtl().resetObjectInspectorModelView()
         } else {
           const parts = value.split('|')
-          this.rotateObjectInspectorModel(Number(parts[0]), Number(parts[1]))
-          this.requestObjectInspectorModelRender(true)
+          this.objectModelRendererCtl().rotateObjectInspectorModel(Number(parts[0]), Number(parts[1]))
+          this.objectModelRendererCtl().requestObjectInspectorModelRender(true)
         }
         return
       }
@@ -2240,7 +2272,7 @@ export struct WindowNativeNode {
   private handleApplicationLifecycle = (foreground: boolean): void => {
     this.applicationInForeground = foreground
     if (!foreground && this.guideStore.guideState.phase === 'observing') this.guideStore.pausePlayer()
-    this.objectInspectorModelRenderClient?.setSuspended(!foreground)
+    this.objectModelRendererCtl().setForeground(foreground)
     if (foreground) {
       if (this.foregroundRefreshPaused) {
         this.foregroundRefreshPaused = false
@@ -8063,7 +8095,7 @@ private loadPlanetPositions(): void {
       this.objectDetailStore.selectedDetailMediaKind = result.detailMediaKind && result.detailMediaKind.length > 0 ? result.detailMediaKind : ''
       this.objectDetailStore.selectedDetailMediaLabel = result.detailMediaLabel && result.detailMediaLabel.length > 0 ? result.detailMediaLabel : ''
       this.objectDetailStore.selectedDetailModel = result.detailModel
-      this.refreshObjectInspectorModelLighting()
+      this.objectModelRendererCtl().refreshObjectInspectorModelLighting()
       this.objectDetailStore.selectedConstellationCultureId = result.constellationCultureId && result.constellationCultureId.length > 0 ? result.constellationCultureId : ''
       this.objectDetailStore.selectedConstellationCultureName = result.constellationCultureName && result.constellationCultureName.length > 0 ? result.constellationCultureName : ''
       this.objectDetailStore.selectedConstellationCultureDescription = result.constellationCultureDescription && result.constellationCultureDescription.length > 0 ? result.constellationCultureDescription : ''
@@ -9240,7 +9272,7 @@ private loadPlanetPositions(): void {
         this.callNativeFire('setNightMode', this.nightModeStore.nightMode ? 'true' : 'false')
         return true
       case KeyCode.KEYCODE_ESCAPE:
-        if (this.objectMediaStore.objectInspectorModelImmersive) this.setObjectInspectorModelImmersive(false)
+        if (this.objectMediaStore.objectInspectorModelImmersive) this.objectModelRendererCtl().setObjectInspectorModelImmersive(false)
         else this.closePanel()
         return true
       default: return false
@@ -9811,9 +9843,9 @@ private loadPlanetPositions(): void {
                 distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
                 imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
                 inlineModelSize: this.objectInspectorInlineModelSize(),
-                modelReady: this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight),
-                modelRendering: this.objectInspectorModelRendering,
-                hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+                modelReady: this.objectModelRendererCtl().modelReady(),
+                modelRendering: this.objectModelRendererCtl().isRendering(),
+                hasModelTexture: this.objectModelRendererCtl().hasTexture(),
                 modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
                 warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
                 fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
@@ -9853,8 +9885,8 @@ private loadPlanetPositions(): void {
                 onLoadPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
                 onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
                 onMediaRetry: () => { this.retryObjectInspectorMedia() },
-                onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-                onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+                onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
+                onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
                 onToggleLock: () => { this.toggleViewLock() },
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
@@ -9916,9 +9948,9 @@ private loadPlanetPositions(): void {
                 distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
                 imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
                 inlineModelSize: this.objectInspectorInlineModelSize(),
-                modelReady: this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight),
-                modelRendering: this.objectInspectorModelRendering,
-                hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+                modelReady: this.objectModelRendererCtl().modelReady(),
+                modelRendering: this.objectModelRendererCtl().isRendering(),
+                hasModelTexture: this.objectModelRendererCtl().hasTexture(),
                 modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
                 warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
                 fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
@@ -9970,8 +10002,8 @@ private loadPlanetPositions(): void {
                 onLoadPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
                 onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
                 onMediaRetry: () => { this.retryObjectInspectorMedia() },
-                onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-                onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+                onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
+                onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
                 onToggleLock: () => { this.toggleViewLock() },
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
@@ -10038,9 +10070,9 @@ private loadPlanetPositions(): void {
                 distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
                 imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
                 inlineModelSize: this.objectInspectorInlineModelSize(),
-                modelReady: this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight),
-                modelRendering: this.objectInspectorModelRendering,
-                hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+                modelReady: this.objectModelRendererCtl().modelReady(),
+                modelRendering: this.objectModelRendererCtl().isRendering(),
+                hasModelTexture: this.objectModelRendererCtl().hasTexture(),
                 modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
                 warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
                 fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
@@ -10104,8 +10136,8 @@ private loadPlanetPositions(): void {
                 onLoadPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
                 onMediaOpen: () => { this.openObjectInspectorMediaPreview() },
                 onMediaRetry: () => { this.retryObjectInspectorMedia() },
-                onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-                onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+                onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
+                onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
                 onToggleLock: () => { this.toggleViewLock() },
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
@@ -10217,9 +10249,9 @@ private loadPlanetPositions(): void {
             titleText: this.objectDetailStore.selectedName,
             noticeText: this.objectMediaStore.objectInspectorModelNotice(),
             topInset: this.mediaPreviewTopInset(),
-            onCloseOverlay: () => { this.setObjectInspectorModelImmersive(false) },
-            onResetView: () => { this.resetObjectInspectorModelView() },
-            onStageTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) }
+            onCloseOverlay: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(false) },
+            onResetView: () => { this.objectModelRendererCtl().resetObjectInspectorModelView() },
+            onStageTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) }
           })
         }
       }
@@ -10913,45 +10945,10 @@ private loadPlanetPositions(): void {
     const oldPixelMap = this.objectMediaStore.objectInspectorMediaPixelMap
     this.objectMediaStore.objectInspectorMediaPixelMap = undefined
     this.objectInspectorMediaDecodeGeneration++
-    this.clearObjectInspectorModelRenderer()
+    this.objectModelRendererCtl().clearObjectInspectorModelRenderer()
     releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'object-inspector')
   }
 
-  private clearObjectInspectorModelRenderer(): void {
-    this.objectInspectorModelRenderClient?.dispose()
-    this.objectInspectorModelRenderClient = undefined
-    this.objectMediaStore.objectInspectorProceduralKind = ''
-    this.objectInspectorProceduralKey = ''
-    this.objectInspectorProceduralParticles = []
-    this.objectMediaStore.objectInspectorModelImmersive = false
-    this.objectMediaStore.objectInspectorModelOverlayOpacity = 0
-    this.objectInspectorModelOverlaySerial++
-    AppStorage.setOrCreate('stellariumObjectModelView', JSON.stringify({
-      ok: false, error: 'model is not ready'
-    }))
-    this.objectInspectorModelTouchCount = 0
-    this.objectInspectorModelLastLighting = []
-    const oldModelPixelMap = this.objectMediaStore.objectInspectorModelPixelMap
-    if (this.objectInspectorModelRenderTimer !== 0) {
-      clearTimeout(this.objectInspectorModelRenderTimer)
-      this.objectInspectorModelRenderTimer = 0
-    }
-    this.objectMediaStore.objectInspectorModelPixelMap = undefined
-    this.objectInspectorModelTexturePixels = undefined
-    this.objectInspectorModelTextureWidth = 0
-    this.objectInspectorModelTextureHeight = 0
-    this.objectInspectorModelTextureStride = 0
-    this.objectInspectorModelRingTexturePixels = undefined
-    this.objectInspectorModelRingTextureWidth = 0
-    this.objectInspectorModelRingTextureHeight = 0
-    this.objectInspectorModelRingTextureStride = 0
-    this.objectInspectorModelRendering = false
-    this.objectInspectorModelRenderPending = false
-    this.objectInspectorModelRenderHighQuality = false
-    this.objectMediaStore.objectInspectorModelInteracting = false
-    this.objectInspectorModelRenderGeneration++
-    releaseDecodedImage(this.hostMediaPort, oldModelPixelMap, 'object-inspector-model')
-  }
 
   private updateObjectInspectorMediaWarmup(kind: string): void {
     if (kind !== 'image') {
@@ -11093,13 +11090,13 @@ private loadPlanetPositions(): void {
     const shouldResolve = requestedPath.length > 0 && path.length === 0 && !resolutionAlreadyAttempted
     const mediaKeySame = path === this.objectMediaStore.objectInspectorMediaPath && kind === this.objectMediaStore.objectInspectorMediaKind &&
       proceduralKey === this.objectInspectorProceduralKey
-    if (mediaKeySame && (this.objectMediaStore.objectInspectorMediaDecoding || this.objectInspectorModelRendering)) {
+    if (mediaKeySame && (this.objectMediaStore.objectInspectorMediaDecoding || this.objectModelRendererCtl().isRendering())) {
       return
     }
     const shouldDecode = path.length > 0 && (kind === 'image' || kind === 'constellation' || kind === 'model') &&
       !(mediaKeySame && this.objectMediaStore.objectInspectorMediaLoadFailed) &&
       (!mediaKeySame || (kind === 'model'
-        ? this.objectInspectorModelTexturePixels === undefined
+        ? !this.objectModelRendererCtl().hasTexture()
         : this.objectMediaStore.objectInspectorMediaPixelMap === undefined))
     if (mediaKeySame &&
       this.objectMediaStore.objectInspectorMediaLoading === (shouldResolve || shouldDecode) &&
@@ -11119,8 +11116,7 @@ private loadPlanetPositions(): void {
     this.objectMediaStore.objectInspectorMediaPreviewLoading = false
     this.objectMediaStore.objectInspectorMediaPreviewFailed = false
     this.objectMediaStore.objectInspectorModelScale = 1
-    this.objectInspectorModelRotation = this.objectMediaStore.defaultObjectInspectorModelRotation()
-    this.objectInspectorModelLastPinchDistance = 0
+    this.objectModelRendererCtl().resetRotationForNewMedia()
     this.objectMediaStore.objectInspectorMediaLoading = shouldResolve || shouldDecode
     this.objectMediaStore.objectInspectorMediaDecoding = shouldDecode
     this.objectMediaStore.objectInspectorMediaLoadFailed = false
@@ -11129,7 +11125,7 @@ private loadPlanetPositions(): void {
     this.updateObjectInspectorMediaWarmup(kind)
     this.objectInspectorMediaRequestPath = this.objectMediaStore.objectInspectorMediaLoading ? requestedPath : ''
     if (proceduralKind.length > 0) {
-      this.requestObjectInspectorModelRender(true)
+      this.objectModelRendererCtl().requestObjectInspectorModelRender(true)
       return
     }
     if (shouldResolve) {
@@ -11224,104 +11220,8 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private failObjectInspectorModelTexture(mediaGeneration: number, reason: string): void {
-    if (mediaGeneration !== this.objectInspectorMediaDecodeGeneration) {
-      return
-    }
-    this.objectMediaStore.objectInspectorMediaLoading = false
-    this.objectMediaStore.objectInspectorMediaDecoding = false
-    this.objectMediaStore.objectInspectorMediaLoadFailed = true
-    hilog.error(0x0000, 'StellariumArkUI',
-      '[detail-model] CPU texture load failed uri=%{public}s reason=%{public}s',
-      this.objectMediaStore.objectInspectorMediaPath, reason)
-  }
 
-  private commitObjectInspectorModelTexture(
-    texture: ArrayBuffer,
-    ringTexture: ArrayBuffer | undefined,
-    mediaGeneration: number,
-    expectedSelection: string,
-    expectedPath: string,
-    sourceLabel: string,
-  ): void {
-    const currentSelection = this.objectDetailStore.selectedName + '\n' + this.objectDetailStore.selectedEnglishName + '\n' + this.objectDetailStore.selectedCatalogId
-    if (currentSelection !== expectedSelection || this.objectMediaStore.objectInspectorMediaPath !== expectedPath ||
-      mediaGeneration !== this.objectInspectorMediaDecodeGeneration) {
-      return
-    }
-    this.objectInspectorModelTexturePixels = texture
-    this.objectInspectorModelTextureWidth = 512
-    this.objectInspectorModelTextureHeight = 256
-    this.objectInspectorModelTextureStride = 512 * 4
-    if (ringTexture !== undefined) {
-      this.objectInspectorModelRingTexturePixels = ringTexture
-      this.objectInspectorModelRingTextureWidth = 512
-      this.objectInspectorModelRingTextureHeight = 2
-      this.objectInspectorModelRingTextureStride = 512 * 4
-    } else {
-      this.objectInspectorModelRingTexturePixels = undefined
-      this.objectInspectorModelRingTextureWidth = 0
-      this.objectInspectorModelRingTextureHeight = 0
-      this.objectInspectorModelRingTextureStride = 0
-    }
-    this.objectMediaStore.objectInspectorMediaLoading = false
-    this.objectMediaStore.objectInspectorMediaDecoding = true
-    this.objectMediaStore.objectInspectorMediaLoadFailed = false
-    hilog.info(0x0000, 'StellariumArkUI',
-      '[detail-model] CPU texture ready uri=%{public}s bytes=%{public}s source=%{public}s phase=%{public}s',
-      expectedPath, texture.byteLength.toString(), sourceLabel, this.objectDetailStore.selectedPhase)
-    this.requestObjectInspectorModelRender(true)
-  }
 
-  // HarmonyOS 的 CPU 光栅化需要原始 RGBA 字节。构建期侧车（.model.rgba）缺失时
-  // （Windows 资源同步脚本不生成它们），退回到用鸿蒙图像框架解码 PNG（512x256，
-  // RGBA_8888）再读回像素，避免“本地资源已找到但设备无法显示”因缺少侧车而失败。
-  private decodeObjectInspectorModelTextureFromPng(
-    pngFilePath: string,
-    ringPngFilePath: string,
-    mediaGeneration: number,
-    expectedSelection: string,
-    expectedPath: string,
-  ): void {
-    if (pngFilePath.length === 0) {
-      this.failObjectInspectorModelTexture(mediaGeneration, 'sidecar and PNG are both missing')
-      return
-    }
-    decodeLocalImage(this.hostMediaPort, pngFilePath, 'model', (pixelMap: image.PixelMap) => {
-      const pixels = new ArrayBuffer(512 * 256 * 4)
-      try {
-        pixelMap.readPixelsToBufferSync(pixels)
-      } catch (err) {
-        releaseDecodedImage(this.hostMediaPort, pixelMap, 'model-texture-fallback')
-        this.failObjectInspectorModelTexture(mediaGeneration, 'PNG readback failed: ' + describeDecodeError(err as Error))
-        return
-      }
-      releaseDecodedImage(this.hostMediaPort, pixelMap, 'model-texture-fallback')
-      if (ringPngFilePath.length === 0) {
-        this.commitObjectInspectorModelTexture(pixels, undefined, mediaGeneration, expectedSelection, expectedPath, 'png')
-        return
-      }
-      decodeLocalImage(this.hostMediaPort, ringPngFilePath, 'model', (ringPixelMap: image.PixelMap) => {
-        const ringPixels = new ArrayBuffer(512 * 2 * 4)
-        let ringTexture: ArrayBuffer | undefined = undefined
-        try {
-          ringPixelMap.readPixelsToBufferSync(ringPixels)
-          ringTexture = ringPixels
-        } catch (err) {
-          hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] ring PNG readback failed error=%{public}s',
-            describeDecodeError(err as Error))
-        }
-        releaseDecodedImage(this.hostMediaPort, ringPixelMap, 'model-ring-texture-fallback')
-        this.commitObjectInspectorModelTexture(pixels, ringTexture, mediaGeneration, expectedSelection, expectedPath, 'png')
-      }, (err: Error) => {
-        hilog.warn(0x0000, 'StellariumArkUI', '[detail-model] ring PNG decode failed error=%{public}s',
-          describeDecodeError(err))
-        this.commitObjectInspectorModelTexture(pixels, undefined, mediaGeneration, expectedSelection, expectedPath, 'png')
-      }, { width: 512, height: 2 })
-    }, (err: Error) => {
-      this.failObjectInspectorModelTexture(mediaGeneration, 'PNG decode failed: ' + describeDecodeError(err))
-    }, { width: 512, height: 256 })
-  }
 
   // §14 B2R-1：ObjectMediaStore.loadObjectInspectorModelRawTexture 的原始侧车读取职责
   //（fileIo 属 NAPI，不下沉 store）——把原地内联的 open/read/close 与尺寸校验提取为本方法，
@@ -11348,257 +11248,17 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private refreshObjectInspectorModelLighting(): void {
-    if (!this.infoWindowStore.infoWinVisible || this.objectDetailStore.bottomCardIndex !== 2) return
-    const lighting = this.objectDetailStore.selectedDetailModel?.lighting
-    if (lighting === undefined || this.objectInspectorModelTexturePixels === undefined) return
-    const values = lighting.viewToBody.concat(lighting.sunDirectionBody)
-    const changed = values.some((value: number, index: number) =>
-      Math.abs(value - (this.objectInspectorModelLastLighting[index] ?? 10)) > 0.0001)
-    if (changed && Date.now() - this.objectInspectorModelLastRenderTime >= 250) {
-      this.requestObjectInspectorModelRender(!this.objectMediaStore.objectInspectorModelInteracting)
-    }
-  }
 
 
 
-  private rotateObjectInspectorModel(deltaX: number, deltaY: number): void {
-    this.objectInspectorModelRotation = modelDrag(this.objectInspectorModelRotation, deltaX, deltaY)
-    this.requestObjectInspectorModelRender(false)
-  }
-
-  private requestObjectInspectorModelRender(highQuality: boolean): void {
-    if (!this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
-      return
-    }
-    this.objectInspectorModelRenderHighQuality = this.objectInspectorModelRenderHighQuality || highQuality
-    this.objectInspectorModelRenderPending = true
-    if (this.objectInspectorModelRendering) {
-      return
-    }
-    if (!highQuality) {
-      if (this.objectInspectorModelRenderTimer !== 0) {
-        return
-      }
-      this.objectInspectorModelRenderTimer = setTimeout(() => {
-        this.objectInspectorModelRenderTimer = 0
-        this.flushObjectInspectorModelRender()
-      }, 18) as number
-      return
-    }
-    if (this.objectInspectorModelRenderTimer !== 0) {
-      clearTimeout(this.objectInspectorModelRenderTimer)
-      this.objectInspectorModelRenderTimer = 0
-    }
-    this.flushObjectInspectorModelRender()
-  }
-
-  private flushObjectInspectorModelRender(): void {
-    if (this.objectInspectorModelRendering || !this.objectInspectorModelRenderPending ||
-      !this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
-      return
-    }
-    const renderHighQuality = this.objectInspectorModelRenderHighQuality
-    this.objectInspectorModelRenderPending = false
-    this.objectInspectorModelRenderHighQuality = false
-    this.objectInspectorModelRendering = true
-    this.renderObjectInspectorModel(renderHighQuality)
-  }
-
-  private renderObjectInspectorModel(highQuality: boolean): void {
-    if (!this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
-      this.objectInspectorModelRendering = false
-      return
-    }
-    const generation = this.objectInspectorModelRenderGeneration
-    const immersive = this.objectMediaStore.objectInspectorModelImmersive
-    const renderSize = highQuality ? (immersive ? 640 : 320) : 224
-    const transform = this.objectDetailStore.objectInspectorModelTransform(this.objectInspectorModelRotation)
-    const inspectionRotation = this.objectInspectorModelRotation.slice()
-    const lighting = this.objectDetailStore.selectedDetailModel?.lighting
-    const started = Date.now()
-    let computeMs = 0
-    let pixelMapStarted = 0
-    let uiPulseCount = 0
-    let uiMaxDelayMs = 0
-    this.objectInspectorModelLastRenderTime = started
-    this.objectInspectorModelLastLighting = lighting === undefined ? [] :
-      lighting.viewToBody.concat(lighting.sunDirectionBody)
-    if (this.objectMediaStore.objectInspectorModelPixelMap === undefined) this.objectMediaStore.objectInspectorMediaDecoding = true
-    const ring = objectInspectorPlanetRingSpec(this.objectDetailStore.selectedEnglishName)
-    const renderRing: DetailModelRing | undefined = ring === undefined ? undefined : {
-      innerRadius: ring.innerRadius, outerRadius: ring.outerRadius, opacity: ring.opacity
-    }
-    const renderLighting: DetailModelLight | undefined = lighting === undefined ? undefined : {
-      viewToBody: lighting.viewToBody, sunDirectionBody: lighting.sunDirectionBody, emissive: lighting.emissive
-    }
-    const resources: DetailModelResources = {
-      texture: this.objectInspectorModelTexturePixels,
-      textureWidth: this.objectInspectorModelTextureWidth,
-      textureHeight: this.objectInspectorModelTextureHeight,
-      textureStride: this.objectInspectorModelTextureStride,
-      ringTexture: this.objectInspectorModelRingTexturePixels,
-      ringWidth: this.objectInspectorModelRingTextureWidth,
-      ringHeight: this.objectInspectorModelRingTextureHeight,
-      ringSpec: renderRing,
-      kind: this.objectMediaStore.objectInspectorProceduralKind,
-      temperature: this.objectDetailStore.selectedTemperatureK,
-      particles: this.objectInspectorProceduralParticles
-    }
-    const frame: DetailModelFrame = {
-      renderSize: renderSize, scale: this.objectMediaStore.objectInspectorModelScale, transform: transform, lighting: renderLighting
-    }
-    if (this.objectInspectorModelRenderClient === undefined) {
-      this.objectInspectorModelRenderClient = new DetailModelRenderClient()
-    }
-    this.objectInspectorModelRenderClient.setSuspended(!this.applicationInForeground)
-    this.objectInspectorModelRenderClient.render(resources, frame).then((result: DetailModelResult) => {
-      if (generation !== this.objectInspectorModelRenderGeneration || !this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
-        throw new Error('stale model frame')
-      }
-      computeMs = result.computeMs
-      uiPulseCount = result.uiPulseCount ?? 0
-      uiMaxDelayMs = result.uiMaxDelayMs ?? 0
-      pixelMapStarted = Date.now()
-      return image.createPixelMap(result.pixels as ArrayBuffer, {
-      size: { width: renderSize, height: renderSize },
-      srcPixelFormat: image.PixelMapFormat.RGBA_8888,
-      pixelFormat: image.PixelMapFormat.RGBA_8888,
-      alphaType: image.AlphaType.UNPREMUL,
-      editable: false
-      })
-    }).then((pixelMap: image.PixelMap) => {
-      if (generation !== this.objectInspectorModelRenderGeneration ||
-        !this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)) {
-        releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-object-inspector-model')
-        return
-      }
-      const oldPixelMap = this.objectMediaStore.objectInspectorModelPixelMap
-      this.objectMediaStore.objectInspectorModelPixelMap = pixelMap
-      AppStorage.setOrCreate('stellariumObjectModelView', JSON.stringify({
-        ok: true, selectedEnglishName: this.objectDetailStore.selectedEnglishName,
-        rotation: inspectionRotation, viewToBody: transform,
-        lighting: lighting, renderSize: renderSize, renderedAt: this.objectInspectorModelLastRenderTime,
-        kind: this.objectMediaStore.objectInspectorProceduralKind || 'textured-sphere',
-        schematic: this.objectMediaStore.objectInspectorProceduralKind.length > 0,
-        temperatureK: this.objectDetailStore.selectedTemperatureK > 0 ? this.objectDetailStore.selectedTemperatureK : null,
-        immersive: immersive, renderer: 'worker', computeMs: computeMs,
-        uiPulseCount: uiPulseCount, uiMaxDelayMs: uiMaxDelayMs,
-        pixelMapMs: Date.now() - pixelMapStarted, totalMs: Date.now() - started
-      }))
-      releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'previous-object-inspector-model')
-      this.objectInspectorModelRendering = false
-      this.objectMediaStore.objectInspectorMediaDecoding = false
-      this.objectMediaStore.objectInspectorMediaLoadFailed = false
-      const renderAgain = this.objectInspectorModelRenderPending
-      const renderAgainHighQuality = this.objectInspectorModelRenderHighQuality
-      this.objectInspectorModelRenderPending = false
-      this.objectInspectorModelRenderHighQuality = false
-      if (renderAgain) {
-        this.requestObjectInspectorModelRender(renderAgainHighQuality)
-      }
-    }).catch((err: Error) => {
-      if (generation !== this.objectInspectorModelRenderGeneration) {
-        return
-      }
-      this.objectInspectorModelRendering = false
-      this.objectMediaStore.objectInspectorMediaDecoding = false
-      this.objectMediaStore.objectInspectorMediaLoadFailed = true
-      hilog.error(0x0000, 'StellariumArkUI',
-        '[detail-model] sphere render failed error=%{public}s', JSON.stringify(err))
-      AppStorage.setOrCreate('stellariumObjectModelView', JSON.stringify({
-        ok: false, error: 'model render failed', selectedEnglishName: this.objectDetailStore.selectedEnglishName
-      }))
-    })
-  }
 
 
 
-  private resetObjectInspectorModelView(): void {
-    this.objectInspectorModelRotation = this.objectMediaStore.defaultObjectInspectorModelRotation()
-    this.objectMediaStore.objectInspectorModelScale = 1
-    this.objectInspectorModelLastPinchDistance = 0
-    this.objectMediaStore.objectInspectorModelInteracting = false
-    this.requestObjectInspectorModelRender(true)
-  }
 
-  private setObjectInspectorModelImmersive(open: boolean): void {
-    if (open === this.objectMediaStore.objectInspectorModelImmersive &&
-      this.objectMediaStore.objectInspectorModelOverlayOpacity === (open ? 1 : 0)) return
-    const serial = ++this.objectInspectorModelOverlaySerial
-    if (open) {
-      this.objectMediaStore.objectInspectorModelImmersive = true
-      this.objectMediaStore.objectInspectorModelOverlayOpacity = 0
-      this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, () => {
-        this.objectMediaStore.objectInspectorModelOverlayOpacity = 1
-      })
-      this.requestObjectInspectorModelRender(true)
-    } else {
-      this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseIn, onFinish: () => {
-        if (serial !== this.objectInspectorModelOverlaySerial) return
-        this.objectMediaStore.objectInspectorModelImmersive = false
-        this.requestObjectInspectorModelRender(true)
-      } }, () => { this.objectMediaStore.objectInspectorModelOverlayOpacity = 0 })
-    }
-  }
 
-  private handleObjectInspectorModelTouch(event: TouchEvent): void {
-    event.stopPropagation()
-    if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      this.objectInspectorModelTouchCount = 0
-      this.objectInspectorModelLastPinchDistance = 0
-      this.objectMediaStore.objectInspectorModelInteracting = false
-      this.requestObjectInspectorModelRender(true)
-      return
-    }
-    const points = event.touches.length > 0 ? event.touches : event.changedTouches
-    if (points.length === 0) { return }
-    const x = touchScreenX(points[0])
-    const y = touchScreenY(points[0])
-    if (event.type === TouchType.Down || this.objectInspectorModelTouchCount !== points.length) {
-      this.objectInspectorModelTouchCount = points.length
-      this.objectMediaStore.objectInspectorModelInteracting = true
-      this.objectInspectorModelLastX = x
-      this.objectInspectorModelLastY = y
-      if (points.length > 1) {
-        const secondX = touchScreenX(points[1])
-        const secondY = touchScreenY(points[1])
-        const deltaX = secondX - x
-        const deltaY = secondY - y
-        this.objectInspectorModelLastPinchDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
-      } else {
-        this.objectInspectorModelLastPinchDistance = 0
-      }
-      return
-    }
-    if (event.type === TouchType.Move) {
-      if (points.length > 1) {
-        const secondX = touchScreenX(points[1])
-        const secondY = touchScreenY(points[1])
-        const deltaX = secondX - x
-        const deltaY = secondY - y
-        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
-        if (this.objectInspectorModelLastPinchDistance > 0) {
-          const rawScaleFactor = distance / this.objectInspectorModelLastPinchDistance
-          if (Number.isFinite(rawScaleFactor) && Math.abs(rawScaleFactor - 1) > 0.002) {
-            const scaleFactor = 1 + (rawScaleFactor - 1) * 0.68
-            this.objectMediaStore.objectInspectorModelScale = Math.max(0.82, Math.min(1.20,
-              this.objectMediaStore.objectInspectorModelScale * scaleFactor))
-            this.requestObjectInspectorModelRender(false)
-          }
-        }
-        this.objectInspectorModelLastPinchDistance = distance
-        return
-      }
-      const deltaX = x - this.objectInspectorModelLastX
-      const deltaY = y - this.objectInspectorModelLastY
-      this.objectInspectorModelLastX = x
-      this.objectInspectorModelLastY = y
-      this.objectInspectorModelLastPinchDistance = 0
-      this.rotateObjectInspectorModel(deltaX, deltaY)
-      return
-    }
-  }
+
+
+
 
   private objectInspectorInlineModelSize(): number {
     return Math.min(200, Math.max(80, this.bottomCardWidth() - 112))
@@ -11953,9 +11613,9 @@ private loadPlanetPositions(): void {
         imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
         iconName: this.objectDetailStore.objectInspectorIcon(),
         inlineModelSize: this.objectInspectorInlineModelSize(),
-        modelReady: this.objectMediaStore.objectInspectorModelReady(this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight),
-        modelRendering: this.objectInspectorModelRendering,
-        hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
+        modelReady: this.objectModelRendererCtl().modelReady(),
+        modelRendering: this.objectModelRendererCtl().isRendering(),
+        hasModelTexture: this.objectModelRendererCtl().hasTexture(),
         modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
         warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
         fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
@@ -11985,8 +11645,8 @@ private loadPlanetPositions(): void {
         onSpeak: () => { speakSelectedObject(this.commandPort(), { flashHint: (text: ResourceStr): void => this.flashHint(text), setSpeechStatus: (text: string): void => { this.guideStore.speechStatus = text } }) },
         onOpenMedia: () => { this.openObjectInspectorMediaPreview() },
         onRetryMedia: () => { this.retryObjectInspectorMedia() },
-        onModelExpand: () => { this.setObjectInspectorModelImmersive(true) },
-        onModelTouch: (event: TouchEvent) => { this.handleObjectInspectorModelTouch(event) },
+        onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
+        onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
         onLoadSatPasses: () => { this.objectDetailStore.loadSelectedSatellitePasses() },
         onGoto: () => { this.lx200GotoSelected() },
         onSync: () => { this.lx200SyncSelected() },
