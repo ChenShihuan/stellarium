@@ -143,7 +143,7 @@ test('UI and CLI share semantic player, scrollable text and actual result', () =
   assert.match(guideShell, /GuideButton\(\{ label: 'btn_resume', action: 'resume'/);
   assert.match(guideShell, /minHeight: 52.*HitTestMode\.Default/);
   assert.match(guideShell, /guidePhase === 'exploring'/);
-  assert.match(page, /lastRequestId: this.guideLastRequest/);
+  assert.match(page, /lastRequestId: this\.guideStore\.guideLastRequest/);
   assert.match(page, /guideState\.active/);
   const core = readFileSync(new URL('../src/scripting/StelScriptMgr.cpp', import.meta.url), 'utf8');
   assert.match(core, /restoreSessionState\(false\)/);
