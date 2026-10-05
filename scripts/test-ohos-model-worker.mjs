@@ -4,8 +4,15 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { createHash } from 'node:crypto';
 
-const directory = new URL('../harmonyos/ets-source/pages/', import.meta.url);
-const source = name => readFileSync(new URL(name + '.ets', directory), 'utf8');
+const sourceRoot = new URL('../harmonyos/ets-source/', import.meta.url);
+const sourcePaths = {
+  ProceduralDetailModel: 'common/derive/ProceduralDetailModel',
+  DetailModelGeometry: 'common/derive/DetailModelGeometry',
+  DetailModelRasterizer: 'capability/DetailModelRasterizer',
+  DetailModelRenderClient: 'capability/DetailModelRenderClient',
+  MainWindowNativeNode: 'pages/MainWindowNativeNode'
+};
+const source = name => readFileSync(new URL(sourcePaths[name] + '.ets', sourceRoot), 'utf8');
 const plain = text => stripTypeScriptTypes(text.replace(/^import .*\r?\n/gm, '').replace(/export /g, ''));
 const procedural = new Function(plain(source('ProceduralDetailModel')) + ';return { renderProceduralModel, proceduralParticles };')();
 const geometry = new Function(plain(source('DetailModelGeometry')) + ';return { modelIdentity, modelDrag };')();

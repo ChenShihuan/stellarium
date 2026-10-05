@@ -1,5 +1,5 @@
 import { ObjectInspectorRingSpec } from '../../pages/MainWindowModels'
-import { proceduralModelKind } from '../../pages/ProceduralDetailModel'
+import { proceduralModelKind } from './ProceduralDetailModel'
 
 // A2-1：objectInspector 媒体族的纯派生函数（原宿主 MainWindowNativeNode 的 private 方法，
 // 函数体逐字搬入）。按 §14.3 A2-M「随媒体管线（ObjectMediaStore / 媒体助手）」落到媒体助手模块。

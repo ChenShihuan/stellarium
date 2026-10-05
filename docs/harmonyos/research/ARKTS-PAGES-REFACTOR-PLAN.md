@@ -1779,3 +1779,26 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **度量**：宿主 **7,992 → 8,017 行（+25）**、`private` 方法 **211 → 212（−1 删 `settingsCtl()` + 2 增薄分派）**、`@State private` **131 不变**；删除 `capability/SettingsController.ets`（350 行）；`InfoWindowStore` 57→147、`ObjectDetailStore` 231→284、`ToolsStore` 207→292、`NavigationSettingsStore` 25→99、`EphemerisStore` 43→92、`ViewSettingsStore` 36→135、`AtmosphereStore` 19→32。
 
 **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 9 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 249 文件）；`test-ohos-information-policy` 3/3、`test-ohos-settings-choice-motion` 4/4 全绿（两夹具同步）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败。真机（192.168.50.108:36717）：`Smoke: PASS`；信息模式 `default → short → default`（`getInformationSettings` 回读）、距离单位 `英里 → 千米`（hilog `flag_use_km_for_distance=false→true`）、时间面板冒烟（`AtmosphereStore` 消费方渲染）；`pidof` 存活、无 jscrash；测试改动的持久化设置已复原。**未走查同 E3**（保存设置 / 恢复默认 / 投影 / FOV 标记 / 抖动 / 星历 / 导出导入）。
+
+#### 15.12.16 M 轨道 M1：DetailModel 渲染管线迁出 pages/（2026-10-06，纯路径迁移）
+
+> **背景**：STATE-REVIEW §11 的 M 轨道（渲染管线 / 纯计算模块从 `pages/` 归位）。本片为 M 轨道第 1 片，**纯路径迁移**（`git mv` + 同步消费者相对深度），**不改任何运行逻辑**；开工 `git log -1` = `b675c48a0c`，宿主基线 7,573 行。
+
+**文件移动清单（旧 → 新，`git mv` 保留历史）**
+
+| 旧路径 | 新路径 | 行 |
+|---|---|---:|
+| `pages/DetailModelRenderTypes.ets` | `capability/DetailModelRenderTypes.ets` | 45 |
+| `pages/DetailModelRenderClient.ets` | `capability/DetailModelRenderClient.ets` | 106 |
+| `pages/DetailModelRasterizer.ets` | `capability/DetailModelRasterizer.ets` | 177 |
+| `pages/DetailModelWorker.ets` | `capability/DetailModelWorker.ets` | 21 |
+| `pages/DetailModelGeometry.ets` | `common/derive/DetailModelGeometry.ets` | 28 |
+| `pages/ProceduralDetailModel.ets` | `common/derive/ProceduralDetailModel.ets` | 134 |
+
+**Worker 入口路径字符串**：`DetailModelRenderClient` 的 `'entry/ets/pages/DetailModelWorker.ets'` → `'entry/ets/capability/DetailModelWorker.ets'`；`scripts/configure-ohos-model-worker.mjs` 的 `sourceOption.workers` 同步改新路径并补「旧→新就地改写」（生成项目 `build-profile.json5` 自动迁移）。
+
+**消费者 import（5 文件 / 6 行）**：`ObjectModelRenderer`（3）、`ObjectInspectorMediaController`（1）、`ObjectDetailStore`（1）、`ObjectMediaStore`（1）、`common/derive/media.ets`（1）；移动文件内部 `DetailModelRasterizer → ProceduralDetailModel` 改走 `../common/derive/`。夹具 3 个同步改读新路径。
+
+**度量**：宿主 `MainWindowNativeNode.ets` **7,573 → 7,573 行**（本片不动宿主）；无 store / 端口新增；净 15 文件、+36 / −23 行。
+
+**验证**：预检通过；`arkts_check` 11 文件 0 error；`BUILD SUCCESSFUL`；契约 44 锚点 intact（249 文件）；受影响 3 测试全绿（12/12、6/6、7/7）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败。真机（192.168.50.108:36717）：`Smoke: PASS`；`searchObject Mars` → hilog `[detail-model] CPU texture ready … source=sidecar` → `[detail-model] render pixel map created kind=object-inspector-model bytes=409600` → `[detail-media-card] sphere loaded`（worker 链路实证）；`pidof` 存活、无 jscrash。
