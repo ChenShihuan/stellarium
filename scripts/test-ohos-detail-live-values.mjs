@@ -98,5 +98,8 @@ test('tile components receive resolved values while the host keeps the lookups',
   assert.ok(chrome.includes('ObjectDetailTab({ label:'), 'the tab bar comes from the component');
   assert.ok((source + hoverShell + expandedShell).includes('activeIndex: this.bottomCardIndex'), 'the active tab is derived from live state');
   assert.ok(source.includes('resolve: (key: string) => this.selectedDisplayValue(key)'), 'the host injects the resolver');
-  assert.ok(chrome.includes("ObjectCompactMetric({ label: I18n.t('i0007')"), 'compact metrics resolve their value in the host');
+  // Phase 3ad 回归修复：页头三枚摘要直接读 @ObjectLink store，否则切换天体时元素不被标脏而冻结。
+  assert.ok(chrome.includes("ObjectCompactMetric({ label: I18n.t('i0007'), value: this.store.selectedMagnitude })"), 'the magnitude metric reads the observed store directly');
+  assert.ok(chrome.includes('value: this.nameOf(this.store.selectedConstellation)'), 'the constellation metric reads the observed store directly');
+  assert.ok(chrome.includes('value: this.distanceSummary(this.store.selectedDistance, this.store.selectedDistanceCompact)'), 'the distance metric reads the observed store directly');
 });
