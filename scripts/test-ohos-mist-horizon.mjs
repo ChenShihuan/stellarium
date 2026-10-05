@@ -75,7 +75,10 @@ test('UI, semantic actions and snapshot properties share the same switch', () =>
   // actionId 分支搬到了 LayerSwitchRow 组件，调用点直接传解析后的布尔值。
   assert.match(page, /this\.layerStore\.mistHorizon = result\.actionShow_MistHorizon === true/);
   assert.match(switchRow, /if \(value === this\.isOn\) return/);
-  assert.match(page, /LayerSwitchRow\(\{ label: I18n\.t\('mist_horizon'\), isOn: this\.layerStore\.mistHorizon, onToggle: \(value: boolean\) => \{ this\.applyLayerSwitch\('actionShow_MistHorizon', '', value\) \} \}\)/);
+  // Phase 4f：该调用点随 viewLandscapeTab 下沉到 panels/layers/LayerViewTabs.ets，
+  // 开关动作改经 onToggleLayer 回调回注宿主（层开关链路不变）。
+  const layerViewTabs = read('harmonyos/ets-source/panels/layers/LayerViewTabs.ets');
+  assert.match(layerViewTabs, /LayerSwitchRow\(\{ label: I18n\.t\('mist_horizon'\), isOn: this\.layerStore\.mistHorizon, onToggle: \(value: boolean\) => \{ this\.onToggleLayer\('actionShow_MistHorizon', '', value\) \} \}\)/);
   assert.match(read('harmonyos/ets-source/pages/AstronomyGuide.ts'), /actionShow_MistHorizon\|0/);
   assert.match(read('src/StelMainView.cpp'), /result\["mistHorizonOpacity"\]/);
   assert.match(read('src/StelMainView.cpp'), /"actionShow_Ground",\s*"actionShow_MistHorizon"/);

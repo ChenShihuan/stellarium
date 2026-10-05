@@ -62,6 +62,8 @@ import { LayerStore } from '../state/LayerStore'
 import { LayerSwitchRow } from '../panels/layers/LayerSwitchRow'
 import { LayerPresetBar } from '../panels/layers/LayerPresetBar'
 import { LayerTabs } from '../panels/layers/LayerTabs'
+import { LayerViewStore } from '../state/LayerViewStore'
+import { LayerSkyTab, LayerSsoTab, LayerDsoTab, LayerMarkingsTab, LayerLandscapeTab, LayerSurveysTab } from '../panels/layers/LayerViewTabs'
 import { TelescopeStore } from '../state/TelescopeStore'
 import { OcularSelector } from '../panels/telescope/OcularSelector'
 import { OcularMetric } from '../panels/telescope/OcularMetric'
@@ -337,6 +339,7 @@ export struct WindowNativeNode {
 
   @State private locationStore: LocationStore = new LocationStore()
   @State private layerStore: LayerStore = new LayerStore()
+  @State private layerViewStore: LayerViewStore = new LayerViewStore()
   @State private fovText: string = '--'
   @State private trackingText: string = 'Off'
   @State private trackingRequestPending: boolean = false
@@ -355,21 +358,6 @@ export struct WindowNativeNode {
   @State private splashGone: boolean = false
   private startupViewportCheckedAt: number = 0
   @State private currentSkyCulture: string = ""
-  @State private orbitSettingsExpanded: boolean = false
-  @State private orbitIsolated: boolean = true
-  @State private orbitMajorPlanets: boolean = false
-  @State private orbitPlanetsOnly: boolean = false
-  @State private orbitWithMoons: boolean = false
-  @State private orbitPermanent: boolean = false
-  @State private orbitThickness: number = 1
-  @State private orbitColorStyle: string = 'one_color'
-  @State private trailSettingsExpanded: boolean = false
-  @State private trailIsolated: boolean = true
-  @State private trailSelectionCount: number = 1
-  @State private trailYears: number = 1
-  @State private trailThickness: number = 1
-  @State private trailColor: string = '#FFFFFF'
-  @State private trailColorInput: string = '#FFFFFF'
   @State private viewTab: number = 0  // View面板子标签索引
   @State private configTab: number = 0  // 统一设置面板子标签索引；默认显示主设置
   @State private timeSettingsStore: TimeSettingsStore = new TimeSettingsStore()
@@ -415,15 +403,7 @@ export struct WindowNativeNode {
   @State private viewLock: boolean = false
   // 画面防弯曲：限制最大视场角(100°)，不能缩到"整个天空变成一个球"，地平线保持基本平直。
   @State private flatHorizon: boolean = true
-  @State private fovCircularMarkerSize: number = 1
-  @State private fovRectangularMarkerWidth: number = 4
-  @State private fovRectangularMarkerHeight: number = 3
-  @State private fovRectangularMarkerRotation: number = 0
   // 桥接数据
-  @State private landscapeList: Array<LandscapeItem> = []
-  @State private landscapeLoading: boolean = false
-  @State private landscapeImporting: boolean = false
-  @State private currentLandscapeId: string = ''
   @State private scriptList: string[] = []
   @State private scriptMetadata: Record<string, ScriptMetadata> = {}
   @State private moduleList: string[] = []
@@ -748,14 +728,6 @@ export struct WindowNativeNode {
   private navStarsLoadRequestId: number = 0
   private navStarsMutationId: number = 0
   @State private landscapeDetailOpen: boolean = false
-  @State private landscapeTransp: number = 0
-  @State private landscapeFadeWithZoom: boolean = true
-  @State private bortleScale: number = 3
-  @State private milkyWayBright: number = 3
-  @State private meteorZhr: number = 10
-  @State private meteorZhrMax: number = 240000
-  @State private zodiacalIntensity: number = 1
-  @State private starMagLimit: number = 6.0
   @State private infoLevel: number = 1
   @State private useMetricUnits: boolean = true
   // 新增面板控制
@@ -1886,7 +1858,7 @@ export struct WindowNativeNode {
         const response = r as LimitMagnitudeResponse
         if (response.ok && response.customStarMagLimit !== undefined) {
           const value = Number(response.customStarMagLimit)
-          if (!isNaN(value)) { this.starMagLimit = Math.round(value * 10) / 10 }
+          if (!isNaN(value)) { this.layerViewStore.starMagLimit = Math.round(value * 10) / 10 }
         }
       }),
       () => this.restoreStartupSettings(),
@@ -2909,15 +2881,15 @@ export struct WindowNativeNode {
   }
 
   private loadLandscapeList(): void {
-    if (this.landscapeLoading) return
-    this.landscapeLoading = true
+    if (this.layerViewStore.landscapeLoading) return
+    this.layerViewStore.landscapeLoading = true
     this.callNativeWhenReady('getLandscapeList', '', (r: StellariumBridgeResponse) => {
-      this.landscapeLoading = false
+      this.layerViewStore.landscapeLoading = false
       if (r.ok !== true || !Array.isArray(r.items)) return
-      this.landscapeList = r.items as Array<LandscapeItem>
-      this.currentLandscapeId = r.current as string
+      this.layerViewStore.landscapeList = r.items as Array<LandscapeItem>
+      this.layerViewStore.currentLandscapeId = r.current as string
     }, 0, 100, 15, () => {
-      this.landscapeLoading = false
+      this.layerViewStore.landscapeLoading = false
     })
   }
 
@@ -3884,8 +3856,8 @@ export struct WindowNativeNode {
   }
 
   private async importLandscapeFile(): Promise<void> {
-    if (this.landscapeImporting) return
-    this.landscapeImporting = true
+    if (this.layerViewStore.landscapeImporting) return
+    this.layerViewStore.landscapeImporting = true
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const options = new picker.DocumentSelectOptions()
@@ -3894,7 +3866,7 @@ export struct WindowNativeNode {
       const selectedUris = await new picker.DocumentViewPicker(context).select(options)
       if (selectedUris.length === 0 || selectedUris[0].length === 0) {
         this.flashHint(I18n.t('landscape_import_cancelled'))
-        this.landscapeImporting = false
+        this.layerViewStore.landscapeImporting = false
         return
       }
       const importDir = context.filesDir + '/stellarium_userdir/landscape-imports'
@@ -3914,15 +3886,15 @@ export struct WindowNativeNode {
         } else {
           this.flashHint(I18n.t('landscape_import_failed'))
         }
-        this.landscapeImporting = false
+        this.layerViewStore.landscapeImporting = false
       }, () => {
         this.flashHint(I18n.t('landscape_import_failed'))
-        this.landscapeImporting = false
+        this.layerViewStore.landscapeImporting = false
       })
     } catch (error) {
       hilog.error(0x0000, 'StellariumArkUI', 'Landscape import failed: %{public}s', String(error))
       this.flashHint(I18n.t('landscape_import_failed'))
-      this.landscapeImporting = false
+      this.layerViewStore.landscapeImporting = false
     }
   }
 
@@ -5030,10 +5002,10 @@ export struct WindowNativeNode {
     this.layerStore.fovMarker = result.actionShow_FOV_Center_Marker === true
     this.layerStore.fovCircularMarker = result.actionShow_FOV_Circular_Marker === true
     this.layerStore.fovRectangularMarker = result.actionShow_FOV_Rectangular_Marker === true
-    if (result.fovCircularMarkerSize !== undefined) this.fovCircularMarkerSize = result.fovCircularMarkerSize
-    if (result.fovRectangularMarkerWidth !== undefined) this.fovRectangularMarkerWidth = result.fovRectangularMarkerWidth
-    if (result.fovRectangularMarkerHeight !== undefined) this.fovRectangularMarkerHeight = result.fovRectangularMarkerHeight
-    if (result.fovRectangularMarkerRotation !== undefined) this.fovRectangularMarkerRotation = result.fovRectangularMarkerRotation
+    if (result.fovCircularMarkerSize !== undefined) this.layerViewStore.fovCircularMarkerSize = result.fovCircularMarkerSize
+    if (result.fovRectangularMarkerWidth !== undefined) this.layerViewStore.fovRectangularMarkerWidth = result.fovRectangularMarkerWidth
+    if (result.fovRectangularMarkerHeight !== undefined) this.layerViewStore.fovRectangularMarkerHeight = result.fovRectangularMarkerHeight
+    if (result.fovRectangularMarkerRotation !== undefined) this.layerViewStore.fovRectangularMarkerRotation = result.fovRectangularMarkerRotation
     this.layerStore.azimuthGrid = result.actionShow_Azimuthal_Grid === true
     this.layerStore.equatorialGrid = result.actionShow_Equatorial_Grid === true
     this.layerStore.equatorialJ2000Grid = result.actionShow_Equatorial_J2000_Grid === true
@@ -5103,17 +5075,17 @@ export struct WindowNativeNode {
     if (result.actionShow_Hips_Surveys !== undefined) this.layerStore.hipsSurveys = result.actionShow_Hips_Surveys === true
     if (result.actionShow_Toast_Survey !== undefined) this.layerStore.toastSurvey = result.actionShow_Toast_Survey === true
     this.layerStore.meteors = result.meteors === true
-    if (result.bortleScale !== undefined) this.bortleScale = Math.round(result.bortleScale as number)
-    if (result.milkyWayIntensity !== undefined) this.milkyWayBright = Math.max(0, Math.min(6, Math.round((result.milkyWayIntensity as number) * 3)))
+    if (result.bortleScale !== undefined) this.layerViewStore.bortleScale = Math.round(result.bortleScale as number)
+    if (result.milkyWayIntensity !== undefined) this.layerViewStore.milkyWayBright = Math.max(0, Math.min(6, Math.round((result.milkyWayIntensity as number) * 3)))
     if (result.luminanceAdaptation !== undefined) this.layerStore.luminanceAdaptation = result.luminanceAdaptation === true
     if (result.starTwinkle !== undefined) this.layerStore.starTwinkle = result.starTwinkle === true
     if (result.forcedStarTwinkle !== undefined) this.layerStore.forcedStarTwinkle = result.forcedStarTwinkle === true
     if (result.bigStarHalo !== undefined) this.layerStore.bigStarHalo = result.bigStarHalo === true
     if (result.starSpiky !== undefined) this.layerStore.starSpiky = result.starSpiky === true
-    if (result.meteorZhr !== undefined) this.meteorZhr = Math.round(result.meteorZhr as number)
-    if (result.meteorZhrMax !== undefined) this.meteorZhrMax = Math.max(1000, Math.round(result.meteorZhrMax as number))
+    if (result.meteorZhr !== undefined) this.layerViewStore.meteorZhr = Math.round(result.meteorZhr as number)
+    if (result.meteorZhrMax !== undefined) this.layerViewStore.meteorZhrMax = Math.max(1000, Math.round(result.meteorZhrMax as number))
     if (result.zodiacalLight !== undefined) this.layerStore.zodiacalLight = result.zodiacalLight === true
-    if (result.zodiacalIntensity !== undefined) this.zodiacalIntensity = result.zodiacalIntensity as number
+    if (result.zodiacalIntensity !== undefined) this.layerViewStore.zodiacalIntensity = result.zodiacalIntensity as number
     this.autoZoomResets = result.autoZoomResets === true
     // The native Stellarium property is authoritative. The QAction is not
     // guaranteed to update when the time-panel uses the direct bridge command.
@@ -5208,38 +5180,38 @@ export struct WindowNativeNode {
   private loadOrbitDisplaySettings(): void {
     this.callInteractive('getOrbitDisplaySettings', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      this.orbitIsolated = r.orbitIsolated !== undefined ? r.orbitIsolated : this.orbitIsolated
-      this.orbitMajorPlanets = r.orbitMajorPlanets !== undefined ? r.orbitMajorPlanets : this.orbitMajorPlanets
-      this.orbitPlanetsOnly = r.orbitPlanetsOnly !== undefined ? r.orbitPlanetsOnly : this.orbitPlanetsOnly
-      this.orbitWithMoons = r.orbitWithMoons !== undefined ? r.orbitWithMoons : this.orbitWithMoons
-      this.orbitPermanent = r.orbitPermanent !== undefined ? r.orbitPermanent : this.orbitPermanent
-      this.orbitThickness = r.orbitThickness !== undefined ? r.orbitThickness : this.orbitThickness
-      this.orbitColorStyle = r.orbitColorStyle !== undefined ? r.orbitColorStyle : this.orbitColorStyle
+      this.layerViewStore.orbitIsolated = r.orbitIsolated !== undefined ? r.orbitIsolated : this.layerViewStore.orbitIsolated
+      this.layerViewStore.orbitMajorPlanets = r.orbitMajorPlanets !== undefined ? r.orbitMajorPlanets : this.layerViewStore.orbitMajorPlanets
+      this.layerViewStore.orbitPlanetsOnly = r.orbitPlanetsOnly !== undefined ? r.orbitPlanetsOnly : this.layerViewStore.orbitPlanetsOnly
+      this.layerViewStore.orbitWithMoons = r.orbitWithMoons !== undefined ? r.orbitWithMoons : this.layerViewStore.orbitWithMoons
+      this.layerViewStore.orbitPermanent = r.orbitPermanent !== undefined ? r.orbitPermanent : this.layerViewStore.orbitPermanent
+      this.layerViewStore.orbitThickness = r.orbitThickness !== undefined ? r.orbitThickness : this.layerViewStore.orbitThickness
+      this.layerViewStore.orbitColorStyle = r.orbitColorStyle !== undefined ? r.orbitColorStyle : this.layerViewStore.orbitColorStyle
     })
   }
 
   private setOrbitDisplayFlag(setting: string, enabled: boolean): void {
     this.callInteractive('setOrbitDisplaySetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      if (setting === 'isolated') this.orbitIsolated = enabled
-      else if (setting === 'majorPlanets') this.orbitMajorPlanets = enabled
-      else if (setting === 'planetsOnly') this.orbitPlanetsOnly = enabled
-      else if (setting === 'withMoons') this.orbitWithMoons = enabled
-      else if (setting === 'permanent') this.orbitPermanent = enabled
+      if (setting === 'isolated') this.layerViewStore.orbitIsolated = enabled
+      else if (setting === 'majorPlanets') this.layerViewStore.orbitMajorPlanets = enabled
+      else if (setting === 'planetsOnly') this.layerViewStore.orbitPlanetsOnly = enabled
+      else if (setting === 'withMoons') this.layerViewStore.orbitWithMoons = enabled
+      else if (setting === 'permanent') this.layerViewStore.orbitPermanent = enabled
     })
   }
 
   private setOrbitDisplayThickness(value: number): void {
     const thickness = Math.round(value)
     this.callInteractive('setOrbitDisplaySetting', 'thickness|' + thickness.toString(), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.orbitThickness = thickness
+      if (r.ok === true) this.layerViewStore.orbitThickness = thickness
     })
   }
 
   private orbitColorStyleIndex(): number {
-    if (this.orbitColorStyle === 'groups') return 1
-    if (this.orbitColorStyle === 'major_planets') return 2
-    if (this.orbitColorStyle === 'major_planets_minor_types') return 3
+    if (this.layerViewStore.orbitColorStyle === 'groups') return 1
+    if (this.layerViewStore.orbitColorStyle === 'major_planets') return 2
+    if (this.layerViewStore.orbitColorStyle === 'major_planets_minor_types') return 3
     return 0
   }
 
@@ -5247,27 +5219,27 @@ export struct WindowNativeNode {
     const values: string[] = ['one_color', 'groups', 'major_planets', 'major_planets_minor_types']
     const style = values[index] ?? 'one_color'
     this.callInteractive('setOrbitDisplaySetting', 'colorStyle|' + style, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.orbitColorStyle = style
+      if (r.ok === true) this.layerViewStore.orbitColorStyle = style
     })
   }
 
   private loadTrailDisplaySettings(): void {
     this.callInteractive('getTrailDisplaySettings', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      this.trailIsolated = r.trailIsolated !== undefined ? r.trailIsolated : this.trailIsolated
-      this.trailSelectionCount = r.trailSelectionCount !== undefined ? r.trailSelectionCount : this.trailSelectionCount
-      this.trailYears = r.trailYears !== undefined ? r.trailYears : this.trailYears
-      this.trailThickness = r.trailThickness !== undefined ? r.trailThickness : this.trailThickness
+      this.layerViewStore.trailIsolated = r.trailIsolated !== undefined ? r.trailIsolated : this.layerViewStore.trailIsolated
+      this.layerViewStore.trailSelectionCount = r.trailSelectionCount !== undefined ? r.trailSelectionCount : this.layerViewStore.trailSelectionCount
+      this.layerViewStore.trailYears = r.trailYears !== undefined ? r.trailYears : this.layerViewStore.trailYears
+      this.layerViewStore.trailThickness = r.trailThickness !== undefined ? r.trailThickness : this.layerViewStore.trailThickness
       if (r.trailColor !== undefined) {
-        this.trailColor = r.trailColor
-        this.trailColorInput = r.trailColor
+        this.layerViewStore.trailColor = r.trailColor
+        this.layerViewStore.trailColorInput = r.trailColor
       }
     })
   }
 
   private setTrailDisplayFlag(setting: string, enabled: boolean): void {
     this.callInteractive('setTrailDisplaySetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (r.ok === true && setting === 'isolated') this.trailIsolated = enabled
+      if (r.ok === true && setting === 'isolated') this.layerViewStore.trailIsolated = enabled
     })
   }
 
@@ -5275,22 +5247,22 @@ export struct WindowNativeNode {
     const number = Math.round(value)
     this.callInteractive('setTrailDisplaySetting', setting + '|' + number.toString(), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      if (setting === 'selectionCount') this.trailSelectionCount = number
-      else if (setting === 'years') this.trailYears = number
-      else if (setting === 'thickness') this.trailThickness = number
+      if (setting === 'selectionCount') this.layerViewStore.trailSelectionCount = number
+      else if (setting === 'years') this.layerViewStore.trailYears = number
+      else if (setting === 'thickness') this.layerViewStore.trailThickness = number
     })
   }
 
   private applyTrailColor(): void {
-    const normalized = this.trailColorInput.trim().toUpperCase()
+    const normalized = this.layerViewStore.trailColorInput.trim().toUpperCase()
     if (!/^#[0-9A-F]{6}$/.test(normalized)) {
       this.flashHint('请输入 #RRGGBB 格式的颜色')
       return
     }
     this.callInteractive('setTrailDisplaySetting', 'color|' + normalized, (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      this.trailColor = r.trailColor !== undefined ? r.trailColor : normalized
-      this.trailColorInput = this.trailColor
+      this.layerViewStore.trailColor = r.trailColor !== undefined ? r.trailColor : normalized
+      this.layerViewStore.trailColorInput = this.layerViewStore.trailColor
     })
   }
 
@@ -5331,19 +5303,7 @@ export struct WindowNativeNode {
     this.setViewLockState(!this.viewLock)
   }
 
-  private meteorZhrSliderPosition(): number {
-    const value = Math.max(0, Math.min(this.meteorZhrMax, this.meteorZhr))
-    if (value <= 1000) return value * 0.75
-    const upperRange = Math.max(1, this.meteorZhrMax / 1000)
-    return 750 + Math.log(value / 1000) / Math.log(upperRange) * 250
-  }
 
-  private meteorZhrFromSliderPosition(position: number): number {
-    const clamped = Math.max(0, Math.min(1000, position))
-    if (clamped <= 750) return Math.round(clamped / 0.75)
-    const upperRange = Math.max(1, this.meteorZhrMax / 1000)
-    return Math.round(1000 * Math.pow(upperRange, (clamped - 750) / 250))
-  }
 
   private setSkyDisplaySetting(setting: string, value: boolean | number): void {
     if (setting === 'luminanceAdaptation') this.layerStore.luminanceAdaptation = value as boolean
@@ -5351,10 +5311,10 @@ export struct WindowNativeNode {
     else if (setting === 'forcedStarTwinkle') this.layerStore.forcedStarTwinkle = value as boolean
     else if (setting === 'bigStarHalo') this.layerStore.bigStarHalo = value as boolean
     else if (setting === 'starSpiky') this.layerStore.starSpiky = value as boolean
-    else if (setting === 'bortleScale') this.bortleScale = Math.round(value as number)
-    else if (setting === 'meteorZhr') this.meteorZhr = Math.round(value as number)
+    else if (setting === 'bortleScale') this.layerViewStore.bortleScale = Math.round(value as number)
+    else if (setting === 'meteorZhr') this.layerViewStore.meteorZhr = Math.round(value as number)
     else if (setting === 'zodiacalLight') this.layerStore.zodiacalLight = value as boolean
-    else if (setting === 'zodiacalIntensity') this.zodiacalIntensity = value as number
+    else if (setting === 'zodiacalIntensity') this.layerViewStore.zodiacalIntensity = value as number
     const payload = setting + '|' + (typeof value === 'boolean' ? (value ? '1' : '0') : value.toString())
     this.callInteractive('setSkyDisplaySetting', payload, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
@@ -5366,6 +5326,15 @@ export struct WindowNativeNode {
     })
   }
 
+  private applyStarMagLimit(value: number): void {
+    this.layerViewStore.starMagLimit = value
+    this.callInteractive('setLimitMagnitude', value.toFixed(1), () => {})
+  }
+
+  private applyMilkyWayBright(value: number): void {
+    this.layerViewStore.milkyWayBright = value
+    this.callInteractive('setMilkyWayIntensity', (value / 3).toFixed(2), () => {})
+  }
   private setFovPreset(deg: number): void {
     this.callInteractive('setFOV', deg.toString(), (r: StellariumBridgeResponse) => {
       hilog.info(0x0000, 'StellariumArkUI', 'setFovPreset %{public}d ok=%{public}s', deg, r.ok === true ? '1' : '0')
@@ -10055,7 +10024,7 @@ private loadPlanetPositions(): void {
         this.flashHint(I18n.t('msg_apply_failed'))
         return
       }
-      this.currentLandscapeId = id
+      this.layerViewStore.currentLandscapeId = id
       this.objectDetailStore.selectedLandscapeName = name
       this.landscapeDetailOpen = false
       this.refreshState()
@@ -10063,7 +10032,7 @@ private loadPlanetPositions(): void {
   }
 
   private setLandscapeFadeWithZoom(isOn: boolean): void {
-    this.landscapeFadeWithZoom = isOn
+    this.layerViewStore.landscapeFadeWithZoom = isOn
     this.callInteractive('setLandscapeFadeWithZoom', isOn ? '1' : '0', () => {})
   }
 
@@ -10071,7 +10040,7 @@ private loadPlanetPositions(): void {
     const v = (val / 100).toFixed(2)
     // 手动透明度接管地景显示；不要再调用 setLandscapeFadeWithZoom(0)，
     // C++ 里该命令会重置透明度，导致滑条看起来“没反应”。
-    this.landscapeFadeWithZoom = false
+    this.layerViewStore.landscapeFadeWithZoom = false
     this.callInteractive('setLandscapeUseTransparency', '1', () => {})
     this.callInteractive('setLandscapeTransparency', v, () => {})
   }
@@ -18156,9 +18125,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private landscapeZh(en: string): ResourceStr {
-    return I18n.landscapeName(en)
-  }
 
 
   // 收起当前页面按钮：把右侧浮动面板收回到左侧栏
@@ -18515,21 +18481,95 @@ private loadPlanetPositions(): void {
         LayerTabs({ tabs: this.layerTabItems(), activeTab: this.viewTab, foldTablet: this.isFoldTabletLayout, textColor: this.nmText(), subColor: this.nmSub(), accentColor: this.nmAccent(), panelColor: this.nmBg(), onSelectTab: (id: number) => { this.selectViewTab(id) } })
         Column({ space: 0 }) {
           if (this.viewTab === 0) {
-            this.viewSkyTab()
+            LayerSkyTab({
+              layerStore: this.layerStore,
+              layerViewStore: this.layerViewStore,
+              nightModeOn: this.nightModeStore.nightMode,
+              textColor: this.nmText(),
+              subColor: this.nmSub(),
+              accentColor: this.nmAccent(),
+              panelColor: this.nmBg(),
+              cardBorder: this.nmBorder(),
+              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
+              onSetSkyDisplay: (setting: string, value: boolean | number) => { this.setSkyDisplaySetting(setting, value) },
+              onStarMagLimit: (value: number) => { this.applyStarMagLimit(value) },
+              onMilkyWayBright: (value: number) => { this.applyMilkyWayBright(value) }
+            })
           } else if (this.viewTab === 1) {
-            this.viewSSOTab()
+            LayerSsoTab({
+              layerStore: this.layerStore,
+              layerViewStore: this.layerViewStore,
+              expandedLayout: this.isExpandedLayout,
+              textColor: this.nmText(),
+              subColor: this.nmSub(),
+              accentColor: this.nmAccent(),
+              panelColor: this.nmBg(),
+              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
+              onSetOrbitFlag: (setting: string, enabled: boolean) => { this.setOrbitDisplayFlag(setting, enabled) },
+              onSetOrbitThickness: (value: number) => { this.setOrbitDisplayThickness(value) },
+              onSetOrbitColorStyle: (index: number) => { this.setOrbitColorStyle(index) },
+              onLoadOrbitSettings: () => { this.loadOrbitDisplaySettings() },
+              onSetTrailFlag: (setting: string, enabled: boolean) => { this.setTrailDisplayFlag(setting, enabled) },
+              onSetTrailNumber: (setting: string, value: number) => { this.setTrailDisplayNumber(setting, value) },
+              onLoadTrailSettings: () => { this.loadTrailDisplaySettings() },
+              onApplyTrailColor: () => { this.applyTrailColor() },
+              onTriggerAction: (actionId: string) => { this.triggerAction(actionId) }
+            })
           } else if (this.viewTab === 2) {
-            this.viewDSOTab()
+            LayerDsoTab({
+              layerStore: this.layerStore,
+              subColor: this.nmSub(),
+              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) }
+            })
           } else if (this.viewTab === 3) {
-            this.viewMarkingsTab()
+            LayerMarkingsTab({
+              layerStore: this.layerStore,
+              layerViewStore: this.layerViewStore,
+              textColor: this.nmText(),
+              subColor: this.nmSub(),
+              accentColor: this.nmAccent(),
+              panelColor: this.nmBg(),
+              cardBorder: this.nmBorder(),
+              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
+              onSetFovMarker: (setting: string, value: number) => { this.setFovMarkerSetting(setting, value) }
+            })
           } else if (this.viewTab === 4) {
-            this.viewLandscapeTab()
+            LayerLandscapeTab({
+              layerStore: this.layerStore,
+              layerViewStore: this.layerViewStore,
+              textColor: this.nmText(),
+              subColor: this.nmSub(),
+              accentColor: this.nmAccent(),
+              panelColor: this.nmBg(),
+              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
+              onSetLandscapeFadeWithZoom: (isOn: boolean) => { this.setLandscapeFadeWithZoom(isOn) },
+              onImportLandscape: () => { this.importLandscapeFile() },
+              onSelectLandscape: (id: string, name: string) => { this.selectLandscape(id, name) },
+              onChangeLandscapeTransparency: (val: number) => { this.changeLandscapeTransparency(val) }
+            })
           } else if (this.viewTab === 5) {
             this.viewSkyCultureTab()
           } else if (this.viewTab === 6 && !OFFLINE_APPGALLERY_BUILD) {
-            this.viewSurveysTab()
+            LayerSurveysTab({
+              layerStore: this.layerStore,
+              subColor: this.nmSub(),
+              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) }
+            })
           } else {
-            this.viewSkyTab()
+            LayerSkyTab({
+              layerStore: this.layerStore,
+              layerViewStore: this.layerViewStore,
+              nightModeOn: this.nightModeStore.nightMode,
+              textColor: this.nmText(),
+              subColor: this.nmSub(),
+              accentColor: this.nmAccent(),
+              panelColor: this.nmBg(),
+              cardBorder: this.nmBorder(),
+              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.applyLayerSwitch(actionId, cmd, value) },
+              onSetSkyDisplay: (setting: string, value: boolean | number) => { this.setSkyDisplaySetting(setting, value) },
+              onStarMagLimit: (value: number) => { this.applyStarMagLimit(value) },
+              onMilkyWayBright: (value: number) => { this.applyMilkyWayBright(value) }
+            })
           }
         }
           .width('100%')
@@ -22762,508 +22802,10 @@ private loadPlanetPositions(): void {
     })
   }
 
-  // View 面板 Sky 标签页内容
-  @Builder viewSkyTab() {
-    Text('天空与恒星').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 2, bottom: 6 }).padding({ left: 2 })
-    LayerSwitchRow({ label: I18n.t('s0530'), isOn: this.layerStore.stars, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Stars', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0531'), isOn: this.layerStore.milkyWay, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_MilkyWay', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0532'), isOn: this.layerStore.starLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Stars_Labels', '', value) } })
-    // 星等限制
-    Row() {
-      Text(I18n.t('i0300')).fontSize(12).fontColor(this.nmSub()).width(72)
-      Slider({
-        value: this.starMagLimit,
-        min: 2.0,
-        max: 9.0,
-        step: 0.5,
-        style: SliderStyle.OutSet
-      })
-        .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-        .blockColor('#5B93BF')
-        .trackColor('rgba(255,255,255,0.08)')
-        .selectedColor('#5B93BF')
-        .showSteps(false)
-        .showTips(false)
-        .layoutWeight(1)
-        .onChange((value: number) => {
-          this.starMagLimit = Math.round(value * 10) / 10
-          // Native code enables the forced limit before applying this value.
-          // A 2.0--9.0 range makes the visual effect apparent on mobile data.
-          this.callInteractive('setLimitMagnitude', this.starMagLimit.toFixed(1), () => {})
-        })
-      Text(this.starMagLimit.toFixed(1)).fontSize(12).fontColor(this.nmText()).width(28).textAlign(TextAlign.End)
-    }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-    LayerSwitchRow({ label: I18n.t('s0305'), isOn: this.layerStore.atmosphere, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Atmosphere', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0306'), isOn: this.layerStore.ground, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ground', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0307'), isOn: this.layerStore.fogEffect, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Fog', '', value) } })
-    Row().width('100%').height(0.5).backgroundColor(this.nmBorder()).margin({ top: 5, bottom: 8 })
-    Text('观测条件').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ bottom: 6 }).padding({ left: 2 })
-    Row() {
-      Text('光污染等级').fontSize(12).fontColor(this.nmSub()).width(76)
-      Slider({ value: this.bortleScale, min: 1, max: 9, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-        .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false)
-        .onChange((value: number) => { this.setSkyDisplaySetting('bortleScale', Math.round(value)) })
-      Text('Bortle ' + this.bortleScale).fontSize(11).fontColor(this.nmText()).width(58).textAlign(TextAlign.End)
-    }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-    LayerSwitchRow({ label: '人眼动态视觉调适', isOn: this.layerStore.luminanceAdaptation, onToggle: (value: boolean) => { this.applyLayerSwitch('luminanceAdaptation', 'setSkyDisplayLuminanceAdaptation', value) } })
-    LayerSwitchRow({ label: '星星闪烁', isOn: this.layerStore.starTwinkle, onToggle: (value: boolean) => { this.applyLayerSwitch('starTwinkle', 'setSkyDisplayStarTwinkle', value) } })
-    if (this.layerStore.starTwinkle) {
-      LayerSwitchRow({ label: '无大气时保持闪烁', isOn: this.layerStore.forcedStarTwinkle, onToggle: (value: boolean) => { this.applyLayerSwitch('forcedStarTwinkle', 'setSkyDisplayForcedTwinkle', value) } })
-    }
-    LayerSwitchRow({ label: '亮星光晕', isOn: this.layerStore.bigStarHalo, onToggle: (value: boolean) => { this.applyLayerSwitch('bigStarHalo', 'setSkyDisplayBigStarHalo', value) } })
-    LayerSwitchRow({ label: '星芒效果', isOn: this.layerStore.starSpiky, onToggle: (value: boolean) => { this.applyLayerSwitch('starSpiky', 'setSkyDisplayStarSpiky', value) } })
-    LayerSwitchRow({ label: '黄道光', isOn: this.layerStore.zodiacalLight, onToggle: (value: boolean) => { this.applyLayerSwitch('zodiacalLight', 'setSkyDisplayZodiacalLight', value) } })
-    if (this.layerStore.zodiacalLight) {
-      Row() {
-        Text('黄道光亮度').fontSize(12).fontColor(this.nmSub()).width(76)
-        Slider({ value: this.zodiacalIntensity, min: 0, max: 5, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-          .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false)
-          .onChange((value: number) => { this.setSkyDisplaySetting('zodiacalIntensity', Math.round(value * 10) / 10) })
-        Text(this.zodiacalIntensity.toFixed(1)).fontSize(11).fontColor(this.nmText()).width(34).textAlign(TextAlign.End)
-      }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-    }
-    LayerSwitchRow({ label: I18n.t('s0308'), isOn: this.layerStore.meteors, onToggle: (value: boolean) => { this.applyLayerSwitch('setMeteors', 'setMeteors', value) } })
-    // 银河亮度
-    Row() {
-      Text(I18n.t('i0212')).fontSize(12).fontColor(this.nmSub()).width(72)
-      Row({ space: 6 }) {
-        Button('-').fontSize(12).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).width(36).height(28)
-          .onClick(() => {
-            if (this.milkyWayBright > 0) {
-              this.milkyWayBright--
-              this.callInteractive('setMilkyWayIntensity', (this.milkyWayBright / 3).toFixed(2), () => {})
-            }
-          })
-        Text(this.milkyWayBright.toString()).fontSize(14).fontColor(this.nmText()).width(24).textAlign(TextAlign.Center)
-        Button('+').fontSize(12).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .borderRadius(UI_RADIUS_CONTROL).width(36).height(28)
-          .onClick(() => {
-            if (this.milkyWayBright < 6) {
-              this.milkyWayBright++
-              this.callInteractive('setMilkyWayIntensity', (this.milkyWayBright / 3).toFixed(2), () => {})
-            }
-          })
-      }
-    }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-    if (this.layerStore.meteors) {
-      Row() {
-        Text('理论流星率').fontSize(12).fontColor(this.nmSub()).width(76)
-        Slider({ value: this.meteorZhrSliderPosition(), min: 0, max: 1000, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-          .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false)
-          .onChange((value: number) => { this.setSkyDisplaySetting('meteorZhr', this.meteorZhrFromSliderPosition(value)) })
-        Text(this.meteorZhr + ' / 小时').fontSize(11).fontColor(this.nmText()).width(66).textAlign(TextAlign.End)
-      }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 2 })
-      Text('实际可见数量还会受夜间、地景亮度和地平高度影响')
-        .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 86, right: 10 }).margin({ bottom: 4 })
-    }
-    LayerSwitchRow({ label: I18n.t('s0300'), isOn: this.nightModeStore.nightMode, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Night_Mode', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0309'), isOn: this.layerStore.flipHoriz, onToggle: (value: boolean) => { this.applyLayerSwitch('actionHorizontal_Flip', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0310'), isOn: this.layerStore.flipVert, onToggle: (value: boolean) => { this.applyLayerSwitch('actionVertical_Flip', '', value) } })
-  }
 
-  // View 面板 SSO 标签页内容
-  @Builder viewSSOTab() {
-    Text('基础显示').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 2, bottom: 6 }).padding({ left: 2 })
-    LayerSwitchRow({ label: I18n.t('s0311'), isOn: this.layerStore.planets, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0312'), isOn: this.layerStore.planetOrbits, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_Orbits', '', value) } })
-    if (this.layerStore.planetOrbits) {
-      Row() {
-        Column({ space: 1 }) {
-          Text('轨道显示方式').fontSize(12).fontColor(this.nmSub()).width('100%')
-          Text('控制轨道显示对象、线条和配色分类').fontSize(9).fontColor(this.nmSub()).width('100%')
-        }.layoutWeight(1)
-        Button(this.orbitSettingsExpanded ? '收起' : '设置').fontSize(10).fontColor(this.nmAccent()).height(28)
-          .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).padding({ left: 9, right: 9 })
-          .onClick(() => {
-            this.orbitSettingsExpanded = !this.orbitSettingsExpanded
-            if (this.orbitSettingsExpanded) this.loadOrbitDisplaySettings()
-          })
-      }.width('100%').padding({ left: 2, right: 2, top: 3, bottom: 4 }).margin({ bottom: this.orbitSettingsExpanded ? 4 : 8 })
-      if (this.orbitSettingsExpanded) {
-        Column({ space: 4 }) {
-          Row() {
-            Column({ space: 1 }) {
-              Text('只显示当前选中天体').fontSize(11).fontColor(this.nmText()).width('100%')
-              Text('关闭后显示所有符合条件的轨道').fontSize(9).fontColor(this.nmSub()).width('100%')
-            }.layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.orbitIsolated }).width(40).height(22)
-              .onChange((enabled: boolean) => { this.setOrbitDisplayFlag('isolated', enabled) })
-          }.height(44).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Column({ space: 1 }) {
-              Text('始终显示八大行星轨道').fontSize(11).fontColor(this.nmText()).width('100%')
-              Text('可与当前选中的小天体轨道同时显示').fontSize(9).fontColor(this.nmSub()).width('100%')
-            }.layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.orbitMajorPlanets }).width(40).height(22)
-              .onChange((enabled: boolean) => { this.setOrbitDisplayFlag('majorPlanets', enabled) })
-          }.height(44).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Column({ space: 1 }) {
-              Text('仅显示行星轨道').fontSize(11).fontColor(this.nmText()).width('100%')
-              Text('隐藏小行星、彗星等其他天体轨道').fontSize(9).fontColor(this.nmSub()).width('100%')
-            }.layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.orbitPlanetsOnly }).width(40).height(22)
-              .onChange((enabled: boolean) => { this.setOrbitDisplayFlag('planetsOnly', enabled) })
-          }.height(44).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Column({ space: 1 }) {
-              Text('包含卫星轨道').fontSize(11).fontColor(this.nmText()).width('100%')
-              Text('显示行星周围卫星的轨道').fontSize(9).fontColor(this.nmSub()).width('100%')
-            }.layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.orbitWithMoons }).width(40).height(22)
-              .onChange((enabled: boolean) => { this.setOrbitDisplayFlag('withMoons', enabled) })
-          }.height(44).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Column({ space: 1 }) {
-              Text('轨道保持显示').fontSize(11).fontColor(this.nmText()).width('100%')
-              Text('天体移出屏幕后仍持续绘制轨道').fontSize(9).fontColor(this.nmSub()).width('100%')
-            }.layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.orbitPermanent }).width(40).height(22)
-              .onChange((enabled: boolean) => { this.setOrbitDisplayFlag('permanent', enabled) })
-          }.height(44).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text('轨道线宽').fontSize(11).fontColor(this.nmText()).width(64)
-            Text(this.orbitThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(34).textAlign(TextAlign.End)
-            Slider({ value: this.orbitThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-              .onChange((value: number) => { this.setOrbitDisplayThickness(value) })
-          }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          Row({ space: 8 }) {
-            Text('轨道配色').fontSize(11).fontColor(this.nmText()).width(64)
-            Select([{ value: '统一颜色' }, { value: '按天体分组' }, { value: '按八大行星' }, { value: '行星与小天体分类' }])
-              .selected(this.orbitColorStyleIndex()).value('轨道配色').height(30).layoutWeight(1)
-              .onSelect((index: number) => { this.setOrbitColorStyle(index) })
-          }.height(34).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-      }
-    }
-    LayerSwitchRow({ label: I18n.t('s0314'), isOn: this.layerStore.planetHints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_Hints', '', value) } })
-    Text('高级标记').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 8, bottom: 6 }).padding({ left: 2 })
-    LayerSwitchRow({ label: I18n.t('s0313'), isOn: this.layerStore.planetTrails, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_Trails', '', value) } })
-    if (this.layerStore.planetTrails) {
-      Row() {
-        Column({ space: 1 }) {
-          Text('轨迹显示方式').fontSize(12).fontColor(this.nmSub()).width('100%')
-          Text('控制保留对象、历史跨度、线宽与颜色').fontSize(9).fontColor(this.nmSub()).width('100%')
-        }.layoutWeight(1)
-        Button(this.trailSettingsExpanded ? '收起' : '设置').fontSize(10).fontColor(this.nmAccent()).height(28)
-          .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).padding({ left: 9, right: 9 })
-          .onClick(() => {
-            this.trailSettingsExpanded = !this.trailSettingsExpanded
-            if (this.trailSettingsExpanded) this.loadTrailDisplaySettings()
-          })
-      }.width('100%').padding({ left: 2, right: 2, top: 3, bottom: 4 }).margin({ bottom: this.trailSettingsExpanded ? 4 : 8 })
-      if (this.trailSettingsExpanded) {
-        Column({ space: 4 }) {
-          Row() {
-            Column({ space: 1 }) {
-              Text('仅保留最近选中天体').fontSize(11).fontColor(this.nmText()).width('100%')
-              Text('关闭后显示当前可见的全部太阳系天体轨迹').fontSize(9).fontColor(this.nmSub()).width('100%')
-            }.layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.trailIsolated }).width(40).height(22)
-              .onChange((enabled: boolean) => { this.setTrailDisplayFlag('isolated', enabled) })
-          }.height(44).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          if (this.trailIsolated) {
-            Row() {
-              Text('保留选中对象').fontSize(11).fontColor(this.nmText()).width(84)
-              Text(this.trailSelectionCount.toFixed(0) + ' 个').fontSize(11).fontColor(this.nmSub()).width(34).textAlign(TextAlign.End)
-              Slider({ value: this.trailSelectionCount, min: 1, max: 5, step: 1, style: SliderStyle.OutSet })
-                .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-                .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-                .onChange((value: number) => { this.setTrailDisplayNumber('selectionCount', value) })
-            }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          }
-          Row() {
-            Text('历史跨度').fontSize(11).fontColor(this.nmText()).width(72)
-            Text(this.trailYears.toFixed(0) + ' 年').fontSize(11).fontColor(this.nmSub()).width(42).textAlign(TextAlign.End)
-            Slider({ value: this.trailYears, min: 1, max: 250, step: 1, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-              .onChange((value: number) => { this.setTrailDisplayNumber('years', value) })
-          }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          Row() {
-            Text('轨迹线宽').fontSize(11).fontColor(this.nmText()).width(72)
-            Text(this.trailThickness.toFixed(0) + ' px').fontSize(11).fontColor(this.nmSub()).width(42).textAlign(TextAlign.End)
-            Slider({ value: this.trailThickness, min: 1, max: 5, step: 1, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-              .onChange((value: number) => { this.setTrailDisplayNumber('thickness', value) })
-          }.height(34).width('100%').padding({ left: 8, right: 10 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          Row({ space: 8 }) {
-            Text('轨迹颜色').fontSize(11).fontColor(this.nmText()).width(64)
-            TextInput({ text: this.trailColorInput, placeholder: '#RRGGBB' })
-              .fontSize(11).fontColor(this.nmText()).placeholderColor(this.nmSub()).height(30).layoutWeight(1)
-              .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).padding({ left: 8, right: 8 })
-              .onChange((value: string) => { this.trailColorInput = value })
-            Button('应用').fontSize(10).fontColor(this.nmAccent()).height(28).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-              .padding({ left: 9, right: 9 }).onClick(() => { this.applyTrailColor() })
-          }.height(34).width('100%').padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-        }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 }).backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
-      }
-    }
-    LayerSwitchRow({ label: I18n.t('s0318'), isOn: this.layerStore.minorBodyMarkers, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_ShowMinorBodyMarkers', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0319'), isOn: this.layerStore.planetNomenclature, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_Nomenclature', '', value) } })
-    if (this.isExpandedLayout) {
-      Text('视直径增强').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 8, bottom: 6 }).padding({ left: 2 })
-      LayerSwitchRow({ label: I18n.t('s0315'), isOn: this.layerStore.enlargeMoon, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_EnlargeMoon', '', value) } })
-      LayerSwitchRow({ label: I18n.t('s0316'), isOn: this.layerStore.enlargePlanets, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_EnlargePlanets', '', value) } })
-      LayerSwitchRow({ label: I18n.t('s0317'), isOn: this.layerStore.enlargeSun, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Planets_EnlargeSun', '', value) } })
-    }
-    Row() {
-      Text(I18n.t('i0281')).fontSize(12).fontColor(this.nmSub()).width(72)
-      Button(I18n.t('i0282')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
-        .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
-        .onClick(() => { this.triggerAction('actionShow_Planets_Trails_Reset') })
-    }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-  }
 
-  // View 面板 DSO 标签页内容
-  @Builder viewDSOTab() {
-    Text('显示内容').fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 2, bottom: 6 }).padding({ left: 2 })
-    LayerSwitchRow({ label: I18n.t('s0320'), isOn: this.layerStore.nebulae, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Nebulas', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0321'), isOn: this.layerStore.dsoLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('setDsoLabels', 'setDsoLabels', value) } })
-    LayerSwitchRow({ label: I18n.t('s0322'), isOn: this.layerStore.dsoTextures, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_DSO_Textures', '', value) } })
-  }
 
-  // View 面板 Markings 标签页内容
-  @Builder viewMarkingsTab() {
-    Column({ space: 0 }) {
-        Text(I18n.t('view_orientation_marks')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 4, bottom: 2 }).padding({ left: 2 })
-        Text(I18n.t('view_orientation_marks_hint')).fontSize(10).fontColor(this.nmSub()).width('100%').maxLines(2)
-          .padding({ left: 2, right: 2 }).margin({ bottom: 5 })
-        LayerSwitchRow({ label: I18n.t('s0533'), isOn: this.layerStore.cardinalPoints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Cardinal_Points', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0342'), isOn: this.layerStore.compassMarks, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Compass_Marks', '', value) } })
-        // 基础网格
-        Text(I18n.t('i0197')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 4, bottom: 2 }).padding({ left: 2 })
-        LayerSwitchRow({ label: I18n.t('s0538'), isOn: this.layerStore.gridlinesMaster, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Gridlines', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0323'), isOn: this.layerStore.equatorialGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equatorial_Grid', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0324'), isOn: this.layerStore.azimuthGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Azimuthal_Grid', '', value) } })
-        // 特殊线
-        Row()
-          .width('100%').height(0.5)
-          .backgroundColor(this.nmBorder())
-          .margin({ top: 6, bottom: 4 })
-        Text(I18n.t('i0198')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-          .height(18).width('100%')
-        LayerSwitchRow({ label: I18n.t('s0325'), isOn: this.layerStore.equatorLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equator_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0326'), isOn: this.layerStore.eclipticLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0327'), isOn: this.layerStore.meridianLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Meridian_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0328'), isOn: this.layerStore.horizonLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Horizon_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0329'), isOn: this.layerStore.galacticEquator, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Galactic_Equator_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0330'), isOn: this.layerStore.supergalacticEq, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Supergalactic_Equator_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0331'), isOn: this.layerStore.galacticGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Galactic_Grid', '', value) } })
-        // J2000 线
-        Row()
-          .width('100%').height(0.5)
-          .backgroundColor(this.nmBorder())
-          .margin({ top: 6, bottom: 4 })
-        Text(I18n.t('i0199')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-          .height(18).width('100%')
-        LayerSwitchRow({ label: I18n.t('s0332'), isOn: this.layerStore.equJ2000Line, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equator_J2000_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0333'), isOn: this.layerStore.eclJ2000Line, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_J2000_Line', '', value) } })
-        // 点标记
-        Row()
-          .width('100%').height(0.5)
-          .backgroundColor(this.nmBorder())
-          .margin({ top: 6, bottom: 4 })
-        Text(I18n.t('i0200')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-          .height(18).width('100%')
-        LayerSwitchRow({ label: I18n.t('s0334'), isOn: this.layerStore.celestialPoles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Celestial_Poles', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0335'), isOn: this.layerStore.eclipticPoles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_Poles', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0336'), isOn: this.layerStore.galacticPoles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Galactic_Poles', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0337'), isOn: this.layerStore.equinoxPoints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equinox_Points', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0338'), isOn: this.layerStore.solsticePoints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Solstice_Points', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0339'), isOn: this.layerStore.antisolarPoint, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Antisolar_Point', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0340'), isOn: this.layerStore.umbraCircle, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Umbra_Circle', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0341'), isOn: this.layerStore.penumbraCircle, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Penumbra_Circle', '', value) } })
-        // 辅助标记
-        Row()
-          .width('100%').height(0.5)
-          .backgroundColor(this.nmBorder())
-          .margin({ top: 6, bottom: 4 })
-        Text(I18n.t('i0284')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-          .height(18).width('100%')
-        LayerSwitchRow({ label: I18n.t('s0343'), isOn: this.layerStore.fovMarker, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_FOV_Center_Marker', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0534'), isOn: this.layerStore.fovCircularMarker, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_FOV_Circular_Marker', '', value) } })
-        if (this.layerStore.fovCircularMarker) {
-          Row() {
-            Text('圆形直径').fontSize(11).fontColor(this.nmSub()).width(72)
-            Text(this.fovCircularMarkerSize.toFixed(1) + '°').fontSize(11).fontColor(this.nmText()).width(42).textAlign(TextAlign.End)
-            Slider({ value: this.fovCircularMarkerSize, min: 0.1, max: 180, step: 0.1, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-              .onChange((value: number) => { this.fovCircularMarkerSize = value; this.setFovMarkerSetting('circleSize', value) })
-          }.height(34).width('100%').padding({ left: 14, right: 10 }).margin({ bottom: 3 })
-        }
-        LayerSwitchRow({ label: I18n.t('s0535'), isOn: this.layerStore.fovRectangularMarker, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_FOV_Rectangular_Marker', '', value) } })
-        if (this.layerStore.fovRectangularMarker) {
-          Row() {
-            Text('矩形宽度').fontSize(11).fontColor(this.nmSub()).width(72)
-            Text(this.fovRectangularMarkerWidth.toFixed(1) + '°').fontSize(11).fontColor(this.nmText()).width(42).textAlign(TextAlign.End)
-            Slider({ value: this.fovRectangularMarkerWidth, min: 0.1, max: 180, step: 0.1, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-              .onChange((value: number) => { this.fovRectangularMarkerWidth = value; this.setFovMarkerSetting('rectWidth', value) })
-          }.height(34).width('100%').padding({ left: 14, right: 10 })
-          Row() {
-            Text('矩形高度').fontSize(11).fontColor(this.nmSub()).width(72)
-            Text(this.fovRectangularMarkerHeight.toFixed(1) + '°').fontSize(11).fontColor(this.nmText()).width(42).textAlign(TextAlign.End)
-            Slider({ value: this.fovRectangularMarkerHeight, min: 0.1, max: 180, step: 0.1, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-              .onChange((value: number) => { this.fovRectangularMarkerHeight = value; this.setFovMarkerSetting('rectHeight', value) })
-          }.height(34).width('100%').padding({ left: 14, right: 10 })
-          Row() {
-            Text('旋转角度').fontSize(11).fontColor(this.nmSub()).width(72)
-            Text(this.fovRectangularMarkerRotation.toFixed(0) + '°').fontSize(11).fontColor(this.nmText()).width(42).textAlign(TextAlign.End)
-            Slider({ value: this.fovRectangularMarkerRotation, min: -180, max: 180, step: 1, style: SliderStyle.OutSet })
-              .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-              .layoutWeight(1).blockColor(this.nmAccent()).trackColor(this.nmBg()).selectedColor(this.nmAccent()).showSteps(false).showTips(false)
-              .onChange((value: number) => { this.fovRectangularMarkerRotation = value; this.setFovMarkerSetting('rectRotation', value) })
-          }.height(34).width('100%').padding({ left: 14, right: 10 }).margin({ bottom: 3 })
-        }
-        LayerSwitchRow({ label: I18n.t('s0344'), isOn: this.layerStore.intercardinalPts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Intercardinal_Points', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0536'), isOn: this.layerStore.secondaryIntercardinalPts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Secondary_Intercardinal_Points', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0537'), isOn: this.layerStore.tertiaryIntercardinalPts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Tertiary_Intercardinal_Points', '', value) } })
-        // 更多标记线
-        Row()
-          .width('100%').height(0.5)
-          .backgroundColor(this.nmBorder())
-          .margin({ top: 6, bottom: 4 })
-        Text(I18n.t('i0285')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-          .height(18).width('100%')
-        LayerSwitchRow({ label: I18n.t('s0345'), isOn: this.layerStore.primeVerticalLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Prime_Vertical_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0346'), isOn: this.layerStore.currentVerticalLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Current_Vertical_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0347'), isOn: this.layerStore.colureLines, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Colure_Lines', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0348'), isOn: this.layerStore.precessionCircles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Precession_Circles', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0500'), isOn: this.layerStore.circumpolarCircles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Circumpolar_Circles', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0501'), isOn: this.layerStore.invariantPlaneLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Invariable_Plane_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0502'), isOn: this.layerStore.solarEquatorLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Solar_Equator_Line', '', value) } })
-        // 更多网格
-        Row()
-          .width('100%').height(0.5)
-          .backgroundColor(this.nmBorder())
-          .margin({ top: 6, bottom: 4 })
-        Text(I18n.t('i0286')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-          .height(18).width('100%')
-        LayerSwitchRow({ label: I18n.t('s0503'), isOn: this.layerStore.equatorialJ2000Grid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equatorial_J2000_Grid', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0504'), isOn: this.layerStore.eclipticJ2000Grid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_J2000_Grid', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0505'), isOn: this.layerStore.eclipticGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_Grid', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0506'), isOn: this.layerStore.supergalacticGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Supergalactic_Grid', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0507'), isOn: this.layerStore.fixedEquatorialGrid, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Fixed_Equatorial_Grid', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0508'), isOn: this.layerStore.fixedEquatorLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Fixed_Equator_Line', '', value) } })
-        // 更多点标记
-        Row()
-          .width('100%').height(0.5)
-          .backgroundColor(this.nmBorder())
-          .margin({ top: 6, bottom: 4 })
-        Text(I18n.t('i0287')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-          .height(18).width('100%')
-        LayerSwitchRow({ label: I18n.t('s0509'), isOn: this.layerStore.zenithNadir, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Zenith_Nadir', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0510'), isOn: this.layerStore.celestialJ2000Poles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Celestial_J2000_Poles', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0511'), isOn: this.layerStore.eclipticJ2000Poles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ecliptic_J2000_Poles', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0512'), isOn: this.layerStore.equinoxJ2000Pts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Equinox_J2000_Points', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0513'), isOn: this.layerStore.solsticeJ2000Pts, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Solstice_J2000_Points', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0514'), isOn: this.layerStore.galacticCenter, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Galactic_Center', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0515'), isOn: this.layerStore.supergalacticPoles, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Supergalactic_Poles', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0516'), isOn: this.layerStore.apexPoints, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Apex_Points', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0517'), isOn: this.layerStore.umbraCenter, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Umbra_Center_Point', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0518'), isOn: this.layerStore.longitudeLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Longitude_Line', '', value) } })
-        LayerSwitchRow({ label: I18n.t('s0519'), isOn: this.layerStore.quadratureLine, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Quadrature_Line', '', value) } })
 
-    }
-    .width('100%')
-  }
-
-  // View 面板 Landscape 标签页内容
-  @Builder viewLandscapeTab() {
-    LayerSwitchRow({ label: I18n.t('s0306'), isOn: this.layerStore.ground, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ground', '', value) } })
-    LayerSwitchRow({ label: I18n.t('mist_horizon'), isOn: this.layerStore.mistHorizon, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_MistHorizon', '', value) } })
-    Text(I18n.t('mist_horizon_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10, bottom: 8 })
-    if (!this.layerStore.ground) {
-      Text(I18n.t('landscape_preselect_hint')).fontSize(12).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10, bottom: 8 })
-    }
-    LayerSwitchRow({ label: I18n.t('s0520'), isOn: this.layerStore.landscapeIllum, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_LandscapeIllumination', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0521'), isOn: this.layerStore.landscapeLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_LandscapeLabels', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0307'), isOn: this.layerStore.fogEffect, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Fog', '', value) } })
-    Row() {
-      Column() {
-        Text('俯视时地景淡出').fontSize(13).fontColor('#E5FFFFFF')
-        Text('视角压低看地面时地面渐隐，露出地平线下的星空（仍可见）').fontSize(11).fontColor('#99FFFFFF').margin({ top: 2 })
-      }.layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: this.landscapeFadeWithZoom })
-        .onChange((isOn: boolean) => { this.setLandscapeFadeWithZoom(isOn) })
-    }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ top: 6 })
-    Row() {
-      Text(I18n.t('i0288')).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 2 })
-    }.height(18).width('100%').margin({ top: 6 })
-    Row({ space: 8 }) {
-      Text(I18n.t('btn_import_landscape')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-      if (this.landscapeImporting) LoadingProgress().width(16).height(16).color(this.nmAccent())
-      Button(I18n.t('btn_import_landscape')).fontSize(10).fontColor(this.nmAccent()).backgroundColor(this.nmBg())
-        .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 }).enabled(!this.landscapeImporting)
-        .onClick(() => { this.importLandscapeFile() })
-    }.width('100%').height(38).padding({ left: 8, right: 8 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 5 })
-    if (this.landscapeLoading && this.landscapeList.length === 0) {
-      Row({ space: 8 }) {
-        LoadingProgress().width(16).height(16).color(this.nmAccent())
-        Text('正在加载地景列表').fontSize(11).fontColor(this.nmSub())
-      }
-        .width('100%').height(42).justifyContent(FlexAlign.Center)
-    } else if (!this.landscapeLoading && this.landscapeList.length === 0) {
-      Text('暂无可用地景').fontSize(11).fontColor(this.nmSub()).width('100%')
-        .textAlign(TextAlign.Center).padding({ top: 14, bottom: 14 })
-    }
-    Column({ space: 2 }) {
-      ForEach(this.landscapeList, (item: LandscapeItem) => {
-        Column({ space: 2 }) {
-          Row() {
-            Text(this.landscapeZh(item.name)).fontSize(11)
-              .fontColor(this.currentLandscapeId === item.id ? this.nmAccent() : this.nmText())
-              .layoutWeight(1)
-            if (this.currentLandscapeId === item.id) {
-              Text(I18n.t('s0602')).fontSize(9).fontColor(this.nmAccent()).margin({ right: 8 })
-            }
-          }
-          if (item.author || item.description) {
-            Text(this.resourceText(item.description, I18n.t('resource_not_provided')))
-              .fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(I18n.t('resource_author') + ': ' + this.resourceText(item.author, I18n.t('resource_not_provided')))
-              .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(1)
-          }
-          if (item.hasLocation === true) {
-            Text(this.resourceText(item.planet, 'Earth') + ' · ' + this.resourceText(item.timezone, '时区未提供'))
-              .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(1)
-          }
-          if (item.source) {
-            Text(I18n.t('resource_source') + ': ' + item.source).fontSize(8).fontColor('#55FFFFFF')
-              .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-        }
-        .height(item.description !== undefined || item.author !== undefined ? (item.hasLocation === true ? 102 : 86) : 48)
-        .width('100%').padding({ left: 12, right: 12, top: 5, bottom: 5 })
-        .backgroundColor(this.currentLandscapeId === item.id ? 'rgba(80,140,200,0.18)' : 'rgba(0,0,0,0)')
-        .borderRadius(UI_RADIUS_CONTROL)
-        .onClick(() => { this.selectLandscape(item.id, item.name) })
-      }, (item: LandscapeItem, index: number) => item.id)
-    }
-    .width('100%')
-    Row() {
-      Text(I18n.t('i0289')).fontSize(12).fontColor(this.nmSub()).width(72)
-      Text(this.landscapeTransp + '%').fontSize(14).fontColor(this.nmText()).margin({ right: 8 })
-      Slider({ value: this.landscapeTransp, min: 0, max: 100, step: 5, style: SliderStyle.OutSet })
-        .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-        .layoutWeight(1)
-        .blockColor(this.nmAccent())
-        .trackColor(this.nmBg())
-        .selectedColor(this.nmAccent())
-        .showSteps(false)
-        .onChange((val: number) => { this.landscapeTransp = Math.round(val); this.changeLandscapeTransparency(val) })
-    }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-  }
 
   // View 面板 Sky Culture 标签页内容
   @Builder viewSkyCultureTab() {
@@ -24086,13 +23628,5 @@ private loadPlanetPositions(): void {
     }
   }
 
-  // View 面板 Surveys 标签页内容
-  @Builder viewSurveysTab() {
-    LayerSwitchRow({ label: I18n.t('s0600'), isOn: this.layerStore.hipsSurveys, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Hips_Surveys', '', value) } })
-    LayerSwitchRow({ label: I18n.t('s0601'), isOn: this.layerStore.toastSurvey, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Toast_Survey', '', value) } })
-    Row() {
-      Text(I18n.t('i0215')).fontSize(10).fontColor('#CC8FB6FF').width('100%').padding({ left: 2 })
-    }.height(18).width('100%').margin({ top: 8 })
-  }
 
 }
