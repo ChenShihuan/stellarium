@@ -2,10 +2,13 @@ import { RecordingEntry, RecordingsResponse, RecordingDetailResponse } from '../
 import { ScriptMetadata, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → ScriptStore 的 UI 提示注入（§13.1 规则 6 / §14.8 规则 2：store 不触碰 UI）。
+// 宿主 → ScriptStore 的 UI 提示 / 动作注入（§13.1 规则 6 / §14.8 规则 2：store 不触碰 UI）。
 // loadRecordingByName 回包后经宿主 flashHint 提示（原宿主 this.flashHint 逐字语义）。
+// §14 B3-4：视频状态轮询发现录制已结束（wasRecording && !recording）时，原宿主以
+// setTimeout(() => this.stopVideoRecording(), 0) 收尾，该动作经 stopVideoRecording 回注。
 export interface ScriptHostHooks {
   flashHint(text: ResourceStr): void
+  stopVideoRecording(): void
 }
 
 // 脚本 / 录制 / 视频导出域中"面板可见"的状态（原宿主的 21 个 @State）。
@@ -71,6 +74,9 @@ export class ScriptStore {
   replayName: string = ''
   videoArchiveFileName: string = ''
   screenVideoFileName: string = ''
+
+  // —— §14 B3-4：视频状态轮询定时器（原宿主 videoStateTimer 裸字段，随加载器收口迁入本 store） ——
+  private videoStateTimer: number = -1
 
   // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadRecordings） ——
   private port: CommandPort | null = null
@@ -158,5 +164,44 @@ export class ScriptStore {
         hooks.flashHint('加载录制失败')
       }
     })
+  }
+
+  // 视频帧序列录制状态轮询（原宿主 loadVideoRecordingState，函数体逐字搬入；差异仅：
+  // this.callInteractive → port.requestInteractive、this.scriptStore.<f> → this.<f>、
+  // this.stopVideoStatePolling 为同 store 方法、this.stopVideoRecording 经 hooks 回注）。
+  loadVideoRecordingState(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    port.requestInteractive('getVideoRecordingState', '', (r: StellariumBridgeResponse) => {
+      const wasRecording = this.videoRecording
+      this.videoRecording = r.recording === true
+      this.videoDir = r.dir as string ?? ''
+      this.videoFrameCount = r.frameCount as number ?? 0
+      this.videoFailedFrames = r.failedFrames as number ?? 0
+      this.videoMaxFrames = r.maxFrames as number ?? 0
+      if (wasRecording && !this.videoRecording) {
+        this.stopVideoStatePolling()
+        setTimeout(() => {
+          const hooks = this.hooks
+          if (hooks !== null) hooks.stopVideoRecording()
+        }, 0)
+      }
+    })
+  }
+
+  // 视频状态轮询定时器开启（原宿主 startVideoStatePolling，逐字搬入）。
+  startVideoStatePolling(): void {
+    this.stopVideoStatePolling()
+    this.videoStateTimer = setInterval(() => { this.loadVideoRecordingState() }, 450) as number
+  }
+
+  // 视频状态轮询定时器收口（原宿主 stopVideoStatePolling，逐字搬入）。
+  stopVideoStatePolling(): void {
+    if (this.videoStateTimer >= 0) {
+      clearInterval(this.videoStateTimer)
+      this.videoStateTimer = -1
+    }
   }
 }
