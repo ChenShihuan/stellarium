@@ -43,25 +43,30 @@
 | `AppStorage` 引用 | 28 |
 | `@Watch` | 2 |
 
-### 1.3 最大的 Builder（拆分靶点，前 15）
+### 1.3 最大的 Builder（拆分靶点，前 12，**2026-10-01 重测**）
+
+> **更正说明：** 本文初版此表用"下一个 `\n  }\n`"启发式测量，该启发式会越过 builder 的真实收尾、把紧随其后的
+> 普通方法也算进去，导致**严重高估**（如 `searchFilterMenu` 初版记 3,441 行，实测仅 **48 行**）。
+> 下表改用"首个 `^  }$` 收尾"重测；全文件共 **118 个 `@Builder`，合计 9,475 行**。
 
 | 行数 | 起始行 | 名称 |
 |---:|---:|---|
-| **5,138** | L24531 | `panelContent`（33 个面板的 if/else 分发） |
-| 3,441 | L12362 | `searchFilterMenu` |
-| 1,970 | L5948 | 匿名 `Column` |
-| 1,399 | L10695 | 匿名 `Stack` |
-| 1,331 | L31444 | `layerPresetBar` |
-| 1,141 | L17710 | `hierColumn` |
-| 1,003 | L15811 | `wutTargetCard` |
-| 893 | L20805 | `tabletObjectInspector` |
-| 760 | L4966 | `scriptKeyButton` |
-| 715 | L8202 | `phenomenonRelationMark` |
-| 592 | L17021 | `continuationSection` |
-| 525 | L8917 | `astroSelectionGuide` |
-| 459 | L9495 | 匿名 `Column` |
-| 448 | L29669 | `toolsPanel` |
-| 368 | L9977 | 匿名 `Column` |
+| **4,707** | L22128 | `panelContent`（33 个面板的 if/else 分发，**占全部 builder 代码的 50%**） |
+| 446 | L26837 | `toolsPanel` |
+| 209 | L17151 | `scriptFocusShell` |
+| 183 | L18603 | `unifiedObjectDetailCard` |
+| 179 | L19683 | `tabletInspectorMedia` |
+| 150 | L17588 | `expandedShell` |
+| 130 | L21407 | `compactMoreDrawer` |
+| 125 | L9786 | （首行为 `if` 的匿名 builder） |
+| 109 | L27500 | `cityChipsRow` |
+| 99 | L21162 | `gyroCalibPanel` |
+| 93 | L21912 | `skyCultureMakerConstellationEditor` |
+| 87 | L17740 | `compactShell` |
+
+**推论（影响策略）：** 本文件的 UI **并不分散在众多超大 builder 里**，而是集中在 **`panelContent`（4,707 行）**；
+其余 builder 多为几十到几百行。因此 Phase 4 的主战场是**把 `panelContent` 的 33 个面板分支逐个抽成组件**
+（每个分支通常只有几十行），而不是先啃若干"巨型 builder"。
 
 ### 1.4 状态字段的领域分布（按名称聚类）
 
@@ -751,20 +756,26 @@ devecocli ui click/drag/text --device 192.168.3.95:40565 ...
 
 **CHANGELOG 追加（CRLF 安全）**：把条目写入临时文件后用脚本前置插入，并核对 `裸LF = 0`（见本轮各次提交的实际命令）。
 
-### 13.5 剩余队列（按体积，供续作选择）
+### 13.5 剩余队列（按体积，供续作选择；**2026-10-01 用实测行数修正**）
 
-| 序 | 域 | 规模提示 | 备注 |
+> 初版此表沿用 §1.3 的错误测法，行数普遍高估 10–70 倍（如 `searchFilterMenu` 3,441 → 实测 48）。
+> 下表为"首个 `^  }$` 收尾"重测值。**真正的 UI 体量集中在 `panelContent`（4,707 行）**，
+> 故 Phase 4 的主线始终是"把 `panelContent` 的 33 个分支逐个抽成组件"。
+
+| 序 | 域 | 实测规模 | 备注 |
 |---|---|---|---|
-| 1 | **search** | `searchFilterMenu` 3,441 行 + `search*`/`category*` ≈60 字段 | 最大一片，建议拆 3–5 个提交 |
-| 2 | **object / detail** | `unifiedObjectDetailCard` 185 / `selectedLiveInfoRows` 270 / `structuredObjectDetails` 257 / `tabletInspectorMedia` 181；`object*`/`selected*`/`detail*` ≈93 字段 | 与 tablet/compact 两壳耦合 |
-| 3 | **astro** | `wutTargetCard` 1,003 / `continuationSection` 592 / `astroSelectionGuide` 525 / `phenomenonRelationMark` 715；≈164 字段 | 计算类，多为展示 |
-| 4 | **layers** | `layerPresetBar` 1,331 / `hierColumn` 1,141；图层开关 ≈60 字段 | 含 21 个 switchRow |
-| 5 | **skyCulture** | ≈130 字段 | 编辑器 + 展示 |
-| 6 | **satellite** | ≈40 字段 | |
-| 7 | **sensors/gyro** | 13 字段 + `gyroCalibPanel` 148 行 | 注意：活路径是 `gyroRotationCallback` 等，勿动 |
-| 8 | **script / telescope / session / tools / settings 其余标签页** | 26 / 24 / ~ / 51 / — | |
-| 9 | **Phase 4 面板宿主** | `panelContent`（5,138 行 if/else）→ 表驱动 `PanelHost` | 面板逐个抽组件后收口 |
-| 10 | **Phase 5 overlay / Phase 6 壳层** | 信息窗、详情卡、时间轮、Dock、expanded/compact/hover | 含 `panelHeader` chrome（`observationTimeText`/`timeRateText` 在此收口） |
-| 11 | **Phase 7 收口** | 删除过渡 getter、更新 `UI-ARCHITECTURE.md` 行号、AGENTS.md §2.2 | |
+| 1 | **search 筛选器** | `searchFilterMenu` **48** + `searchFilterChips` **30** + `catalogFilterRow`（参数化 UI 函数，需改子组件）；`searchFilterPage` 15 / `searchCategory` 19 / `searchVisibilityFilter` 5 / `searchInstrumentFilter` 6 | 一片可完成 |
+| 2 | search 分类浏览 | `category*` 10 字段 / 64 处 | |
+| 3 | **object / detail** | `unifiedObjectDetailCard` 183 / `tabletInspectorMedia` 179 / `structuredObjectDetails` 30 / `selectedLiveInfoRows` 19；≈93 字段 | 与 tablet/compact 两壳耦合 |
+| 4 | **astro** | `wutTargetCard` 21 / `continuationSection` 31 / `phenomenonRelationMark` 29 / `astroSelectionGuide` 15；≈164 字段 | 多为展示 |
+| 5 | **layers** | `layerPresetBar` 19 / `hierColumn` 75；图层开关 ≈60 字段 | 含 21 个 switchRow |
+| 6 | **tools** | `toolsPanel` **446**（除去 panelContent 外最大） | |
+| 7 | **skyCulture** | `skyCultureMakerConstellationEditor` 93；≈130 字段 | |
+| 8 | **sensors/gyro** | `gyroCalibPanel` 99；13 字段 | 活路径是 `gyroRotationCallback` 等，勿动 |
+| 9 | satellite / script / telescope / session / 其余设置标签页 | `scriptFocusShell` 209 / `compactMoreDrawer` 130 / `cityChipsRow` 109 | |
+| 10 | **Phase 4 面板宿主** | `panelContent` **4,707** → 表驱动 `PanelHost` | 主线；逐分支抽组件 |
+| 11 | **Phase 5 overlay / Phase 6 壳层** | `expandedShell` 150 / `compactShell` 87 / `scriptFocusShell` 209 | 含 `panelHeader` chrome（`observationTimeText`/`timeRateText` 在此收口） |
+| 12 | **Phase 7 收口** | 删过渡 getter、校正 `UI-ARCHITECTURE.md` 行号、AGENTS.md §2.2 | |
+
 
 **每个 Phase 4 面板切片前**建议先跑一次第 13.2 步 1 的"零引用扫描"，把死代码清掉再搬迁（§11 修订 6 的四类判据）。
