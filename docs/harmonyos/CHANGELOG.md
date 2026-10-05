@@ -1,3 +1,25 @@
+## [2026-10-04] DevEco Code - 重构：小簇批处理（scenery3d / catalogs / meteorShowers / commandConsole 四簇同批转 Store；宿主 @State 286 → 266）
+
+- **依据**：review §2.7 目标清单里的独立小簇。一次做四簇以省去重复的构建/安装开销，每簇仍走同一口径（先普查原地变更 → 只搬面板入参 → 动作留回调 → 机械替换后复核"0 残留 / 0 双重前缀"）。
+- **新增 4 个 store（共 24 个字段）**：
+  | store | 字段 | 面板 | 面板入参变化 |
+  |---|---|---|---|
+  | `SceneryStore` | 4 | `Scenery3dPanel` | `@Prop` 8 → 4 |
+  | `CatalogStore` | 5 | `CatalogsPanel` | `@Prop` 6 → 1 |
+  | `MeteorStore` | 8 | `MeteorShowersPanel` | `@Prop` 9 → 1 |
+  | `CommandStore` | 7 | `CommandsPanel` | `@Prop` 12 → 5 |
+  各面板余下的 `@Prop` 仅为主题色，另各增 1 个 `@ObjectLink`；调用点由最多 8 条绑定收敛为 1 条。
+- **两簇存在"面板别名"**（store 沿用宿主字段名，头注已写明）：`Scenery3dPanel` 的 `pluginEnabled←scenery3dEnabled`、`loading←scenery3dLoading`、`items←scenery3dItems`、`loadingId←scenery3dLoadingId`；`CatalogsPanel` 的 `loading←catalogLoading`、`items←catalogList`、`busy←catalogBusy`、`downloadingId←catalogDownloadingId`、`msg←catalogMsg`。两簇的调用点因此必须整块换成 store 绑定（否则替换后会留下已不存在的 prop）。
+- **刻意留宿主、理由写入 store 头注**：`scenery3dCurrentId`（宿主自用：记住当前场景以做恢复，非面板入参）；`catalogHealthLoaded` / `catalogManifestPresent`（与卫星面板"卫星目录健康"及恒星表共用，非本面板入参 —— 与卫星片的判断一致）。
+- **普查澄清一处误报**：先前脚本把 `this.<字段>.<prop> =` 当作"原地属性写"，实际命中的是 `this.catalogList.length === 0` / `this.commandNameInput.length === 0` 这类**读取**（`===` 里的 `=` 被正则误吃）⇒ 四簇**全部无原地变更**，`@ObjectLink` 语义等价。
+- **收益（实测）**：宿主 `@State` **286 → 266**（−24 +4）；四个面板入参合计 `@Prop` 35 → 11。
+- **验证**：`arkts_check` 通过；UI 契约 `intact`（33 面板 / 24 静态 id / 17 动态前缀 / **44 锚点** / **191** 文件）；**BUILD SUCCESSFUL**；真机（`192.168.50.108:36717`）走查 **3/4 簇**：
+  - **流星雨** ✅ 四个开关（`msEnabled/msLabels/msActiveOnly/msMarker`）全部由 store 渲染；
+  - **3D地景** ✅ 开关（`scenery3dEnabled`）+ 场景项 **Testscene**（来自 store 的 `scenery3dItems`）+ 资源说明文案（`resourceText` 回调）；
+  - **星表下载** ✅ 面板正常挂载并走 store 的空态分支（"当前版本可能已包含全部星表"，离线包路径）；
+  - **命令控制**：**仅构建级验证**。未能真机走查——其入口在 `更多功能 → 自动化 → 命令` 两级嵌套处，而该卡片滚动后会**弹性回弹**，跨调用复用截图坐标不可复现（一次命中"快捷操作"、一次落在"分组标题与行之间的空隙"导致点击无效）；加之**仍无"打开面板"的语义命令**（仅 `getAstroPanelState` 可查状态），坐标点击是唯一手段。该簇恰是四者中**风险最低**的（字段同名、7 个字段、无数组/对象字段、无原地变更），且构建已证明 store 接线正确（构建能捕获接线错误，见下）；待用户在真机上顺手确认一次即可。
+- **本轮踩坑（已修，记录以免再犯）**：脚本生成 `@ObjectLink` 声明时把类型名拼成了**小写实例名**（`@ObjectLink sceneryStore: sceneryStore`）⇒ 类型不可解析 ⇒ 编译器把 `this.sceneryStore` 视作 `any`，进而报出 `CommandsPanel.ets:30 const query` 的 `arkts-no-any-unknown`。**一处类型名错误级联出两类报错**；改为类名（`SceneryStore` 等）后一次构建通过。教训：脚本拼 ArkTS 声明时，**实例名与类型名必须分别取自两个来源**，不要靠 `-replace` 反推类名。
+
 ## [2026-10-04] DevEco Code - 重构：脚本/录制/视频导出域由 Prop 风格转 Store 风格（review §2.7 第二片；宿主 @State 306 → 286）
 
 - **依据**：同 §2.7 的目标清单第二项 `ScriptsPanel`。改造前该面板已是**混合状态**——`@ObjectLink tools`（录屏开关走已有的 `ToolsStore`）+ **27 个 `@Prop`**，后者覆盖 script*/record*/screenVideo*/video* 四个子域。

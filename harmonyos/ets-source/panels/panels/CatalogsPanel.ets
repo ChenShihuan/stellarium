@@ -1,6 +1,7 @@
 import { I18n } from '../../pages/I18n'
 import { OFFLINE_APPGALLERY_BUILD, StarCatalogItem } from '../../pages/MainWindowModels'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
+import { CatalogStore } from '../../state/CatalogStore'
 
 // 星表下载面板（原宿主 panelContent() 的 `catalogs` 分支，分支体原样下沉）。
 //
@@ -10,11 +11,8 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
 @Component
 export struct CatalogsPanel {
-  @Prop loading: boolean
-  @Prop items: StarCatalogItem[]
-  @Prop busy: boolean
-  @Prop downloadingId: string
-  @Prop msg: string
+  // 状态经 @ObjectLink 订阅（review §2.7 第三批小簇批处理）。动作仍为宿主注入的回调。
+  @ObjectLink catalogStore: CatalogStore
   @Prop cardBorderColor: string
   onDownload: (id: string) => void = () => {}
 
@@ -24,11 +22,11 @@ export struct CatalogsPanel {
         Text(I18n.t('m_all_catalogs_included')).fontSize(14).fontColor('#E5FFFFFF').margin({ top: 8 })
       }.width('100%').height(120).justifyContent(FlexAlign.Center)
     } else {
-      if (this.loading) {
+      if (this.catalogStore.catalogLoading) {
         Column() {
           Text(I18n.t('c_loading_catalogs')).fontSize(13).fontColor('#99FFFFFF')
         }.width('100%').height(120).justifyContent(FlexAlign.Center)
-      } else if (this.items.length === 0) {
+      } else if (this.catalogStore.catalogList.length === 0) {
         Column() {
           Text(I18n.t('m_no_catalogs')).fontSize(14).fontColor('#E5FFFFFF').margin({ top: 8 })
           Text(I18n.t('m_all_catalogs_included')).fontSize(12).fontColor('#CC8FB6FF').margin({ top: 6 })
@@ -36,7 +34,7 @@ export struct CatalogsPanel {
       } else {
         Scroll() {
           Column({ space: 8 }) {
-            ForEach(this.items, (c: StarCatalogItem) => {
+            ForEach(this.catalogStore.catalogList, (c: StarCatalogItem) => {
               Column({ space: 4 }) {
                 Row() {
                   Column() {
@@ -54,16 +52,16 @@ export struct CatalogsPanel {
                       .padding({ left: 8, right: 8, top: 3, bottom: 3 })
                       .backgroundColor('rgba(91,147,191,0.15)').borderRadius(UI_RADIUS_CONTROL)
                   } else {
-                    Button(this.busy && this.downloadingId === c.id ? '下载中' : '下载')
+                    Button(this.catalogStore.catalogBusy && this.catalogStore.catalogDownloadingId === c.id ? '下载中' : '下载')
                       .fontSize(12).fontColor('#E5FFFFFF')
-                      .backgroundColor(this.busy ? 'rgba(255,255,255,0.10)' : 'rgba(107,163,214,0.35)')
+                      .backgroundColor(this.catalogStore.catalogBusy ? 'rgba(255,255,255,0.10)' : 'rgba(107,163,214,0.35)')
                       .borderRadius(UI_RADIUS_CONTROL).height(32).padding({ left: 14, right: 14 })
-                      .enabled(!this.busy)
+                      .enabled(!this.catalogStore.catalogBusy)
                       .onClick(() => { this.onDownload(c.id) })
                   }
                 }.width('100%')
-                if (this.busy && this.downloadingId === c.id && this.msg.length > 0) {
-                  Text(this.msg).fontSize(11).fontColor('#99FFFFFF').width('100%')
+                if (this.catalogStore.catalogBusy && this.catalogStore.catalogDownloadingId === c.id && this.catalogStore.catalogMsg.length > 0) {
+                  Text(this.catalogStore.catalogMsg).fontSize(11).fontColor('#99FFFFFF').width('100%')
                 }
               }
               .width('100%')

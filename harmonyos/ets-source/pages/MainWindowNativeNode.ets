@@ -41,6 +41,10 @@ import { BridgeClient } from '../bridge/BridgeClient'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
+import { SceneryStore } from '../state/SceneryStore'
+import { CatalogStore } from '../state/CatalogStore'
+import { MeteorStore } from '../state/MeteorStore'
+import { CommandStore } from '../state/CommandStore'
 import { TimeSpeedChips } from '../panels/time/TimeSpeedChips'
 import { JulianDateStore } from '../state/JulianDateStore'
 import { JulianDateControls } from '../panels/time/JulianDateControls'
@@ -520,13 +524,6 @@ export struct WindowNativeNode {
   @State private nebulaTexturePending: boolean = false
   @State private nebulaTextureImporting: boolean = false
   @State private nebulaTextureActionStatus: string = ''
-  @State private commandCatalog: Array<CommandCatalogEntry> = []
-  @State private commandSearchText: string = ''
-  @State private commandNameInput: string = ''
-  @State private commandPayloadInput: string = ''
-  @State private commandResultText: string = ''
-  @State private commandPendingConfirmation: string = ''
-  @State private commandBusy: boolean = false
   private angleMeasureRequestId: number = 0
   @State private navStarsLoading: boolean = false
   @State private navStarsStatus: string = ''
@@ -590,11 +587,6 @@ export struct WindowNativeNode {
   private widePanelScroller: Scroller = new Scroller()
   private compactPanelScroller: Scroller = new Scroller()
   private scriptListScroller: Scroller = new Scroller()
-  @State private catalogList: StarCatalogItem[] = []
-  @State private catalogLoading: boolean = false
-  @State private catalogBusy: boolean = false
-  @State private catalogDownloadingId: string = ''
-  @State private catalogMsg: string = ''
   @State private bookmarkStore: BookmarkStore = new BookmarkStore()
   // 望远镜/目镜配置（Oculars）：状态已迁入 TelescopeStore（Phase 3al）；加载请求序号由宿主自持
   @State private telescopeStore: TelescopeStore = new TelescopeStore()
@@ -638,6 +630,12 @@ export struct WindowNativeNode {
   // 脚本/录制/视频导出域的面板可见状态同样已下沉（review §2.7 第二片）。
   // recordBuffer 与脚本播放引擎字段刻意留在宿主，理由见 state/ScriptStore.ets 头注。
   @State private scriptStore: ScriptStore = new ScriptStore()
+  // 小簇批处理（review §2.7 第三批）：scenery3d / catalogs / meteorShowers / commandConsole。
+  // 各簇的非面板字段（scenery3dCurrentId、catalogHealthLoaded、catalogManifestPresent）留宿主。
+  @State private sceneryStore: SceneryStore = new SceneryStore()
+  @State private catalogStore: CatalogStore = new CatalogStore()
+  @State private meteorStore: MeteorStore = new MeteorStore()
+  @State private commandStore: CommandStore = new CommandStore()
   @State private catalogHealthLoaded: boolean = false
   @State private catalogManifestPresent: boolean = false
   @State private starCatalogHealth: CatalogHealthEntry = {}
@@ -651,21 +649,9 @@ export struct WindowNativeNode {
   private equationOfTimeMutationId: number = 0
   private archaeoMutationId: number = 0
   // 流星雨（MeteorShowers）
-  @State private msEnabled: boolean = false
-  @State private msLabels: boolean = false
-  @State private msActiveOnly: boolean = false
-  @State private msMarker: boolean = false
-  @State private msShowerList: MeteorShowerItem[] = []
-  @State private msCatalogVersion: string = ''
-  @State private msCatalogName: string = ''
-  @State private msCatalogSource: string = ''
   private meteorShowersLoadRequestId: number = 0
   // 三维地景：直接读取原版 scenery3d.ini 与语言描述文件
-  @State private scenery3dItems: Scenery3dItem[] = []
-  @State private scenery3dLoading: boolean = false
-  @State private scenery3dEnabled: boolean = false
   @State private scenery3dCurrentId: string = ''
-  @State private scenery3dLoadingId: string = ''
   @State private skyTouchFeedback: boolean = false
   @State private skyTouchX: number = 0   // 触摸点窗口坐标(px)，供反馈圈跟随手指
   @State private skyTouchY: number = 0
@@ -2403,7 +2389,7 @@ export struct WindowNativeNode {
         this.loadObserverInfo()
         this.loadSavedLocations()
       } else if (panel === 'catalogs' && !OFFLINE_APPGALLERY_BUILD) {
-        if (this.catalogList.length === 0) this.loadStarCatalogs()
+        if (this.catalogStore.catalogList.length === 0) this.loadStarCatalogs()
       } else if (panel === 'bookmarks') {
         this.loadBookmarks()
       } else if (panel === 'oculars') {
@@ -2881,11 +2867,11 @@ export struct WindowNativeNode {
 
   // ===== 星表下载（C++ 桥：getStarCatalogs / downloadStarCatalog / getStarCatalogStatus）=====
   private loadStarCatalogs(): void {
-    this.catalogLoading = true
+    this.catalogStore.catalogLoading = true
     this.callNativeWhenReady('getStarCatalogs', '', (r: StellariumBridgeResponse) => {
       const resp = r as StarCatalogsResponse
       const list = resp.catalogs ?? []
-      this.catalogList = list.map((c: StarCatalogRaw): StarCatalogItem => ({
+      this.catalogStore.catalogList = list.map((c: StarCatalogRaw): StarCatalogItem => ({
         id: c.id ?? '',
         name: c.name ?? (c.id ?? I18n.t('catalog_fallback')),
         size: c.size ?? '',
@@ -2895,24 +2881,24 @@ export struct WindowNativeNode {
         html: c.html ?? '',
         checked: c.checked === true || c.checked === 'true' || c.checked === 1,
       }))
-      this.catalogLoading = false
+      this.catalogStore.catalogLoading = false
     })
   }
 
   private startCatalogDownload(id: string): void {
-    if (this.catalogBusy) {
+    if (this.catalogStore.catalogBusy) {
       this.flashHint(I18n.t('msg_catalog_downloading'))
       return
     }
-    this.catalogBusy = true
-    this.catalogDownloadingId = id
-    this.catalogMsg = '开始下载 ' + id + ' …'
+    this.catalogStore.catalogBusy = true
+    this.catalogStore.catalogDownloadingId = id
+    this.catalogStore.catalogMsg = '开始下载 ' + id + ' …'
     this.flashHint('开始下载 ' + id)
     const r = this.callNative('downloadStarCatalog', id)
     if (!r || !r.ok) {
-      this.catalogBusy = false
-      this.catalogDownloadingId = ''
-      this.catalogMsg = '下载启动失败'
+      this.catalogStore.catalogBusy = false
+      this.catalogStore.catalogDownloadingId = ''
+      this.catalogStore.catalogMsg = '下载启动失败'
       this.flashHint(I18n.t('msg_download_failed'))
       return
     }
@@ -2924,8 +2910,8 @@ export struct WindowNativeNode {
       const r = this.callNative('getStarCatalogStatus', '') as StarCatalogStatusResponse
       if (!r || !r.ok) {
         clearInterval(timer)
-        this.catalogBusy = false
-        this.catalogDownloadingId = ''
+        this.catalogStore.catalogBusy = false
+        this.catalogStore.catalogDownloadingId = ''
         return
       }
       const state = r.state ?? 'downloading'
@@ -2933,21 +2919,21 @@ export struct WindowNativeNode {
       if (state === 'done') {
         clearInterval(timer)
         const md5ok = r.md5ok === true
-        this.catalogMsg = md5ok ? ('「' + id + '」下载完成并已加载') : ('「' + id + '」下载完成，校验未通过')
-        this.flashHint(this.catalogMsg)
-        this.catalogBusy = false
-        this.catalogDownloadingId = ''
+        this.catalogStore.catalogMsg = md5ok ? ('「' + id + '」下载完成并已加载') : ('「' + id + '」下载完成，校验未通过')
+        this.flashHint(this.catalogStore.catalogMsg)
+        this.catalogStore.catalogBusy = false
+        this.catalogStore.catalogDownloadingId = ''
         this.loadStarCatalogs()
       } else if (state === 'error') {
         clearInterval(timer)
         const err = r.error ?? '未知错误'
-        this.catalogMsg = '下载失败：' + err
+        this.catalogStore.catalogMsg = '下载失败：' + err
         this.flashHint('下载失败：' + err)
-        this.catalogBusy = false
-        this.catalogDownloadingId = ''
+        this.catalogStore.catalogBusy = false
+        this.catalogStore.catalogDownloadingId = ''
       } else {
         const mb = (bytes / (1024 * 1024)).toFixed(1)
-        this.catalogMsg = '下载中 ' + id + '：' + mb + ' MB'
+        this.catalogStore.catalogMsg = '下载中 ' + id + '：' + mb + ' MB'
       }
     }, 600)
   }
@@ -4609,16 +4595,16 @@ export struct WindowNativeNode {
       const resp = r as MeteorShowersResponse
       const m = resp.meteorShowers
       if (!m) { return }
-      this.msEnabled = m.enabled
-      this.msLabels = m.labels
-      this.msActiveOnly = m.activeOnly
-      this.msMarker = m.marker
-      this.msCatalogVersion = m.catalogVersion ?? ''
-      this.msCatalogName = m.catalogName ?? ''
-      this.msCatalogSource = m.catalogSource ?? ''
+      this.meteorStore.msEnabled = m.enabled
+      this.meteorStore.msLabels = m.labels
+      this.meteorStore.msActiveOnly = m.activeOnly
+      this.meteorStore.msMarker = m.marker
+      this.meteorStore.msCatalogVersion = m.catalogVersion ?? ''
+      this.meteorStore.msCatalogName = m.catalogName ?? ''
+      this.meteorStore.msCatalogSource = m.catalogSource ?? ''
       // Parse active shower list
       if (resp.showerList && resp.showerList.length > 0) {
-        this.msShowerList = resp.showerList.map((s): MeteorShowerItem => ({
+        this.meteorStore.msShowerList = resp.showerList.map((s): MeteorShowerItem => ({
           name: s.name ?? '',
           englishName: s.englishName ?? '',
           zhr: s.zhr ?? 0,
@@ -4631,52 +4617,52 @@ export struct WindowNativeNode {
           activeEnd: s.activeEnd ?? ''
         }))
       } else {
-        this.msShowerList = []
+        this.meteorStore.msShowerList = []
       }
     })
   }
   private setMeteorShowersFlag(name: string, v: boolean): void {
     this.meteorShowersLoadRequestId++
-    if (name == 'enabled') { this.msEnabled = v }
-    else if (name == 'labels') { this.msLabels = v }
-    else if (name == 'activeOnly') { this.msActiveOnly = v }
-    else if (name == 'marker') { this.msMarker = v }
+    if (name == 'enabled') { this.meteorStore.msEnabled = v }
+    else if (name == 'labels') { this.meteorStore.msLabels = v }
+    else if (name == 'activeOnly') { this.meteorStore.msActiveOnly = v }
+    else if (name == 'marker') { this.meteorStore.msMarker = v }
     this.callNativeWhenReady('setMeteorShowersFlag', name + ':' + (v ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) this.loadMeteorShowers()
     }, 0, 100, 15, () => { this.loadMeteorShowers() })
   }
 
   private loadScenery3d(): void {
-    this.scenery3dLoading = true
+    this.sceneryStore.scenery3dLoading = true
     this.callNativeWhenReady('getScenery3dList', '', (r: StellariumBridgeResponse) => {
-      this.scenery3dLoading = false
+      this.sceneryStore.scenery3dLoading = false
       const response = r as Scenery3dResponse
       if (response.ok !== true) return
-      this.scenery3dItems = response.items ?? []
+      this.sceneryStore.scenery3dItems = response.items ?? []
       this.scenery3dCurrentId = response.current ?? ''
-      this.scenery3dLoadingId = response.loading ?? ''
-      this.scenery3dEnabled = response.enabled === true
+      this.sceneryStore.scenery3dLoadingId = response.loading ?? ''
+      this.sceneryStore.scenery3dEnabled = response.enabled === true
     })
   }
 
   private setScenery3dScene(id: string): void {
-    this.scenery3dLoadingId = id
+    this.sceneryStore.scenery3dLoadingId = id
     this.callInteractive('setScenery3dScene', id, (r: StellariumBridgeResponse) => {
       if (r.ok !== true) {
-        this.scenery3dLoadingId = ''
+        this.sceneryStore.scenery3dLoadingId = ''
         this.flashHint('三维地景加载失败')
         return
       }
       this.loadScenery3d()
-    }, () => { this.scenery3dLoadingId = '' })
+    }, () => { this.sceneryStore.scenery3dLoadingId = '' })
   }
 
   private setScenery3dEnabled(enabled: boolean): void {
-    this.scenery3dEnabled = enabled
+    this.sceneryStore.scenery3dEnabled = enabled
     this.callInteractive('setScenery3dEnabled', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) this.scenery3dEnabled = !enabled
+      if (r.ok !== true) this.sceneryStore.scenery3dEnabled = !enabled
       this.loadScenery3d()
-    }, () => { this.scenery3dEnabled = !enabled })
+    }, () => { this.sceneryStore.scenery3dEnabled = !enabled })
   }
 
   // ===== 帮助面板：关于 / 日志 / 配置导入导出 =====
@@ -9256,7 +9242,7 @@ private loadPlanetPositions(): void {
     this.callInteractive('getCommandCatalog', '', (r: StellariumBridgeResponse) => {
       const catalogResponse = r as CommandCatalogResponse
       if (catalogResponse.ok !== true || !Array.isArray(catalogResponse.commands)) {
-        this.commandResultText = JSON.stringify({ ok: false, error: r.error ?? '命令目录不可用' }, null, 2)
+        this.commandStore.commandResultText = JSON.stringify({ ok: false, error: r.error ?? '命令目录不可用' }, null, 2)
         return
       }
       const entries: Array<CommandCatalogEntry> = []
@@ -9274,45 +9260,45 @@ private loadPlanetPositions(): void {
           examplePayload: typeof item['examplePayload'] === 'string' ? item['examplePayload'] as string : undefined,
         })
       }
-      this.commandCatalog = entries
-      if (this.commandNameInput.length === 0 && entries.length > 0) this.commandNameInput = entries[0].name
+      this.commandStore.commandCatalog = entries
+      if (this.commandStore.commandNameInput.length === 0 && entries.length > 0) this.commandStore.commandNameInput = entries[0].name
     }, (r: StellariumBridgeResponse) => {
-      this.commandResultText = JSON.stringify({ ok: false, error: r.error ?? '命令目录加载超时' }, null, 2)
+      this.commandStore.commandResultText = JSON.stringify({ ok: false, error: r.error ?? '命令目录加载超时' }, null, 2)
     })
   }
 
   private selectCommandEntry(item: CommandCatalogEntry): void {
-    this.commandNameInput = item.name
-    this.commandPayloadInput = item.examplePayload ?? ''
-    this.commandPendingConfirmation = ''
-    this.commandResultText = ''
+    this.commandStore.commandNameInput = item.name
+    this.commandStore.commandPayloadInput = item.examplePayload ?? ''
+    this.commandStore.commandPendingConfirmation = ''
+    this.commandStore.commandResultText = ''
   }
 
   private executeCommandFromPanel(force: boolean = false): void {
-    const commandName = this.commandNameInput.trim()
+    const commandName = this.commandStore.commandNameInput.trim()
     if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(commandName)) {
-      this.commandResultText = JSON.stringify({ ok: false, error: '请输入合法命令名' }, null, 2)
+      this.commandStore.commandResultText = JSON.stringify({ ok: false, error: '请输入合法命令名' }, null, 2)
       return
     }
-    const selected = this.commandCatalog.find((item: CommandCatalogEntry) => item.name === commandName)
+    const selected = this.commandStore.commandCatalog.find((item: CommandCatalogEntry) => item.name === commandName)
     if (selected === undefined) {
-      this.commandResultText = JSON.stringify({ ok: false, error: '命令不在当前版本目录中，请先刷新目录' }, null, 2)
+      this.commandStore.commandResultText = JSON.stringify({ ok: false, error: '命令不在当前版本目录中，请先刷新目录' }, null, 2)
       return
     }
     if (selected.requiresConfirmation && !force) {
-      this.commandPendingConfirmation = commandName
-      this.commandResultText = '该命令可能修改文件、插件、录制或外部设备状态，请确认后执行。'
+      this.commandStore.commandPendingConfirmation = commandName
+      this.commandStore.commandResultText = '该命令可能修改文件、插件、录制或外部设备状态，请确认后执行。'
       return
     }
-    this.commandPendingConfirmation = ''
-    this.commandBusy = true
-    this.callInteractive(commandName, this.commandPayloadInput, (r: StellariumBridgeResponse) => {
-      this.commandBusy = false
-      this.commandResultText = JSON.stringify(r, null, 2)
+    this.commandStore.commandPendingConfirmation = ''
+    this.commandStore.commandBusy = true
+    this.callInteractive(commandName, this.commandStore.commandPayloadInput, (r: StellariumBridgeResponse) => {
+      this.commandStore.commandBusy = false
+      this.commandStore.commandResultText = JSON.stringify(r, null, 2)
       this.refreshState()
     }, (r: StellariumBridgeResponse) => {
-      this.commandBusy = false
-      this.commandResultText = JSON.stringify({ ok: false, error: r.error ?? '命令执行超时' }, null, 2)
+      this.commandStore.commandBusy = false
+      this.commandStore.commandResultText = JSON.stringify({ ok: false, error: r.error ?? '命令执行超时' }, null, 2)
     })
   }
 
@@ -17584,21 +17570,15 @@ private loadPlanetPositions(): void {
       })
     } else if (this.activePanel === 'commands') {
       CommandsPanel({
-        commandSearchText: this.commandSearchText,
-        commandCatalog: this.commandCatalog,
-        commandNameInput: this.commandNameInput,
-        commandPayloadInput: this.commandPayloadInput,
-        commandResultText: this.commandResultText,
-        commandPendingConfirmation: this.commandPendingConfirmation,
-        commandBusy: this.commandBusy,
+        commandStore: this.commandStore,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         inputColor: this.nmInput(),
         accentColor: this.nmAccent(),
         panelColor: this.nmBg(),
-        onSearchTextChange: (value: string) => { this.commandSearchText = value },
-        onNameInputChange: (value: string) => { this.commandNameInput = value; this.commandPendingConfirmation = '' },
-        onPayloadInputChange: (value: string) => { this.commandPayloadInput = value },
+        onSearchTextChange: (value: string) => { this.commandStore.commandSearchText = value },
+        onNameInputChange: (value: string) => { this.commandStore.commandNameInput = value; this.commandStore.commandPendingConfirmation = '' },
+        onPayloadInputChange: (value: string) => { this.commandStore.commandPayloadInput = value },
         onSelectEntry: (item: CommandCatalogEntry) => { this.selectCommandEntry(item) },
         onRefreshCatalog: () => { this.loadCommandCatalog() },
         onExecute: (force: boolean) => { this.executeCommandFromPanel(force) }
@@ -17939,11 +17919,7 @@ private loadPlanetPositions(): void {
       })
 	    } else if (this.activePanel === 'catalogs') {
       CatalogsPanel({
-        loading: this.catalogLoading,
-        items: this.catalogList,
-        busy: this.catalogBusy,
-        downloadingId: this.catalogDownloadingId,
-        msg: this.catalogMsg,
+        catalogStore: this.catalogStore,
         cardBorderColor: this.nmBorder(),
         onDownload: (id: string) => { this.startCatalogDownload(id) }
       })
@@ -18091,24 +18067,14 @@ private loadPlanetPositions(): void {
       })
     } else if (this.activePanel === 'meteorshowers') {
       MeteorShowersPanel({
-        msEnabled: this.msEnabled,
-        msLabels: this.msLabels,
-        msActiveOnly: this.msActiveOnly,
-        msMarker: this.msMarker,
-        msCatalogName: this.msCatalogName,
-        msCatalogVersion: this.msCatalogVersion,
-        msCatalogSource: this.msCatalogSource,
-        msShowerList: this.msShowerList,
+        meteorStore: this.meteorStore,
         panelColor: this.nmBg(),
         onSetFlag: (flag: string, value: boolean) => { this.setMeteorShowersFlag(flag, value) },
         onSearch: (name: string) => { this.searchObject(name, '', '', 'center') }
       })
     } else if (this.activePanel === 'scenery3d') {
       Scenery3dPanel({
-        pluginEnabled: this.scenery3dEnabled,
-        loading: this.scenery3dLoading,
-        items: this.scenery3dItems,
-        loadingId: this.scenery3dLoadingId,
+        sceneryStore: this.sceneryStore,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         panelColor: this.nmBg(),

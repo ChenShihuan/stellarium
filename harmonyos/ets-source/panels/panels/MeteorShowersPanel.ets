@@ -2,6 +2,7 @@ import { curves } from '@kit.ArkUI'
 import { I18n } from '../../pages/I18n'
 import { MeteorShowerItem } from '../../pages/MainWindowModels'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
+import { MeteorStore } from '../../state/MeteorStore'
 
 // 流星雨面板（原宿主 panelContent() 的 `meteorshowers` 分支，分支体原样下沉）。
 //
@@ -12,14 +13,8 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
 @Component
 export struct MeteorShowersPanel {
-  @Prop msEnabled: boolean
-  @Prop msLabels: boolean
-  @Prop msActiveOnly: boolean
-  @Prop msMarker: boolean
-  @Prop msCatalogName: string
-  @Prop msCatalogVersion: string
-  @Prop msCatalogSource: string
-  @Prop msShowerList: MeteorShowerItem[]
+  // 状态经 @ObjectLink 订阅（review §2.7 第三批小簇批处理）。动作仍为宿主注入的回调。
+  @ObjectLink meteorStore: MeteorStore
   @Prop panelColor: string
   onSetFlag: (flag: string, value: boolean) => void = () => {}
   onSearch: (name: string) => void = () => {}
@@ -38,28 +33,28 @@ export struct MeteorShowersPanel {
       Column({ space: 10 }) {
         Row() {
           Text(I18n.t('c_enable_meteor_plugin')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.msEnabled })
+          Toggle({ type: ToggleType.Switch, isOn: this.meteorStore.msEnabled })
             .onChange((isOn: boolean) => { this.onSetFlag('enabled', isOn) })
         }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
         Row() {
           Text(I18n.t('c_show_radiant_labels')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.msLabels })
+          Toggle({ type: ToggleType.Switch, isOn: this.meteorStore.msLabels })
             .onChange((isOn: boolean) => { this.onSetFlag('labels', isOn) })
         }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
         Row() {
           Text(I18n.t('c_active_only')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.msActiveOnly })
+          Toggle({ type: ToggleType.Switch, isOn: this.meteorStore.msActiveOnly })
             .onChange((isOn: boolean) => { this.onSetFlag('activeOnly', isOn) })
         }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
         Row() {
           Text(I18n.t('c_show_radiant_markers')).fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.msMarker })
+          Toggle({ type: ToggleType.Switch, isOn: this.meteorStore.msMarker })
             .onChange((isOn: boolean) => { this.onSetFlag('marker', isOn) })
         }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
-        if (this.msCatalogName.length > 0 || this.msCatalogVersion.length > 0 || this.msCatalogSource.length > 0) {
+        if (this.meteorStore.msCatalogName.length > 0 || this.meteorStore.msCatalogVersion.length > 0 || this.meteorStore.msCatalogSource.length > 0) {
           Column({ space: 2 }) {
-            Text('原版流星雨目录' + (this.msCatalogVersion.length > 0 ? ' · v' + this.msCatalogVersion : '')).fontSize(10).fontColor('#88FFFFFF').width('100%')
-            if (this.msCatalogSource.length > 0) Text(I18n.t('resource_source') + ': ' + this.msCatalogSource).fontSize(9).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text('原版流星雨目录' + (this.meteorStore.msCatalogVersion.length > 0 ? ' · v' + this.meteorStore.msCatalogVersion : '')).fontSize(10).fontColor('#88FFFFFF').width('100%')
+            if (this.meteorStore.msCatalogSource.length > 0) Text(I18n.t('resource_source') + ': ' + this.meteorStore.msCatalogSource).fontSize(9).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor('rgba(111, 168, 207, 0.08)').borderRadius(UI_RADIUS_CONTROL)
         }
         Text(I18n.t('meteor_radiant_desc'))
@@ -67,8 +62,8 @@ export struct MeteorShowersPanel {
         // 活跃流星雨列表
         Text(I18n.t('meteor_active_showers'))
           .fontSize(13).fontColor('#FFE9B0').width('100%').margin({ top: 8, bottom: 2 })
-        if (this.msShowerList.length > 0) {
-          ForEach(this.msShowerList, (s: MeteorShowerItem) => {
+        if (this.meteorStore.msShowerList.length > 0) {
+          ForEach(this.meteorStore.msShowerList, (s: MeteorShowerItem) => {
             Column({ space: 3 }) {
               Row({ space: 6 }) {
                 Text(s.name).fontSize(14).fontColor('#FFD54F').layoutWeight(1)
