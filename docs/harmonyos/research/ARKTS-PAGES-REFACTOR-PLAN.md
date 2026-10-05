@@ -732,7 +732,7 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
 5. **`arkts_check` → `devecocli build`（项目脚本）→ `node scripts/check-ohos-ui-contract.mjs`**。
 6. **跑受影响的切片测试**（`node scripts/test-ohos-*.mjs` / `verify-ohos-*.mjs`，见 §13.1 规则 8）并同步。
 7. **真机实测**（`192.168.3.95:40565`，IP 可能变，先用 `hdc list targets`）：安装 → 启动 → **逐项交互验证"点按后是否实时更新"**，不要只看布局是否一致；**测试若改了持久化设置，必须测后恢复**。回调链路可用 `hdc shell hilog -x` 过滤日志实证（如点"重试"后应出现 `[detail-media] retry request=...`）。
-8. **CHANGELOG + 提交**：CHANGELOG 用 **CRLF 安全脚本**追加（见 13.4）；提交后再单独同步 `build/.../MainWindowNativeNode.ets` 这一被跟踪的生成副本。
+8. **CHANGELOG + 提交**：CHANGELOG 用 **CRLF 安全脚本**追加（见 13.4）。**不需要**再单独同步 `build/...` 的生成副本 —— 自 §13.7 起 `build/` 下的副本已全部取消跟踪，由构建脚本按需生成。
 
 ### 13.3 已知陷阱（都付出过代价）
 
@@ -776,6 +776,24 @@ devecocli ui click/drag/text --device 192.168.3.95:40565 ...
 
 > Phase 3v 已顺带清掉 Phase 3t 遗留的 5 处失败（`test-ohos-detail-live-values.mjs` 的假宿主缺 `objectDetailStore`）。
 > 其余切片测试在 Phase 3v 结束时全绿：`audit-ohos-resource-coverage`、`test-ohos-astro-motion`、`-detail-image-layout`、`-detail-live-values`、`-detail-model-geometry`、`-distance-ui`、`-guide`、`-information-policy`、`-mist-horizon`、`-model-scroll`、`-plugin-panel-state`、`-polar-scope`、`-procedural-model`、`-search-browser`、`-settings-choice-motion`、`-skyculture-text`、`-startup-stars`、`-wut-layout`、`verify-ohos-julian-date`、`verify-ohos-object-details`。
+
+### 13.7 `build/` 生成物取消跟踪（2026-10-01）
+
+**现象：** 每改一次源码，`git status` 就多出 `build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets` 等改动，因此每片都要额外做一次“同步生成副本”的提交。
+
+**根因：** git 的 `.gitignore` **只对未跟踪文件生效**。根 `.gitignore` 里确实有 `build` 一行，但这 11 个文件在规则生效前（2026-07-26 的 `3a1bad1e3a` / `0566439884` 等提交）就已被 `git add`，于是一直被跟踪。构建脚本 `scripts/sync-ohos-build-sources.sh` 会把 `harmonyos/ets-source/**` 复制到 `build/.../entry/src/main/ets/**`，所以源码一动、被跟踪的副本就脏。
+
+**核查（取消跟踪前）：** 11 个文件**全部**能在仓内找到被跟踪的源，取消跟踪不丢任何内容 ——
+
+| 类别 | 数量 | 源（均已跟踪） | 关系 |
+|---|---:|---|---|
+| ArkTS 页面 | 4 | `harmonyos/ets-source/**` | **byte 完全一致**（纯拷贝） |
+| 资源 | 5 | `harmonyos/{AppScope,resources,ets-source}/resources/**` | 一致 |
+| 数据 | 2 | `stars/hip_gaia3/**`（含 53.2 MB 星表） | 一致 |
+
+**处理：** `git rm --cached` 上述 11 个（文件留在磁盘），`build` 继续被忽略；构建脚本在编译前完成同步，因此新克隆只需跑一次构建。`verify-ohos-object-details.mjs` 的“生成镜像是否过期”检查照常有效（它只要求文件在磁盘上存在）。
+
+**注意：** 仓内还有约 20 个“被忽略但被跟踪”的**上游素材**（`textures/*.tif`、`guide/*.pdf`、`data/*.dat`、`scripts/tests/media/*.mp4` 等），它们是被 `*.tif`/`*.pdf` 这类宽泛规则误伤的真实内容、且**没有别的副本**，属于另一类别，**不要**顺手删除。
 
 ### 13.5 剩余队列（按体积，供续作选择；**2026-10-01 用实测行数修正**）
 
