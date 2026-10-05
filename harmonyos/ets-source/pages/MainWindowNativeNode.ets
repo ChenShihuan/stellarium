@@ -209,7 +209,7 @@ import {
   CatalogHealthResponse, MeteorShowersData, MeteorShowerItem, MeteorShowersResponse, Scenery3dResponse, LogResponse,
   ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
   RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptStatusResponse, ScriptCaption, ScriptCaptionsResponse,
-  CommandCatalogEntry, CommandCatalogResponse
+  CommandCatalogEntry
 } from './MainWindowModels'
 
 // Sky-texture status banner. Its visibility is driven purely by the live
@@ -1159,6 +1159,12 @@ export struct WindowNativeNode {
     // 两者消费方均为 @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，onChanged 传空实现。
     this.mosaicStore.attachPort(hostPort, () => {})
     this.archaeoStore.attachPort(hostPort, () => {})
+    // §14 B1-5：插件管理 / 命令控制台 / 均时差 / 星云贴图四域复用同一实例。其消费方均为
+    // @ObjectLink，字段赋值即刷新，四个域都无 publish* 发布点，故 onChanged 传空实现。
+    this.pluginStore.attachPort(hostPort, () => {})
+    this.commandStore.attachPort(hostPort, () => {})
+    this.equationOfTimeStore.attachPort(hostPort, () => {})
+    this.nebulaTextureStore.attachPort(hostPort, () => {})
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -1532,7 +1538,7 @@ export struct WindowNativeNode {
 
   private restoreStartupSettings(): void {
     this.loadSkyCultureList()
-    this.loadPluginList()
+    this.pluginStore.loadPluginList()
     const settings = AppStorage.get<string>("stellariumSettings")
     if (settings) {
       try {
@@ -2253,7 +2259,7 @@ export struct WindowNativeNode {
       }
       if (panel === 'time') {
         this.loadTimeExtras()
-        this.ensurePluginLoaded('EquationOfTime', () => { this.loadEquationOfTime() })
+        this.ensurePluginLoaded('EquationOfTime', () => { this.equationOfTimeStore.loadEquationOfTime() })
         this.timePanelTimer = setInterval(() => { this.refreshSimTimeLight() }, 125)
         this.timePanelFullTimer = setInterval(() => {
           this.refreshState()
@@ -2270,7 +2276,7 @@ export struct WindowNativeNode {
         this.refreshState()
         this.loadCatalogHealth()
         this.loadConfigurationSettings()
-        if (this.configTab === 6) this.loadPluginList()
+        if (this.configTab === 6) this.pluginStore.loadPluginList()
       } else if (panel === 'place') {
         this.refreshState()
         this.loadPlanetList()
@@ -2298,14 +2304,14 @@ export struct WindowNativeNode {
       } else if (panel === 'scenery3d') {
         this.ensurePluginLoaded('Scenery3d', () => { this.loadScenery3d() })
       } else if (panel === 'nebulaTextures') {
-        this.ensurePluginLoaded('NebulaTextures', () => { this.loadNebulaTextureStatus() })
+        this.ensurePluginLoaded('NebulaTextures', () => { this.nebulaTextureStore.loadNebulaTextureStatus() })
       } else if (panel === 'skyCultureMaker') {
         this.loadSkyCultureMakerDraft()
       } else if (panel === 'pointerCoordinates') {
         this.ensurePluginLoaded('PointerCoordinates', () => { this.loadPointerCoordinates() })
       } else if (panel === 'observing') {
       } else if (panel === 'commands') {
-        this.loadCommandCatalog()
+        this.commandStore.loadCommandCatalog()
       } else if (panel === 'help') {
         this.tools.loadAboutInfo()
       } else if (panel === 'scripts') {
@@ -3792,26 +3798,6 @@ export struct WindowNativeNode {
     }, () => {
       this.mosaicStore.mosaicCameraPending = false
       this.mosaicStore.mosaicCameraStatus = I18n.t('plugin_action_failed')
-    })
-  }
-
-  private loadEquationOfTime(): void {
-    this.equationOfTimeStore.equationOfTimeLoading = true
-    this.callNativeWhenReady('getEquationOfTime', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) {
-        this.equationOfTimeStore.equationOfTimeStatus = I18n.t('plugin_status_unavailable')
-      } else {
-        this.equationOfTimeStore.equationOfTimeEnabled = r.enabled === true
-        this.equationOfTimeStore.equationOfTimeMsFormat = r.msFormat === true
-        this.equationOfTimeStore.equationOfTimeInverted = r.inverted === true
-        this.equationOfTimeStore.equationOfTimeStartup = r.enableAtStartup === true
-        this.equationOfTimeStore.equationOfTimeMinutes = typeof r.minutes === 'number' ? r.minutes : 0
-        this.equationOfTimeStore.equationOfTimeStatus = ''
-      }
-      this.equationOfTimeStore.equationOfTimeLoading = false
-    }, 0, 100, 15, () => {
-      this.equationOfTimeStore.equationOfTimeLoading = false
-      this.equationOfTimeStore.equationOfTimeStatus = I18n.t('plugin_status_unavailable')
     })
   }
 
@@ -8203,41 +8189,6 @@ export struct WindowNativeNode {
     }
   }
 
-  private loadPluginList(): void {
-    this.pluginStore.pluginListLoading = true
-    this.callInteractive('getPluginList', '', (r: StellariumBridgeResponse) => {
-      this.pluginStore.pluginListLoading = false
-      if (r.ok === true && r.items !== undefined && Array.isArray(r.items)) {
-        const arr = r.items as Array<Record<string, Object>>;
-        const list: Array<PluginItem> = [];
-        for (let i = 0; i < arr.length; i++) {
-          const obj = arr[i];
-          const id = obj['id'] !== undefined ? obj['id'] as string : '';
-          const name = obj['name'] !== undefined ? obj['name'] as string : id;
-          const loaded = obj['loaded'] !== undefined ? obj['loaded'] as boolean : false;
-          const startup = true
-          list.push({
-            id: id,
-            name: name,
-            loaded: loaded,
-            loadAtStartup: startup,
-            description: obj['description'] as string | undefined,
-            authors: obj['authors'] as string | undefined,
-            contact: obj['contact'] as string | undefined,
-            version: obj['version'] as string | undefined,
-            license: obj['license'] as string | undefined,
-            acknowledgements: obj['acknowledgements'] as string | undefined,
-            hasPreviewImage: obj['hasPreviewImage'] as boolean | undefined,
-            source: obj['source'] as string | undefined
-          });
-        }
-        this.pluginStore.pluginList = list;
-      }
-    }, () => {
-      this.pluginStore.pluginListLoading = false
-    })
-  }
-
   private updatePluginLoadedItem(id: string, loaded: boolean): void {
     this.pluginStore.pluginList = this.pluginStore.pluginList.map((item: PluginItem) => {
       if (item.id !== id) return item
@@ -8284,22 +8235,6 @@ export struct WindowNativeNode {
       : I18n.t('plugin_open_feature')
   }
 
-  private loadNebulaTextureStatus(): void {
-    if (this.nebulaTextureStore.nebulaTextureLoading) return
-    this.nebulaTextureStore.nebulaTextureLoading = true
-    this.callInteractive('getNebulaTextureStatus', '', (r: StellariumBridgeResponse) => {
-      this.nebulaTextureStore.nebulaTextureLoading = false
-      if (r.ok !== true) {
-        this.nebulaTextureStore.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_status_failed')
-        return
-      }
-      this.nebulaTextureStore.nebulaTextureStatus = r as NebulaTextureStatus
-    }, () => {
-      this.nebulaTextureStore.nebulaTextureLoading = false
-      this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_status_failed')
-    })
-  }
-
   private setNebulaTextureVisible(enabled: boolean): void {
     this.setNebulaTextureFlag('setNebulaTexturesVisible', enabled, this.nebulaTextureStore.nebulaTextureStatus?.enabled === true)
   }
@@ -8341,7 +8276,7 @@ export struct WindowNativeNode {
     this.callInteractive('removeNebulaTexture', imageUrl, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_removed')
-        this.loadNebulaTextureStatus()
+        this.nebulaTextureStore.loadNebulaTextureStatus()
       } else this.nebulaTextureStore.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
     }, () => { this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed') })
   }
@@ -8367,7 +8302,7 @@ export struct WindowNativeNode {
       await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(sourcePath))
       this.callInteractive('importNebulaTexture', JSON.stringify({ sourcePath: sourcePath }), (r: StellariumBridgeResponse) => {
         this.nebulaTextureStore.nebulaTextureActionStatus = r.ok === true ? I18n.t('nebula_texture_imported') : (r.error ?? I18n.t('nebula_texture_import_failed'))
-        if (r.ok === true) this.loadNebulaTextureStatus()
+        if (r.ok === true) this.nebulaTextureStore.loadNebulaTextureStatus()
         this.nebulaTextureStore.nebulaTextureImporting = false
       }, () => {
         this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_import_failed')
@@ -8617,35 +8552,6 @@ private loadPlanetPositions(): void {
       this.scriptStore.scriptWaitMessage = ''
       this.stopScriptStatusPolling()
       this.flashHint('脚本启动超时，请重试')
-    })
-  }
-
-  private loadCommandCatalog(): void {
-    this.callInteractive('getCommandCatalog', '', (r: StellariumBridgeResponse) => {
-      const catalogResponse = r as CommandCatalogResponse
-      if (catalogResponse.ok !== true || !Array.isArray(catalogResponse.commands)) {
-        this.commandStore.commandResultText = JSON.stringify({ ok: false, error: r.error ?? '命令目录不可用' }, null, 2)
-        return
-      }
-      const entries: Array<CommandCatalogEntry> = []
-      const raw = catalogResponse.commands as Array<Record<string, Object>>
-      for (let i = 0; i < raw.length; i++) {
-        const item = raw[i]
-        if (typeof item['name'] !== 'string') continue
-        entries.push({
-          name: item['name'] as string,
-          category: typeof item['category'] === 'string' ? item['category'] as string : '工具',
-          description: typeof item['description'] === 'string' ? item['description'] as string : '',
-          mutatesState: item['mutatesState'] === true,
-          requiresConfirmation: item['requiresConfirmation'] === true,
-          offline: item['offline'] !== false,
-          examplePayload: typeof item['examplePayload'] === 'string' ? item['examplePayload'] as string : undefined,
-        })
-      }
-      this.commandStore.commandCatalog = entries
-      if (this.commandStore.commandNameInput.length === 0 && entries.length > 0) this.commandStore.commandNameInput = entries[0].name
-    }, (r: StellariumBridgeResponse) => {
-      this.commandStore.commandResultText = JSON.stringify({ ok: false, error: r.error ?? '命令目录加载超时' }, null, 2)
     })
   }
 
@@ -16367,7 +16273,7 @@ private loadPlanetPositions(): void {
         onNameInputChange: (value: string) => { this.commandStore.commandNameInput = value; this.commandStore.commandPendingConfirmation = '' },
         onPayloadInputChange: (value: string) => { this.commandStore.commandPayloadInput = value },
         onSelectEntry: (item: CommandCatalogEntry) => { this.selectCommandEntry(item) },
-        onRefreshCatalog: () => { this.loadCommandCatalog() },
+        onRefreshCatalog: () => { this.commandStore.loadCommandCatalog() },
         onExecute: (force: boolean) => { this.executeCommandFromPanel(force) }
       })
     } else if (this.activePanel === 'settings_quick_legacy') {
@@ -16528,7 +16434,7 @@ private loadPlanetPositions(): void {
         setObjectDetailConnector: (enabled: boolean) => { this.setObjectDetailConnector(enabled) },
         toggleGyroscope: (enabled: boolean) => { this.toggleGyroscope(enabled) },
         confirmPrivacyRevocation: () => { this.confirmPrivacyRevocation() },
-        loadPluginList: () => { this.loadPluginList() },
+        loadPluginList: () => { this.pluginStore.loadPluginList() },
         openPluginFeature: (id: string) => { this.openPluginFeature(id) },
         playScriptByName: (filename: string) => { this.playScriptByName(filename) },
         triggerAction: (actionId: string) => { this.triggerAction(actionId) },
@@ -17432,7 +17338,7 @@ private loadPlanetPositions(): void {
         this.loadRecordings()
         this.loadVideoRecordingState()
       } else if (tabId === 6) {
-        this.loadPluginList()
+        this.pluginStore.loadPluginList()
       }
       hilog.info(0x0000, 'StellariumArkUI', '[settings-transition] swap id=%{public}d tab=%{public}d', transitionId, tabId)
       this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
