@@ -1,3 +1,73 @@
+## [2026-10-05] DevEco Code - M3-1：SkyInputController 骨架（PLAN §15.10/§15.11 第三批 M3，高风险）
+
+> 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.10/§15.11 **M3-1**（高风险，最后一批）。
+> 提交：`3d97c8bec5`（refactor）+ 本条目（docs）。工作目录 `E:\code\Stellarium-mobile\stellarium`。
+
+**结论：部分完成（安全 > 完成度）** —— 鼠标/键盘/滚轮轴/点按序列/惯性 **8 个方法 + 16 个字段**下沉到 `capability/SkyInputController.ets`；
+触屏主路径 `handleSkyTouch`(318) 与 `emitFluidDrag`(36) 按计划留给 **M3-2**；§15.6 的 4 个 A2 热路径与全部跨域/路由/选中动作**不搬**、经 hooks 回注宿主。
+
+**改动文件（净行数）**
+- 新增 `harmonyos/ets-source/capability/SkyInputController.ets`（265 行；普通类 + `SkyInputHostHooks` 18 法 + `CommandPort`/`NightModeStore` 注入；不 import NAPI/UI，`hilog`/`KeyCode` 除外）。
+- 修改 `harmonyos/ets-source/pages/MainWindowNativeNode.ets` **12800 → 12641（−159）**；`git diff --stat`：`70 insertions(+), 230 deletions(-)`。
+- 宿主度量：`private` 方法 **510 → 503**（−7 = 搬走 8、新增 `skyInputCtl()` 1）；裸 `@State private` **132 → 132（不变，不变式保持）**。
+
+**方法清单（8 个 → 控制器）与逐方法 diff 摘要**（仅「取值参数化 + 所有权转移」，**未改任何比较边界/分支/取整**）：
+
+| 方法 | 行数 | 唯一变化（除 `this.` 前缀外） |
+|---|---:|---|
+| `resetSkyTapSequence` | 3 | 无（仅字段归属控制器） |
+| `isSkyDoubleTap` | 19 | `distance` 仍取 `common/derive/astro`；`this.lastSkyTap*` 为控制器字段 |
+| `handleSkyTap` | 11 | `tools.angleMeasureEnabled`→`hooks.angleMeasureEnabled()`；`measureAngleAt`/`clearSkySelectionFromDoubleTap`/`requestSkySelection`→hooks；`isSkyDoubleTap` 留类内 |
+| `handleSkyMouse` | 51 | `isUiPoint`→hooks（A2 热路径）、`gyroscopeEnabled`→hooks、`gyroCtl().stopGyroscope(true)`→`hooks.stopGyroscope(true)`、`flashHint`→hooks；`callNativeFire`→`commandPort.fire`；`startSkyInertia`/`stopSkyInertia`/`handleSkyTap`/`resetSkyTapSequence` 留类内 |
+| `handleSkyAxis` | 23 | `isUiPoint`→hooks；`callNativeFire`→`fire`；`skyWidth`/`skyHeight`→hooks |
+| `handleSkyKey` | 31 | `callNativeFire`→`fire`；`zoomStep`/`moveToSelectedObject`/`centerSelectedObjectFromKeyboard`/`setPanel('search')`/`closePanel`→hooks；`nightModeStore` 实例持有、`persistNightMode`→hooks、`setNightMode` fire；模型沉浸态读写→`hooks.modelImmersive()`/`setModelImmersive(false)` |
+| `stopSkyInertia` | 14 | 字段归属控制器；`callNativeFire('stopPanInertia')`→`fire` |
+| `startSkyInertia` | 11 | 字段归属控制器；`callNativeFire('startPanInertia')`→`fire` |
+
+**字段清单（16 个 → 控制器）**
+- 控制器私有（11）：`skyInertiaTimer`、`lastSkyTapAt`、`lastSkyTapX`、`lastSkyTapY`、`mouseSkyPressed`、`mouseSkyMoved`、`mouseSkyStartX`、`mouseSkyStartY`、`mouseSkyLastX`、`mouseSkyLastY`、`mouseSkyLastSampleMs`。
+- M3-2 共享草稿字段（5，本片**转移所有权**、宿主暂以 `this.skyInputCtl().<field>` 访问，M3-2 收回后恢复私有）：`nativeSkyInertiaActive`、`dragVelocityX`、`dragVelocityY`、`dragVelocitySampleValid`、`pinchActive`；涉及宿主 `handleSkyTouch`/`emitFluidDrag` 共 **15 处**引用改写。
+
+**可观测子集：无（不改任何 store）** —— 本片方法不产生组件消费的状态（触摸反馈点 `skyTouchFeedback`/`skyTouchX/Y` 属 M3-2 的 `@State`），故不新建/不改 `OverlayStore`/`DockStore`；16 个字段全为逐帧/草稿字段，留控制器（§15.7 规则 2）。
+
+**§15.6 保留项（未搬、经 hooks 调宿主实现）**：`isUiPoint`（A2 热路径，本片最危险项）；`setPanel`/`closePanel`/`zoomStep`/`moveToSelectedObject`/`centerSelectedObjectFromKeyboard`（路由/缩放）；`requestSkySelection`/`clearSkySelectionFromDoubleTap`/`measureAngleAt`（选中管线属 P4-5）；`persistNightMode`（AppStorage/UI）；模型沉浸态；陀螺退出。
+**主动停下登记**：`handleSkyTouch` + `emitFluidDrag` → **M3-2**；`centerSelectedObjectFromKeyboard`（与 `objectDetailStore`/`navigateSelectedObjectTo` 交织，随 `handleSkyKey` 经 hooks 调用）；4 个 A2 热路径（`isUiPoint`/`skyZoomButtonAt`/`dockActionAt`/`expandedSafeTargetPoint`）一律未动。
+
+**hooks/端口清单**
+- `CommandPort.fire`：`dragView` / `zoomBy` / `panBy` / `startPanInertia` / `stopPanInertia` / `setNightMode`（`callNativeFire` 逐字等价，均为 fire-and-forget）。
+- `SkyInputHostHooks`（18 法）：`isUiPoint`、`flashHint`、`skyWidth`、`skyHeight`、`gyroscopeEnabled`、`stopGyroscope`、`angleMeasureEnabled`、`measureAngleAt`、`requestSkySelection`、`clearSkySelectionFromDoubleTap`、`zoomStep`、`setPanel`、`closePanel`、`moveToSelectedObject`、`centerSelectedObjectFromKeyboard`、`persistNightMode`、`modelImmersive`、`setModelImmersive`。
+
+**定时器 start/stop 调用点对照表**（唯一句柄 `skyInertiaTimer` 归属控制器；宿主原状中该句柄从未被赋值，`stopSkyInertia` 的 `clearInterval` 为防御性，本片逐字保留）：
+
+| 角色 | 宿主调用点（改后） | 说明 |
+|---|---|---|
+| stop（生命周期） | `aboutToDisappear` → `this.skyInputCtl().stop()` | 等价原 `this.stopSkyInertia()`（`stop()` = `stopSkyInertia()`，reset 默认 true） |
+| stop（生命周期） | `handleApplicationLifecycle`（后台）→ `this.skyInputCtl().stop()` | 同上 |
+| stop（手势让位） | 视图坐标拖动 Down / 脚本控制拖动 Down / `handleSkyTouch` Down·双指·Cancel / compactQuick Down / 对象卡拖动 Down / Dock Down → `this.skyInputCtl().stopSkyInertia()` | 9 处，逐字等价 |
+| stop（hooks 回注） | `SensorController` hooks 的 `stopSkyInertia` → `this.skyInputCtl().stopSkyInertia()` | 逐字等价 |
+| start | `handleSkyTouch` Up（nativeDrag 分支）→ `this.skyInputCtl().startSkyInertia()` | 逐字等价 |
+| start（内部） | `handleSkyMouse` Up（已入控制器）→ 类内 `this.startSkyInertia()` | — |
+
+**真机逐项数值对照（真机 Mate 80 Pro `192.168.50.108:36717`；`pidof` = 51406 全程存活；语义命令 `stellarium-cli --bundle com.cnchensh.stellarium` 读回数值）**
+
+| 项 | 操作 | 前 → 后 |
+|---|---|---|
+| 星空拖拽（水平） | `devecocli ui drag 540 1400 300 1400` | `getViewDirection` az **0.0006° → 352.35°** |
+| 星空拖拽（竖直） | `devecocli ui drag 540 1400 540 1000` | alt **11.39° → 1.33°**（az 不变） |
+| 点选天体 | `devecocli ui click 540 1500` ×2 | `getSelectedObjects` **0 → 1**（`η² Hyi` / HIP 8928，Star） |
+| 缩放（`#skyZoomInButton` 142,2118） | `devecocli ui click` | `getFieldOfView` fov **60 → 48 → 38.4** |
+| 缩放（`#skyZoomOutButton` 142,2300） | `devecocli ui click` | fov **38.4 → 48** |
+| 惯性 | `devecocli ui fling 540 1700 780 1100` | `getViewDirection` t+0 alt −12.67°、t+1 −13.07°、t+2 停在 **−13.07°（az 357.82°）**——抬起后视图**继续移动并收敛**，证明共享速度字段所有权转移后 `startPanInertia` 仍生效 |
+
+- **键盘/鼠标路径（本片迁移的 `handleSkyKey`/`handleSkyMouse`）**：`uitest uiInput keyEvent 2013`（DPAD_DOWN）/`2022`（F）注入后 `getViewDirection` 完全不变 → 注入事件未达 app 的 `onKeyEvent`；`devecocli`/`uitest` 无鼠标注入。**未走查键盘/鼠标命中，原因：无可用注入通道，待真机人工**（代码结构逐字等价、编译与构建通过）。
+- **测后恢复**：本片只改视图朝向/FOV/选中（均不落盘），未改持久化设置，无需恢复。
+
+**验证证据**：`check-ohos-refactor-slice.mjs` 通过；`arkts_check`（2 文件）无错；构建 **BUILD SUCCESSFUL**；`check-ohos-ui-contract.mjs` **44 锚点 intact**（33 面板/24 静态 id/17 动态前缀）；全量 `*ohos*.mjs` 扫描仅 §13.6 的 6 个环境类失败（`-clipboard/-guide/-mist-horizon/-polar-scope -pad`、`mist-performance`、`verify-ohos-search`），无新增回归。
+
+**本片新踩的坑**
+1. **真机锁屏无法自动解锁**（开发者模式下 `aa start` 报 `10106102 The device screen is locked`）：真机 `input` 命令不可用（`inaccessible or not found`），须改用 `uitest uiInput swipe 540 2200 540 700 2000` 上滑解锁后再 `aa start`。
+2. **`uitest uiInput keyEvent` 注入不到应用 `onKeyEvent`**：本次 DPAD/F 注入后视图/面板均无变化；键盘路径只能待人工真机验证。
+
 ## [2026-10-05] DevEco Code - 修复：图层「银河亮度」步进 `+` 被裁成竖条（同类第二处）
 
 **问题**：图层面板 → 银河亮度行的 `+` 按钮显示为一条竖线（横画被切掉），`−` 正常。
