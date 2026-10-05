@@ -1,3 +1,32 @@
+## [2026-10-04] DevEco Code - 重构：视图导航 / 视图偏好 / 大气三域转 Store；dso 死代码清理（宿主 @State 181 → 162）
+
+- **依据**：review §2.7「Store 风格 vs Prop 风格」。本批把三簇 Prop 风格域的宿主 `@State` 下沉为独立 `@Observed` store，消费面板改 `@ObjectLink` 订阅；加载/设置/桥回写等动作仍由宿主回调注入，store 只承载状态（V1 体系，不混 V2）。
+
+- **每簇明细**：
+
+  | 簇 | 字段 | store（新建） | 消费面板入参变化 |
+  |---|---|---|---|
+  | A `navigation` 设置 | 9 | 新建 `state/NavigationSettingsStore.ets` | `SettingsPanel`：9 个 `@Prop` → 1 个 `@ObjectLink navigationStore` |
+  | B 视图交互偏好 | 5 | 新建 `state/ViewSettingsStore.ets` | `SettingsPanel`：3 个 `@Prop` → 1 个 `@ObjectLink viewSettingsStore`；`SettingsQuickLegacyPanel`：4 个 `@Prop` → 1 个 `@ObjectLink`；`ConfigFallbackPanel`：`useMetricUnits` `@Prop` → `@ObjectLink` |
+  | C 大气观测辅助 | 4 | 新建 `state/AtmosphereStore.ets` | `TimePanel`：4 个 `@Prop` → 1 个 `@ObjectLink atmosphereStore`（`ObservationAidBlock` 仍 `@Prop`） |
+  | D `dso` 计数（死代码） | 4 | —— | 删除 |
+
+- **簇 B 归组理由（写入 store 头注）**：`autoZoomResets` / `useMetricUnits` / `viewLock` / `verticalClamp` / `flatHorizon` 同属「视图 / 显示交互偏好」，默认在设置面板（configTab 7）、快捷设置（旧版）与配置回退面板里成组出现，故合为一个 store；`flatHorizon` 未并入 `OverlayStore`（其既定范围是叠层 / 坐标 / 指向线），它与 `verticalClamp` / `viewLock` 一样由 `syncBridgeFlagState()` 统一写回，语义同属视图限位。
+
+- **簇 C 归组理由（写入 store 头注）**：`refractionOn` 与 `atmoPressure/Temperature/Extinction` 由且仅由时间面板（`TimePanel` → `ObservationAidBlock`）消费，语义同为「观测点大气条件」，故成组；`refractionOn` 未并入 `OverlayStore`（不含天空 / 大气渲染）。
+
+- **刻意留宿主（非本批 store 状态）**：`maxFovDraft`（`SettingsPanel` 本地 `@State` 滑块草稿，随面板存在）；`viewLock` 经宿主以 `@Prop` 下发给三个壳层内的 `UnifiedObjectDetailCard`（沿用 `OverlayStore.viewCoordinatesVisible` 的「深链 @Prop + 宿主读 store」先例，未逐层改 `@ObjectLink`）；`setDistanceUnit` / `setViewLockState` / `syncBridgeFlagState` / `setNavigationBoolean` / `setNavigationMaxFov` / `applyAtmosphereResponse` 等动作与桥调用留宿主（§13.1 规则 6）。
+
+- **普查确认无原地变更**：18 个字段均为标量（boolean / number），只有整体赋值；`this.<field>.push|splice|pop|shift|sort|reverse(` 与 `this.<field>.<prop> =` 均为 0。
+
+- **簇 D（死代码清理，见独立提交 `chore(harmonyos)`）**：复扫确认 `dsoTotalCount` / `dsoGalaxies` / `dsoClusters` / `dsoNebulae` 仅由 `private loadDSOCounts()` 写入，而该方法零调用、四字段零读取（`panels/**`、`scripts/**`、`qability/**` 均无消费），属写后即弃死状态；连同 `StellariumBridgeResponse.dsoCounts` 一并删除。
+
+- **宿主 `@State`**：181 → 162（迁移 -15：18 个字段下沉 + 3 个 store 声明；死代码清理 -4）。
+
+- **验证**：`check-ohos-refactor-slice.mjs` 通过；`arkts_check` 9 文件无错；`build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources` = BUILD SUCCESSFUL；`check-ohos-ui-contract.mjs` = intact（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 203 文件）；切片脚本扫描仅剩 §13.6 的 7 个环境类失败（4 个 `-pad` 需设备、`mist-performance` 需设备、`location-search` 路径 bug、`search` macOS 假设），无新增回归。真机（192.168.50.108:36717）：装包启动后 `pidof` 存活；`openUiPanel settings` → 「视角与导航」页渲染 `当前视角 60.0°`（`navigationStore`）；点按「地平线自动重置」开关 → `getNavigationSettings` 回读 `autoZoomResets:false→true`（写回生效），再点按恢复 `true→false`；`openUiPanel time` → 大气块渲染 `1013 mbar / 15 °C / 0.13`（`atmosphereStore`）。测试未遗留持久化改动（开关已复原）。
+
+- **测试同步**：本批字段未被任何 `scripts/*ohos*.mjs` 夹具引用，无需同步。
+
 ## [2026-10-04] DevEco Code - 重构：Prop 风格域转 Store 第五批（ephemeris / nebulaTexture / plugin；dso 计数经核查留宿主；宿主 @State 196 → 181）
 
 - **依据**：review §2.7「Store 风格 vs Prop 风格」与 §2.13 B3（ephemeris / nebula / plugin 的宿主 `@State` 未成 store → 先抽 store）。本批把 3 个 Prop 风格域的宿主 `@State` 下沉为独立 `@Observed` store，`SettingsPanel` / `NebulaTexturesPanel` 改 `@ObjectLink` 订阅；加载/设置/导入/刷新等动作仍由宿主回调注入，store 只承载状态（V1 体系，不混 V2）。

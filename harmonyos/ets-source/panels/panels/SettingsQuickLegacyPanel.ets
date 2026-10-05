@@ -2,8 +2,9 @@
 // 分支体原样下沉，Phase 4i）。
 //
 // 判定条件 `activePanel === 'settings_quick_legacy'` 留在宿主；分支体内的 if / ForEach
-// 全部随 UI 下沉。陀螺仪、坐标显示、夜视、望远镜赤道仪、星空文化五个 store 走 @ObjectLink；面板读取
-// 的宿主 @State 标量（FOV / 投影 / 语言 / 距离单位 / 目录健康）走 @Prop；所有写回
+// 全部随 UI 下沉。陀螺仪、坐标显示、夜视、望远镜赤道仪、星空文化、视图设置六个 store 走 @ObjectLink
+// （viewSettingsStore 承载 autoZoomResets / verticalClamp / flatHorizon / useMetricUnits，原 4 个 @Prop）；面板读取
+// 的宿主 @State 标量（FOV / 投影 / 语言 / 目录健康）走 @Prop；所有写回
 // 与动作（速度控制、切换投影 / 语言 / 星文化 / 单位、陀螺仪开关、隐私撤销、目录健康查表）
 // 回注宿主（§13.1 规则 6）。
 // 视觉逐字保留：Scroll 撑满（layoutWeight(1)）+ Column({ space: 0 })。
@@ -16,6 +17,7 @@ import { OverlayStore } from '../../state/OverlayStore'
 import { NightModeStore } from '../../state/NightModeStore'
 import { TelescopeStore } from '../../state/TelescopeStore'
 import { SkyCultureViewStore } from '../../state/SkyCultureViewStore'
+import { ViewSettingsStore } from '../../state/ViewSettingsStore'
 import { DevicePrivacySection } from '../settings/DeviceAndLanguageRows'
 import { ViewCoordinateSettings } from '../view/ViewCoordinateSettings'
 import { LayerSwitchRow } from '../layers/LayerSwitchRow'
@@ -27,14 +29,11 @@ export struct SettingsQuickLegacyPanel {
   @ObjectLink nightModeStore: NightModeStore
   @ObjectLink telescopeStore: TelescopeStore
   @ObjectLink skyCultureViewStore: SkyCultureViewStore
-  @Prop autoZoomResets: boolean
+  @ObjectLink viewSettingsStore: ViewSettingsStore
   @Prop liveMode: boolean
-  @Prop verticalClamp: boolean
-  @Prop flatHorizon: boolean
   @Prop fovSliderValue: number
   @Prop currentProjection: string
   @Prop selectedLanguage: string
-  @Prop useMetricUnits: boolean
   @Prop satelliteCatalogHealth: CatalogHealthEntry = {}
   @Prop starCatalogHealth: CatalogHealthEntry = {}
   @Prop gyroSensitivityText: string
@@ -96,15 +95,15 @@ export struct SettingsQuickLegacyPanel {
           Text(I18n.t('i0114')).fontSize(13).fontColor(this.textColor).width('100%').margin({ top: 4, bottom: 8 })
           LayerSwitchRow({ label: I18n.t('s0300'), isOn: this.nightModeStore.nightMode, onToggle: (value: boolean) => { this.onApplyLayerSwitch('actionShow_Night_Mode', '', value) } })
           LayerSwitchRow({ label: I18n.t('s0301'), isOn: this.telescopeStore.equatorialMount, onToggle: (value: boolean) => { this.onApplyLayerSwitch('actionSwitch_Equatorial_Mount', '', value) } })
-          LayerSwitchRow({ label: I18n.t('s0302'), isOn: this.autoZoomResets, onToggle: (value: boolean) => { this.onApplyLayerSwitch('setAutoZoomResets', 'setAutoZoomResets', value) } })
+          LayerSwitchRow({ label: I18n.t('s0302'), isOn: this.viewSettingsStore.autoZoomResets, onToggle: (value: boolean) => { this.onApplyLayerSwitch('setAutoZoomResets', 'setAutoZoomResets', value) } })
           Row()
             .width('100%').height(0.5)
             .backgroundColor(this.lineColor)
             .margin({ top: 6, bottom: 4 })
           Text(I18n.t('i0116')).fontSize(13).fontColor(this.textColor).width('100%').margin({ top: 4, bottom: 8 })
           LayerSwitchRow({ label: I18n.t('s0304'), isOn: this.liveMode, onToggle: (value: boolean) => { this.onApplyLayerSwitch('', '', value) } })
-          LayerSwitchRow({ label: I18n.t('set_vert_clamp'), isOn: this.verticalClamp, onToggle: (value: boolean) => { this.onApplyLayerSwitch('', 'setVerticalClamp', value) } })
-          LayerSwitchRow({ label: I18n.t('set_flat_horizon'), isOn: this.flatHorizon, onToggle: (value: boolean) => { this.onApplyLayerSwitch('', 'setFlatHorizon', value) } })
+          LayerSwitchRow({ label: I18n.t('set_vert_clamp'), isOn: this.viewSettingsStore.verticalClamp, onToggle: (value: boolean) => { this.onApplyLayerSwitch('', 'setVerticalClamp', value) } })
+          LayerSwitchRow({ label: I18n.t('set_flat_horizon'), isOn: this.viewSettingsStore.flatHorizon, onToggle: (value: boolean) => { this.onApplyLayerSwitch('', 'setFlatHorizon', value) } })
           Row({ space: 6 }) {
             Button(I18n.t('i0142')).fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor)
               .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
@@ -218,15 +217,15 @@ export struct SettingsQuickLegacyPanel {
             Text(I18n.t('i0029')).fontSize(12).fontColor(this.subColor).width(72)
             Row({ space: 6 }) {
               Text(I18n.t('unit_km'))
-                .fontSize(11).fontColor(this.useMetricUnits ? '#FFFFFFFF' : '#99FFFFFF')
+                .fontSize(11).fontColor(this.viewSettingsStore.useMetricUnits ? '#FFFFFFFF' : '#99FFFFFF')
                 .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                .backgroundColor(this.useMetricUnits ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
+                .backgroundColor(this.viewSettingsStore.useMetricUnits ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
                 .borderRadius(UI_RADIUS_CONTROL)
                 .onClick(() => { this.onSetUnits(true) })
               Text(I18n.t('unit_mile'))
-                .fontSize(11).fontColor(!this.useMetricUnits ? '#FFFFFFFF' : '#99FFFFFF')
+                .fontSize(11).fontColor(!this.viewSettingsStore.useMetricUnits ? '#FFFFFFFF' : '#99FFFFFF')
                 .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-                .backgroundColor(!this.useMetricUnits ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
+                .backgroundColor(!this.viewSettingsStore.useMetricUnits ? 'rgba(107,163,214,0.35)' : 'rgba(255,255,255,0.05)')
                 .borderRadius(UI_RADIUS_CONTROL)
                 .onClick(() => { this.onSetUnits(false) })
             }
