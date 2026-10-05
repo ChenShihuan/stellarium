@@ -31,13 +31,7 @@ import { setLifecycleListener } from '../common/StellariumLifecycle'
 import { AudioEngine } from './StellariumAudio'
 import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES, PROJECTION_KEYS } from './I18n'
 import { DeepSkyWarmupStatus, getDeepSkyResourceWarmupStatus, isStellariumDetailMediaPreparationFailed, resolveStellariumDetailMediaAsset } from '../qability/StellariumResourceBootstrap'
-
-// Shared corner-radius scale for the ArkUI shell.
-const UI_RADIUS_CONTROL: number = 14
-const UI_RADIUS_PANEL: number = 22
-const UI_RADIUS_SHEET: number = 28
-const UI_RADIUS_PILL: number = 999
-const UI_OPTION_ANIMATION_MS: number = 180
+import { UI_RADIUS_CONTROL, UI_RADIUS_PANEL, UI_RADIUS_SHEET, UI_RADIUS_PILL, UI_OPTION_ANIMATION_MS } from '../common/ui/UiTokens'
 
 interface CityPreset {
   lat: number
