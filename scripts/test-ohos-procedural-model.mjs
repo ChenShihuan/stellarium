@@ -27,17 +27,17 @@ test('temperature controls approximate colour; missing values remain neutral', (
 });
 
 test('satellite fallback reuses the catalogue icon without lunar or orbit decorations', () => {
-  const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
+  // objectInspectorFallbackVisualKind 已于 A2-1 下沉到 common/derive/media.ets（显式入参），断言改读模块文件。
+  const media = readFileSync(new URL('../harmonyos/ets-source/common/derive/media.ets', import.meta.url), 'utf8');
   const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/object/TabletInspectorMedia.ets', import.meta.url), 'utf8');
-  const start = source.indexOf('  private objectInspectorFallbackVisualKind(');
-  const method = source.slice(start, source.indexOf('\n  }', start) + 4);
-  const Controller = new Function('proceduralModelKind', stripTypeScriptTypes('class Controller {\n' + method + '\n}') + ';return Controller;')(proceduralModelKind);
+  const start = media.indexOf('export function objectInspectorFallbackVisualKind(');
+  const fn = media.slice(start, media.indexOf('\n}', start) + 2).replace('export ', '');
+  const objectInspectorFallbackVisualKind = new Function('proceduralModelKind',
+    stripTypeScriptTypes(fn) + '\nreturn objectInspectorFallbackVisualKind;')(proceduralModelKind);
   for (const [type, objectType, expected] of [['artificial satellite', 'Satellite', 'satellite'],
     ['人造卫星', 'Satellite', 'satellite'], ['artificial', 'Planet', 'satellite'],
     ['moon', 'Planet', 'moon'], ['卫星', 'Planet moon', 'moon'], ['double star', 'Star', 'star']]) {
-    const controller = new Controller();
-    Object.assign(controller, { objectDetailStore: { selectedType: type, selectedObjectType: objectType } });
-    assert.equal(controller.objectInspectorFallbackVisualKind(), expected);
+    assert.equal(objectInspectorFallbackVisualKind(objectType, type), expected);
   }
   // 示意图已下沉为 TabletInspectorFallbackVisual 组件，分支判定改用组件的 kind 入参。
   const visual = mediaComponents.slice(mediaComponents.indexOf('export struct TabletInspectorFallbackVisual {'));
