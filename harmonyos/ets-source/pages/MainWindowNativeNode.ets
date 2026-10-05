@@ -40,6 +40,7 @@ import {
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot } from '../common/derive/gyro'
 import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute } from '../common/derive/labels'
+import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, csvCell, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
@@ -1386,7 +1387,7 @@ export struct WindowNativeNode {
       }
       if (commandName === 'openUiPanel') {
         const panel = String(event['payload'] ?? '').trim()
-        if (this.isCliPanelName(panel)) {
+        if (isCliPanelName(panel)) {
           this.openPanelFromCli(panel)
           hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] opened panel=%{public}s', panel)
         } else {
@@ -1516,16 +1517,6 @@ export struct WindowNativeNode {
     }
   }
 
-  private isCliPanelName(panel: string): boolean {
-    return [
-      'search', 'time', 'place', 'layers', 'more', 'observeHub', 'dataHub', 'automationHub',
-      'observing', 'bookmarks', 'oculars', 'angleMeasure', 'navStars', 'polarScope', 'telescope',
-      'astro', 'satellites', 'meteorshowers', 'scenery3d', 'catalogs', 'settings', 'tools',
-      'scripts', 'commands', 'audio', 'skyCultureMaker', 'mosaicCamera', 'nebulaTextures', 'help',
-      'settingsInformation', 'settingsTime', 'settingsPrivacy'
-    ].includes(panel)
-  }
-
   private startPageAfterPrivacyIfNeeded(): void {
     if (!this.privacyNativeStartupAllowed || this.privacyPageStartupStarted) {
       return
@@ -1535,25 +1526,13 @@ export struct WindowNativeNode {
     // Keep the old AppStorage value as a migration fallback while the durable
     // preferences store is opened asynchronously.
     const stored = AppStorage.get<string>("observingList")
-    if (stored) this.obsListStore.observingList = this.parseObservingList(stored)
+    if (stored) this.obsListStore.observingList = parseObservingList(stored)
     this.loadObservingListFromStorage()
     this.loadSearchHistoryFromStorage()
     this.loadBookmarksFromStorage()
     this.registerFoldListeners()
     this.subscribeApplicationLifecycle()
     this.startupBridgeSync()
-  }
-
-  private parseObservingList(value: string): string[] {
-    try {
-      const parsed: string[] = JSON.parse(value) as string[]
-      if (!Array.isArray(parsed)) return []
-      return parsed.filter((item: string) => typeof item === 'string' && item.trim().length > 0)
-        .map((item: string) => item.trim())
-        .filter((item: string, index: number, items: string[]) => items.indexOf(item) === index)
-    } catch (e) {
-      return []
-    }
   }
 
   // 启动期只用一个轻量查询确认 Qt 核心就绪。其余查询分批执行，避免在
@@ -2545,7 +2524,7 @@ export struct WindowNativeNode {
   private callNativeFire(name: string, payload: string = ''): void {
     const raw = BridgeClient.send(name, payload)
     if (raw.length === 0) { return }
-    if (this.tools.recording && !this.tools.recordingPaused && !this.scriptStore.replaying && this.isRecordable(name)) {
+    if (this.tools.recording && !this.tools.recordingPaused && !this.scriptStore.replaying && isRecordable(name)) {
       let accepted = false
       try {
         accepted = (JSON.parse(raw) as StellariumBridgeResponse).ok === true
@@ -2557,7 +2536,7 @@ export struct WindowNativeNode {
   }
 
   private recordAcceptedCommand(name: string, payload: string): void {
-    if (!this.tools.recording || this.tools.recordingPaused || this.scriptStore.replaying || !this.isRecordable(name)) { return }
+    if (!this.tools.recording || this.tools.recordingPaused || this.scriptStore.replaying || !isRecordable(name)) { return }
     const key = name + '|' + payload
     const now = Date.now()
     if (key === this.lastRecordKey && now - this.lastRecordTime <= 400) { return }
@@ -2566,16 +2545,6 @@ export struct WindowNativeNode {
     this.scriptStore.recordCount = this.recordBuffer.length
     this.lastRecordKey = key
     this.lastRecordTime = now
-  }
-
-  // 过滤掉只读查询与连续视图命令，以及录制自身的管理命令。
-  private isRecordable(name: string): boolean {
-    if (name.startsWith('get') || name.startsWith('list') || name.startsWith('is') || name.startsWith('selftest'))
-      return false
-    const skip = ['dragView', 'panBy', 'zoomBy', 'setGyroView', 'gyroDiagnostic',
-      'beginGyroViewTransition', 'cancelGyroViewTransition', 'saveRecording',
-      'loadRecording', 'listRecordings', 'deleteRecording', 'startRecording', 'stopRecording']
-    return !skip.includes(name)
   }
 
   private cancelRecordingViewCheckpoint(): void {
@@ -2934,7 +2903,7 @@ export struct WindowNativeNode {
       const store = await preferences.getPreferences(ctx, OBSERVING_STORE)
       const jsonStr: Object = await store.get('observingList', '')
       if (typeof jsonStr === 'string' && jsonStr.length > 0) {
-        this.obsListStore.observingList = this.parseObservingList(jsonStr)
+        this.obsListStore.observingList = parseObservingList(jsonStr)
       } else if (this.obsListStore.observingList.length > 0) {
         // Migrate the pre-existing in-memory value on the first durable read.
         await store.put('observingList', JSON.stringify(this.obsListStore.observingList))
@@ -5157,39 +5126,8 @@ export struct WindowNativeNode {
     })
   }
 
-  private informationMaskBit(key: string): number {
-    switch (key) {
-      case 'name': return 1
-      case 'catalog': return 2
-      case 'magnitude': return 4
-      case 'raJ2000': return 8
-      case 'raOfDate': return 16
-      case 'altAz': return 32
-      case 'distance': return 64
-      case 'elongation': return 128
-      case 'size': return 256
-      case 'velocity': return 512
-      case 'properMotion': return 1024
-      case 'extra': return 2048
-      case 'hourAngle': return 4096
-      case 'absoluteMagnitude': return 8192
-      case 'galactic': return 16384
-      case 'supergalactic': return 32768
-      case 'otherCoordinates': return 65536
-      case 'objectType': return 131072
-      case 'eclipticJ2000': return 262144
-      case 'eclipticOfDate': return 524288
-      case 'constellation': return 1048576
-      case 'culturalConstellation': return 2097152
-      case 'siderealTime': return 4194304
-      case 'riseTransitSet': return 8388608
-      case 'solarLunar': return 16777216
-      default: return 0
-    }
-  }
-
   private informationMaskHas(key: string): boolean {
-    const bit = this.informationMaskBit(key)
+    const bit = informationMaskBit(key)
     return bit > 0 && (this.infoWindowStore.informationCustomMask & bit) === bit
   }
 
@@ -5212,7 +5150,7 @@ export struct WindowNativeNode {
 
   private setInformationField(key: string, enabled: boolean): void {
     if (this.infoWindowStore.informationSettingPending || this.infoWindowStore.informationMode !== 'custom' || this.informationMaskHas(key) === enabled) return
-    const bit = this.informationMaskBit(key)
+    const bit = informationMaskBit(key)
     if (bit === 0) return
     const nextMask = enabled ? (this.infoWindowStore.informationCustomMask | bit) : (this.infoWindowStore.informationCustomMask & ~bit)
     this.infoWindowStore.informationSettingPending = true
@@ -5327,13 +5265,6 @@ export struct WindowNativeNode {
       }
       this.flashHint(I18n.t('settings_defaults_restart'))
     })
-  }
-
-  private configDitheringLabel(value: string): string {
-    if (value.toLowerCase() === 'disabled') return '关闭'
-    if (value.toLowerCase() === 'color565') return '5/6/5 位'
-    if (value.toLowerCase() === 'color666') return '6/6/6 位'
-    return '8/8/8 位'
   }
 
   private setConfigurationDateFormat(value: string): void {
@@ -5556,11 +5487,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private csvCell(value: string | number | boolean | undefined): string {
-    const text = value === undefined ? '' : String(value)
-    return '"' + text.replace(/"/g, '""') + '"'
-  }
-
   private makeAstroCsv(exportData: AstroCsvExport): string {
     const lines: Array<string> = []
     lines.push('# ' + exportData.title)
@@ -5574,9 +5500,9 @@ export struct WindowNativeNode {
       lines.push('# 视恒星时: ' + (this.astroStore.astroContext.apparentSiderealTime ?? '--'))
     }
     if (this.astroStore.astroCalcSnapshot.length > 0) lines.push('# 参数: ' + this.astroStore.astroCalcSnapshot)
-    lines.push(exportData.headers.map((header: string) => this.csvCell(header)).join(','))
+    lines.push(exportData.headers.map((header: string) => csvCell(header)).join(','))
     for (const row of exportData.rows) {
-      lines.push(row.map((cell: string | number | boolean | undefined) => this.csvCell(cell)).join(','))
+      lines.push(row.map((cell: string | number | boolean | undefined) => csvCell(cell)).join(','))
     }
     return lines.join('\r\n') + '\r\n'
   }
@@ -7409,8 +7335,8 @@ export struct WindowNativeNode {
       this.skyCultureSettingsStore.skyCultureInfoLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(r.infoLabelStyle)
       this.skyCultureSettingsStore.skyCultureZodiacLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(r.zodiacLabelStyle)
       this.skyCultureSettingsStore.skyCultureLunarLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(r.lunarSystemLabelStyle)
-      this.skyCultureViewStore.narration = this.cleanSkyCultureNarration(r.narration !== undefined ? r.narration : '')
-      this.skyCultureViewStore.description = this.cleanSkyCultureDescription(r.description !== undefined ? r.description : '')
+      this.skyCultureViewStore.narration = cleanSkyCultureNarration(r.narration !== undefined ? r.narration : '')
+      this.skyCultureViewStore.description = cleanSkyCultureDescription(r.description !== undefined ? r.description : '')
       this.skyCultureViewStore.descriptionBlocks = r.descriptionBlocks !== undefined ? r.descriptionBlocks : []
       this.clearSkyCultureArtThumbnails()
       this.skyCultureViewStore.artItems = r.constellationArt !== undefined ? r.constellationArt : []
@@ -7668,22 +7594,14 @@ export struct WindowNativeNode {
     })
   }
 
-  private cleanSkyCultureNarration(text: string): string {
-    return text.replace(/[\uFEFF\uFFFD\uFFFC]/g, '').replace(/\s*\.\s*\.\s*\.\s*/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
-  }
-
-  private cleanSkyCultureDescription(text: string): string {
-    return text.replace(/[\uFEFF\uFFFD\uFFFC]/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
-  }
-
 
   private skyCultureNarrationParagraphs(): string[] {
-    return this.cleanSkyCultureNarration(this.skyCultureViewStore.narration).split(/\n+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0)
+    return cleanSkyCultureNarration(this.skyCultureViewStore.narration).split(/\n+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0)
   }
 
 
   private skyCultureArtFilePath(rawPath: string): string {
-    if (!this.isSafeSkyCultureArtPath(rawPath)) return ''
+    if (!isSafeSkyCultureArtPath(rawPath)) return ''
     const path = this.stellariumFilesDir() + '/stellarium/' + rawPath
     try {
       fileIo.accessSync(path)
@@ -7701,16 +7619,6 @@ export struct WindowNativeNode {
   private stellariumFilesDir(): string {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext
     return context.getApplicationContext().filesDir
-  }
-
-  private isSafeSkyCultureArtPath(rawPath: string): boolean {
-    if (!rawPath.startsWith('skycultures/')) return false
-    const parts = rawPath.split('/')
-    if (parts.length < 4 || parts[0] !== 'skycultures' || parts[2] !== 'illustrations') return false
-    for (const part of parts) {
-      if (part.length === 0 || part === '.' || part === '..' || part.indexOf('\\') >= 0) return false
-    }
-    return /\.(?:png|jpe?g|webp)$/i.test(parts[parts.length - 1])
   }
 
 
@@ -9550,7 +9458,7 @@ private loadPlanetPositions(): void {
   private stopTimeWheelSpeed(): void {
     this.timeStore.timeSpeedIndex = WindowNativeNode.SPEED_IDX_STOP
     this.timeStore.beginRateChange(0, 500)
-    this.timeStore.timeRateText = this.formatRate(0)
+    this.timeStore.timeRateText = formatRate(0)
   }
 
   // ===== 时间速率档位系统 =====
@@ -9585,7 +9493,7 @@ private loadPlanetPositions(): void {
     this.timeStore.timeSpeedIndex = idx
     this.timeStore.beginRateChange(rate, 500)
     this.setTimeRate(rate)
-    this.timeStore.timeRateText = this.formatRate(rate)
+    this.timeStore.timeRateText = formatRate(rate)
   }
 
   /** 将原生返回的速率映射回时间档位，保证面板重建后按钮状态不会丢失。 */
@@ -9594,7 +9502,7 @@ private loadPlanetPositions(): void {
     if (this.timeStore.shouldIgnoreEngineRate(rate)) { return }
 
     this.timeStore.lastSyncedTimeRate = rate
-    this.timeStore.timeRateText = this.formatRate(rate)
+    this.timeStore.timeRateText = formatRate(rate)
     let nearestIndex = 0
     let nearestDistance = Number.MAX_VALUE
     for (let i = 0; i < this.SPEED_STEPS.length; i++) {
@@ -12179,33 +12087,6 @@ private loadPlanetPositions(): void {
       this.objectDetailStore.selectedInfo = '当前位置没有可选天体，请放大或使用搜索'
       this.clearRtsSelectionResults()
     }
-  }
-
-  private formatRate(rate: number): string {
-    if (rate === 0 || Math.abs(rate) < 1e-18) {
-      return I18n.t('msg_paused')
-    }
-    const secPerDay = 86400.0
-    const absRate = Math.abs(rate)
-    const sign = rate > 0 ? '' : '-'
-    // Map common speeds to human-readable labels
-    interface SpeedLabel { limit: number; label: string }
-    const thresholds: SpeedLabel[] = [
-      { limit: 2.0 / secPerDay,     label: '2x' } as SpeedLabel,
-      { limit: 10.0 / secPerDay,    label: '10x' } as SpeedLabel,
-      { limit: 60.0 / secPerDay,    label: '1分/秒' } as SpeedLabel,
-      { limit: 360.0 / secPerDay,   label: '1时/秒' } as SpeedLabel,
-      { limit: 1.0,                label: '1天/秒' } as SpeedLabel,
-      { limit: 10.0,               label: '10天/秒' } as SpeedLabel,
-    ] as SpeedLabel[]
-    if (Math.abs(absRate - 1.0 / secPerDay) < 0.0000001) { return sign + '1x' }
-    let speedLabel: string = ''
-    for (const t of thresholds) {
-      if (absRate <= t.limit * 1.01) { speedLabel = t.label; break }
-    }
-    if (speedLabel.length > 0) { return sign + speedLabel }
-    const mult: number = absRate * secPerDay
-    return sign + mult.toFixed(0) + 'x'
   }
 
   /**
@@ -17106,7 +16987,6 @@ private loadPlanetPositions(): void {
         panelColor: this.nmBg(),
         lineColor: this.nmBorder(),
         inputColor: this.nmInput(),
-        configDitheringLabel: (value: string) => { return this.configDitheringLabel(value) },
         informationMaskHas: (key: string) => { return this.informationMaskHas(key) },
         pluginMetaLine: (plugin: PluginItem) => { return this.pluginMetaLine(plugin) },
         pluginFeatureDestination: (id: string) => { return this.pluginFeatureDestination(id) },

@@ -15,7 +15,7 @@
 //     CustomComponent 基类属性方法冲突，边框色命名为 lineColor）。
 //   - 标签/文案纯函数（sensZh / pluginZh / pluginDesc / pluginFeatureRoute /
 //     resourceText / scriptZh / scriptDesc）已随 §14.2 A1-3 直连 common/derive/labels；
-//     其余宿主私有助手（configDitheringLabel / informationMaskHas / pluginMetaLine /
+//     其余宿主私有助手（informationMaskHas / pluginMetaLine /
 //     pluginFeatureDestination / pluginFeatureIsActionable / pluginFeatureActionLabel /
 //     scriptMetaLine / scriptSourceLine）与全部动作按规则 6 回注，组件内不改宿主 @State。
 //     `viewTab = 0; openSubPanel('layers')` 与 `openSubPanel('tools')` 合并为
@@ -46,6 +46,7 @@ import { TimeSettingsSection } from '../settings/TimeSettingsSection'
 import { DeltaTSettingsBlock } from '../time/DeltaTSettingsBlock'
 import { ViewCoordinateSettings } from '../view/ViewCoordinateSettings'
 import { sensZh, pluginZh, pluginDesc, pluginFeatureRoute, resourceText, scriptZh, scriptDesc } from '../../common/derive/labels'
+import { configDitheringLabel } from '../../common/derive/skycult'
 
 @Component
 export struct SettingsPanel {
@@ -81,7 +82,6 @@ export struct SettingsPanel {
   @Prop inputColor: string
   scroller: Scroller = new Scroller()
   @State private maxFovDraft: number = 180
-  configDitheringLabel: (value: string) => string = () => ''
   informationMaskHas: (key: string) => boolean = () => false
   pluginMetaLine: (plugin: PluginItem) => string = () => ''
   pluginFeatureDestination: (id: string) => string = () => ''
@@ -273,7 +273,7 @@ export struct SettingsPanel {
             Text('渲染输出').fontSize(12).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 2, bottom: 5 })
             Row() {
               Text('色彩抖动').fontSize(12).fontColor(this.subColor).width(72)
-              Text(this.configDitheringLabel(this.configDitheringMode)).fontSize(12).fontColor(this.textColor).layoutWeight(1).textAlign(TextAlign.End)
+              Text(configDitheringLabel(this.configDitheringMode)).fontSize(12).fontColor(this.textColor).layoutWeight(1).textAlign(TextAlign.End)
             }.height(30).width('100%').padding({ left: 10, right: 10 })
             Scroll() {
               Row({ space: 6 }) {

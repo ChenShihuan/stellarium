@@ -231,7 +231,8 @@ test('startup compatibility marker is visible to the HAP packager and emitted af
 
 test('privacy settings are reachable through the existing CLI navigation route', () => {
   const page = read('pages/MainWindowNativeNode.ets');
-  assert.match(page, /'settingsInformation', 'settingsTime', 'settingsPrivacy'/);
+  const cliPanels = read('common/derive/skycult.ets');
+  assert.match(cliPanels, /'settingsInformation', 'settingsTime', 'settingsPrivacy'/);
   assert.match(page, /panel === 'settingsTime' \? 3 : -1/);
 });
 
