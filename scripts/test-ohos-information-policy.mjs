@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
-const match = source.match(/private applyCustomInformationMask\(\): void \{([\s\S]*?)\n  \}/);
+const source = readFileSync(new URL('../harmonyos/ets-source/capability/SettingsController.ets', import.meta.url), 'utf8');
+const match = source.match(/applyCustomInformationMask\(\): void \{([\s\S]*?)\n  \}/);
 assert.ok(match);
 const apply = new Function(match[1].replace('new Map<string, string>', 'new Map').replace('field: ObjectDetailField', 'field'));
 

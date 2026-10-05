@@ -1684,3 +1684,50 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **度量**：宿主 **8,587 → 8,437 行（−150）**、`private` 方法 **268 → 250（−18）**、`@State private` **131 不变**；`LayerController.ets` **250 → 487 行（+237）**；`MediaPort.ets` **103 → 107 行（+4）**；未新增文件。
 
 **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 3 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。真机（192.168.50.108:36717）：`Smoke: PASS`；`applyStarMagLimit` 6.5→5.0（`getLimitMagnitude` enabled=true/5）、`applyMilkyWayBright` 3→4（`getMilkyWayIntensity` 1→1.33）、`setOrbitDisplayFlag`（`orbitIsolated` true→false）、`setSkyDisplaySetting`（「星星闪烁」关闭后条件子行消失）、`setBridgeFlag`（`getMeteors` true→false）、`selectLandscape`（guereins→hurricane→复原）、`changeLandscapeTransparency`（0%→55%，opacity 0.0027→0.55，复原）、`setScenery3dEnabled`/`setScenery3dScene`（enabled/current 变更并重启复原）；`pidof` 全程存活、无 jscrash。**未走查（待真机人工）**：`applyTrailColor` 的颜色输入应用、轨道/轨迹同域滑块与下拉、`setLandscapeFadeWithZoom` 开关、地景导入系统文件选择器。
+
+#### 15.12.13 E 轨道 E3：设置面板选项行为 → `capability/SettingsController.ets`（2026-10-05）
+
+> **背景**：E1/E2 之后继续「设置/配置行为残余」清理。E3 是 E 轨道收益最大片：把宿主残留的
+> 18 个设置 / 配置行为逐字下沉到新控制器，另 1 个选择项本体（`applySelectedInfoMode` 属
+> SelectionService 保留族）留宿主、只迁调用方并经 hook 回注（工作区实测 19 项 = 18 迁 + 1 登记）。
+
+**新增文件**：`capability/SettingsController.ets`（351 行；18 行为法；注入 `CommandPort` +
+`InfoWindowStore`/`TimeSettingsStore`/`NavigationSettingsStore`/`ViewSettingsStore`/`EphemerisStore`/
+`ObjectDetailStore`/`ToolsStore`/`AtmosphereStore` + `SettingsHostHooks extends BehaviorHostHooks`。
+不 import NAPI/UI，仅 `hilog`（与 `TimeController`/`LayerController` 先例一致）；桥经端口）。
+
+**18 法逐条判定（以工作区实测为准）**
+
+| 法 | 目标 | 判定 |
+|---|---|---|
+| `settingsChoiceSelected` | `SettingsController` | 逐字等价（纯 store 读，零副作用） |
+| `selectSettingsChoice` | `SettingsController` | 逐字等价（分派到内部控制 + `hooks.setConfigurationTimeFormat`/`setStartupTimeSetting`） |
+| `setInformationMode` | `SettingsController` | 逐字等价（`applySelectedInfoMode` → hooks；`refreshSelectedObject` → hooks） |
+| `setInformationField` | `SettingsController` | 逐字等价（`informationMaskBit` 纯函数；刷新经 hooks） |
+| `applyCustomInformationMask` | `SettingsController` | 逐字等价（纯 store 读改写 + `Map` 分组过滤） |
+| `setConfigurationDateFormat` | `SettingsController` | 逐字等价（`saveTimePreference` 经 hooks，`TimeController` 本体留宿主） |
+| `setConfigurationDithering` | `SettingsController` | 逐字等价（`viewSettingsStore` + `loadConfigurationSettings` 回滚） |
+| `setDistanceUnit` | `SettingsController` | 逐字等价（`viewSettingsStore.useMetricUnits` + 回滚） |
+| `setFovMarkerSetting` | `SettingsController` | 逐字等价（薄桥） |
+| `setProjection` | `SettingsController` | 逐字等价（`currentProjection` 宿主 @State 经 `hooks.setCurrentProjection`） |
+| `setNavigationBoolean` | `SettingsController` | 逐字等价（`navigationStore` 五分支 + `viewSettingsStore.autoZoomResets`） |
+| `setNavigationMaxFov` | `SettingsController` | 逐字等价（1–360 取整后写 `navigationStore`） |
+| `setEphemerisEnabled` | `SettingsController` | 逐字等价（未安装守卫 + 四 DE 分支写 `ephemerisStore`） |
+| `saveAllCoreSettings` | `SettingsController` | 逐字等价（`saveAppSettings` 经 hooks） |
+| `restoreCoreDefaults` | `SettingsController` | 逐字等价（薄桥 + 提示） |
+| `exportConfig` | `SettingsController` | 逐字等价（`ToolsStore` 三字段；剪贴板经 `hooks.copyConfigExportText`，`PlatformPort` 适配器留宿主） |
+| `importConfig` | `SettingsController` | 逐字等价（`ToolsStore` 消息/文本 + 桥） |
+| `applyAtmosphereResponse` | `SettingsController` | 逐字等价（写 `AtmosphereStore`；两处 hook 调用点改指控制器） |
+| `applySelectedInfoMode` | **登记保留宿主** | SelectionService 保留族（§15.6-6）：只迁调用方，本体经 `SettingsHostHooks.applySelectedInfoMode` 回注 |
+
+**依赖注入**：`CommandPort`（`requestInteractive` / `requestWhenReady`）+ 8 个 store 实例引用 +
+`SettingsHostHooks`（`applySelectedInfoMode` / `refreshSelectedObject` / `setCurrentProjection` /
+`saveAppSettings` / `saveTimePreference` / `setConfigurationTimeFormat` / `setStartupTimeSetting` /
+`copyConfigExportText`）。项目无控制器互调先例，故时间设置三法用具名 hook 回注，不注入 `TimeController` 实例。
+`exportConfig` / `importConfig` 的响应类型收窄沿用既有控制器 `as` 先例（`OcularController` 等 9 处；§15.7-4 的 `as` 禁则限端口适配器）。
+
+**宿主 `MainWindowNativeNode.ets`**：删 18 法 + 清 3 处未用导入（`ExportConfigResponse` / `ImportConfigResponse` / `informationMaskBit`）；增 1 惰性构造器 `settingsCtl()`；全部调用点改指向（SettingsPanel 13 个回调、LayersPanel 的 `onSetFovMarker`、SettingsQuickLegacyPanel 的 `onSetProjection`、ToolsPanel 的 `onExportConfig`/`onImportConfig`、`applySelectedObject` 的 `applyCustomInformationMask`、`AstroCalcHostHooks.applyAtmosphereResponse`、`timeStore.attachHooks.applyAtmosphereResponse`）。
+
+**度量**：宿主 **8,437 → 8,244 行（−193）**、`private` 方法 **250 → 233（−17：删 18 + 增 `settingsCtl()`）**、`@State private` **131 不变**；新增 1 控制器文件（351 行）；未扩展端口/store。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 248 文件）；`test-ohos-information-policy` 3/3、`test-ohos-settings-choice-motion` 4/4 全绿（两夹具改读 `capability/SettingsController.ets`）；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。真机（192.168.50.108:36717）：`openUiPanel settingsInformation` → 点「简短」→ `getInformationSettings` `default→short`、点「默认」复原（`selectSettingsChoice`→`setInformationMode`→控制器全链）；「主设置」页点「英里」→ hilog `setConfigString "astronomy/flag_use_km_for_distance=false"`，点「千米」→ `=true`（`setDistanceUnit` 控制器全链，已复原）；`pidof` 17031 全程存活、无 jscrash。**未走查（待真机人工）**：`保存设置`/`恢复默认`（`saveAllCoreSettings`/`restoreCoreDefaults` 点击未在 hilog 观察到对应 `saveAllSettings`/`restoreDefaultSettings`，疑被面板滚动/命中吞掉）；「视图导航」页（tab 条形横向滚动后不可见）的导航开关与最大 FOV 滑块；`exportConfig`/`importConfig` picker 与剪贴板；`setProjection`（视图导航页下拉）；`setFovMarkerSetting`（图层面板）；星历开关（当前构建 DE430/431/440/441 全部「未安装」，不可启用）。
