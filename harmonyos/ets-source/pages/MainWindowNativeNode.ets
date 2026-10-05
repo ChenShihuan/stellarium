@@ -67,6 +67,8 @@ import { OcularSelector } from '../panels/telescope/OcularSelector'
 import { OcularMetric } from '../panels/telescope/OcularMetric'
 import { Lx200Panel } from '../panels/telescope/Lx200Panel'
 import { Lx200ObjectControls } from '../panels/telescope/Lx200ObjectControls'
+import { SkyCultureMakerStore } from '../state/SkyCultureMakerStore'
+import { SkyCultureViewStore } from '../state/SkyCultureViewStore'
 import { AstroSelectionGuide, PhenomenonRelationMark } from '../panels/astro/AstroGuides'
 import { ContinuationSection } from '../panels/astro/ContinuationSection'
 import { WutTargetCard } from '../panels/astro/WutTargetCard'
@@ -575,35 +577,8 @@ export struct WindowNativeNode {
   @State private atmoExtinction: number = 0.13
   @State private refractionOn: boolean = true
   @State private skyCultureList: Array<SkyCultureItem> = []
-  @State private skyCultureMakerTab: number = 0
-  @State private skyCultureMakerLoading: boolean = false
-  @State private skyCultureMakerDraftReady: boolean = false
-  @State private skyCultureMakerSaving: boolean = false
-  @State private skyCultureMakerStatus: string = ''
-  @State private skyCultureMakerCanUndo: boolean = false
-  @State private skyCultureMakerId: string = ''
-  @State private skyCultureMakerName: string = ''
-  @State private skyCultureMakerAuthor: string = ''
-  @State private skyCultureMakerLicense: string = 'CC BY 4.0'
-  @State private skyCultureMakerRegion: string = ''
-  @State private skyCultureMakerClassification: string = 'traditional'
-  @State private skyCultureMakerNativeLang: string = 'zh_CN'
-  @State private skyCultureMakerBeginTime: string = '0'
-  @State private skyCultureMakerEndTime: string = '0'
-  @State private skyCultureMakerIntroduction: string = ''
-  @State private skyCultureMakerDescription: string = ''
-  @State private skyCultureMakerConstellations: SkyCultureMakerConstellation[] = []
-  @State private skyCultureMakerSelectedConstellation: number = -1
-  @State private skyCultureMakerHipLine: string = ''
-  @State private skyCultureMakerValidation: SkyCultureMakerValidation | undefined = undefined
-  @State private skyCultureMakerExportPath: string = ''
-  @State private skyCultureMakerExportFileName: string = ''
-  @State private skyCultureMakerArtworkImporting: boolean = false
-  @State private skyCultureMakerArtworkAnchorIndex: number = 0
-  @State private skyCultureMakerArtworkRenderWidth: number = 1
-  @State private skyCultureMakerArtworkRenderHeight: number = 1
-  @State private skyCultureMakerArtworkPixelMap: image.PixelMap | undefined = undefined
-  @State private skyCultureMakerArtworkPreviewState: string = 'empty'
+  // 星文化制作器向导状态（Phase 3am，见 state/SkyCultureMakerStore.ets）
+  @State private skyCultureMakerStore: SkyCultureMakerStore = new SkyCultureMakerStore()
   private skyCultureMakerArtworkPreviewPath: string = ''
   private skyCultureMakerArtworkDecodeGeneration: number = 0
   private skyCultureMakerArtworkTouchStartX: number = 0
@@ -612,22 +587,9 @@ export struct WindowNativeNode {
   private skyCultureMakerSaveTimer: number = 0
   @State private currentSkyCultureId: string = ''
   @State private skyCultureListLoading: boolean = false
-  @State private skyCultureDetailsLoading: boolean = false
-  @State private skyCultureDetailsReady: boolean = false
-  @State private skyCulturePendingId: string = ''
-  @State private skyCultureDetailError: string = ''
-  @State private skyCultureNarration: string = ''
-  @State private skyCultureDescription: string = ''
-  @State private skyCultureDescriptionBlocks: Array<SkyCultureDescriptionBlock> = []
-  @State private skyCultureArtItems: Array<SkyCultureArtItem> = []
+  // 星文化只读详情视图状态（Phase 3am，见 state/SkyCultureViewStore.ets）
+  @State private skyCultureViewStore: SkyCultureViewStore = new SkyCultureViewStore()
   @State private skyCultureArtStates: Record<string, string> = {}
-  @State private skyCultureArtExpanded: boolean = false
-  @State private skyCultureArtPreviewOpen: boolean = false
-  @State private skyCultureArtPreviewPath: string = ''
-  @State private skyCultureArtPreviewName: string = ''
-  @State private skyCultureArtPreviewRawPath: string = ''
-  @State private skyCultureArtPreviewLoading: boolean = false
-  @State private skyCultureArtPreviewFailed: boolean = false
   @State private skyCultureArtPreviewPixelMap: image.PixelMap | undefined = undefined
   @State private skyCultureArtThumbnailPixelMaps: Record<string, image.PixelMap> = {}
   private skyCultureArtDecodeGeneration: number = 0
@@ -717,8 +679,6 @@ export struct WindowNativeNode {
   @State private skyCultureRangeEndInput: string = new Date().getFullYear().toString()
   @State private skyCultureSimulationYear: number = new Date().getFullYear()
   @State private skyCultureTimeFollowSimulation: boolean = false
-  @State private skyCultureNarrationExpanded: boolean = false
-  @State private skyCultureDescriptionExpanded: boolean = false
   private skyCultureMapContextSettings: RenderingContextSettings = new RenderingContextSettings(true)
   private skyCultureMapContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.skyCultureMapContextSettings)
   private skyCultureMapRenderWidth: number = 0
@@ -1779,7 +1739,7 @@ export struct WindowNativeNode {
       if (commandName === 'setSkyCultureMakerTab') {
         const tabId = Number(String(event['payload'] ?? '').trim())
         if (this.activePanel === 'skyCultureMaker' && this.panelVisible && Number.isInteger(tabId) && tabId >= 0 && tabId <= 2) {
-          this.skyCultureMakerTab = tabId
+          this.skyCultureMakerStore.tab = tabId
           hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] sky culture maker tab=%{public}d', tabId)
         } else {
           hilog.warn(0x0000, 'StellariumArkUI', '[cli-ui] rejected sky culture maker tab=%{public}s', String(event['payload'] ?? ''))
@@ -1812,7 +1772,7 @@ export struct WindowNativeNode {
           : String(event['payload'] ?? '').trim()
         if (cultureId.length > 0) {
           this.captureSkyCultureAnchor(cultureId)
-          this.skyCulturePendingId = cultureId
+          this.skyCultureViewStore.pendingId = cultureId
           this.currentSkyCultureId = cultureId
           this.loadSkyCultureDetails()
           hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] sky culture=%{public}s', cultureId)
@@ -7880,7 +7840,7 @@ export struct WindowNativeNode {
   private loadSkyCultureList(): void {
     const requestId = ++this.skyCultureListRequestId
     ++this.skyCultureDetailsRequestId
-    this.skyCulturePendingId = ''
+    this.skyCultureViewStore.pendingId = ''
     this.skyCultureListLoading = true
     this.callInteractive('getSkyCultureList', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.skyCultureListRequestId) return
@@ -7921,12 +7881,12 @@ export struct WindowNativeNode {
   }
 
   private selectSkyCulture(id: string): void {
-    if (id === this.currentSkyCultureId || id === this.skyCulturePendingId) return
+    if (id === this.currentSkyCultureId || id === this.skyCultureViewStore.pendingId) return
     this.captureSkyCultureAnchor(id)
     const requestId = ++this.skyCultureDetailsRequestId
-    this.skyCulturePendingId = id
-    this.skyCultureDetailsLoading = true
-    this.skyCultureDetailError = ''
+    this.skyCultureViewStore.pendingId = id
+    this.skyCultureViewStore.detailsLoading = true
+    this.skyCultureViewStore.detailError = ''
     this.callInteractive('setSkyCulture', id, (r: StellariumBridgeResponse) => {
       if (requestId !== this.skyCultureDetailsRequestId) return
       if (r.ok === true) {
@@ -7936,9 +7896,9 @@ export struct WindowNativeNode {
         this.skyCultureLabelPickerOpen = ''
         this.skyCultureClassificationFilterOpen = false
         this.skyCultureRegionFilterOpen = false
-        this.skyCultureNarrationExpanded = false
-        this.skyCultureDescriptionExpanded = false
-        this.skyCultureArtExpanded = false
+        this.skyCultureViewStore.narrationExpanded = false
+        this.skyCultureViewStore.descriptionExpanded = false
+        this.skyCultureViewStore.artExpanded = false
         this.closeSkyCultureArtPreview()
         this.skyCultureTerritoryExpanded = false
         this.skyCultureTerritoryMapExpanded = false
@@ -7947,15 +7907,15 @@ export struct WindowNativeNode {
         this.loadSkyCultureDetails()
         return
       }
-      this.skyCulturePendingId = ''
-      this.skyCultureDetailsLoading = false
-      this.skyCultureDetailError = '切换星空文化失败，请重试。'
+      this.skyCultureViewStore.pendingId = ''
+      this.skyCultureViewStore.detailsLoading = false
+      this.skyCultureViewStore.detailError = '切换星空文化失败，请重试。'
       this.clearSkyCultureAnchor()
     }, () => {
       if (requestId !== this.skyCultureDetailsRequestId) return
-      this.skyCulturePendingId = ''
-      this.skyCultureDetailsLoading = false
-      this.skyCultureDetailError = '切换星空文化失败，请重试。'
+      this.skyCultureViewStore.pendingId = ''
+      this.skyCultureViewStore.detailsLoading = false
+      this.skyCultureViewStore.detailError = '切换星空文化失败，请重试。'
       this.clearSkyCultureAnchor()
     })
   }
@@ -8018,13 +7978,13 @@ export struct WindowNativeNode {
   private loadSkyCultureDetails(): void {
     if (this.currentSkyCultureId.length === 0) return
     const requestId = ++this.skyCultureDetailsRequestId
-    this.skyCultureDetailsLoading = true
-    this.skyCultureDetailError = ''
+    this.skyCultureViewStore.detailsLoading = true
+    this.skyCultureViewStore.detailError = ''
     this.callInteractive('getSkyCultureDetails', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.skyCultureDetailsRequestId) return
       if (r.ok !== true) {
-        this.skyCultureDetailError = '未能读取该文化的资料。'
-        this.skyCultureDetailsLoading = false
+        this.skyCultureViewStore.detailError = '未能读取该文化的资料。'
+        this.skyCultureViewStore.detailsLoading = false
         this.clearSkyCultureAnchor()
         return
       }
@@ -8055,14 +8015,14 @@ export struct WindowNativeNode {
       this.skyCultureInfoLabelMode = this.skyCultureScreenLabelModeFromBridge(r.infoLabelStyle)
       this.skyCultureZodiacLabelMode = this.skyCultureScreenLabelModeFromBridge(r.zodiacLabelStyle)
       this.skyCultureLunarLabelMode = this.skyCultureScreenLabelModeFromBridge(r.lunarSystemLabelStyle)
-      this.skyCultureNarration = this.cleanSkyCultureNarration(r.narration !== undefined ? r.narration : '')
-      this.skyCultureDescription = this.cleanSkyCultureDescription(r.description !== undefined ? r.description : '')
-      this.skyCultureDescriptionBlocks = r.descriptionBlocks !== undefined ? r.descriptionBlocks : []
+      this.skyCultureViewStore.narration = this.cleanSkyCultureNarration(r.narration !== undefined ? r.narration : '')
+      this.skyCultureViewStore.description = this.cleanSkyCultureDescription(r.description !== undefined ? r.description : '')
+      this.skyCultureViewStore.descriptionBlocks = r.descriptionBlocks !== undefined ? r.descriptionBlocks : []
       this.clearSkyCultureArtThumbnails()
-      this.skyCultureArtItems = r.constellationArt !== undefined ? r.constellationArt : []
+      this.skyCultureViewStore.artItems = r.constellationArt !== undefined ? r.constellationArt : []
       this.skyCultureArtStates = {}
       this.closeSkyCultureArtPreview()
-      this.prepareSkyCultureArtResources(this.skyCultureArtItems, requestId)
+      this.prepareSkyCultureArtResources(this.skyCultureViewStore.artItems, requestId)
       this.skyCultureHasTerritoryArchive = r.hasTerritoryArchive === true
       this.skyCultureTerritorySegmentCount = r.territorySegmentCount !== undefined ? r.territorySegmentCount : 0
       this.skyCultureTerritoryArchive = r.territoryArchive !== undefined ? r.territoryArchive : []
@@ -8071,22 +8031,22 @@ export struct WindowNativeNode {
         if (this.skyCultureTimeFollowSimulation) this.setSkyCultureTimeYear(this.skyCultureSimulationYear)
         if (!this.skyCultureTerritoryMapExpanded) this.setSkyCultureTerritoryMapYear(r.territorySimulationYear)
       }
-      this.skyCultureDetailsReady = true
-      this.skyCulturePendingId = ''
-      this.skyCultureDetailsLoading = false
+      this.skyCultureViewStore.detailsReady = true
+      this.skyCultureViewStore.pendingId = ''
+      this.skyCultureViewStore.detailsLoading = false
       this.loadSkyCultureConstellationSelectionFlags()
       this.loadSkyCultureVisualSettings()
     }, () => {
       if (requestId !== this.skyCultureDetailsRequestId) return
-      this.skyCulturePendingId = ''
-      this.skyCultureDetailsLoading = false
-      this.skyCultureDetailError = '未能读取该文化的资料。'
+      this.skyCultureViewStore.pendingId = ''
+      this.skyCultureViewStore.detailsLoading = false
+      this.skyCultureViewStore.detailError = '未能读取该文化的资料。'
       this.clearSkyCultureAnchor()
     })
   }
 
   private selectedSkyCultureId(): string {
-    return this.skyCulturePendingId.length > 0 ? this.skyCulturePendingId : this.currentSkyCultureId
+    return this.skyCultureViewStore.pendingId.length > 0 ? this.skyCultureViewStore.pendingId : this.currentSkyCultureId
   }
 
   private skyCultureScreenLabelModeFromBridge(style: string | undefined): number {
@@ -8778,7 +8738,7 @@ export struct WindowNativeNode {
   }
 
   private skyCultureNarrationParagraphs(): string[] {
-    return this.cleanSkyCultureNarration(this.skyCultureNarration).split(/\n+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0)
+    return this.cleanSkyCultureNarration(this.skyCultureViewStore.narration).split(/\n+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0)
   }
 
 
@@ -8959,74 +8919,74 @@ export struct WindowNativeNode {
   }
 
   private openSkyCultureArtPreview(art: SkyCultureArtItem): void {
-    this.skyCultureArtPreviewOpen = true
+    this.skyCultureViewStore.artPreviewOpen = true
     this.skyCultureArtDecodeGeneration++
     const oldPixelMap = this.skyCultureArtPreviewPixelMap
     this.skyCultureArtPreviewPixelMap = undefined
     this.releaseDecodedImage(oldPixelMap, 'switch-sky-culture-art')
-    this.skyCultureArtPreviewRawPath = art.rawPath
-    this.skyCultureArtPreviewName = art.name !== undefined && art.name.length > 0 ? art.name : '星座绘图 ' + art.index
-    this.skyCultureArtPreviewFailed = false
-    this.skyCultureArtPreviewLoading = true
-    this.skyCultureArtPreviewPath = this.skyCultureArtUri(art.rawPath)
+    this.skyCultureViewStore.artPreviewRawPath = art.rawPath
+    this.skyCultureViewStore.artPreviewName = art.name !== undefined && art.name.length > 0 ? art.name : '星座绘图 ' + art.index
+    this.skyCultureViewStore.artPreviewFailed = false
+    this.skyCultureViewStore.artPreviewLoading = true
+    this.skyCultureViewStore.artPreviewPath = this.skyCultureArtUri(art.rawPath)
     this.resolveSkyCultureArtPreview(art.rawPath)
   }
 
   private resolveSkyCultureArtPreview(rawPath: string): void {
     const current = this.skyCultureArtFilePath(rawPath)
     if (current.length > 0) {
-      this.skyCultureArtPreviewPath = fileUri.getUriFromPath(current)
-      this.skyCultureArtPreviewLoading = true
-      this.skyCultureArtPreviewFailed = false
+      this.skyCultureViewStore.artPreviewPath = fileUri.getUriFromPath(current)
+      this.skyCultureViewStore.artPreviewLoading = true
+      this.skyCultureViewStore.artPreviewFailed = false
       this.setSkyCultureArtStatus(rawPath, 'ready')
       this.decodeSkyCultureArtPreview(current, rawPath)
       return
     }
     const context = (this.getUIContext().getHostContext() as common.UIAbilityContext).getApplicationContext()
     resolveStellariumDetailMediaAsset(context, rawPath).then((resolvedPath: string) => {
-      if (!this.skyCultureArtPreviewOpen || this.skyCultureArtPreviewRawPath !== rawPath) return
+      if (!this.skyCultureViewStore.artPreviewOpen || this.skyCultureViewStore.artPreviewRawPath !== rawPath) return
       const filePath = resolvedPath.length > 0 ? this.skyCultureArtFilePath(resolvedPath) : ''
-      this.skyCultureArtPreviewPath = filePath.length > 0 ? fileUri.getUriFromPath(filePath) : ''
-      this.skyCultureArtPreviewLoading = filePath.length > 0
-      this.skyCultureArtPreviewFailed = filePath.length === 0
+      this.skyCultureViewStore.artPreviewPath = filePath.length > 0 ? fileUri.getUriFromPath(filePath) : ''
+      this.skyCultureViewStore.artPreviewLoading = filePath.length > 0
+      this.skyCultureViewStore.artPreviewFailed = filePath.length === 0
       this.setSkyCultureArtStatus(rawPath, filePath.length > 0 ? 'ready' : 'missing')
       if (filePath.length > 0) {
         this.decodeSkyCultureArtPreview(filePath, rawPath)
       }
     }).catch((_err: Error) => {
-      if (!this.skyCultureArtPreviewOpen || this.skyCultureArtPreviewRawPath !== rawPath) return
-      this.skyCultureArtPreviewPath = ''
-      this.skyCultureArtPreviewLoading = false
-      this.skyCultureArtPreviewFailed = true
+      if (!this.skyCultureViewStore.artPreviewOpen || this.skyCultureViewStore.artPreviewRawPath !== rawPath) return
+      this.skyCultureViewStore.artPreviewPath = ''
+      this.skyCultureViewStore.artPreviewLoading = false
+      this.skyCultureViewStore.artPreviewFailed = true
       this.setSkyCultureArtStatus(rawPath, 'missing')
     })
   }
 
   private closeSkyCultureArtPreview(): void {
-    this.skyCultureArtPreviewOpen = false
+    this.skyCultureViewStore.artPreviewOpen = false
     this.skyCultureArtDecodeGeneration++
     const oldPixelMap = this.skyCultureArtPreviewPixelMap
     this.skyCultureArtPreviewPixelMap = undefined
     this.releaseDecodedImage(oldPixelMap, 'sky-culture-art')
-    this.skyCultureArtPreviewPath = ''
-    this.skyCultureArtPreviewName = ''
-    this.skyCultureArtPreviewRawPath = ''
-    this.skyCultureArtPreviewLoading = false
-    this.skyCultureArtPreviewFailed = false
+    this.skyCultureViewStore.artPreviewPath = ''
+    this.skyCultureViewStore.artPreviewName = ''
+    this.skyCultureViewStore.artPreviewRawPath = ''
+    this.skyCultureViewStore.artPreviewLoading = false
+    this.skyCultureViewStore.artPreviewFailed = false
   }
 
   private onSkyCultureArtLoaded(): void {
-    if (!this.skyCultureArtPreviewOpen) return
-    this.skyCultureArtPreviewLoading = false
-    this.skyCultureArtPreviewFailed = false
-    this.setSkyCultureArtStatus(this.skyCultureArtPreviewRawPath, 'ready')
-    hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-art] preview loaded path=%{public}s', this.skyCultureArtPreviewRawPath)
+    if (!this.skyCultureViewStore.artPreviewOpen) return
+    this.skyCultureViewStore.artPreviewLoading = false
+    this.skyCultureViewStore.artPreviewFailed = false
+    this.setSkyCultureArtStatus(this.skyCultureViewStore.artPreviewRawPath, 'ready')
+    hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-art] preview loaded path=%{public}s', this.skyCultureViewStore.artPreviewRawPath)
   }
 
   private decodeSkyCultureArtPreview(filePath: string, rawPath: string): void {
     const generation = ++this.skyCultureArtDecodeGeneration
     this.decodeLocalImage(filePath, 'sky-culture-art', (pixelMap: image.PixelMap) => {
-      if (!this.skyCultureArtPreviewOpen || this.skyCultureArtPreviewRawPath !== rawPath ||
+      if (!this.skyCultureViewStore.artPreviewOpen || this.skyCultureViewStore.artPreviewRawPath !== rawPath ||
         generation !== this.skyCultureArtDecodeGeneration) {
         this.releaseDecodedImage(pixelMap, 'stale-sky-culture-art')
         return
@@ -9034,17 +8994,17 @@ export struct WindowNativeNode {
       const oldPixelMap = this.skyCultureArtPreviewPixelMap
       this.skyCultureArtPreviewPixelMap = pixelMap
       this.releaseDecodedImage(oldPixelMap, 'previous-sky-culture-art')
-      this.skyCultureArtPreviewLoading = false
-      this.skyCultureArtPreviewFailed = false
+      this.skyCultureViewStore.artPreviewLoading = false
+      this.skyCultureViewStore.artPreviewFailed = false
       this.setSkyCultureArtStatus(rawPath, 'ready')
       hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-art] pixel map ready path=%{public}s', rawPath)
     }, (err: Error) => {
-      if (!this.skyCultureArtPreviewOpen || this.skyCultureArtPreviewRawPath !== rawPath ||
+      if (!this.skyCultureViewStore.artPreviewOpen || this.skyCultureViewStore.artPreviewRawPath !== rawPath ||
         generation !== this.skyCultureArtDecodeGeneration) {
         return
       }
-      this.skyCultureArtPreviewLoading = false
-      this.skyCultureArtPreviewFailed = true
+      this.skyCultureViewStore.artPreviewLoading = false
+      this.skyCultureViewStore.artPreviewFailed = true
       this.setSkyCultureArtStatus(rawPath, 'decodeFailed')
       hilog.error(0x0000, 'StellariumArkUI', '[sky-culture-art] pixel map decode failed path=%{public}s error=%{public}s',
         rawPath, JSON.stringify(err))
@@ -9052,16 +9012,16 @@ export struct WindowNativeNode {
   }
 
   private onSkyCultureArtError(): void {
-    if (!this.skyCultureArtPreviewOpen) return
-    this.skyCultureArtPreviewLoading = false
-    this.skyCultureArtPreviewFailed = true
-    this.setSkyCultureArtStatus(this.skyCultureArtPreviewRawPath, 'decodeFailed')
-    hilog.error(0x0000, 'StellariumArkUI', '[sky-culture-art] preview decode failed path=%{public}s', this.skyCultureArtPreviewRawPath)
+    if (!this.skyCultureViewStore.artPreviewOpen) return
+    this.skyCultureViewStore.artPreviewLoading = false
+    this.skyCultureViewStore.artPreviewFailed = true
+    this.setSkyCultureArtStatus(this.skyCultureViewStore.artPreviewRawPath, 'decodeFailed')
+    hilog.error(0x0000, 'StellariumArkUI', '[sky-culture-art] preview decode failed path=%{public}s', this.skyCultureViewStore.artPreviewRawPath)
   }
 
   @Builder
   private skyCultureArtPreviewOverlay() {
-    if (this.skyCultureArtPreviewOpen) {
+    if (this.skyCultureViewStore.artPreviewOpen) {
       Stack() {
         Stack() { }
           .width('100%').height('100%')
@@ -9069,7 +9029,7 @@ export struct WindowNativeNode {
           .hitTestBehavior(HitTestMode.Block)
         Column({ space: 10 }) {
           Row() {
-            Text(this.skyCultureArtPreviewName.length > 0 ? this.skyCultureArtPreviewName : '星座绘图')
+            Text(this.skyCultureViewStore.artPreviewName.length > 0 ? this.skyCultureViewStore.artPreviewName : '星座绘图')
               .fontSize(15).fontColor(this.nmText()).fontWeight(FontWeight.Medium)
               .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             Button() {
@@ -9087,25 +9047,25 @@ export struct WindowNativeNode {
                 .onComplete(() => { this.onSkyCultureArtLoaded() })
                 .onError(() => { this.onSkyCultureArtError() })
             }
-            if (this.skyCultureArtPreviewLoading) {
+            if (this.skyCultureViewStore.artPreviewLoading) {
               Column({ space: 10 }) {
                 LoadingProgress().width(34).height(34).color(this.nmAccent())
                 Text('正在打开离线绘图').fontSize(12).fontColor(this.nmSub())
               }
-            } else if (this.skyCultureArtPreviewFailed) {
+            } else if (this.skyCultureViewStore.artPreviewFailed) {
               Column({ space: 10 }) {
                 Text('绘图资源无法显示').fontSize(13).fontColor(this.nmText())
                 Text('资源缺失或设备解码失败').fontSize(11).fontColor(this.nmSub())
                 Button('重新加载').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmBg())
                   .borderRadius(UI_RADIUS_CONTROL).height(32)
                   .onClick(() => {
-                    this.skyCultureArtPreviewFailed = false
-                    this.skyCultureArtPreviewLoading = true
+                    this.skyCultureViewStore.artPreviewFailed = false
+                    this.skyCultureViewStore.artPreviewLoading = true
                     const oldPixelMap = this.skyCultureArtPreviewPixelMap
                     this.skyCultureArtPreviewPixelMap = undefined
                     this.releaseDecodedImage(oldPixelMap, 'retry-sky-culture-art')
-                    this.skyCultureArtPreviewPath = ''
-                    this.resolveSkyCultureArtPreview(this.skyCultureArtPreviewRawPath)
+                    this.skyCultureViewStore.artPreviewPath = ''
+                    this.resolveSkyCultureArtPreview(this.skyCultureViewStore.artPreviewRawPath)
                   })
               }
             }
@@ -9549,74 +9509,74 @@ export struct WindowNativeNode {
   }
 
   private applySkyCultureMakerDraft(draft: SkyCultureMakerDraft): void {
-    this.skyCultureMakerId = draft.id ?? ''
-    this.skyCultureMakerName = draft.name ?? ''
-    this.skyCultureMakerAuthor = draft.author ?? ''
-    this.skyCultureMakerLicense = draft.license ?? 'CC BY 4.0'
-    this.skyCultureMakerRegion = draft.region ?? ''
-    this.skyCultureMakerClassification = draft.classification !== undefined && draft.classification.length > 0
+    this.skyCultureMakerStore.id = draft.id ?? ''
+    this.skyCultureMakerStore.name = draft.name ?? ''
+    this.skyCultureMakerStore.author = draft.author ?? ''
+    this.skyCultureMakerStore.license = draft.license ?? 'CC BY 4.0'
+    this.skyCultureMakerStore.region = draft.region ?? ''
+    this.skyCultureMakerStore.classification = draft.classification !== undefined && draft.classification.length > 0
       ? draft.classification[0] : 'traditional'
-    this.skyCultureMakerNativeLang = draft.native_lang ?? 'zh_CN'
-    this.skyCultureMakerBeginTime = (draft.beginTime ?? 0).toString()
-    this.skyCultureMakerEndTime = (draft.endTime ?? 0).toString()
-    this.skyCultureMakerIntroduction = draft.introduction ?? ''
-    this.skyCultureMakerDescription = draft.description ?? ''
-    this.skyCultureMakerConstellations = draft.constellations ?? []
-    this.skyCultureMakerDraftReady = true
-    if (this.skyCultureMakerConstellations.length > 0 && this.skyCultureMakerSelectedConstellation < 0) {
-      this.skyCultureMakerSelectedConstellation = 0
-    } else if (this.skyCultureMakerSelectedConstellation >= this.skyCultureMakerConstellations.length) {
-      this.skyCultureMakerSelectedConstellation = this.skyCultureMakerConstellations.length - 1
+    this.skyCultureMakerStore.nativeLang = draft.native_lang ?? 'zh_CN'
+    this.skyCultureMakerStore.beginTime = (draft.beginTime ?? 0).toString()
+    this.skyCultureMakerStore.endTime = (draft.endTime ?? 0).toString()
+    this.skyCultureMakerStore.introduction = draft.introduction ?? ''
+    this.skyCultureMakerStore.description = draft.description ?? ''
+    this.skyCultureMakerStore.constellations = draft.constellations ?? []
+    this.skyCultureMakerStore.draftReady = true
+    if (this.skyCultureMakerStore.constellations.length > 0 && this.skyCultureMakerStore.selectedConstellation < 0) {
+      this.skyCultureMakerStore.selectedConstellation = 0
+    } else if (this.skyCultureMakerStore.selectedConstellation >= this.skyCultureMakerStore.constellations.length) {
+      this.skyCultureMakerStore.selectedConstellation = this.skyCultureMakerStore.constellations.length - 1
     }
     this.refreshSkyCultureMakerArtworkPreview()
   }
 
   private currentSkyCultureMakerDraft(): SkyCultureMakerDraft {
-    let beginTime = Number(this.skyCultureMakerBeginTime)
-    let endTime = Number(this.skyCultureMakerEndTime)
+    let beginTime = Number(this.skyCultureMakerStore.beginTime)
+    let endTime = Number(this.skyCultureMakerStore.endTime)
     if (!Number.isFinite(beginTime)) beginTime = 0
     if (!Number.isFinite(endTime)) endTime = 0
     return {
       schemaVersion: 1,
-      id: this.skyCultureMakerId.trim(),
-      name: this.skyCultureMakerName.trim(),
-      author: this.skyCultureMakerAuthor.trim(),
-      license: this.skyCultureMakerLicense.trim(),
-      region: this.skyCultureMakerRegion.trim(),
-      classification: [this.skyCultureMakerClassification],
-      native_lang: this.skyCultureMakerNativeLang.trim(),
+      id: this.skyCultureMakerStore.id.trim(),
+      name: this.skyCultureMakerStore.name.trim(),
+      author: this.skyCultureMakerStore.author.trim(),
+      license: this.skyCultureMakerStore.license.trim(),
+      region: this.skyCultureMakerStore.region.trim(),
+      classification: [this.skyCultureMakerStore.classification],
+      native_lang: this.skyCultureMakerStore.nativeLang.trim(),
       beginTime: Math.trunc(beginTime),
       endTime: Math.trunc(endTime),
-      introduction: this.skyCultureMakerIntroduction,
-      description: this.skyCultureMakerDescription,
-      constellations: this.skyCultureMakerConstellations
+      introduction: this.skyCultureMakerStore.introduction,
+      description: this.skyCultureMakerStore.description,
+      constellations: this.skyCultureMakerStore.constellations
     }
   }
 
   private loadSkyCultureMakerDraft(): void {
-    if (this.skyCultureMakerLoading) return
-    this.skyCultureMakerLoading = true
-    this.skyCultureMakerDraftReady = false
+    if (this.skyCultureMakerStore.loading) return
+    this.skyCultureMakerStore.loading = true
+    this.skyCultureMakerStore.draftReady = false
     this.callNativeWhenReady('getSkyCultureMakerDraft', '', (response: StellariumBridgeResponse) => {
-      this.skyCultureMakerLoading = false
+      this.skyCultureMakerStore.loading = false
       const draft = this.skyCultureMakerDraftFromResponse(response)
       if (response.ok !== true || draft === undefined) {
-        this.skyCultureMakerStatus = response.error ?? I18n.t('sky_culture_maker_load_failed')
+        this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_load_failed')
         return
       }
       this.applySkyCultureMakerDraft(draft)
       const values = response as Record<string, Object>
-      this.skyCultureMakerCanUndo = values['canUndo'] === true
-      this.skyCultureMakerStatus = ''
+      this.skyCultureMakerStore.canUndo = values['canUndo'] === true
+      this.skyCultureMakerStore.status = ''
       this.ensurePluginLoaded('SkyCultureMaker', () => {})
     }, 0, 100, 150, () => {
-      this.skyCultureMakerLoading = false
-      this.skyCultureMakerStatus = I18n.t('sky_culture_maker_load_failed')
+      this.skyCultureMakerStore.loading = false
+      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_load_failed')
     })
   }
 
   private scheduleSkyCultureMakerSave(): void {
-    if (!this.skyCultureMakerDraftReady) return
+    if (!this.skyCultureMakerStore.draftReady) return
     if (this.skyCultureMakerSaveTimer > 0) clearTimeout(this.skyCultureMakerSaveTimer)
     this.skyCultureMakerSaveTimer = setTimeout(() => {
       this.skyCultureMakerSaveTimer = 0
@@ -9636,42 +9596,42 @@ export struct WindowNativeNode {
   }
 
   private saveSkyCultureMakerDraft(silent: boolean = false, onComplete?: (success: boolean) => void): void {
-    if (!this.skyCultureMakerDraftReady) {
-      if (!silent) this.skyCultureMakerStatus = I18n.t('sky_culture_maker_load_failed')
+    if (!this.skyCultureMakerStore.draftReady) {
+      if (!silent) this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_load_failed')
       if (onComplete !== undefined) onComplete(false)
       return
     }
-    if (this.skyCultureMakerSaving) {
+    if (this.skyCultureMakerStore.saving) {
       if (onComplete !== undefined) onComplete(false)
       return
     }
-    this.skyCultureMakerSaving = true
+    this.skyCultureMakerStore.saving = true
     this.callInteractive('saveSkyCultureMakerDraft', JSON.stringify(this.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
-      this.skyCultureMakerSaving = false
+      this.skyCultureMakerStore.saving = false
       if (response.ok !== true) {
-        this.skyCultureMakerStatus = response.error ?? I18n.t('sky_culture_maker_save_failed')
+        this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_save_failed')
         if (onComplete !== undefined) onComplete(false)
         return
       }
-      this.skyCultureMakerCanUndo = true
-      this.skyCultureMakerValidation = this.validationFromResponse(response)
-      if (!silent) this.skyCultureMakerStatus = I18n.t('sky_culture_maker_saved')
+      this.skyCultureMakerStore.canUndo = true
+      this.skyCultureMakerStore.validation = this.validationFromResponse(response)
+      if (!silent) this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_saved')
       if (onComplete !== undefined) onComplete(true)
     }, () => {
-      this.skyCultureMakerSaving = false
-      this.skyCultureMakerStatus = I18n.t('sky_culture_maker_save_failed')
+      this.skyCultureMakerStore.saving = false
+      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_save_failed')
       if (onComplete !== undefined) onComplete(false)
     })
   }
 
   private validateSkyCultureMaker(): void {
     this.callInteractive('validateSkyCultureMakerDraft', JSON.stringify(this.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
-      this.skyCultureMakerValidation = this.validationFromResponse(response)
-      this.skyCultureMakerStatus = response.ok === true
+      this.skyCultureMakerStore.validation = this.validationFromResponse(response)
+      this.skyCultureMakerStore.status = response.ok === true
         ? I18n.t('sky_culture_maker_valid')
         : I18n.t('sky_culture_maker_invalid')
-      this.skyCultureMakerTab = 2
-    }, () => { this.skyCultureMakerStatus = I18n.t('sky_culture_maker_validate_failed') })
+      this.skyCultureMakerStore.tab = 2
+    }, () => { this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_validate_failed') })
   }
 
   private resetSkyCultureMaker(): void {
@@ -9679,10 +9639,10 @@ export struct WindowNativeNode {
       const draft = this.skyCultureMakerDraftFromResponse(response)
       if (response.ok === true && draft !== undefined) {
         this.applySkyCultureMakerDraft(draft)
-        this.skyCultureMakerValidation = undefined
-        this.skyCultureMakerCanUndo = true
-        this.skyCultureMakerStatus = I18n.t('sky_culture_maker_reset_done')
-      } else this.skyCultureMakerStatus = response.error ?? I18n.t('sky_culture_maker_reset_failed')
+        this.skyCultureMakerStore.validation = undefined
+        this.skyCultureMakerStore.canUndo = true
+        this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_reset_done')
+      } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_reset_failed')
     })
   }
 
@@ -9692,16 +9652,16 @@ export struct WindowNativeNode {
       if (response.ok === true && draft !== undefined) {
         this.applySkyCultureMakerDraft(draft)
         const values = response as Record<string, Object>
-        this.skyCultureMakerCanUndo = values['canUndo'] === true
-        this.skyCultureMakerStatus = I18n.t('sky_culture_maker_undo_done')
-      } else this.skyCultureMakerStatus = response.error ?? I18n.t('sky_culture_maker_undo_empty')
+        this.skyCultureMakerStore.canUndo = values['canUndo'] === true
+        this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_undo_done')
+      } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_undo_empty')
     })
   }
 
   private addSkyCultureMakerConstellation(): void {
-    let number = this.skyCultureMakerConstellations.length + 1
+    let number = this.skyCultureMakerStore.constellations.length + 1
     let id = 'constellation_' + number.toString()
-    while (this.skyCultureMakerConstellations.some((item: SkyCultureMakerConstellation) => item.id === id)) {
+    while (this.skyCultureMakerStore.constellations.some((item: SkyCultureMakerConstellation) => item.id === id)) {
       number += 1
       id = 'constellation_' + number.toString()
     }
@@ -9715,44 +9675,44 @@ export struct WindowNativeNode {
       dark: false,
       lines: []
     }
-    this.skyCultureMakerConstellations = this.skyCultureMakerConstellations.concat([constellation])
-    this.skyCultureMakerSelectedConstellation = this.skyCultureMakerConstellations.length - 1
+    this.skyCultureMakerStore.constellations = this.skyCultureMakerStore.constellations.concat([constellation])
+    this.skyCultureMakerStore.selectedConstellation = this.skyCultureMakerStore.constellations.length - 1
     this.refreshSkyCultureMakerArtworkPreview()
     this.scheduleSkyCultureMakerSave()
   }
 
   private updateSkyCultureMakerConstellation(updated: SkyCultureMakerConstellation): void {
-    const index = this.skyCultureMakerSelectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerConstellations.length) return
-    this.skyCultureMakerConstellations = this.skyCultureMakerConstellations.map((item: SkyCultureMakerConstellation, itemIndex: number) => {
+    const index = this.skyCultureMakerStore.selectedConstellation
+    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
+    this.skyCultureMakerStore.constellations = this.skyCultureMakerStore.constellations.map((item: SkyCultureMakerConstellation, itemIndex: number) => {
       return itemIndex === index ? updated : item
     })
     this.scheduleSkyCultureMakerSave()
   }
 
   private removeSelectedSkyCultureMakerConstellation(): void {
-    const index = this.skyCultureMakerSelectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerConstellations.length) return
-    this.skyCultureMakerConstellations = this.skyCultureMakerConstellations.filter((_item: SkyCultureMakerConstellation, itemIndex: number) => itemIndex !== index)
-    this.skyCultureMakerSelectedConstellation = Math.min(index, this.skyCultureMakerConstellations.length - 1)
+    const index = this.skyCultureMakerStore.selectedConstellation
+    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
+    this.skyCultureMakerStore.constellations = this.skyCultureMakerStore.constellations.filter((_item: SkyCultureMakerConstellation, itemIndex: number) => itemIndex !== index)
+    this.skyCultureMakerStore.selectedConstellation = Math.min(index, this.skyCultureMakerStore.constellations.length - 1)
     this.refreshSkyCultureMakerArtworkPreview()
     this.scheduleSkyCultureMakerSave()
   }
 
   private addSkyCultureMakerHipLine(): void {
-    const index = this.skyCultureMakerSelectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerConstellations.length) return
-    const parts = this.skyCultureMakerHipLine.trim().split(/[\s,;，；]+/)
+    const index = this.skyCultureMakerStore.selectedConstellation
+    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
+    const parts = this.skyCultureMakerStore.hipLine.trim().split(/[\s,;，；]+/)
     const hips: number[] = []
     for (const part of parts) {
       const value = Number(part.replace(/^HIP/i, ''))
       if (Number.isInteger(value) && value > 0) hips.push(value)
     }
     if (hips.length < 2) {
-      this.skyCultureMakerStatus = I18n.t('sky_culture_maker_line_needs_two')
+      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_line_needs_two')
       return
     }
-    const constellation = this.skyCultureMakerConstellations[index]
+    const constellation = this.skyCultureMakerStore.constellations[index]
     this.updateSkyCultureMakerConstellation({
       id: constellation.id,
       english: constellation.english,
@@ -9764,14 +9724,14 @@ export struct WindowNativeNode {
       lines: constellation.lines.concat([hips]),
       image: constellation.image
     })
-    this.skyCultureMakerHipLine = ''
-    this.skyCultureMakerStatus = I18n.t('sky_culture_maker_line_added')
+    this.skyCultureMakerStore.hipLine = ''
+    this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_line_added')
   }
 
   private removeSkyCultureMakerLine(lineIndex: number): void {
-    const index = this.skyCultureMakerSelectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerConstellations.length) return
-    const constellation = this.skyCultureMakerConstellations[index]
+    const index = this.skyCultureMakerStore.selectedConstellation
+    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
+    const constellation = this.skyCultureMakerStore.constellations[index]
     this.updateSkyCultureMakerConstellation({
       id: constellation.id,
       english: constellation.english,
@@ -9786,9 +9746,9 @@ export struct WindowNativeNode {
   }
 
   private addSelectedStarToSkyCultureMaker(): void {
-    const index = this.skyCultureMakerSelectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerConstellations.length) return
-    const constellation = this.skyCultureMakerConstellations[index]
+    const index = this.skyCultureMakerStore.selectedConstellation
+    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
+    const constellation = this.skyCultureMakerStore.constellations[index]
     const lineIndex = constellation.lines.length > 0 ? constellation.lines.length - 1 : -1
     this.saveSkyCultureMakerDraft(true, (saved: boolean) => {
       if (!saved) return
@@ -9796,16 +9756,16 @@ export struct WindowNativeNode {
         const draft = this.skyCultureMakerDraftFromResponse(response)
         if (response.ok === true && draft !== undefined) {
           this.applySkyCultureMakerDraft(draft)
-          this.skyCultureMakerStatus = I18n.t('sky_culture_maker_selected_star_added')
-        } else this.skyCultureMakerStatus = response.error ?? I18n.t('sky_culture_maker_selected_star_failed')
+          this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_selected_star_added')
+        } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_selected_star_failed')
       })
     })
   }
 
   private selectedSkyCultureMakerConstellation(): SkyCultureMakerConstellation | undefined {
-    const index = this.skyCultureMakerSelectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerConstellations.length) return undefined
-    return this.skyCultureMakerConstellations[index]
+    const index = this.skyCultureMakerStore.selectedConstellation
+    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return undefined
+    return this.skyCultureMakerStore.constellations[index]
   }
 
   private skyCultureMakerArtworkFilePath(): string {
@@ -9824,9 +9784,9 @@ export struct WindowNativeNode {
   private clearSkyCultureMakerArtworkPreview(label: string = 'sky-culture-maker-artwork'): void {
     this.skyCultureMakerArtworkDecodeGeneration++
     this.skyCultureMakerArtworkPreviewPath = ''
-    this.skyCultureMakerArtworkPreviewState = 'empty'
-    const oldPixelMap = this.skyCultureMakerArtworkPixelMap
-    this.skyCultureMakerArtworkPixelMap = undefined
+    this.skyCultureMakerStore.artworkPreviewState = 'empty'
+    const oldPixelMap = this.skyCultureMakerStore.artworkPixelMap
+    this.skyCultureMakerStore.artworkPixelMap = undefined
     this.releaseDecodedImage(oldPixelMap, label)
   }
 
@@ -9839,20 +9799,20 @@ export struct WindowNativeNode {
     const filePath = this.skyCultureMakerArtworkFilePath()
     if (filePath.length === 0) {
       this.clearSkyCultureMakerArtworkPreview()
-      this.skyCultureMakerArtworkPreviewState = 'missing'
+      this.skyCultureMakerStore.artworkPreviewState = 'missing'
       hilog.warn(0x0000, 'StellariumArkUI', '[sky-culture-maker] artwork file missing')
       return
     }
     if (this.skyCultureMakerArtworkPreviewPath === filePath &&
-      (this.skyCultureMakerArtworkPreviewState === 'preparing' || this.skyCultureMakerArtworkPixelMap !== undefined)) {
+      (this.skyCultureMakerStore.artworkPreviewState === 'preparing' || this.skyCultureMakerStore.artworkPixelMap !== undefined)) {
       return
     }
     const generation = ++this.skyCultureMakerArtworkDecodeGeneration
-    const oldPixelMap = this.skyCultureMakerArtworkPixelMap
-    this.skyCultureMakerArtworkPixelMap = undefined
+    const oldPixelMap = this.skyCultureMakerStore.artworkPixelMap
+    this.skyCultureMakerStore.artworkPixelMap = undefined
     this.releaseDecodedImage(oldPixelMap, 'previous-sky-culture-maker-artwork')
     this.skyCultureMakerArtworkPreviewPath = filePath
-    this.skyCultureMakerArtworkPreviewState = 'preparing'
+    this.skyCultureMakerStore.artworkPreviewState = 'preparing'
     const sourceWidth = Math.max(1, artwork.size?.[0] ?? 1)
     const sourceHeight = Math.max(1, artwork.size?.[1] ?? 1)
     const scale = Math.min(1, 1280 / Math.max(sourceWidth, sourceHeight))
@@ -9865,21 +9825,21 @@ export struct WindowNativeNode {
         this.releaseDecodedImage(pixelMap, 'stale-sky-culture-maker-artwork')
         return
       }
-      this.skyCultureMakerArtworkPixelMap = pixelMap
-      this.skyCultureMakerArtworkPreviewState = 'ready'
+      this.skyCultureMakerStore.artworkPixelMap = pixelMap
+      this.skyCultureMakerStore.artworkPreviewState = 'ready'
       hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-maker] artwork ready path=%{public}s', filePath)
     }, (error: Error) => {
       if (generation !== this.skyCultureMakerArtworkDecodeGeneration || this.skyCultureMakerArtworkPreviewPath !== filePath) return
-      this.skyCultureMakerArtworkPreviewState = 'decodeFailed'
+      this.skyCultureMakerStore.artworkPreviewState = 'decodeFailed'
       hilog.error(0x0000, 'StellariumArkUI', '[sky-culture-maker] artwork decode failed path=%{public}s error=%{public}s',
         filePath, JSON.stringify(error))
     }, desiredSize)
   }
 
   private selectSkyCultureMakerConstellation(index: number): void {
-    if (index < 0 || index >= this.skyCultureMakerConstellations.length || index === this.skyCultureMakerSelectedConstellation) return
-    this.skyCultureMakerSelectedConstellation = index
-    this.skyCultureMakerArtworkAnchorIndex = 0
+    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length || index === this.skyCultureMakerStore.selectedConstellation) return
+    this.skyCultureMakerStore.selectedConstellation = index
+    this.skyCultureMakerStore.artworkAnchorIndex = 0
     this.refreshSkyCultureMakerArtworkPreview()
   }
 
@@ -9905,32 +9865,32 @@ export struct WindowNativeNode {
     const image = this.selectedSkyCultureMakerConstellation()?.image
     const anchor = this.skyCultureMakerArtworkAnchor(index)
     if (image === undefined || anchor === undefined || image.size.length !== 2 || anchor.pos.length !== 2) return -20
-    return anchor.pos[0] / Math.max(1, image.size[0]) * this.skyCultureMakerArtworkRenderWidth - 12
+    return anchor.pos[0] / Math.max(1, image.size[0]) * this.skyCultureMakerStore.artworkRenderWidth - 12
   }
 
   private skyCultureMakerArtworkAnchorY(index: number): number {
     const image = this.selectedSkyCultureMakerConstellation()?.image
     const anchor = this.skyCultureMakerArtworkAnchor(index)
     if (image === undefined || anchor === undefined || image.size.length !== 2 || anchor.pos.length !== 2) return -20
-    return anchor.pos[1] / Math.max(1, image.size[1]) * this.skyCultureMakerArtworkRenderHeight - 12
+    return anchor.pos[1] / Math.max(1, image.size[1]) * this.skyCultureMakerStore.artworkRenderHeight - 12
   }
 
   private applySkyCultureMakerArtworkResponse(response: StellariumBridgeResponse, successText: string): void {
     const draft = this.skyCultureMakerDraftFromResponse(response)
     if (response.ok === true && draft !== undefined) {
       this.applySkyCultureMakerDraft(draft)
-      this.skyCultureMakerCanUndo = true
-      this.skyCultureMakerValidation = this.validationFromResponse(response)
-      this.skyCultureMakerStatus = successText
+      this.skyCultureMakerStore.canUndo = true
+      this.skyCultureMakerStore.validation = this.validationFromResponse(response)
+      this.skyCultureMakerStore.status = successText
     } else {
-      this.skyCultureMakerStatus = response.error ?? I18n.t('sky_culture_maker_artwork_failed')
+      this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_artwork_failed')
     }
   }
 
   private async importSkyCultureMakerArtworkFile(): Promise<void> {
     const constellation = this.selectedSkyCultureMakerConstellation()
-    if (constellation === undefined || this.skyCultureMakerArtworkImporting) return
-    this.skyCultureMakerArtworkImporting = true
+    if (constellation === undefined || this.skyCultureMakerStore.artworkImporting) return
+    this.skyCultureMakerStore.artworkImporting = true
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const options = new picker.DocumentSelectOptions()
@@ -9948,16 +9908,16 @@ export struct WindowNativeNode {
         constellationId: constellation.id,
         sourcePath: sourcePath
       }), (response: StellariumBridgeResponse) => {
-        this.skyCultureMakerArtworkImporting = false
-        this.skyCultureMakerArtworkAnchorIndex = 0
+        this.skyCultureMakerStore.artworkImporting = false
+        this.skyCultureMakerStore.artworkAnchorIndex = 0
         this.applySkyCultureMakerArtworkResponse(response, I18n.t('sky_culture_maker_artwork_imported'))
       }, () => {
-        this.skyCultureMakerArtworkImporting = false
-        this.skyCultureMakerStatus = I18n.t('sky_culture_maker_artwork_failed')
+        this.skyCultureMakerStore.artworkImporting = false
+        this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_artwork_failed')
       })
     } catch (error) {
-      this.skyCultureMakerArtworkImporting = false
-      this.skyCultureMakerStatus = I18n.t('sky_culture_maker_artwork_failed')
+      this.skyCultureMakerStore.artworkImporting = false
+      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_artwork_failed')
       hilog.error(0x0000, 'StellariumArkUI', 'Sky culture artwork import failed: %{public}s', String(error))
     }
   }
@@ -9966,7 +9926,7 @@ export struct WindowNativeNode {
     const constellation = this.selectedSkyCultureMakerConstellation()
     if (constellation === undefined) return
     this.callInteractive('removeSkyCultureMakerArtwork', JSON.stringify({ constellationId: constellation.id }), (response: StellariumBridgeResponse) => {
-      this.skyCultureMakerArtworkAnchorIndex = 0
+      this.skyCultureMakerStore.artworkAnchorIndex = 0
       this.applySkyCultureMakerArtworkResponse(response, I18n.t('sky_culture_maker_artwork_removed'))
     })
   }
@@ -9975,16 +9935,16 @@ export struct WindowNativeNode {
     const constellation = this.selectedSkyCultureMakerConstellation()
     const image = constellation?.image
     if (constellation === undefined || image === undefined || image.size.length !== 2) return
-    const pixelX = this.clamp(x / Math.max(1, this.skyCultureMakerArtworkRenderWidth) * image.size[0], 0, image.size[0])
-    const pixelY = this.clamp(y / Math.max(1, this.skyCultureMakerArtworkRenderHeight) * image.size[1], 0, image.size[1])
+    const pixelX = this.clamp(x / Math.max(1, this.skyCultureMakerStore.artworkRenderWidth) * image.size[0], 0, image.size[0])
+    const pixelY = this.clamp(y / Math.max(1, this.skyCultureMakerStore.artworkRenderHeight) * image.size[1], 0, image.size[1])
     this.callInteractive('setSkyCultureMakerArtworkAnchor', JSON.stringify({
       constellationId: constellation.id,
-      anchorIndex: this.skyCultureMakerArtworkAnchorIndex,
+      anchorIndex: this.skyCultureMakerStore.artworkAnchorIndex,
       x: pixelX,
       y: pixelY
     }), (response: StellariumBridgeResponse) => {
-      this.applySkyCultureMakerArtworkResponse(response, I18n.format('sky_culture_maker_anchor_bound', [(this.skyCultureMakerArtworkAnchorIndex + 1).toString()]))
-      if (response.ok === true && this.skyCultureMakerArtworkAnchorIndex < 2) this.skyCultureMakerArtworkAnchorIndex += 1
+      this.applySkyCultureMakerArtworkResponse(response, I18n.format('sky_culture_maker_anchor_bound', [(this.skyCultureMakerStore.artworkAnchorIndex + 1).toString()]))
+      if (response.ok === true && this.skyCultureMakerStore.artworkAnchorIndex < 2) this.skyCultureMakerStore.artworkAnchorIndex += 1
     })
   }
 
@@ -10013,14 +9973,14 @@ export struct WindowNativeNode {
     this.saveSkyCultureMakerDraft(true, (saved: boolean) => {
       if (!saved) return
       this.callInteractive('exportSkyCultureMaker', '', (response: StellariumBridgeResponse) => {
-        this.skyCultureMakerValidation = this.validationFromResponse(response)
+        this.skyCultureMakerStore.validation = this.validationFromResponse(response)
         const values = response as Record<string, Object>
         if (response.ok === true) {
-          this.skyCultureMakerExportPath = values['path'] as string
-          this.skyCultureMakerExportFileName = values['fileName'] as string
-          this.skyCultureMakerStatus = I18n.t('sky_culture_maker_exported')
-        } else this.skyCultureMakerStatus = response.error ?? I18n.t('sky_culture_maker_export_failed')
-        this.skyCultureMakerTab = 2
+          this.skyCultureMakerStore.exportPath = values['path'] as string
+          this.skyCultureMakerStore.exportFileName = values['fileName'] as string
+          this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_exported')
+        } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_export_failed')
+        this.skyCultureMakerStore.tab = 2
       })
     })
   }
@@ -10041,14 +10001,14 @@ export struct WindowNativeNode {
         const draft = this.skyCultureMakerDraftFromResponse(response)
         if (response.ok === true && draft !== undefined) {
           this.applySkyCultureMakerDraft(draft)
-          this.skyCultureMakerValidation = undefined
-          this.skyCultureMakerCanUndo = true
-          this.skyCultureMakerStatus = I18n.t('sky_culture_maker_imported')
-        } else this.skyCultureMakerStatus = response.error ?? I18n.t('sky_culture_maker_import_failed')
+          this.skyCultureMakerStore.validation = undefined
+          this.skyCultureMakerStore.canUndo = true
+          this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_imported')
+        } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_import_failed')
       })
     } catch (error) {
       hilog.error(0x0000, 'StellariumArkUI', 'Sky culture maker import failed: %{public}s', String(error))
-      this.skyCultureMakerStatus = I18n.t('sky_culture_maker_import_failed')
+      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_import_failed')
     }
   }
 
@@ -19696,13 +19656,13 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   skyCultureMakerTabs() {
     Row({ space: 6 }) {
       ForEach([I18n.t('sky_culture_maker_overview'), I18n.t('sky_culture_maker_constellations'), I18n.t('sky_culture_maker_validate_export')], (label: ResourceStr, index: number) => {
-        Text(label).fontSize(11).fontColor(this.skyCultureMakerTab === index ? '#FFFFFFFF' : this.nmSub())
-          .fontWeight(this.skyCultureMakerTab === index ? FontWeight.Medium : FontWeight.Normal)
+        Text(label).fontSize(11).fontColor(this.skyCultureMakerStore.tab === index ? '#FFFFFFFF' : this.nmSub())
+          .fontWeight(this.skyCultureMakerStore.tab === index ? FontWeight.Medium : FontWeight.Normal)
           .textAlign(TextAlign.Center).layoutWeight(1).height(34).padding({ top: 8 })
-          .backgroundColor(this.skyCultureMakerTab === index ? this.nmAccent() : this.nmBg())
+          .backgroundColor(this.skyCultureMakerStore.tab === index ? this.nmAccent() : this.nmBg())
           .borderRadius(UI_RADIUS_CONTROL)
           .animation({ duration: 180, curve: curves.springMotion(0.42, 0.86) })
-          .onClick(() => { this.skyCultureMakerTab = index })
+          .onClick(() => { this.skyCultureMakerStore.tab = index })
       }, (_label: ResourceStr, index: number) => index.toString())
     }.width('100%').margin({ bottom: 10 })
   }
@@ -19711,39 +19671,39 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   skyCultureMakerOverview() {
     Column({ space: 10 }) {
       Text(I18n.t('sky_culture_maker_offline_hint')).fontSize(10).lineHeight(15).fontColor(this.nmSub()).width('100%')
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_id'), this.skyCultureMakerId, 'custom_culture', (value: string) => { this.skyCultureMakerId = value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_name'), this.skyCultureMakerName, I18n.t('sky_culture_maker_name_hint'), (value: string) => { this.skyCultureMakerName = value })
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_author'), this.skyCultureMakerAuthor, I18n.t('sky_culture_maker_author_hint'), (value: string) => { this.skyCultureMakerAuthor = value })
+      this.skyCultureMakerField(I18n.t('sky_culture_maker_id'), this.skyCultureMakerStore.id, 'custom_culture', (value: string) => { this.skyCultureMakerStore.id = value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })
+      this.skyCultureMakerField(I18n.t('sky_culture_maker_name'), this.skyCultureMakerStore.name, I18n.t('sky_culture_maker_name_hint'), (value: string) => { this.skyCultureMakerStore.name = value })
+      this.skyCultureMakerField(I18n.t('sky_culture_maker_author'), this.skyCultureMakerStore.author, I18n.t('sky_culture_maker_author_hint'), (value: string) => { this.skyCultureMakerStore.author = value })
       Row({ space: 8 }) {
         Column({ space: 5 }) {
           Text(I18n.t('sky_culture_maker_license')).fontSize(10).fontColor(this.nmSub()).width('100%')
           Select([{ value: 'CC0 1.0' }, { value: 'CC BY 4.0' }, { value: 'CC BY-NC 4.0' }, { value: 'CC BY-ND 4.0' }, { value: 'CC BY-NC-ND 4.0' }])
-            .selected(Math.max(0, ['CC0 1.0', 'CC BY 4.0', 'CC BY-NC 4.0', 'CC BY-ND 4.0', 'CC BY-NC-ND 4.0'].indexOf(this.skyCultureMakerLicense)))
-            .value(this.skyCultureMakerLicense).backgroundColor(this.nmInput())
+            .selected(Math.max(0, ['CC0 1.0', 'CC BY 4.0', 'CC BY-NC 4.0', 'CC BY-ND 4.0', 'CC BY-NC-ND 4.0'].indexOf(this.skyCultureMakerStore.license)))
+            .value(this.skyCultureMakerStore.license).backgroundColor(this.nmInput())
             .borderRadius(UI_RADIUS_CONTROL).height(38).width('100%')
-            .onSelect((_index: number, value: string) => { this.skyCultureMakerLicense = value; this.scheduleSkyCultureMakerSave() })
+            .onSelect((_index: number, value: string) => { this.skyCultureMakerStore.license = value; this.scheduleSkyCultureMakerSave() })
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Column({ space: 5 }) {
           Text(I18n.t('sky_culture_maker_classification')).fontSize(10).fontColor(this.nmSub()).width('100%')
           Select([{ value: 'traditional' }, { value: 'ethnographic' }, { value: 'historical' }, { value: 'single' }, { value: 'comparative' }, { value: 'personal' }])
-            .selected(Math.max(0, ['traditional', 'ethnographic', 'historical', 'single', 'comparative', 'personal'].indexOf(this.skyCultureMakerClassification)))
-            .value(this.skyCultureMakerClassification).backgroundColor(this.nmInput())
+            .selected(Math.max(0, ['traditional', 'ethnographic', 'historical', 'single', 'comparative', 'personal'].indexOf(this.skyCultureMakerStore.classification)))
+            .value(this.skyCultureMakerStore.classification).backgroundColor(this.nmInput())
             .borderRadius(UI_RADIUS_CONTROL).height(38).width('100%')
-            .onSelect((_index: number, value: string) => { this.skyCultureMakerClassification = value; this.scheduleSkyCultureMakerSave() })
+            .onSelect((_index: number, value: string) => { this.skyCultureMakerStore.classification = value; this.scheduleSkyCultureMakerSave() })
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       }.width('100%')
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_region'), this.skyCultureMakerRegion, 'Eastern Asia', (value: string) => { this.skyCultureMakerRegion = value })
-      this.skyCultureMakerField(I18n.t('sky_culture_maker_native_language'), this.skyCultureMakerNativeLang, 'zh_CN', (value: string) => { this.skyCultureMakerNativeLang = value })
+      this.skyCultureMakerField(I18n.t('sky_culture_maker_region'), this.skyCultureMakerStore.region, 'Eastern Asia', (value: string) => { this.skyCultureMakerStore.region = value })
+      this.skyCultureMakerField(I18n.t('sky_culture_maker_native_language'), this.skyCultureMakerStore.nativeLang, 'zh_CN', (value: string) => { this.skyCultureMakerStore.nativeLang = value })
       Row({ space: 8 }) {
         Column() {
-          this.skyCultureMakerField(I18n.t('sky_culture_maker_begin_year'), this.skyCultureMakerBeginTime, '0', (value: string) => { this.skyCultureMakerBeginTime = value.replace(/[^0-9-]/g, '') })
+          this.skyCultureMakerField(I18n.t('sky_culture_maker_begin_year'), this.skyCultureMakerStore.beginTime, '0', (value: string) => { this.skyCultureMakerStore.beginTime = value.replace(/[^0-9-]/g, '') })
         }.layoutWeight(1)
         Column() {
-          this.skyCultureMakerField(I18n.t('sky_culture_maker_end_year'), this.skyCultureMakerEndTime, '0', (value: string) => { this.skyCultureMakerEndTime = value.replace(/[^0-9-]/g, '') })
+          this.skyCultureMakerField(I18n.t('sky_culture_maker_end_year'), this.skyCultureMakerStore.endTime, '0', (value: string) => { this.skyCultureMakerStore.endTime = value.replace(/[^0-9-]/g, '') })
         }.layoutWeight(1)
       }.width('100%')
-      this.skyCultureMakerLongField(I18n.t('sky_culture_maker_introduction'), this.skyCultureMakerIntroduction, I18n.t('sky_culture_maker_introduction_hint'), (value: string) => { this.skyCultureMakerIntroduction = value })
-      this.skyCultureMakerLongField(I18n.t('sky_culture_maker_description'), this.skyCultureMakerDescription, I18n.t('sky_culture_maker_description_hint'), (value: string) => { this.skyCultureMakerDescription = value })
+      this.skyCultureMakerLongField(I18n.t('sky_culture_maker_introduction'), this.skyCultureMakerStore.introduction, I18n.t('sky_culture_maker_introduction_hint'), (value: string) => { this.skyCultureMakerStore.introduction = value })
+      this.skyCultureMakerLongField(I18n.t('sky_culture_maker_description'), this.skyCultureMakerStore.description, I18n.t('sky_culture_maker_description_hint'), (value: string) => { this.skyCultureMakerStore.description = value })
     }.width('100%')
   }
 
@@ -19755,22 +19715,22 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           Text(I18n.t('sky_culture_maker_artwork')).fontSize(11).fontColor(this.nmText()).width('100%')
           Text(I18n.t('sky_culture_maker_artwork_hint')).fontSize(9).lineHeight(14).fontColor(this.nmSub()).width('100%')
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Button(this.skyCultureMakerArtworkImporting ? I18n.t('sky_culture_maker_artwork_importing') : I18n.t('sky_culture_maker_artwork_choose'))
+        Button(this.skyCultureMakerStore.artworkImporting ? I18n.t('sky_culture_maker_artwork_importing') : I18n.t('sky_culture_maker_artwork_choose'))
           .fontSize(9).fontColor(this.nmText()).backgroundColor(this.nmBg()).height(30).borderRadius(UI_RADIUS_CONTROL)
-          .enabled(!this.skyCultureMakerArtworkImporting).onClick(() => { this.importSkyCultureMakerArtworkFile() })
+          .enabled(!this.skyCultureMakerStore.artworkImporting).onClick(() => { this.importSkyCultureMakerArtworkFile() })
       }.width('100%')
       if (this.selectedSkyCultureMakerConstellation()?.image !== undefined) {
         Stack() {
-          if (this.skyCultureMakerArtworkPixelMap !== undefined) {
-            Image(this.skyCultureMakerArtworkPixelMap as image.PixelMap)
+          if (this.skyCultureMakerStore.artworkPixelMap !== undefined) {
+            Image(this.skyCultureMakerStore.artworkPixelMap as image.PixelMap)
               .width('100%').height('100%').objectFit(ImageFit.Fill)
-          } else if (this.skyCultureMakerArtworkPreviewState === 'preparing') {
+          } else if (this.skyCultureMakerStore.artworkPreviewState === 'preparing') {
             Column({ space: 7 }) {
               LoadingProgress().width(20).height(20).color(this.nmAccent())
               Text(I18n.t('sky_culture_maker_artwork_preparing')).fontSize(9).fontColor(this.nmSub())
             }
           } else {
-            Text(I18n.t(this.skyCultureMakerArtworkPreviewState === 'decodeFailed'
+            Text(I18n.t(this.skyCultureMakerStore.artworkPreviewState === 'decodeFailed'
               ? 'sky_culture_maker_artwork_decode_failed' : 'sky_culture_maker_artwork_missing'))
               .fontSize(9).fontColor('#FFB7B7').textAlign(TextAlign.Center).padding({ left: 16, right: 16 })
           }
@@ -19778,7 +19738,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             if ((this.skyCultureMakerArtworkAnchor(anchorIndex)?.hip ?? 0) > 0) {
               Stack({ alignContent: Alignment.Center }) {
                 Circle().width(24).height(24)
-                  .fill(anchorIndex === this.skyCultureMakerArtworkAnchorIndex ? '#E6A85B' : '#5B93BF')
+                  .fill(anchorIndex === this.skyCultureMakerStore.artworkAnchorIndex ? '#E6A85B' : '#5B93BF')
                   .stroke('#FFFFFFFF').strokeWidth(1)
                 Text((anchorIndex + 1).toString()).fontSize(10).fontWeight(FontWeight.Bold).fontColor('#FFFFFFFF')
               }.width(24).height(24).position({
@@ -19791,17 +19751,17 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
           .width('100%').height(this.skyCultureMakerArtworkPreviewHeight()).clip(true)
           .backgroundColor('#16000000').border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
           .onAreaChange((_oldArea: Area, newArea: Area) => {
-            this.skyCultureMakerArtworkRenderWidth = Math.max(1, Number(newArea.width))
-            this.skyCultureMakerArtworkRenderHeight = Math.max(1, Number(newArea.height))
+            this.skyCultureMakerStore.artworkRenderWidth = Math.max(1, Number(newArea.width))
+            this.skyCultureMakerStore.artworkRenderHeight = Math.max(1, Number(newArea.height))
           })
           .onTouch((event: TouchEvent) => this.handleSkyCultureMakerArtworkTouch(event))
         Row({ space: 6 }) {
           ForEach([0, 1, 2], (anchorIndex: number) => {
             Button(I18n.format('sky_culture_maker_anchor', [(anchorIndex + 1).toString(), this.skyCultureMakerArtworkAnchorHipText(anchorIndex)]))
-              .fontSize(9).fontColor(anchorIndex === this.skyCultureMakerArtworkAnchorIndex ? '#FFFFFFFF' : this.nmSub())
-              .backgroundColor(anchorIndex === this.skyCultureMakerArtworkAnchorIndex ? this.nmAccent() : this.nmBg())
+              .fontSize(9).fontColor(anchorIndex === this.skyCultureMakerStore.artworkAnchorIndex ? '#FFFFFFFF' : this.nmSub())
+              .backgroundColor(anchorIndex === this.skyCultureMakerStore.artworkAnchorIndex ? this.nmAccent() : this.nmBg())
               .height(30).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.skyCultureMakerArtworkAnchorIndex = anchorIndex })
+              .onClick(() => { this.skyCultureMakerStore.artworkAnchorIndex = anchorIndex })
           }, (anchorIndex: number) => anchorIndex.toString())
         }.width('100%')
         Text(I18n.t('sky_culture_maker_anchor_instruction')).fontSize(9).lineHeight(14).fontColor(this.nmSub()).width('100%')
@@ -19816,81 +19776,81 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   skyCultureMakerConstellationEditor() {
     Column({ space: 9 }) {
       Row({ space: 8 }) {
-        Text(I18n.format('sky_culture_maker_constellation_count', [this.skyCultureMakerConstellations.length.toString()]))
+        Text(I18n.format('sky_culture_maker_constellation_count', [this.skyCultureMakerStore.constellations.length.toString()]))
           .fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
         Button(I18n.t('sky_culture_maker_add_constellation')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent())
           .height(30).borderRadius(UI_RADIUS_CONTROL).padding({ left: 10, right: 10 }).onClick(() => { this.addSkyCultureMakerConstellation() })
       }.width('100%')
-      if (this.skyCultureMakerConstellations.length > 0) {
+      if (this.skyCultureMakerStore.constellations.length > 0) {
         Scroll() {
           Row({ space: 6 }) {
-            ForEach(this.skyCultureMakerConstellations, (item: SkyCultureMakerConstellation, index: number) => {
+            ForEach(this.skyCultureMakerStore.constellations, (item: SkyCultureMakerConstellation, index: number) => {
               Text(item.native.length > 0 ? item.native : item.id).fontSize(10)
-                .fontColor(this.skyCultureMakerSelectedConstellation === index ? '#FFFFFFFF' : this.nmSub())
+                .fontColor(this.skyCultureMakerStore.selectedConstellation === index ? '#FFFFFFFF' : this.nmSub())
                 .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-                .backgroundColor(this.skyCultureMakerSelectedConstellation === index ? this.nmAccent() : this.nmBg())
+                .backgroundColor(this.skyCultureMakerStore.selectedConstellation === index ? this.nmAccent() : this.nmBg())
                 .borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.selectSkyCultureMakerConstellation(index) })
             }, (item: SkyCultureMakerConstellation, index: number) => item.id + '/' + index.toString())
           }.padding({ right: 8 })
         }.width('100%').height(34).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       }
-      if (this.skyCultureMakerSelectedConstellation >= 0 && this.skyCultureMakerSelectedConstellation < this.skyCultureMakerConstellations.length) {
-        this.skyCultureMakerField(I18n.t('sky_culture_maker_constellation_id'), this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation].id, 'example', (value: string) => {
-          const item = this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation]
+      if (this.skyCultureMakerStore.selectedConstellation >= 0 && this.skyCultureMakerStore.selectedConstellation < this.skyCultureMakerStore.constellations.length) {
+        this.skyCultureMakerField(I18n.t('sky_culture_maker_constellation_id'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].id, 'example', (value: string) => {
+          const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
           this.updateSkyCultureMakerConstellation({ id: value.toLowerCase().replace(/[^a-z0-9_]/g, '_'), english: item.english, native: item.native, pronounce: item.pronounce, transliteration: item.transliteration, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
         })
         Row({ space: 8 }) {
           Column() {
-            this.skyCultureMakerField(I18n.t('sky_culture_maker_english_name'), this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation].english, 'Example', (value: string) => {
-              const item = this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation]
+            this.skyCultureMakerField(I18n.t('sky_culture_maker_english_name'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].english, 'Example', (value: string) => {
+              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
               this.updateSkyCultureMakerConstellation({ id: item.id, english: value, native: item.native, pronounce: item.pronounce, transliteration: item.transliteration, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
             })
           }.layoutWeight(1)
           Column() {
-            this.skyCultureMakerField(I18n.t('sky_culture_maker_native_name'), this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation].native, I18n.t('sky_culture_maker_native_name_hint'), (value: string) => {
-              const item = this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation]
+            this.skyCultureMakerField(I18n.t('sky_culture_maker_native_name'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].native, I18n.t('sky_culture_maker_native_name_hint'), (value: string) => {
+              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
               this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: value, pronounce: item.pronounce, transliteration: item.transliteration, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
             })
           }.layoutWeight(1)
         }.width('100%')
         Row({ space: 8 }) {
           Column() {
-            this.skyCultureMakerField(I18n.t('sky_culture_maker_pronunciation'), this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation].pronounce, '', (value: string) => {
-              const item = this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation]
+            this.skyCultureMakerField(I18n.t('sky_culture_maker_pronunciation'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].pronounce, '', (value: string) => {
+              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
               this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: item.native, pronounce: value, transliteration: item.transliteration, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
             })
           }.layoutWeight(1)
           Column() {
-            this.skyCultureMakerField(I18n.t('sky_culture_maker_transliteration'), this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation].transliteration, '', (value: string) => {
-              const item = this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation]
+            this.skyCultureMakerField(I18n.t('sky_culture_maker_transliteration'), this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].transliteration, '', (value: string) => {
+              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
               this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: item.native, pronounce: item.pronounce, transliteration: value, IPA: item.IPA, dark: item.dark, lines: item.lines, image: item.image })
             })
           }.layoutWeight(1)
         }.width('100%')
-        this.skyCultureMakerField('IPA', this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation].IPA, '', (value: string) => {
-          const item = this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation]
+        this.skyCultureMakerField('IPA', this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].IPA, '', (value: string) => {
+          const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
           this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: item.native, pronounce: item.pronounce, transliteration: item.transliteration, IPA: value, dark: item.dark, lines: item.lines, image: item.image })
         })
         Row({ space: 8 }) {
           Text(I18n.t('sky_culture_maker_dark_constellation')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation].dark })
+          Toggle({ type: ToggleType.Switch, isOn: this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].dark })
             .width(42).height(24).selectedColor(this.nmAccent()).onChange((enabled: boolean) => {
-              const item = this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation]
+              const item = this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation]
               this.updateSkyCultureMakerConstellation({ id: item.id, english: item.english, native: item.native, pronounce: item.pronounce, transliteration: item.transliteration, IPA: item.IPA, dark: enabled, lines: item.lines, image: item.image })
             })
         }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
         Text(I18n.t('sky_culture_maker_lines')).fontSize(11).fontColor(this.nmSub()).width('100%').margin({ top: 4 })
-        ForEach(this.skyCultureMakerConstellations[this.skyCultureMakerSelectedConstellation].lines, (line: number[], lineIndex: number) => {
+        ForEach(this.skyCultureMakerStore.constellations[this.skyCultureMakerStore.selectedConstellation].lines, (line: number[], lineIndex: number) => {
           Row({ space: 8 }) {
             Text('HIP ' + line.join('  ·  ')).fontSize(10).fontColor(this.nmText()).layoutWeight(1).maxLines(2)
             Button(I18n.t('nebula_texture_remove')).fontSize(9).fontColor('#FFB7B7').backgroundColor('rgba(255,107,107,0.12)')
               .height(28).borderRadius(UI_RADIUS_CONTROL).padding({ left: 8, right: 8 }).onClick(() => { this.removeSkyCultureMakerLine(lineIndex) })
           }.width('100%').padding({ left: 10, right: 8, top: 6, bottom: 6 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
         }, (line: number[], lineIndex: number) => line.join('-') + '/' + lineIndex.toString())
-        TextInput({ text: this.skyCultureMakerHipLine, placeholder: I18n.t('sky_culture_maker_hip_hint') })
+        TextInput({ text: this.skyCultureMakerStore.hipLine, placeholder: I18n.t('sky_culture_maker_hip_hint') })
           .height(38).width('100%').fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmInput())
           .border({ width: 1, color: this.nmInputBorder() }).borderRadius(UI_RADIUS_CONTROL)
-          .onChange((value: string) => { this.skyCultureMakerHipLine = value })
+          .onChange((value: string) => { this.skyCultureMakerStore.hipLine = value })
         Row({ space: 8 }) {
           Button(I18n.t('sky_culture_maker_add_line')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent())
             .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.addSkyCultureMakerHipLine() })
@@ -19913,14 +19873,14 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       Text(I18n.t('sky_culture_maker_validate_hint')).fontSize(10).lineHeight(15).fontColor(this.nmSub()).width('100%')
       Button(I18n.t('sky_culture_maker_validate')).fontSize(11).fontColor(this.nmText()).backgroundColor(this.nmAccent())
         .height(34).width('100%').borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.validateSkyCultureMaker() })
-      if (this.skyCultureMakerValidation !== undefined) {
+      if (this.skyCultureMakerStore.validation !== undefined) {
         Row({ space: 8 }) {
-          Text(I18n.format('sky_culture_maker_error_count', [this.skyCultureMakerValidation.errorCount.toString()]))
-            .fontSize(11).fontColor(this.skyCultureMakerValidation.errorCount > 0 ? '#FFB7B7' : '#B9E6C4').layoutWeight(1)
-          Text(I18n.format('sky_culture_maker_warning_count', [this.skyCultureMakerValidation.warningCount.toString()]))
+          Text(I18n.format('sky_culture_maker_error_count', [this.skyCultureMakerStore.validation.errorCount.toString()]))
+            .fontSize(11).fontColor(this.skyCultureMakerStore.validation.errorCount > 0 ? '#FFB7B7' : '#B9E6C4').layoutWeight(1)
+          Text(I18n.format('sky_culture_maker_warning_count', [this.skyCultureMakerStore.validation.warningCount.toString()]))
             .fontSize(11).fontColor('#FFD49A')
         }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        ForEach(this.skyCultureMakerValidation.errors.concat(this.skyCultureMakerValidation.warnings), (issue: SkyCultureMakerIssue, index: number) => {
+        ForEach(this.skyCultureMakerStore.validation.errors.concat(this.skyCultureMakerStore.validation.warnings), (issue: SkyCultureMakerIssue, index: number) => {
           Column({ space: 3 }) {
             Text(issue.field).fontSize(10).fontWeight(FontWeight.Medium).fontColor(issue.severity === 'error' ? '#FFB7B7' : '#FFD49A').width('100%')
             Text(this.skyCultureMakerIssueText(issue.code, issue.message)).fontSize(9).lineHeight(14).fontColor(this.nmSub()).width('100%')
@@ -19933,15 +19893,15 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         Button(I18n.t('sky_culture_maker_export')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent())
           .height(34).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.exportSkyCultureMaker() })
       }.width('100%')
-      if (this.skyCultureMakerExportPath.length > 0) {
+      if (this.skyCultureMakerStore.exportPath.length > 0) {
         Row({ space: 8 }) {
           Button(I18n.t('sky_culture_maker_share')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
             .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => {
-              this.shareFile(this.skyCultureMakerExportPath, utd.UniformDataType.ZIP_ARCHIVE, this.skyCultureMakerExportFileName, I18n.t('sky_culture_maker_share_description'), 'sky-culture-maker-share')
+              this.shareFile(this.skyCultureMakerStore.exportPath, utd.UniformDataType.ZIP_ARCHIVE, this.skyCultureMakerStore.exportFileName, I18n.t('sky_culture_maker_share_description'), 'sky-culture-maker-share')
             })
           Button(I18n.t('sky_culture_maker_save_as')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
             .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => {
-              this.saveFileAs(this.skyCultureMakerExportPath, this.skyCultureMakerExportFileName, 'ZIP 压缩包|.zip')
+              this.saveFileAs(this.skyCultureMakerStore.exportPath, this.skyCultureMakerStore.exportFileName, 'ZIP 压缩包|.zip')
             })
         }.width('100%')
       }
@@ -19958,30 +19918,30 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   skyCultureMakerPanel() {
     Column({ space: 8 }) {
       this.skyCultureMakerTabs()
-      if (this.skyCultureMakerLoading) {
+      if (this.skyCultureMakerStore.loading) {
         Row({ space: 8 }) {
           LoadingProgress().width(18).height(18).color(this.nmAccent())
           Text(I18n.t('msg_loading')).fontSize(11).fontColor(this.nmSub())
         }.width('100%').height(80).justifyContent(FlexAlign.Center)
       } else {
-        if (this.skyCultureMakerTab === 0) {
+        if (this.skyCultureMakerStore.tab === 0) {
           this.skyCultureMakerOverview()
-        } else if (this.skyCultureMakerTab === 1) {
+        } else if (this.skyCultureMakerStore.tab === 1) {
           this.skyCultureMakerConstellationEditor()
         } else {
           this.skyCultureMakerValidationPanel()
         }
       }
-      if (this.skyCultureMakerStatus.length > 0) {
-        Text(this.skyCultureMakerStatus).fontSize(10).lineHeight(15).fontColor(this.nmSub()).width('100%')
+      if (this.skyCultureMakerStore.status.length > 0) {
+        Text(this.skyCultureMakerStore.status).fontSize(10).lineHeight(15).fontColor(this.nmSub()).width('100%')
           .padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
       }
       Row({ space: 8 }) {
-        Button(this.skyCultureMakerSaving ? I18n.t('sky_culture_maker_saving') : I18n.t('sky_culture_maker_save'))
+        Button(this.skyCultureMakerStore.saving ? I18n.t('sky_culture_maker_saving') : I18n.t('sky_culture_maker_save'))
           .fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmAccent()).height(32).layoutWeight(1)
-          .borderRadius(UI_RADIUS_CONTROL).enabled(!this.skyCultureMakerSaving).onClick(() => { this.saveSkyCultureMakerDraft(false) })
+          .borderRadius(UI_RADIUS_CONTROL).enabled(!this.skyCultureMakerStore.saving).onClick(() => { this.saveSkyCultureMakerDraft(false) })
         Button(I18n.t('sky_culture_maker_undo')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
-          .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).enabled(this.skyCultureMakerCanUndo).opacity(this.skyCultureMakerCanUndo ? 1 : 0.5)
+          .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).enabled(this.skyCultureMakerStore.canUndo).opacity(this.skyCultureMakerStore.canUndo ? 1 : 0.5)
           .onClick(() => { this.undoSkyCultureMaker() })
         Button(I18n.t('sky_culture_maker_reset')).fontSize(10).fontColor('#FFB7B7').backgroundColor('rgba(255,107,107,0.12)')
           .height(32).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL).onClick(() => { this.resetSkyCultureMaker() })
@@ -26147,7 +26107,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         LayerSwitchRow({ label: I18n.t('s0528'), isOn: this.layerStore.asterismLines, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Asterism_Lines', '', value) } })
         LayerSwitchRow({ label: I18n.t('s0529'), isOn: this.layerStore.asterismLabels, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Asterism_Labels', '', value) } })
         LayerSwitchRow({ label: I18n.t('s0540'), isOn: this.layerStore.rayHelpers, onToggle: (value: boolean) => { this.applyLayerSwitch('actionShow_Ray_Helpers', '', value) } })
-      } else if (this.skyCultureDetailsReady && this.currentSkyCultureId.length > 0) {
+      } else if (this.skyCultureViewStore.detailsReady && this.currentSkyCultureId.length > 0) {
         Text(I18n.t('culture_no_asterisms')).fontSize(10).fontColor(this.nmSub()).width('100%')
           .padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 6 })
       }
@@ -26163,7 +26123,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       Text(this.currentSkyCulture.length > 0 ? this.currentSkyCulture : I18n.t('culture_reading'))
         .fontSize(15).fontColor(this.nmText()).fontWeight(FontWeight.Medium).layoutWeight(1).maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
-      if (this.skyCultureDetailsLoading && this.skyCultureDetailsReady) {
+      if (this.skyCultureViewStore.detailsLoading && this.skyCultureViewStore.detailsReady) {
         LoadingProgress().width(16).height(16).color(this.nmAccent()).margin({ right: 8 })
       }
       Button(I18n.t('culture_refresh')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
@@ -26171,14 +26131,14 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         .onClick(() => { this.loadSkyCultureList() })
     }.height(40).width('100%').padding({ left: 8, right: 6 })
       .backgroundColor('rgba(255,255,255,0.045)').borderRadius(UI_RADIUS_CONTROL).margin({ top: 4, bottom: 4 })
-    if (this.skyCultureDetailsLoading && !this.skyCultureDetailsReady) {
+    if (this.skyCultureViewStore.detailsLoading && !this.skyCultureViewStore.detailsReady) {
       this.graphLoadingRow(I18n.t('culture_loading'))
-    } else if (this.skyCultureDetailError.length > 0 && !this.skyCultureDetailsReady) {
-      Text(this.skyCultureDetailError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8, right: 8 }).margin({ top: 6, bottom: 6 })
-    } else if (this.skyCultureDetailsReady && this.currentSkyCultureId.length > 0) {
+    } else if (this.skyCultureViewStore.detailError.length > 0 && !this.skyCultureViewStore.detailsReady) {
+      Text(this.skyCultureViewStore.detailError).fontSize(11).fontColor(this.nmSub()).width('100%').padding({ left: 8, right: 8 }).margin({ top: 6, bottom: 6 })
+    } else if (this.skyCultureViewStore.detailsReady && this.currentSkyCultureId.length > 0) {
       Column({ space: 5 }) {
-        if (this.skyCultureDetailError.length > 0) {
-          Text(this.skyCultureDetailError).fontSize(10).fontColor(this.nmSub()).width('100%')
+        if (this.skyCultureViewStore.detailError.length > 0) {
+          Text(this.skyCultureViewStore.detailError).fontSize(10).fontColor(this.nmSub()).width('100%')
             .padding({ left: 9, right: 9, top: 7, bottom: 7 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
         }
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
@@ -26199,19 +26159,19 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
             this.skyCultureMetaItem('本土名称', this.skyCultureNativeNameCount + ' 个')
           }
         }.width('100%').padding({ top: 5, bottom: 2 })
-        if (this.skyCultureArtItems.length > 0) {
+        if (this.skyCultureViewStore.artItems.length > 0) {
           Row() {
             Column({ space: 1 }) {
               Text(I18n.t('culture_art_gallery')).fontSize(11).fontColor(this.nmText()).width('100%')
-              Text(this.skyCultureArtItems.length + ' ' + I18n.t('culture_offline_art')).fontSize(9).fontColor(this.nmSub()).width('100%')
+              Text(this.skyCultureViewStore.artItems.length + ' ' + I18n.t('culture_offline_art')).fontSize(9).fontColor(this.nmSub()).width('100%')
             }.layoutWeight(1)
-            Button(this.skyCultureArtExpanded ? '收起' : '查看').fontSize(10).fontColor(this.nmAccent()).backgroundColor(this.nmBg())
+            Button(this.skyCultureViewStore.artExpanded ? '收起' : '查看').fontSize(10).fontColor(this.nmAccent()).backgroundColor(this.nmBg())
               .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
-              .onClick(() => { this.skyCultureArtExpanded = !this.skyCultureArtExpanded })
+              .onClick(() => { this.skyCultureViewStore.artExpanded = !this.skyCultureViewStore.artExpanded })
           }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 }).backgroundColor('rgba(255,255,255,0.035)').borderRadius(UI_RADIUS_CONTROL)
-          if (this.skyCultureArtExpanded) {
+          if (this.skyCultureViewStore.artExpanded) {
             Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(this.skyCultureArtItems.slice(0, 24), (art: SkyCultureArtItem) => {
+              ForEach(this.skyCultureViewStore.artItems.slice(0, 24), (art: SkyCultureArtItem) => {
                 Column({ space: 3 }) {
                   if (this.skyCultureArtThumbnailPixelMaps[art.rawPath] !== undefined) {
                     Image(this.skyCultureArtThumbnailPixelMaps[art.rawPath] as image.PixelMap).width('100%').aspectRatio(1).objectFit(ImageFit.Contain)
@@ -26241,46 +26201,46 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
                   })
               }, (art: SkyCultureArtItem) => art.rawPath)
             }.width('100%').padding({ top: 5, bottom: 5 })
-            if (this.skyCultureArtItems.length > 24) {
+            if (this.skyCultureViewStore.artItems.length > 24) {
               Text('已显示前 24 幅，完整绘图仍由星图图层按需加载。').fontSize(9).fontColor(this.nmSub()).width('100%')
             }
           }
         }
-        if (this.skyCultureNarration.length > 0) {
+        if (this.skyCultureViewStore.narration.length > 0) {
           Column({ space: 10 }) {
             Row({ space: 8 }) {
               Row().width(3).height(20).backgroundColor(this.nmAccent()).borderRadius(2)
               Text(I18n.t('culture_constellation_intro')).fontSize(12).fontColor(this.nmText()).fontWeight(FontWeight.Medium).layoutWeight(1)
             }.width('100%')
             Column({ space: 11 }) {
-              ForEach(this.skyCultureNarrationExpanded ? this.skyCultureNarrationParagraphs() : this.skyCultureNarrationParagraphs().slice(0, 2), (paragraph: string) => {
+              ForEach(this.skyCultureViewStore.narrationExpanded ? this.skyCultureNarrationParagraphs() : this.skyCultureNarrationParagraphs().slice(0, 2), (paragraph: string) => {
                 Text(paragraph).fontSize(11).fontColor(this.nmText()).width('100%').lineHeight(21)
               }, (paragraph: string, index: number) => 'narration-' + index + '-' + paragraph)
             }.width('100%')
             Row() {
-              Button(I18n.t(this.skyCultureNarrationExpanded ? 'culture_collapse_intro' : 'culture_expand_intro')).fontSize(10).fontColor(this.nmAccent())
+              Button(I18n.t(this.skyCultureViewStore.narrationExpanded ? 'culture_collapse_intro' : 'culture_expand_intro')).fontSize(10).fontColor(this.nmAccent())
                 .backgroundColor(this.nmInput()).borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 11, right: 11 })
                 .clickEffect({ level: ClickEffectLevel.LIGHT })
-                .onClick(() => { this.skyCultureNarrationExpanded = !this.skyCultureNarrationExpanded })
+                .onClick(() => { this.skyCultureViewStore.narrationExpanded = !this.skyCultureViewStore.narrationExpanded })
             }.width('100%').justifyContent(FlexAlign.End)
           }.width('100%').padding({ left: 13, right: 13, top: 12, bottom: 11 })
             .backgroundColor(this.nmBg()).border({ width: 0.5, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL)
         }
-        if (this.skyCultureDescription.length > 0 && this.skyCultureDescription !== this.skyCultureNarration) {
+        if (this.skyCultureViewStore.description.length > 0 && this.skyCultureViewStore.description !== this.skyCultureViewStore.narration) {
           Column({ space: 5 }) {
             Text(I18n.t('culture_full_material')).fontSize(12).fontColor(this.nmText()).fontWeight(FontWeight.Medium).width('100%')
-            if (this.skyCultureDescriptionBlocks.length > 0) {
+            if (this.skyCultureViewStore.descriptionBlocks.length > 0) {
               Column({ space: 4 }) {
-                ForEach(this.skyCultureDescriptionExpanded ? this.skyCultureDescriptionBlocks : this.skyCultureDescriptionBlocks.slice(0, 6), (block: SkyCultureDescriptionBlock) => {
+                ForEach(this.skyCultureViewStore.descriptionExpanded ? this.skyCultureViewStore.descriptionBlocks : this.skyCultureViewStore.descriptionBlocks.slice(0, 6), (block: SkyCultureDescriptionBlock) => {
                   SkyCultureDescriptionBlockView({ kind: block.kind, headingLarge: block.level !== undefined && block.level <= 1, text: block.text, textColor: this.nmText() })
                 }, (block: SkyCultureDescriptionBlock) => 'description-' + block.index)
               }.width('100%')
             } else {
-              Text(this.skyCultureDescription).fontSize(11).fontColor(this.nmText()).width('100%')
-                .lineHeight(20).maxLines(this.skyCultureDescriptionExpanded ? 999 : 6).textOverflow({ overflow: TextOverflow.Ellipsis })
+              Text(this.skyCultureViewStore.description).fontSize(11).fontColor(this.nmText()).width('100%')
+                .lineHeight(20).maxLines(this.skyCultureViewStore.descriptionExpanded ? 999 : 6).textOverflow({ overflow: TextOverflow.Ellipsis })
             }
-            Button(this.skyCultureDescriptionExpanded ? I18n.t('culture_hide_full_material') : I18n.t('culture_read_full_material')).fontSize(10).fontColor(this.nmAccent()).backgroundColor('rgba(0,0,0,0)')
-              .height(28).padding({ left: 0, right: 8 }).onClick(() => { this.skyCultureDescriptionExpanded = !this.skyCultureDescriptionExpanded })
+            Button(this.skyCultureViewStore.descriptionExpanded ? I18n.t('culture_hide_full_material') : I18n.t('culture_read_full_material')).fontSize(10).fontColor(this.nmAccent()).backgroundColor('rgba(0,0,0,0)')
+              .height(28).padding({ left: 0, right: 8 }).onClick(() => { this.skyCultureViewStore.descriptionExpanded = !this.skyCultureViewStore.descriptionExpanded })
           }.width('100%').padding({ left: 10, right: 10, top: 10, bottom: 6 })
             .backgroundColor(this.nmBg()).border({ width: 0.5, color: this.nmBorder() }).borderRadius(UI_RADIUS_CONTROL)
         }
@@ -26826,10 +26786,10 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
               }.layoutWeight(1)
               if (sc.id === this.selectedSkyCultureId()) {
                 Row({ space: 4 }) {
-                  if (sc.id === this.skyCulturePendingId) {
+                  if (sc.id === this.skyCultureViewStore.pendingId) {
                     LoadingProgress().width(12).height(12).color(this.nmAccent())
                   }
-                  Text(sc.id === this.skyCulturePendingId ? I18n.t('c_loading') : '✓ ' + I18n.t('culture_current'))
+                  Text(sc.id === this.skyCultureViewStore.pendingId ? I18n.t('c_loading') : '✓ ' + I18n.t('culture_current'))
                     .fontSize(10).fontColor(this.nmAccent()).maxLines(1)
                 }.padding({ left: 7, right: 7, top: 4, bottom: 4 }).backgroundColor('rgba(80,140,200,0.14)').borderRadius(UI_RADIUS_CONTROL)
               }
