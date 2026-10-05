@@ -46,6 +46,7 @@ export struct RecordingControlBar {
         .borderRadius(UI_RADIUS_CONTROL)
         .height(34)
         .width(46)
+        .padding({ left: 0, right: 0 })
         .onClick(() => { this.onToggleUi() })
       Button(this.store.recordingPaused ? I18n.t('btn_resume') : I18n.t('script_pause'))
         .fontSize(10)
@@ -54,6 +55,7 @@ export struct RecordingControlBar {
         .borderRadius(UI_RADIUS_CONTROL)
         .height(34)
         .width(48)
+        .padding({ left: 0, right: 0 })
         .onClick(() => { this.onTogglePause() })
       Button(I18n.t('script_stop'))
         .fontSize(10)
@@ -62,6 +64,7 @@ export struct RecordingControlBar {
         .borderRadius(UI_RADIUS_CONTROL)
         .height(34)
         .width(48)
+        .padding({ left: 0, right: 0 })
         .onClick(() => { this.onStop() })
     }
       .width(Math.min(560, Math.max(260, this.skyWidth - 24)))

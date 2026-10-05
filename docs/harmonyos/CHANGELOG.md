@@ -1,3 +1,23 @@
+## [2026-10-05] DevEco Code - 修复：脚本录制控制条三个按钮文字被省略成"…"
+
+**问题**：开始脚本录制后，顶栏 `RecordingControlBar` 的三个按钮（操作/专注、暂停/继续、停止）文字显示为"…"。
+
+**根因**：三个 `Button` 为**定宽 46/48vp**（数值逐字沿袭原宿主 `recordingControlBar()`，经 `git show 9c9a4f3d6c^` 核对确认 —— 属**既有缺陷**，非本次重构引入），而 ArkUI `Button` 带默认左右内边距 ⇒ 内容宽度不足以容纳 2 个中文字（`fontSize(10)`），标签被省略号取代。
+
+**改动**（`harmonyos/ets-source/panels/tools/RecordingControlBar.ets`，3 处）：给三个按钮各加 `.padding({ left: 0, right: 0 })`，把 46/48vp 全部留给标签；尺寸、颜色、圆角、交互与视觉其余部分不变。
+
+**验证（真机 Mate 80 Pro `192.168.50.108:36717`）**：`openUiPanel scripts` → 滚动到「脚本录制与回放」→ 点「开始录制」→ 顶栏出现后截图，逐按钮测量文字墨迹：
+| 按钮 | 墨迹像素 | 墨迹包围盒 |
+|---|---:|---|
+| 操作/专注 | 746 | **68×33 px** |
+| 暂停/继续 | 960 | **66×33 px** |
+| 停止 | 732 | **69×33 px** |
+| 对照：3 字标题「录制中」(fontSize 12) | 1535 | 114×33 px（≈33px/字） |
+
+⇒ 三按钮均为 **2 个中文字正常渲染**（≈34px/字），不再是省略号（若为"…"包围盒应仅约 30–40px 宽）。`arkts_check` 无错、构建 SUCCESSFUL、契约 intact（44 锚点）；测后已停止录制恢复现场。
+
+**顺带排查（未改，待决定）**：同类"定宽 + Button 默认内边距"的可疑项（扫描 `panels/**` 中 `Button(I18n.t(...))` 且 `.width(≤52)` 且无显式 padding）：`NebulaTexturesPanel.ets`(18: `act_refresh`/`nebula_texture_import`)、`ObservingPanel.ets`(20: `observing_refresh`)、`SatellitesPanel.ets`(42: `sat_source_delete`/`sat_refresh`/`sat_tle_import`)、`SettingsPanel.ets`(42: `settings_view_center`)、`SkyCultureViewTab.ets`(52)。其中 width 16–20 的多数是**图标按钮**（单字符/符号标签）不受影响；42/52 的需逐个确认。修复模式同本片（`.padding({ left: 0, right: 0 })` 或适度加宽）。
+
 ## [2026-10-04] DevEco Code - M2-A：ObjectModelRenderer（PLAN §15.11 第二批 M2）
 
 > 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.11 **M2-A**（原 M2-1/2 合并为模块级大切片）。
