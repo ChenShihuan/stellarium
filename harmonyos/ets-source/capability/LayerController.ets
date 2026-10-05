@@ -20,8 +20,10 @@
 //     留宿主、经 hooks get/set；
 //   - 标签切换动画（宿主 getUIContext().animateTo）归宿主，经 animateTabIn / animateTabOut 回注。
 //   - E2：星空显示 / 开关设置写 LayerStore（布尔）与 LayerViewStore（数值），地景导入 picker/fileIo 经
-//     MediaPort.importLandscapeDocument；setViewLock 分支（选中判定 + trackingText 回读）与地景详情浮层
-//     宿主 @State 经 hooks 回注。
+//     MediaPort.importLandscapeDocument；地景详情浮层宿主 @State 经 hooks 回注。
+//   - E4：`setViewLockState` / `toggleViewLock` 自宿主并入（同属图层 / 视图域，写 viewSettingsStore），
+//     并**移除 E2 的 setViewLockState hook**（原 `setBridgeFlag` 的 setViewLock 分支改为控制器内部直调）；
+//     成功回读的 `trackingText`（宿主 @State）经新增 hook `setTrackingText` 回注。
 //
 // **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；picker/fileIo 经 MediaPort；跨域回调经
 // LayerHostHooks 具名回注（§13.1 规则 6）。
@@ -42,8 +44,8 @@ import { BehaviorHostHooks } from './ControllerHooks'
 
 // 宿主 → 控制器回注（§13.1 规则 6）：图层开关分派、持久化、标签切换动画与宿主 @State 读写。
 export interface LayerHostHooks extends BehaviorHostHooks {
-  // 视图锁定（cmd === 'setViewLock' 的既有宿主动作，含选中判定 / trackingText 回读，留宿主 §15.7 规则 1）。
-  setViewLockState(enabled: boolean): void
+  // 视图锁定回读的跟踪状态文案（宿主 @State trackingText，组件 @Prop 消费，E4 下沉 setViewLockState 时回注）。
+  setTrackingText(value: string): void
   // 地景详情浮层宿主 @State（selectLandscape 关闭浮层；组件 @Prop 消费，§15.7 规则 2）。
   setLandscapeDetailOpen(value: boolean): void
   // 持久化（跨 store / AppStorage：赤道仪开关归 TelescopeStore；夜视归 NightModeStore 的 D16 方法）。
@@ -308,7 +310,7 @@ export class LayerController {
   setBridgeFlag(cmd: string, enabled: boolean): void {
     hilog.info(0x0000, 'StellariumArkUI', 'setBridgeFlag send %{public}s|%{public}s', cmd, enabled ? '1' : '0')
     if (cmd === 'setViewLock') {
-      this.hooks.setViewLockState(enabled)
+      this.setViewLockState(enabled)
       return
     }
     // 同步本地 @State：否则面板关闭重开后 Toggle 会显示旧值，再点一次就把状态发反了
@@ -327,6 +329,35 @@ export class LayerController {
     else if (cmd === 'setMeteors') { this.layerStore.meteors = enabled }
     else if (cmd === 'setDsoLabels') { this.layerStore.dsoLabels = enabled }
     else if (cmd === 'setAutoZoomResets') { this.viewSettingsStore.autoZoomResets = enabled }
+  }
+
+  // 原宿主 setViewLockState()（E4 并入）：视图锁定（选中判定 + 桥写 + 成功回读 trackingText）。
+  setViewLockState(enabled: boolean): void {
+    if (enabled && !this.objectDetailStore.hasSelectedObject()) {
+      this.viewSettingsStore.viewLock = false
+      this.hooks.flashHint(I18n.t('view_lock_requires_selection'))
+      return
+    }
+    const previous = this.viewSettingsStore.viewLock
+    this.viewSettingsStore.viewLock = enabled
+    this.port.requestInteractive('setViewLock', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) {
+        this.viewSettingsStore.viewLock = previous
+        this.hooks.flashHint(r.selectionRequired === true ? I18n.t('view_lock_requires_selection') : I18n.t('msg_apply_failed'))
+        return
+      }
+      if (r.viewLock !== undefined) this.viewSettingsStore.viewLock = r.viewLock === true
+      if (r.tracking !== undefined) this.hooks.setTrackingText(r.tracking === true ? 'On' : 'Off')
+      this.hooks.flashHint(this.viewSettingsStore.viewLock ? I18n.t('view_lock_enabled') : I18n.t('view_lock_disabled'))
+    }, () => {
+      this.viewSettingsStore.viewLock = previous
+      this.hooks.flashHint(I18n.t('msg_apply_failed'))
+    })
+  }
+
+  // 原宿主 toggleViewLock()（E4 并入）。
+  toggleViewLock(): void {
+    this.setViewLockState(!this.viewSettingsStore.viewLock)
   }
 
   // 原宿主 applyStarMagLimit()：极限星等写 store 并写桥。

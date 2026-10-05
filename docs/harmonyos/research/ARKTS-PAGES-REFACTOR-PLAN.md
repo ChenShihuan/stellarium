@@ -1731,3 +1731,27 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **度量**：宿主 **8,437 → 8,244 行（−193）**、`private` 方法 **250 → 233（−17：删 18 + 增 `settingsCtl()`）**、`@State private` **131 不变**；新增 1 控制器文件（351 行）；未扩展端口/store。
 
 **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 248 文件）；`test-ohos-information-policy` 3/3、`test-ohos-settings-choice-motion` 4/4 全绿（两夹具改读 `capability/SettingsController.ets`）；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。真机（192.168.50.108:36717）：`openUiPanel settingsInformation` → 点「简短」→ `getInformationSettings` `default→short`、点「默认」复原（`selectSettingsChoice`→`setInformationMode`→控制器全链）；「主设置」页点「英里」→ hilog `setConfigString "astronomy/flag_use_km_for_distance=false"`，点「千米」→ `=true`（`setDistanceUnit` 控制器全链，已复原）；`pidof` 17031 全程存活、无 jscrash。**未走查（待真机人工）**：`保存设置`/`恢复默认`（`saveAllCoreSettings`/`restoreCoreDefaults` 点击未在 hilog 观察到对应 `saveAllSettings`/`restoreDefaultSettings`，疑被面板滚动/命中吞掉）；「视图导航」页（tab 条形横向滚动后不可见）的导航开关与最大 FOV 滑块；`exportConfig`/`importConfig` picker 与剪贴板；`setProjection`（视图导航页下拉）；`setFovMarkerSetting`（图层面板）；星历开关（当前构建 DE430/431/440/441 全部「未安装」，不可启用）。
+
+#### 15.12.14 E 轨道 E4（末片）：搜索 / 音频 / 自检 / 视锁 / 今晚天象行为下沉（2026-10-05）
+
+> **背景**：E3 后 E 轨道收尾片。按「先分组普查、按各法实际读写的 store / 依赖决定去处」处置 5 组 19 法：迁出 13、登记保留 3、并入既有控制器 2 + 既有 store 1。
+
+**迁出（13 法）**
+
+| 组 | 法 | 目标 | 判定 |
+|---|---|---|---|
+| 搜索 / 筛选 | `scheduleSuggestions` / `fetchSuggestions` / `selectSearchSuggestion` | **新** `capability/SearchController.ets` | 逐字等价；去抖定时器自持 `stop()`（§15.7-3）；`callInteractive`→`port.requestInteractive`；UI（`animateTo` / 滚动复位 / `publishSearchBrowserState` / `searchObject`）经 hooks |
+| 搜索 / 筛选 | `refreshSearchFilterResults` / `selectSearchFilterCategory` / `selectSearchVisibilityFilter` / `selectSearchInstrumentFilter` / `setSearchFilterPage` | 同上 | 逐字等价（catalog 校验 + `animateTo` 220ms + `loadCategoryObjects` + 滚动复位） |
+| 音乐 | `toggleMusic` / `persistMusicEnabled` | `state/AudioStore.ets` | 逐字等价；引擎经 `AudioStoreHooks.setMusicPlaying`；AppStorage 持久化在 store 内（同 `LocationStore` / `NightModeStore` / `TelescopeStore` 例） |
+| 自检 | `selfTestAllActions`（+ `SELFTEST_ACTION_IDS` 83 项） | **新** `capability/SelfTestController.ets` | 逐字等价（`requestWhenReady` 0/100/120）；真机不可触发（编译常量 `SELFTEST=false`） |
+| 视锁 | `setViewLockState` / `toggleViewLock` | `capability/LayerController.ets` | 逐字等价；**移除 E2 的 `setViewLockState` hook**，`setBridgeFlag` 的 `setViewLock` 分支改控制器内部直调；新增 `setTrackingText` hook 回注宿主 `trackingText` |
+| 指针坐标 | `setPointerCoordinates` | `capability/ViewCoordinateController.ets` | 逐字等价（`requestWhenReady` 0/100/15，失败提示 `I18n.t('plugin_action_failed')`） |
+| 今晚天象 | `refreshTonight`（+ 私有纯助手 `fmtIso`） | `state/SessionToolStore.ets` | 逐字等价（既有 `port` / `hooks.flashHint`；`fmtIso` 随之下沉） |
+
+**登记保留（3 法，§15.6-4）**：`setLanguage`（`I18n.setLanguage` + `@StorageLink('i18nLang')` + `panelContentKey++` + 跨 store 重载 + `languageSwitchTimer` + AppStorage）；`setTrackingState` / `stopTracking`（与保留的 `refreshState()` 双向耦合 + 宿主 @State `trackingText` 经 @Prop 下发三壳层；§15.11 M1-A 已登记「引擎耦合」）；`refreshDockClock`（1s 节拍写 `dockClockText` / `currentFovText` 两个宿主 @State）。
+
+**度量（ReadAllLines 口径，与 E1–E3 一致）**：宿主 **8,244 → 7,993 行（−251）**、`private` 方法 **233 → 219（−14：删 16 + 增 `searchCtl()`/`selfTestCtl()` 2）**、`@State private` **131 不变**；新增 2 控制器（`SearchController` 176 行 + `SelfTestController` 117 行）；`LayerController` 487 → 518、`ViewCoordinateController` 162 → 171、`AudioStore` 15 → 57、`SessionToolStore` 220 → 271；未新增端口 / store。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 7 文件 0 error；`BUILD SUCCESSFUL`；契约 44 锚点 intact（33 面板 / 24 静态 id / 17 动态前缀 / 250+ 文件）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败。真机（192.168.50.108:36717）：搜索筛选全链（`setSearchBrowserPage browse/categories`、`setSearchBrowserFilter visibility|above` / `instrument|binocular`、`selectSearchCategory galaxy`→`NebulaMgr:0`，`getSearchBrowserState` 回读，测后复原）；详情卡「固定位置」→ hilog `setViewLock "1"`→`"0"`；音频面板「背景音乐」→ `StellariumAudio: muted = true`→`false`；位置面板 → `getTonightEvents`；Dock 时钟 1s 节拍；`pidof` 存活、无 jscrash。未走查：紧凑音频快捷 `toggleMusic`（无语义命令）、`pointerCoordinates` 面板（本布局内容为空、既有行为）、`selfTestAllActions`（`SELFTEST=false`）。
+
+**E 轨道收尾结论（E1–E4 全清）**：E1 位置层级选择薄胶水 + 死代码、E2 显示/图层 16 法并入 `LayerController`、E3 设置选项 18 法 → `SettingsController`、E4 搜索/音频/自检/视锁/今晚天象。宿主 **8,646 → 7,993 行（−653）**、`private` **277 → 219（−58）**。**「几何不宜下沉」评审结论**：`viewCoordinateOverlayWidth/Left/Top` + `clampedViewCoordinateOffsetX/Y`、`bottomCardX/Y` 等几何助手与 A2 热路径（`isUiPoint` / `skyZoomButtonAt` / `dockActionAt` / `expandedSafeTargetPoint`）与布局 / 命中逐帧同源，下沉会割裂绘制—命中一致性，**保留宿主**（§15.6-2 已登记）。

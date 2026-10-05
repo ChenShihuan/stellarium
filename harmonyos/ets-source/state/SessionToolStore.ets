@@ -1,5 +1,5 @@
 import { TonightPlanetRow } from '../pages/MainWindowModels'
-import { StellariumBridgeResponse, SessionSnapshot } from '../pages/StellariumTypes'
+import { StellariumBridgeResponse, SessionSnapshot, TonightEvents } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 import { sessionSignature } from '../common/derive/actions'
 import { planetZh } from '../common/derive/labels'
@@ -32,9 +32,12 @@ export interface SessionToolHooks {
 //
 // 刻意不搬的宿主职责（跨域 / 桥 / 定时器依赖，§13.1 规则 6）：
 //   - native 桥：`setObserverPlanet` / `pointAtSkyTest` / `watchGyroSend` / `watchGyroStart` /
-//     `watchGyroStop` / `refreshTonight` / `gotoTonightEvent`；
+//     `watchGyroStop` / `gotoTonightEvent`；
 //   - `watchLastSend`（节流时间戳，每次发送都写、不可观测）留宿主普通字段；
 //   - `planetZh()` 与 `nm*()` 主题色留在宿主，以 prop / 回调解入组件。
+//
+// 2026-10-05（PLAN §15.12 E4）：`refreshTonight` 自宿主下沉本 store（桥经既有 port，UI 提示经既有
+// hooks.flashHint，纯助手 `fmtIso` 随之下沉为私有方法）。
 //
 // 只放数据与纯计算，不 import UI / NAPI。
 @Observed
@@ -216,5 +219,53 @@ export class SessionToolStore {
       hooks.flashHint(I18n.t('m_continuation_basic_sdk'))
       this.sessionHint = I18n.t('m_continuation_basic_desc')
     }
+  }
+
+  // 「位置」面板今晚天象：桥拉取并本地化各卡片文案（原宿主 refreshTonight，E4 逐字搬入）。
+  // 差异仅：this.callNativeWhenReady → port.requestWhenReady、this.sessionToolStore.<f> → this.<f>、
+  // this.flashHint → hooks.flashHint、this.fmtIso → this.fmtIso（随之下沉的私有纯助手）。
+  refreshTonight(): void {
+    const port = this.ensurePort()
+    const hooks = this.hooks
+    if (port === null || hooks === null) {
+      return
+    }
+    port.requestWhenReady('getTonightEvents', '', (r: StellariumBridgeResponse) => {
+      if (!r.ok || !r.tonight) { hooks.flashHint(I18n.t('msg_fetch_failed')); return }
+      const t = r.tonight as TonightEvents
+      this.tonightDate = this.fmtIso(t.date ?? '')
+      this.tonightMoon = I18n.t('tn_phase') + ': ' + (t.moon?.phaseName ?? I18n.t('m_unknown')) + ' (' + I18n.t('tn_illumination') + ' ' + Math.round(t.moon?.illumination ?? 0) + '% · ' + I18n.t('tn_moon_age') + ' ' + (t.moon?.age ?? 0).toFixed(1) + ' ' + I18n.t('tn_days') + ')\n'
+        + '  ' + I18n.t('tn_rise') + ' ' + this.fmtIso(t.moon?.rise ?? '') + ' · ' + I18n.t('tn_transit') + ' ' + this.fmtIso(t.moon?.transit ?? '') + ' · ' + I18n.t('tn_set') + ' ' + this.fmtIso(t.moon?.set ?? '')
+      this.tonightSun = I18n.t('tn_rise') + ' ' + this.fmtIso(t.sun?.rise ?? '') + ' · ' + I18n.t('tn_transit') + ' ' + this.fmtIso(t.sun?.transit ?? '') + ' · ' + I18n.t('tn_set') + ' ' + this.fmtIso(t.sun?.set ?? '')
+      this.tonightDark = I18n.t('tn_astro_dusk') + ' ' + this.fmtIso(t.sun?.astroTwilightEnd ?? '') + ' → ' + I18n.t('tn_astro_dawn') + ' ' + this.fmtIso(t.sun?.astroTwilightStart ?? '')
+        + (t.sun?.darkWindowHours !== undefined ? (' (' + I18n.t('tn_dark_hours') + ' ~' + t.sun.darkWindowHours.toFixed(1) + ' ' + I18n.t('tn_hours') + ')') : '')
+      this.tonightPlanetRows = (t.planets ?? []).map((p): TonightPlanetRow => {
+        const vis = p.visible === true ? I18n.t('tn_visible') : I18n.t('tn_below_horizon')
+        return {
+          name: p.name ?? (p.englishName ?? ''),
+          line: I18n.t('tn_rise') + ' ' + this.fmtIso(p.rise ?? '') + ' · ' + I18n.t('tn_transit') + ' ' + this.fmtIso(p.transit ?? '') + ' · ' + I18n.t('tn_set') + ' ' + this.fmtIso(p.set ?? '')
+            + ' · ' + I18n.t('tn_magnitude') + ' ' + (p.magnitude ?? 0).toFixed(1) + ' · ' + vis,
+          jd: p.transitJd ?? 0,
+          lock: p.englishName ?? (p.name ?? '')
+        }
+      })
+      this.tonightShowers = (t.meteorShowers ?? []).map((s) => (s.name ?? '') + ': ZHR~' + (s.zhr ?? 0) + (s.status === 'confirmed' ? ' (' + I18n.t('tn_confirmed') + ')' : ' (' + I18n.t('tn_generic') + ')'))
+      this.tonightSats = ((t.satellites?.enabled ?? false) ? (I18n.t('tn_loaded') + ' ' + (t.satellites?.count ?? 0) + ' ' + I18n.t('tn_sats_count')) : I18n.t('tn_not_enabled')) + ' (' + I18n.t('tn_transit_needs_data') + ')'
+      // 点击跳转的时间基准
+      this.tonightMoonJd = t.moon?.transitJd ?? 0
+      this.tonightSunJd = t.sun?.astroTwilightEndJd ?? 0
+      this.tonightShowerJd = (t.meteorShowers && t.meteorShowers.length > 0) ? (t.meteorShowers[0].primeJd ?? this.tonightSunJd) : this.tonightSunJd
+      this.tonightHint = I18n.t('tn_updated') + ' · ' + this.fmtIso(t.date ?? '')
+      hooks.flashHint('已刷新今晚天象 · 点击卡片可跳转')
+    })
+  }
+
+  // ISO 字符串 → 'MM-DD HH:mm'（原宿主私有助手 fmtIso，随 refreshTonight 一并下沉）。
+  private fmtIso(iso: string): string {
+    if (!iso || iso.length < 16) return '--'
+    const parts = iso.split('T')
+    const d = parts[0] ?? ''
+    const t = parts[1] ?? ''
+    return (d.length >= 10 ? d.slice(5) : d) + ' ' + (t.length >= 8 ? t.slice(0, 5) : t)
   }
 }
