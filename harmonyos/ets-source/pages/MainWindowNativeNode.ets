@@ -128,6 +128,7 @@ import { GyroTargetGuide } from '../panels/astro/GyroTargetGuide'
 import { SkyCultureMakerPanel } from '../panels/skyculture/SkyCultureMakerPanel'
 import { SkyCultureViewTab } from '../panels/skyculture/SkyCultureViewTab'
 import { DockClockLayer, PadPanelHandle, PanelHandle } from '../panels/shell/PanelChromeExtras'
+import { ScriptFocusShell } from '../panels/shell/ScriptFocusShell'
 import { ScriptKeyButton } from '../panels/tools/ScriptKeyButton'
 import { GuideButton } from '../panels/guide/GuideButton'
 import { GuideLibrary } from '../panels/guide/GuideLibrary'
@@ -14420,7 +14421,35 @@ private loadPlanetPositions(): void {
         })
 
       if (this.scriptPlaybackVisible()) {
-        this.scriptFocusShell()
+        if (this.guideState.active) {
+          this.interactiveGuideShell()
+        } else {
+          ScriptFocusShell({
+            scriptWaiting: this.scriptWaiting,
+            scriptRunning: this.scriptRunning,
+            replaying: this.replaying,
+            replayPaused: this.replayPaused,
+            playbackVisible: this.scriptPlaybackVisible(),
+            compact: this.scriptControlCompact(),
+            displayName: this.scriptZh(this.scriptId.length > 0 ? this.scriptId : (this.scriptLaunchingName.length > 0 ? this.scriptLaunchingName : this.replayName)),
+            hasCaptions: this.visibleScriptCaptions().length > 0,
+            captionText: this.visibleScriptCaptionText(),
+            waitText: this.scriptWaitDisplayText(),
+            rateText: (this.replaying ? this.replayRate : this.scriptRate).toFixed((this.replaying ? this.replayRate : this.scriptRate) < 1 ? 2 : 1) + 'x',
+            keyButtonWidth: this.scriptKeyButtonWidth(),
+            controlWidth: this.scriptControlWidth(),
+            controlHeight: this.scriptControlHeight(),
+            controlX: this.scriptControlX(),
+            controlY: this.scriptControlY(),
+            onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+            onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
+            onContinue: () => { this.continueNativeScript() },
+            onChangeRate: (delta: number) => { this.changePlaybackRate(delta) },
+            onToggleReplayPause: () => { this.toggleReplayPause() },
+            onStop: () => { this.stopScriptPlayback() },
+            onSendKey: (k: string) => { this.sendScriptKey(k) }
+          })
+        }
       }
       if (!this.scriptPlaybackVisible() && this.tools.recording && !this.tools.recordingUiExpanded) {
         RecordingFocusShell({ onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) } })
@@ -14743,220 +14772,6 @@ private loadPlanetPositions(): void {
         .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
         .transition(TransitionEffect.OPACITY.animation({ duration: 220, curve: Curve.EaseOut }))
     }.width('100%').height('100%').hitTestBehavior(HitTestMode.Transparent)
-  }
-
-  @Builder
-  scriptFocusShell() {
-    if (this.guideState.active) {
-      this.interactiveGuideShell()
-    } else {
-    Stack() {
-      Stack() { }
-        .width('100%')
-        .height('100%')
-        .hitTestBehavior(HitTestMode.Block)
-        .zIndex(0)
-        .onTouch((event: TouchEvent) => { this.handleSkyTouch(event) })
-
-      Column({ space: 6 }) {
-        Row({ space: 8 }) {
-          Stack() {
-            Circle({ width: 7, height: 7 })
-              .fill(this.scriptWaiting ? '#F0B44D' : '#68C8A4')
-          }
-            .width(18)
-            .height(18)
-          Column({ space: 2 }) {
-            Text(this.scriptWaiting ? I18n.t('script_waiting') : (this.scriptRunning ? I18n.t('script_playing') : (this.replaying ? I18n.t('script_replaying') : I18n.t('script_preparing'))))
-              .fontSize(12)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#F1FAFF')
-              .maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(this.scriptZh(this.scriptId.length > 0 ? this.scriptId : (this.scriptLaunchingName.length > 0 ? this.scriptLaunchingName : this.replayName)))
-              .fontSize(10)
-              .fontColor('rgba(205, 228, 244, 0.70)')
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-            .layoutWeight(1)
-            .alignItems(HorizontalAlign.Start)
-          Stack() {
-            Rect().width(18).height(3).radius(2).fill('rgba(205, 228, 244, 0.42)')
-          }
-            .width(30)
-            .height(28)
-        }
-          .width('100%')
-          .height(36)
-          .hitTestBehavior(HitTestMode.Block)
-          .onTouch((event: TouchEvent) => { this.handleScriptControlDragTouch(event) })
-
-        Stack() {
-          if (this.visibleScriptCaptions().length > 0) {
-            Text(this.visibleScriptCaptionText())
-              .fontSize(this.scriptControlCompact() ? 11 : 12)
-              .lineHeight(this.scriptControlCompact() ? 16 : 17)
-              .fontColor('#F2FAFF')
-              .width('100%')
-              .maxLines(this.scriptWaiting ? 1 : 4)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-              .position({ x: 0, y: this.scriptWaiting ? 46 : 0 })
-              .transition(TransitionEffect.OPACITY.animation({ duration: 150, curve: Curve.EaseOut }))
-          } else if (!this.scriptWaiting) {
-            Row({ space: 8 }) {
-              LoadingProgress().width(16).height(16).color('#7FB3DC')
-              Text(I18n.t('script_playing'))
-                .fontSize(11)
-                .fontColor('rgba(205, 228, 244, 0.72)')
-            }
-              .width('100%')
-              .height('100%')
-              .justifyContent(FlexAlign.Center)
-              .transition(TransitionEffect.OPACITY.animation({ duration: 150, curve: Curve.EaseOut }))
-          }
-
-          if (this.scriptWaiting) {
-            Row({ space: 8 }) {
-              Image(getIcon('info', false)).width(16).height(16).fillColor('#D6EEFF')
-              Text(this.scriptWaitDisplayText())
-                .fontSize(11)
-                .fontColor('#E7F6FF')
-                .maxLines(2)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .layoutWeight(1)
-              Button() {
-                Row({ space: 5 }) {
-                  Image(getIcon('time_resume', false)).width(16).height(16)
-                  Text(I18n.t('script_continue'))
-                    .fontSize(11)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor('#F6FCFF')
-                    .maxLines(1)
-                }
-              }
-                .height(34)
-                .width(this.scriptControlCompact() ? 82 : 96)
-                .backgroundColor('#4E89B5')
-                .borderRadius(UI_RADIUS_CONTROL)
-                .stateEffect(true)
-                .enabled(this.scriptRunning)
-                .onClick(() => { this.continueNativeScript() })
-            }
-              .width('100%')
-              .height(44)
-              .padding({ left: 9, right: 6 })
-              .backgroundColor('rgba(78, 137, 181, 0.30)')
-              .border({ width: 0.5, color: 'rgba(147, 215, 255, 0.30)' })
-              .borderRadius(UI_RADIUS_CONTROL)
-              .position({ x: 0, y: 0 })
-              .transition(TransitionEffect.asymmetric(
-                TransitionEffect.OPACITY.animation({ duration: 150, curve: Curve.EaseOut })
-                  .combine(TransitionEffect.translate({ x: 0, y: -5 }).animation({ duration: 190, curve: curves.springMotion(0.55, 0.90) })),
-                TransitionEffect.OPACITY.animation({ duration: 110, curve: Curve.EaseIn })
-              ))
-          }
-        }
-          .width('100%')
-          .height(this.replaying ? 78 : 82)
-          .backgroundColor('rgba(91, 147, 191, 0.14)')
-          .border({ width: 0.5, color: 'rgba(147, 215, 255, 0.18)' })
-          .borderRadius(UI_RADIUS_CONTROL)
-          .clip(true)
-
-        Row({ space: 5 }) {
-          Button() {
-            Image(getIcon('time_slower', false)).width(18).height(18)
-          }
-            .backgroundColor('rgba(255,255,255,0.10)')
-            .borderRadius(UI_RADIUS_CONTROL)
-            .height(34)
-            .width(36)
-            .enabled(this.scriptPlaybackVisible())
-            .onClick(() => { this.changePlaybackRate(-1) })
-          Text((this.replaying ? this.replayRate : this.scriptRate).toFixed((this.replaying ? this.replayRate : this.scriptRate) < 1 ? 2 : 1) + 'x')
-            .fontSize(11)
-            .fontColor('#D9F1FF')
-            .width(44)
-            .textAlign(TextAlign.Center)
-            .maxLines(1)
-          Button() {
-            Image(getIcon('time_fast', false)).width(18).height(18)
-          }
-            .backgroundColor('rgba(255,255,255,0.10)')
-            .borderRadius(UI_RADIUS_CONTROL)
-            .height(34)
-            .width(36)
-            .enabled(this.scriptPlaybackVisible())
-            .onClick(() => { this.changePlaybackRate(1) })
-          if (this.replaying) {
-            Button() {
-              Image(getIcon(this.replayPaused ? 'time_realtime' : 'pause', false)).width(18).height(18)
-            }
-              .backgroundColor('rgba(255,255,255,0.10)')
-              .borderRadius(UI_RADIUS_CONTROL)
-              .height(34)
-              .width(36)
-              .onClick(() => { this.toggleReplayPause() })
-          }
-          Blank()
-          Button() {
-            Row({ space: 5 }) {
-              Image(getIcon('time_stop', false)).width(17).height(17)
-              Text(I18n.t('script_stop'))
-                .fontSize(11)
-                .fontColor('#FFFFFF')
-                .maxLines(1)
-            }
-          }
-            .backgroundColor('rgba(192, 57, 43, 0.82)')
-            .borderRadius(UI_RADIUS_CONTROL)
-            .height(34)
-            .width(this.scriptControlCompact() ? 68 : 76)
-            .stateEffect(true)
-            .onClick(() => { this.stopScriptPlayback() })
-        }
-          .width('100%')
-          .height(34)
-          .zIndex(2)
-          .hitTestBehavior(HitTestMode.Default)
-
-        if (this.scriptRunning && !this.replaying) {
-          Row({ space: 5 }) {
-            ScriptKeyButton({ label: '−', keyName: '-', btnWidth: this.scriptKeyButtonWidth(), isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.sendScriptKey(k) } })
-            ScriptKeyButton({ label: '+', keyName: '+', btnWidth: this.scriptKeyButtonWidth(), isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.sendScriptKey(k) } })
-            ScriptKeyButton({ label: '[', keyName: '[', btnWidth: this.scriptKeyButtonWidth(), isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.sendScriptKey(k) } })
-            ScriptKeyButton({ label: ']', keyName: ']', btnWidth: this.scriptKeyButtonWidth(), isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.sendScriptKey(k) } })
-            ScriptKeyButton({ label: 'N', keyName: 'N', btnWidth: this.scriptKeyButtonWidth(), isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.sendScriptKey(k) } })
-            ScriptKeyButton({ label: 'B', keyName: 'B', btnWidth: this.scriptKeyButtonWidth(), isEnabled: this.scriptRunning && !this.replaying, onKey: (k: string) => { this.sendScriptKey(k) } })
-          }
-            .height(34)
-            .width('100%')
-            .justifyContent(FlexAlign.SpaceBetween)
-            .hitTestBehavior(HitTestMode.Default)
-      }
-      }
-      .width(this.scriptControlWidth())
-      .height(this.scriptControlHeight())
-      .padding({ left: 12, right: 10, top: 8, bottom: 8 })
-      .position({ x: this.scriptControlX(), y: this.scriptControlY() })
-      .backgroundColor('rgba(10, 18, 30, 0.84)')
-      .backdropBlur(28)
-      .border({ width: 1, color: 'rgba(147, 215, 255, 0.20)' })
-      .borderRadius(UI_RADIUS_PANEL)
-      .shadow({ radius: 18, color: 'rgba(0,0,0,0.30)', offsetX: 0, offsetY: 8 })
-      .zIndex(120)
-      .hitTestBehavior(HitTestMode.Default)
-      .transition(TransitionEffect.asymmetric(
-        TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut })
-          .combine(TransitionEffect.translate({ x: 0, y: -12 }).animation({ duration: 240, curve: curves.springMotion(0.5, 0.86) })),
-        TransitionEffect.OPACITY.animation({ duration: 140, curve: Curve.EaseIn })
-          .combine(TransitionEffect.translate({ x: 0, y: -6 }).animation({ duration: 160, curve: Curve.EaseIn }))
-      ))
-  }
-  }
-
   }
 
   @Builder

@@ -1,3 +1,22 @@
+## [2026-10-02] DevEco Code - Phase 6a：抽取 `scriptFocusShell` 壳层（Phase 6 首片）
+
+- **背景/范围**：Phase 6（壳层）第一片。把 `pages/MainWindowNativeNode.ets` 的 `@Builder private scriptFocusShell()`（212 行）下沉到 `harmonyos/ets-source/panels/shell/ScriptFocusShell.ets`（246 行）。**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 3/9），不迁 V2。
+- **归属与分发（规则 9）**：原壳首行是 `if (this.guideState.active) { this.interactiveGuideShell() } else { …播放分支… }`。交互导览壳尚未组件化，把宿主 `@Builder` 经 `@BuilderParam` 回传会触发真机整应用退出（规则 9 实证），故**该分发上移到宿主调用点**：`if (this.scriptPlaybackVisible()) { if (this.guideState.active) { this.interactiveGuideShell() } else { ScriptFocusShell({…}) } }`；本组件只承载播放分支，树结构与命中语义不变。
+- **注入（规则 4/6）**：脚本状态均为宿主 `@State`（无 ScriptStore），逐项以 `@Prop` 传入——6 个布尔（`scriptWaiting` / `scriptRunning` / `replaying` / `replayPaused` / `playbackVisible` / `compact` / `hasCaptions`）、4 个文案（`displayName`=`scriptZh(...)` / `captionText` / `waitText` / `rateText`）、5 个尺寸与坐标（`keyButtonWidth` / `controlWidth` / `controlHeight` / `controlX` / `controlY`）；7 个动作回注（`onSkyTouch` / `onControlDragTouch` / `onContinue` / `onChangeRate(delta)` / `onToggleReplayPause` / `onStop` / `onSendKey`）。宿主在调用点读这些 `@State` 构造入参即订阅改值，改值后重绘并推送新 `@Prop`。
+- **单容器根（规则 7）**：根为唯一 `Stack`（内层全屏 `Stack` 触摸层 + `Column({ space: 6 })` 控制条）；`HitTestMode.Block` / `Default`、`zIndex(0/2/120)`、`backdropBlur(28)`、`UI_RADIUS_*`、`curves.springMotion(...)`、6 个 `ScriptKeyButton` 调用与 `− + [ ] N B` 标签逐字保留。原壳无 `.id(...)`（42 锚点不变）。
+- **单体手术**（`pages/MainWindowNativeNode.ets`）：**19,098 → 18,913 行，净 −185**：按边界签名正则（`@Builder … scriptFocusShell() {` 非贪婪到 `@Builder … harmonyShell() {` 之前）删除整段 212 行（非行号算术）、调用点 3 行改写为 31 行分发、新增 1 行 import。提取后先 `grep` 新文件 `this.` 残留：仅 16 个 `@Prop` 与组件自有成员，无宿主方法残留。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（2 文件 0 错）→ `devecocli build`（`-SkipEngine -SkipDeploy -SkipResources`）**BUILD SUCCESSFUL**（40 s；新文件仅一条既有类 `fill` API 版本告警）→ `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好（178 文件）→ 全量 `*-ohos*.mjs` 扫描：失败 7 个，**全部为 §13.6 存量环境类**（4 个 `-pad` 与 `mist-performance` 需设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS hdc 假设）。
+- **测试同步（规则 8）**：`scripts/test-ohos-guide.mjs` 原以 `page.indexOf('  scriptFocusShell()')` 作导览壳切片终点；本片删除该 builder 后改为 `page.indexOf('  harmonyShell()')`（新的下一个壳）→ 9/9 全绿。
+- **真机**（`com.cnchensh.stellarium`，`192.168.50.108:40565` Mate 80 Pro，1280×2832；`aa dump -l` 确认 `QAbility` `state #FOREGROUND`；`pidof` 全程 53421 存活）：
+  1. **进入**：`stellarium-cli.mjs --command playScript --payload screensaver.ssc --bundle com.cnchensh.stellarium --hdc <hdc.exe>` → `{"ok":true,"accepted":true,"pending":true}`；`devecocli ui layout` 见 `Text "脚本播放中"` + 脚本名 `"屏幕保护模式"` + `"1.0x"` + `"停止"` 与 6 个功能键（`− + [ ] N B`）—— 即 `ScriptFocusShell` 播放分支正常挂载。
+  2. **点按后实时刷新**：点速率 `+` 按钮 `(465,699)` → `1.0x` 实时变 `2.0x`（宿主 `scriptRate` 改值 → `rateText` `@Prop` → 组件重绘）。
+  3. **退出**：点 `停止` `(1081,699)` → 壳消失、回到主界面（底部 `搜索/更多功能` 复现），`pidof`=53421 仍存活（排除规则 9 运行期退出）。
+- **测后恢复**：未改动任何持久化设置（脚本速率是会话态，`stopScriptPlayback` 已复位；未写 `settings.json`）。
+- **本片新踩的坑**：
+  1. **模拟器上连续 `install -r` 会让 HAP 内 `.abc` 校验和损坏** —— 现象为启动即 `cppcrash`（`Reason:Signal:SIGABRT`，`LastFatalMessage:[common] Invalid file offset, checksum mismatch. The abc file has been corrupted`），崩在 `JsAbilityStage::LoadModule → ExecuteModuleBufferSecure`，**发生在渲染任何 UI 之前**，与源码无关；`uninstall` 后干净重装即恢复。遇到此现象先做干净重装，不要按"运行期退出回归"排查。
+  2. **`devecocli ui click` 只接受坐标 / `--id`，无按文本点击**；无 `id` 的宿主壳只能用 `ui layout` 取 center 后点击。此缺口已记录。
+  3. **Windows 上 `stellarium-cli.mjs` 默认 `--hdc` 指向 macOS DevEco 路径**（`/Applications/…`）→ 必须显式传 `--hdc "D:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe"`。
+- **Phase 6 进度**：6 个壳层第 1 个（`scriptFocusShell`）完成。剩余：`compactShell` 165 / `harmonyShell` 90 → `hoverObservatoryShell` 142 / `expandedShell` 128 → `interactiveGuideShell` 78。
 ## [2026-10-02] DevEco Code - Phase 5d：抽取 `objectInspectorModelOverlay` 叠层并收口 Phase 5
 
 - **背景/范围**：Phase 5（overlay）最后一片。把 `pages/MainWindowNativeNode.ets` 的 `@Builder private objectInspectorModelOverlay()`（47 行，含 `@Builder` 前缀）下沉到 `harmonyos/ets-source/panels/overlay/ObjectInspectorModelOverlay.ets`（80 行）。**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 3/9），不迁 V2。
