@@ -1,5 +1,5 @@
 import { image } from '@kit.ImageKit'
-import { SkyCultureArtItem, SkyCultureDescriptionBlock } from '../pages/StellariumTypes'
+import { SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureItem } from '../pages/StellariumTypes'
 
 // 「星空文化」面板的**只读详情视图**状态簇（查看器侧）。
 //
@@ -7,12 +7,14 @@ import { SkyCultureArtItem, SkyCultureDescriptionBlock } from '../pages/Stellari
 // 详情加载三态/两处展开标记）逐条搬到这里，保留原类型与默认值。宿主以
 // `@State private skyCultureViewStore: SkyCultureViewStore = new SkyCultureViewStore()` 持有。
 //
+// 本片（Phase 4 residual）：文化列表与当前选择（`skyCultures` / `skyCultureList` /
+// `skyCultureListLoading` / `currentSkyCulture` / `currentSkyCultureId`）由宿主并入本 store；
+// 消费方 `LayersPanel` / `SkyCultureViewTab` / `SettingsQuickLegacyPanel` / `ConfigFallbackPanel`
+// 经 @ObjectLink 实时读，宿主自身也改读 store（规则 4）。
+//
 // 明确**不**属于本 store（各自留在宿主）：
-//   - 文化列表与当前选择：`skyCultureList` / `skyCultureListLoading` / `skyCultures` /
-//     `currentSkyCulture` / `currentSkyCultureId` —— 被领地地图、默认文化设置、若干面板头部交叉使用，
-//     不属于"详情视图"，等 Phase 4 面板宿主切片一起收口；
 //   - 进度驱动的资源字段：`skyCultureArtStates` / `skyCultureArtThumbnailPixelMaps` —— 由逐张图片解码
-//     回调渐进写入（§13.2 的「高频写入不入 store」），留在宿主以免重渲染风暴；
+//     回调分块/防抖渐进写入（§13.2 的「高频写入不入 store」），留在宿主以免重渲染风暴；
 //   - 例外（Phase 5c）：`artPreviewPixelMap`（单张大图）虽同为解码结果，但下沉到预览叠层组件后，
 //     组件必须以引用语义（@ObjectLink）拿到 PixelMap 才能渲染 —— @Prop 会拷贝 PixelMap，真机实测
 //     导致 Image.onError「绘图资源无法显示」；每张图解码只写一次，不构成重渲染风暴，故收进本 store。
@@ -48,4 +50,11 @@ export class SkyCultureViewStore {
   artPreviewFailed: boolean = false
   // 单张大图解码结果：由解码回调渐进写入（每张只写一次），以 @ObjectLink 引用语义供叠层组件渲染。
   artPreviewPixelMap: image.PixelMap | undefined = undefined
+
+  // —— 文化列表与当前选择（Phase 4 residual）——
+  skyCultures: string[] = []
+  skyCultureList: Array<SkyCultureItem> = []
+  skyCultureListLoading: boolean = false
+  currentSkyCulture: string = ''
+  currentSkyCultureId: string = ''
 }

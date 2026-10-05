@@ -402,11 +402,9 @@ export struct WindowNativeNode {
   private readonly EDGE_MARGIN: number = 44
   // 观测列表域状态已下沉 state/ObservingListStore.ets（review §2.7：Prop 风格 → Store 风格）。
   @State private obsListStore: ObservingListStore = new ObservingListStore()
-  @State private skyCultures: string[] = []
   @State private isLoading: boolean = true
   @State private splashGone: boolean = false
   private startupViewportCheckedAt: number = 0
-  @State private currentSkyCulture: string = ""
   @State private viewTab: number = 0  // View面板子标签索引
   @State private configTab: number = 0  // 统一设置面板子标签索引；默认显示主设置
   @State private timeSettingsStore: TimeSettingsStore = new TimeSettingsStore()
@@ -449,7 +447,6 @@ export struct WindowNativeNode {
   // 画面防弯曲：限制最大视场角(100°)，不能缩到"整个天空变成一个球"，地平线保持基本平直。
   @State private flatHorizon: boolean = true
   // 桥接数据
-  @State private scriptMetadata: Record<string, ScriptMetadata> = {}
   @State private moduleList: string[] = []
   private rtsRequestSequence: number = 0
   @State private rtsCalendarStartYear: number = new Date().getFullYear()
@@ -485,7 +482,6 @@ export struct WindowNativeNode {
   @State private atmoTemperature: number = 10
   @State private atmoExtinction: number = 0.13
   @State private refractionOn: boolean = true
-  @State private skyCultureList: Array<SkyCultureItem> = []
   // 星文化制作器向导状态（Phase 3am，见 state/SkyCultureMakerStore.ets）
   @State private skyCultureMakerStore: SkyCultureMakerStore = new SkyCultureMakerStore()
   private skyCultureMakerArtworkPreviewPath: string = ''
@@ -494,8 +490,6 @@ export struct WindowNativeNode {
   private skyCultureMakerArtworkTouchStartY: number = 0
   private skyCultureMakerArtworkTouchMoved: boolean = false
   private skyCultureMakerSaveTimer: number = 0
-  @State private currentSkyCultureId: string = ''
-  @State private skyCultureListLoading: boolean = false
   // 星文化只读详情视图状态（Phase 3am，见 state/SkyCultureViewStore.ets）
   @State private skyCultureViewStore: SkyCultureViewStore = new SkyCultureViewStore()
   @State private skyCultureArtStates: Record<string, string> = {}
@@ -633,11 +627,6 @@ export struct WindowNativeNode {
   @State private speechStatus: string = ''
   // ===== 脚本录制 / 回放（#39）=====
   @State private recordBuffer: Array<RecordCmd> = []
-  @State private replaying: boolean = false
-  @State private replayPaused: boolean = false
-  @State private replayRate: number = 1
-  @State private replayName: string = ''
-  @State private scriptFocusActive: boolean = false
   @State private guideState: GuideState = { active: false, phase: 'idle', guideId: '', index: 0, count: 0, automatic: false, remaining: 0, error: '' }
   private guidePlayer?: GuidePlayer
   private guideTimer: number = -1
@@ -645,17 +634,7 @@ export struct WindowNativeNode {
   private guidePanelWasVisible: boolean = false
   private guideLastRequest: string = ''
   private guideLastResult: GuideResult = { ok: true }
-  @State private scriptRunning: boolean = false
-  @State private scriptWaiting: boolean = false
-  @State private scriptWaitMessage: string = ''
-  @State private scriptCaptions: Array<string> = []
-  @State private scriptId: string = ''
-  @State private scriptRate: number = 1
-  @State private scriptControlOffsetX: number = 0
-  @State private scriptControlOffsetY: number = 0
   // ===== 视频帧序列录制（#40）=====
-  @State private videoArchiveFileName: string = ''
-  @State private screenVideoFileName: string = ''
   private lastRecordKey: string = ''
   private lastRecordTime: number = 0
   private recordStartedAt: number = 0
@@ -1443,7 +1422,7 @@ export struct WindowNativeNode {
         if (cultureId.length > 0) {
           this.captureSkyCultureAnchor(cultureId)
           this.skyCultureViewStore.pendingId = cultureId
-          this.currentSkyCultureId = cultureId
+          this.skyCultureViewStore.currentSkyCultureId = cultureId
           this.loadSkyCultureDetails()
           hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] sky culture=%{public}s', cultureId)
         }
@@ -1455,10 +1434,10 @@ export struct WindowNativeNode {
         return
       }
       if (commandName === 'playScript' && response.ok === true) {
-        this.scriptFocusActive = true
+        this.scriptStore.scriptFocusActive = true
         this.scriptStore.scriptLaunching = false
         this.scriptStore.scriptLaunchingName = ''
-        this.scriptId = String(event['payload'] ?? '')
+        this.scriptStore.scriptId = String(event['payload'] ?? '')
         this.scriptStartGraceUntil = Date.now() + 2500
         this.panelVisible = false
         this.infoWinVisible = false
@@ -1467,15 +1446,15 @@ export struct WindowNativeNode {
       }
       if (commandName === 'continueScript' && response.ok === true) {
         this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, () => {
-          this.scriptWaiting = false
-          this.scriptWaitMessage = ''
+          this.scriptStore.scriptWaiting = false
+          this.scriptStore.scriptWaitMessage = ''
         })
         return
       }
       if (commandName === 'setScriptRate' && response.ok === true) {
         const rate = Number(String(event['payload'] ?? '').trim())
         if (Number.isFinite(rate) && rate > 0) {
-          this.scriptRate = rate
+          this.scriptStore.scriptRate = rate
         }
         return
       }
@@ -1555,8 +1534,8 @@ export struct WindowNativeNode {
     this.bridgeSyncStarted = true
     this.callNativeWhenReady("getSkyCultures", "", (r) => {
       if (r.ok !== true || !Array.isArray(r.items)) { return }
-      this.skyCultures = r.items as string[]
-      this.currentSkyCulture = r.current as string
+      this.skyCultureViewStore.skyCultures = r.items as string[]
+      this.skyCultureViewStore.currentSkyCulture = r.current as string
       this.dismissSplash()
       this.runStartupBridgeTasks()
     })
@@ -1748,7 +1727,7 @@ export struct WindowNativeNode {
     this.stopAstroCalcContextTimer()
     this.stopTelescopeLivePosition(false)
     this.stopScriptStatusPolling()
-    if (this.replaying) {
+    if (this.scriptStore.replaying) {
       this.finishRecordingReplay('回放已结束')
     }
     this.tools.recording = false
@@ -2540,7 +2519,7 @@ export struct WindowNativeNode {
   private callNativeFire(name: string, payload: string = ''): void {
     const raw = BridgeClient.send(name, payload)
     if (raw.length === 0) { return }
-    if (this.tools.recording && !this.tools.recordingPaused && !this.replaying && this.isRecordable(name)) {
+    if (this.tools.recording && !this.tools.recordingPaused && !this.scriptStore.replaying && this.isRecordable(name)) {
       let accepted = false
       try {
         accepted = (JSON.parse(raw) as StellariumBridgeResponse).ok === true
@@ -2552,7 +2531,7 @@ export struct WindowNativeNode {
   }
 
   private recordAcceptedCommand(name: string, payload: string): void {
-    if (!this.tools.recording || this.tools.recordingPaused || this.replaying || !this.isRecordable(name)) { return }
+    if (!this.tools.recording || this.tools.recordingPaused || this.scriptStore.replaying || !this.isRecordable(name)) { return }
     const key = name + '|' + payload
     const now = Date.now()
     if (key === this.lastRecordKey && now - this.lastRecordTime <= 400) { return }
@@ -2582,11 +2561,11 @@ export struct WindowNativeNode {
 
   private scheduleRecordingViewCheckpoint(delayMs: number = 900, fullSession: boolean = false): void {
     this.cancelRecordingViewCheckpoint()
-    if (!this.tools.recording || this.tools.recordingPaused || this.replaying) { return }
+    if (!this.tools.recording || this.tools.recordingPaused || this.scriptStore.replaying) { return }
     this.recordViewCheckpointTimer = setTimeout(() => {
       this.recordViewCheckpointTimer = -1
       this.callInteractive('getSessionState', '', (response: StellariumBridgeResponse) => {
-        if (!this.tools.recording || this.tools.recordingPaused || this.replaying || response.ok !== true) { return }
+        if (!this.tools.recording || this.tools.recordingPaused || this.scriptStore.replaying || response.ok !== true) { return }
         const state = response as SessionSnapshot
         const checkpoint: SessionSnapshot = fullSession ? {
           schemaVersion: 1,
@@ -3143,10 +3122,10 @@ export struct WindowNativeNode {
         this.flashHint(I18n.t('msg_recording_empty'))
         return
       }
-      this.replaying = true
-      this.replayPaused = false
-      this.replayRate = 1
-      this.replayName = resp.name ?? file
+      this.scriptStore.replaying = true
+      this.scriptStore.replayPaused = false
+      this.scriptStore.replayRate = 1
+      this.scriptStore.replayName = resp.name ?? file
       this.replayCommands = cmds
       this.replayIndex = 0
       this.replayStartedAt = Date.now()
@@ -3158,7 +3137,7 @@ export struct WindowNativeNode {
   }
 
   private replayNextCommand(): void {
-    if (!this.replaying || this.replayPaused) { return }
+    if (!this.scriptStore.replaying || this.scriptStore.replayPaused) { return }
     if (this.replayIndex >= this.replayCommands.length) {
       this.finishRecordingReplay('回放完成')
       return
@@ -3168,9 +3147,9 @@ export struct WindowNativeNode {
     const targetTime = typeof commandItem.t === 'number' && Number.isFinite(commandItem.t)
       ? Math.max(0, commandItem.t) : fallbackTime
     const timelineElapsed = this.replayTimelineMs()
-    const delay = Math.max(0, (targetTime - timelineElapsed) / Math.max(0.25, this.replayRate))
+    const delay = Math.max(0, (targetTime - timelineElapsed) / Math.max(0.25, this.scriptStore.replayRate))
     this.replayTimer = setTimeout(() => {
-      if (!this.replaying) { return }
+      if (!this.scriptStore.replaying) { return }
       this.replayIndex++
       this.callNativeWhenReady(commandItem.c, commandItem.p, () => {
         this.replayNextCommand()
@@ -3185,10 +3164,10 @@ export struct WindowNativeNode {
       clearTimeout(this.replayTimer)
       this.replayTimer = -1
     }
-    this.replaying = false
-    this.replayPaused = false
-    this.replayRate = 1
-    this.replayName = ''
+    this.scriptStore.replaying = false
+    this.scriptStore.replayPaused = false
+    this.scriptStore.replayRate = 1
+    this.scriptStore.replayName = ''
     this.replayCommands = []
     this.replayIndex = 0
     this.replayPauseStartedAt = 0
@@ -3197,19 +3176,19 @@ export struct WindowNativeNode {
   }
 
   private replayTimelineMs(): number {
-    const now = this.replayPaused && this.replayPauseStartedAt > 0
+    const now = this.scriptStore.replayPaused && this.replayPauseStartedAt > 0
       ? this.replayPauseStartedAt : Date.now()
-    return Math.max(0, now - this.replayStartedAt - this.replayPausedTotal) * this.replayRate
+    return Math.max(0, now - this.replayStartedAt - this.replayPausedTotal) * this.scriptStore.replayRate
   }
 
   private toggleReplayPause(): void {
-    if (!this.replaying) { return }
-    if (this.replayPaused) {
+    if (!this.scriptStore.replaying) { return }
+    if (this.scriptStore.replayPaused) {
       if (this.replayPauseStartedAt > 0) {
         this.replayPausedTotal += Date.now() - this.replayPauseStartedAt
       }
       this.replayPauseStartedAt = 0
-      this.replayPaused = false
+      this.scriptStore.replayPaused = false
       this.flashHint('回放继续')
       this.replayNextCommand()
       return
@@ -3219,17 +3198,17 @@ export struct WindowNativeNode {
       this.replayTimer = -1
     }
     this.replayPauseStartedAt = Date.now()
-    this.replayPaused = true
+    this.scriptStore.replayPaused = true
     this.flashHint('回放已暂停')
   }
 
   private changePlaybackRate(direction: number): void {
-    if (this.replaying) {
-      const next = Math.max(0.25, Math.min(16, this.replayRate * (direction > 0 ? 2 : 0.5)))
+    if (this.scriptStore.replaying) {
+      const next = Math.max(0.25, Math.min(16, this.scriptStore.replayRate * (direction > 0 ? 2 : 0.5)))
       const timeline = this.replayTimelineMs()
-      const anchor = this.replayPaused && this.replayPauseStartedAt > 0
+      const anchor = this.scriptStore.replayPaused && this.replayPauseStartedAt > 0
         ? this.replayPauseStartedAt : Date.now()
-      this.replayRate = next
+      this.scriptStore.replayRate = next
       this.replayStartedAt = anchor - this.replayPausedTotal - timeline / next
       if (this.replayTimer >= 0) {
         clearTimeout(this.replayTimer)
@@ -3251,7 +3230,7 @@ export struct WindowNativeNode {
   }
 
   private scriptPlaybackVisible(): boolean {
-    return this.guideState.active || this.scriptFocusActive || this.scriptStore.scriptLaunching || this.replaying
+    return this.guideState.active || this.scriptStore.scriptFocusActive || this.scriptStore.scriptLaunching || this.scriptStore.replaying
   }
 
   private scriptSessionActive(): boolean {
@@ -3259,7 +3238,7 @@ export struct WindowNativeNode {
   }
 
   private scriptControlWidth(): number {
-    return Math.max(280, Math.min(this.skyWidth - 24, this.replaying ? 520 : 500))
+    return Math.max(280, Math.min(this.skyWidth - 24, this.scriptStore.replaying ? 520 : 500))
   }
 
   private scriptControlCompact(): boolean {
@@ -3273,13 +3252,13 @@ export struct WindowNativeNode {
 
   private scriptControlX(): number {
     const maxX = Math.max(8, this.skyWidth - this.scriptControlWidth() - 8)
-    return this.clamp(12 + this.scriptControlOffsetX, 8, maxX)
+    return this.clamp(12 + this.scriptStore.scriptControlOffsetX, 8, maxX)
   }
 
   private scriptControlY(): number {
     const safeTop = this.scriptControlSafeTop()
     const maxY = Math.max(safeTop, this.skyHeight - this.scriptControlHeight() - 12)
-    return this.clamp(safeTop + this.scriptControlOffsetY, safeTop, maxY)
+    return this.clamp(safeTop + this.scriptStore.scriptControlOffsetY, safeTop, maxY)
   }
 
   private handleScriptControlDragTouch(event: TouchEvent): void {
@@ -3291,24 +3270,24 @@ export struct WindowNativeNode {
       this.scriptControlDragging = true
       this.scriptControlDragStartX = x
       this.scriptControlDragStartY = y
-      this.scriptControlDragStartOffsetX = this.scriptControlOffsetX
-      this.scriptControlDragStartOffsetY = this.scriptControlOffsetY
+      this.scriptControlDragStartOffsetX = this.scriptStore.scriptControlOffsetX
+      this.scriptControlDragStartOffsetY = this.scriptStore.scriptControlOffsetY
       this.stopSkyInertia()
       return
     }
     if (event.type === TouchType.Move && this.scriptControlDragging) {
-      this.scriptControlOffsetX = this.scriptControlDragStartOffsetX + x - this.scriptControlDragStartX
-      this.scriptControlOffsetY = this.scriptControlDragStartOffsetY + y - this.scriptControlDragStartY
+      this.scriptStore.scriptControlOffsetX = this.scriptControlDragStartOffsetX + x - this.scriptControlDragStartX
+      this.scriptStore.scriptControlOffsetY = this.scriptControlDragStartOffsetY + y - this.scriptControlDragStartY
       return
     }
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.scriptControlDragging = false
       if (this.guideState.active) {
-        this.scriptControlOffsetX = this.guideCardX() - (this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2)
-        this.scriptControlOffsetY = this.guideCardY() - (this.skyHeight - this.guideCardHeight() - 16)
+        this.scriptStore.scriptControlOffsetX = this.guideCardX() - (this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2)
+        this.scriptStore.scriptControlOffsetY = this.guideCardY() - (this.skyHeight - this.guideCardHeight() - 16)
       } else {
-        this.scriptControlOffsetX = this.scriptControlX() - 12
-        this.scriptControlOffsetY = this.scriptControlY() - this.scriptControlSafeTop()
+        this.scriptStore.scriptControlOffsetX = this.scriptControlX() - 12
+        this.scriptStore.scriptControlOffsetY = this.scriptControlY() - this.scriptControlSafeTop()
       }
     }
   }
@@ -3328,15 +3307,15 @@ export struct WindowNativeNode {
     }
     this.scriptStatusRequestPending = false
     this.scriptCaptionsRequestPending = false
-    this.scriptCaptions = []
+    this.scriptStore.scriptCaptions = []
   }
 
   private finishNativeScriptUi(message: string): void {
-    this.scriptRunning = false
-    this.scriptWaiting = false
-    this.scriptWaitMessage = ''
-    this.scriptId = ''
-    this.scriptFocusActive = false
+    this.scriptStore.scriptRunning = false
+    this.scriptStore.scriptWaiting = false
+    this.scriptStore.scriptWaitMessage = ''
+    this.scriptStore.scriptId = ''
+    this.scriptStore.scriptFocusActive = false
     this.scriptStore.scriptLaunching = false
     this.scriptStore.scriptLaunchingName = ''
     this.scriptStartGraceUntil = 0
@@ -3363,19 +3342,19 @@ export struct WindowNativeNode {
       const running = status.running === true
       const waiting = running && status.waiting === true
       const waitMessage = waiting && typeof status.waitMessage === 'string' ? status.waitMessage : ''
-      this.scriptRunning = running
-      if (waiting !== this.scriptWaiting || waitMessage !== this.scriptWaitMessage) {
+      this.scriptStore.scriptRunning = running
+      if (waiting !== this.scriptStore.scriptWaiting || waitMessage !== this.scriptStore.scriptWaitMessage) {
         this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.55, 0.90) }, () => {
-          this.scriptWaiting = waiting
-          this.scriptWaitMessage = waitMessage
+          this.scriptStore.scriptWaiting = waiting
+          this.scriptStore.scriptWaitMessage = waitMessage
         })
       }
-      this.scriptId = typeof status.scriptId === 'string' ? status.scriptId : ''
+      this.scriptStore.scriptId = typeof status.scriptId === 'string' ? status.scriptId : ''
       this.refreshScriptCaptions()
       if (typeof status.scriptRate === 'number' && Number.isFinite(status.scriptRate)) {
-        this.scriptRate = status.scriptRate
+        this.scriptStore.scriptRate = status.scriptRate
       }
-      if (!running && !this.scriptStore.scriptLaunching && !this.replaying && Date.now() >= this.scriptStartGraceUntil) {
+      if (!running && !this.scriptStore.scriptLaunching && !this.scriptStore.replaying && Date.now() >= this.scriptStartGraceUntil) {
         this.finishNativeScriptUi(I18n.t('script_finished'))
       }
     }, () => {
@@ -3390,16 +3369,16 @@ export struct WindowNativeNode {
       this.scriptCaptionsRequestPending = false
       const response = r as ScriptCaptionsResponse
       if (response.ok !== true || !Array.isArray(response.captions)) {
-        this.scriptCaptions = []
+        this.scriptStore.scriptCaptions = []
         return
       }
       const captions = response.captions
         .filter((item) => item.visible === true && typeof item.text === 'string' && item.text.length > 0)
         .map((item) => item.text)
         .slice(-3)
-      if (captions.join('\n') !== this.scriptCaptions.join('\n')) {
+      if (captions.join('\n') !== this.scriptStore.scriptCaptions.join('\n')) {
         this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, () => {
-          this.scriptCaptions = captions
+          this.scriptStore.scriptCaptions = captions
         })
       }
     }, () => {
@@ -3408,7 +3387,7 @@ export struct WindowNativeNode {
   }
 
   private visibleScriptCaptions(): Array<string> {
-    return this.scriptCaptions.slice(-3)
+    return this.scriptStore.scriptCaptions.slice(-3)
   }
 
   private visibleScriptCaptionText(): string {
@@ -3416,7 +3395,7 @@ export struct WindowNativeNode {
   }
 
   private scriptWaitDisplayText(): string {
-    const message = this.scriptWaitMessage.trim()
+    const message = this.scriptStore.scriptWaitMessage.trim()
     if (message.length === 0 || /press\s+(any\s+)?key\s+to\s+continue/i.test(message)) {
       return I18n.t('script_wait_hint')
     }
@@ -3428,7 +3407,7 @@ export struct WindowNativeNode {
       this.executeGuideRequest('guideAction', 'stop')
       return
     }
-    if (this.replaying) {
+    if (this.scriptStore.replaying) {
       this.finishRecordingReplay('回放已停止')
     }
     this.callInteractive('stopScript', '', (r: StellariumBridgeResponse) => {
@@ -3437,10 +3416,10 @@ export struct WindowNativeNode {
   }
 
   private changeScriptRate(direction: number): void {
-    const next = Math.max(0.25, Math.min(16, this.scriptRate * (direction > 0 ? 2 : 0.5)))
+    const next = Math.max(0.25, Math.min(16, this.scriptStore.scriptRate * (direction > 0 ? 2 : 0.5)))
     this.callInteractive('setScriptRate', next.toString(), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.scriptRate = next
+        this.scriptStore.scriptRate = next
       } else {
         this.flashHint('调整脚本速度失败')
       }
@@ -3459,12 +3438,12 @@ export struct WindowNativeNode {
   }
 
   private continueNativeScript(): void {
-    if (!this.scriptRunning || this.replaying) return
+    if (!this.scriptStore.scriptRunning || this.scriptStore.replaying) return
     this.callInteractive('continueScript', '', (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, () => {
-          this.scriptWaiting = false
-          this.scriptWaitMessage = ''
+          this.scriptStore.scriptWaiting = false
+          this.scriptStore.scriptWaitMessage = ''
         })
         this.flashHint(I18n.t('script_continue'))
       } else {
@@ -3474,7 +3453,7 @@ export struct WindowNativeNode {
   }
 
   private sendScriptKey(key: string): void {
-    if (!this.scriptRunning || this.replaying) return
+    if (!this.scriptStore.scriptRunning || this.scriptStore.replaying) return
     this.callInteractive('sendKey', key, (r: StellariumBridgeResponse) => {
       if (r.ok !== true) {
         this.flashHint('脚本按键不可用')
@@ -3483,7 +3462,7 @@ export struct WindowNativeNode {
   }
 
   private scriptControlHeight(): number {
-    return this.replaying ? 176 : 224
+    return this.scriptStore.replaying ? 176 : 224
   }
 
   private scriptKeyButtonWidth(): number {
@@ -3505,11 +3484,11 @@ export struct WindowNativeNode {
     for (const item of raw as Array<ScriptMetadata>) {
       if (item.file) { next[item.file] = item }
     }
-    this.scriptMetadata = next
+    this.scriptStore.scriptMetadata = next
   }
 
   private scriptMeta(filename: string): ScriptMetadata | undefined {
-    return this.scriptMetadata[filename]
+    return this.scriptStore.scriptMetadata[filename]
   }
 
   private resourceText(value: string | undefined, fallback: string): string {
@@ -3738,8 +3717,8 @@ export struct WindowNativeNode {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const dir = context.filesDir + '/recordings/videos'
       fileIo.mkdirSync(dir, true)
-      this.screenVideoFileName = 'stellarium-screen-' + Date.now().toString() + '.mp4'
-      this.scriptStore.screenVideoPath = dir + '/' + this.screenVideoFileName
+      this.scriptStore.screenVideoFileName = 'stellarium-screen-' + Date.now().toString() + '.mp4'
+      this.scriptStore.screenVideoPath = dir + '/' + this.scriptStore.screenVideoFileName
       this.scriptStore.screenVideoBytes = 0
       this.scriptStore.screenVideoStatus = '等待系统录屏授权…'
       this.screenCaptureFile = fileIo.openSync(this.scriptStore.screenVideoPath,
@@ -3834,7 +3813,7 @@ export struct WindowNativeNode {
         this.scriptStore.videoFailedFrames = 0
         this.scriptStore.videoMaxFrames = r.maxFrames as number ?? 0
         this.scriptStore.videoArchivePath = ''
-        this.videoArchiveFileName = ''
+        this.scriptStore.videoArchiveFileName = ''
         this.startVideoStatePolling()
         this.flashHint('开始录制视频帧序列：' + fps + ' fps × ' + duration + ' s')
       } else {
@@ -3852,7 +3831,7 @@ export struct WindowNativeNode {
         this.scriptStore.videoFailedFrames = (r.failedFrames as number) ?? 0
         this.scriptStore.videoDir = r.dir as string ?? ''
         this.scriptStore.videoArchivePath = r.archivePath as string ?? ''
-        this.videoArchiveFileName = r.archiveFileName as string ?? ''
+        this.scriptStore.videoArchiveFileName = r.archiveFileName as string ?? ''
         this.flashHint(this.scriptStore.videoArchivePath.length > 0 ?
           '已停止，共 ' + this.scriptStore.videoFrameCount + ' 帧，ZIP 已生成' :
           '已停止，共 ' + this.scriptStore.videoFrameCount + ' 帧，但 ZIP 生成失败')
@@ -7377,7 +7356,7 @@ export struct WindowNativeNode {
     const requestId = ++this.skyCultureListRequestId
     ++this.skyCultureDetailsRequestId
     this.skyCultureViewStore.pendingId = ''
-    this.skyCultureListLoading = true
+    this.skyCultureViewStore.skyCultureListLoading = true
     this.callInteractive('getSkyCultureList', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.skyCultureListRequestId) return
       if (r.ok === true && r.items !== undefined && Array.isArray(r.items)) {
@@ -7403,21 +7382,21 @@ export struct WindowNativeNode {
             hasLunarSystem: obj.hasLunarSystem === true,
           });
         }
-        this.skyCultureList = list;
+        this.skyCultureViewStore.skyCultureList = list;
         if (r.current !== undefined) {
-          this.currentSkyCultureId = r.current as string;
+          this.skyCultureViewStore.currentSkyCultureId = r.current as string;
         }
         this.loadSkyCultureDetails()
       }
-      this.skyCultureListLoading = false
+      this.skyCultureViewStore.skyCultureListLoading = false
     }, () => {
       if (requestId !== this.skyCultureListRequestId) return
-      this.skyCultureListLoading = false
+      this.skyCultureViewStore.skyCultureListLoading = false
     })
   }
 
   private selectSkyCulture(id: string): void {
-    if (id === this.currentSkyCultureId || id === this.skyCultureViewStore.pendingId) return
+    if (id === this.skyCultureViewStore.currentSkyCultureId || id === this.skyCultureViewStore.pendingId) return
     this.captureSkyCultureAnchor(id)
     const requestId = ++this.skyCultureDetailsRequestId
     this.skyCultureViewStore.pendingId = id
@@ -7426,9 +7405,9 @@ export struct WindowNativeNode {
     this.callInteractive('setSkyCulture', id, (r: StellariumBridgeResponse) => {
       if (requestId !== this.skyCultureDetailsRequestId) return
       if (r.ok === true) {
-        this.currentSkyCultureId = r.cultureId !== undefined ? r.cultureId : id
-        const selected = this.skyCultureList.find((item: SkyCultureItem) => item.id === this.currentSkyCultureId)
-        this.currentSkyCulture = r.culture !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(this.currentSkyCultureId, r.culture) : (selected !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(selected.id, selected.name) : id)
+        this.skyCultureViewStore.currentSkyCultureId = r.cultureId !== undefined ? r.cultureId : id
+        const selected = this.skyCultureViewStore.skyCultureList.find((item: SkyCultureItem) => item.id === this.skyCultureViewStore.currentSkyCultureId)
+        this.skyCultureViewStore.currentSkyCulture = r.culture !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(this.skyCultureViewStore.currentSkyCultureId, r.culture) : (selected !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(selected.id, selected.name) : id)
         this.skyCultureSettingsStore.skyCultureLabelPickerOpen = ''
         this.skyCultureSettingsStore.skyCultureClassificationFilterOpen = false
         this.skyCultureSettingsStore.skyCultureRegionFilterOpen = false
@@ -7512,7 +7491,7 @@ export struct WindowNativeNode {
   }
 
   private loadSkyCultureDetails(): void {
-    if (this.currentSkyCultureId.length === 0) return
+    if (this.skyCultureViewStore.currentSkyCultureId.length === 0) return
     const requestId = ++this.skyCultureDetailsRequestId
     this.skyCultureViewStore.detailsLoading = true
     this.skyCultureViewStore.detailError = ''
@@ -7524,9 +7503,9 @@ export struct WindowNativeNode {
         this.clearSkyCultureAnchor()
         return
       }
-      this.currentSkyCultureId = r.id !== undefined ? r.id : this.currentSkyCultureId
-      this.armSkyCultureAnchor(this.currentSkyCultureId, requestId)
-      this.currentSkyCulture = r.name !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(this.currentSkyCultureId, r.name) : this.currentSkyCulture
+      this.skyCultureViewStore.currentSkyCultureId = r.id !== undefined ? r.id : this.skyCultureViewStore.currentSkyCultureId
+      this.armSkyCultureAnchor(this.skyCultureViewStore.currentSkyCultureId, requestId)
+      this.skyCultureViewStore.currentSkyCulture = r.name !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(this.skyCultureViewStore.currentSkyCultureId, r.name) : this.skyCultureViewStore.currentSkyCulture
       this.skyCultureSettingsStore.skyCultureLabelPickerOpen = ''
       this.skyCultureSettingsStore.skyCultureRegions = r.region !== undefined ? r.region : []
       this.skyCultureSettingsStore.skyCultureClassification = r.classification !== undefined ? r.classification : ''
@@ -7801,10 +7780,10 @@ export struct WindowNativeNode {
   }
 
   private setCurrentSkyCultureAsDefault(): void {
-    if (this.currentSkyCultureId.length === 0 || this.skyCultureSettingsStore.skyCultureDefaultId === this.currentSkyCultureId) return
-    this.callInteractive('setSkyCultureDefault', this.currentSkyCultureId, (r: StellariumBridgeResponse) => {
+    if (this.skyCultureViewStore.currentSkyCultureId.length === 0 || this.skyCultureSettingsStore.skyCultureDefaultId === this.skyCultureViewStore.currentSkyCultureId) return
+    this.callInteractive('setSkyCultureDefault', this.skyCultureViewStore.currentSkyCultureId, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.skyCultureSettingsStore.skyCultureDefaultId = r.defaultId !== undefined ? r.defaultId : this.currentSkyCultureId
+        this.skyCultureSettingsStore.skyCultureDefaultId = r.defaultId !== undefined ? r.defaultId : this.skyCultureViewStore.currentSkyCultureId
         this.flashHint('已设为默认星空文化')
       }
     })
@@ -7901,7 +7880,7 @@ export struct WindowNativeNode {
     const generation = this.skyCultureArtThumbnailGeneration
     this.decodeLocalImage(filePath, 'sky-culture-art-thumbnail', (pixelMap: image.PixelMap) => {
       if (requestId !== this.skyCultureDetailsRequestId || generation !== this.skyCultureArtThumbnailGeneration ||
-        this.currentSkyCultureId.length === 0) {
+        this.skyCultureViewStore.currentSkyCultureId.length === 0) {
         this.releaseDecodedImage(pixelMap, 'stale-sky-culture-art-thumbnail')
         return
       }
@@ -7915,7 +7894,7 @@ export struct WindowNativeNode {
       hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-art] thumbnail ready path=%{public}s', rawPath)
     }, (err: Error) => {
       if (requestId !== this.skyCultureDetailsRequestId || generation !== this.skyCultureArtThumbnailGeneration ||
-        this.currentSkyCultureId.length === 0) {
+        this.skyCultureViewStore.currentSkyCultureId.length === 0) {
         return
       }
       this.setSkyCultureArtStatus(rawPath, 'decodeFailed')
@@ -7944,7 +7923,7 @@ export struct WindowNativeNode {
     let visibleIndex = 0
     const decodeVisibleChunk = (): void => {
       this.skyCultureArtDecodeTimer = 0
-      if (requestId !== this.skyCultureDetailsRequestId || this.currentSkyCultureId.length === 0) return
+      if (requestId !== this.skyCultureDetailsRequestId || this.skyCultureViewStore.currentSkyCultureId.length === 0) return
       const chunkEnd = Math.min(visibleIndex + 4, visiblePaths.length)
       while (visibleIndex < chunkEnd) {
         this.decodeSkyCultureArtThumbnail(visiblePaths[visibleIndex], requestId)
@@ -7962,7 +7941,7 @@ export struct WindowNativeNode {
       items.length.toString(), ready.toString(), missing.length.toString())
     let nextIndex = 0
     const copyNext = (): void => {
-      if (requestId !== this.skyCultureDetailsRequestId || this.currentSkyCultureId.length === 0) return
+      if (requestId !== this.skyCultureDetailsRequestId || this.skyCultureViewStore.currentSkyCultureId.length === 0) return
       if (nextIndex >= missing.length) {
         let completed = 0
         let failed = 0
@@ -8185,7 +8164,7 @@ export struct WindowNativeNode {
 
 
   private loadSkyCultureTerritoryMap(): void {
-    if (!this.skyCultureSettingsStore.skyCultureHasTerritoryArchive || this.currentSkyCultureId.length === 0 || this.skyCultureSettingsStore.skyCultureTerritoryMapLoading) return
+    if (!this.skyCultureSettingsStore.skyCultureHasTerritoryArchive || this.skyCultureViewStore.currentSkyCultureId.length === 0 || this.skyCultureSettingsStore.skyCultureTerritoryMapLoading) return
     this.skyCultureSettingsStore.applySkyCultureTerritoryMapYearInput()
     const requestedYear = this.skyCultureSettingsStore.skyCultureTerritoryMapYear
     this.skyCultureSettingsStore.skyCultureTerritoryMapLoading = true
@@ -9167,11 +9146,11 @@ private loadPlanetPositions(): void {
     }
     this.scriptStore.scriptLaunching = true
     this.scriptStore.scriptLaunchingName = filename
-    this.scriptFocusActive = true
-    this.scriptId = filename
-    this.scriptRate = 1
-    this.scriptWaiting = false
-    this.scriptWaitMessage = ''
+    this.scriptStore.scriptFocusActive = true
+    this.scriptStore.scriptId = filename
+    this.scriptStore.scriptRate = 1
+    this.scriptStore.scriptWaiting = false
+    this.scriptStore.scriptWaitMessage = ''
     this.scriptStartGraceUntil = Date.now() + 2500
     this.panelVisible = false
     this.infoWinVisible = false
@@ -9188,9 +9167,9 @@ private loadPlanetPositions(): void {
         this.flashHint(I18n.t('msg_script_running'))
         this.refreshScriptStatus()
       } else {
-        this.scriptFocusActive = false
-        this.scriptWaiting = false
-        this.scriptWaitMessage = ''
+        this.scriptStore.scriptFocusActive = false
+        this.scriptStore.scriptWaiting = false
+        this.scriptStore.scriptWaitMessage = ''
         this.stopScriptStatusPolling()
         hilog.error(0x0000, 'StellariumArkUI', 'playScript failed %{public}s err=%{public}s', filename, r.error ?? '')
         this.flashHint(I18n.t('msg_apply_failed'))
@@ -9198,9 +9177,9 @@ private loadPlanetPositions(): void {
     }, () => {
       this.scriptStore.scriptLaunching = false
       this.scriptStore.scriptLaunchingName = ''
-      this.scriptFocusActive = false
-      this.scriptWaiting = false
-      this.scriptWaitMessage = ''
+      this.scriptStore.scriptFocusActive = false
+      this.scriptStore.scriptWaiting = false
+      this.scriptStore.scriptWaitMessage = ''
       this.stopScriptStatusPolling()
       this.flashHint('脚本启动超时，请重试')
     })
@@ -9723,7 +9702,7 @@ private loadPlanetPositions(): void {
         return
       }
       const culture = r.culture && r.culture.length > 0 ? r.culture : name
-      this.currentSkyCulture = culture
+      this.skyCultureViewStore.currentSkyCulture = culture
       this.flashHint(I18n.t('i0068').replace('%s', culture))
     })
   }
@@ -14365,17 +14344,14 @@ private loadPlanetPositions(): void {
           })
         } else {
           ScriptFocusShell({
-            scriptWaiting: this.scriptWaiting,
-            scriptRunning: this.scriptRunning,
-            replaying: this.replaying,
-            replayPaused: this.replayPaused,
+            scriptStore: this.scriptStore,
             playbackVisible: this.scriptPlaybackVisible(),
             compact: this.scriptControlCompact(),
-            displayName: this.scriptZh(this.scriptId.length > 0 ? this.scriptId : (this.scriptStore.scriptLaunchingName.length > 0 ? this.scriptStore.scriptLaunchingName : this.replayName)),
+            displayName: this.scriptZh(this.scriptStore.scriptId.length > 0 ? this.scriptStore.scriptId : (this.scriptStore.scriptLaunchingName.length > 0 ? this.scriptStore.scriptLaunchingName : this.scriptStore.replayName)),
             hasCaptions: this.visibleScriptCaptions().length > 0,
             captionText: this.visibleScriptCaptionText(),
             waitText: this.scriptWaitDisplayText(),
-            rateText: (this.replaying ? this.replayRate : this.scriptRate).toFixed((this.replaying ? this.replayRate : this.scriptRate) < 1 ? 2 : 1) + 'x',
+            rateText: (this.scriptStore.replaying ? this.scriptStore.replayRate : this.scriptStore.scriptRate).toFixed((this.scriptStore.replaying ? this.scriptStore.replayRate : this.scriptStore.scriptRate) < 1 ? 2 : 1) + 'x',
             keyButtonWidth: this.scriptKeyButtonWidth(),
             controlWidth: this.scriptControlWidth(),
             controlHeight: this.scriptControlHeight(),
@@ -15008,10 +14984,10 @@ private loadPlanetPositions(): void {
   private guideCardWidth(): number { return Math.max(200, Math.min(440, this.skyWidth - 24)) }
   private guideCardHeight(): number { return Math.max(160, Math.min(390, this.skyHeight - this.scriptControlSafeTop() - 24)) }
   private guideCardX(): number {
-    return this.clamp((this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2) + this.scriptControlOffsetX, 8, Math.max(8, this.skyWidth - this.guideCardWidth() - 8))
+    return this.clamp((this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2) + this.scriptStore.scriptControlOffsetX, 8, Math.max(8, this.skyWidth - this.guideCardWidth() - 8))
   }
   private guideCardY(): number {
-    return this.clamp(this.skyHeight - this.guideCardHeight() - 16 + this.scriptControlOffsetY,
+    return this.clamp(this.skyHeight - this.guideCardHeight() - 16 + this.scriptStore.scriptControlOffsetY,
       this.scriptControlSafeTop(), Math.max(this.scriptControlSafeTop(), this.skyHeight - this.guideCardHeight() - 12))
   }
 
@@ -17456,10 +17432,6 @@ private loadPlanetPositions(): void {
         viewTabContentOpacity: this.viewTabContentOpacity,
         viewTabContentOffsetX: this.viewTabContentOffsetX,
         layerTabs: this.layerTabItems(),
-        currentSkyCultureId: this.currentSkyCultureId,
-        currentSkyCultureName: this.currentSkyCulture,
-        skyCultureListLoading: this.skyCultureListLoading,
-        skyCultureList: this.skyCultureList,
         skyCultureArtStates: this.skyCultureArtStates,
         skyCultureArtThumbnailPixelMaps: this.skyCultureArtThumbnailPixelMaps,
         narrationParagraphs: this.skyCultureNarrationParagraphs(),
@@ -17558,8 +17530,7 @@ private loadPlanetPositions(): void {
         fovSliderValue: this.fovSliderValue,
         currentProjection: this.currentProjection,
         selectedLanguage: this.selectedLanguage,
-        currentSkyCulture: this.currentSkyCulture,
-        skyCultures: this.skyCultures,
+        skyCultureViewStore: this.skyCultureViewStore,
         useMetricUnits: this.useMetricUnits,
         satelliteCatalogHealth: this.satelliteStore.satelliteCatalogHealth,
         starCatalogHealth: this.starCatalogHealth,
@@ -18090,18 +18061,18 @@ private loadPlanetPositions(): void {
         },
         onSaveScreenVideoToGallery: (result: SaveButtonOnClickResult) => { this.saveScreenVideoToGallery(result) },
         onShareScreenVideo: () => {
-          this.shareFile(this.scriptStore.screenVideoPath, utd.UniformDataType.VIDEO, this.screenVideoFileName,
+          this.shareFile(this.scriptStore.screenVideoPath, utd.UniformDataType.VIDEO, this.scriptStore.screenVideoFileName,
             'Stellarium 屏幕视频', 'screen-video-share')
         },
-        onSaveScreenVideoAs: () => { this.saveFileAs(this.scriptStore.screenVideoPath, this.screenVideoFileName, 'MP4 视频|.mp4') },
+        onSaveScreenVideoAs: () => { this.saveFileAs(this.scriptStore.screenVideoPath, this.scriptStore.screenVideoFileName, 'MP4 视频|.mp4') },
         onSetVideoFps: (value: string) => { this.scriptStore.videoFps = value },
         onSetVideoDuration: (value: string) => { this.scriptStore.videoDuration = value },
         onToggleVideoRecording: () => { this.scriptStore.videoRecording ? this.stopVideoRecording() : this.startVideoRecording() },
         onShareVideoArchive: () => {
           this.shareFile(this.scriptStore.videoArchivePath, utd.UniformDataType.ZIP_ARCHIVE,
-            this.videoArchiveFileName, 'Stellarium 高质量星图帧序列', 'video-frames-share')
+            this.scriptStore.videoArchiveFileName, 'Stellarium 高质量星图帧序列', 'video-frames-share')
         },
-        onExportVideoArchive: () => { this.saveFileAs(this.scriptStore.videoArchivePath, this.videoArchiveFileName, 'ZIP 压缩包|.zip') }
+        onExportVideoArchive: () => { this.saveFileAs(this.scriptStore.videoArchivePath, this.scriptStore.videoArchiveFileName, 'ZIP 压缩包|.zip') }
       })
     } else if (this.activePanel === 'observing') {
       ObservingPanel({
@@ -18197,8 +18168,7 @@ private loadPlanetPositions(): void {
         selectedLanguage: this.selectedLanguage,
         useMetricUnits: this.useMetricUnits,
         observingListStore: this.obsListStore,
-        currentSkyCulture: this.currentSkyCulture,
-        skyCultures: this.skyCultures,
+        skyCultureViewStore: this.skyCultureViewStore,
         panelColor: this.nmBg(),
         sensZh: (en: string) => { return this.sensZh(en) },
         observingDisplayName: (name: string) => { return this.observingDisplayName(name) },
