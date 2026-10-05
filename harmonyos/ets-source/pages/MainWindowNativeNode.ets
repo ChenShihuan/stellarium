@@ -72,6 +72,8 @@ import { PluginFeatureController, PluginFeatureHostHooks } from '../capability/P
 import { ObjectInspectorMediaController, ObjectInspectorMediaHostHooks } from '../capability/ObjectInspectorMediaController'
 import { ScriptPlaybackController, ScriptPlaybackHostHooks } from '../capability/ScriptPlaybackController'
 import { TimeController, TimeHostHooks } from '../capability/TimeController'
+import { SkyCultureController, SkyCultureHostHooks } from '../capability/SkyCultureController'
+import { SkyCultureMakerController, SkyCultureMakerHostHooks } from '../capability/SkyCultureMakerController'
 import { BehaviorHostHooks } from '../capability/ControllerHooks'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
@@ -469,6 +471,36 @@ class HostMediaPort implements MediaPort {
       fileIo.mkdirSync(importDir, true)
       const sourceName = selectedUris[0].substring(selectedUris[0].lastIndexOf('/') + 1).replace(/[^A-Za-z0-9._-]/g, '_')
       const sourcePath = importDir + '/' + (sourceName.length > 0 ? sourceName : fallbackFileName)
+      await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(sourcePath))
+      const imported: MediaImportResult = { cancelled: false, path: sourcePath }
+      return imported
+    }
+    return run()
+  }
+
+  // D3：按调用方命名规则复制单文件——picker 选择 + 复制到应用私有目录（原宿主
+  // importSkyCultureMakerArtworkFile / importSkyCultureMakerFile 的 picker / fileIo 段逐字保留：
+  // 后缀过滤、单文件、源名清洗 `[^A-Za-z0-9._-]` → `_`、importDir 落盘；最终名由 buildFileName 提供）。
+  pickDocumentToDirNamed(dirName: string, fileSuffixFilters: string[], buildFileName: (sourceName: string) => string): Promise<MediaImportResult> {
+    const factory = this.contextFactory
+    if (factory === null) {
+      const missing: MediaImportResult = { cancelled: true, path: '' }
+      return Promise.resolve(missing)
+    }
+    const run = async (): Promise<MediaImportResult> => {
+      const context = factory()
+      const options = new picker.DocumentSelectOptions()
+      options.fileSuffixFilters = fileSuffixFilters
+      options.maxSelectNumber = 1
+      const selectedUris = await new picker.DocumentViewPicker(context).select(options)
+      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
+        const cancelled: MediaImportResult = { cancelled: true, path: '' }
+        return cancelled
+      }
+      const importDir = context.filesDir + '/' + dirName
+      fileIo.mkdirSync(importDir, true)
+      const sourceName = selectedUris[0].substring(selectedUris[0].lastIndexOf('/') + 1).replace(/[^A-Za-z0-9._-]/g, '_')
+      const sourcePath = importDir + '/' + buildFileName(sourceName)
       await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(sourcePath))
       const imported: MediaImportResult = { cancelled: false, path: sourcePath }
       return imported
@@ -940,6 +972,10 @@ export struct WindowNativeNode {
   private skyTextureStatusControllerImpl: SkyTextureStatusController | null = null
   // D12：星云纹理控制器（惰性构造；picker/fileIo 经 MediaPort，状态在 NebulaTextureStore）。
   private nebulaTextureControllerImpl: NebulaTextureController | null = null
+  // D3：星空文化控制器（惰性构造；选择/标签/视觉 + 时间跟随 + Art 预览；状态在 skyCulture* store）。
+  private skyCultureControllerImpl: SkyCultureController | null = null
+  // D3：星空文化制作器控制器（惰性构造；Maker 向导 CRUD + 画布触摸 + 自动保存定时器）。
+  private skyCultureMakerControllerImpl: SkyCultureMakerController | null = null
   // D9：目镜/拼接相机/均时差/古天文线写回控制器（惰性构造；状态在 telescope/mosaic/equationOfTime/archaeo store）。
   private ocularControllerImpl: OcularController | null = null
   // D9：LX200 望远镜编辑器/控制命令控制器（惰性构造；状态在 TelescopeStore，定时器仍由 store 自持）。
@@ -1104,21 +1140,17 @@ export struct WindowNativeNode {
   @State private atmosphereStore: AtmosphereStore = new AtmosphereStore()
   // 星文化制作器向导状态（Phase 3am，见 state/SkyCultureMakerStore.ets）
   @State private skyCultureMakerStore: SkyCultureMakerStore = new SkyCultureMakerStore()
-  private skyCultureMakerArtworkPreviewPath: string = ''
-  private skyCultureMakerArtworkDecodeGeneration: number = 0
-  private skyCultureMakerArtworkTouchStartX: number = 0
-  private skyCultureMakerArtworkTouchStartY: number = 0
-  private skyCultureMakerArtworkTouchMoved: boolean = false
-  private skyCultureMakerSaveTimer: number = 0
+  // §10.2 D3：skyCultureMakerArtworkPreviewPath / skyCultureMakerArtworkDecodeGeneration /
+  // skyCultureMakerArtworkTouchStartX|Y / skyCultureMakerArtworkTouchMoved / skyCultureMakerSaveTimer
+  // 已随 Maker 行为下沉 capability/SkyCultureMakerController.ets（控制器自持 650ms 去抖定时器与画布草稿）。
   // 星文化只读详情视图状态（Phase 3am，见 state/SkyCultureViewStore.ets）
   @State private skyCultureViewStore: SkyCultureViewStore = new SkyCultureViewStore()
   @State private skyCultureArtStates: Record<string, string> = {}
   @State private skyCultureArtThumbnailPixelMaps: Record<string, image.PixelMap> = {}
-  private skyCultureArtDecodeGeneration: number = 0
-  private skyCultureArtThumbnailGeneration: number = 0
-  private skyCultureArtDecodeTimer: number = 0
-  private skyCultureArtStatusFlushTimer: number = 0
-  private skyCultureArtPendingStatuses: Record<string, string> = {}
+  // §10.2 D3：skyCultureArtDecodeGeneration / skyCultureArtThumbnailGeneration / skyCultureArtDecodeTimer /
+  // skyCultureArtStatusFlushTimer / skyCultureArtPendingStatuses 已随 Art 预览行为下沉
+  // capability/SkyCultureController.ets（控制器自持）；§2.7.1 L 的两个 @State 渐进字段本体留宿主，
+  // 控制器经 hooks 读写（§15.6-1 + §15.7 规则 2 双重约束）。
   // 星空文化面板设置状态簇（Phase 4g，见 state/SkyCultureSettingsStore.ets）
   @State private skyCultureSettingsStore: SkyCultureSettingsStore = new SkyCultureSettingsStore()
   private skyCultureMapContextSettings: RenderingContextSettings = new RenderingContextSettings(true)
@@ -1287,17 +1319,16 @@ export struct WindowNativeNode {
   // （否则只在打开瞬间刷新一次，点按钮/时间流逝都不会再更新，永远显示 --）
   // D4：timePanelTimer / timePanelFullTimer 随时间面板定时器下沉 capability/TimeController.ets
   // （控制器自持 startPanelTimers()/stopPanelTimers()；面板路由/生命周期调用，§15.7 规则 3）。
-  private skyCultureTimeFollowTimer: number = 0
-  private skyCultureTimeFollowRequestPending: boolean = false
+  // §10.2 D3：skyCultureTimeFollowTimer / skyCultureTimeFollowRequestPending 已随时间跟随行为
+  // 下沉 capability/SkyCultureController.ets（控制器自持 500ms 轮询 start/stop）。
   // §10.2 D5：polarScopeTimer 已随行为下沉 capability/PolarScopeController.ets（控制器自持）。
   // 极轴镜在途请求态（polarScopeRequestPending / polarScopeDataRequestId）随加载器下沉
   // state/PolarScopeStore.ets（§14 B3-2）。
   private skyCultureDetailsRequestId: number = 0
-  private skyCultureRowY: Record<string, number> = {}
-  private skyCultureAnchorId: string = ''
-  private skyCultureAnchorY: number = 0
-  private skyCultureAnchorRequestId: number = 0
-  private skyCultureAnchorArmed: boolean = false
+  // §10.2 D3：skyCultureRowY / skyCultureAnchorId / skyCultureAnchorY / skyCultureAnchorRequestId /
+  // skyCultureAnchorArmed 已随锚点校正行为下沉 capability/SkyCultureController.ets；
+  // skyCultureDetailsRequestId 与留宿主的 loadSkyCultureDetails（§15.6-3 永久登记）共用，
+  // 按 §14.8 规则 3 单一持有者 = 宿主，控制器经 hooks 读写。
   // 触屏主路径草稿字段（touchStart*/touchLast*/touchMoved/pinch*/dragFiltered*/dragLast*/
   // nativeDragActive/skyDragging 的写侧/panelDragging/panelDragStart*）已随 M3-2 搬入
   // capability/SkyInputController.ets（§15.7 规则 2）；下列跨 handler 共用标志留宿主，
@@ -1912,7 +1943,7 @@ export struct WindowNativeNode {
         setBridgeFlag: (cmd: string, value: boolean): void => { this.setBridgeFlag(cmd, value) },
         persistEquatorialMount: (): void => { this.telescopeStore.persistEquatorialMount() },
         persistNightMode: (): void => { this.nightModeStore.persistNightMode() },
-        syncSkyCultureTimeFollowTimer: (): void => { this.syncSkyCultureTimeFollowTimer() },
+        syncSkyCultureTimeFollowTimer: (): void => { this.skyCultureCtl().syncSkyCultureTimeFollowTimer() },
         viewTab: (): number => this.viewTab,
         setViewTab: (value: number): void => { this.viewTab = value },
         viewTabContentOpacity: (): number => this.viewTabContentOpacity,
@@ -1975,6 +2006,67 @@ export struct WindowNativeNode {
       )
     }
     return this.nebulaTextureControllerImpl
+  }
+
+  // D3：星空文化行为控制器惰性构造（选择/标签/视觉 + 时间跟随 + Art 预览）。桥经 HostCommandPort；
+  // fileIo/image 经 HostMediaPort / common/media/ImageDecoder；详情加载器（永久保留宿主）与共享请求
+  // 序号、§2.7.1 L 渐进字段、UI 上下文派生量、标签下拉动画、锚点校正滚动经 hooks 回注。
+  private skyCultureCtl(): SkyCultureController {
+    if (this.skyCultureControllerImpl === null) {
+      const hooks: SkyCultureHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        loadSkyCultureDetails: (): void => { this.loadSkyCultureDetails() },
+        skyCultureDetailsRequestId: (): number => this.skyCultureDetailsRequestId,
+        nextSkyCultureDetailsRequestId: (): number => { return ++this.skyCultureDetailsRequestId },
+        skyCultureActiveColorTarget: (): string => this.skyCultureActiveColorTarget(),
+        skyCultureArtStates: (): Record<string, string> => this.skyCultureArtStates,
+        setSkyCultureArtStates: (next: Record<string, string>): void => { this.skyCultureArtStates = next },
+        skyCultureArtThumbnailPixelMaps: (): Record<string, image.PixelMap> => this.skyCultureArtThumbnailPixelMaps,
+        setSkyCultureArtThumbnailPixelMaps: (next: Record<string, image.PixelMap>): void => { this.skyCultureArtThumbnailPixelMaps = next },
+        stellariumFilesDir: (): string => this.stellariumFilesDir(),
+        pathToUri: (path: string): string => fileUri.getUriFromPath(path),
+        resolveDetailMediaAsset: (relativePath: string): Promise<string> => {
+          const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+          return resolveStellariumDetailMediaAsset(context.getApplicationContext(), relativePath)
+        },
+        shouldFollowSkyCultureSimulationTime: (): boolean => this.shouldFollowSkyCultureSimulationTime(),
+        animatePickerCollapse: (action: () => void): void => {
+          this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.46, 0.86) }, action)
+        },
+        correctSkyCultureRowScroll: (id: string, delta: number): void => { this.correctSkyCultureRowScroll(id, delta) }
+      }
+      this.skyCultureControllerImpl = new SkyCultureController(
+        this.commandPort(), this.hostMediaPort, this.skyCultureViewStore, this.skyCultureSettingsStore, hooks
+      )
+    }
+    return this.skyCultureControllerImpl
+  }
+
+  // D3：星空文化制作器控制器惰性构造。桥经 HostCommandPort；picker/fileIo 经 HostMediaPort；
+  // 图片解码经 common/media/ImageDecoder；filesDir 经 hooks 回注；自动保存定时器与画布触摸草稿自持。
+  private skyCultureMakerCtl(): SkyCultureMakerController {
+    if (this.skyCultureMakerControllerImpl === null) {
+      const hooks: SkyCultureMakerHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        stellariumFilesDir: (): string => this.stellariumFilesDir()
+      }
+      this.skyCultureMakerControllerImpl = new SkyCultureMakerController(
+        this.commandPort(), this.hostMediaPort, this.skyCultureMakerStore, hooks
+      )
+    }
+    return this.skyCultureMakerControllerImpl
   }
 
   // D9：目镜/拼接相机/均时差/古天文线写回控制器惰性构造。桥经 HostCommandPort；
@@ -2348,7 +2440,7 @@ export struct WindowNativeNode {
       },
       stopBackgroundTimers: (): void => {
         this.timeCtl().stopPanelTimers()
-        this.stopSkyCultureTimeFollowTimer()
+        this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
         this.polarScopeCtl().stopPolarScopeTimer()
       },
       startStatusPolling: (): void => this.scriptPlaybackCtl().startScriptStatusPolling(),
@@ -2392,7 +2484,7 @@ export struct WindowNativeNode {
       stopCompetingTasks: (): void => {
         this.detailConnectorCtl().stopDetailAutoRefresh()
         this.timeCtl().stopPanelTimers()
-        this.stopSkyCultureTimeFollowTimer()
+        this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
         this.astroCalcCtl().stopAstroCalcContextTimer()
         this.telescopeStore.stopTelescopeLivePosition(false)
       },
@@ -2446,9 +2538,9 @@ export struct WindowNativeNode {
     })
     this.skyCultureMakerStore.attachPort(hostPort, () => {})
     this.skyCultureMakerStore.attachHooks({
-      applySkyCultureMakerDraft: (draft: SkyCultureMakerDraft): void => this.applySkyCultureMakerDraft(draft),
+      applySkyCultureMakerDraft: (draft: SkyCultureMakerDraft): void => this.skyCultureMakerCtl().applySkyCultureMakerDraft(draft),
       ensurePluginLoaded: (pluginName: string, callback: () => void, failureCallback?: () => void): void => this.pluginFeatureCtl().ensurePluginLoaded(pluginName, callback, failureCallback),
-      skyCultureMakerDraftFromResponse: (response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined => this.skyCultureMakerDraftFromResponse(response)
+      skyCultureMakerDraftFromResponse: (response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined => this.skyCultureMakerCtl().skyCultureMakerDraftFromResponse(response)
     })
     // §14 B1-6：卫星域有 publish* CLI 发布点（publishSatellitePanelState），
     // 故 onChanged 用它，保持 CLI 侧 satellitePanelState 与 store 同步。
@@ -2822,7 +2914,7 @@ export struct WindowNativeNode {
           ? String(response.cultureId)
           : String(event['payload'] ?? '').trim()
         if (cultureId.length > 0) {
-          this.captureSkyCultureAnchor(cultureId)
+          this.skyCultureCtl().captureSkyCultureAnchor(cultureId)
           this.skyCultureViewStore.pendingId = cultureId
           this.skyCultureViewStore.currentSkyCultureId = cultureId
           this.loadSkyCultureDetails()
@@ -2942,11 +3034,7 @@ export struct WindowNativeNode {
     this.guideStore.guideGyroWasEnabled = false
     this.guideStore.guidePanelWasVisible = false
     this.guideStore.stopPlayer()
-    if (this.skyCultureMakerSaveTimer > 0) {
-      clearTimeout(this.skyCultureMakerSaveTimer)
-      this.skyCultureMakerSaveTimer = 0
-      this.saveSkyCultureMakerDraft(true)
-    }
+    this.skyCultureMakerCtl().flushSkyCultureMakerSave()
     if (this.searchSuggestionTimer >= 0) {
       clearTimeout(this.searchSuggestionTimer)
       this.searchSuggestionTimer = -1
@@ -2958,8 +3046,8 @@ export struct WindowNativeNode {
     this.objectInspectorMediaCtl().stopObjectInspectorMediaWarmup()
     this.objectInspectorMediaCtl().stopBodyDetailWarmup()
     this.objectInspectorMediaCtl().clearObjectInspectorDecodedImage()
-    this.skyCultureArtDecodeGeneration++
-    this.clearSkyCultureArtThumbnails()
+    this.skyCultureCtl().invalidateSkyCultureArtDecode()
+    this.skyCultureCtl().clearSkyCultureArtThumbnails()
     if (this.stateRefreshTimer >= 0) {
       clearTimeout(this.stateRefreshTimer)
       this.stateRefreshTimer = -1
@@ -2973,13 +3061,13 @@ export struct WindowNativeNode {
     const skyCulturePixelMap = this.skyCultureViewStore.artPreviewPixelMap
     this.skyCultureViewStore.artPreviewPixelMap = undefined
     releaseDecodedImage(this.hostMediaPort, skyCulturePixelMap, 'disappear-sky-culture-art')
-    this.clearSkyCultureMakerArtworkPreview('disappear-sky-culture-maker-artwork')
+    this.skyCultureMakerCtl().clearSkyCultureMakerArtworkPreview('disappear-sky-culture-maker-artwork')
     this.skyTextureStatusCtl().stop()
     this.timeCtl().stopPanelTimers()
     this.viewCoordinateCtl().stopViewCoordinateTimer()
     this.stopDockClockTimer()
     if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
-    this.stopSkyCultureTimeFollowTimer()
+    this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
@@ -3010,7 +3098,7 @@ export struct WindowNativeNode {
       this.gyroCtl().resumeAfterForeground()
       this.viewCoordinateCtl().syncViewCoordinateTimer()
       this.syncDockClockTimer()
-      this.syncSkyCultureTimeFollowTimer()
+      this.skyCultureCtl().syncSkyCultureTimeFollowTimer()
       this.polarScopeCtl().syncPolarScopeTimer()
       this.astroCalcCtl().syncAstroCalcContextTimer()
       this.telescopeStore.syncTelescopeLivePosition()
@@ -3024,7 +3112,7 @@ export struct WindowNativeNode {
     this.viewCoordinateCtl().stopViewCoordinateTimer()
     this.stopDockClockTimer()
     if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
-    this.stopSkyCultureTimeFollowTimer()
+    this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
@@ -3047,24 +3135,23 @@ export struct WindowNativeNode {
       this.viewTab === 5 && this.skyCultureSettingsStore.skyCultureTimeFiltering && !this.skyCultureSettingsStore.skyCultureRangeFiltering && this.skyCultureSettingsStore.skyCultureTimeFollowSimulation
   }
 
-  private stopSkyCultureTimeFollowTimer(): void {
-    if (this.skyCultureTimeFollowTimer !== 0) {
-      clearInterval(this.skyCultureTimeFollowTimer)
-      this.skyCultureTimeFollowTimer = 0
+  // §10.2 D3：stopSkyCultureTimeFollowTimer / syncSkyCultureTimeFollowTimer / refreshSkyCultureSimulationYear
+  // （及其 timer / pending 两字段）已下沉 capability/SkyCultureController.ets（控制器自持 500ms 轮询）；
+  // 宿主保留上面的前后台/面板路由谓词 shouldFollowSkyCultureSimulationTime 经 SkyCultureHostHooks 注入。
+  // 锚点校正滚动的宿主侧（Scroller / 展开布局判定）经 correctSkyCultureRowScroll 回注。
+  private correctSkyCultureRowScroll(id: string, delta: number): void {
+    try {
+      const scroller = this.isExpandedLayout ? this.widePanelScroller : this.compactPanelScroller
+      const offset = scroller.currentOffset()
+      const targetOffset = Math.max(0, offset.yOffset + delta)
+      scroller.scrollTo({ xOffset: offset.xOffset, yOffset: targetOffset, animation: false })
+      hilog.info(0x0000, 'StellariumArkUI',
+        '[sky-culture-anchor] id=%{public}s delta=%{public}s offset=%{public}s',
+        id, delta.toFixed(1), targetOffset.toFixed(1))
+    } catch (error) {
+      hilog.warn(0x0000, 'StellariumArkUI',
+        '[sky-culture-anchor] correction failed id=%{public}s error=%{public}s', id, String(error))
     }
-    this.skyCultureTimeFollowRequestPending = false
-  }
-
-  private syncSkyCultureTimeFollowTimer(): void {
-    if (!this.shouldFollowSkyCultureSimulationTime()) {
-      this.stopSkyCultureTimeFollowTimer()
-      return
-    }
-    if (this.skyCultureTimeFollowTimer !== 0) return
-    this.refreshSkyCultureSimulationYear()
-    this.skyCultureTimeFollowTimer = setInterval(() => {
-      this.refreshSkyCultureSimulationYear()
-    }, 500)
   }
 
   private shouldRefreshTelescopePosition(): boolean {
@@ -3098,21 +3185,6 @@ export struct WindowNativeNode {
   private mediaPreviewTopInset(): number {
     const safeTop = this.getUIContext().px2vp(Math.max(0, this.screenSafeTopPixels))
     return Math.max(18, safeTop + 12)
-  }
-
-  private refreshSkyCultureSimulationYear(force: boolean = false): void {
-    if ((!force && !this.shouldFollowSkyCultureSimulationTime()) || this.skyCultureTimeFollowRequestPending) return
-    this.skyCultureTimeFollowRequestPending = true
-    this.callInteractive('getSimulationTime', '', (r: StellariumBridgeResponse) => {
-      this.skyCultureTimeFollowRequestPending = false
-      if (r.ok !== true || r.year === undefined) return
-      this.skyCultureSettingsStore.skyCultureSimulationYear = Math.round(r.year)
-      if (force || this.shouldFollowSkyCultureSimulationTime()) {
-        this.skyCultureSettingsStore.setSkyCultureTimeYear(this.skyCultureSettingsStore.skyCultureSimulationYear)
-      }
-    }, () => {
-      this.skyCultureTimeFollowRequestPending = false
-    })
   }
 
   private openPanelFromCli(panel: string): void {
@@ -3168,7 +3240,7 @@ export struct WindowNativeNode {
       this.infoWindowStore.infoWinExpanded = false
     }
     this.timeCtl().stopPanelTimers()
-    this.stopSkyCultureTimeFollowTimer()
+    this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
@@ -3233,7 +3305,7 @@ export struct WindowNativeNode {
     this.panelDataLoadTimer = setTimeout(() => {
       this.panelDataLoadTimer = -1
       if (!this.panelVisible || this.activePanel !== panel) return
-      this.syncSkyCultureTimeFollowTimer()
+      this.skyCultureCtl().syncSkyCultureTimeFollowTimer()
       this.polarScopeCtl().syncPolarScopeTimer()
       if (panel === 'place') {
         this.refreshTonight()
@@ -3393,7 +3465,7 @@ export struct WindowNativeNode {
     }
     // 关面板时停掉时间面板定时器，避免后台空转
     this.timeCtl().stopPanelTimers()
-    this.stopSkyCultureTimeFollowTimer()
+    this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
@@ -4410,101 +4482,6 @@ export struct WindowNativeNode {
     }))
   }
 
-  private selectSkyCulture(id: string): void {
-    if (id === this.skyCultureViewStore.currentSkyCultureId || id === this.skyCultureViewStore.pendingId) return
-    this.captureSkyCultureAnchor(id)
-    const requestId = ++this.skyCultureDetailsRequestId
-    this.skyCultureViewStore.pendingId = id
-    this.skyCultureViewStore.detailsLoading = true
-    this.skyCultureViewStore.detailError = ''
-    this.callInteractive('setSkyCulture', id, (r: StellariumBridgeResponse) => {
-      if (requestId !== this.skyCultureDetailsRequestId) return
-      if (r.ok === true) {
-        this.skyCultureViewStore.currentSkyCultureId = r.cultureId !== undefined ? r.cultureId : id
-        const selected = this.skyCultureViewStore.skyCultureList.find((item: SkyCultureItem) => item.id === this.skyCultureViewStore.currentSkyCultureId)
-        this.skyCultureViewStore.currentSkyCulture = r.culture !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(this.skyCultureViewStore.currentSkyCultureId, r.culture) : (selected !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(selected.id, selected.name) : id)
-        this.skyCultureSettingsStore.skyCultureLabelPickerOpen = ''
-        this.skyCultureSettingsStore.skyCultureClassificationFilterOpen = false
-        this.skyCultureSettingsStore.skyCultureRegionFilterOpen = false
-        this.skyCultureViewStore.narrationExpanded = false
-        this.skyCultureViewStore.descriptionExpanded = false
-        this.skyCultureViewStore.artExpanded = false
-        this.closeSkyCultureArtPreview()
-        this.skyCultureSettingsStore.skyCultureTerritoryExpanded = false
-        this.skyCultureSettingsStore.skyCultureTerritoryMapExpanded = false
-        this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons = []
-        this.skyCultureSettingsStore.skyCultureTerritoryMapError = ''
-        this.loadSkyCultureDetails()
-        return
-      }
-      this.skyCultureViewStore.pendingId = ''
-      this.skyCultureViewStore.detailsLoading = false
-      this.skyCultureViewStore.detailError = '切换星空文化失败，请重试。'
-      this.clearSkyCultureAnchor()
-    }, () => {
-      if (requestId !== this.skyCultureDetailsRequestId) return
-      this.skyCultureViewStore.pendingId = ''
-      this.skyCultureViewStore.detailsLoading = false
-      this.skyCultureViewStore.detailError = '切换星空文化失败，请重试。'
-      this.clearSkyCultureAnchor()
-    })
-  }
-
-  private captureSkyCultureAnchor(id: string): void {
-    const y = this.skyCultureRowY[id]
-    if (y === undefined || !Number.isFinite(y)) {
-      hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-anchor] row not measured id=%{public}s', id)
-      this.clearSkyCultureAnchor()
-      return
-    }
-    this.skyCultureAnchorId = id
-    this.skyCultureAnchorY = y
-    this.skyCultureAnchorRequestId = 0
-    this.skyCultureAnchorArmed = false
-    hilog.info(0x0000, 'StellariumArkUI',
-      '[sky-culture-anchor] captured id=%{public}s y=%{public}s', id, y.toFixed(1))
-  }
-
-  private armSkyCultureAnchor(id: string, requestId: number): void {
-    if (this.skyCultureAnchorId !== id) return
-    this.skyCultureAnchorRequestId = requestId
-    this.skyCultureAnchorArmed = true
-  }
-
-  private clearSkyCultureAnchor(): void {
-    this.skyCultureAnchorId = ''
-    this.skyCultureAnchorY = 0
-    this.skyCultureAnchorRequestId = 0
-    this.skyCultureAnchorArmed = false
-  }
-
-  private handleSkyCultureRowArea(id: string, area: Area): void {
-    const y = Number.parseFloat(String(area.globalPosition.y))
-    if (!Number.isFinite(y)) return
-    this.skyCultureRowY[id] = y
-    if (!this.skyCultureAnchorArmed || this.skyCultureAnchorId !== id ||
-      this.skyCultureAnchorRequestId !== this.skyCultureDetailsRequestId) return
-    const delta = y - this.skyCultureAnchorY
-    this.clearSkyCultureAnchor()
-    if (Math.abs(delta) < 0.5) {
-      hilog.info(0x0000, 'StellariumArkUI',
-        '[sky-culture-anchor] stable id=%{public}s y=%{public}s', id, y.toFixed(1))
-      return
-    }
-    try {
-      const scroller = this.isExpandedLayout ? this.widePanelScroller : this.compactPanelScroller
-      const offset = scroller.currentOffset()
-      const targetOffset = Math.max(0, offset.yOffset + delta)
-      scroller.scrollTo({ xOffset: offset.xOffset, yOffset: targetOffset, animation: false })
-      hilog.info(0x0000, 'StellariumArkUI',
-        '[sky-culture-anchor] id=%{public}s delta=%{public}s offset=%{public}s',
-        id, delta.toFixed(1), targetOffset.toFixed(1))
-    } catch (error) {
-      hilog.warn(0x0000, 'StellariumArkUI',
-        '[sky-culture-anchor] correction failed id=%{public}s error=%{public}s', id, String(error))
-    }
-  }
-
   private loadSkyCultureDetails(): void {
     if (this.skyCultureViewStore.currentSkyCultureId.length === 0) return
     const requestId = ++this.skyCultureDetailsRequestId
@@ -4515,11 +4492,11 @@ export struct WindowNativeNode {
       if (r.ok !== true) {
         this.skyCultureViewStore.detailError = '未能读取该文化的资料。'
         this.skyCultureViewStore.detailsLoading = false
-        this.clearSkyCultureAnchor()
+        this.skyCultureCtl().clearSkyCultureAnchor()
         return
       }
       this.skyCultureViewStore.currentSkyCultureId = r.id !== undefined ? r.id : this.skyCultureViewStore.currentSkyCultureId
-      this.armSkyCultureAnchor(this.skyCultureViewStore.currentSkyCultureId, requestId)
+      this.skyCultureCtl().armSkyCultureAnchor(this.skyCultureViewStore.currentSkyCultureId, requestId)
       this.skyCultureViewStore.currentSkyCulture = r.name !== undefined ? this.skyCultureSettingsStore.skyCultureDisplayName(this.skyCultureViewStore.currentSkyCultureId, r.name) : this.skyCultureViewStore.currentSkyCulture
       this.skyCultureSettingsStore.skyCultureLabelPickerOpen = ''
       this.skyCultureSettingsStore.skyCultureRegions = r.region !== undefined ? r.region : []
@@ -4548,11 +4525,11 @@ export struct WindowNativeNode {
       this.skyCultureViewStore.narration = cleanSkyCultureNarration(r.narration !== undefined ? r.narration : '')
       this.skyCultureViewStore.description = cleanSkyCultureDescription(r.description !== undefined ? r.description : '')
       this.skyCultureViewStore.descriptionBlocks = r.descriptionBlocks !== undefined ? r.descriptionBlocks : []
-      this.clearSkyCultureArtThumbnails()
+      this.skyCultureCtl().clearSkyCultureArtThumbnails()
       this.skyCultureViewStore.artItems = r.constellationArt !== undefined ? r.constellationArt : []
       this.skyCultureArtStates = {}
-      this.closeSkyCultureArtPreview()
-      this.prepareSkyCultureArtResources(this.skyCultureViewStore.artItems, requestId)
+      this.skyCultureCtl().closeSkyCultureArtPreview()
+      this.skyCultureCtl().prepareSkyCultureArtResources(this.skyCultureViewStore.artItems, requestId)
       this.skyCultureSettingsStore.skyCultureHasTerritoryArchive = r.hasTerritoryArchive === true
       this.skyCultureSettingsStore.skyCultureTerritorySegmentCount = r.territorySegmentCount !== undefined ? r.territorySegmentCount : 0
       this.skyCultureSettingsStore.skyCultureTerritoryArchive = r.territoryArchive !== undefined ? r.territoryArchive : []
@@ -4571,119 +4548,11 @@ export struct WindowNativeNode {
       this.skyCultureViewStore.pendingId = ''
       this.skyCultureViewStore.detailsLoading = false
       this.skyCultureViewStore.detailError = '未能读取该文化的资料。'
-      this.clearSkyCultureAnchor()
+      this.skyCultureCtl().clearSkyCultureAnchor()
     })
   }
 
-  private setSkyCultureStyleOption(target: string, optionIndex: number, enabled: boolean): void {
-    const oldMask = target === 'screen' ? this.skyCultureSettingsStore.skyCultureScreenStyleMask : this.skyCultureSettingsStore.skyCultureInfoStyleMask
-    const bit = 1 << optionIndex
-    const nextMask = enabled ? (oldMask | bit) : (oldMask & ~bit)
-    this.callInteractive('setSkyCultureLabelStyle', target + '|' + this.skyCultureSettingsStore.skyCultureStyleValue(nextMask), (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      const style = target === 'screen' ? r.screenLabelStyle : r.infoLabelStyle
-      const actualMask = this.skyCultureSettingsStore.skyCultureStyleMaskFromBridge(style)
-      if (target === 'screen') {
-        this.skyCultureSettingsStore.skyCultureScreenStyleMask = actualMask
-        this.skyCultureSettingsStore.skyCultureScreenLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(style)
-      } else {
-        this.skyCultureSettingsStore.skyCultureInfoStyleMask = actualMask
-        this.skyCultureSettingsStore.skyCultureInfoLabelMode = this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(style)
-      }
-    })
-  }
-
-  private setSkyCultureScreenLabelMode(mode: number): void {
-    this.setSkyCultureLabelMode('screen', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureScreenLabelMode = value })
-  }
-
-  private setSkyCultureInfoLabelMode(mode: number): void {
-    this.setSkyCultureLabelMode('info', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureInfoLabelMode = value })
-  }
-
-  private setSkyCultureZodiacLabelMode(mode: number): void {
-    this.setSkyCultureLabelMode('zodiac', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureZodiacLabelMode = value })
-  }
-
-  private setSkyCultureLunarLabelMode(mode: number): void {
-    this.setSkyCultureLabelMode('lunar', mode, (value: number) => { this.skyCultureSettingsStore.skyCultureLunarLabelMode = value })
-  }
-
-  private setSkyCultureLabelModeForTarget(target: string, mode: number): void {
-    if (target === 'screen') {
-      this.setSkyCultureScreenLabelMode(mode)
-    } else if (target === 'info') {
-      this.setSkyCultureInfoLabelMode(mode)
-    } else if (target === 'zodiac') {
-      this.setSkyCultureZodiacLabelMode(mode)
-    } else {
-      this.setSkyCultureLunarLabelMode(mode)
-    }
-  }
-
-  // 选择某个标签模式并收起该卡片的下拉（原 skyCultureLabelModePicker 内联逻辑）。
-  private selectSkyCultureLabelMode(target: string, index: number): void {
-    this.setSkyCultureLabelModeForTarget(target, index)
-    this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.46, 0.86) }, () => {
-      this.skyCultureSettingsStore.skyCultureLabelPickerOpen = ''
-    })
-  }
-
-  private setSkyCultureLabelMode(target: string, mode: number, apply: (value: number) => void): void {
-    const styles: string[] = ['Translated', 'Native', 'Pronounce', 'Translit', 'Modern']
-    if (mode < 0 || mode >= styles.length) return
-    apply(mode)
-    this.callInteractive('setSkyCultureLabelStyle', target + '|' + styles[mode], (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        const style = target === 'screen' ? r.screenLabelStyle
-          : (target === 'info' ? r.infoLabelStyle
-            : (target === 'zodiac' ? r.zodiacLabelStyle : r.lunarSystemLabelStyle))
-        apply(this.skyCultureSettingsStore.skyCultureScreenLabelModeFromBridge(style))
-      }
-    })
-  }
-
-  private setSkyCultureShortLabels(enabled: boolean): void {
-    this.callInteractive('setSkyCultureShortLabels', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.skyCultureSettingsStore.skyCultureShortLabels = r.abbreviatedNames === true
-    })
-  }
-
-  private setSkyCultureCommonNames(enabled: boolean): void {
-    this.callInteractive('setSkyCultureCommonNames', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.skyCultureSettingsStore.skyCultureOverrideCommonNames = r.overrideCommonNames === true
-    })
-  }
-
-  private setSkyCultureConstellationIsolation(enabled: boolean): void {
-    this.callInteractive('setConstellationFlag', 'isolateSelected|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      this.skyCultureSettingsStore.skyCultureIsolateSelected = enabled
-      if (!enabled && this.skyCultureSettingsStore.skyCultureSinglePick) {
-        this.setSkyCultureConstellationSinglePick(false)
-      }
-    })
-  }
-
-  private setSkyCultureConstellationSinglePick(enabled: boolean): void {
-    if (enabled && !this.skyCultureSettingsStore.skyCultureIsolateSelected) return
-    this.callInteractive('setConstellationFlag', 'constellationPick|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.skyCultureSettingsStore.skyCultureSinglePick = enabled
-    })
-  }
-
-  private applySkyCultureConstellationSelection(actionId: string, hint: string): void {
-    this.callInteractive('triggerAction', actionId, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.flashHint(hint)
-    })
-  }
-
-  private setSkyCultureVisualSetting(setting: string, value: number): void {
-    this.callInteractive('setSkyCultureVisualSetting', setting + '|' + value.toFixed(2), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.skyCultureSettingsStore.applySkyCultureVisualSetting(setting, value)
-    })
-  }
-
+  // §15.6-2 A2 登记宿主控制器：可用配色目标（读 layerStore 图层开关 + hasZodiac/hasLunarSystem）。
   private skyCultureColorOptions(): ConfigurationOption[] {
     const options: ConfigurationOption[] = []
     if (this.layerStore.constellationLines) options.push({ id: 'constellationLines', label: '星座连线' })
@@ -4706,312 +4575,9 @@ export struct WindowNativeNode {
     return options.length > 0 ? options[0].id : 'constellationLines'
   }
 
-  private setSkyCultureVisualColor(setting: string, color: string): void {
-    const normalized = color.trim().toUpperCase()
-    if (!/^#[0-9A-F]{6}$/.test(normalized)) {
-      this.flashHint('请输入 #RRGGBB 格式的颜色')
-      return
-    }
-    this.callInteractive('setSkyCultureVisualColor', setting + '|' + normalized, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      const nextColor = r.color !== undefined ? r.color : normalized
-      const colors = this.skyCultureSettingsStore.skyCultureVisualColors
-      const updated: SkyCultureVisualColors = {
-        constellationLines: setting === 'constellationLines' ? nextColor : colors.constellationLines,
-        constellationLabels: setting === 'constellationLabels' ? nextColor : colors.constellationLabels,
-        constellationBoundaries: setting === 'constellationBoundaries' ? nextColor : colors.constellationBoundaries,
-        constellationHulls: setting === 'constellationHulls' ? nextColor : colors.constellationHulls,
-        zodiac: setting === 'zodiac' ? nextColor : colors.zodiac,
-        lunarSystem: setting === 'lunarSystem' ? nextColor : colors.lunarSystem,
-        asterismLines: setting === 'asterismLines' ? nextColor : colors.asterismLines,
-        asterismLabels: setting === 'asterismLabels' ? nextColor : colors.asterismLabels,
-        rayHelpers: setting === 'rayHelpers' ? nextColor : colors.rayHelpers
-      }
-      this.skyCultureSettingsStore.skyCultureVisualColors = updated
-      if (setting === this.skyCultureActiveColorTarget()) this.skyCultureSettingsStore.skyCultureColorInput = nextColor
-    })
-  }
-
-  private setCurrentSkyCultureAsDefault(): void {
-    if (this.skyCultureViewStore.currentSkyCultureId.length === 0 || this.skyCultureSettingsStore.skyCultureDefaultId === this.skyCultureViewStore.currentSkyCultureId) return
-    this.callInteractive('setSkyCultureDefault', this.skyCultureViewStore.currentSkyCultureId, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.skyCultureSettingsStore.skyCultureDefaultId = r.defaultId !== undefined ? r.defaultId : this.skyCultureViewStore.currentSkyCultureId
-        this.flashHint('已设为默认星空文化')
-      }
-    })
-  }
-
-  private skyCultureArtFilePath(rawPath: string): string {
-    if (!isSafeSkyCultureArtPath(rawPath)) return ''
-    const path = this.stellariumFilesDir() + '/stellarium/' + rawPath
-    try {
-      fileIo.accessSync(path)
-      return path
-    } catch (_err) {
-      return ''
-    }
-  }
-
-  private skyCultureArtUri(rawPath: string): string {
-    const path = this.skyCultureArtFilePath(rawPath)
-    return path.length > 0 ? fileUri.getUriFromPath(path) : ''
-  }
-
   private stellariumFilesDir(): string {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext
     return context.getApplicationContext().filesDir
-  }
-
-  private setSkyCultureArtStatus(rawPath: string, status: string): void {
-    if (this.skyCultureArtStates[rawPath] === status && this.skyCultureArtPendingStatuses[rawPath] === undefined) return
-    if (this.skyCultureArtPendingStatuses[rawPath] === status) return
-    this.skyCultureArtPendingStatuses[rawPath] = status
-    if (this.skyCultureArtStatusFlushTimer !== 0) return
-    this.skyCultureArtStatusFlushTimer = setTimeout(() => {
-      this.skyCultureArtStatusFlushTimer = 0
-      const pending = this.skyCultureArtPendingStatuses
-      this.skyCultureArtPendingStatuses = {}
-      const next: Record<string, string> = {}
-      for (const key of Object.keys(this.skyCultureArtStates)) next[key] = this.skyCultureArtStates[key]
-      for (const key of Object.keys(pending)) next[key] = pending[key]
-      this.skyCultureArtStates = next
-    }, 48) as number
-  }
-
-  private clearSkyCultureArtThumbnails(): void {
-    this.skyCultureArtThumbnailGeneration++
-    if (this.skyCultureArtDecodeTimer !== 0) {
-      clearTimeout(this.skyCultureArtDecodeTimer)
-      this.skyCultureArtDecodeTimer = 0
-    }
-    if (this.skyCultureArtStatusFlushTimer !== 0) {
-      clearTimeout(this.skyCultureArtStatusFlushTimer)
-      this.skyCultureArtStatusFlushTimer = 0
-    }
-    this.skyCultureArtPendingStatuses = {}
-    const oldMaps = this.skyCultureArtThumbnailPixelMaps
-    this.skyCultureArtThumbnailPixelMaps = {}
-    for (const rawPath of Object.keys(oldMaps)) {
-      releaseDecodedImage(this.hostMediaPort, oldMaps[rawPath], 'sky-culture-art-thumbnail')
-    }
-  }
-
-  private decodeSkyCultureArtThumbnail(rawPath: string, requestId: number, resolvedPath: string = rawPath): void {
-    if (this.skyCultureArtThumbnailPixelMaps[rawPath] !== undefined) {
-      return
-    }
-    const filePath = this.skyCultureArtFilePath(resolvedPath)
-    if (filePath.length === 0) {
-      return
-    }
-    const generation = this.skyCultureArtThumbnailGeneration
-    decodeLocalImage(this.hostMediaPort, filePath, 'sky-culture-art-thumbnail', (pixelMap: image.PixelMap) => {
-      if (requestId !== this.skyCultureDetailsRequestId || generation !== this.skyCultureArtThumbnailGeneration ||
-        this.skyCultureViewStore.currentSkyCultureId.length === 0) {
-        releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-sky-culture-art-thumbnail')
-        return
-      }
-      const next: Record<string, image.PixelMap> = {}
-      for (const key of Object.keys(this.skyCultureArtThumbnailPixelMaps)) {
-        next[key] = this.skyCultureArtThumbnailPixelMaps[key]
-      }
-      next[rawPath] = pixelMap
-      this.skyCultureArtThumbnailPixelMaps = next
-      this.setSkyCultureArtStatus(rawPath, 'ready')
-      hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-art] thumbnail ready path=%{public}s', rawPath)
-    }, (err: Error) => {
-      if (requestId !== this.skyCultureDetailsRequestId || generation !== this.skyCultureArtThumbnailGeneration ||
-        this.skyCultureViewStore.currentSkyCultureId.length === 0) {
-        return
-      }
-      this.setSkyCultureArtStatus(rawPath, 'decodeFailed')
-      hilog.warn(0x0000, 'StellariumArkUI', '[sky-culture-art] thumbnail decode failed path=%{public}s error=%{public}s',
-        rawPath, JSON.stringify(err))
-    }, { width: 320, height: 320 })
-  }
-
-  private prepareSkyCultureArtResources(items: Array<SkyCultureArtItem>, requestId: number): void {
-    const initial: Record<string, string> = {}
-    const missing: Array<string> = []
-    const visiblePaths: string[] = []
-    let ready = 0
-    for (let index = 0; index < items.length; index++) {
-      const art = items[index]
-      if (this.skyCultureArtFilePath(art.rawPath).length > 0) {
-        initial[art.rawPath] = 'ready'
-        ready++
-        if (index < 24) visiblePaths.push(art.rawPath)
-      } else {
-        initial[art.rawPath] = 'preparing'
-        missing.push(art.rawPath)
-      }
-    }
-    this.skyCultureArtStates = initial
-    let visibleIndex = 0
-    const decodeVisibleChunk = (): void => {
-      this.skyCultureArtDecodeTimer = 0
-      if (requestId !== this.skyCultureDetailsRequestId || this.skyCultureViewStore.currentSkyCultureId.length === 0) return
-      const chunkEnd = Math.min(visibleIndex + 4, visiblePaths.length)
-      while (visibleIndex < chunkEnd) {
-        this.decodeSkyCultureArtThumbnail(visiblePaths[visibleIndex], requestId)
-        visibleIndex++
-      }
-      if (visibleIndex < visiblePaths.length) {
-        this.skyCultureArtDecodeTimer = setTimeout(decodeVisibleChunk, 32) as number
-      }
-    }
-    if (visiblePaths.length > 0) {
-      this.skyCultureArtDecodeTimer = setTimeout(decodeVisibleChunk, 0) as number
-    }
-    hilog.info(0x0000, 'StellariumArkUI',
-      '[sky-culture-art] probe total=%{public}s ready=%{public}s pending=%{public}s',
-      items.length.toString(), ready.toString(), missing.length.toString())
-    let nextIndex = 0
-    const copyNext = (): void => {
-      if (requestId !== this.skyCultureDetailsRequestId || this.skyCultureViewStore.currentSkyCultureId.length === 0) return
-      if (nextIndex >= missing.length) {
-        let completed = 0
-        let failed = 0
-        for (const key of Object.keys(this.skyCultureArtStates)) {
-          if (this.skyCultureArtStates[key] === 'ready') completed++
-          if (this.skyCultureArtStates[key] === 'missing') failed++
-        }
-        hilog.info(0x0000, 'StellariumArkUI',
-          '[sky-culture-art] preparation complete ready=%{public}s missing=%{public}s total=%{public}s',
-          completed.toString(), failed.toString(), items.length.toString())
-        return
-      }
-      const rawPath = missing[nextIndex++]
-      const context = (this.getUIContext().getHostContext() as common.UIAbilityContext).getApplicationContext()
-      resolveStellariumDetailMediaAsset(context, rawPath).then((resolvedPath: string) => {
-        if (requestId !== this.skyCultureDetailsRequestId) return
-        const filePath = resolvedPath.length > 0 ? this.skyCultureArtFilePath(resolvedPath) : ''
-        this.setSkyCultureArtStatus(rawPath, filePath.length > 0 ? 'ready' : 'missing')
-        if (filePath.length > 0 && items.slice(0, 24).some((item: SkyCultureArtItem) => item.rawPath === rawPath)) {
-          this.decodeSkyCultureArtThumbnail(rawPath, requestId, resolvedPath)
-        }
-        copyNext()
-      }).catch((err: Error) => {
-        if (requestId !== this.skyCultureDetailsRequestId) return
-        this.setSkyCultureArtStatus(rawPath, 'missing')
-        hilog.warn(0x0000, 'StellariumArkUI',
-          '[sky-culture-art] preparation failed path=%{public}s error=%{public}s', rawPath, JSON.stringify(err))
-        copyNext()
-      })
-    }
-    copyNext()
-  }
-
-  private openSkyCultureArtPreview(art: SkyCultureArtItem): void {
-    this.skyCultureViewStore.artPreviewOpen = true
-    this.skyCultureArtDecodeGeneration++
-    const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
-    this.skyCultureViewStore.artPreviewPixelMap = undefined
-    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'switch-sky-culture-art')
-    this.skyCultureViewStore.artPreviewRawPath = art.rawPath
-    this.skyCultureViewStore.artPreviewName = art.name !== undefined && art.name.length > 0 ? art.name : '星座绘图 ' + art.index
-    this.skyCultureViewStore.artPreviewFailed = false
-    this.skyCultureViewStore.artPreviewLoading = true
-    this.skyCultureViewStore.artPreviewPath = this.skyCultureArtUri(art.rawPath)
-    this.resolveSkyCultureArtPreview(art.rawPath)
-  }
-
-  private resolveSkyCultureArtPreview(rawPath: string): void {
-    const current = this.skyCultureArtFilePath(rawPath)
-    if (current.length > 0) {
-      this.skyCultureViewStore.artPreviewPath = fileUri.getUriFromPath(current)
-      this.skyCultureViewStore.artPreviewLoading = true
-      this.skyCultureViewStore.artPreviewFailed = false
-      this.setSkyCultureArtStatus(rawPath, 'ready')
-      this.decodeSkyCultureArtPreview(current, rawPath)
-      return
-    }
-    const context = (this.getUIContext().getHostContext() as common.UIAbilityContext).getApplicationContext()
-    resolveStellariumDetailMediaAsset(context, rawPath).then((resolvedPath: string) => {
-      if (!this.skyCultureViewStore.artPreviewOpen || this.skyCultureViewStore.artPreviewRawPath !== rawPath) return
-      const filePath = resolvedPath.length > 0 ? this.skyCultureArtFilePath(resolvedPath) : ''
-      this.skyCultureViewStore.artPreviewPath = filePath.length > 0 ? fileUri.getUriFromPath(filePath) : ''
-      this.skyCultureViewStore.artPreviewLoading = filePath.length > 0
-      this.skyCultureViewStore.artPreviewFailed = filePath.length === 0
-      this.setSkyCultureArtStatus(rawPath, filePath.length > 0 ? 'ready' : 'missing')
-      if (filePath.length > 0) {
-        this.decodeSkyCultureArtPreview(filePath, rawPath)
-      }
-    }).catch((_err: Error) => {
-      if (!this.skyCultureViewStore.artPreviewOpen || this.skyCultureViewStore.artPreviewRawPath !== rawPath) return
-      this.skyCultureViewStore.artPreviewPath = ''
-      this.skyCultureViewStore.artPreviewLoading = false
-      this.skyCultureViewStore.artPreviewFailed = true
-      this.setSkyCultureArtStatus(rawPath, 'missing')
-    })
-  }
-
-  private closeSkyCultureArtPreview(): void {
-    this.skyCultureViewStore.artPreviewOpen = false
-    this.skyCultureArtDecodeGeneration++
-    const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
-    this.skyCultureViewStore.artPreviewPixelMap = undefined
-    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'sky-culture-art')
-    this.skyCultureViewStore.artPreviewPath = ''
-    this.skyCultureViewStore.artPreviewName = ''
-    this.skyCultureViewStore.artPreviewRawPath = ''
-    this.skyCultureViewStore.artPreviewLoading = false
-    this.skyCultureViewStore.artPreviewFailed = false
-  }
-
-  private onSkyCultureArtLoaded(): void {
-    if (!this.skyCultureViewStore.artPreviewOpen) return
-    this.skyCultureViewStore.artPreviewLoading = false
-    this.skyCultureViewStore.artPreviewFailed = false
-    this.setSkyCultureArtStatus(this.skyCultureViewStore.artPreviewRawPath, 'ready')
-    hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-art] preview loaded path=%{public}s', this.skyCultureViewStore.artPreviewRawPath)
-  }
-
-  private decodeSkyCultureArtPreview(filePath: string, rawPath: string): void {
-    const generation = ++this.skyCultureArtDecodeGeneration
-    decodeLocalImage(this.hostMediaPort, filePath, 'sky-culture-art', (pixelMap: image.PixelMap) => {
-      if (!this.skyCultureViewStore.artPreviewOpen || this.skyCultureViewStore.artPreviewRawPath !== rawPath ||
-        generation !== this.skyCultureArtDecodeGeneration) {
-        releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-sky-culture-art')
-        return
-      }
-      const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
-      this.skyCultureViewStore.artPreviewPixelMap = pixelMap
-      releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'previous-sky-culture-art')
-      this.skyCultureViewStore.artPreviewLoading = false
-      this.skyCultureViewStore.artPreviewFailed = false
-      this.setSkyCultureArtStatus(rawPath, 'ready')
-      hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-art] pixel map ready path=%{public}s', rawPath)
-    }, (err: Error) => {
-      if (!this.skyCultureViewStore.artPreviewOpen || this.skyCultureViewStore.artPreviewRawPath !== rawPath ||
-        generation !== this.skyCultureArtDecodeGeneration) {
-        return
-      }
-      this.skyCultureViewStore.artPreviewLoading = false
-      this.skyCultureViewStore.artPreviewFailed = true
-      this.setSkyCultureArtStatus(rawPath, 'decodeFailed')
-      hilog.error(0x0000, 'StellariumArkUI', '[sky-culture-art] pixel map decode failed path=%{public}s error=%{public}s',
-        rawPath, JSON.stringify(err))
-    })
-  }
-
-  private onSkyCultureArtError(): void {
-    if (!this.skyCultureViewStore.artPreviewOpen) return
-    this.skyCultureViewStore.artPreviewLoading = false
-    this.skyCultureViewStore.artPreviewFailed = true
-    this.setSkyCultureArtStatus(this.skyCultureViewStore.artPreviewRawPath, 'decodeFailed')
-    hilog.error(0x0000, 'StellariumArkUI', '[sky-culture-art] preview decode failed path=%{public}s', this.skyCultureViewStore.artPreviewRawPath)
-  }
-
-  private retrySkyCultureArtPreview(): void {
-    this.skyCultureViewStore.artPreviewFailed = false
-    this.skyCultureViewStore.artPreviewLoading = true
-    const oldPixelMap = this.skyCultureViewStore.artPreviewPixelMap
-    this.skyCultureViewStore.artPreviewPixelMap = undefined
-    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'retry-sky-culture-art')
-    this.skyCultureViewStore.artPreviewPath = ''
-    this.resolveSkyCultureArtPreview(this.skyCultureViewStore.artPreviewRawPath)
   }
 
   private drawSkyCultureTerritoryMap(): void {
@@ -5049,428 +4615,6 @@ export struct WindowNativeNode {
       this.skyCultureMapContext.closePath()
       if (!crossesDateLine) this.skyCultureMapContext.fill()
       this.skyCultureMapContext.stroke()
-    }
-  }
-
-  private skyCultureMakerDraftFromResponse(response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined {
-    const values = response as Record<string, Object>
-    if (values['draft'] === undefined) return undefined
-    try {
-      return JSON.parse(JSON.stringify(values['draft'])) as SkyCultureMakerDraft
-    } catch (error) {
-      hilog.error(0x0000, 'StellariumArkUI', 'Sky culture maker draft decode failed: %{public}s', String(error))
-      return undefined
-    }
-  }
-
-  private applySkyCultureMakerDraft(draft: SkyCultureMakerDraft): void {
-    this.skyCultureMakerStore.id = draft.id ?? ''
-    this.skyCultureMakerStore.name = draft.name ?? ''
-    this.skyCultureMakerStore.author = draft.author ?? ''
-    this.skyCultureMakerStore.license = draft.license ?? 'CC BY 4.0'
-    this.skyCultureMakerStore.region = draft.region ?? ''
-    this.skyCultureMakerStore.classification = draft.classification !== undefined && draft.classification.length > 0
-      ? draft.classification[0] : 'traditional'
-    this.skyCultureMakerStore.nativeLang = draft.native_lang ?? 'zh_CN'
-    this.skyCultureMakerStore.beginTime = (draft.beginTime ?? 0).toString()
-    this.skyCultureMakerStore.endTime = (draft.endTime ?? 0).toString()
-    this.skyCultureMakerStore.introduction = draft.introduction ?? ''
-    this.skyCultureMakerStore.description = draft.description ?? ''
-    this.skyCultureMakerStore.constellations = draft.constellations ?? []
-    this.skyCultureMakerStore.draftReady = true
-    if (this.skyCultureMakerStore.constellations.length > 0 && this.skyCultureMakerStore.selectedConstellation < 0) {
-      this.skyCultureMakerStore.selectedConstellation = 0
-    } else if (this.skyCultureMakerStore.selectedConstellation >= this.skyCultureMakerStore.constellations.length) {
-      this.skyCultureMakerStore.selectedConstellation = this.skyCultureMakerStore.constellations.length - 1
-    }
-    this.refreshSkyCultureMakerArtworkPreview()
-  }
-
-  private scheduleSkyCultureMakerSave(): void {
-    if (!this.skyCultureMakerStore.draftReady) return
-    if (this.skyCultureMakerSaveTimer > 0) clearTimeout(this.skyCultureMakerSaveTimer)
-    this.skyCultureMakerSaveTimer = setTimeout(() => {
-      this.skyCultureMakerSaveTimer = 0
-      this.saveSkyCultureMakerDraft(true)
-    }, 650) as number
-  }
-
-  private saveSkyCultureMakerDraft(silent: boolean = false, onComplete?: (success: boolean) => void): void {
-    if (!this.skyCultureMakerStore.draftReady) {
-      if (!silent) this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_load_failed')
-      if (onComplete !== undefined) onComplete(false)
-      return
-    }
-    if (this.skyCultureMakerStore.saving) {
-      if (onComplete !== undefined) onComplete(false)
-      return
-    }
-    this.skyCultureMakerStore.saving = true
-    this.callInteractive('saveSkyCultureMakerDraft', JSON.stringify(this.skyCultureMakerStore.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
-      this.skyCultureMakerStore.saving = false
-      if (response.ok !== true) {
-        this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_save_failed')
-        if (onComplete !== undefined) onComplete(false)
-        return
-      }
-      this.skyCultureMakerStore.canUndo = true
-      this.skyCultureMakerStore.validation = validationFromResponse(response)
-      if (!silent) this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_saved')
-      if (onComplete !== undefined) onComplete(true)
-    }, () => {
-      this.skyCultureMakerStore.saving = false
-      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_save_failed')
-      if (onComplete !== undefined) onComplete(false)
-    })
-  }
-
-  private validateSkyCultureMaker(): void {
-    this.callInteractive('validateSkyCultureMakerDraft', JSON.stringify(this.skyCultureMakerStore.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
-      this.skyCultureMakerStore.validation = validationFromResponse(response)
-      this.skyCultureMakerStore.status = response.ok === true
-        ? I18n.t('sky_culture_maker_valid')
-        : I18n.t('sky_culture_maker_invalid')
-      this.skyCultureMakerStore.tab = 2
-    }, () => { this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_validate_failed') })
-  }
-
-  private resetSkyCultureMaker(): void {
-    this.callInteractive('resetSkyCultureMakerDraft', '', (response: StellariumBridgeResponse) => {
-      const draft = this.skyCultureMakerDraftFromResponse(response)
-      if (response.ok === true && draft !== undefined) {
-        this.applySkyCultureMakerDraft(draft)
-        this.skyCultureMakerStore.validation = undefined
-        this.skyCultureMakerStore.canUndo = true
-        this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_reset_done')
-      } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_reset_failed')
-    })
-  }
-
-  private undoSkyCultureMaker(): void {
-    this.callInteractive('undoSkyCultureMakerEdit', '', (response: StellariumBridgeResponse) => {
-      const draft = this.skyCultureMakerDraftFromResponse(response)
-      if (response.ok === true && draft !== undefined) {
-        this.applySkyCultureMakerDraft(draft)
-        const values = response as Record<string, Object>
-        this.skyCultureMakerStore.canUndo = values['canUndo'] === true
-        this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_undo_done')
-      } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_undo_empty')
-    })
-  }
-
-  private addSkyCultureMakerConstellation(): void {
-    let number = this.skyCultureMakerStore.constellations.length + 1
-    let id = 'constellation_' + number.toString()
-    while (this.skyCultureMakerStore.constellations.some((item: SkyCultureMakerConstellation) => item.id === id)) {
-      number += 1
-      id = 'constellation_' + number.toString()
-    }
-    const constellation: SkyCultureMakerConstellation = {
-      id: id,
-      english: '',
-      native: '',
-      pronounce: '',
-      transliteration: '',
-      IPA: '',
-      dark: false,
-      lines: []
-    }
-    this.skyCultureMakerStore.constellations = this.skyCultureMakerStore.constellations.concat([constellation])
-    this.skyCultureMakerStore.selectedConstellation = this.skyCultureMakerStore.constellations.length - 1
-    this.refreshSkyCultureMakerArtworkPreview()
-    this.scheduleSkyCultureMakerSave()
-  }
-
-  private updateSkyCultureMakerConstellation(updated: SkyCultureMakerConstellation): void {
-    const index = this.skyCultureMakerStore.selectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
-    this.skyCultureMakerStore.constellations = this.skyCultureMakerStore.constellations.map((item: SkyCultureMakerConstellation, itemIndex: number) => {
-      return itemIndex === index ? updated : item
-    })
-    this.scheduleSkyCultureMakerSave()
-  }
-
-  private removeSelectedSkyCultureMakerConstellation(): void {
-    const index = this.skyCultureMakerStore.selectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
-    this.skyCultureMakerStore.constellations = this.skyCultureMakerStore.constellations.filter((_item: SkyCultureMakerConstellation, itemIndex: number) => itemIndex !== index)
-    this.skyCultureMakerStore.selectedConstellation = Math.min(index, this.skyCultureMakerStore.constellations.length - 1)
-    this.refreshSkyCultureMakerArtworkPreview()
-    this.scheduleSkyCultureMakerSave()
-  }
-
-  private addSkyCultureMakerHipLine(): void {
-    const index = this.skyCultureMakerStore.selectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
-    const parts = this.skyCultureMakerStore.hipLine.trim().split(/[\s,;，；]+/)
-    const hips: number[] = []
-    for (const part of parts) {
-      const value = Number(part.replace(/^HIP/i, ''))
-      if (Number.isInteger(value) && value > 0) hips.push(value)
-    }
-    if (hips.length < 2) {
-      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_line_needs_two')
-      return
-    }
-    const constellation = this.skyCultureMakerStore.constellations[index]
-    this.updateSkyCultureMakerConstellation({
-      id: constellation.id,
-      english: constellation.english,
-      native: constellation.native,
-      pronounce: constellation.pronounce,
-      transliteration: constellation.transliteration,
-      IPA: constellation.IPA,
-      dark: constellation.dark,
-      lines: constellation.lines.concat([hips]),
-      image: constellation.image
-    })
-    this.skyCultureMakerStore.hipLine = ''
-    this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_line_added')
-  }
-
-  private removeSkyCultureMakerLine(lineIndex: number): void {
-    const index = this.skyCultureMakerStore.selectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
-    const constellation = this.skyCultureMakerStore.constellations[index]
-    this.updateSkyCultureMakerConstellation({
-      id: constellation.id,
-      english: constellation.english,
-      native: constellation.native,
-      pronounce: constellation.pronounce,
-      transliteration: constellation.transliteration,
-      IPA: constellation.IPA,
-      dark: constellation.dark,
-      lines: constellation.lines.filter((_line: number[], index: number) => index !== lineIndex),
-      image: constellation.image
-    })
-  }
-
-  private addSelectedStarToSkyCultureMaker(): void {
-    const index = this.skyCultureMakerStore.selectedConstellation
-    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length) return
-    const constellation = this.skyCultureMakerStore.constellations[index]
-    const lineIndex = constellation.lines.length > 0 ? constellation.lines.length - 1 : -1
-    this.saveSkyCultureMakerDraft(true, (saved: boolean) => {
-      if (!saved) return
-      this.callInteractive('addSkyCultureMakerSelectedStar', JSON.stringify({ constellationId: constellation.id, lineIndex: lineIndex }), (response: StellariumBridgeResponse) => {
-        const draft = this.skyCultureMakerDraftFromResponse(response)
-        if (response.ok === true && draft !== undefined) {
-          this.applySkyCultureMakerDraft(draft)
-          this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_selected_star_added')
-        } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_selected_star_failed')
-      })
-    })
-  }
-
-  private skyCultureMakerArtworkFilePath(): string {
-    const constellation = this.skyCultureMakerStore.selected()
-    const assetFile = constellation?.image?.file ?? ''
-    if (assetFile.length === 0 || assetFile.startsWith('/') || assetFile.includes('..')) return ''
-    const filePath = this.stellariumFilesDir() + '/stellarium_userdir/sky-culture-maker/assets/' + assetFile
-    try {
-      fileIo.accessSync(filePath)
-      return filePath
-    } catch (_error) {
-      return ''
-    }
-  }
-
-  private clearSkyCultureMakerArtworkPreview(label: string = 'sky-culture-maker-artwork'): void {
-    this.skyCultureMakerArtworkDecodeGeneration++
-    this.skyCultureMakerArtworkPreviewPath = ''
-    this.skyCultureMakerStore.artworkPreviewState = 'empty'
-    const oldPixelMap = this.skyCultureMakerStore.artworkPixelMap
-    this.skyCultureMakerStore.artworkPixelMap = undefined
-    releaseDecodedImage(this.hostMediaPort, oldPixelMap, label)
-  }
-
-  private refreshSkyCultureMakerArtworkPreview(): void {
-    const artwork = this.skyCultureMakerStore.selected()?.image
-    if (artwork === undefined) {
-      this.clearSkyCultureMakerArtworkPreview()
-      return
-    }
-    const filePath = this.skyCultureMakerArtworkFilePath()
-    if (filePath.length === 0) {
-      this.clearSkyCultureMakerArtworkPreview()
-      this.skyCultureMakerStore.artworkPreviewState = 'missing'
-      hilog.warn(0x0000, 'StellariumArkUI', '[sky-culture-maker] artwork file missing')
-      return
-    }
-    if (this.skyCultureMakerArtworkPreviewPath === filePath &&
-      (this.skyCultureMakerStore.artworkPreviewState === 'preparing' || this.skyCultureMakerStore.artworkPixelMap !== undefined)) {
-      return
-    }
-    const generation = ++this.skyCultureMakerArtworkDecodeGeneration
-    const oldPixelMap = this.skyCultureMakerStore.artworkPixelMap
-    this.skyCultureMakerStore.artworkPixelMap = undefined
-    releaseDecodedImage(this.hostMediaPort, oldPixelMap, 'previous-sky-culture-maker-artwork')
-    this.skyCultureMakerArtworkPreviewPath = filePath
-    this.skyCultureMakerStore.artworkPreviewState = 'preparing'
-    const sourceWidth = Math.max(1, artwork.size?.[0] ?? 1)
-    const sourceHeight = Math.max(1, artwork.size?.[1] ?? 1)
-    const scale = Math.min(1, 1280 / Math.max(sourceWidth, sourceHeight))
-    const desiredSize: ImageDecodeSize = {
-      width: Math.max(1, Math.round(sourceWidth * scale)),
-      height: Math.max(1, Math.round(sourceHeight * scale))
-    }
-    decodeLocalImage(this.hostMediaPort, filePath, 'sky-culture-maker-artwork', (pixelMap: image.PixelMap) => {
-      if (generation !== this.skyCultureMakerArtworkDecodeGeneration || this.skyCultureMakerArtworkPreviewPath !== filePath) {
-        releaseDecodedImage(this.hostMediaPort, pixelMap, 'stale-sky-culture-maker-artwork')
-        return
-      }
-      this.skyCultureMakerStore.artworkPixelMap = pixelMap
-      this.skyCultureMakerStore.artworkPreviewState = 'ready'
-      hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-maker] artwork ready path=%{public}s', filePath)
-    }, (error: Error) => {
-      if (generation !== this.skyCultureMakerArtworkDecodeGeneration || this.skyCultureMakerArtworkPreviewPath !== filePath) return
-      this.skyCultureMakerStore.artworkPreviewState = 'decodeFailed'
-      hilog.error(0x0000, 'StellariumArkUI', '[sky-culture-maker] artwork decode failed path=%{public}s error=%{public}s',
-        filePath, JSON.stringify(error))
-    }, desiredSize)
-  }
-
-  private selectSkyCultureMakerConstellation(index: number): void {
-    if (index < 0 || index >= this.skyCultureMakerStore.constellations.length || index === this.skyCultureMakerStore.selectedConstellation) return
-    this.skyCultureMakerStore.selectedConstellation = index
-    this.skyCultureMakerStore.artworkAnchorIndex = 0
-    this.refreshSkyCultureMakerArtworkPreview()
-  }
-
-  private applySkyCultureMakerArtworkResponse(response: StellariumBridgeResponse, successText: string): void {
-    const draft = this.skyCultureMakerDraftFromResponse(response)
-    if (response.ok === true && draft !== undefined) {
-      this.applySkyCultureMakerDraft(draft)
-      this.skyCultureMakerStore.canUndo = true
-      this.skyCultureMakerStore.validation = validationFromResponse(response)
-      this.skyCultureMakerStore.status = successText
-    } else {
-      this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_artwork_failed')
-    }
-  }
-
-  private async importSkyCultureMakerArtworkFile(): Promise<void> {
-    const constellation = this.skyCultureMakerStore.selected()
-    if (constellation === undefined || this.skyCultureMakerStore.artworkImporting) return
-    this.skyCultureMakerStore.artworkImporting = true
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const options = new picker.DocumentSelectOptions()
-      options.fileSuffixFilters = ['图像|.png|.jpg|.jpeg|.webp']
-      options.maxSelectNumber = 1
-      const selectedUris = await new picker.DocumentViewPicker(context).select(options)
-      if (selectedUris.length === 0 || selectedUris[0].length === 0) return
-      const importDir = context.filesDir + '/sky-culture-maker-imports'
-      fileIo.mkdirSync(importDir, true)
-      let fileName = selectedUris[0].substring(selectedUris[0].lastIndexOf('/') + 1).replace(/[^A-Za-z0-9._-]/g, '_')
-      if (fileName.length === 0) fileName = 'artwork-' + Date.now().toString() + '.png'
-      const sourcePath = importDir + '/' + Date.now().toString() + '-' + fileName
-      await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(sourcePath))
-      this.callInteractive('importSkyCultureMakerArtwork', JSON.stringify({
-        constellationId: constellation.id,
-        sourcePath: sourcePath
-      }), (response: StellariumBridgeResponse) => {
-        this.skyCultureMakerStore.artworkImporting = false
-        this.skyCultureMakerStore.artworkAnchorIndex = 0
-        this.applySkyCultureMakerArtworkResponse(response, I18n.t('sky_culture_maker_artwork_imported'))
-      }, () => {
-        this.skyCultureMakerStore.artworkImporting = false
-        this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_artwork_failed')
-      })
-    } catch (error) {
-      this.skyCultureMakerStore.artworkImporting = false
-      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_artwork_failed')
-      hilog.error(0x0000, 'StellariumArkUI', 'Sky culture artwork import failed: %{public}s', String(error))
-    }
-  }
-
-  private removeSkyCultureMakerArtwork(): void {
-    const constellation = this.skyCultureMakerStore.selected()
-    if (constellation === undefined) return
-    this.callInteractive('removeSkyCultureMakerArtwork', JSON.stringify({ constellationId: constellation.id }), (response: StellariumBridgeResponse) => {
-      this.skyCultureMakerStore.artworkAnchorIndex = 0
-      this.applySkyCultureMakerArtworkResponse(response, I18n.t('sky_culture_maker_artwork_removed'))
-    })
-  }
-
-  private bindSkyCultureMakerArtworkAnchor(x: number, y: number): void {
-    const constellation = this.skyCultureMakerStore.selected()
-    const image = constellation?.image
-    if (constellation === undefined || image === undefined || image.size.length !== 2) return
-    const pixelX = clamp(x / Math.max(1, this.skyCultureMakerStore.artworkRenderWidth) * image.size[0], 0, image.size[0])
-    const pixelY = clamp(y / Math.max(1, this.skyCultureMakerStore.artworkRenderHeight) * image.size[1], 0, image.size[1])
-    this.callInteractive('setSkyCultureMakerArtworkAnchor', JSON.stringify({
-      constellationId: constellation.id,
-      anchorIndex: this.skyCultureMakerStore.artworkAnchorIndex,
-      x: pixelX,
-      y: pixelY
-    }), (response: StellariumBridgeResponse) => {
-      this.applySkyCultureMakerArtworkResponse(response, I18n.format('sky_culture_maker_anchor_bound', [(this.skyCultureMakerStore.artworkAnchorIndex + 1).toString()]))
-      if (response.ok === true && this.skyCultureMakerStore.artworkAnchorIndex < 2) this.skyCultureMakerStore.artworkAnchorIndex += 1
-    })
-  }
-
-  private handleSkyCultureMakerArtworkTouch(event: TouchEvent): boolean {
-    const points = event.touches.length > 0 ? event.touches : event.changedTouches
-    if (points.length === 0) return false
-    const point = points[0]
-    if (event.type === TouchType.Down) {
-      this.skyCultureMakerArtworkTouchStartX = point.x
-      this.skyCultureMakerArtworkTouchStartY = point.y
-      this.skyCultureMakerArtworkTouchMoved = false
-    } else if (event.type === TouchType.Move) {
-      const deltaX = point.x - this.skyCultureMakerArtworkTouchStartX
-      const deltaY = point.y - this.skyCultureMakerArtworkTouchStartY
-      if (Math.sqrt(deltaX * deltaX + deltaY * deltaY) > 8) this.skyCultureMakerArtworkTouchMoved = true
-    } else if (event.type === TouchType.Up) {
-      if (!this.skyCultureMakerArtworkTouchMoved) this.bindSkyCultureMakerArtworkAnchor(point.x, point.y)
-      this.skyCultureMakerArtworkTouchMoved = false
-    } else if (event.type === TouchType.Cancel) {
-      this.skyCultureMakerArtworkTouchMoved = false
-    }
-    return false
-  }
-
-  private exportSkyCultureMaker(): void {
-    this.saveSkyCultureMakerDraft(true, (saved: boolean) => {
-      if (!saved) return
-      this.callInteractive('exportSkyCultureMaker', '', (response: StellariumBridgeResponse) => {
-        this.skyCultureMakerStore.validation = validationFromResponse(response)
-        const values = response as Record<string, Object>
-        if (response.ok === true) {
-          this.skyCultureMakerStore.exportPath = values['path'] as string
-          this.skyCultureMakerStore.exportFileName = values['fileName'] as string
-          this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_exported')
-        } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_export_failed')
-        this.skyCultureMakerStore.tab = 2
-      })
-    })
-  }
-
-  private async importSkyCultureMakerFile(): Promise<void> {
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const options = new picker.DocumentSelectOptions()
-      options.fileSuffixFilters = ['Stellarium 星空文化|.zip']
-      options.maxSelectNumber = 1
-      const selectedUris = await new picker.DocumentViewPicker(context).select(options)
-      if (selectedUris.length === 0) return
-      const importDir = context.filesDir + '/sky-culture-maker-imports'
-      fileIo.mkdirSync(importDir, true)
-      const targetPath = importDir + '/culture-' + Date.now().toString() + '.zip'
-      await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(targetPath))
-      this.callInteractive('importSkyCultureMaker', targetPath, (response: StellariumBridgeResponse) => {
-        const draft = this.skyCultureMakerDraftFromResponse(response)
-        if (response.ok === true && draft !== undefined) {
-          this.applySkyCultureMakerDraft(draft)
-          this.skyCultureMakerStore.validation = undefined
-          this.skyCultureMakerStore.canUndo = true
-          this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_imported')
-        } else this.skyCultureMakerStore.status = response.error ?? I18n.t('sky_culture_maker_import_failed')
-      })
-    } catch (error) {
-      hilog.error(0x0000, 'StellariumArkUI', 'Sky culture maker import failed: %{public}s', String(error))
-      this.skyCultureMakerStore.status = I18n.t('sky_culture_maker_import_failed')
     }
   }
 
@@ -5700,18 +4844,6 @@ export struct WindowNativeNode {
 
   private stopTracking(): void {
     this.setTrackingState(false)
-  }
-
-  private setSkyCulture(name: string): void {
-    this.callInteractive('setSkyCulture', name, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) {
-        this.flashHint(I18n.t('msg_apply_failed'))
-        return
-      }
-      const culture = r.culture && r.culture.length > 0 ? r.culture : name
-      this.skyCultureViewStore.currentSkyCulture = culture
-      this.flashHint(I18n.t('i0068').replace('%s', culture))
-    })
   }
 
   // 时间轮交互控制器（普通类，非可观测）：拖动/惯性/轨道重基准/引擎推送。
@@ -7672,10 +6804,10 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
             accentColor: this.nightModeStore.nmAccent(),
             bgColor: this.nightModeStore.nmBg(),
             topInset: this.mediaPreviewTopInset(),
-            closeSkyCultureArtPreview: () => { this.closeSkyCultureArtPreview() },
-            onSkyCultureArtLoaded: () => { this.onSkyCultureArtLoaded() },
-            onSkyCultureArtError: () => { this.onSkyCultureArtError() },
-            onRetrySkyCultureArtPreview: () => { this.retrySkyCultureArtPreview() }
+            closeSkyCultureArtPreview: () => { this.skyCultureCtl().closeSkyCultureArtPreview() },
+            onSkyCultureArtLoaded: () => { this.skyCultureCtl().onSkyCultureArtLoaded() },
+            onSkyCultureArtError: () => { this.skyCultureCtl().onSkyCultureArtError() },
+            onRetrySkyCultureArtPreview: () => { this.skyCultureCtl().retrySkyCultureArtPreview() }
           })
         }
         if (this.objectMediaStore.objectInspectorMediaFullscreen) {
@@ -7784,6 +6916,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         }
       })
   }
+
   private publishGuideState(): void {
     AppStorage.setOrCreate('stellariumGuideState', JSON.stringify({
       ok: true, state: this.guideStore.guideState, lastRequestId: this.guideStore.guideLastRequest,
@@ -8812,28 +7945,28 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         onSelectLandscape: (id: string, name: string) => { this.selectLandscape(id, name) },
         onChangeLandscapeTransparency: (val: number) => { this.changeLandscapeTransparency(val) },
         onLoadList: () => { this.skyCultureViewStore.loadSkyCultureList() },
-        onSelectCulture: (id: string) => { this.selectSkyCulture(id) },
-        onRowArea: (id: string, area: Area) => { this.handleSkyCultureRowArea(id, area) },
+        onSelectCulture: (id: string) => { this.skyCultureCtl().selectSkyCulture(id) },
+        onRowArea: (id: string, area: Area) => { this.skyCultureCtl().handleSkyCultureRowArea(id, area) },
         onReloadList: () => { this.callInteractive('reloadSkyCulture', '', () => { this.skyCultureViewStore.loadSkyCultureList() }) },
-        onSelectLabelMode: (target: string, index: number) => { this.selectSkyCultureLabelMode(target, index) },
-        onSetShortLabels: (enabled: boolean) => { this.setSkyCultureShortLabels(enabled) },
-        onSetCommonNames: (enabled: boolean) => { this.setSkyCultureCommonNames(enabled) },
-        onSetIsolation: (enabled: boolean) => { this.setSkyCultureConstellationIsolation(enabled) },
-        onSetSinglePick: (enabled: boolean) => { this.setSkyCultureConstellationSinglePick(enabled) },
-        onConstellationSelection: (actionId: string, hint: string) => { this.applySkyCultureConstellationSelection(actionId, hint) },
-        onSetStyleOption: (target: string, optionIndex: number, enabled: boolean) => { this.setSkyCultureStyleOption(target, optionIndex, enabled) },
+        onSelectLabelMode: (target: string, index: number) => { this.skyCultureCtl().selectSkyCultureLabelMode(target, index) },
+        onSetShortLabels: (enabled: boolean) => { this.skyCultureCtl().setSkyCultureShortLabels(enabled) },
+        onSetCommonNames: (enabled: boolean) => { this.skyCultureCtl().setSkyCultureCommonNames(enabled) },
+        onSetIsolation: (enabled: boolean) => { this.skyCultureCtl().setSkyCultureConstellationIsolation(enabled) },
+        onSetSinglePick: (enabled: boolean) => { this.skyCultureCtl().setSkyCultureConstellationSinglePick(enabled) },
+        onConstellationSelection: (actionId: string, hint: string) => { this.skyCultureCtl().applySkyCultureConstellationSelection(actionId, hint) },
+        onSetStyleOption: (target: string, optionIndex: number, enabled: boolean) => { this.skyCultureCtl().setSkyCultureStyleOption(target, optionIndex, enabled) },
         getColorOptions: () => this.skyCultureColorOptions(),
-        onSetVisualColor: (setting: string, color: string) => { this.setSkyCultureVisualColor(setting, color) },
-        onSetVisualSetting: (setting: string, value: number) => { this.setSkyCultureVisualSetting(setting, value) },
-        onSetDefault: () => { this.setCurrentSkyCultureAsDefault() },
-        onSyncTimeFollowTimer: () => { this.syncSkyCultureTimeFollowTimer() },
-        onRefreshSimulationYear: () => { this.refreshSkyCultureSimulationYear(true) },
+        onSetVisualColor: (setting: string, color: string) => { this.skyCultureCtl().setSkyCultureVisualColor(setting, color) },
+        onSetVisualSetting: (setting: string, value: number) => { this.skyCultureCtl().setSkyCultureVisualSetting(setting, value) },
+        onSetDefault: () => { this.skyCultureCtl().setCurrentSkyCultureAsDefault() },
+        onSyncTimeFollowTimer: () => { this.skyCultureCtl().syncSkyCultureTimeFollowTimer() },
+        onRefreshSimulationYear: () => { this.skyCultureCtl().refreshSkyCultureSimulationYear(true) },
         onLoadTerritoryMap: () => { this.skyCultureSettingsStore.loadSkyCultureTerritoryMap() },
         onMapReady: () => { this.drawSkyCultureTerritoryMap() },
         onMapAreaChange: (width: number, height: number) => { this.skyCultureMapRenderWidth = width; this.skyCultureMapRenderHeight = height; this.drawSkyCultureTerritoryMap() },
         onLoadObserverInfo: (force: boolean) => { this.locationPickerStore.loadObserverInfo(force) },
-        onArtDecodeError: (rawPath: string) => { this.setSkyCultureArtStatus(rawPath, 'decodeFailed') },
-        onOpenArtPreview: (art: SkyCultureArtItem) => { this.openSkyCultureArtPreview(art) }
+        onArtDecodeError: (rawPath: string) => { this.skyCultureCtl().setSkyCultureArtStatus(rawPath, 'decodeFailed') },
+        onOpenArtPreview: (art: SkyCultureArtItem) => { this.skyCultureCtl().openSkyCultureArtPreview(art) }
       })
     } else if (this.activePanel === 'pointerCoordinates') {
       PointerCoordinatesPanel({
@@ -8892,7 +8025,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         onFovChange: (val: number) => { this.fovSliderValue = Math.round(val); this.changeFovBySlider(val) },
         onSetProjection: (name: string) => { this.setProjection(name) },
         onSetLanguage: (lang: string) => { this.setLanguage(lang) },
-        onSetSkyCulture: (name: string) => { this.setSkyCulture(name) },
+        onSetSkyCulture: (name: string) => { this.skyCultureCtl().setSkyCulture(name) },
         onSetUnits: (metric: boolean) => { this.viewSettingsStore.useMetricUnits = metric; this.callInteractive('setConfigString', 'astronomy/flag_use_km_for_distance=' + metric, () => {}) },
         catalogHealthTextOf: (title: string, health: CatalogHealthEntry) => this.catalogHealthText(title, health),
         catalogHealthColorOf: (health: CatalogHealthEntry) => this.catalogHealthColor(health)
@@ -9275,25 +8408,25 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         panelWidth: this.panelWidth,
         subColor: this.nightModeStore.nmSub(), textColor: this.nightModeStore.nmText(), accentColor: this.nightModeStore.nmAccent(), bgColor: this.nightModeStore.nmBg(),
         inputColor: this.nightModeStore.nmInput(), inputBorderColor: this.nightModeStore.nmInputBorder(),
-        onEdited: () => { this.scheduleSkyCultureMakerSave() },
-        onAdd: () => { this.addSkyCultureMakerConstellation() },
-        onSelect: (index: number) => { this.selectSkyCultureMakerConstellation(index) },
-        onUpdate: (updated: SkyCultureMakerConstellation) => { this.updateSkyCultureMakerConstellation(updated) },
-        onRemoveSelected: () => { this.removeSelectedSkyCultureMakerConstellation() },
-        onRemoveLine: (lineIndex: number) => { this.removeSkyCultureMakerLine(lineIndex) },
-        onAddHipLine: () => { this.addSkyCultureMakerHipLine() },
-        onAddSelectedStar: () => { this.addSelectedStarToSkyCultureMaker() },
-        onImportArtwork: () => { this.importSkyCultureMakerArtworkFile() },
-        onRemoveArtwork: () => { this.removeSkyCultureMakerArtwork() },
-        onArtworkTouch: (event: TouchEvent) => { this.handleSkyCultureMakerArtworkTouch(event) },
-        onValidate: () => { this.validateSkyCultureMaker() },
-        onImport: () => { this.importSkyCultureMakerFile() },
-        onExport: () => { this.exportSkyCultureMaker() },
+        onEdited: () => { this.skyCultureMakerCtl().scheduleSkyCultureMakerSave() },
+        onAdd: () => { this.skyCultureMakerCtl().addSkyCultureMakerConstellation() },
+        onSelect: (index: number) => { this.skyCultureMakerCtl().selectSkyCultureMakerConstellation(index) },
+        onUpdate: (updated: SkyCultureMakerConstellation) => { this.skyCultureMakerCtl().updateSkyCultureMakerConstellation(updated) },
+        onRemoveSelected: () => { this.skyCultureMakerCtl().removeSelectedSkyCultureMakerConstellation() },
+        onRemoveLine: (lineIndex: number) => { this.skyCultureMakerCtl().removeSkyCultureMakerLine(lineIndex) },
+        onAddHipLine: () => { this.skyCultureMakerCtl().addSkyCultureMakerHipLine() },
+        onAddSelectedStar: () => { this.skyCultureMakerCtl().addSelectedStarToSkyCultureMaker() },
+        onImportArtwork: () => { this.skyCultureMakerCtl().importSkyCultureMakerArtworkFile() },
+        onRemoveArtwork: () => { this.skyCultureMakerCtl().removeSkyCultureMakerArtwork() },
+        onArtworkTouch: (event: TouchEvent) => { this.skyCultureMakerCtl().handleSkyCultureMakerArtworkTouch(event) },
+        onValidate: () => { this.skyCultureMakerCtl().validateSkyCultureMaker() },
+        onImport: () => { this.skyCultureMakerCtl().importSkyCultureMakerFile() },
+        onExport: () => { this.skyCultureMakerCtl().exportSkyCultureMaker() },
         onShare: () => { shareFile(this.hostMediaPort, this.hostPlatformPort, this.skyCultureMakerStore.exportPath, utd.UniformDataType.ZIP_ARCHIVE, this.skyCultureMakerStore.exportFileName, I18n.t('sky_culture_maker_share_description'), 'sky-culture-maker-share', { flashHint: (text: ResourceStr): void => this.flashHint(text), isExpandedLayout: (): boolean => this.isExpandedLayout }) },
         onSaveAs: () => { this.saveFileAs(this.skyCultureMakerStore.exportPath, this.skyCultureMakerStore.exportFileName, 'ZIP 压缩包|.zip') },
-        onSaveDraft: () => { this.saveSkyCultureMakerDraft(false) },
-        onUndo: () => { this.undoSkyCultureMaker() },
-        onReset: () => { this.resetSkyCultureMaker() }
+        onSaveDraft: () => { this.skyCultureMakerCtl().saveSkyCultureMakerDraft(false) },
+        onUndo: () => { this.skyCultureMakerCtl().undoSkyCultureMaker() },
+        onReset: () => { this.skyCultureMakerCtl().resetSkyCultureMaker() }
       })
         } else if (this.activePanel === 'nebulaTextures') {
       NebulaTexturesPanel({
@@ -9465,7 +8598,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         toggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
         flashHint: (text: ResourceStr) => { this.flashHint(text) },
         setLanguage: (lang: string) => { this.setLanguage(lang) },
-        setSkyCulture: (culture: string) => { this.setSkyCulture(culture) },
+        setSkyCulture: (culture: string) => { this.skyCultureCtl().setSkyCulture(culture) },
         triggerAction: (actionId: string) => { this.triggerAction(actionId) },
         refreshState: () => { this.refreshState() },
         saveScreenshot: () => { saveScreenshot(this.commandPort(), this.hostMediaPort, { flashHint: (text: ResourceStr): void => this.flashHint(text), screenshotSaving: (): boolean => this.tools.screenshotSaving, setScreenshotSaving: (saving: boolean): void => { this.tools.screenshotSaving = saving } }) }
