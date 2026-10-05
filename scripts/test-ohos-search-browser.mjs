@@ -12,8 +12,10 @@ const searchPanels = ['SearchBar', 'SearchSuggestions', 'SearchFilterMenu', 'Sea
   'SearchCategoryBrowse', 'SearchConstellationChips', 'SearchCoordinateInput'].map(read).join('\n');
 // 搜索面板分支已下沉为 SearchPanel 组件（Phase 4e），浏览器 Scroll 的 id/align 现在组件内。
 const searchPanelFile = readFileSync(new URL('../harmonyos/ets-source/panels/panels/SearchPanel.ets', import.meta.url), 'utf8');
+// E4：搜索筛选行为（selectSearchFilterCategory 等）已自宿主下沉 capability/SearchController.ets。
+const searchController = readFileSync(new URL('../harmonyos/ets-source/capability/SearchController.ets', import.meta.url), 'utf8');
 
-const methodSources = [source, catalogStore];
+const methodSources = [source, catalogStore, searchController];
 function controllerFor(names) {
   const methods = names.map(name => {
     for (const src of methodSources) {
@@ -47,9 +49,11 @@ test('choosing a category returns to results without clearing observing filters'
   Object.assign(controller, { searchStore: { searchFilterPage: 'categories', searchVisibilityFilter: 'above',
     searchInstrumentFilter: 'binocular', loadCategoryObjects: category => loads.push(category) },
     catalogStore: { searchAllCategoryOptions: () => [{ code: 'satellite' }] },
-    getUIContext: () => ({ animateTo: (_options, callback) => callback() }),
-    searchPanelScroller: { scrollTo: () => {} },
-    publishSearchBrowserState: error => errors.push(error) });
+    hooks: {
+      animateFilterChange: callback => callback(),
+      resetSearchScroll: () => {},
+      publishSearchBrowserState: error => errors.push(error)
+    } });
   controller.selectSearchFilterCategory('satellite');
   assert.equal(controller.searchStore.searchFilterPage, '');
   assert.deepEqual(loads, ['satellite']);

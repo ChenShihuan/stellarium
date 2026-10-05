@@ -21,6 +21,7 @@
 // saveAppSettings / stopSkyInertia 与叠层 4 个 @State 经 ViewCoordinateHostHooks 回注。
 // 定时器 viewCoordinateTimer 由控制器自持（§15.7 规则 3）：stopViewCoordinateTimer / syncViewCoordinateTimer。
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 import { OverlayStore } from '../state/OverlayStore'
 import { touchScreenX, touchScreenY } from '../common/derive/geometry'
@@ -158,5 +159,13 @@ export class ViewCoordinateController {
       this.hooks.setViewCoordinateOffsetX(this.hooks.viewCoordinateRestOffsetX())
       this.hooks.setViewCoordinateOffsetY(this.hooks.viewCoordinateRestOffsetY())
     }
+  }
+
+  // 原宿主 setPointerCoordinates()（E4 并入）：写指针坐标设置并回读状态。
+  setPointerCoordinates(setting: string, value: string): void {
+    this.port.requestWhenReady('setPointerCoordinates', setting + '|' + value, (r: StellariumBridgeResponse) => {
+      if (r.ok !== true) this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed')
+      this.overlayStore.loadPointerCoordinates()
+    }, () => { this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed') }, 0, 100, 15)
   }
 }

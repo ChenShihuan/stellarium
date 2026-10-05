@@ -20,7 +20,7 @@ import { LOCATION_COUNTRY_NAMES } from './location_countries'
 import { LOCATION_ZH_NAMES } from './location_names_zh'
 import { ASTRONOMY_GUIDES, AstronomyGuide, GuideState, GuideStep } from './AstronomyGuide'
 
-import { StellariumBridgeResponse, SessionSnapshot, TonightEvents, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, CatOption, NameItem, SearchSug, WindowNativeNodeCreateInfo, ChipItem, LandscapeItem, ScriptMetadata, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass } from './StellariumTypes'
+import { StellariumBridgeResponse, SessionSnapshot, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, NameItem, SearchSug, WindowNativeNodeCreateInfo, ChipItem, LandscapeItem, ScriptMetadata, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass } from './StellariumTypes'
 import { setLifecycleListener } from '../common/StellariumLifecycle'
 import { AudioEngine } from './StellariumAudio'
 import { I18n, LANGUAGE_DISPLAY, PROJECTION_KEYS } from './I18n'
@@ -76,6 +76,8 @@ import { SkyCultureController, SkyCultureHostHooks } from '../capability/SkyCult
 import { SkyCultureMakerController, SkyCultureMakerHostHooks } from '../capability/SkyCultureMakerController'
 import { BehaviorHostHooks } from '../capability/ControllerHooks'
 import { SettingsController, SettingsHostHooks } from '../capability/SettingsController'
+import { SearchController, SearchHostHooks } from '../capability/SearchController'
+import { SelfTestController } from '../capability/SelfTestController'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
@@ -230,7 +232,7 @@ import {
   HeliocentricOrbit, ConfigurationOption, SkyCultureVisualColors, CelestialPositionOptions,
   CelestialPositionCategory, PhenomenaOptions, PhenomenaStartOption, EphemerisOptions, RtsCalendarOptions, EclipseOptions,
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
-  HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS, TonightPlanetRow,
+  HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS,
   GyroGuideProjection, SkyUiObstacle, BookmarkItem,
   BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, PointerCoordinatesData, PointerCoordinatesResponse,
@@ -1046,6 +1048,8 @@ export struct WindowNativeNode {
   private timeControllerImpl: TimeController | null = null
   // E3：设置面板选项 / 配置行为控制器（惰性构造；状态在 infoWindow/timeSettings/navigation/view/ephemeris/objectDetail/tools/atmosphere store）。
   private settingsControllerImpl: SettingsController | null = null
+  private searchControllerImpl: SearchController | null = null
+  private selfTestControllerImpl: SelfTestController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -1097,7 +1101,6 @@ export struct WindowNativeNode {
   private stateRefreshTimer: number = -1
   private stateRefreshRequestPending: boolean = false
   private stateRefreshQueued: boolean = false
-  private lastMusicToggle: number = 0
   /** 主界面 Dock 右上的常驻时钟文本（HH:mm），面板未打开时显示。 */
   @State private dockClockText: string = ''
   /** Dock 时钟的独立轻量刷新定时器（1s），不并入时间面板 125ms 高频刷新。 */
@@ -1326,7 +1329,6 @@ export struct WindowNativeNode {
   private hintTimer: number = 0
   // 离线搜索分块扫描草稿（locSearchRequestId / locationSearchScan* / locationSearchLastPublishMs）
   // 已随 §15.12 离线搜索三法下沉 state/LocationStore.ets。
-  private searchSuggestionTimer: number = -1
   private panelIdleTimer: number = -1
   private lastOverlayActivityMs: number = 0
 
@@ -1405,91 +1407,6 @@ export struct WindowNativeNode {
 
   // 城市快速定位预设数据: id -> "lat|lon|alt"
 
-  private readonly SELFTEST_ACTION_IDS: string[] = [
-    "actionHorizontal_Flip",
-    "actionShow_Antisolar_Point",
-    "actionShow_Apex_Points",
-    "actionShow_Asterism_Labels",
-    "actionShow_Asterism_Lines",
-    "actionShow_Atmosphere",
-    "actionShow_Azimuthal_Grid",
-    "actionShow_Celestial_J2000_Poles",
-    "actionShow_Celestial_Poles",
-    "actionShow_Circumpolar_Circles",
-    "actionShow_Colure_Lines",
-    "actionShow_Compass_Marks",
-    "actionShow_Constellation_Hulls",
-    "actionShow_Constellation_Art",
-    "actionShow_Constellation_Boundaries",
-    "actionShow_Constellation_Labels",
-    "actionShow_Constellation_Lines",
-    "actionShow_Current_Vertical_Line",
-    "actionShow_DSO_Textures",
-    "actionShow_Ecliptic_Grid",
-    "actionShow_Ecliptic_J2000_Grid",
-    "actionShow_Ecliptic_J2000_Line",
-    "actionShow_Ecliptic_J2000_Poles",
-    "actionShow_Ecliptic_Line",
-    "actionShow_Ecliptic_Poles",
-    "actionShow_Equator_J2000_Line",
-    "actionShow_Equator_Line",
-    "actionShow_Equatorial_Grid",
-    "actionShow_Equatorial_J2000_Grid",
-    "actionShow_Equinox_J2000_Points",
-    "actionShow_Equinox_Points",
-    "actionShow_FOV_Center_Marker",
-    "actionShow_Gridlines",
-    "actionShow_Fixed_Equator_Line",
-    "actionShow_Fixed_Equatorial_Grid",
-    "actionShow_Fog",
-    "actionShow_Galactic_Center",
-    "actionShow_Galactic_Equator_Line",
-    "actionShow_Galactic_Grid",
-    "actionShow_Galactic_Poles",
-    "actionShow_Ground",
-    "actionShow_MistHorizon",
-    "actionShow_Hips_Surveys",
-    "actionShow_Horizon_Line",
-    "actionShow_Intercardinal_Points",
-    "actionShow_Invariable_Plane_Line",
-    "actionShow_LandscapeIllumination",
-    "actionShow_LandscapeLabels",
-    "actionShow_Longitude_Line",
-    "actionShow_LunarSystem",
-    "actionShow_Meridian_Line",
-    "actionShow_MilkyWay",
-    "actionShow_Nebulas",
-    "actionShow_Night_Mode",
-    "actionShow_Penumbra_Circle",
-    "actionShow_Planets",
-    "actionShow_Planets_EnlargeMoon",
-    "actionShow_Planets_EnlargePlanets",
-    "actionShow_Planets_EnlargeSun",
-    "actionShow_Planets_Hints",
-    "actionShow_Planets_Nomenclature",
-    "actionShow_Planets_Orbits",
-    "actionShow_Planets_ShowMinorBodyMarkers",
-    "actionShow_Planets_Trails",
-    "actionShow_Precession_Circles",
-    "actionShow_Prime_Vertical_Line",
-    "actionShow_Quadrature_Line",
-    "actionShow_Ray_Helpers",
-    "actionShow_Solar_Equator_Line",
-    "actionShow_Solstice_J2000_Points",
-    "actionShow_Solstice_Points",
-    "actionShow_Stars",
-    "actionShow_Stars_Labels",
-    "actionShow_Supergalactic_Equator_Line",
-    "actionShow_Supergalactic_Grid",
-    "actionShow_Supergalactic_Poles",
-    "actionShow_Toast_Survey",
-    "actionShow_Umbra_Center_Point",
-    "actionShow_Umbra_Circle",
-    "actionShow_Zenith_Nadir",
-    "actionShow_Zodiac",
-    "actionSwitch_Equatorial_Mount",
-    "actionVertical_Flip"
-  ]
 
   private dismissSplash(): void {
     if (this.splashGone) return
@@ -1698,7 +1615,7 @@ export struct WindowNativeNode {
           bridgeSyncStarted: (): boolean => this.bridgeSyncStarted,
           setBridgeSyncStarted: (value: boolean): void => { this.bridgeSyncStarted = value },
           selftestEnabled: (): boolean => this.SELFTEST,
-          runSelftest: (): void => this.selfTestAllActions(),
+          runSelftest: (): void => this.selfTestCtl().selfTestAllActions(),
           restoreObserverLocation: (): void => { this.locationCtl().restoreObserverLocation() }
         },
         this.skyCultureViewStore, this.pluginStore, this.nightModeStore, this.telescopeStore,
@@ -1865,7 +1782,7 @@ export struct WindowNativeNode {
         scheduleSkyTextureStatusCheck: (): void => this.skyTextureStatusCtl().start(),
         scheduleRecordingViewCheckpoint: (delay: number): void => this.recordingCtl().scheduleRecordingViewCheckpoint(delay),
         resetPanelIdle: (): void => this.resetPanelIdle(),
-        toggleMusic: (): void => this.toggleMusic(),
+        toggleMusic: (): void => this.audioStore.toggleMusic(),
         musicHintText: (): string => this.audioStore.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'),
         toggleGyroscope: (value: boolean): void => this.gyroCtl().toggleGyroscope(value),
         skyZoomButtonAt: (x: number, y: number): string => this.skyZoomButtonAt(x, y),
@@ -1988,7 +1905,7 @@ export struct WindowNativeNode {
           this.panelVisible = visible
           this.syncDockClockTimer()
         },
-        setViewLockState: (enabled: boolean): void => { this.setViewLockState(enabled) },
+        setTrackingText: (value: string): void => { this.trackingText = value },
         setLandscapeDetailOpen: (value: boolean): void => { this.landscapeDetailOpen = value },
         persistEquatorialMount: (): void => { this.telescopeStore.persistEquatorialMount() },
         persistNightMode: (): void => { this.nightModeStore.persistNightMode() },
@@ -2369,7 +2286,7 @@ export struct WindowNativeNode {
         syncJulianDateFields: (response: StellariumBridgeResponse, jd: number): void => { this.julianStore.syncJulianDateFields(response, jd) },
         refreshSelectedObject: (): void => { this.refreshSelectedObject() },
         moveToSelectedObject: (): void => { this.moveToSelectedObject() },
-        setViewLockState: (locked: boolean): void => { this.setViewLockState(locked) },
+        setViewLockState: (locked: boolean): void => { this.layerCtl().setViewLockState(locked) },
         triggerAction: (actionId: string): void => { this.triggerAction(actionId) },
         searchObject: (name: string): void => { this.searchObject(name) },
         stopTracking: (): void => { this.stopTracking() },
@@ -2411,6 +2328,34 @@ export struct WindowNativeNode {
         this.atmosphereStore, hooks)
     }
     return this.settingsControllerImpl
+  }
+
+  // E4：搜索 / 筛选行为控制器惰性构造。桥经 HostCommandPort；可观测状态写 SearchStore；
+  // 面板滚动复位 / animateTo 过渡（宿主 getUIContext）/ CLI 发布点 / 选中入口经 hooks 回注。
+  private searchCtl(): SearchController {
+    if (this.searchControllerImpl === null) {
+      const hooks: SearchHostHooks = {
+        animateFilterChange: (action: () => void): void => {
+          this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, action)
+        },
+        resetSearchScroll: (): void => { this.searchPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false }) },
+        publishSearchBrowserState: (error: string): void => { this.publishSearchBrowserState(error) },
+        searchObject: (name: string, catalogModuleId: string, exactSelectionPayload: string): void => {
+          this.searchObject(name, catalogModuleId, exactSelectionPayload)
+        }
+      }
+      this.searchControllerImpl = new SearchController(
+        this.commandPort(), this.searchStore, this.catalogStore, this.languageStore, hooks)
+    }
+    return this.searchControllerImpl
+  }
+
+  // E4：自检行为控制器惰性构造（桥经 HostCommandPort；SELFTEST_ACTION_IDS 随控制器）。
+  private selfTestCtl(): SelfTestController {
+    if (this.selfTestControllerImpl === null) {
+      this.selfTestControllerImpl = new SelfTestController(this.commandPort())
+    }
+    return this.selfTestControllerImpl
   }
 
   aboutToAppear(): void {
@@ -2763,6 +2708,15 @@ export struct WindowNativeNode {
       readSearchHistoryStorage: (): Promise<string> => this.readSearchHistoryStorage(),
       writeSearchHistoryStorage: (json: string): Promise<void> => this.writeSearchHistoryStorage(json)
     })
+    // E4：音乐开关行为（toggleMusic / persistMusicEnabled）下沉 AudioStore；播放/静音引擎
+    // （AudioEngine 是原生桥）与 UI 提示经具名 hooks 回注（store 不 import NAPI/UI）。
+    this.audioStore.attachHooks({
+      setMusicPlaying: (enabled: boolean): void => {
+        const engine = AudioEngine.getInstance()
+        if (enabled) { engine.start().then(() => { engine.setMuted(false) }) } else { engine.setMuted(true) }
+      },
+      flashHint: (text: ResourceStr): void => this.flashHint(text)
+    })
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -2834,16 +2788,16 @@ export struct WindowNativeNode {
         if (!this.panelVisible || this.activePanel !== 'search') this.openPanelFromCli('search')
         this.searchStore.searchText = ''
         const value = String(event['payload'] ?? '').trim()
-        if (commandName === 'selectSearchCategory') this.selectSearchFilterCategory(value)
-        else this.setSearchFilterPage(value === 'browse' ? '' : value)
+        if (commandName === 'selectSearchCategory') this.searchCtl().selectSearchFilterCategory(value)
+        else this.searchCtl().setSearchFilterPage(value === 'browse' ? '' : value)
         this.publishSearchBrowserState()
         return
       }
       if (commandName === 'setSearchBrowserFilter') {
         if (!this.panelVisible || this.activePanel !== 'search') this.openPanelFromCli('search')
         const parts = String(event['payload'] ?? '').split('|')
-        if (parts[0] === 'visibility') this.selectSearchVisibilityFilter(parts[1])
-        else this.selectSearchInstrumentFilter(parts[1])
+        if (parts[0] === 'visibility') this.searchCtl().selectSearchVisibilityFilter(parts[1])
+        else this.searchCtl().selectSearchInstrumentFilter(parts[1])
         this.publishSearchBrowserState()
         return
       }
@@ -3118,10 +3072,7 @@ export struct WindowNativeNode {
     this.guideStore.guidePanelWasVisible = false
     this.guideStore.stopPlayer()
     this.skyCultureMakerCtl().flushSkyCultureMakerSave()
-    if (this.searchSuggestionTimer >= 0) {
-      clearTimeout(this.searchSuggestionTimer)
-      this.searchSuggestionTimer = -1
-    }
+    this.searchCtl().stop()
     this.saveAppSettings()
     this.skyInputCtl().stop()
     this.gyroCtl().stopGyroscope(false)
@@ -3391,7 +3342,7 @@ export struct WindowNativeNode {
       this.skyCultureCtl().syncSkyCultureTimeFollowTimer()
       this.polarScopeCtl().syncPolarScopeTimer()
       if (panel === 'place') {
-        this.refreshTonight()
+        this.sessionToolStore.refreshTonight()
       }
       if (panel === 'observing' && !this.wutStore.wutHasResult && !this.wutStore.wutLoading) {
         this.wutStore.loadWutTargets()
@@ -3847,12 +3798,7 @@ export struct WindowNativeNode {
   // changeOcularCcdRotation / changeOcularMaskOpacity / changeOcularPrismRotation / changeOcularCropSize /
   // rotateOcularReticle / resetOcularInstrument 已随 D9 下沉 capability/OcularController.ets。
 
-  private setPointerCoordinates(setting: string, value: string): void {
-    this.callNativeWhenReady('setPointerCoordinates', setting + '|' + value, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed')
-      this.overlayStore.loadPointerCoordinates()
-    }, 0, 100, 15, () => { this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed') })
-  }
+  // setPointerCoordinates 已随 E4 下沉 capability/ViewCoordinateController.ets（写 OverlayStore）。
 
   // ===== 卫星（Satellites 插件桥）=====
   private publishSatellitePanelState(error: string = ''): void {
@@ -4099,32 +4045,8 @@ export struct WindowNativeNode {
   // setTrailDisplayFlag / setTrailDisplayNumber / applyTrailColor 已随 E2 下沉 capability/LayerController.ets
   //（桥经 CommandPort，cmd 型开关的本地 store 同步随 setBridgeFlag 一并下沉）。
 
-  private setViewLockState(enabled: boolean): void {
-    if (enabled && !this.objectDetailStore.hasSelectedObject()) {
-      this.viewSettingsStore.viewLock = false
-      this.flashHint(I18n.t('view_lock_requires_selection'))
-      return
-    }
-    const previous = this.viewSettingsStore.viewLock
-    this.viewSettingsStore.viewLock = enabled
-    this.callInteractive('setViewLock', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) {
-        this.viewSettingsStore.viewLock = previous
-        this.flashHint(r.selectionRequired === true ? I18n.t('view_lock_requires_selection') : I18n.t('msg_apply_failed'))
-        return
-      }
-      if (r.viewLock !== undefined) this.viewSettingsStore.viewLock = r.viewLock === true
-      if (r.tracking !== undefined) this.trackingText = r.tracking === true ? 'On' : 'Off'
-      this.flashHint(this.viewSettingsStore.viewLock ? I18n.t('view_lock_enabled') : I18n.t('view_lock_disabled'))
-    }, () => {
-      this.viewSettingsStore.viewLock = previous
-      this.flashHint(I18n.t('msg_apply_failed'))
-    })
-  }
-
-  private toggleViewLock(): void {
-    this.setViewLockState(!this.viewSettingsStore.viewLock)
-  }
+  // setViewLockState / toggleViewLock 已随 E4 下沉 capability/LayerController.ets（同属图层 / 视图域，
+  // 写 ViewSettingsStore；trackingText 经 LayerHostHooks.setTrackingText 回注）。
 
   // setSkyDisplaySetting / applyStarMagLimit / applyMilkyWayBright 已随 E2 下沉 capability/LayerController.ets。
 
@@ -4407,75 +4329,11 @@ export struct WindowNativeNode {
     })
   }
 
-  private scheduleSuggestions(prefix: string): void {
-    if (this.searchSuggestionTimer >= 0) {
-      clearTimeout(this.searchSuggestionTimer)
-      this.searchSuggestionTimer = -1
-    }
-    if (prefix.length < 1) {
-      this.searchStore.searchSuggestions = []
-      return
-    }
-    this.searchSuggestionTimer = setTimeout(() => {
-      this.searchSuggestionTimer = -1
-      if (this.searchStore.searchText.trim() === prefix) this.fetchSuggestions(prefix)
-    }, 140)
-  }
+  // E4：搜索建议 / 筛选行为（scheduleSuggestions / fetchSuggestions / selectSearchSuggestion /
+  // refreshSearchFilterResults / selectSearchFilterCategory / selectSearchVisibilityFilter /
+  // selectSearchInstrumentFilter / setSearchFilterPage）已整体下沉 capability/SearchController.ets
+  //（建议去抖定时器自持；面板滚动复位 / animateTo / CLI 发布点 / searchObject 经 SearchHostHooks 回注）。
 
-  private fetchSuggestions(prefix: string, languageSerial: number = this.languageStore.languageRefreshSerial): void {
-    if (prefix.length < 1) { this.searchStore.searchSuggestions = []; return }
-    // Native matching covers localized names, English names, catalog IDs, and
-    // spacing/hyphen variants across every currently loaded object module.
-    this.callInteractive('listMatchingObjects', prefix + '|30', (result) => {
-      // Only apply if the query prefix is still current (user may have typed more).
-      if (this.searchStore.searchText.trim() !== prefix || this.languageStore.languageRefreshSerial !== languageSerial) { return }
-      const suggestions: SearchSug[] = []
-      const seen: Record<string, boolean> = {}
-      if (Array.isArray(result.items)) {
-        const keys = Array.isArray(result.keys) ? result.keys as string[] : []
-        const ids = Array.isArray(result.ids) ? result.ids as string[] : []
-        const typeIds = Array.isArray(result.typeIds) ? result.typeIds as string[] : []
-        const types = Array.isArray(result.types) ? result.types as string[] : []
-        const fuzzy = Array.isArray(result.fuzzy) ? result.fuzzy as boolean[] : []
-        const crossLanguage = Array.isArray(result.crossLanguage) ? result.crossLanguage as boolean[] : []
-        const items = result.items as string[]
-        for (let i = 0; i < items.length; i++) {
-          const display = items[i]
-          const key = (keys[i] && keys[i].length > 0) ? keys[i] : display
-          const id = ids[i] ?? ''
-          const typeId = typeIds[i] ?? ''
-          const selection = id.length > 0 && typeId.length > 0 ? 'object|' + typeId + '|' + id : ''
-          const uniqueKey = selection.length > 0 ? selection : key
-          if (!seen[uniqueKey]) {
-            seen[uniqueKey] = true
-            suggestions.push({
-              zh: celestialTitle(display, key),
-              en: key,
-              type: types[i] ?? '',
-              selection: selection.length > 0 ? selection : undefined,
-              fuzzy: fuzzy[i] === true,
-              crossLanguage: crossLanguage[i] === true,
-            })
-          }
-        }
-      }
-      // C++ ranks exact, prefix, and substring matches. Keep that order instead
-      // of re-sorting localized display labels in ArkUI.
-      this.searchStore.searchSuggestions = suggestions.slice(0, 30)
-    })
-  }
-
-  // 搜索建议的显示名可能是当前语言的译名；en 始终是 C++ 桥返回的稳定检索键。
-  // 只有核心确认选中成功时 searchObject() 才会收起手机面板。
-  private selectSearchSuggestion(suggestion: SearchSug): void {
-    if (this.searchSuggestionTimer >= 0) {
-      clearTimeout(this.searchSuggestionTimer)
-      this.searchSuggestionTimer = -1
-    }
-    this.searchObject(suggestion.en, '', suggestion.selection ?? '')
-  }
-
-  // Keep constellation navigation clear and light: labels and lines, no global boundaries.
   private openConstellationGuide(name: string, moduleId: string = 'ConstellationMgr', displayName: string = ''): void {
     this.flashHint('已开启星座名称和连线，正在定位' + (displayName.length > 0 ? displayName : zhNameOf(name)))
     this.callInteractive('setActionChecked', 'actionShow_Constellation_Boundaries|0', () => {
@@ -4505,46 +4363,8 @@ export struct WindowNativeNode {
     }))
   }
 
-  private refreshSearchFilterResults(): void {
-    this.searchStore.loadCategoryObjects(this.searchStore.searchCategory)
-    this.searchPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
-  }
-
-  private selectSearchFilterCategory(category: string): void {
-    if (!this.catalogStore.searchAllCategoryOptions().some((option: CatOption) => option.code === category)) {
-      this.publishSearchBrowserState('unknown category')
-      return
-    }
-    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
-      this.searchStore.searchFilterPage = ''
-      this.searchStore.loadCategoryObjects(category)
-    })
-    this.searchPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
-  }
-
-  private selectSearchVisibilityFilter(filter: string): void {
-    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
-      this.searchStore.searchVisibilityFilter = filter
-      this.searchStore.searchFilterPage = ''
-      this.refreshSearchFilterResults()
-    })
-  }
-
-  private selectSearchInstrumentFilter(filter: string): void {
-    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
-      this.searchStore.searchInstrumentFilter = filter
-      this.searchStore.searchFilterPage = ''
-      this.refreshSearchFilterResults()
-    })
-  }
-
-  private setSearchFilterPage(page: string): void {
-    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => {
-      this.searchStore.searchFilterPage = page
-    })
-    this.searchPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
-    this.publishSearchBrowserState()
-  }
+  // refreshSearchFilterResults / selectSearchFilterCategory / selectSearchVisibilityFilter /
+  // selectSearchInstrumentFilter / setSearchFilterPage 已随 E4 下沉 capability/SearchController.ets。
 
   // Catalogs may contain many thousands of entries. Request small pages so the
   // first page is usable immediately and append more only when the user scrolls.
@@ -4636,7 +4456,7 @@ export struct WindowNativeNode {
         this.searchStore.loadConstellationNavigation(languageSerial)
         this.searchStore.loadCategoryObjects(this.searchStore.searchCategory, selectedCategoryModuleId)
         const query = this.searchStore.searchText.trim()
-        if (query.length > 0) this.fetchSuggestions(query, languageSerial)
+        if (query.length > 0) this.searchCtl().fetchSuggestions(query, languageSerial)
       }, 0, 300, 3)
     }, 50)
   }
@@ -5553,36 +5373,7 @@ export struct WindowNativeNode {
   // 完整跨设备一键流转需华为分布式软总线(Distributed Hardware Kit)。当前基础 SDK 已把
   // "导出/导入"做成统一命令桥，切到含分布式能力的 SDK 后这里即可改为设备发现+拉起目标 Ability。
 
-  private refreshTonight(): void {
-    this.callNativeWhenReady('getTonightEvents', '', (r: StellariumBridgeResponse) => {
-      if (!r.ok || !r.tonight) { this.flashHint(I18n.t('msg_fetch_failed')); return }
-      const t = r.tonight as TonightEvents
-      this.sessionToolStore.tonightDate = this.fmtIso(t.date ?? '')
-      this.sessionToolStore.tonightMoon = I18n.t('tn_phase') + ': ' + (t.moon?.phaseName ?? I18n.t('m_unknown')) + ' (' + I18n.t('tn_illumination') + ' ' + Math.round(t.moon?.illumination ?? 0) + '% · ' + I18n.t('tn_moon_age') + ' ' + (t.moon?.age ?? 0).toFixed(1) + ' ' + I18n.t('tn_days') + ')\n'
-        + '  ' + I18n.t('tn_rise') + ' ' + this.fmtIso(t.moon?.rise ?? '') + ' · ' + I18n.t('tn_transit') + ' ' + this.fmtIso(t.moon?.transit ?? '') + ' · ' + I18n.t('tn_set') + ' ' + this.fmtIso(t.moon?.set ?? '')
-      this.sessionToolStore.tonightSun = I18n.t('tn_rise') + ' ' + this.fmtIso(t.sun?.rise ?? '') + ' · ' + I18n.t('tn_transit') + ' ' + this.fmtIso(t.sun?.transit ?? '') + ' · ' + I18n.t('tn_set') + ' ' + this.fmtIso(t.sun?.set ?? '')
-      this.sessionToolStore.tonightDark = I18n.t('tn_astro_dusk') + ' ' + this.fmtIso(t.sun?.astroTwilightEnd ?? '') + ' → ' + I18n.t('tn_astro_dawn') + ' ' + this.fmtIso(t.sun?.astroTwilightStart ?? '')
-        + (t.sun?.darkWindowHours !== undefined ? (' (' + I18n.t('tn_dark_hours') + ' ~' + t.sun.darkWindowHours.toFixed(1) + ' ' + I18n.t('tn_hours') + ')') : '')
-      this.sessionToolStore.tonightPlanetRows = (t.planets ?? []).map((p): TonightPlanetRow => {
-        const vis = p.visible === true ? I18n.t('tn_visible') : I18n.t('tn_below_horizon')
-        return {
-          name: p.name ?? (p.englishName ?? ''),
-          line: I18n.t('tn_rise') + ' ' + this.fmtIso(p.rise ?? '') + ' · ' + I18n.t('tn_transit') + ' ' + this.fmtIso(p.transit ?? '') + ' · ' + I18n.t('tn_set') + ' ' + this.fmtIso(p.set ?? '')
-            + ' · ' + I18n.t('tn_magnitude') + ' ' + (p.magnitude ?? 0).toFixed(1) + ' · ' + vis,
-          jd: p.transitJd ?? 0,
-          lock: p.englishName ?? (p.name ?? '')
-        }
-      })
-      this.sessionToolStore.tonightShowers = (t.meteorShowers ?? []).map((s) => (s.name ?? '') + ': ZHR~' + (s.zhr ?? 0) + (s.status === 'confirmed' ? ' (' + I18n.t('tn_confirmed') + ')' : ' (' + I18n.t('tn_generic') + ')'))
-      this.sessionToolStore.tonightSats = ((t.satellites?.enabled ?? false) ? (I18n.t('tn_loaded') + ' ' + (t.satellites?.count ?? 0) + ' ' + I18n.t('tn_sats_count')) : I18n.t('tn_not_enabled')) + ' (' + I18n.t('tn_transit_needs_data') + ')'
-      // 点击跳转的时间基准
-      this.sessionToolStore.tonightMoonJd = t.moon?.transitJd ?? 0
-      this.sessionToolStore.tonightSunJd = t.sun?.astroTwilightEndJd ?? 0
-      this.sessionToolStore.tonightShowerJd = (t.meteorShowers && t.meteorShowers.length > 0) ? (t.meteorShowers[0].primeJd ?? this.sessionToolStore.tonightSunJd) : this.sessionToolStore.tonightSunJd
-      this.sessionToolStore.tonightHint = I18n.t('tn_updated') + ' · ' + this.fmtIso(t.date ?? '')
-      this.flashHint('已刷新今晚天象 · 点击卡片可跳转')
-    })
-  }
+  // refreshTonight（含私有助手 fmtIso）已随 E4 下沉 state/SessionToolStore.ets（桥经既有 port）。
 
   // 点击今晚天象卡片：跳到事件发生时刻，并锁定主角(lock)、框入卫星(月球)
   private gotoTonightEvent(jd: number, lock: string, title: string): void {
@@ -5601,14 +5392,6 @@ export struct WindowNativeNode {
 
   // 跳转后若视角过窄，适当拉远以便把卫星(月球)一并收入视野
   // （D13：frameSatellite 已下沉 capability/SatelliteController.ets）
-
-  private fmtIso(iso: string): string {
-    if (!iso || iso.length < 16) return '--'
-    const parts = iso.split('T')
-    const d = parts[0] ?? ''
-    const t = parts[1] ?? ''
-    return (d.length >= 10 ? d.slice(5) : d) + ' ' + (t.length >= 8 ? t.slice(0, 5) : t)
-  }
 
   private isUiPoint(x: number, y: number): boolean {
     // 录制聚焦态（控制条收起）：除顶部录制控制条外，面板/详情卡/搜索/Dock/底部条等界面
@@ -6100,7 +5883,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
                 onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
                 onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
-                onToggleLock: () => { this.toggleViewLock() },
+                onToggleLock: () => { this.layerCtl().toggleViewLock() },
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
                 onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
                 onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
@@ -6217,7 +6000,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
                 onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
                 onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
-                onToggleLock: () => { this.toggleViewLock() },
+                onToggleLock: () => { this.layerCtl().toggleViewLock() },
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
                 onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
                 onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
@@ -6332,7 +6115,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
                 onAudio: () => {
                   hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio button CLICKED musicEnabled=%{public}s', this.audioStore.musicEnabled.toString())
                   this.resetPanelIdle()
-                  this.toggleMusic()
+                  this.audioStore.toggleMusic()
                   this.flashHint(this.audioStore.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
                 },
                 onCompactTopQuickTouch: (event: TouchEvent) => { this.handleCompactTopQuickTouch(event) },
@@ -6351,7 +6134,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
                 onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
                 onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
-                onToggleLock: () => { this.toggleViewLock() },
+                onToggleLock: () => { this.layerCtl().toggleViewLock() },
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
                 onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
                 onReselect: () => { this.triggerAction('actionGoto_ReSelect_Last_Selected_Object'); this.refreshSelectedObject() },
@@ -6640,7 +6423,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
     }
     if (quickId === 'audio') {
       this.resetPanelIdle()
-      this.toggleMusic()
+      this.audioStore.toggleMusic()
       this.flashHint(this.audioStore.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
       return true
     }
@@ -7207,31 +6990,8 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
 
   // ── 陀螺仪校准面板 ──
 
-  // 切换音乐开关（带 350ms 防抖，避免坐标命中与 onClick 双触发导致来回跳）
-  private toggleMusic(): void {
-    const now = Date.now()
-    if (now - this.lastMusicToggle < 350) { return }
-    this.lastMusicToggle = now
-    this.audioStore.musicEnabled = !this.audioStore.musicEnabled
-    const engine = AudioEngine.getInstance()
-    if (this.audioStore.musicEnabled) {
-      engine.start().then(() => { engine.setMuted(false) })
-    } else {
-      engine.setMuted(true)
-    }
-    this.persistMusicEnabled()
-    this.flashHint(this.audioStore.musicEnabled ? '音乐：开 ♪' : '音乐：静音')
-  }
-
-  private persistMusicEnabled(): void {
-    let obj: Record<string, boolean | string> = {}
-    const cur = AppStorage.get<string>('stellariumSettings')
-    if (cur) {
-      try { obj = JSON.parse(cur) as Record<string, boolean | string> } catch (e) { }
-    }
-    obj['musicEnabled'] = this.audioStore.musicEnabled
-    AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
-  }
+  // 切换音乐开关：已随 E4 下沉 state/AudioStore.ets（toggleMusic / persistMusicEnabled；
+  // 防抖时间戳与播放/静音引擎经 hooks 回注）。
 
   // 引擎回报的夜视状态落库。换挡瞬间 / 轮询（约每 3 s）可能回报旧值，
   // 因此在"待定窗口"内忽略与待定值不一致的回报，避免刚打开又被旧值翻回去
@@ -7503,7 +7263,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         onExport: () => { this.sessionToolStore.sessionExport() },
         onSessionApply: () => { this.sessionToolStore.sessionApply() },
         onHandoff: () => { this.sessionToolStore.sessionHandoff() },
-        onRefreshTonight: () => { this.refreshTonight() },
+        onRefreshTonight: () => { this.sessionToolStore.refreshTonight() },
         onJump: (jd: number, lock: string, title: string) => { this.gotoTonightEvent(jd, lock, title) }
       })
     } else if (this.activePanel === 'layers') {
@@ -7587,7 +7347,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         accentColor: this.nightModeStore.nmAccent(),
         panelColor: this.nightModeStore.nmBg(),
         lineColor: this.nightModeStore.nmBorder(),
-        onSetSetting: (setting: string, value: string) => { this.setPointerCoordinates(setting, value) }
+        onSetSetting: (setting: string, value: string) => { this.viewCoordinateCtl().setPointerCoordinates(setting, value) }
       })
     } else if (this.activePanel === 'commands') {
       CommandsPanel({
@@ -7655,12 +7415,9 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         panelColor: this.nightModeStore.nmBg(),
         inputColor: this.nightModeStore.nmInput(),
         scroller: this.searchPanelScroller,
-        onInput: (value: string) => { this.scheduleSuggestions(value.trim()) },
+        onInput: (value: string) => { this.searchCtl().scheduleSuggestions(value.trim()) },
         onSubmit: (text: string) => {
-          if (this.searchSuggestionTimer >= 0) {
-            clearTimeout(this.searchSuggestionTimer)
-            this.searchSuggestionTimer = -1
-          }
+          this.searchCtl().stop()
           this.searchObject(text)
           this.searchStore.searchSuggestions = []
         },
@@ -7674,16 +7431,16 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
             this.scheduleSelectedObjectForUiChange(300)
           }
         },
-        onSetPage: (page: string) => { this.setSearchFilterPage(page) },
-        onSelectCategory: (code: string) => { this.selectSearchFilterCategory(code) },
-        onSelectVisibility: (filter: string) => { this.selectSearchVisibilityFilter(filter) },
-        onSelectInstrument: (filter: string) => { this.selectSearchInstrumentFilter(filter) },
+        onSetPage: (page: string) => { this.searchCtl().setSearchFilterPage(page) },
+        onSelectCategory: (code: string) => { this.searchCtl().selectSearchFilterCategory(code) },
+        onSelectVisibility: (filter: string) => { this.searchCtl().selectSearchVisibilityFilter(filter) },
+        onSelectInstrument: (filter: string) => { this.searchCtl().selectSearchInstrumentFilter(filter) },
         suggestionSubtitle: (title: string, englishName: string) => { return this.searchStore.celestialSubtitle(title, englishName) },
-        onSelectSuggestion: (item: SearchSug) => { this.selectSearchSuggestion(item) },
+        onSelectSuggestion: (item: SearchSug) => { this.searchCtl().selectSearchSuggestion(item) },
         iconFor: (item: NameItem) => { return this.catalogStore.categoryObjectIcon(item, this.searchStore.searchCategory) },
         categorySubtitle: (item: NameItem) => { return this.searchStore.categoryObservationSubtitle(item) },
-        onOpenCategories: () => { this.setSearchFilterPage('categories') },
-        onOpenFilters: () => { this.setSearchFilterPage('root') },
+        onOpenCategories: () => { this.searchCtl().setSearchFilterPage('categories') },
+        onOpenFilters: () => { this.searchCtl().setSearchFilterPage('root') },
         onRetry: () => { this.searchStore.loadCategoryObjects(this.searchStore.searchCategory) },
         onLoadMore: () => { this.searchStore.loadMoreCategoryObjects() },
         onSelectCategoryObject: (item: NameItem) => {
@@ -7693,8 +7450,8 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
             this.searchObject(item.name ?? '', this.searchStore.categoryModuleId)
           }
         },
-        onClearVisibility: () => { this.selectSearchVisibilityFilter('all') },
-        onClearInstrument: () => { this.selectSearchInstrumentFilter('all') },
+        onClearVisibility: () => { this.searchCtl().selectSearchVisibilityFilter('all') },
+        onClearInstrument: () => { this.searchCtl().selectSearchInstrumentFilter('all') },
         onOpenConstellation: (item: ConstellationNavigationItem) => { this.openConstellationGuide(item.englishName, 'ConstellationMgr', item.localizedName) },
         onGoCoordinates: () => { this.goToCoordinates() }
       })
@@ -7753,7 +7510,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         saveAllCoreSettings: () => { this.settingsCtl().saveAllCoreSettings() },
         restoreCoreDefaults: () => { this.settingsCtl().restoreCoreDefaults() },
         saveCurrentViewAsStartup: () => { this.startupBridge().saveCurrentViewAsStartup() },
-        setViewLockState: (enabled: boolean) => { this.setViewLockState(enabled) },
+        setViewLockState: (enabled: boolean) => { this.layerCtl().setViewLockState(enabled) },
         setNavigationBoolean: (setting: string, enabled: boolean) => { this.settingsCtl().setNavigationBoolean(setting, enabled) },
         setNavigationMaxFov: (value: number) => { this.settingsCtl().setNavigationMaxFov(value) },
         selectSettingsChoice: (group: string, value: string) => { this.settingsCtl().selectSettingsChoice(group, value) },
@@ -8176,7 +7933,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
           this.audioStore.musicEnabled = enabled
           const engine = AudioEngine.getInstance()
           if (enabled) { engine.start().then(() => { engine.setMuted(false) }) } else { engine.setMuted(true) }
-          this.persistMusicEnabled()
+          this.audioStore.persistMusicEnabled()
           this.flashHint(enabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'))
         },
         onVolumeChange: (value: number) => {
@@ -8223,15 +7980,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
 
   // ===== Sky Guide 风格：按字段选择的时间转轴 =====
 
-  private selfTestAllActions(): void {
-    hilog.info(0x0000, 'StellariumArkUI', 'selftest send %{public}d ids', this.SELFTEST_ACTION_IDS.length)
-    // 引擎核心(StelApp)在启动早期尚未就绪，命令会先返回 pending 不入队；
-    // 用更长重试窗口(100ms x 120 = 12s)撑过初始化，确保真正跑到 C++ 自检。
-    this.callNativeWhenReady('selftestActions', this.SELFTEST_ACTION_IDS.join('|'), (r: StellariumBridgeResponse) => {
-      // 把整包响应(含 total/missing)打在一行里，避免被启动期日志冲掉
-      hilog.info(0x0000, 'StellariumArkUI', 'selftest done %{public}s', JSON.stringify(r))
-    }, 0, 100, 120)
-  }
+  // selfTestAllActions / SELFTEST_ACTION_IDS 已随 E4 下沉 capability/SelfTestController.ets。
 
   // settingsChoiceSelected / selectSettingsChoice 已随 E3 下沉 capability/SettingsController.ets。
 
