@@ -1,4 +1,4 @@
-import { renderProceduralModel } from './ProceduralDetailModel'
+import { renderProceduralModel } from '../common/derive/ProceduralDetailModel'
 import { DetailModelResources, DetailModelFrame } from './DetailModelRenderTypes'
 
 export function renderDetailModel(resources: DetailModelResources, frame: DetailModelFrame): ArrayBuffer {

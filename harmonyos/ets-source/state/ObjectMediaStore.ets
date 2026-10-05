@@ -2,7 +2,7 @@ import { image } from '@kit.ImageKit'
 import hilog from '@ohos.hilog'
 import { describeDecodeError } from '../common/derive/labels'
 import { I18n } from '../pages/I18n'
-import { modelIdentity, modelDrag } from '../pages/DetailModelGeometry'
+import { modelIdentity, modelDrag } from '../common/derive/DetailModelGeometry'
 
 // 宿主 → ObjectMediaStore 的媒体管线助手（§13.1 规则 6 / §14.8 规则 2：跨域 / NAPI 依赖用注入解决）。
 // B2R-1 的 loadObjectInspectorModelRawTexture 读写宿主刻意保留的逐帧裸字段

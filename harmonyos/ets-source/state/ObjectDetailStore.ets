@@ -1,7 +1,7 @@
 import { StellariumBridgeResponse, ObjectDetailField, ObjectDetailModel, SatellitePass, SkyCultureDescriptionBlock } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { catalogIconForObjectType } from '../common/derive/catalog'
-import { modelIdentity, modelMultiply } from '../pages/DetailModelGeometry'
+import { modelIdentity, modelMultiply } from '../common/derive/DetailModelGeometry'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → ObjectDetailStore 的卫星过境助手注入（§13.1 规则 6 / §14.8 规则 2）。

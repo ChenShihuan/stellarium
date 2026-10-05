@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 
-async function sourceModule(name) {
-  const source = readFileSync(new URL('../harmonyos/ets-source/pages/' + name + '.ets', import.meta.url), 'utf8');
+async function sourceModule(modulePath) {
+  const source = readFileSync(new URL('../harmonyos/ets-source/' + modulePath + '.ets', import.meta.url), 'utf8');
   return import('data:text/javascript,' + encodeURIComponent(stripTypeScriptTypes(source)));
 }
-const { proceduralModelKind, proceduralStarColor, proceduralParticles, renderProceduralModel } = await sourceModule('ProceduralDetailModel');
-const { modelIdentity, modelDrag } = await sourceModule('DetailModelGeometry');
+const { proceduralModelKind, proceduralStarColor, proceduralParticles, renderProceduralModel } = await sourceModule('common/derive/ProceduralDetailModel');
+const { modelIdentity, modelDrag } = await sourceModule('common/derive/DetailModelGeometry');
 const kinds = ['star', 'quasar', 'pulsar', 'globular-cluster', 'open-cluster'];
 
 test('catalog types are discriminated without inventing models for unsupported classes', () => {
@@ -83,7 +83,7 @@ for (const kind of kinds) {
 }
 
 test('procedural models never install timers or fetch remote resources', () => {
-  const source = readFileSync(new URL('../harmonyos/ets-source/pages/ProceduralDetailModel.ets', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../harmonyos/ets-source/common/derive/ProceduralDetailModel.ets', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /setInterval|setTimeout|fetch\(|https?:\/\//);
 });
 

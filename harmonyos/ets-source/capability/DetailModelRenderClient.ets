@@ -20,7 +20,7 @@ export class DetailModelRenderClient {
       try {
         const firstFrame = this.thread === undefined
         if (firstFrame) {
-          const thread = new worker.ThreadWorker('entry/ets/pages/DetailModelWorker.ets', { name: 'DetailModel' })
+          const thread = new worker.ThreadWorker('entry/ets/capability/DetailModelWorker.ets', { name: 'DetailModel' })
           this.thread = thread
           thread.onmessage = (event: MessageEvents): void => {
             if (this.thread !== thread) return
