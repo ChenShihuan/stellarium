@@ -1,35 +1,20 @@
 import { I18n } from '../../pages/I18n'
 import { ArchaeoPlanetOption } from '../../pages/MainWindowModels'
+import { ArchaeoStore } from '../../state/ArchaeoStore'
 import { ArchaeoToggleRow } from '../settings/SettingsRows'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
 // 考古学线条面板（原宿主 panelContent() 的 `archaeoLines` 分支，分支体原样下沉）。
 //
-// 判定条件 `activePanel === 'archaeoLines'` 留在宿主；加载态与 13 个开关状态由宿主
-// @State 字段以 @Prop 传入（宿主仍是写方），设置动作回注宿主（setArchaeoLineSetting）；
-// 线条宽度由本组件就地取整后回注（Math.round 只影响提交值，不影响展示）。
+// 判定条件 `activePanel === 'archaeoLines'` 留在宿主；加载态与 15 个开关/线宽状态已下沉
+// state/ArchaeoStore.ets（review §2.7：Prop 风格 → Store 风格），本组件以 @ObjectLink 订阅。
+// 设置动作仍回注宿主（setArchaeoLineSetting）；线条宽度由本组件就地取整后回注
+// （Math.round 只影响提交值，不影响展示）。
 // 成员名避开 CustomComponent 属性方法（描边走 borderTint，不用 borderColor）。
 
 @Component
 export struct ArchaeoLinesPanel {
-  @Prop archaeoLoading: boolean
-  @Prop archaeoStatus: string
-  @Prop archaeoLinesEnabled: boolean
-  @Prop archaeoEquinox: boolean
-  @Prop archaeoSolstices: boolean
-  @Prop archaeoCrossquarters: boolean
-  @Prop archaeoMajorStandstills: boolean
-  @Prop archaeoMinorStandstills: boolean
-  @Prop archaeoPolarCircles: boolean
-  @Prop archaeoZenithPassage: boolean
-  @Prop archaeoNadirPassage: boolean
-  @Prop archaeoSelectedObject: boolean
-  @Prop archaeoSelectedObjectAzimuth: boolean
-  @Prop archaeoSelectedObjectHourAngle: boolean
-  @Prop archaeoCurrentSun: boolean
-  @Prop archaeoCurrentMoon: boolean
-  @Prop archaeoCurrentPlanet: number
-  @Prop archaeoLineWidth: number
+  @ObjectLink archaeoStore: ArchaeoStore
   @Prop textColor: string
   @Prop subColor: string
   @Prop panelColor: string
@@ -47,25 +32,25 @@ export struct ArchaeoLinesPanel {
             Text(I18n.t('archaeo_lines_title')).fontSize(14).fontColor(this.textColor).width('100%')
             Text(I18n.t('archaeo_lines_hint')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-          if (this.archaeoLoading) { LoadingProgress().width(20).height(20).color(this.accentColor) }
-          Toggle({ type: ToggleType.Switch, isOn: this.archaeoLinesEnabled })
-            .enabled(!this.archaeoLoading)
+          if (this.archaeoStore.archaeoLoading) { LoadingProgress().width(20).height(20).color(this.accentColor) }
+          Toggle({ type: ToggleType.Switch, isOn: this.archaeoStore.archaeoLinesEnabled })
+            .enabled(!this.archaeoStore.archaeoLoading)
             .onChange((v: boolean) => { this.onSetSetting('enabled', v ? '1' : '0') })
         }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
-        if (this.archaeoStatus.length > 0) { Text(this.archaeoStatus).fontSize(10).fontColor('#FFD59A').width('100%').padding({ left: 10, right: 10 }) }
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_equinox'), isOn: this.archaeoEquinox, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('equinox', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_solstices'), isOn: this.archaeoSolstices, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('solstices', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_crossquarters'), isOn: this.archaeoCrossquarters, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('crossquarters', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_major'), isOn: this.archaeoMajorStandstills, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('majorStandstills', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_minor'), isOn: this.archaeoMinorStandstills, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('minorStandstills', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_polar'), isOn: this.archaeoPolarCircles, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('polarCircles', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_zenith'), isOn: this.archaeoZenithPassage, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('zenithPassage', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_nadir'), isOn: this.archaeoNadirPassage, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('nadirPassage', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_selected'), isOn: this.archaeoSelectedObject, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('selectedObject', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_azimuth'), isOn: this.archaeoSelectedObjectAzimuth, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('selectedObjectAzimuth', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_hour_angle'), isOn: this.archaeoSelectedObjectHourAngle, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('selectedObjectHourAngle', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_sun'), isOn: this.archaeoCurrentSun, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('currentSun', v ? '1' : '0') } })
-        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_moon'), isOn: this.archaeoCurrentMoon, canToggle: !this.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('currentMoon', v ? '1' : '0') } })
+        if (this.archaeoStore.archaeoStatus.length > 0) { Text(this.archaeoStore.archaeoStatus).fontSize(10).fontColor('#FFD59A').width('100%').padding({ left: 10, right: 10 }) }
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_equinox'), isOn: this.archaeoStore.archaeoEquinox, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('equinox', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_solstices'), isOn: this.archaeoStore.archaeoSolstices, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('solstices', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_crossquarters'), isOn: this.archaeoStore.archaeoCrossquarters, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('crossquarters', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_major'), isOn: this.archaeoStore.archaeoMajorStandstills, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('majorStandstills', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_minor'), isOn: this.archaeoStore.archaeoMinorStandstills, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('minorStandstills', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_polar'), isOn: this.archaeoStore.archaeoPolarCircles, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('polarCircles', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_zenith'), isOn: this.archaeoStore.archaeoZenithPassage, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('zenithPassage', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_nadir'), isOn: this.archaeoStore.archaeoNadirPassage, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('nadirPassage', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_selected'), isOn: this.archaeoStore.archaeoSelectedObject, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('selectedObject', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_azimuth'), isOn: this.archaeoStore.archaeoSelectedObjectAzimuth, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('selectedObjectAzimuth', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_hour_angle'), isOn: this.archaeoStore.archaeoSelectedObjectHourAngle, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('selectedObjectHourAngle', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_sun'), isOn: this.archaeoStore.archaeoCurrentSun, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('currentSun', v ? '1' : '0') } })
+        ArchaeoToggleRow({ label: I18n.t('archaeo_lines_moon'), isOn: this.archaeoStore.archaeoCurrentMoon, canToggle: !this.archaeoStore.archaeoLoading, textColor: this.textColor, panelColor: this.panelColor, borderColorValue: this.borderTint, onToggle: (v: boolean) => { this.onSetSetting('currentMoon', v ? '1' : '0') } })
         Text(I18n.t('archaeo_lines_planet')).fontSize(11).fontColor(this.subColor).width('100%').padding({ left: 2, top: 2 })
         Row({ space: 5 }) {
           ForEach([
@@ -75,18 +60,18 @@ export struct ArchaeoLinesPanel {
             { id: 5, label: '土星', value: 'Saturn' }
           ] as ArchaeoPlanetOption[], (planet: ArchaeoPlanetOption) => {
             Text(planet.label).fontSize(10)
-              .fontColor(this.archaeoCurrentPlanet === planet.id ? '#FFFFFF' : this.subColor)
+              .fontColor(this.archaeoStore.archaeoCurrentPlanet === planet.id ? '#FFFFFF' : this.subColor)
               .textAlign(TextAlign.Center).layoutWeight(1).height(28).padding({ top: 6 })
-              .backgroundColor(this.archaeoCurrentPlanet === planet.id ? this.accentColor : this.panelColor)
+              .backgroundColor(this.archaeoStore.archaeoCurrentPlanet === planet.id ? this.accentColor : this.panelColor)
               .borderRadius(UI_RADIUS_CONTROL)
               .onClick(() => { this.onSetSetting('currentPlanet', planet.value) })
           }, (planet: ArchaeoPlanetOption) => planet.id.toString())
         }.width('100%')
         Row() {
           Text(I18n.t('archaeo_lines_width')).fontSize(12).fontColor(this.textColor).layoutWeight(1)
-          Text(this.archaeoLineWidth.toString()).fontSize(12).fontColor(this.subColor)
+          Text(this.archaeoStore.archaeoLineWidth.toString()).fontSize(12).fontColor(this.subColor)
         }.width('100%').padding({ left: 10, right: 10 })
-        Slider({ value: this.archaeoLineWidth, min: 1, max: 8, step: 1, style: SliderStyle.OutSet })
+        Slider({ value: this.archaeoStore.archaeoLineWidth, min: 1, max: 8, step: 1, style: SliderStyle.OutSet })
           .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
           .width('100%').blockColor(this.accentColor).selectedColor(this.accentColor).trackColor(this.panelColor)
           .onChange((v: number, mode: SliderChangeMode) => {

@@ -25,7 +25,7 @@ import { DetailModelRenderClient } from './DetailModelRenderClient'
 import { ASTRONOMY_GUIDES, AstronomyGuide, GuidePlayer, GuideState, GuideResult, GuideStep } from './AstronomyGuide'
 import { DetailModelResources, DetailModelFrame, DetailModelResult, DetailModelRing, DetailModelLight } from './DetailModelRenderTypes'
 
-import { StellariumBridgeResponse, SessionSnapshot, TonightEvents, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, CatOption, NameItem, SearchSug, WindowNativeNodeCreateInfo, TabItem, ChipItem, LandscapeItem, ScriptMetadata, PlanetPosition, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass, PolarScopeData } from './StellariumTypes'
+import { StellariumBridgeResponse, SessionSnapshot, TonightEvents, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, CatOption, NameItem, SearchSug, WindowNativeNodeCreateInfo, TabItem, ChipItem, LandscapeItem, ScriptMetadata, PlanetPosition, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass } from './StellariumTypes'
 import { setLifecycleListener } from '../common/StellariumLifecycle'
 import { AudioEngine } from './StellariumAudio'
 import { I18n, LANGUAGE_DISPLAY, PROJECTION_KEYS } from './I18n'
@@ -119,6 +119,9 @@ import { ManualTimeBlock } from '../panels/time/ManualTimeBlock'
 import { TimeWheelStore } from '../state/TimeWheelStore'
 import { TimeWheelScrubber } from '../panels/time/TimeWheelScrubber'
 import { OverlayStore } from '../state/OverlayStore'
+import { PolarScopeStore } from '../state/PolarScopeStore'
+import { ArchaeoStore } from '../state/ArchaeoStore'
+import { NavStarsStore } from '../state/NavStarsStore'
 import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
 import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
@@ -507,12 +510,10 @@ export struct WindowNativeNode {
   private skyCultureMapContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.skyCultureMapContextSettings)
   private skyCultureMapRenderWidth: number = 0
   private skyCultureMapRenderHeight: number = 0
-  @State private polarScopeData: PolarScopeData | undefined = undefined
-  @State private polarScopeVisible: boolean = false
-  @State private polarScopeLoading: boolean = false
-  @State private polarScopeError: string = ''
-  @State private polarScopeHorizontalFlip: boolean = false
-  @State private polarScopeVerticalFlip: boolean = false
+  // 极轴镜域状态已下沉 state/PolarScopeStore.ets（review §2.7：Prop 风格 → Store 风格）。
+  // 极轴镜几何与引擎/定时器字段（polarScopeRestoreState / Transition* / RequestPending / Timer /
+  // DataRequestId）仍留在宿主。
+  @State private polarScopeStore: PolarScopeStore = new PolarScopeStore()
   private polarScopeRestoreState: string = ''
   private polarScopeTransitionPending: boolean = false
   private polarScopeTransitionId: number = 0
@@ -525,20 +526,9 @@ export struct WindowNativeNode {
   @State private nebulaTextureImporting: boolean = false
   @State private nebulaTextureActionStatus: string = ''
   private angleMeasureRequestId: number = 0
-  @State private navStarsLoading: boolean = false
-  @State private navStarsStatus: string = ''
-  @State private navStarsEnabled: boolean = false
-  @State private navStarsSetKey: string = 'AngloAmerican'
-  @State private navStarsSetDescription: string = ''
-  @State private navStarsSetKeys: string[] = []
-  @State private navStarsCount: number = 0
-  @State private navStarsHighlight: boolean = false
-  @State private navStarsLimitInfo: boolean = false
-  @State private navStarsUpperLimb: boolean = false
-  @State private navStarsTabulated: boolean = false
-  @State private navStarsExtraDecimals: boolean = false
-  @State private navStarsUseUtc: boolean = false
-  @State private navStarsStartup: boolean = false
+  // 航海星域状态已下沉 state/NavStarsStore.ets（review §2.7：Prop 风格 → Store 风格）。
+  // 请求序号 navStarsLoadRequestId / navStarsMutationId 仍由宿主自持（见下方）。
+  @State private navStarsStore: NavStarsStore = new NavStarsStore()
   private navStarsLoadRequestId: number = 0
   private navStarsMutationId: number = 0
   @State private landscapeDetailOpen: boolean = false
@@ -604,24 +594,9 @@ export struct WindowNativeNode {
   @State private mosaicCameraPending: boolean = false
   @State private mosaicCameraStatus: string = ''
   @State private equationOfTimeStore: EquationOfTimeStore = new EquationOfTimeStore()
-  @State private archaeoLinesEnabled: boolean = false
-  @State private archaeoLineWidth: number = 1
-  @State private archaeoEquinox: boolean = false
-  @State private archaeoSolstices: boolean = false
-  @State private archaeoCrossquarters: boolean = false
-  @State private archaeoMajorStandstills: boolean = false
-  @State private archaeoMinorStandstills: boolean = false
-  @State private archaeoPolarCircles: boolean = false
-  @State private archaeoZenithPassage: boolean = false
-  @State private archaeoNadirPassage: boolean = false
-  @State private archaeoSelectedObject: boolean = false
-  @State private archaeoSelectedObjectAzimuth: boolean = false
-  @State private archaeoSelectedObjectHourAngle: boolean = false
-  @State private archaeoCurrentSun: boolean = false
-  @State private archaeoCurrentMoon: boolean = false
-  @State private archaeoCurrentPlanet: number = 0
-  @State private archaeoLoading: boolean = false
-  @State private archaeoStatus: string = ''
+  // 古天文辅助线域状态已下沉 state/ArchaeoStore.ets（review §2.7：Prop 风格 → Store 风格）。
+  // 写回请求序号 archaeoMutationId 仍由宿主自持（见下方）。
+  @State private archaeoStore: ArchaeoStore = new ArchaeoStore()
   // 卫星（Satellites）
   // 卫星域状态已下沉 state/SatelliteStore.ets（review §2.7：Prop 风格 → Store 风格）。
   // SatellitesPanel 改为 @ObjectLink 订阅该 store，刷新粒度不再落在宿主整棵树上。
@@ -1892,7 +1867,7 @@ export struct WindowNativeNode {
   }
 
   private shouldRefreshPolarScope(): boolean {
-    return this.applicationInForeground && this.polarScopeVisible
+    return this.applicationInForeground && this.polarScopeStore.polarScopeVisible
   }
 
   private stopPolarScopeTimer(): void {
@@ -2022,36 +1997,36 @@ export struct WindowNativeNode {
     if (!this.shouldRefreshPolarScope() || this.polarScopeRequestPending) return
     this.polarScopeRequestPending = true
     const requestId = this.polarScopeDataRequestId
-    if (showLoading && this.polarScopeData === undefined) this.polarScopeLoading = true
+    if (showLoading && this.polarScopeStore.polarScopeData === undefined) this.polarScopeStore.polarScopeLoading = true
     this.callNativeWhenReady('getPolarScopeData', '', (response: StellariumBridgeResponse) => {
       if (requestId !== this.polarScopeDataRequestId) return
       this.polarScopeRequestPending = false
-      this.polarScopeLoading = false
+      this.polarScopeStore.polarScopeLoading = false
       if (!this.shouldRefreshPolarScope() || response.polarScope === undefined) return
-      this.polarScopeData = response.polarScope
-      this.polarScopeError = ''
+      this.polarScopeStore.polarScopeData = response.polarScope
+      this.polarScopeStore.polarScopeError = ''
     }, 0, 34, 8, () => {
       if (requestId !== this.polarScopeDataRequestId) return
       this.polarScopeRequestPending = false
-      this.polarScopeLoading = false
-      this.polarScopeError = I18n.t('polar_scope_earth_only')
+      this.polarScopeStore.polarScopeLoading = false
+      this.polarScopeStore.polarScopeError = I18n.t('polar_scope_earth_only')
     })
   }
 
   private enterPolarScope(): void {
-    if (this.polarScopeVisible) {
+    if (this.polarScopeStore.polarScopeVisible) {
       this.closePolarScope()
       return
     }
     if (this.polarScopeTransitionPending) return
     const transitionId = ++this.polarScopeTransitionId
     this.polarScopeTransitionPending = true
-    this.polarScopeLoading = true
-    this.polarScopeError = ''
-    this.polarScopeData = undefined
+    this.polarScopeStore.polarScopeLoading = true
+    this.polarScopeStore.polarScopeError = ''
+    this.polarScopeStore.polarScopeData = undefined
     this.activePanel = 'polarScope'
     this.panelVisible = false
-    this.polarScopeVisible = true
+    this.polarScopeStore.polarScopeVisible = true
     this.syncNativePolarScopeOverlay(false)
     this.callNativeWhenReady('getSessionState', '', (response: StellariumBridgeResponse) => {
       if (transitionId !== this.polarScopeTransitionId) return
@@ -2065,15 +2040,15 @@ export struct WindowNativeNode {
       }
       this.polarScopeRestoreState = JSON.stringify(snapshot)
       const flags = response.flags as Record<string, Object>
-      this.polarScopeHorizontalFlip = flags !== undefined && flags['flipHorz'] === true
-      this.polarScopeVerticalFlip = flags !== undefined && flags['flipVert'] === true
+      this.polarScopeStore.polarScopeHorizontalFlip = flags !== undefined && flags['flipHorz'] === true
+      this.polarScopeStore.polarScopeVerticalFlip = flags !== undefined && flags['flipVert'] === true
       const location = response.location as Record<string, Object>
       const planetName = response.location && location['planetName'] !== undefined
         ? String(location['planetName']) : 'Earth'
       if (planetName !== 'Earth') {
         this.polarScopeTransitionPending = false
-        this.polarScopeLoading = false
-        this.polarScopeError = I18n.t('polar_scope_earth_only')
+        this.polarScopeStore.polarScopeLoading = false
+        this.polarScopeStore.polarScopeError = I18n.t('polar_scope_earth_only')
         return
       }
       this.callNativeWhenReady('centerPolarScope', '', () => {
@@ -2086,30 +2061,30 @@ export struct WindowNativeNode {
         }, 0, 100, 15, () => {
           if (transitionId !== this.polarScopeTransitionId) return
           this.polarScopeTransitionPending = false
-          this.polarScopeLoading = false
-          this.polarScopeError = I18n.t('polar_scope_open_failed')
+          this.polarScopeStore.polarScopeLoading = false
+          this.polarScopeStore.polarScopeError = I18n.t('polar_scope_open_failed')
         })
       }, 0, 100, 15, () => {
         if (transitionId !== this.polarScopeTransitionId) return
         this.polarScopeTransitionPending = false
-        this.polarScopeLoading = false
-        this.polarScopeError = I18n.t('polar_scope_open_failed')
+        this.polarScopeStore.polarScopeLoading = false
+        this.polarScopeStore.polarScopeError = I18n.t('polar_scope_open_failed')
       })
     }, 0, 120, 20, () => {
       if (transitionId !== this.polarScopeTransitionId) return
       this.polarScopeTransitionPending = false
-      this.polarScopeLoading = false
-      this.polarScopeError = I18n.t('polar_scope_open_failed')
+      this.polarScopeStore.polarScopeLoading = false
+      this.polarScopeStore.polarScopeError = I18n.t('polar_scope_open_failed')
       this.syncNativePolarScopeOverlay(false)
     })
   }
 
   private closePolarScope(): void {
-    if (!this.polarScopeVisible && !this.polarScopeTransitionPending) return
+    if (!this.polarScopeStore.polarScopeVisible && !this.polarScopeTransitionPending) return
     ++this.polarScopeTransitionId
-    this.polarScopeVisible = false
+    this.polarScopeStore.polarScopeVisible = false
     this.stopPolarScopeTimer()
-    this.polarScopeLoading = false
+    this.polarScopeStore.polarScopeLoading = false
     this.syncNativePolarScopeOverlay(false)
     this.polarScopeTransitionPending = false
     const restoreState = this.polarScopeRestoreState
@@ -2132,8 +2107,8 @@ export struct WindowNativeNode {
     const height = Math.max(1, this.skyHeight)
     const safeTopRatio = (this.polarScopeTopInset() + 68) / height
     const safeBottomRatio = (this.polarScopeFooterHeight() + 20) / height
-    const payload = (active ? '1' : '0') + '|' + (this.polarScopeHorizontalFlip ? '1' : '0') + '|' +
-      (this.polarScopeVerticalFlip ? '1' : '0') + '|' + safeTopRatio.toString() + '|' + safeBottomRatio.toString() +
+    const payload = (active ? '1' : '0') + '|' + (this.polarScopeStore.polarScopeHorizontalFlip ? '1' : '0') + '|' +
+      (this.polarScopeStore.polarScopeVerticalFlip ? '1' : '0') + '|' + safeTopRatio.toString() + '|' + safeBottomRatio.toString() +
       '|' + Math.max(0, Math.round(this.screenSafeTopPixels)).toString()
     this.callNativeWhenReady('setPolarScopeOverlay', payload, () => {})
   }
@@ -2159,24 +2134,24 @@ export struct WindowNativeNode {
   }
 
   private setPolarScopeHorizontalFlip(value: boolean): void {
-    if (value === this.polarScopeHorizontalFlip) return
-    this.polarScopeHorizontalFlip = value
+    if (value === this.polarScopeStore.polarScopeHorizontalFlip) return
+    this.polarScopeStore.polarScopeHorizontalFlip = value
     this.syncNativePolarScopeOverlay(true)
     this.callInteractive('setActionChecked', 'actionHorizontal_Flip|' + (value ? '1' : '0'), () => {
       this.loadPolarScopeData(false)
     }, () => {
-      this.polarScopeHorizontalFlip = !value
+      this.polarScopeStore.polarScopeHorizontalFlip = !value
     })
   }
 
   private setPolarScopeVerticalFlip(value: boolean): void {
-    if (value === this.polarScopeVerticalFlip) return
-    this.polarScopeVerticalFlip = value
+    if (value === this.polarScopeStore.polarScopeVerticalFlip) return
+    this.polarScopeStore.polarScopeVerticalFlip = value
     this.syncNativePolarScopeOverlay(true)
     this.callInteractive('setActionChecked', 'actionVertical_Flip|' + (value ? '1' : '0'), () => {
       this.loadPolarScopeData(false)
     }, () => {
-      this.polarScopeVerticalFlip = !value
+      this.polarScopeStore.polarScopeVerticalFlip = !value
     })
   }
 
@@ -2516,7 +2491,7 @@ export struct WindowNativeNode {
     if (this.uiLocked && !force) {
       return
     }
-    if (this.polarScopeVisible) {
+    if (this.polarScopeStore.polarScopeVisible) {
       this.closePolarScope()
       return
     }
@@ -4096,33 +4071,33 @@ export struct WindowNativeNode {
 
 
   private loadArchaeoLines(): void {
-    this.archaeoLoading = true
+    this.archaeoStore.archaeoLoading = true
     this.callNativeWhenReady('getArchaeoLines', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) {
-        this.archaeoStatus = I18n.t('plugin_status_unavailable')
+        this.archaeoStore.archaeoStatus = I18n.t('plugin_status_unavailable')
       } else {
-        this.archaeoLinesEnabled = r.enabled === true
-        this.archaeoLineWidth = typeof r.lineWidth === 'number' ? r.lineWidth : 1
-        this.archaeoEquinox = r.equinox === true
-        this.archaeoSolstices = r.solstices === true
-        this.archaeoCrossquarters = r.crossquarters === true
-        this.archaeoMajorStandstills = r.majorStandstills === true
-        this.archaeoMinorStandstills = r.minorStandstills === true
-        this.archaeoPolarCircles = r.polarCircles === true
-        this.archaeoZenithPassage = r.zenithPassage === true
-        this.archaeoNadirPassage = r.nadirPassage === true
-        this.archaeoSelectedObject = r.selectedObject === true
-        this.archaeoSelectedObjectAzimuth = r.selectedObjectAzimuth === true
-        this.archaeoSelectedObjectHourAngle = r.selectedObjectHourAngle === true
-        this.archaeoCurrentSun = r.currentSun === true
-        this.archaeoCurrentMoon = r.currentMoon === true
-        this.archaeoCurrentPlanet = typeof r.currentPlanet === 'number' ? r.currentPlanet : 0
-        this.archaeoStatus = ''
+        this.archaeoStore.archaeoLinesEnabled = r.enabled === true
+        this.archaeoStore.archaeoLineWidth = typeof r.lineWidth === 'number' ? r.lineWidth : 1
+        this.archaeoStore.archaeoEquinox = r.equinox === true
+        this.archaeoStore.archaeoSolstices = r.solstices === true
+        this.archaeoStore.archaeoCrossquarters = r.crossquarters === true
+        this.archaeoStore.archaeoMajorStandstills = r.majorStandstills === true
+        this.archaeoStore.archaeoMinorStandstills = r.minorStandstills === true
+        this.archaeoStore.archaeoPolarCircles = r.polarCircles === true
+        this.archaeoStore.archaeoZenithPassage = r.zenithPassage === true
+        this.archaeoStore.archaeoNadirPassage = r.nadirPassage === true
+        this.archaeoStore.archaeoSelectedObject = r.selectedObject === true
+        this.archaeoStore.archaeoSelectedObjectAzimuth = r.selectedObjectAzimuth === true
+        this.archaeoStore.archaeoSelectedObjectHourAngle = r.selectedObjectHourAngle === true
+        this.archaeoStore.archaeoCurrentSun = r.currentSun === true
+        this.archaeoStore.archaeoCurrentMoon = r.currentMoon === true
+        this.archaeoStore.archaeoCurrentPlanet = typeof r.currentPlanet === 'number' ? r.currentPlanet : 0
+        this.archaeoStore.archaeoStatus = ''
       }
-      this.archaeoLoading = false
+      this.archaeoStore.archaeoLoading = false
     }, 0, 100, 15, () => {
-      this.archaeoLoading = false
-      this.archaeoStatus = I18n.t('plugin_status_unavailable')
+      this.archaeoStore.archaeoLoading = false
+      this.archaeoStore.archaeoStatus = I18n.t('plugin_status_unavailable')
     })
   }
 
@@ -4130,32 +4105,32 @@ export struct WindowNativeNode {
     const mutationId = ++this.archaeoMutationId
     const previous = this.archaeoLineSettingValue(setting)
     this.applyArchaeoLineSetting(setting, value)
-    this.archaeoStatus = ''
+    this.archaeoStore.archaeoStatus = ''
     this.callInteractive('setArchaeoLineSetting', setting + '|' + value, () => {}, () => {
       if (mutationId !== this.archaeoMutationId) return
       this.applyArchaeoLineSetting(setting, previous)
-      this.archaeoStatus = I18n.t('plugin_action_failed')
+      this.archaeoStore.archaeoStatus = I18n.t('plugin_action_failed')
     })
   }
 
   private archaeoLineSettingValue(setting: string): string {
     switch (setting) {
-      case 'enabled': return this.archaeoLinesEnabled ? '1' : '0'
-      case 'equinox': return this.archaeoEquinox ? '1' : '0'
-      case 'solstices': return this.archaeoSolstices ? '1' : '0'
-      case 'crossquarters': return this.archaeoCrossquarters ? '1' : '0'
-      case 'majorStandstills': return this.archaeoMajorStandstills ? '1' : '0'
-      case 'minorStandstills': return this.archaeoMinorStandstills ? '1' : '0'
-      case 'polarCircles': return this.archaeoPolarCircles ? '1' : '0'
-      case 'zenithPassage': return this.archaeoZenithPassage ? '1' : '0'
-      case 'nadirPassage': return this.archaeoNadirPassage ? '1' : '0'
-      case 'selectedObject': return this.archaeoSelectedObject ? '1' : '0'
-      case 'selectedObjectAzimuth': return this.archaeoSelectedObjectAzimuth ? '1' : '0'
-      case 'selectedObjectHourAngle': return this.archaeoSelectedObjectHourAngle ? '1' : '0'
-      case 'currentSun': return this.archaeoCurrentSun ? '1' : '0'
-      case 'currentMoon': return this.archaeoCurrentMoon ? '1' : '0'
-      case 'currentPlanet': return ['none', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'][this.archaeoCurrentPlanet] ?? 'none'
-      case 'lineWidth': return this.archaeoLineWidth.toString()
+      case 'enabled': return this.archaeoStore.archaeoLinesEnabled ? '1' : '0'
+      case 'equinox': return this.archaeoStore.archaeoEquinox ? '1' : '0'
+      case 'solstices': return this.archaeoStore.archaeoSolstices ? '1' : '0'
+      case 'crossquarters': return this.archaeoStore.archaeoCrossquarters ? '1' : '0'
+      case 'majorStandstills': return this.archaeoStore.archaeoMajorStandstills ? '1' : '0'
+      case 'minorStandstills': return this.archaeoStore.archaeoMinorStandstills ? '1' : '0'
+      case 'polarCircles': return this.archaeoStore.archaeoPolarCircles ? '1' : '0'
+      case 'zenithPassage': return this.archaeoStore.archaeoZenithPassage ? '1' : '0'
+      case 'nadirPassage': return this.archaeoStore.archaeoNadirPassage ? '1' : '0'
+      case 'selectedObject': return this.archaeoStore.archaeoSelectedObject ? '1' : '0'
+      case 'selectedObjectAzimuth': return this.archaeoStore.archaeoSelectedObjectAzimuth ? '1' : '0'
+      case 'selectedObjectHourAngle': return this.archaeoStore.archaeoSelectedObjectHourAngle ? '1' : '0'
+      case 'currentSun': return this.archaeoStore.archaeoCurrentSun ? '1' : '0'
+      case 'currentMoon': return this.archaeoStore.archaeoCurrentMoon ? '1' : '0'
+      case 'currentPlanet': return ['none', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'][this.archaeoStore.archaeoCurrentPlanet] ?? 'none'
+      case 'lineWidth': return this.archaeoStore.archaeoLineWidth.toString()
       default: return ''
     }
   }
@@ -4163,22 +4138,22 @@ export struct WindowNativeNode {
   private applyArchaeoLineSetting(setting: string, value: string): void {
     const enabled = value === '1' || value === 'true'
     switch (setting) {
-      case 'enabled': this.archaeoLinesEnabled = enabled; break
-      case 'equinox': this.archaeoEquinox = enabled; break
-      case 'solstices': this.archaeoSolstices = enabled; break
-      case 'crossquarters': this.archaeoCrossquarters = enabled; break
-      case 'majorStandstills': this.archaeoMajorStandstills = enabled; break
-      case 'minorStandstills': this.archaeoMinorStandstills = enabled; break
-      case 'polarCircles': this.archaeoPolarCircles = enabled; break
-      case 'zenithPassage': this.archaeoZenithPassage = enabled; break
-      case 'nadirPassage': this.archaeoNadirPassage = enabled; break
-      case 'selectedObject': this.archaeoSelectedObject = enabled; break
-      case 'selectedObjectAzimuth': this.archaeoSelectedObjectAzimuth = enabled; break
-      case 'selectedObjectHourAngle': this.archaeoSelectedObjectHourAngle = enabled; break
-      case 'currentSun': this.archaeoCurrentSun = enabled; break
-      case 'currentMoon': this.archaeoCurrentMoon = enabled; break
-      case 'currentPlanet': this.archaeoCurrentPlanet = ['none', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'].indexOf(value); break
-      case 'lineWidth': this.archaeoLineWidth = Math.round(Number(value)); break
+      case 'enabled': this.archaeoStore.archaeoLinesEnabled = enabled; break
+      case 'equinox': this.archaeoStore.archaeoEquinox = enabled; break
+      case 'solstices': this.archaeoStore.archaeoSolstices = enabled; break
+      case 'crossquarters': this.archaeoStore.archaeoCrossquarters = enabled; break
+      case 'majorStandstills': this.archaeoStore.archaeoMajorStandstills = enabled; break
+      case 'minorStandstills': this.archaeoStore.archaeoMinorStandstills = enabled; break
+      case 'polarCircles': this.archaeoStore.archaeoPolarCircles = enabled; break
+      case 'zenithPassage': this.archaeoStore.archaeoZenithPassage = enabled; break
+      case 'nadirPassage': this.archaeoStore.archaeoNadirPassage = enabled; break
+      case 'selectedObject': this.archaeoStore.archaeoSelectedObject = enabled; break
+      case 'selectedObjectAzimuth': this.archaeoStore.archaeoSelectedObjectAzimuth = enabled; break
+      case 'selectedObjectHourAngle': this.archaeoStore.archaeoSelectedObjectHourAngle = enabled; break
+      case 'currentSun': this.archaeoStore.archaeoCurrentSun = enabled; break
+      case 'currentMoon': this.archaeoStore.archaeoCurrentMoon = enabled; break
+      case 'currentPlanet': this.archaeoStore.archaeoCurrentPlanet = ['none', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'].indexOf(value); break
+      case 'lineWidth': this.archaeoStore.archaeoLineWidth = Math.round(Number(value)); break
     }
   }
 
@@ -4197,46 +4172,46 @@ export struct WindowNativeNode {
   private loadNavStars(showLoading: boolean = true): void {
     const requestId = ++this.navStarsLoadRequestId
     const mutationId = this.navStarsMutationId
-    if (showLoading) this.navStarsLoading = true
+    if (showLoading) this.navStarsStore.navStarsLoading = true
     this.callNativeWhenReady('getNavStars', '', (r: StellariumBridgeResponse) => {
       if (requestId !== this.navStarsLoadRequestId) return
-      this.navStarsLoading = false
+      this.navStarsStore.navStarsLoading = false
       if (mutationId !== this.navStarsMutationId) return
       if (r.ok !== true) {
-        this.navStarsStatus = I18n.t('plugin_status_unavailable')
+        this.navStarsStore.navStarsStatus = I18n.t('plugin_status_unavailable')
       } else {
-        this.navStarsEnabled = r.enabled === true
-        this.navStarsSetKey = r.setKey ?? 'AngloAmerican'
-        this.navStarsSetDescription = r.setDescription ?? ''
-        this.navStarsSetKeys = r.setKeys ?? []
-        this.navStarsCount = r.starCount ?? 0
-        this.navStarsHighlight = r.highlightWhenVisible === true
-        this.navStarsLimitInfo = r.limitInfo === true
-        this.navStarsUpperLimb = r.upperLimb === true
-        this.navStarsTabulated = r.tabulatedDisplay === true
-        this.navStarsExtraDecimals = r.extraDecimals === true
-        this.navStarsUseUtc = r.useUtc === true
-        this.navStarsStartup = r.enableAtStartup === true
-        this.navStarsStatus = ''
+        this.navStarsStore.navStarsEnabled = r.enabled === true
+        this.navStarsStore.navStarsSetKey = r.setKey ?? 'AngloAmerican'
+        this.navStarsStore.navStarsSetDescription = r.setDescription ?? ''
+        this.navStarsStore.navStarsSetKeys = r.setKeys ?? []
+        this.navStarsStore.navStarsCount = r.starCount ?? 0
+        this.navStarsStore.navStarsHighlight = r.highlightWhenVisible === true
+        this.navStarsStore.navStarsLimitInfo = r.limitInfo === true
+        this.navStarsStore.navStarsUpperLimb = r.upperLimb === true
+        this.navStarsStore.navStarsTabulated = r.tabulatedDisplay === true
+        this.navStarsStore.navStarsExtraDecimals = r.extraDecimals === true
+        this.navStarsStore.navStarsUseUtc = r.useUtc === true
+        this.navStarsStore.navStarsStartup = r.enableAtStartup === true
+        this.navStarsStore.navStarsStatus = ''
       }
     }, 0, 100, 15, () => {
       if (requestId !== this.navStarsLoadRequestId) return
-      this.navStarsLoading = false
-      this.navStarsStatus = I18n.t('plugin_status_unavailable')
+      this.navStarsStore.navStarsLoading = false
+      this.navStarsStore.navStarsStatus = I18n.t('plugin_status_unavailable')
     })
   }
 
   private applyNavStarsSetting(setting: string, value: string): void {
     const enabled = value === '1' || value.toLowerCase() === 'true'
-    if (setting === 'enabled') this.navStarsEnabled = enabled
-    else if (setting === 'set') this.navStarsSetKey = value
-    else if (setting === 'highlightWhenVisible') this.navStarsHighlight = enabled
-    else if (setting === 'limitInfo') this.navStarsLimitInfo = enabled
-    else if (setting === 'upperLimb') this.navStarsUpperLimb = enabled
-    else if (setting === 'tabulatedDisplay') this.navStarsTabulated = enabled
-    else if (setting === 'extraDecimals') this.navStarsExtraDecimals = enabled
-    else if (setting === 'useUtc') this.navStarsUseUtc = enabled
-    else if (setting === 'enableAtStartup') this.navStarsStartup = enabled
+    if (setting === 'enabled') this.navStarsStore.navStarsEnabled = enabled
+    else if (setting === 'set') this.navStarsStore.navStarsSetKey = value
+    else if (setting === 'highlightWhenVisible') this.navStarsStore.navStarsHighlight = enabled
+    else if (setting === 'limitInfo') this.navStarsStore.navStarsLimitInfo = enabled
+    else if (setting === 'upperLimb') this.navStarsStore.navStarsUpperLimb = enabled
+    else if (setting === 'tabulatedDisplay') this.navStarsStore.navStarsTabulated = enabled
+    else if (setting === 'extraDecimals') this.navStarsStore.navStarsExtraDecimals = enabled
+    else if (setting === 'useUtc') this.navStarsStore.navStarsUseUtc = enabled
+    else if (setting === 'enableAtStartup') this.navStarsStore.navStarsStartup = enabled
   }
 
   private setNavStarsSetting(setting: string, value: string): void {
@@ -4247,12 +4222,12 @@ export struct WindowNativeNode {
       if (r.ok === true) {
         if (setting === 'set') this.loadNavStars(false)
       } else {
-        this.navStarsStatus = I18n.t('plugin_action_failed')
+        this.navStarsStore.navStarsStatus = I18n.t('plugin_action_failed')
         this.loadNavStars(false)
       }
     }, () => {
       if (mutationId !== this.navStarsMutationId) return
-      this.navStarsStatus = I18n.t('plugin_action_failed')
+      this.navStarsStore.navStarsStatus = I18n.t('plugin_action_failed')
       this.loadNavStars(false)
     })
   }
@@ -11634,7 +11609,7 @@ private loadPlanetPositions(): void {
         bottom: this.viewCoordinateOverlayTop() + 100
       })
     }
-    if (this.polarScopeVisible) {
+    if (this.polarScopeStore.polarScopeVisible) {
       const headerTop = this.polarScopeTopInset()
       const left = (this.skyWidth - this.polarScopeControlWidth()) / 2
       const right = left + this.polarScopeControlWidth()
@@ -13494,7 +13469,7 @@ private loadPlanetPositions(): void {
       return x >= this.guideCardX() && x <= this.guideCardX() + this.guideCardWidth() &&
         y >= this.guideCardY() && y <= this.guideCardY() + this.guideCardHeight()
     }
-    if (this.polarScopeVisible) {
+    if (this.polarScopeStore.polarScopeVisible) {
       const headerTop = this.polarScopeTopInset()
       const left = (this.skyWidth - this.polarScopeControlWidth()) / 2
       if (x >= left && x <= left + this.polarScopeControlWidth() &&
@@ -13584,7 +13559,7 @@ private loadPlanetPositions(): void {
       this.activateDockAction(dockItem)
       return true
     }
-    if (this.polarScopeVisible) {
+    if (this.polarScopeStore.polarScopeVisible) {
       const headerTop = this.polarScopeTopInset()
       const right = (this.skyWidth + this.polarScopeControlWidth()) / 2 - 6
       if (y >= headerTop + 6 && y <= headerTop + 54) {
@@ -14426,7 +14401,7 @@ private loadPlanetPositions(): void {
       if (!this.scriptPlaybackVisible() && this.tools.recording && !this.tools.recordingUiExpanded) {
         RecordingFocusShell({ onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) } })
       }
-      if (!this.scriptPlaybackVisible() && !(this.tools.recording && !this.tools.recordingUiExpanded) && !this.polarScopeVisible) {
+      if (!this.scriptPlaybackVisible() && !(this.tools.recording && !this.tools.recordingUiExpanded) && !this.polarScopeStore.polarScopeVisible) {
         Stack() {
           if (this.isFoldHoverLayout) {
             Stack() {
@@ -14547,7 +14522,7 @@ private loadPlanetPositions(): void {
                 dockLabelFontSize: this.compactDockLabelFontSize(),
                 dockItemHeight: this.compactDockItemHeight(),
                 skyHeight: this.skyHeight,
-                polarScopeVisible: this.polarScopeVisible,
+                polarScopeVisible: this.polarScopeStore.polarScopeVisible,
                 dockClockText: this.dockClockText,
                 dockWidth: this.dockWidthPixels(),
                 dockLeft: this.dockLeft(),
@@ -14660,7 +14635,7 @@ private loadPlanetPositions(): void {
                 skyHeight: this.skyHeight,
                 panelVisible: this.panelVisible,
                 isExpandedLayout: this.isExpandedLayout,
-                polarScopeVisible: this.polarScopeVisible,
+                polarScopeVisible: this.polarScopeStore.polarScopeVisible,
                 activePanel: this.activePanel,
                 languageRevision: this.languageRevision,
                 actions: this.canonicalDockActions(),
@@ -14825,21 +14800,15 @@ private loadPlanetPositions(): void {
         })
       }
       if (!this.scriptPlaybackVisible() && (!this.tools.recording || this.tools.recordingUiExpanded)) {
-        if (this.polarScopeVisible) {
+        if (this.polarScopeStore.polarScopeVisible) {
           PolarScopeOverlay({
+            polarScopeStore: this.polarScopeStore,
             controlWidth: this.polarScopeControlWidth(),
             topInset: this.polarScopeTopInset(),
             footerHeight: this.polarScopeFooterHeight(),
             skyWidth: this.skyWidth,
             skyHeight: this.skyHeight,
             isExpandedLayout: this.isExpandedLayout,
-            loading: this.polarScopeLoading,
-            errorText: this.polarScopeError,
-            isSouthHemisphere: this.polarScopeData?.hemisphere === 'south',
-            hourAngleText: this.polarScopeData?.hourAngleText ?? '--',
-            viewAngleText: this.polarScopeData?.viewAngleText ?? '--',
-            horizontalFlip: this.polarScopeHorizontalFlip,
-            verticalFlip: this.polarScopeVerticalFlip,
             onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
             onRecenter: () => { this.recenterPolarScope() },
             onClose: () => { this.closePolarScope() },
@@ -14951,7 +14920,7 @@ private loadPlanetPositions(): void {
         this.skyHeight = Number(newArea.height) > 1 ? Number(newArea.height) : 1
         this.refreshFoldState('onAreaChange')
         this.updateResponsiveLayout('onAreaChange')
-        if (this.polarScopeVisible) this.syncNativePolarScopeOverlay(true)
+        if (this.polarScopeStore.polarScopeVisible) this.syncNativePolarScopeOverlay(true)
         if (this.isFoldTabletLayout) {
           this.panelWidth = Math.min(Math.max(this.skyWidth * 0.42, 300), 340)
           this.panelMaxHeight = Math.min(this.skyHeight * 0.70, 560)
@@ -15006,7 +14975,7 @@ private loadPlanetPositions(): void {
     }
     let result: GuideResult
     if (commandName === 'startGuide') {
-      if (this.scriptSessionActive() || this.polarScopeVisible || !ASTRONOMY_GUIDES.some((guide: AstronomyGuide) => guide.id === payload)) {
+      if (this.scriptSessionActive() || this.polarScopeStore.polarScopeVisible || !ASTRONOMY_GUIDES.some((guide: AstronomyGuide) => guide.id === payload)) {
         result = { ok: false, error: 'session_busy_or_unknown_guide' }
       } else {
         this.guidePanelWasVisible = this.panelVisible
@@ -15080,7 +15049,7 @@ private loadPlanetPositions(): void {
    * posX=dockLeft, posY=dockTop-104, padding-left 4, 两个 44x44 按钮间距 8。
    */
   private skyZoomButtonAt(x: number, y: number): string {
-    if (this.panelVisible || this.polarScopeVisible) { return '' }
+    if (this.panelVisible || this.polarScopeStore.polarScopeVisible) { return '' }
     // 几何与 SkyZoomLayer 共用 common/ui/ChromeGeometry：绘制位置和命中区域必须同源，
     // 否则两者会各自漂移（曾出现"点 + 无响应、点 − 变成放大"的整列错位）。
     const horizontal = this.chromeZoomHorizontal()
@@ -15689,7 +15658,7 @@ private loadPlanetPositions(): void {
   }
 
   private isDockPoint(x: number, y: number): boolean {
-    if (this.polarScopeVisible) return false
+    if (this.polarScopeStore.polarScopeVisible) return false
     const left = this.dockLeft()
     const right = left + this.dockWidthPixels()
     const top = this.dockTop()
@@ -17974,31 +17943,14 @@ private loadPlanetPositions(): void {
       })
     } else if (this.activePanel === 'archaeoLines') {
       ArchaeoLinesPanel({
-        archaeoLoading: this.archaeoLoading,
-        archaeoStatus: this.archaeoStatus,
-        archaeoLinesEnabled: this.archaeoLinesEnabled,
-        archaeoEquinox: this.archaeoEquinox,
-        archaeoSolstices: this.archaeoSolstices,
-        archaeoCrossquarters: this.archaeoCrossquarters,
-        archaeoMajorStandstills: this.archaeoMajorStandstills,
-        archaeoMinorStandstills: this.archaeoMinorStandstills,
-        archaeoPolarCircles: this.archaeoPolarCircles,
-        archaeoZenithPassage: this.archaeoZenithPassage,
-        archaeoNadirPassage: this.archaeoNadirPassage,
-        archaeoSelectedObject: this.archaeoSelectedObject,
-        archaeoSelectedObjectAzimuth: this.archaeoSelectedObjectAzimuth,
-        archaeoSelectedObjectHourAngle: this.archaeoSelectedObjectHourAngle,
-        archaeoCurrentSun: this.archaeoCurrentSun,
-        archaeoCurrentMoon: this.archaeoCurrentMoon,
-        archaeoCurrentPlanet: this.archaeoCurrentPlanet,
-        archaeoLineWidth: this.archaeoLineWidth,
+        archaeoStore: this.archaeoStore,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         panelColor: this.nmBg(),
         accentColor: this.nmAccent(),
         borderTint: this.nmBorder(),
         onSetSetting: (setting: string, value: string) => { this.setArchaeoLineSetting(setting, value) },
-        onLineWidthPreview: (value: number) => { this.archaeoLineWidth = value },
+        onLineWidthPreview: (value: number) => { this.archaeoStore.archaeoLineWidth = value },
         onSetLineWidth: (value: number) => { this.setArchaeoLineSetting('lineWidth', value.toString()) }
       })
     } else if (this.activePanel === 'angleMeasure') {
@@ -18013,20 +17965,7 @@ private loadPlanetPositions(): void {
       })
     } else if (this.activePanel === 'navStars') {
       NavStarsPanel({
-        navStarsLoading: this.navStarsLoading,
-        navStarsStatus: this.navStarsStatus,
-        navStarsEnabled: this.navStarsEnabled,
-        navStarsSetKey: this.navStarsSetKey,
-        navStarsSetDescription: this.navStarsSetDescription,
-        navStarsSetKeys: this.navStarsSetKeys,
-        navStarsCount: this.navStarsCount,
-        navStarsHighlight: this.navStarsHighlight,
-        navStarsLimitInfo: this.navStarsLimitInfo,
-        navStarsUpperLimb: this.navStarsUpperLimb,
-        navStarsTabulated: this.navStarsTabulated,
-        navStarsExtraDecimals: this.navStarsExtraDecimals,
-        navStarsUseUtc: this.navStarsUseUtc,
-        navStarsStartup: this.navStarsStartup,
+        navStarsStore: this.navStarsStore,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         panelColor: this.nmBg(),

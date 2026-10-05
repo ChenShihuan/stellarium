@@ -827,6 +827,13 @@ devecocli ui click/drag/text --device 192.168.3.95:40565 ...
 | 13 | **Phase RA 资源覆盖审计（非 UI 切片）** | **已完成（Phase RA：修正 `scripts/audit-ohos-resource-coverage.mjs` 的 skycultures 期望集与陈旧结论、纳入 `scenery3d` 并新增"未随包家族与原因"；以签名 HAP + 真机 `getDeepSkyImageStatus` 逐族核对。结论：**所有应随包的运行时资源均已进包**；FOV 横幅的 N 是视口内纹理**加载中**数量而非缺失（`missingCount=0`、`referenced=onDisk=674`）；仅 `models/`（17.8 MiB）与 `atmosphere/`（58.7 MiB）按默认关闭的配置项启用，属**待决策**不擅自打包。详见 CHANGELOG [2026-10-02] 与 `docs/harmonyos/archive/audits/RESOURCE-COVERAGE-AUDIT-2026-08-24.md`）** | 审计报告已随包提交 |
 
 
+#### Prop 风格域转 Store 追加队列（review §2.7，2026-10-04）
+
+- **已完成（第三批，2026-10-04）**：`archaeo`（`ArchaeoStore` 18 字段 + `ArchaeoLinesPanel`）、`navStars`（`NavStarsStore` 14 字段 + `NavStarsPanel`）、`polarScope`（`PolarScopeStore` 6 字段 + `PolarScopeOverlay`）三域由 Prop 风格转 Store 风格；宿主 `@State` 266 → 231。
+- **viewCoordinate 经核查无字段可迁，不改**：`viewCoordinatePrimaryText/SecondaryText`（50ms 定时器回填）与 `viewCoordinateOffsetX/Y`（拖拽逐帧写）按规则"高频字段不入被观察 store"留宿主；`ViewCoordinateSettings` 早已用 `OverlayStore`，`ViewCenterCoordinateOverlay` 以 `@Prop` 接收读数 —— 故不新建 `ViewCoordinateStore`。
+- **已完成（前序，2026-10-04）**：`satellites`（`SatelliteStore`，28 字段）、`script/recording/video`（`ScriptStore`）、`scenery3d`/`catalogs`/`meteorShowers`/`commandConsole`（四簇同批，共 24 字段）。
+- **仍待处理（review §2.7 剩余 Prop 风格目标）**：`mosaicCamera`（`mosaic*` 字段 + `MosaicCameraPanel`）。注：`test-ohos-satellite-panel.mjs` 在卫星域转 store 时未同步假宿主，HEAD 起即失败，属存量失败。
+
 **每个 Phase 4 面板切片前**建议先跑一次第 13.2 步 1 的"零引用扫描"，把死代码清掉再搬迁（§11 修订 6 的四类判据）。
 
 #### Phase 6 收口结论（2026-10-02，Phase 6d 后）

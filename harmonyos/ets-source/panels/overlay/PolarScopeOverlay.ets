@@ -1,19 +1,23 @@
 import { I18n } from '../../pages/I18n'
+import { PolarScopeStore } from '../../state/PolarScopeStore'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 
 // 「极轴镜」屏幕叠层（原宿主 @Builder `polarScopeOverlay()`，约 126 行）。
 //
 // 分工（§13.1 规则 4/6 + 叠层几何不入被观察 store）：
+//   - 极轴镜状态（polarScopeData / Loading / Error / HorizontalFlip / VerticalFlip / Visible）
+//     已下沉 state/PolarScopeStore.ets（review §2.7：Prop 风格 → Store 风格），本组件以
+//     @ObjectLink 订阅；可见性判定仍在宿主调用点（`if (this.polarScopeStore.polarScopeVisible)`），
+//     读数（isSouthHemisphere / hourAngleText / viewAngleText）由本组件就地读 store 的 polarScopeData 派生；
 //   - 几何全部留在宿主：`polarScopeControlWidth()` / `polarScopeTopInset()` / `polarScopeFooterHeight()`
 //     与 `skyWidth` / `skyHeight` 由宿主算好后以 @Prop（controlWidth / topInset / footerHeight /
 //     skyWidth / skyHeight）传入 —— 手工命中路由（`isUiPoint` / `isDockPoint` / `handleSkyTouch`）与
 //     `syncNativePolarScopeOverlay()` 复用同一批几何，必须保持单一口径；
 //   - 全屏透明层的 `onTouch` 只做转发，注入 `onSkyTouch`（避开 `CustomComponent.onTouch`），
 //     命中判定仍在宿主 `handleSkyTouch` 内；
-//   - 读数（isSouthHemisphere / hourAngleText / viewAngleText）由宿主从 `polarScopeData` 取好后传入；
-//   - 翻转开关的状态在宿主 `@State`，组件只回注 `onHorizontalFlipChange` / `onVerticalFlipChange`，
-//     由宿主负责 `syncNativePolarScopeOverlay()` 与 `callInteractive('setActionChecked', ...)`。
+//   - 翻转开关只回注 `onHorizontalFlipChange` / `onVerticalFlipChange`，由宿主负责
+//     `syncNativePolarScopeOverlay()` 与 `callInteractive('setActionChecked', ...)`。
 //
 // 单容器根（§13.1 规则 7）：原 @Builder 的唯一根是 `if (this.polarScopeVisible) { Stack() … }`，
 // 下沉后把可见性判定留在宿主调用点，组件根即那个全屏 `Stack`（zIndex 101 / BLOCK_HIERARCHY 逐字保留）。
@@ -22,19 +26,13 @@ import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 // polar-scope-flip-vertical。
 @Component
 export struct PolarScopeOverlay {
+  @ObjectLink polarScopeStore: PolarScopeStore
   @Prop controlWidth: number
   @Prop topInset: number
   @Prop footerHeight: number
   @Prop skyWidth: number
   @Prop skyHeight: number
   @Prop isExpandedLayout: boolean
-  @Prop loading: boolean
-  @Prop errorText: string
-  @Prop isSouthHemisphere: boolean
-  @Prop hourAngleText: string
-  @Prop viewAngleText: string
-  @Prop horizontalFlip: boolean
-  @Prop verticalFlip: boolean
   onSkyTouch: (event: TouchEvent) => void = (event: TouchEvent) => {}
   onRecenter: () => void = () => {}
   onClose: () => void = () => {}
@@ -76,7 +74,7 @@ export struct PolarScopeOverlay {
         .border({ width: 1, color: 'rgba(255,255,255,0.10)' })
         .hitTestBehavior(HitTestMode.Default)
 
-      if (this.loading) {
+      if (this.polarScopeStore.polarScopeLoading) {
         Column({ space: 10 }) {
           LoadingProgress().width(34).height(34).color('#F46F6B')
           Text(I18n.t('polar_scope_aligning')).fontSize(12).fontColor('#FFE1DF')
@@ -86,8 +84,8 @@ export struct PolarScopeOverlay {
           .backdropBlur(16)
           .borderRadius(UI_RADIUS_PANEL)
           .hitTestBehavior(HitTestMode.Block)
-      } else if (this.errorText.length > 0) {
-        Text(this.errorText)
+      } else if (this.polarScopeStore.polarScopeError.length > 0) {
+        Text(this.polarScopeStore.polarScopeError)
           .fontSize(13).fontColor('#FFE1DF').textAlign(TextAlign.Center)
           .padding({ left: 18, right: 18, top: 14, bottom: 14 })
           .backgroundColor('rgba(56, 8, 12, 0.78)')
@@ -96,7 +94,7 @@ export struct PolarScopeOverlay {
       }
 
       Column({ space: this.isExpandedLayout ? 5 : 8 }) {
-        Text(I18n.t(this.isSouthHemisphere ? 'polar_scope_south_position' : 'polar_scope_north_position'))
+        Text(I18n.t(this.polarScopeStore.polarScopeData?.hemisphere === 'south' ? 'polar_scope_south_position' : 'polar_scope_north_position'))
           .fontSize(this.isExpandedLayout ? 13 : 16)
           .fontWeight(FontWeight.Medium)
           .fontColor('#F3F3F5')
@@ -104,19 +102,19 @@ export struct PolarScopeOverlay {
         Row() {
           Text(I18n.t('polar_scope_hour_angle')).fontSize(11).fontColor('rgba(255, 255, 255, 0.60)')
             .width(this.isExpandedLayout ? 120 : 92)
-          Text(this.hourAngleText)
+          Text(this.polarScopeStore.polarScopeData?.hourAngleText ?? '--')
             .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#F7F7F8').fontFamily('monospace')
         }.width('100%')
         Row() {
           Text(I18n.t('polar_scope_view_angle')).fontSize(11).fontColor('rgba(255, 255, 255, 0.60)')
             .width(this.isExpandedLayout ? 120 : 92)
-          Text(this.viewAngleText)
+          Text(this.polarScopeStore.polarScopeData?.viewAngleText ?? '--')
             .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#F7F7F8').fontFamily('monospace')
         }.width('100%')
         Row({ space: 18 }) {
           Row({ space: 8 }) {
             Text(I18n.t('polar_scope_flip_horizontal')).fontSize(12).fontColor('rgba(255, 221, 219, 0.82)').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.horizontalFlip })
+            Toggle({ type: ToggleType.Switch, isOn: this.polarScopeStore.polarScopeHorizontalFlip })
               .width(42).height(24).selectedColor('#C44949')
               .id('polar-scope-flip-horizontal')
               .onChange((value: boolean) => {
@@ -125,7 +123,7 @@ export struct PolarScopeOverlay {
           }.layoutWeight(1)
           Row({ space: 8 }) {
             Text(I18n.t('polar_scope_flip_vertical')).fontSize(12).fontColor('rgba(255, 221, 219, 0.82)').layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.verticalFlip })
+            Toggle({ type: ToggleType.Switch, isOn: this.polarScopeStore.polarScopeVerticalFlip })
               .width(42).height(24).selectedColor('#C44949')
               .id('polar-scope-flip-vertical')
               .onChange((value: boolean) => {
