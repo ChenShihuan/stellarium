@@ -1,5 +1,7 @@
 import { RecordingEntry, RecordingsResponse, RecordingDetailResponse } from '../pages/MainWindowModels'
 import { ScriptMetadata, StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { I18n } from '../pages/I18n'
+import { resourceText } from '../common/derive/labels'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → ScriptStore 的 UI 提示 / 动作注入（§13.1 规则 6 / §14.8 规则 2：store 不触碰 UI）。
@@ -203,5 +205,52 @@ export class ScriptStore {
       clearInterval(this.videoStateTimer)
       this.videoStateTimer = -1
     }
+  }
+
+  // ==== 脚本元数据/字幕的「取值/文案」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  //
+  // 均读本 store 的 scriptMetadata / scriptCaptions / scriptWaitMessage，按 §14.3「读本域
+  // store 字段 → 并入该 store 方法（零入参除文件名/保留入参外）」下沉；函数体逐字保留
+  //（resourceText 直接 import A1 纯函数模块）。
+
+  // 按文件名取脚本元数据（原宿主 scriptMeta）。
+  scriptMeta(filename: string): ScriptMetadata | undefined {
+    return this.scriptMetadata[filename]
+  }
+
+  // 脚本作者/许可/版本行（原宿主 scriptMetaLine）。
+  scriptMetaLine(filename: string): string {
+    const metadata = this.scriptMeta(filename)
+    if (metadata === undefined) { return I18n.t('resource_not_provided') }
+    const values: string[] = []
+    values.push(I18n.t('resource_author') + ': ' + resourceText(metadata.author, I18n.t('resource_not_provided')))
+    values.push(I18n.t('resource_license') + ': ' + resourceText(metadata.license, I18n.t('resource_not_provided')))
+    if (metadata.version && metadata.version.trim().length > 0) { values.push(I18n.t('resource_version') + ': ' + metadata.version.trim()) }
+    return values.join(' · ')
+  }
+
+  // 脚本来源行（原宿主 scriptSourceLine）。
+  scriptSourceLine(filename: string): string {
+    const metadata = this.scriptMeta(filename)
+    return metadata !== undefined && metadata.source ? I18n.t('resource_source') + ': ' + metadata.source : ''
+  }
+
+  // 脚本等待提示（原宿主 scriptWaitDisplayText）。
+  scriptWaitDisplayText(): string {
+    const message = this.scriptWaitMessage.trim()
+    if (message.length === 0 || /press\s+(any\s+)?key\s+to\s+continue/i.test(message)) {
+      return I18n.t('script_wait_hint')
+    }
+    return message
+  }
+
+  // 最近三条脚本字幕（原宿主 visibleScriptCaptions）。
+  visibleScriptCaptions(): Array<string> {
+    return this.scriptCaptions.slice(-3)
+  }
+
+  // 最近三条脚本字幕拼接文本（原宿主 visibleScriptCaptionText）。
+  visibleScriptCaptionText(): string {
+    return this.visibleScriptCaptions().join('\n')
   }
 }

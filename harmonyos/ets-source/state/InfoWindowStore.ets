@@ -22,6 +22,8 @@
 //
 // 约束：6 个字段均为标量，只做整体赋值（`informationCustomMask` 的读改写也是整体赋值，
 // `infoLevel` 由 applySelectedInfoMode 整体赋值）；改造前已普查确认无原地变更。
+import { informationMaskBit } from '../common/derive/skycult'
+
 @Observed
 export class InfoWindowStore {
   infoWinVisible: boolean = false
@@ -30,4 +32,26 @@ export class InfoWindowStore {
   informationCustomMask: number = 0
   informationSettingPending: boolean = false
   infoLevel: number = 1
+
+  // ==== 信息显示「取值/判断」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  //
+  // 均读本 store 的 informationMode / informationCustomMask / infoLevel，按 §14.3「读本域
+  // store 字段 → 并入该 store 方法（零入参）」下沉；函数体逐字保留（informationMaskHas 依赖
+  // A1 纯函数 informationMaskBit）。
+
+  // 自定义模式下某字段位是否开启（原宿主 informationMaskHas）。
+  informationMaskHas(key: string): boolean {
+    const bit = informationMaskBit(key)
+    return bit > 0 && (this.informationCustomMask & bit) === bit
+  }
+
+  // 距离信息是否可见（原宿主 distanceInformationVisible）。
+  distanceInformationVisible(): boolean {
+    return this.infoLevel <= 1 && (this.informationMode !== 'custom' || this.informationMaskHas('distance'))
+  }
+
+  // 实时信息块是否可见（原宿主 selectedLiveInfoVisible）。
+  selectedLiveInfoVisible(): boolean {
+    return this.infoLevel <= 1
+  }
 }

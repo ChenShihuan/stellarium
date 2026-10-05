@@ -10,8 +10,8 @@ const apply = new Function(match[1].replace('new Map<string, string>', 'new Map'
 // 选中天体的信息字段改由 ObjectDetailStore 承载（本轮状态搬迁），假宿主相应注入 objectDetailStore。
 function state(enabled, mode = 'custom') {
   return {
-    infoWindowStore: { informationMode: mode },
-    informationMaskHas: key => enabled.includes(key),
+    // §14 A2-3：informationMaskHas 已下沉 InfoWindowStore，夹具相应挂到 infoWindowStore 上。
+    infoWindowStore: { informationMode: mode, informationMaskHas: key => enabled.includes(key) },
     objectDetailStore: {
       selectedMagnitude: '3.40', selectedDistance: '2.5 Mly', selectedConstellation: '仙女座',
       selectedCoordEq: '00h42m', selectedCoordGalactic: '121°', selectedName: '仙女座星系',

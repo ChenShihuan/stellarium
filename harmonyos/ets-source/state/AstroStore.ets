@@ -1395,4 +1395,14 @@ export class AstroStore {
     if (this.graphStartOffsetDays >= 0) return '指定日期'
     return this.graphStartYear.toString() + '-' + this.graphStartMonth.toString().padStart(2, '0') + '-' + this.graphStartDay.toString().padStart(2, '0')
   }
+
+  // 当前星历/日历页是否必须先选中天体（原宿主 astroNeedsSelectedObject，§14 A2-3 逐字搬入）。
+  // 读本 store 的 astroTab / ephemerisMode / planetCalcMode，按 §14.3「读本域 store 字段 →
+  // 并入该 store 方法」。
+  astroNeedsSelectedObject(): boolean {
+    if (this.astroTab === 2 || this.astroTab === 4) return true
+    if (this.astroTab === 1 && this.ephemerisMode < 2) return true
+    if (this.astroTab === 6 && this.planetCalcMode === 1) return false
+    return false
+  }
 }

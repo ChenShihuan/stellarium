@@ -1,7 +1,7 @@
 import { StarCatalogItem, CatalogHealthEntry, StarCatalogsResponse, StarCatalogRaw, CatalogHealthResponse } from '../pages/MainWindowModels'
-import { CatOption, StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { CatOption, NameItem, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
-import { catalogIconForModule } from '../common/derive/catalog'
+import { catalogIconForModule, catalogIconForObjectType } from '../common/derive/catalog'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → CatalogStore 的检索域助手 / 跨 store setter（§13.1 规则 6 / §14.8 规则 2）。
@@ -178,5 +178,105 @@ export class CatalogStore {
       hooks.setSatelliteCatalogHealth(health.satellites ?? {})
       this.starCatalogHealth = health.stars ?? {}
     })
+  }
+
+  // ==== 搜索域分类 chips 的「取值/选项」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  //
+  // 这些方法读本 store 的 `objectCatalogCategories`（搜索分类目录），按 §14.3「读本域 store
+  // 字段 → 并入该 store 方法」下沉；`searchCategoryLabel` / `categoryObjectIcon` 另需搜索域的
+  // 当前分类，按 §14.8 规则 6 改为显式入参（调用点传 searchStore.searchCategory），
+  // 避免 store 相互 import。函数体逐字保留，仅去掉宿主前缀。
+
+  // 目录 moduleId → 本地化标签；查不到回退 fallback（原宿主 catalogLabelForModule）。
+  private catalogLabelForModule(moduleId: string, fallback: ResourceStr): ResourceStr {
+    for (const option of this.objectCatalogCategories) {
+      if (option.moduleId === moduleId) return option.label
+    }
+    return fallback
+  }
+
+  // 搜索面板内置分类表（原宿主 searchCategoryOptions）。
+  searchCategoryOptions(): Array<CatOption> {
+    const core: CatOption[] = [
+      { code: 'planet', label: this.catalogLabelForModule('SolarSystem:planet', I18n.t('i0103')), moduleId: 'SolarSystem:planet', iconKey: 'catalog_planet' },
+      { code: 'moon', label: this.catalogLabelForModule('SolarSystem:moon', I18n.objectType('Moon')), moduleId: 'SolarSystem:moon', iconKey: 'catalog_moon' },
+      { code: 'comet', label: this.catalogLabelForModule('SolarSystem:comet', I18n.objectType('Comet')), moduleId: 'SolarSystem:comet', iconKey: 'catalog_comet' },
+      { code: 'asteroid', label: this.catalogLabelForModule('SolarSystem:asteroid', I18n.objectType('Asteroid')), moduleId: 'SolarSystem:asteroid', iconKey: 'catalog_asteroid' },
+      { code: 'star', label: this.catalogLabelForModule('StarMgr', I18n.t('i0104')), moduleId: 'StarMgr', iconKey: 'catalog_star' },
+      { code: 'variable', label: this.catalogLabelForModule('StarMgr:1', I18n.objectType('Variable star')), moduleId: 'StarMgr:1', iconKey: 'catalog_variable_star' },
+      { code: 'constellation', label: this.catalogLabelForModule('ConstellationMgr', I18n.objectType('Constellation')), moduleId: 'ConstellationMgr', iconKey: 'catalog_constellation' },
+      { code: 'galaxy', label: this.catalogLabelForModule('NebulaMgr:0', I18n.objectType('Galaxy')), moduleId: 'NebulaMgr:0', iconKey: 'catalog_galaxy' },
+      { code: 'cluster', label: this.catalogLabelForModule('NebulaMgr:5', I18n.objectType('Cluster')), moduleId: 'NebulaMgr:5', iconKey: 'catalog_cluster' },
+      { code: 'nebula', label: this.catalogLabelForModule('NebulaMgr:200', I18n.t('i0107')), moduleId: 'NebulaMgr:200', iconKey: 'catalog_nebula' },
+      { code: 'messier', label: this.catalogLabelForModule('NebulaMgr:100', I18n.t('i0108')), moduleId: 'NebulaMgr:100', iconKey: 'catalog_messier' },
+      { code: 'artificial', label: this.catalogLabelForModule('ArtificialObjects', I18n.t('search_artificial_objects')), moduleId: 'ArtificialObjects', iconKey: 'catalog_satellite' },
+      { code: 'satellite', label: this.catalogLabelForModule('Satellites', I18n.objectType('Artificial satellite')), moduleId: 'Satellites', iconKey: 'catalog_satellite' }
+    ]
+    return core
+  }
+
+  // 插件目录动态追加的分类（原宿主 searchDynamicCategoryOptions）。
+  searchDynamicCategoryOptions(): Array<CatOption> {
+    const core = this.searchCategoryOptions()
+    const knownModules: Record<string, boolean> = {}
+    for (const option of core) knownModules[option.moduleId ?? ''] = true
+    const dynamic: CatOption[] = []
+    for (const option of this.objectCatalogCategories) {
+      if (!knownModules[option.moduleId ?? ''] && option.isPluginCatalog === true) dynamic.push(option)
+    }
+    dynamic.sort((left: CatOption, right: CatOption) => String(left.label).localeCompare(String(right.label)))
+    return dynamic
+  }
+
+  // 内置 + 动态分类去重合并（原宿主 searchAllCategoryOptions）。
+  searchAllCategoryOptions(): Array<CatOption> {
+    const result: CatOption[] = []
+    const modules: Record<string, boolean> = {}
+    for (const option of [...this.searchCategoryOptions(), ...this.searchDynamicCategoryOptions()]) {
+      const key = option.moduleId || option.code
+      if (!modules[key]) {
+        modules[key] = true
+        result.push(option)
+      }
+    }
+    return result
+  }
+
+  // 分类 code → 图标键（原宿主 searchCategoryIcon）。
+  searchCategoryIcon(category: string): string {
+    for (const option of this.searchCategoryOptions()) {
+      if (option.code === category) return option.iconKey ?? 'catalog_plugin'
+    }
+    for (const option of this.objectCatalogCategories) {
+      if (option.code === category) return option.iconKey ?? 'catalog_plugin'
+    }
+    return 'catalog_plugin'
+  }
+
+  // 分类 code → 目录 moduleId（原宿主 categoryModuleIdFor）。
+  categoryModuleIdFor(category: string): string {
+    for (const option of this.searchCategoryOptions()) {
+      if (option.code === category) return option.moduleId ?? ''
+    }
+    for (const option of this.objectCatalogCategories) {
+      if (option.code === category) return option.moduleId ?? ''
+    }
+    return ''
+  }
+
+  // 当前分类的显示标签（原宿主 searchCategoryLabel；当前分类经显式入参传入）。
+  searchCategoryLabel(category: string): string {
+    for (const option of this.searchCategoryOptions()) {
+      if (option.code === category) return String(option.label)
+    }
+    for (const option of this.objectCatalogCategories) {
+      if (option.code === category) return String(option.label)
+    }
+    return I18n.t('search_browse_categories')
+  }
+
+  // 分类浏览条目的图标（原宿主 categoryObjectIcon；当前分类经显式入参传入）。
+  categoryObjectIcon(item: NameItem, category: string): string {
+    return catalogIconForObjectType(item.type ?? '', this.searchCategoryIcon(category))
   }
 }

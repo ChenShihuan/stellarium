@@ -12,6 +12,8 @@ const preview = readFileSync(new URL('../harmonyos/ets-source/panels/overlay/Obj
 // 天体详情分支已下沉为 ObjectPanel 组件（Phase 4e）：媒体卡片的调用点现在组件内，
 // 但视口高度仍由宿主按实时视口状态算好后以 @Prop 传入。
 const objectPanel = readFileSync(new URL('../harmonyos/ets-source/panels/panels/ObjectPanel.ets', import.meta.url), 'utf8');
+// §14 A2-3：objectInspectorImageHeight 已下沉 ObjectMediaStore（读本 store 的视口高度）。
+const objectMediaStore = readFileSync(new URL('../harmonyos/ets-source/state/ObjectMediaStore.ets', import.meta.url), 'utf8');
 
 test('detail images preserve their entire frame instead of covering the viewport', () => {
   assert.match(card, /Image\(this\.store\.objectInspectorMediaPixelMap\)[\s\S]*?objectFit\(ImageFit\.Contain\)/);
@@ -28,14 +30,14 @@ test('host still feeds the media card the viewport height computed from the live
   const call = objectPanel.slice(objectPanel.indexOf('TabletInspectorMediaGroup({'), objectPanel.indexOf('SatellitePassDetails({'));
   assert.match(call, /store: this\.objectMediaStore/);
   assert.match(call, /imageHeight: this\.imageHeight/);
-  assert.match(source, /imageHeight: this\.objectInspectorImageHeight\(\)/);
+  assert.match(source, /imageHeight: this\.objectMediaStore\.objectInspectorImageHeight\(\)/);
 });
 
 test('preview shrinks to the available detail viewport without growing beyond 210vp', () => {
-  const body = source.match(/private objectInspectorImageHeight\(\): number \{([\s\S]*?)\n  \}/)[1];
+  const body = objectMediaStore.match(/objectInspectorImageHeight\(\): number \{([\s\S]*?)\n  \}/)[1];
   const height = new Function(body);
   for (const available of [160, 210, 300, 500]) {
-    const result = height.call({ objectMediaStore: { objectInspectorMediaViewportHeight: available } });
+    const result = height.call({ objectInspectorMediaViewportHeight: available });
     assert.ok(result >= 72 && result <= 210);
     assert.ok(result + 88 <= available);
   }
