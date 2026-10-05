@@ -19,6 +19,7 @@ import { AstroSelectionGuide, PhenomenonRelationMark } from './AstroGuides'
 import { GraphLoadingRow, RtsSelectionGuide, GraphSelectionGuide } from './GraphGuides'
 import { WutTargetCard } from './WutTargetCard'
 import { getIcon } from '../../common/ui/ShellIcons'
+import { astroGroupItems, astroTabItemsForGroup, rtsCalendarDurationLabel, graphStartOptionLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, planetPairLinearLabel, hecPointSize, hecDistanceLabel, lunarElongationBarHeight, planetTimeSeriesBarHeight, planetPairBarHeight } from '../../common/derive/astro'
 
 export interface AstroPanelHost {
   almanacHoursLabel: (key: string) => string
@@ -34,9 +35,7 @@ export interface AstroPanelHost {
   annualBarHeight: (altitude: number | undefined) => number
   annualBarWidth: () => number
   annualMaxLabel: () => string
-  astroGroupItems: () => Array<TabItem>
   astroNeedsSelectedObject: () => boolean
-  astroTabItemsForGroup: (group: number) => Array<TabItem>
   azBarHeight: (azimuth: number | undefined) => number
   azimuthNowLabel: () => string
   callNative: (name: string, payload?: string) => void
@@ -55,13 +54,10 @@ export interface AstroPanelHost {
   fmtEphemerisDate: (s: string | undefined) => string
   fmtNum: (v: number | undefined, digits: number, suffix: string) => string
   graphCustomStartLabel: () => string
-  graphStartOptionLabel: (offsetDays: number) => string
   graphTargetLabel: () => string
   hasSelectedObject: () => boolean
-  hecDistanceLabel: (position: HeliocentricPosition) => string
   hecPointColor: (position: HeliocentricPosition) => string
   hecPointLeft: (position: HeliocentricPosition) => number
-  hecPointSize: (position: HeliocentricPosition) => number
   hecPointTop: (position: HeliocentricPosition) => number
   hecTitle: (position: HeliocentricPosition) => string
   jdToDateStr: (jd: string) => string
@@ -93,7 +89,6 @@ export interface AstroPanelHost {
   loadRtsCalendar: () => void
   loadTonightAstro: () => void
   loadWutTargets: () => void
-  lunarElongationBarHeight: (separation: number | undefined) => number
   lunarElongationBarWidth: () => number
   lunarElongationClosestLabel: () => string
   lunarElongationLineTop: () => number
@@ -105,15 +100,9 @@ export interface AstroPanelHost {
   openRtsTargetPicker: () => void
   phenomenaBodyName: (body: string) => string
   phenomenonCaption: (type: string) => string
-  planetMetricLabel: (metric: string) => string
-  planetMetricUnit: (metric: string) => string
-  planetPairBarHeight: (value: number | undefined, min: number, max: number) => number
   planetPairBarWidth: () => number
-  planetPairBodyName: (body: string) => string
   planetPairCurrentIndex: () => number
-  planetPairLinearLabel: (value: number | undefined) => string
   planetPairSegmentWidth: () => number
-  planetTimeSeriesBarHeight: (value: number | undefined, min: number, max: number) => number
   planetTimeSeriesBarWidth: () => number
   planetTimeSeriesSegmentWidth: () => number
   planetTimeSeriesValueLabel: (value: number | undefined, metric: string) => string
@@ -121,7 +110,6 @@ export interface AstroPanelHost {
   publishAstroPanelState: () => void
   reloadCurrentGraph: () => void
   reloadEclipses: () => void
-  rtsCalendarDurationLabel: (days: number) => string
   rtsCalendarStartOptionLabel: (offsetDays: number) => string
   searchObject: (name: string, catalogModuleId?: string, exactSelectionPayload?: string, placement?: string) => void
   selectAstroFilter: (key: string, value: string) => void
@@ -152,9 +140,7 @@ function noopAstroPanelHost(): AstroPanelHost {
     annualBarHeight: () => 0,
     annualBarWidth: () => 0,
     annualMaxLabel: () => '',
-    astroGroupItems: () => [],
     astroNeedsSelectedObject: () => false,
-    astroTabItemsForGroup: () => [],
     azBarHeight: () => 0,
     azimuthNowLabel: () => '',
     callNative: () => {},
@@ -173,13 +159,10 @@ function noopAstroPanelHost(): AstroPanelHost {
     fmtEphemerisDate: () => '',
     fmtNum: () => '',
     graphCustomStartLabel: () => '',
-    graphStartOptionLabel: () => '',
     graphTargetLabel: () => '',
     hasSelectedObject: () => false,
-    hecDistanceLabel: () => '',
     hecPointColor: () => '',
     hecPointLeft: () => 0,
-    hecPointSize: () => 0,
     hecPointTop: () => 0,
     hecTitle: () => '',
     jdToDateStr: () => '',
@@ -211,7 +194,6 @@ function noopAstroPanelHost(): AstroPanelHost {
     loadRtsCalendar: () => {},
     loadTonightAstro: () => {},
     loadWutTargets: () => {},
-    lunarElongationBarHeight: () => 0,
     lunarElongationBarWidth: () => 0,
     lunarElongationClosestLabel: () => '',
     lunarElongationLineTop: () => 0,
@@ -223,15 +205,9 @@ function noopAstroPanelHost(): AstroPanelHost {
     openRtsTargetPicker: () => {},
     phenomenaBodyName: () => '',
     phenomenonCaption: () => '',
-    planetMetricLabel: () => '',
-    planetMetricUnit: () => '',
-    planetPairBarHeight: () => 0,
     planetPairBarWidth: () => 0,
-    planetPairBodyName: () => '',
     planetPairCurrentIndex: () => 0,
-    planetPairLinearLabel: () => '',
     planetPairSegmentWidth: () => 0,
-    planetTimeSeriesBarHeight: () => 0,
     planetTimeSeriesBarWidth: () => 0,
     planetTimeSeriesSegmentWidth: () => 0,
     planetTimeSeriesValueLabel: () => '',
@@ -239,7 +215,6 @@ function noopAstroPanelHost(): AstroPanelHost {
     publishAstroPanelState: () => {},
     reloadCurrentGraph: () => {},
     reloadEclipses: () => {},
-    rtsCalendarDurationLabel: () => '',
     rtsCalendarStartOptionLabel: () => '',
     searchObject: () => {},
     selectAstroFilter: () => {},
@@ -274,7 +249,7 @@ export struct AstroPanel {
         // 天文计算窗口
         Scroll() {
           Row({ space: 4 }) {
-          ForEach(this.host.astroGroupItems(), (tab: TabItem) => {
+          ForEach(astroGroupItems(), (tab: TabItem) => {
             Text(tab.label)
               .fontSize(10)
               .fontColor(this.store.astroGroup === tab.id ? this.textColor : this.subColor)
@@ -291,7 +266,7 @@ export struct AstroPanel {
           .margin({ top: 4, bottom: 3 })
         Scroll() {
           Row({ space: 4 }) {
-            ForEach(this.host.astroTabItemsForGroup(this.store.astroGroup), (tab: TabItem) => {
+            ForEach(astroTabItemsForGroup(this.store.astroGroup), (tab: TabItem) => {
               Text(tab.label)
                 .fontSize(10)
                 .fontColor(this.store.astroTab === tab.id ? this.textColor : this.subColor)
@@ -468,9 +443,9 @@ export struct AstroPanel {
                   Circle().width(22).height(22).fill('#F4C454')
                   Text('太阳').fontSize(8).fontColor('#30240D')
                   ForEach(this.store.hecPositions, (position: HeliocentricPosition) => {
-                    Circle().width(this.host.hecPointSize(position) + 4).height(this.host.hecPointSize(position) + 4).fill(this.panelColor)
+                    Circle().width(hecPointSize(position) + 4).height(hecPointSize(position) + 4).fill(this.panelColor)
                       .position({ x: this.host.hecPointLeft(position) - 2, y: this.host.hecPointTop(position) - 2 })
-                    Circle().width(this.host.hecPointSize(position)).height(this.host.hecPointSize(position)).fill(this.host.hecPointColor(position))
+                    Circle().width(hecPointSize(position)).height(hecPointSize(position)).fill(this.host.hecPointColor(position))
                       .position({ x: this.host.hecPointLeft(position), y: this.host.hecPointTop(position) })
                       .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                       .onClick(() => { this.host.searchObject(position.englishName) })
@@ -497,7 +472,7 @@ export struct AstroPanel {
                         Text(this.host.hecTitle(position)).fontSize(11).fontColor(this.textColor).width(70).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                         Text(position.latitude.toFixed(1) + '°').fontSize(10).fontColor(this.subColor).width(47)
                         Text(position.longitude.toFixed(1) + '°').fontSize(10).fontColor(this.subColor).width(47)
-                        Text(this.host.hecDistanceLabel(position) + ' AU').fontSize(10).fontColor(this.subColor).layoutWeight(1).maxLines(1)
+                        Text(hecDistanceLabel(position) + ' AU').fontSize(10).fontColor(this.subColor).layoutWeight(1).maxLines(1)
                       }
                       .height(28).width('100%').padding({ left: 8, right: 8 })
                       .backgroundColor(this.panelColor)
@@ -620,7 +595,7 @@ export struct AstroPanel {
                 Scroll() {
                   Row({ space: 4 }) {
                     ForEach(['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'], (body: string) => {
-                      Text(this.host.planetPairBodyName(body)).fontSize(10)
+                      Text(planetPairBodyName(body)).fontSize(10)
                         .fontColor(this.store.ephemerisPrimary === body ? this.textColor : this.subColor)
                         .padding({ left: 9, right: 9, top: 5, bottom: 5 })
                         .backgroundColor(this.store.ephemerisPrimary === body ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
@@ -637,7 +612,7 @@ export struct AstroPanel {
                   Row({ space: 4 }) {
                     ForEach(['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'], (body: string) => {
                       if (body !== this.store.ephemerisPrimary) {
-                        Text(this.host.planetPairBodyName(body)).fontSize(10)
+                        Text(planetPairBodyName(body)).fontSize(10)
                           .fontColor(this.store.ephemerisSecondary === body ? this.textColor : this.subColor)
                           .padding({ left: 9, right: 9, top: 5, bottom: 5 })
                           .backgroundColor(this.store.ephemerisSecondary === body ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(UI_RADIUS_CONTROL)
@@ -821,7 +796,7 @@ export struct AstroPanel {
               Scroll() {
                 Row({ space: 4 }) {
                   ForEach([7, 14, 31, 62, 92, 183, 365], (days: number) => {
-                    Text(this.host.rtsCalendarDurationLabel(days)).fontSize(10)
+                    Text(rtsCalendarDurationLabel(days)).fontSize(10)
                     .fontColor(this.store.rtsCalendarDays === days ? this.textColor : this.subColor)
                     .padding({ left: 9, right: 9, top: 4, bottom: 4 })
                     .backgroundColor(this.store.rtsCalendarDays === days ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -876,7 +851,7 @@ export struct AstroPanel {
               } else if (this.store.rtsCalendarError.length > 0) {
                 Text(this.store.rtsCalendarError).fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 4 })
               } else if (this.store.rtsCalendarData.length > 0) {
-                Text(this.store.rtsCalendarName + ' · 从' + this.host.rtsCalendarStartOptionLabel(this.store.rtsCalendarStartOffsetDays) + '开始，持续 ' + this.host.rtsCalendarDurationLabel(this.store.rtsCalendarDays) + '；每项按本地日期计算，点击可跳到该日中天。')
+                Text(this.store.rtsCalendarName + ' · 从' + this.host.rtsCalendarStartOptionLabel(this.store.rtsCalendarStartOffsetDays) + '开始，持续 ' + rtsCalendarDurationLabel(this.store.rtsCalendarDays) + '；每项按本地日期计算，点击可跳到该日中天。')
                   .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
                 ForEach(this.store.rtsCalendarData, (day: RtsCalendarDay) => {
                   Column({ space: 1 }) {
@@ -1051,7 +1026,7 @@ export struct AstroPanel {
                 Text('起始日期').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
                 Row({ space: 4 }) {
                   ForEach([0, 1, 7, 30], (offsetDays: number) => {
-                    Text(this.host.graphStartOptionLabel(offsetDays)).fontSize(10)
+                    Text(graphStartOptionLabel(offsetDays)).fontSize(10)
                       .fontColor(this.store.graphStartOffsetDays === offsetDays ? this.textColor : this.subColor)
                       .padding({ left: 9, right: 9, top: 4, bottom: 4 })
                       .backgroundColor(this.store.graphStartOffsetDays === offsetDays ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -1415,7 +1390,7 @@ export struct AstroPanel {
                   Stack({ alignContent: Alignment.Center }) {
                     Row() {
                       ForEach(this.store.lunarElongationData, (point: LunarElongationPoint) => {
-                        Column().width(this.host.lunarElongationBarWidth()).height(this.host.lunarElongationBarHeight(point.separation))
+                        Column().width(this.host.lunarElongationBarWidth()).height(lunarElongationBarHeight(point.separation))
                           .backgroundColor((point.separation ?? 180) < this.store.lunarElongationLimit ? '#E8B24B' : this.accentColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut }).borderRadius(1)
                       }, (point: LunarElongationPoint, index: number) => index.toString())
                     }.width('100%').height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
@@ -1469,12 +1444,12 @@ export struct AstroPanel {
                       })
                   }, (hours: number) => hours.toString())
                 }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-                Text('左轴：' + this.host.planetMetricLabel(this.store.planetTimeSeriesLeftMetric)).fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
+                Text('左轴：' + planetMetricLabel(this.store.planetTimeSeriesLeftMetric)).fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
                 Column({ space: 3 }) {
                   ForEach([['magnitude', 'phase', 'distance', 'elongation', 'angularSize'], ['phaseAngle', 'heliocentricDistance', 'transitAltitude', 'rightAscension', 'declination']], (metrics: Array<string>, row: number) => {
                     Row({ space: 3 }) {
                       ForEach(metrics, (metric: string) => {
-                        Text(this.host.planetMetricLabel(metric)).fontSize(9).maxLines(1)
+                        Text(planetMetricLabel(metric)).fontSize(9).maxLines(1)
                           .fontColor(this.store.planetTimeSeriesLeftMetric === metric ? this.textColor : this.subColor)
                           .padding({ left: 5, right: 5, top: 4, bottom: 4 })
                           .backgroundColor(this.store.planetTimeSeriesLeftMetric === metric ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -1485,12 +1460,12 @@ export struct AstroPanel {
                     }.width('100%')
                   }, (metrics: Array<string>, row: number) => row.toString())
                 }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 })
-                Text('右轴：' + this.host.planetMetricLabel(this.store.planetTimeSeriesRightMetric)).fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
+                Text('右轴：' + planetMetricLabel(this.store.planetTimeSeriesRightMetric)).fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
                 Column({ space: 3 }) {
                   ForEach([['magnitude', 'phase', 'distance', 'elongation', 'angularSize'], ['phaseAngle', 'heliocentricDistance', 'transitAltitude', 'rightAscension', 'declination']], (metrics: Array<string>, row: number) => {
                     Row({ space: 3 }) {
                       ForEach(metrics, (metric: string) => {
-                        Text(this.host.planetMetricLabel(metric)).fontSize(9).maxLines(1)
+                        Text(planetMetricLabel(metric)).fontSize(9).maxLines(1)
                           .fontColor(this.store.planetTimeSeriesRightMetric === metric ? this.textColor : this.subColor)
                           .padding({ left: 5, right: 5, top: 4, bottom: 4 })
                           .backgroundColor(this.store.planetTimeSeriesRightMetric === metric ? '#9C6A24' : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -1515,17 +1490,17 @@ export struct AstroPanel {
                 } else if (this.store.planetTimeSeriesData.length === 0) {
                   Text('没有可绘制的数据。').fontSize(11).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 6 })
                 } else {
-                  Text(this.store.planetTimeSeriesName + ' · ' + this.host.planetMetricLabel(this.store.planetTimeSeriesLeftMetric) + ' / ' + this.host.planetMetricLabel(this.store.planetTimeSeriesRightMetric))
+                  Text(this.store.planetTimeSeriesName + ' · ' + planetMetricLabel(this.store.planetTimeSeriesLeftMetric) + ' / ' + planetMetricLabel(this.store.planetTimeSeriesRightMetric))
                     .fontSize(11).fontColor(this.textColor).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
                   Stack({ alignContent: Alignment.Center }) {
                     Row() {
                       ForEach(this.store.planetTimeSeriesData, (point: PlanetTimeSeriesPoint) => {
                         Row({ space: 1 }) {
                           Column().width(this.host.planetTimeSeriesSegmentWidth())
-                            .height(this.host.planetTimeSeriesBarHeight(point.left, this.store.planetTimeSeriesLeftMin, this.store.planetTimeSeriesLeftMax))
+                            .height(planetTimeSeriesBarHeight(point.left, this.store.planetTimeSeriesLeftMin, this.store.planetTimeSeriesLeftMax))
                             .backgroundColor(this.accentColor).borderRadius(1)
                           Column().width(this.host.planetTimeSeriesSegmentWidth())
-                            .height(this.host.planetTimeSeriesBarHeight(point.right, this.store.planetTimeSeriesRightMin, this.store.planetTimeSeriesRightMax))
+                            .height(planetTimeSeriesBarHeight(point.right, this.store.planetTimeSeriesRightMin, this.store.planetTimeSeriesRightMax))
                             .backgroundColor('#E8B24B').borderRadius(1)
                         }.width(this.host.planetTimeSeriesBarWidth()).height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
                       }, (point: PlanetTimeSeriesPoint, index: number) => index.toString())
@@ -1536,11 +1511,11 @@ export struct AstroPanel {
                     Text('+' + Math.round(this.store.planetTimeSeriesDays / 2).toString() + '天').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
                     Text(this.store.planetTimeSeriesDays === 365 ? '+1年' : '+' + this.store.planetTimeSeriesDays.toString() + '天').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
                   }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
-                  Text('蓝色左轴：' + this.store.planetTimeSeriesLeftMin.toFixed(1) + ' - ' + this.store.planetTimeSeriesLeftMax.toFixed(1) + this.host.planetMetricUnit(this.store.planetTimeSeriesLeftMetric)
-                    + '；金色右轴：' + this.store.planetTimeSeriesRightMin.toFixed(1) + ' - ' + this.store.planetTimeSeriesRightMax.toFixed(1) + this.host.planetMetricUnit(this.store.planetTimeSeriesRightMetric))
+                  Text('蓝色左轴：' + this.store.planetTimeSeriesLeftMin.toFixed(1) + ' - ' + this.store.planetTimeSeriesLeftMax.toFixed(1) + planetMetricUnit(this.store.planetTimeSeriesLeftMetric)
+                    + '；金色右轴：' + this.store.planetTimeSeriesRightMin.toFixed(1) + ' - ' + this.store.planetTimeSeriesRightMax.toFixed(1) + planetMetricUnit(this.store.planetTimeSeriesRightMetric))
                     .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-                  InfoRow({ label: '当前 ' + this.host.planetMetricLabel(this.store.planetTimeSeriesLeftMetric), value: this.host.planetTimeSeriesValueLabel(this.store.planetTimeSeriesData[0].left, this.store.planetTimeSeriesLeftMetric) })
-                  InfoRow({ label: '当前 ' + this.host.planetMetricLabel(this.store.planetTimeSeriesRightMetric), value: this.host.planetTimeSeriesValueLabel(this.store.planetTimeSeriesData[0].right, this.store.planetTimeSeriesRightMetric) })
+                  InfoRow({ label: '当前 ' + planetMetricLabel(this.store.planetTimeSeriesLeftMetric), value: this.host.planetTimeSeriesValueLabel(this.store.planetTimeSeriesData[0].left, this.store.planetTimeSeriesLeftMetric) })
+                  InfoRow({ label: '当前 ' + planetMetricLabel(this.store.planetTimeSeriesRightMetric), value: this.host.planetTimeSeriesValueLabel(this.store.planetTimeSeriesData[0].right, this.store.planetTimeSeriesRightMetric) })
                 }
               }
             } else if (this.store.astroTab === 5) {
@@ -1804,7 +1779,7 @@ export struct AstroPanel {
                   ForEach([['Sun', 'Earth', 'Moon', 'Mercury', 'Venus', 'Mars'], ['Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']], (bodies: Array<string>, row: number) => {
                     Row({ space: 3 }) {
                       ForEach(bodies, (body: string) => {
-                        Text(this.host.planetPairBodyName(body)).fontSize(9)
+                        Text(planetPairBodyName(body)).fontSize(9)
                           .fontColor(this.store.planetPairFirst === body ? this.textColor : this.subColor)
                           .padding({ left: 6, right: 6, top: 4, bottom: 4 })
                           .backgroundColor(this.store.planetPairFirst === body ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -1825,7 +1800,7 @@ export struct AstroPanel {
                   ForEach([['Sun', 'Earth', 'Moon', 'Mercury', 'Venus', 'Mars'], ['Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']], (bodies: Array<string>, row: number) => {
                     Row({ space: 3 }) {
                       ForEach(bodies, (body: string) => {
-                        Text(this.host.planetPairBodyName(body)).fontSize(9)
+                        Text(planetPairBodyName(body)).fontSize(9)
                           .fontColor(this.store.planetPairSecond === body ? this.textColor : this.subColor)
                           .padding({ left: 6, right: 6, top: 4, bottom: 4 })
                           .backgroundColor(this.store.planetPairSecond === body ? '#9C6A24' : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -1898,11 +1873,11 @@ export struct AstroPanel {
                       ForEach(this.store.planetPairDistanceData, (point: PlanetPairDistancePoint) => {
                         Row({ space: 1 }) {
                           Column().width(this.host.planetPairSegmentWidth())
-                            .height(this.host.planetPairBarHeight(point.linearDistance, this.store.planetPairLinearMin, this.store.planetPairLinearMax))
+                            .height(planetPairBarHeight(point.linearDistance, this.store.planetPairLinearMin, this.store.planetPairLinearMax))
                             .backgroundColor(this.accentColor).borderRadius(1)
                           if (this.store.planetPairAngularAvailable) {
                             Column().width(this.host.planetPairSegmentWidth())
-                              .height(this.host.planetPairBarHeight(point.angularDistance, this.store.planetPairAngularMin, this.store.planetPairAngularMax))
+                              .height(planetPairBarHeight(point.angularDistance, this.store.planetPairAngularMin, this.store.planetPairAngularMax))
                               .backgroundColor('#E8B24B').borderRadius(1)
                           }
                         }.width(this.host.planetPairBarWidth()).height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
@@ -1916,7 +1891,7 @@ export struct AstroPanel {
                   }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
                   Text(this.store.planetPairAngularAvailable ? '蓝色线性距离：' + this.store.planetPairLinearMin.toFixed(3) + ' - ' + this.store.planetPairLinearMax.toFixed(3) + ' AU；金色角距离：' + this.store.planetPairAngularMin.toFixed(1) + ' - ' + this.store.planetPairAngularMax.toFixed(1) + '°' : '蓝色为线性距离；与观测地球比较时，表观角距离不适用。')
                     .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
-                  InfoRow({ label: '当前线性距离', value: this.host.planetPairLinearLabel(this.store.planetPairDistanceData[this.host.planetPairCurrentIndex()].linearDistance) })
+                  InfoRow({ label: '当前线性距离', value: planetPairLinearLabel(this.store.planetPairDistanceData[this.host.planetPairCurrentIndex()].linearDistance) })
                   if (this.store.planetPairAngularAvailable) {
                     InfoRow({ label: '当前角距离', value: (this.store.planetPairDistanceData[this.host.planetPairCurrentIndex()].angularDistance ?? 0).toFixed(1) + '°' })
                   }

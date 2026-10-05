@@ -38,7 +38,7 @@ import {
   chromeZoomButtonTop
 } from '../common/ui/ChromeGeometry'
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot } from '../common/derive/gyro'
-import { dateToJD, jdToLocalTimeText, astroGroupForTab, graphModeLabel, hourOffsetLabel, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
+import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
@@ -5625,7 +5625,7 @@ export struct WindowNativeNode {
           rows: this.astroStore.lunarElongationData.map((item: LunarElongationPoint) => [item.date, item.jd, item.t, item.separation]) }
       }
       if (this.astroStore.graphMode === 5 && this.astroStore.planetTimeSeriesData.length > 0) {
-        return { title: this.astroStore.planetTimeSeriesName + '双变量时间曲线', headers: ['日期时间', '儒略日', '距起点(小时)', this.planetMetricLabel(this.astroStore.planetTimeSeriesLeftMetric), this.planetMetricLabel(this.astroStore.planetTimeSeriesRightMetric)],
+        return { title: this.astroStore.planetTimeSeriesName + '双变量时间曲线', headers: ['日期时间', '儒略日', '距起点(小时)', planetMetricLabel(this.astroStore.planetTimeSeriesLeftMetric), planetMetricLabel(this.astroStore.planetTimeSeriesRightMetric)],
           rows: this.astroStore.planetTimeSeriesData.map((item: PlanetTimeSeriesPoint) => [item.date, item.jd, item.t, item.left, item.right]) }
       }
     } else if (this.astroStore.astroTab === 5 && this.wutStore.wutTargets.length > 0) {
@@ -5784,14 +5784,6 @@ export struct WindowNativeNode {
     return '+' + offsetDays.toString() + ' 天'
   }
 
-  private rtsCalendarDurationLabel(days: number): string {
-    if (days === 31) return '1 个月'
-    if (days === 62) return '2 个月'
-    if (days === 92) return '3 个月'
-    if (days === 183) return '6 个月'
-    if (days === 365) return '12 个月'
-    return days.toString() + ' 天'
-  }
 
   private chooseRtsCalendarStartDate(): void {
     this.pickedDate = new Date(this.astroStore.rtsCalendarStartYear, this.astroStore.rtsCalendarStartMonth - 1, this.astroStore.rtsCalendarStartDay)
@@ -5961,8 +5953,8 @@ export struct WindowNativeNode {
       if (r.ok === true && r.planetPairDistance !== undefined) {
         const data = r.planetPairDistance as Array<PlanetPairDistancePoint>
         this.astroStore.planetPairDistanceData = data
-        this.astroStore.planetPairFirstName = this.planetPairBodyName(this.astroStore.planetPairFirst)
-        this.astroStore.planetPairSecondName = this.planetPairBodyName(this.astroStore.planetPairSecond)
+        this.astroStore.planetPairFirstName = planetPairBodyName(this.astroStore.planetPairFirst)
+        this.astroStore.planetPairSecondName = planetPairBodyName(this.astroStore.planetPairSecond)
         this.astroStore.planetPairAngularAvailable = r.angularAvailable === true
         this.updatePlanetPairDistanceRanges(data)
       } else {
@@ -6188,10 +6180,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private graphStartOptionLabel(offsetDays: number): string {
-    if (offsetDays === 0) return '当前'
-    return '+' + offsetDays.toString() + ' 天'
-  }
 
   private graphCustomStartLabel(): string {
     if (this.astroStore.graphStartOffsetDays >= 0) return '指定日期'
@@ -6461,7 +6449,7 @@ export struct WindowNativeNode {
   private phenomenaRequestSequence: number = 0
 
   private phenomenaBodyName(body: string): string {
-    return body === 'all' ? '全部行星' : this.planetPairBodyName(body)
+    return body === 'all' ? '全部行星' : planetPairBodyName(body)
   }
 
   private phenomenonCaption(type: string): string {
@@ -6712,9 +6700,6 @@ export struct WindowNativeNode {
     return Math.max(1, Math.min(4, 292 / this.astroStore.lunarElongationData.length))
   }
 
-  private lunarElongationBarHeight(separation: number | undefined): number {
-    return Math.max(1, Math.min(96, (separation ?? 0) / 180 * 96))
-  }
 
   private lunarElongationLineTop(): number {
     return Math.max(0, Math.min(95, (1 - this.astroStore.lunarElongationLimit / 180) * 96))
@@ -6738,27 +6723,7 @@ export struct WindowNativeNode {
     return closest > 180 ? '--' : closest.toFixed(1) + '°（' + hourOffsetLabel(time) + '）'
   }
 
-  private planetMetricLabel(metric: string): string {
-    if (metric === 'magnitude') return '星等'
-    if (metric === 'phase') return '照亮比例'
-    if (metric === 'distance') return '距离'
-    if (metric === 'elongation') return '距日角'
-    if (metric === 'angularSize') return '视直径'
-    if (metric === 'phaseAngle') return '相角'
-    if (metric === 'heliocentricDistance') return '日心距'
-    if (metric === 'transitAltitude') return '过中天高度'
-    if (metric === 'rightAscension') return '赤经'
-    return '赤纬'
-  }
 
-  private planetMetricUnit(metric: string): string {
-    if (metric === 'phase') return ' %'
-    if (metric === 'distance' || metric === 'heliocentricDistance') return ' AU'
-    if (metric === 'angularSize') return '″'
-    if (metric === 'rightAscension') return ' h'
-    if (metric === 'magnitude') return ' 等'
-    return '°'
-  }
 
   private planetTimeSeriesBarWidth(): number {
     if (this.astroStore.planetTimeSeriesData.length === 0) return 4
@@ -6769,27 +6734,11 @@ export struct WindowNativeNode {
     return Math.max(1, (this.planetTimeSeriesBarWidth() - 1) / 2)
   }
 
-  private planetTimeSeriesBarHeight(value: number | undefined, min: number, max: number): number {
-    return Math.max(1, Math.min(96, ((value ?? min) - min) / (max - min) * 96))
-  }
 
   private planetTimeSeriesValueLabel(value: number | undefined, metric: string): string {
-    return (value ?? 0).toFixed(metric === 'angularSize' ? 0 : 1) + this.planetMetricUnit(metric)
+    return (value ?? 0).toFixed(metric === 'angularSize' ? 0 : 1) + planetMetricUnit(metric)
   }
 
-  private planetPairBodyName(body: string): string {
-    if (body === 'Sun') return '太阳'
-    if (body === 'Earth') return '地球'
-    if (body === 'Moon') return '月亮'
-    if (body === 'Mercury') return '水星'
-    if (body === 'Venus') return '金星'
-    if (body === 'Mars') return '火星'
-    if (body === 'Jupiter') return '木星'
-    if (body === 'Saturn') return '土星'
-    if (body === 'Uranus') return '天王星'
-    if (body === 'Neptune') return '海王星'
-    return '冥王星'
-  }
 
   private planetPairBarWidth(): number {
     if (this.astroStore.planetPairDistanceData.length === 0) return 4
@@ -6800,15 +6749,7 @@ export struct WindowNativeNode {
     return Math.max(1, (this.planetPairBarWidth() - 1) / 2)
   }
 
-  private planetPairBarHeight(value: number | undefined, min: number, max: number): number {
-    return Math.max(1, Math.min(96, ((value ?? min) - min) / (max - min) * 96))
-  }
 
-  private planetPairLinearLabel(value: number | undefined): string {
-    const distance: number = value ?? 0
-    if (distance < 0.1) return (distance * 149597871).toFixed(0) + ' km'
-    return distance.toFixed(3) + ' AU'
-  }
 
   private planetPairCurrentIndex(): number {
     return Math.floor(this.astroStore.planetPairDistanceData.length / 2)
@@ -6843,17 +6784,6 @@ export struct WindowNativeNode {
     return orbitVerticalRadius > 0 ? orbitVerticalRadius : this.hecPointDistance(position)
   }
 
-  private hecPointSize(position: HeliocentricPosition): number {
-    if (position.isComet) return 9
-    if (position.isSelectedMinor) return 10
-    if (position.englishName === 'Mercury') return 9
-    if (position.englishName === 'Venus' || position.englishName === 'Earth') return 11
-    if (position.englishName === 'Mars') return 10
-    if (position.englishName === 'Jupiter') return 17
-    if (position.englishName === 'Saturn') return 15
-    if (position.englishName === 'Uranus' || position.englishName === 'Neptune') return 13
-    return 11
-  }
 
   private hecPointX(position: HeliocentricPosition): number {
     const angle = (360 - hecPointAngle(position)) * Math.PI / 180
@@ -6866,11 +6796,11 @@ export struct WindowNativeNode {
   }
 
   private hecPointLeft(position: HeliocentricPosition): number {
-    return this.hecPointX(position) - this.hecPointSize(position) / 2
+    return this.hecPointX(position) - hecPointSize(position) / 2
   }
 
   private hecPointTop(position: HeliocentricPosition): number {
-    return this.hecPointY(position) - this.hecPointSize(position) / 2
+    return this.hecPointY(position) - hecPointSize(position) / 2
   }
 
   private hecPointColor(position: HeliocentricPosition): string {
@@ -6926,7 +6856,7 @@ export struct WindowNativeNode {
           for (const existing of placed) {
             const deltaX = this.hecPointX(candidate) - this.hecPointX(existing)
             const deltaY = this.hecPointY(candidate) - this.hecPointY(existing)
-            const clearance = (this.hecPointSize(candidate) + this.hecPointSize(existing)) / 2 + 2
+            const clearance = (hecPointSize(candidate) + hecPointSize(existing)) / 2 + 2
             if (deltaX * deltaX + deltaY * deltaY < clearance * clearance) {
               collides = true
               break
@@ -6948,9 +6878,6 @@ export struct WindowNativeNode {
     return this.celestialTitle(position.name, position.englishName)
   }
 
-  private hecDistanceLabel(position: HeliocentricPosition): string {
-    return position.distanceAU < 10 ? position.distanceAU.toFixed(3) : position.distanceAU.toFixed(2)
-  }
 
   private isObserverPlanetSelection(name: string): boolean {
     return name.trim().toLowerCase() === this.sessionToolStore.observerPlanet.trim().toLowerCase()
@@ -7028,36 +6955,7 @@ export struct WindowNativeNode {
   }
 
 
-  private astroGroupItems(): Array<TabItem> {
-    return [
-      { label: I18n.t('astro_group_observation'), id: 0 },
-      { label: I18n.t('astro_group_position'), id: 1 },
-      { label: I18n.t('astro_group_events'), id: 2 }
-    ]
-  }
 
-  private astroTabItemsForGroup(group: number): Array<TabItem> {
-    if (group === 1) {
-      return [
-        { label: I18n.t('a0000'), id: 0 },
-        { label: I18n.t('a0001'), id: 1 },
-        { label: I18n.t('a0006'), id: 6 }
-      ]
-    }
-    if (group === 2) {
-      return [
-        { label: I18n.t('a0003'), id: 3 },
-        { label: I18n.t('a0007'), id: 7 },
-        { label: I18n.t('a0008'), id: 8 }
-      ]
-    }
-    return [
-      { label: I18n.t('a0005'), id: 5 },
-      { label: I18n.t('a0002'), id: 2 },
-      { label: I18n.t('a0004'), id: 4 },
-      { label: I18n.t('a0009'), id: 9 }
-    ]
-  }
 
   private publishAstroPanelState(): void {
     AppStorage.setOrCreate('stellariumAstroPanelState', JSON.stringify({
@@ -7091,7 +6989,7 @@ export struct WindowNativeNode {
 
   private selectAstroGroup(group: number): void {
     if (group < 0 || group > 2) return
-    const tabs = this.astroTabItemsForGroup(group)
+    const tabs = astroTabItemsForGroup(group)
     const currentTab = tabs.find((item: TabItem) => item.id === this.astroStore.astroTab)
     this.selectAstroTab(currentTab !== undefined ? currentTab.id : tabs[0].id)
   }
@@ -7185,7 +7083,7 @@ export struct WindowNativeNode {
         detail = this.astroStore.planetTimeSeriesDays.toString() + ' 天 · 每 ' + this.astroStore.planetTimeSeriesStepHours.toString() + ' 小时'
       }
       this.astroStore.astroCalcSnapshot = graphModeLabel(this.astroStore.graphMode) + ' · ' + this.graphTargetLabel() + ' · '
-        + this.graphStartOptionLabel(this.astroStore.graphStartOffsetDays) + ' · ' + detail
+        + graphStartOptionLabel(this.astroStore.graphStartOffsetDays) + ' · ' + detail
       return
     }
     if (this.astroStore.astroTab === 5) {
@@ -7193,8 +7091,8 @@ export struct WindowNativeNode {
       return
     }
     if (this.astroStore.astroTab === 6) {
-      this.astroStore.astroCalcSnapshot = this.astroStore.planetCalcMode === 0 ? '行星实时位置' : this.planetPairBodyName(this.astroStore.planetPairFirst)
-        + ' / ' + this.planetPairBodyName(this.astroStore.planetPairSecond) + ' · ' + this.astroStore.planetPairDays.toString() + ' 天'
+      this.astroStore.astroCalcSnapshot = this.astroStore.planetCalcMode === 0 ? '行星实时位置' : planetPairBodyName(this.astroStore.planetPairFirst)
+        + ' / ' + planetPairBodyName(this.astroStore.planetPairSecond) + ' · ' + this.astroStore.planetPairDays.toString() + ' 天'
       return
     }
     if (this.astroStore.astroTab === 7) {
@@ -17547,9 +17445,7 @@ private loadPlanetPositions(): void {
           annualBarHeight: (altitude: number | undefined) => this.annualBarHeight(altitude),
           annualBarWidth: () => this.annualBarWidth(),
           annualMaxLabel: () => this.annualMaxLabel(),
-          astroGroupItems: () => this.astroGroupItems(),
           astroNeedsSelectedObject: () => this.astroNeedsSelectedObject(),
-          astroTabItemsForGroup: (group: number) => this.astroTabItemsForGroup(group),
           azBarHeight: (azimuth: number | undefined) => this.azBarHeight(azimuth),
           azimuthNowLabel: () => this.azimuthNowLabel(),
           callNative: (name: string, payload?: string) => { this.callNative(name, payload) },
@@ -17568,13 +17464,10 @@ private loadPlanetPositions(): void {
           fmtEphemerisDate: (s: string | undefined) => this.fmtEphemerisDate(s),
           fmtNum: (v: number | undefined, digits: number, suffix: string) => this.fmtNum(v, digits, suffix),
           graphCustomStartLabel: () => this.graphCustomStartLabel(),
-          graphStartOptionLabel: (offsetDays: number) => this.graphStartOptionLabel(offsetDays),
           graphTargetLabel: () => this.graphTargetLabel(),
           hasSelectedObject: () => this.hasSelectedObject(),
-          hecDistanceLabel: (position: HeliocentricPosition) => this.hecDistanceLabel(position),
           hecPointColor: (position: HeliocentricPosition) => this.hecPointColor(position),
           hecPointLeft: (position: HeliocentricPosition) => this.hecPointLeft(position),
-          hecPointSize: (position: HeliocentricPosition) => this.hecPointSize(position),
           hecPointTop: (position: HeliocentricPosition) => this.hecPointTop(position),
           hecTitle: (position: HeliocentricPosition) => this.hecTitle(position),
           jdToDateStr: (jd: string) => this.jdToDateStr(jd),
@@ -17606,7 +17499,6 @@ private loadPlanetPositions(): void {
           loadRtsCalendar: () => { this.loadRtsCalendar() },
           loadTonightAstro: () => { this.loadTonightAstro() },
           loadWutTargets: () => { this.loadWutTargets() },
-          lunarElongationBarHeight: (separation: number | undefined) => this.lunarElongationBarHeight(separation),
           lunarElongationBarWidth: () => this.lunarElongationBarWidth(),
           lunarElongationClosestLabel: () => this.lunarElongationClosestLabel(),
           lunarElongationLineTop: () => this.lunarElongationLineTop(),
@@ -17618,15 +17510,9 @@ private loadPlanetPositions(): void {
           openRtsTargetPicker: () => { this.openRtsTargetPicker() },
           phenomenaBodyName: (body: string) => this.phenomenaBodyName(body),
           phenomenonCaption: (type: string) => this.phenomenonCaption(type),
-          planetMetricLabel: (metric: string) => this.planetMetricLabel(metric),
-          planetMetricUnit: (metric: string) => this.planetMetricUnit(metric),
-          planetPairBarHeight: (value: number | undefined, min: number, max: number) => this.planetPairBarHeight(value, min, max),
           planetPairBarWidth: () => this.planetPairBarWidth(),
-          planetPairBodyName: (body: string) => this.planetPairBodyName(body),
           planetPairCurrentIndex: () => this.planetPairCurrentIndex(),
-          planetPairLinearLabel: (value: number | undefined) => this.planetPairLinearLabel(value),
           planetPairSegmentWidth: () => this.planetPairSegmentWidth(),
-          planetTimeSeriesBarHeight: (value: number | undefined, min: number, max: number) => this.planetTimeSeriesBarHeight(value, min, max),
           planetTimeSeriesBarWidth: () => this.planetTimeSeriesBarWidth(),
           planetTimeSeriesSegmentWidth: () => this.planetTimeSeriesSegmentWidth(),
           planetTimeSeriesValueLabel: (value: number | undefined, metric: string) => this.planetTimeSeriesValueLabel(value, metric),
@@ -17634,7 +17520,6 @@ private loadPlanetPositions(): void {
           publishAstroPanelState: () => { this.publishAstroPanelState() },
           reloadCurrentGraph: () => { this.reloadCurrentGraph() },
           reloadEclipses: () => { this.reloadEclipses() },
-          rtsCalendarDurationLabel: (days: number) => this.rtsCalendarDurationLabel(days),
           rtsCalendarStartOptionLabel: (offsetDays: number) => this.rtsCalendarStartOptionLabel(offsetDays),
           searchObject: (name: string, catalogModuleId?: string, exactSelectionPayload?: string, placement?: string) => { this.searchObject(name, catalogModuleId, exactSelectionPayload, placement) },
           selectAstroFilter: (key: string, value: string) => { this.selectAstroFilter(key, value) },

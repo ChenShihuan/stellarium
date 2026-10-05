@@ -12,8 +12,8 @@ function method(name) {
   assert.ok(begin >= 0, name);
   return source.slice(begin, source.indexOf('\n  }', begin) + 4);
 }
-// Phase A1-2a：astroGroupForTab 已迁到 common/derive/astro.ets，宿主不再有它的 private
-// 方法；从纯函数模块取（通过函数作用域传给 Controller）。
+// Phase A1-2：astroGroupForTab / astroTabItemsForGroup 已迁到 common/derive/astro.ets，
+// 宿主不再有它们的 private 方法；从纯函数模块取（通过函数作用域传给 Controller）。
 const derive = readFileSync(new URL('../harmonyos/ets-source/common/derive/astro.ets', import.meta.url), 'utf8');
 function deriveFn(name) {
   const begin = derive.indexOf('export function ' + name + '(');
@@ -23,9 +23,10 @@ function deriveFn(name) {
 function harness() {
   const code = 'class Controller {\n' + ['selectAstroTab', 'selectAstroGroup', 'selectAstroFilter']
     .map(method).join('\n') + '\n}';
-  const Controller = new Function('Curve', 'astroGroupForTab', stripTypeScriptTypes(code) + '; return Controller;')(
+  const Controller = new Function('Curve', 'astroGroupForTab', 'astroTabItemsForGroup', stripTypeScriptTypes(code) + '; return Controller;')(
     { EaseIn: 'in', EaseOut: 'out' },
-    new Function(deriveFn('astroGroupForTab') + '; return astroGroupForTab;')());
+    new Function(deriveFn('astroGroupForTab') + '; return astroGroupForTab;')(),
+    new Function('I18n', deriveFn('astroTabItemsForGroup') + '; return astroTabItemsForGroup;')({ t: k => k }));
   const controller = new Controller();
   const callbacks = [];
   const animations = [];
@@ -38,7 +39,6 @@ function harness() {
     astroPanelScroller: { scrollTo: () => {} },
     publishAstroPanelState: () => {}, saveAppSettings: () => {},
     loadAstroTab: tab => loads.push(tab), loadWutTargets: () => loads.push('wut'),
-    astroTabItemsForGroup: group => [[5, 2, 4, 9], [0, 1, 6], [3, 7, 8]][group].map(id => ({ id })),
     getUIContext: () => ({ animateTo: (options, update) => {
       animations.push(options);
       update();
