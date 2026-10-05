@@ -47,6 +47,9 @@ export interface StartupHooks {
   setBridgeSyncStarted(value: boolean): void
   selftestEnabled(): boolean
   runSelftest(): void
+  // 启动恢复上次观测点（宿主侧读 preferences + setLocation；本服务不触碰 NAPI/UI）。
+  // 放在启动任务里执行，确保晚于引擎 config 的默认位置（否则会被引擎默认覆盖回北京）。
+  restoreObserverLocation(): void
 }
 
 export class StartupBridge {
@@ -141,6 +144,9 @@ export class StartupBridge {
         }
       }),
       () => this.restoreStartupSettings(),
+      // 观测点恢复放在启动任务里：此时 Qt 核心已就绪、引擎 config 默认位置已加载，
+      // 再推持久化位置才能稳定覆盖（放 aboutToAppear 会早于引擎 config 而被覆盖）。
+      () => this.hooks.restoreObserverLocation(),
       () => this.port.requestWhenReady("setFlatHorizon", "1", (r: StellariumBridgeResponse) => {
         if (r.ok === true) { this.viewSettingsStore.flatHorizon = true }
       }),

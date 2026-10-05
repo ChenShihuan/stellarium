@@ -408,9 +408,19 @@ export interface BookmarksResponse extends StellariumBridgeResponse {
   count?: number
 }
 
+// 观测点持久化记录（LOCATION_STORE）：让 GPS / 选点后的位置跨重启保留，不再回退默认北京。
+export interface ObserverLocationRecord {
+  name: string
+  latitude: number
+  longitude: number
+  altitude: number
+  planet: string
+}
+
 export const BOOKMARK_STORE: string = 'stellarium_bookmarks'
 export const SEARCH_HISTORY_STORE: string = 'stellarium_search_history'
 export const OBSERVING_STORE: string = 'stellarium_observing_list'
+export const LOCATION_STORE: string = 'stellarium_observer_location'
 export const OFFLINE_APPGALLERY_BUILD: boolean = true
 
 
