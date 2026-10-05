@@ -1,3 +1,25 @@
+## [2026-10-02] DevEco Code - Phase 4c：`panelContent` 第三批 5 分支抽组件（more / time / help / meteorshowers / nebulaTextures）
+
+- **范围**：Phase 4 第三批 —— 重扫 `panelContent()` 剩余分支，排除「薄调用既有组件」的 hub 类与 `layers`、`floatingPanel`/`compactPanel`（体内调用 `this.panelContent()`）后，取**最小的 5 个分支**（`more` 62 / `nebulaTextures` 69 / `time` 71 / `meteorshowers` 87 / `help` 95 行）下沉为 `panels/panels/` 组件；判定条件 `activePanel === '<name>'` 仍留宿主；**不做表驱动 `PanelHost`**、**不迁 V2**、不新建 store（展示值 `@Prop` 传入、动作回调注入）。
+- **改动文件**：
+  - 新增 `harmonyos/ets-source/panels/panels/MorePanel.ets`（81 行）、`TimePanel.ets`（127）、`HelpPanel.ets`（114）、`MeteorShowersPanel.ets`（117）、`NebulaTexturesPanel.ets`（115）；
+  - 改 `harmonyos/ets-source/pages/MainWindowNativeNode.ets`（+5 行 import、5 个分支体替换为组件调用），**24,796 → 24,497** 行（净 −299）；同时删除随 UI 下沉后成为死代码的纯助手 `nebulaTextureStatusLabel`。
+- **抽法与注入**：`MorePanel` 用 `@Prop actions: ShellAction[]` + `languageRevision`，是否新分节的判定 `moreActionStartsSection()` 依赖宿主状态，按 §13.1 规则 6 以回调回注。`TimePanel` 组装 5 个 store（`timeWheelStore`/`timeStore`/`equationOfTimeStore`/`julianStore`/`nightModeStore` 走 `@ObjectLink`）+ 7 个既有时间子组件，`this.wheel()` 控制器与手动时间读写回注宿主；顶层 `Column()`（无 space）与原调用点 `Column() { this.panelContent() }` 一致。`HelpPanel` 读 `@ObjectLink tools`（「关于」版本信息实时刷新），「工具与数据」按钮回注 `openSubPanel('tools')`。`MeteorShowersPanel` / `NebulaTexturesPanel` 为 `@Prop` 展示值 + 动作回调；各迁入 1 个纯助手（`fmtIso` / `nebulaTextureStatusLabel`）。`NebulaTexturesPanel` 刻意把可空 `NebulaTextureStatus` 拆成 7 个标志/计数/条目 `@Prop`，避免可空对象整体作 `@Prop`。
+- **成员名雷区规避**：星云/流星开关用 `statusEnabled`/`msEnabled`（避开 `enabled`），分隔线/描边用 `lineColor`/`borderTint`（避开 `borderColor`）。
+- **跳过**：本片 5 个分支体内均无参数化 `@Builder`、均无 `this.panelContent()`，无需按规则换分支。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（6 文件）无错 → `devecocli build`（-SkipEngine）BUILD SUCCESSFUL → `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好 → 全量 `*-ohos*.mjs` 扫描，失败项与 §13.6 存量一致（7 个环境/设备类），另修复 1 个被搬迁打断的脚本。
+- **测试同步**：`verify-ohos-julian-date.mjs` 原断言在单体里找 `JulianDateControls({`，随 `time` 分支下沉改读 `panels/panels/TimePanel.ets`；改后通过。
+- **真机**（`com.cnchensh.stellarium`，Mate 80 Pro `192.168.3.95:40565`，CLI 显式 `--bundle`）：全程 `pidof com.cnchensh.stellarium` = 60183（存活，未崩）。
+  - `more`：点坞栏「更多功能」→ 渲染 `more-action-observeHub` / `more-action-dataHub`（分节标题「工作区」「天体数据与扩展」）；点 dataHub → 面板实时切到「天体数据与扩展」。
+  - `time`：点坞栏「时间」→ 渲染转轴 + 速率档位（倒带/停止/实时/减速/快进）；**点「停止」→ `getTimeInfo().timeRate` 1 秒/秒 → 0，面板副标题即时由「2026-10-02 · 1x」变为「2026-10-02 · 已暂停」**；点「实时」恢复。
+  - `help`：更多 → 滚到底 →「帮助」→ 渲染「关于」（实时读到 `tools.aboutVersion`）+ 手势/快捷操作分节；滚到底点「工具与数据」→ 面板实时切到「工具与数据」。
+  - `meteorshowers`：`openPluginFeature MeteorShowers` 打开；**点「启用流星雨插件」开关：截图裁切对照 ON→OFF（`getMeteorShowers` enabled true→false、列表清空），再点回 ON 恢复（enabled=true、列表 4 条）**。
+  - `nebulaTextures`：`openPluginFeature NebulaTextures` 打开；**点「刷新」→ 面板即时出现状态行「星云纹理已刷新」**（`actionStatus` @Prop 刷新）。
+- **测后恢复**：meteorshowers `enabled` 已点回 true（与初始一致，CLI 回读确认）；nebulaTextures 仅只读刷新（未改设置）；`time` 速率属会话态、未持久化。
+- **本片新踩的坑**：
+  - **PowerShell `String.IndexOf(anchor, minIndex)` 的 `minIndex` 是「字符偏移」而非行号**：误按行号传 18000 去跳过前面的同名分支，结果仍命中文件早段的 `handleUiTap` 分支（行 14689 ≈ 字符 713582 ≫ 18000），一度替换错位置；已回退并用「分支体内唯一 ASCII 起点」重做。
+  - **函数内 `Write-Output` 会混入返回值**：辅助函数在 `return <字符串>` 的同时 `Write-Output` 诊断，使返回值变成数组、下一步 `IndexOf` 全部落空；诊断改用 `Write-Host`。
+  - **`NebulaTextureItem` / `NebulaTextureStatus` 在 `pages/MainWindowModels.ets`，不在 `pages/StellariumTypes.ets`**（与 `MeteorShowerItem` 同处），导入错模块要到构建才报错。
 ## [2026-10-01] DevEco Code - Phase 4b：`panelContent` 次小批次 5 分支抽组件（place / commands / navStars / archaeoLines / mosaicCamera）
 
 - **范围**：Phase 4 第二批 —— 接 Phase 4a，把 `panelContent()` 里**体量次小的 5 个分支**（排除「薄调用既有组件」的 hub 类与 `layers`）下沉为 `panels/panels/` 组件；判定条件 `activePanel === '<name>'` 仍留宿主；**不做表驱动 `PanelHost`**、**不迁 V2**、不新建 store（展示值 `@Prop` 传入、动作回注）。
