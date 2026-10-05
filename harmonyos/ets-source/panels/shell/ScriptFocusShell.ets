@@ -7,10 +7,10 @@ import { ScriptKeyButton } from '../tools/ScriptKeyButton'
 // 脚本焦点播放壳（原宿主无参 @Builder `scriptFocusShell()` 的播放分支，212 行）。
 //
 // 脚本 / 回放进行中覆盖主界面的整屏壳：全屏触摸承接层 + 底部控制条（状态圆点、
-// 标题与文件名、字幕 / 等待提示、速率微调与停止、功能键）。原壳首行还有
-// `if (this.guideState.active) this.interactiveGuideShell()` 的导览分发，因交互导览壳
-// 尚未组件化（规则 9 禁止把宿主 @Builder 经 @BuilderParam 传入子组件），该分发留在
-// 宿主调用点；本组件只承载播放分支。
+// 标题与文件名、字幕 / 等待提示、速率微调与停止、功能键）。相邻的导览分发
+// （`if (this.guideState.active) this.interactiveGuideShell()`）留在宿主：
+// Phase 6d 已将导览壳抽成 `InteractiveGuideShell` 组件，宿主在此按 guideState.active
+// 二选一渲染；本组件只承载播放分支。
 //
 // 脚本状态均为宿主 @State，逐项以 @Prop 传入（简单类型按值下发，宿主改值后重绘即可刷新）；
 // 文案与尺寸由宿主算好（scriptZh / visibleScriptCaptionText / scriptWaitDisplayText /
