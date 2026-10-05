@@ -253,4 +253,9 @@ export class ScriptStore {
   visibleScriptCaptionText(): string {
     return this.visibleScriptCaptions().join('\n')
   }
+
+  // 脚本控制条高度（§14 A2-4，原宿主 scriptControlHeight；只读本 store 的 replaying）。
+  scriptControlHeight(): number {
+    return this.replaying ? 176 : 224
+  }
 }

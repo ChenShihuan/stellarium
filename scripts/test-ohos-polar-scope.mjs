@@ -5,6 +5,7 @@ import test from 'node:test';
 const core = readFileSync(new URL('../src/StelMainView.cpp', import.meta.url), 'utf8');
 const page = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
 const overlay = readFileSync(new URL('../harmonyos/ets-source/panels/overlay/PolarScopeOverlay.ets', import.meta.url), 'utf8');
+const geometry = readFileSync(new URL('../harmonyos/ets-source/common/derive/geometry.ets', import.meta.url), 'utf8');
 const draw = core.slice(core.indexOf('void drawOhosPolarScopeOverlay'), core.indexOf('QString formatLx200Ra'));
 
 test('reticle uses one uncompressed pixel radius and screen-space painting', () => {
@@ -51,6 +52,6 @@ test('floating controls and manual hit routing share width and footer geometry',
 test('hidden shell does not intercept polar-scope sky gestures', () => {
   const uiHit = page.slice(page.indexOf('  private isUiPoint('), page.indexOf('  private handleUiTap('));
   assert.match(uiHit, /polarScopeFooterHeight\(\)[\s\S]*?return true\s*\}\s*return false/);
-  const dockHit = page.slice(page.indexOf('  private isDockPoint('), page.indexOf('  private dockActionAt('));
-  assert.match(dockHit, /if \(this.polarScopeStore.polarScopeVisible\) return false/);
+  const dockHit = geometry.slice(geometry.indexOf('export function isDockPoint('), geometry.indexOf('export function objectActionBarY('));
+  assert.match(dockHit, /if \(polarScopeVisible\) return false/);
 });

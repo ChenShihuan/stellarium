@@ -42,7 +42,7 @@ import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, g
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, normalizeLocationSearchText, officialLocationAliases, sessionSignature } from '../common/derive/actions'
-import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary } from '../common/derive/geometry'
+import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, expandedDetailAvailableWidth, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, objectActionBarY, isObjectDetailCardPoint } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
 import { objectInspectorPlanetTexturePath, objectInspectorPlanetRingSpec, objectInspectorDeepSkyImageName, objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
 import { BridgeClient } from '../bridge/BridgeClient'
@@ -845,7 +845,6 @@ export struct WindowNativeNode {
     const actions = moreActions()
     return actions[index - 1].section !== item.section
   }
-  private railTop(): number { return this.EDGE_MARGIN }
 
   private SELFTEST: boolean = false  // 开发自检：启动即对全部开关跑一次 findAction，验证无死开关。发布前改 false。
 
@@ -2483,13 +2482,6 @@ export struct WindowNativeNode {
     this.goBackPanel()
   }
 
-  private isPanelBackPoint(x: number, y: number): boolean {
-    if (!this.canGoBackPanel()) return false
-    const width = this.isExpandedLayout ? this.panelWidth : this.skyWidth * (this.isFoldHoverLayout ? 0.72 : 0.94)
-    const left = this.isExpandedLayout ? this.panelLeft() : (this.skyWidth - width) / 2
-    const top = this.isExpandedLayout ? this.panelTop() : this.skyHeight - 90 - this.compactPanelHeight()
-    return x >= left - 8 && x <= left + Math.min(width * 0.52, 142) && y >= top - 10 && y <= top + 82
-  }
 
   private goBackPanel(): void {
     let previous = ''
@@ -3201,12 +3193,9 @@ export struct WindowNativeNode {
     return this.tools.recording || this.scriptPlaybackVisible()
   }
 
-  private scriptControlWidth(): number {
-    return Math.max(280, Math.min(this.skyWidth - 24, this.scriptStore.replaying ? 520 : 500))
-  }
 
   private scriptControlCompact(): boolean {
-    return this.scriptControlWidth() < 390
+    return scriptControlWidth(this.skyWidth, this.scriptStore.replaying) < 390
   }
 
   private scriptControlSafeTop(): number {
@@ -3214,16 +3203,7 @@ export struct WindowNativeNode {
     return Math.max(this.EDGE_MARGIN, safeTop + 12)
   }
 
-  private scriptControlX(): number {
-    const maxX = Math.max(8, this.skyWidth - this.scriptControlWidth() - 8)
-    return clamp(12 + this.scriptStore.scriptControlOffsetX, 8, maxX)
-  }
 
-  private scriptControlY(): number {
-    const safeTop = this.scriptControlSafeTop()
-    const maxY = Math.max(safeTop, this.skyHeight - this.scriptControlHeight() - 12)
-    return clamp(safeTop + this.scriptStore.scriptControlOffsetY, safeTop, maxY)
-  }
 
   private handleScriptControlDragTouch(event: TouchEvent): void {
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
@@ -3247,11 +3227,11 @@ export struct WindowNativeNode {
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.scriptControlDragging = false
       if (this.guideStore.guideState.active) {
-        this.scriptStore.scriptControlOffsetX = this.guideCardX() - (this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2)
-        this.scriptStore.scriptControlOffsetY = this.guideCardY() - (this.skyHeight - this.guideCardHeight() - 16)
+        this.scriptStore.scriptControlOffsetX = guideCardX(this.isExpandedLayout, this.skyWidth, this.guideCardWidth(), this.scriptStore.scriptControlOffsetX) - (this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2)
+        this.scriptStore.scriptControlOffsetY = guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY) - (this.skyHeight - guideCardHeight(this.skyHeight, this.scriptControlSafeTop()) - 16)
       } else {
-        this.scriptStore.scriptControlOffsetX = this.scriptControlX() - 12
-        this.scriptStore.scriptControlOffsetY = this.scriptControlY() - this.scriptControlSafeTop()
+        this.scriptStore.scriptControlOffsetX = scriptControlX(this.skyWidth, this.scriptStore.replaying, this.scriptStore.scriptControlOffsetX) - 12
+        this.scriptStore.scriptControlOffsetY = scriptControlY(this.skyHeight, this.scriptControlSafeTop(), this.scriptStore.scriptControlHeight(), this.scriptStore.scriptControlOffsetY) - this.scriptControlSafeTop()
       }
     }
   }
@@ -3409,12 +3389,9 @@ export struct WindowNativeNode {
     })
   }
 
-  private scriptControlHeight(): number {
-    return this.scriptStore.replaying ? 176 : 224
-  }
 
   private scriptKeyButtonWidth(): number {
-    return Math.max(32, Math.min(44, (this.scriptControlWidth() - 49) / 6))
+    return Math.max(32, Math.min(44, (scriptControlWidth(this.skyWidth, this.scriptStore.replaying) - 49) / 6))
   }
 
   // loadScriptList / setScriptMetadata 已下沉 ScriptStore（§14 B2R-4）。
@@ -8045,7 +8022,7 @@ private loadPlanetPositions(): void {
     this.gyroGuideLastUpdateMs = now
 
     const left = this.isExpandedLayout && this.panelVisible
-      ? this.expandedMainPanelLeft() + this.panelWidth + 18
+      ? expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX) + this.panelWidth + 18
       : (this.isExpandedLayout ? this.EDGE_MARGIN + 24 : 18)
     const right = this.isExpandedLayout ? this.skyWidth - this.EDGE_MARGIN : this.skyWidth - 18
     const top = this.isFoldHoverLayout ? 46 : 64
@@ -8758,7 +8735,7 @@ private loadPlanetPositions(): void {
     }
     if (this.gyroStore.gyroscopeEnabled && this.gyroStore.gyroCalibPanelOpen) {
       const calibrationLeft = this.isExpandedLayout ? this.EDGE_MARGIN + 64 : 16
-      const calibrationTop = this.isExpandedLayout ? this.railTop() + 120 : 80
+      const calibrationTop = this.isExpandedLayout ? railTop(this.EDGE_MARGIN) + 120 : 80
       obstacles.push({ label: 'gyro-calibration', left: calibrationLeft - 8, top: calibrationTop - 8,
         right: calibrationLeft + (this.isExpandedLayout ? 320 : Math.min(360, this.skyWidth - 32)) + 8,
         bottom: calibrationTop + 270 })
@@ -9039,22 +9016,22 @@ private loadPlanetPositions(): void {
   private selectedObjectUiObstacles(): SkyUiObstacle[] {
     const obstacles: SkyUiObstacle[] = []
     obstacles.push({
-      label: 'bottom-dock', left: this.dockLeft(), top: this.dockTop(),
-      right: this.dockLeft() + this.dockWidthPixels(), bottom: this.skyHeight
+      label: 'bottom-dock', left: dockLeft(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()), top: this.dockTop(),
+      right: dockLeft(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()) + dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()), bottom: this.skyHeight
     })
     if (this.isExpandedLayout) {
       if (this.panelVisible) {
         obstacles.push({
-          label: 'panel', left: this.expandedMainPanelLeft(), top: this.panelTop(),
-          right: this.expandedMainPanelLeft() + this.panelWidth,
-          bottom: this.panelTop() + this.panelMaxHeight
+          label: 'panel', left: expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX), top: panelTop(this.EDGE_MARGIN, this.panelOffsetY),
+          right: expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX) + this.panelWidth,
+          bottom: panelTop(this.EDGE_MARGIN, this.panelOffsetY) + this.panelMaxHeight
         })
       }
       if (this.infoWindowStore.infoWinVisible) {
         if (useTabletObjectInspector()) {
           obstacles.push({
             label: 'object-inspector', left: this.tabletInspectorX(), top: this.tabletInspectorY(),
-            right: this.tabletInspectorX() + this.tabletInspectorWidth(), bottom: this.tabletInspectorY() + this.tabletInspectorHeight()
+            right: this.tabletInspectorX() + this.tabletInspectorWidth(), bottom: this.tabletInspectorY() + tabletInspectorHeight(this.skyHeight, this.EDGE_MARGIN)
           })
         } else if (useExpandedDetailSummary() && this.canShowExpandedDetailSummary()) {
           obstacles.push({
@@ -9216,7 +9193,7 @@ private loadPlanetPositions(): void {
   }
 
   private expandedSafeTargetPoint(): number[] {
-    const left = this.panelVisible ? this.expandedMainPanelLeft() + this.panelWidth + 18 : this.EDGE_MARGIN + 64
+    const left = this.panelVisible ? expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX) + this.panelWidth + 18 : this.EDGE_MARGIN + 64
     const right = this.panelVisible ? this.skyWidth - this.EDGE_MARGIN
       : (this.infoWindowStore.infoWinVisible ? this.bottomCardX() - 18 : this.skyWidth - this.EDGE_MARGIN)
     let top = this.EDGE_MARGIN + 24
@@ -10284,28 +10261,13 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private panelLeft(): number {
-    // 跟随面板真实位置（含拖动偏移），避免点面板却漏成星图拖拽。
-    // 展开态直接复用渲染用的 expandedMainPanelLeft()，保证命中区与实际绘制位置永远一致
-    // （历史上两者各算各的，右侧 EDGE_MARGIN 留边导致命中区整体偏移）。
-    if (this.isExpandedLayout) {
-      return this.expandedMainPanelLeft()
-    }
-    return this.skyWidth - this.panelWidth + this.panelOffsetX
-  }
 
-  private panelRight(): number {
-    return this.panelLeft() + this.panelWidth
-  }
 
-  private panelTop(): number {
-    return this.EDGE_MARGIN + this.panelOffsetY
-  }
 
   private isUiPoint(x: number, y: number): boolean {
     if (this.guideStore.guideState.active) {
-      return x >= this.guideCardX() && x <= this.guideCardX() + this.guideCardWidth() &&
-        y >= this.guideCardY() && y <= this.guideCardY() + this.guideCardHeight()
+      return x >= guideCardX(this.isExpandedLayout, this.skyWidth, this.guideCardWidth(), this.scriptStore.scriptControlOffsetX) && x <= guideCardX(this.isExpandedLayout, this.skyWidth, this.guideCardWidth(), this.scriptStore.scriptControlOffsetX) + this.guideCardWidth() &&
+        y >= guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY) && y <= guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY) + guideCardHeight(this.skyHeight, this.scriptControlSafeTop())
     }
     if (this.polarScopeStore.polarScopeVisible) {
       const headerTop = this.polarScopeTopInset()
@@ -10322,7 +10284,7 @@ private loadPlanetPositions(): void {
       y >= this.EDGE_MARGIN - 8 && y <= this.EDGE_MARGIN + 58) {
       return true
     }
-    if (this.isDockPoint(x, y)) {
+    if (isDockPoint(x, y, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop())) {
       return true
     }
     if (this.overlayStore.viewCoordinatesVisible) {
@@ -10357,15 +10319,15 @@ private loadPlanetPositions(): void {
         return true
       }
     }
-    if (this.isObjectDetailCardPoint(x, y) || this.isObjectActionBarPoint(x, y)) {
+    if (isObjectDetailCardPoint(x, y, this.isObjectDetailCardRendered(), this.detailCardX(), this.detailCardY(), this.detailCardWidth(), this.detailCardHeight()) || this.isObjectActionBarPoint(x, y)) {
       return true
     }
     if (this.isExpandedLayout) {
       // 浮动面板区域（含 30vp 余量，覆盖圆角/边距，杜绝点面板却拖星图）
       if (this.panelVisible) {
-        const pl = this.panelLeft()
-        const pr = this.panelRight()
-        const pt = this.panelTop()
+        const pl = panelLeft(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
+        const pr = panelRight(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
+        const pt = panelTop(this.EDGE_MARGIN, this.panelOffsetY)
         if (x >= pl - 30 && x <= pr + 30 && y >= pt - 30 && y <= pt + this.panelMaxHeight + 30) {
           return true
         }
@@ -10420,10 +10382,10 @@ private loadPlanetPositions(): void {
 		      return false
 		    }
 
-    const left = this.panelLeft()
-    const top = this.panelTop()
-    const right = this.panelRight()
-    if (this.isPanelBackPoint(x, y)) {
+    const left = panelLeft(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
+    const top = panelTop(this.EDGE_MARGIN, this.panelOffsetY)
+    const right = panelRight(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
+    if (isPanelBackPoint(x, y, this.canGoBackPanel(), this.isExpandedLayout, this.isFoldHoverLayout, this.panelWidth, this.skyWidth, this.skyHeight, this.compactPanelHeight(), this.panelOffsetX, this.panelOffsetY, this.EDGE_MARGIN)) {
       this.handlePanelBackTap()
       return true
     }
@@ -10798,9 +10760,9 @@ private loadPlanetPositions(): void {
       const downY = touchWindowY(points[0])
       // Panel header drag detection (before isUiPoint sidebar check)
       if (this.panelVisible) {
-        const pl = this.panelLeft()
-        const pr = this.panelRight()
-        const pt = this.panelTop()
+        const pl = panelLeft(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
+        const pr = panelRight(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
+        const pt = panelTop(this.EDGE_MARGIN, this.panelOffsetY)
         if (downX >= pl && downX <= pr && downY >= pt && downY <= pt + 48) {
           this.panelDragging = true
           this.panelDragStartX = downX
@@ -10827,7 +10789,7 @@ private loadPlanetPositions(): void {
         }
         return
       }
-      if (this.isDockPoint(downX, downY)) {
+      if (isDockPoint(downX, downY, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop())) {
         this.resetSkyTapSequence()
         this.dockTouchActive = true
         this.touchStartedOnUi = true
@@ -11201,9 +11163,9 @@ private loadPlanetPositions(): void {
             guideStepText: this.currentGuideStep().text,
             guideStepKey: this.currentGuideStep().target,
             cardWidth: this.guideCardWidth(),
-            cardHeight: this.guideCardHeight(),
-            cardX: this.guideCardX(),
-            cardY: this.guideCardY(),
+            cardHeight: guideCardHeight(this.skyHeight, this.scriptControlSafeTop()),
+            cardX: guideCardX(this.isExpandedLayout, this.skyWidth, this.guideCardWidth(), this.scriptStore.scriptControlOffsetX),
+            cardY: guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY),
             onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
             onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
             onAction: (action: string) => { this.executeGuideRequest('guideAction', action) }
@@ -11219,10 +11181,10 @@ private loadPlanetPositions(): void {
             waitText: this.scriptStore.scriptWaitDisplayText(),
             rateText: (this.scriptStore.replaying ? this.scriptStore.replayRate : this.scriptStore.scriptRate).toFixed((this.scriptStore.replaying ? this.scriptStore.replayRate : this.scriptStore.scriptRate) < 1 ? 2 : 1) + 'x',
             keyButtonWidth: this.scriptKeyButtonWidth(),
-            controlWidth: this.scriptControlWidth(),
-            controlHeight: this.scriptControlHeight(),
-            controlX: this.scriptControlX(),
-            controlY: this.scriptControlY(),
+            controlWidth: scriptControlWidth(this.skyWidth, this.scriptStore.replaying),
+            controlHeight: this.scriptStore.scriptControlHeight(),
+            controlX: scriptControlX(this.skyWidth, this.scriptStore.replaying, this.scriptStore.scriptControlOffsetX),
+            controlY: scriptControlY(this.skyHeight, this.scriptControlSafeTop(), this.scriptStore.scriptControlHeight(), this.scriptStore.scriptControlOffsetY),
             onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
             onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
             onContinue: () => { this.continueNativeScript() },
@@ -11359,13 +11321,13 @@ private loadPlanetPositions(): void {
                 skyHeight: this.skyHeight,
                 polarScopeVisible: this.polarScopeStore.polarScopeVisible,
                 dockClockText: this.dockClockText,
-                dockWidth: this.dockWidthPixels(),
-                dockLeft: this.dockLeft(),
+                dockWidth: dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()),
+                dockLeft: dockLeft(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()),
                 dockTop: this.dockTop(),
-                expandedDockWidth: this.expandedDockWidth(),
-                expandedDockLeft: this.expandedDockLeft(),
+                expandedDockWidth: expandedDockWidth(this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN),
+                expandedDockLeft: expandedDockLeft(this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN),
                 gyroPanelLeft: this.EDGE_MARGIN + 64,
-                gyroPanelTop: this.railTop() + 120,
+                gyroPanelTop: railTop(this.EDGE_MARGIN) + 120,
                 infoWinVisible: this.infoWindowStore.infoWinVisible,
                 bottomCardIndex: this.objectDetailStore.bottomCardIndex,
                 liveInfoVisible: this.infoWindowStore.selectedLiveInfoVisible(),
@@ -11419,9 +11381,9 @@ private loadPlanetPositions(): void {
                 onZoomOut: () => { this.zoomStep(1.25) },
                 fovText: this.currentFovText,
                 chromeRowY: this.chromeRowY(),
-                chromeRowWidth: this.chromeRowWidth(),
-                chromeRowPosXLeft: this.chromeRowPosXLeft(),
-                chromeRowPosXRight: this.chromeRowPosXRight(),
+                chromeRowWidth: dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()),
+                chromeRowPosXLeft: chromeRowPosXLeft(this.isExpandedLayout, this.EDGE_MARGIN, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()),
+                chromeRowPosXRight: chromeRowPosXRight(this.isExpandedLayout, this.skyWidth, this.EDGE_MARGIN, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()),
                 chromeZoomHorizontal: this.chromeZoomHorizontal(),
                 onFlashHint: (text: string) => { this.flashHint(text) },
                 onCalibrate: () => { this.calibrateGyroscope() },
@@ -11448,7 +11410,7 @@ private loadPlanetPositions(): void {
                 Stack({ alignContent: Alignment.TopStart }) { this.floatingPanel() }
                   .width(this.panelWidth)
                   .height(this.panelMaxHeight)
-                  .position({ x: this.expandedMainPanelLeft(), y: this.panelTop() })
+                  .position({ x: expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX), y: panelTop(this.EDGE_MARGIN, this.panelOffsetY) })
                   // Default keeps the panel above the sibling sky surface while still
                   // letting its deepest child (Button, Slider, Scroll, TextInput) own
                   // the gesture. Block would stop those controls at this outer shell.
@@ -11481,8 +11443,8 @@ private loadPlanetPositions(): void {
                 dockLabelFontSize: this.compactDockLabelFontSize(),
                 dockItemHeight: this.compactDockItemHeight(),
                 dockClockText: this.dockClockText,
-                dockWidth: this.dockWidthPixels(),
-                dockLeft: this.dockLeft(),
+                dockWidth: dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()),
+                dockLeft: dockLeft(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()),
                 dockTop: this.dockTop(),
                 musicEnabled: this.audioStore.musicEnabled,
                 compactQuickPressed: this.compactQuickPressed,
@@ -11541,9 +11503,9 @@ private loadPlanetPositions(): void {
                 onZoomOut: () => { this.zoomStep(1.25) },
                 fovText: this.currentFovText,
                 chromeRowY: this.chromeRowY(),
-                chromeRowWidth: this.chromeRowWidth(),
-                chromeRowPosXLeft: this.chromeRowPosXLeft(),
-                chromeRowPosXRight: this.chromeRowPosXRight(),
+                chromeRowWidth: dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()),
+                chromeRowPosXLeft: chromeRowPosXLeft(this.isExpandedLayout, this.EDGE_MARGIN, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()),
+                chromeRowPosXRight: chromeRowPosXRight(this.isExpandedLayout, this.skyWidth, this.EDGE_MARGIN, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()),
                 chromeZoomHorizontal: this.chromeZoomHorizontal(),
                 onGyro: () => {
                   hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
@@ -11597,9 +11559,9 @@ private loadPlanetPositions(): void {
           // intentionally blocks gestures, so relying on the visual Dock's child
           // handlers lets tablet touches be intercepted before they reach it.
           Stack() { }
-            .width(this.dockWidthPixels())
+            .width(dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()))
             .height(this.isExpandedLayout ? 62 : 82)
-            .position({ x: this.dockLeft(), y: this.dockTop() })
+            .position({ x: dockLeft(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()), y: this.dockTop() })
             .hitTestBehavior(HitTestMode.Block)
             .zIndex(80)
             .onTouch((event: TouchEvent) => {
@@ -11848,14 +11810,6 @@ private loadPlanetPositions(): void {
 
   private currentGuideStep(): GuideStep { return this.currentGuide().steps[this.guideStore.guideState.index] }
   private guideCardWidth(): number { return Math.max(200, Math.min(440, this.skyWidth - 24)) }
-  private guideCardHeight(): number { return Math.max(160, Math.min(390, this.skyHeight - this.scriptControlSafeTop() - 24)) }
-  private guideCardX(): number {
-    return clamp((this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2) + this.scriptStore.scriptControlOffsetX, 8, Math.max(8, this.skyWidth - this.guideCardWidth() - 8))
-  }
-  private guideCardY(): number {
-    return clamp(this.skyHeight - this.guideCardHeight() - 16 + this.scriptStore.scriptControlOffsetY,
-      this.scriptControlSafeTop(), Math.max(this.scriptControlSafeTop(), this.skyHeight - this.guideCardHeight() - 12))
-  }
 
   /**
    * 手机端右上角常驻快捷区：陀螺仪 + 音频控制。
@@ -11887,8 +11841,8 @@ private loadPlanetPositions(): void {
     const rowY = this.chromeRowY()
     const inTop = chromeZoomButtonTop(rowY, horizontal, 0)
     const outTop = chromeZoomButtonTop(rowY, horizontal, 1)
-    const inLeft = chromeZoomButtonLeft(this.chromeRowPosXLeft(), horizontal, 0)
-    const outLeft = chromeZoomButtonLeft(this.chromeRowPosXLeft(), horizontal, 1)
+    const inLeft = chromeZoomButtonLeft(chromeRowPosXLeft(this.isExpandedLayout, this.EDGE_MARGIN, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()), horizontal, 0)
+    const outLeft = chromeZoomButtonLeft(chromeRowPosXLeft(this.isExpandedLayout, this.EDGE_MARGIN, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()), horizontal, 1)
     const within = (v: number, start: number): boolean => v >= start && v <= start + CHROME_ZOOM_BUTTON_SIZE
     if (horizontal) {
       // 横排两枚按钮同一行、左右并排，靠 x 区分。
@@ -12016,21 +11970,13 @@ private loadPlanetPositions(): void {
 
   // ── 顶部搜索栏（中等宽度，点击打开搜索面板） ──
   private bottomCardX(): number {
-    const base = this.baseBottomCardX()
+    const base = baseBottomCardX(this.isExpandedLayout, this.isFoldHoverLayout, this.skyWidth, this.EDGE_MARGIN, this.bottomCardWidth())
     return base + this.clampedObjectCardOffsetX(base, this.bottomCardWidth())
   }
 
-  private baseBottomCardX(): number {
-    if (!this.isExpandedLayout && !this.isFoldHoverLayout) { return 16 }
-    if (!this.isExpandedLayout) { return Math.max(24, (this.skyWidth - this.bottomCardWidth()) / 2) }
-    // The detail card is a freely placed window. Its base geometry must not
-    // depend on whether another panel is open, otherwise the card jumps when
-    // the bottom Dock changes the surrounding layout.
-    return Math.max(this.EDGE_MARGIN + 92, this.skyWidth - this.bottomCardWidth() - this.EDGE_MARGIN + 16)
-  }
 
   private bottomCardY(): number {
-    const base = this.baseBottomCardY()
+    const base = baseBottomCardY(this.isExpandedLayout, this.skyHeight, this.EDGE_MARGIN)
     return base + this.clampedObjectCardOffsetY(base, this.bottomCardHeight())
   }
 
@@ -12050,12 +11996,6 @@ private loadPlanetPositions(): void {
     return this.bottomCardHeight()
   }
 
-  private baseBottomCardY(): number {
-    // Keep the selected target in the visual centre. Full details live in the
-    // upper safe area, leaving the lower half of the sky visible for the lock
-    // marker and for direct sky interaction.
-    return this.isExpandedLayout ? Math.max(this.EDGE_MARGIN + 76, 92) : Math.max(86, Math.min(126, this.skyHeight * 0.12))
-  }
 
   private clampedObjectCardOffsetX(base: number, width: number): number {
     return clamp(this.cardOffsetX, 8 - base, this.skyWidth - width - 8 - base)
@@ -12079,41 +12019,28 @@ private loadPlanetPositions(): void {
     return clamp(this.skyHeight * 0.56, 320, 420)
   }
 
-  private expandedMainPanelLeft(): number {
-    return this.EDGE_MARGIN + this.panelOffsetX
-  }
 
-  private expandedDetailAvailableWidth(): number {
-    const detailLeft = this.expandedMainPanelLeft() + this.panelWidth + 18
-    return this.skyWidth - this.EDGE_MARGIN - detailLeft
-  }
 
   private expandedDetailSummaryWidth(): number {
-    return clamp(this.expandedDetailAvailableWidth(), 140, 300)
+    return clamp(expandedDetailAvailableWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN), 140, 300)
   }
 
   private canShowExpandedDetailSummary(): boolean {
-    return this.expandedDetailAvailableWidth() >= 140
+    return expandedDetailAvailableWidth(this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN) >= 140
   }
 
   private expandedDetailSummaryX(): number {
-    const base = this.baseExpandedDetailSummaryX()
+    const base = baseExpandedDetailSummaryX(this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
     return base + this.clampedObjectCardOffsetX(base, this.expandedDetailSummaryWidth())
   }
 
-  private baseExpandedDetailSummaryX(): number {
-    return this.expandedMainPanelLeft() + this.panelWidth + 18
-  }
 
   private expandedDetailSummaryY(): number {
     // 上移：原先 +84 使小详情卡偏中，遮挡视野中心；贴近顶部留出更多星空可视区
-    const base = this.baseExpandedDetailSummaryY()
+    const base = baseExpandedDetailSummaryY(this.EDGE_MARGIN)
     return base + this.clampedObjectCardOffsetY(base, expandedDetailSummaryHeight())
   }
 
-  private baseExpandedDetailSummaryY(): number {
-    return Math.max(this.EDGE_MARGIN + 16, 48)
-  }
 
   // 平板检查器固定贴在左侧：保留大部分星图，并给底部 Dock 留出触控空间。
   private tabletInspectorWidth(): number {
@@ -12121,26 +12048,17 @@ private loadPlanetPositions(): void {
   }
 
   private tabletInspectorX(): number {
-    const base = this.baseTabletInspectorX()
+    const base = baseTabletInspectorX(this.EDGE_MARGIN)
     return base + this.clampedObjectCardOffsetX(base, this.tabletInspectorWidth())
   }
 
-  private baseTabletInspectorX(): number {
-    return this.EDGE_MARGIN + 12
-  }
 
   private tabletInspectorY(): number {
-    const base = this.baseTabletInspectorY()
-    return base + this.clampedObjectCardOffsetY(base, this.tabletInspectorHeight())
+    const base = baseTabletInspectorY(this.EDGE_MARGIN)
+    return base + this.clampedObjectCardOffsetY(base, tabletInspectorHeight(this.skyHeight, this.EDGE_MARGIN))
   }
 
-  private baseTabletInspectorY(): number {
-    return Math.max(this.EDGE_MARGIN + 56, 58)
-  }
 
-  private tabletInspectorHeight(): number {
-    return Math.max(360, this.skyHeight - this.baseTabletInspectorY() - 84)
-  }
 
   private showObjectActionBar(): boolean {
     return false
@@ -12158,18 +12076,11 @@ private loadPlanetPositions(): void {
     return this.bottomCardWidth()
   }
 
-  private objectActionBarY(): number {
-    let cardY = this.bottomCardY()
-    if (useExpandedDetailSummary()) { cardY = this.expandedDetailSummaryY() }
-    if (isPhoneDetailPeek()) { cardY = this.compactObjectPeekY() }
-    if (this.isFoldHoverLayout && !useExpandedDetailSummary()) { cardY = this.hoverBottomCardY() }
-    return Math.max(8, cardY - 44)
-  }
 
   private isObjectActionBarPoint(x: number, y: number): boolean {
     if (!this.showObjectActionBar()) { return false }
     const left = this.objectActionBarX()
-    const top = this.objectActionBarY()
+    const top = objectActionBarY(this.bottomCardY(), this.expandedDetailSummaryY(), this.compactObjectPeekY(), this.hoverBottomCardY(), this.isFoldHoverLayout)
     return x >= left - 8 && x <= left + this.objectActionBarWidth() + 8 && y >= top - 8 && y <= top + 42
   }
 
@@ -12184,13 +12095,6 @@ private loadPlanetPositions(): void {
     return this.infoWindowStore.infoWinVisible && this.objectDetailStore.selectedName.length > 0
   }
 
-  private isObjectDetailCardPoint(x: number, y: number): boolean {
-    if (!this.isObjectDetailCardRendered()) { return false }
-    const left = this.detailCardX()
-    const top = this.detailCardY()
-    return x >= left - 8 && x <= left + this.detailCardWidth() + 8 &&
-      y >= top - 8 && y <= top + this.detailCardHeight() + 8
-  }
 
   private handleExpandedDetailSummaryTap(x: number, y: number): boolean {
     if (!this.isExpandedDetailSummaryPoint(x, y)) { return false }
@@ -12277,8 +12181,8 @@ private loadPlanetPositions(): void {
     }
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.objectCardDragging = false
-      const baseX = this.baseBottomCardX()
-      const baseY = this.isFoldHoverLayout ? this.baseHoverBottomCardY() : this.baseBottomCardY()
+      const baseX = baseBottomCardX(this.isExpandedLayout, this.isFoldHoverLayout, this.skyWidth, this.EDGE_MARGIN, this.bottomCardWidth())
+      const baseY = this.isFoldHoverLayout ? this.baseHoverBottomCardY() : baseBottomCardY(this.isExpandedLayout, this.skyHeight, this.EDGE_MARGIN)
       const width = this.detailCardWidth()
       const height = this.detailCardHeight()
       this.cardOffsetX = this.clampedObjectCardOffsetX(baseX, width)
@@ -12389,20 +12293,8 @@ private loadPlanetPositions(): void {
     return this.dockTop() - 48
   }
 
-  private chromeRowWidth(): number {
-    return this.dockWidthPixels()
-  }
 
-  private chromeRowPosXLeft(): number {
-    return this.isExpandedLayout ? this.EDGE_MARGIN : this.dockLeft()
-  }
 
-  private chromeRowPosXRight(): number {
-    if (this.isExpandedLayout) {
-      return this.skyWidth - this.EDGE_MARGIN - this.dockWidthPixels()
-    }
-    return this.dockLeft()
-  }
 
   // 竖排（手机·半折，列高 96）还是横排（平板，一行 44 高）：平板 dock 只有 54 高，
   // 96 高的竖排压在它上方过于突兀，横排更贴近平板的工具条语汇。
@@ -12410,24 +12302,8 @@ private loadPlanetPositions(): void {
     return this.isExpandedLayout
   }
 
-  private expandedDockOccupiedLeft(): number {
-    if (this.panelVisible) {
-      return this.expandedMainPanelLeft() + this.panelWidth + 16
-    }
-    return this.EDGE_MARGIN
-  }
 
-  private expandedDockWidth(): number {
-    const right = this.EDGE_MARGIN
-    const available = Math.max(280, this.skyWidth - this.expandedDockOccupiedLeft() - right)
-    const squeeze = Math.max(0, this.expandedDockOccupiedLeft() - this.EDGE_MARGIN)
-    return clamp(640 - squeeze * 0.55, 320, Math.min(640, available))
-  }
 
-  private expandedDockLeft(): number {
-    const available = Math.max(280, this.skyWidth - this.expandedDockOccupiedLeft() - this.EDGE_MARGIN)
-    return this.expandedDockOccupiedLeft() + Math.max(0, (available - this.expandedDockWidth()) / 2)
-  }
 
   private compactDockWidthPercent(): number {
     if (this.isFoldHoverLayout) {
@@ -12452,40 +12328,23 @@ private loadPlanetPositions(): void {
     return this.isFoldHoverLayout ? 14 : 18
   }
 
-  private dockWidthPixels(): number {
-    return this.isExpandedLayout ? this.expandedDockWidth() : this.skyWidth * this.compactDockWidthPercent() / 100
-  }
 
-  private dockLeft(): number {
-    if (this.isExpandedLayout) {
-      return this.expandedDockLeft()
-    }
-    return Math.max(0, (this.skyWidth - this.dockWidthPixels()) / 2)
-  }
 
   private dockTop(): number {
     return this.isExpandedLayout ? this.skyHeight - 62 : this.skyHeight - 82
   }
 
-  private isDockPoint(x: number, y: number): boolean {
-    if (this.polarScopeStore.polarScopeVisible) return false
-    const left = this.dockLeft()
-    const right = left + this.dockWidthPixels()
-    const top = this.dockTop()
-    const bottom = this.skyHeight
-    return x >= left - 8 && x <= right + 8 && y >= top - 8 && y <= bottom
-  }
 
   private dockActionAt(x: number, y: number): ShellAction | null {
-    if (!this.isDockPoint(x, y)) {
+    if (!isDockPoint(x, y, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop())) {
       return null
     }
     const actions = this.canonicalDockActions()
     if (actions.length === 0) {
       return null
     }
-    const usableLeft = this.dockLeft() + 4
-    const usableWidth = Math.max(1, this.dockWidthPixels() - 8)
+    const usableLeft = dockLeft(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()) + 4
+    const usableWidth = Math.max(1, dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()) - 8)
     const itemWidth = usableWidth / actions.length
     const index = Math.floor((x - usableLeft) / itemWidth)
     return index >= 0 && index < actions.length ? actions[index] : null
@@ -12519,7 +12378,7 @@ private loadPlanetPositions(): void {
     if (event.type === TouchType.Down) {
       this.dockTouchActive = true
       this.stopSkyInertia()
-      hilog.info(0x0000, 'StellariumArkUI', '[DOCK] down screen=%{public}d,%{public}d left=%{public}d top=%{public}d width=%{public}d', Math.round(x), Math.round(y), Math.round(this.dockLeft()), Math.round(this.dockTop()), Math.round(this.dockWidthPixels()))
+      hilog.info(0x0000, 'StellariumArkUI', '[DOCK] down screen=%{public}d,%{public}d left=%{public}d top=%{public}d width=%{public}d', Math.round(x), Math.round(y), Math.round(dockLeft(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent())), Math.round(this.dockTop()), Math.round(dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent())))
       return
     }
     if (event.type === TouchType.Up) {
@@ -13408,7 +13267,7 @@ private loadPlanetPositions(): void {
   // 底部详情卡片触摸交互：只处理头部关闭按钮，
   // Swiper body 区域返回 false，让 Swiper 自身手势系统处理水平滑动。
   private handleInfoWinTap(x: number, y: number): boolean {
-    if (!this.isObjectDetailCardPoint(x, y)) { return false }
+    if (!isObjectDetailCardPoint(x, y, this.isObjectDetailCardRendered(), this.detailCardX(), this.detailCardY(), this.detailCardWidth(), this.detailCardHeight())) { return false }
     const bcX = this.detailCardX()
     const bcY = this.detailCardY()
     const bcW = this.detailCardWidth()
@@ -13578,7 +13437,7 @@ private loadPlanetPositions(): void {
         PadPanelHandle()
       }
       PanelHeader({
-        title: this.panelTitle(), subtitle: this.panelSubtitle(), canGoBack: this.canGoBackPanel(),
+        title: this.panelTitle(), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
         routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
         onBack: () => { this.handlePanelBackTap() },
         onClose: () => { this.closePanel(true); this.resetPanelIdle() }
@@ -13633,7 +13492,7 @@ private loadPlanetPositions(): void {
     Column() {
       PanelHandle({ onDrag: (offsetY: number) => { this.updateCompactPanelDrag(offsetY) }, onDragFinish: () => { this.settleCompactPanelDrag() } })
       PanelHeader({
-        title: this.panelTitle(), subtitle: this.panelSubtitle(), canGoBack: this.canGoBackPanel(),
+        title: this.panelTitle(), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
         routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
         onBack: () => { this.handlePanelBackTap() },
         onClose: () => { this.closePanel(true); this.resetPanelIdle() }
@@ -14833,12 +14692,6 @@ private loadPlanetPositions(): void {
     return I18n.t('i0101')
   }
 
-  private panelSubtitle(): string {
-    if (this.activePanel === 'time') {
-      return this.timeStore.timePanelDateText()
-    }
-    return ''
-  }
 
   /** 面板标题行的时分秒：从 timeStore.observationTimeText 拆出第一个空格之后的部分。 */
   /** 面板副标题行的年月日（附带当前时间速率）。 */
