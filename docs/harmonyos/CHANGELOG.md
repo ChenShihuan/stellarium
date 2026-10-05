@@ -1,3 +1,21 @@
+## [2026-10-04] DevEco Code - 真机验证：§2.7 状态下沉 + §14 方法下沉 全链回归
+
+**设备**：HUAWEI Mate 80 Pro（`192.168.50.108:36717`），HEAD `5ea945005f`，`BUILD SUCCESSFUL`（708.7 MB signed HAP）。全程无 jscrash / ArkTS error。
+
+1. **桥链路**：语义 CLI `--batch` 跑 63 个 `get*` 命令 → 52 直接 OK；补选天体后再跑 17 个 → 15 OK（合计 **67/70**）。3 个 "ERR" 均属正常前置：`getAstroPanelState` 需先开面板、`getObjectInfo` 需先选天体、M31 无模型合约。
+2. **store 渲染（31 个面板逐个 `openUiPanel` + `ui layout` 核对真实数据）**：satellites（离线内置轨道数据）、navStars（**57 颗·英美航海星**）、catalogs（**已加载 8/8**）、search（天体分类/目录天体）、scripts（5 个观测站点）、audio（音量 70%）、scenery3d（Testscene）、mosaicCamera（LSSTCam/DECam）、commands（358 命令目录）、nebulaTextures、skyCultureMaker、tools、settings×4、help、place（北京 39.91°N/116.40°E）、observing、bookmarks、oculars、telescope、polarScope（极星时角/分划钟面实时值）、layers、time、more/observeHub/dataHub/automationHub —— **全部渲染正确**，`pidof` 全程稳定。
+3. **astro 面板**：3 组 × 各 tab 切换正确（今晚/升降/图表/月相｜星历/行星｜天象/日食/年历），`getAstroPanelState` 状态与 transitionId 正常；选中 M31 后图表 tab 渲染「实时高度 / 方位」与详情卡（仙女座星系·星等 3.40·距离 2.54 M ly）。
+4. **夜视配色**（A2-5 的 12 个 `nm*` 迁入 `NightModeStore`）：`setNightMode` 开/关，三处采样区平均像素一致呈现"蓝通道降幅约为红 2 倍"（dock 区 18,20,26 → 16,17,20；面板顶 21,26,37 → 20,24,33），符合夜视"减蓝保红"。
+5. **热路径命中（真机点击实测）**：`#skyZoomInButton` FOV 60→48→38.4、`#skyZoomOutButton` →48.0；dock 五项（`Column` 命中带 y 2578–2771 全覆盖）开面板；`#panel-close` 关闭、`#panel-back` 从子面板返回 hub；星空拖拽水平（方位 103.6→127.6→149.6）与竖直（高度 66.6→59.1）均生效。
+6. **定时器收敛**（B3-4 store 自持 start/stop）：望远镜 live-position 开 → 5s 内 25 条 `getTelescopePosition`；关 → **0**；关面板 → **0**（无泄漏）。
+
+**观察项（非阻塞）**
+- **极速连开面板**（约 30s 内 15+ 次 `openUiPanel` 并夹 `ui layout`）下出现过 **2 次进程重启**（`pidof` 一度为空随后自动重启；无 jscrash；`/data/log/faultlog` 无权限读取）。改为**节制节奏**（间隔 2–3s）后连续 30+ 面板/命令**零重启**；`setNightMode`/`setPolarScopeOverlay` 叠加下未复现（该组合单独复现亦未重现）。判定为**压力型偶发**，建议后续在真机补一条"高频面板切换"压测观察项。
+- 已知既有行为（非本次引入）：程序化状态变更（`closeUiPanel`/`clearSelection`）后的**首次触摸被消费**（dock 首点不生效、首次水平拖拽不生效，第二次即正常）——与历史记录一致。
+- 现场已恢复：FOV 60、夜视关、望远镜 live 关、面板关闭。
+
+**结论**：§2.7 状态下沉（48 store）与 §14 方法下沉（宿主 `private` 942→594、`load*` 72→3、单体 18,582→14,347 行）在真机上**功能无回归**；模拟器（无引擎）无法覆盖的桥数据链路与命中精度已全部补齐验证。
+
 ## [2026-10-04] DevEco Code - 重构：§14 A2-6 A2 收尾（热路径 + 残留）
 
 - **切片**：§14 轨道 A2 收尾片（§14.3.1 表 A2-6 行）。开工 `git log -1` = `17847e68e4`（A2-5），`git status --porcelain` 已跟踪文件干净（仅 `.deveco/`、`.iis/` 未跟踪）。
