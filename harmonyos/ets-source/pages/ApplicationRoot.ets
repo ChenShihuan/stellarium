@@ -21,6 +21,12 @@ struct ApplicationRoot {
   aboutToAppear(): void {
     AppStorage.setOrCreate('i18nLang', I18n.systemLanguage())
     this.onLanguageChanged()
+    // Dismiss the startup layer when the sky/art gates are already open by the
+    // time this page mounts (warm restart, or a UI-only run that releases the
+    // gates before the page is constructed): @Watch only fires on later changes,
+    // so without this the loading layer would stay on top forever. No-op while
+    // the gates are still false, which is the normal cold-start path.
+    this.onSkyReady()
   }
 
   private onLanguageChanged(): void {

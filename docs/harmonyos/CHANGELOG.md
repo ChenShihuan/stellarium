@@ -1,3 +1,15 @@
+## [2026-09-30] DevEco Code - 新增 x86_64 模拟器「仅界面」调试通道（debug-only）
+
+- **修改文件：** `harmonyos/ets-source/qability/QAbility.ets`、`harmonyos/ets-source/pages/ApplicationRoot.ets`（镜像；经 `scripts/sync-ohos-build-sources.sh` 同步到生成工程，生成目录不入库）、`docs/harmonyos/CHANGELOG.md`。
+- **背景（用户要求）：** 现有 Mate 80 Pro 真机之外，需要一条在 Windows 上跑 Pura 手机模拟器、只验证 ArkUI 界面（布局/文案/交互）而不依赖 Stellarium/Qt 引擎的通道。实测该模拟器此前无法启动（内存/摄像头），且应用即使能启动也被两道门控挡住。
+- **修改内容（QAbility.ets）：** ① 新增文件作用域判定 `engineLessEmulatorUiOnly()`：`BuildProfile.DEBUG && deviceInfo.productModel === 'emulator' && deviceInfo.abiList.includes('x86_64')`；② 新增私有方法 `releaseUiOnlyStartupGates()`，按序放开四个启动门控键（`stellariumPrivacyNativeStartupAllowed` → `stellariumQtContentReady` → `stellariumStartupSkyReady` → `stellariumStartupArtComplete`）；③ 在 `preparePrivacyHostPage()` 中 `loadContent('pages/ApplicationRoot')` 与 `rootContentLoaded = true` 之后调用它；④ 新增导入 `@ohos.deviceInfo`、`BuildProfile`。
+- **修改内容（ApplicationRoot.ets）：** `aboutToAppear()` 末尾补 `this.onSkyReady()` —— 启动门控若在页面挂载前就已放开，`@Watch` 不会触发，加载层会永久盖住界面；该调用在门控仍为 false 时立即返回，冷启动路径行为不变。
+- **安全边界：** 条件在真机与 release 包上恒为假（`productModel` 仅模拟器为 `emulator`，`DEBUG` 仅 debug 包为 true，引擎库只随 `entry/libs/arm64-v8a` 发布），因此发布链路不受影响；模拟器星图区域全黑属预期（`libstellarium.so`/`libQt6*.so` 无 x86_64 构建，native 桥回退为 `bridge not available`）。
+- **模拟器本机配置调整（仅本机，不涉及仓库）：** Pura 90 Pro 实例 `hw.ramSize` 4096→3072（`config.ini` + `hardware-qemu.ini`），镜像 `features.ini` 的 `camera.feature` / `camera.front.back.enable` 改为 `off`；三处均已备份为 `*.deveco-bak`。原因：崩溃包 `detail.txt` 显示崩溃时宿主仅剩 4,713 MB 空闲而 guest 需 4 GB；09-28 那次模拟器自检直接报 `"Commit charge is not enough!"`；且崩溃前 0.6 s 刚打开宿主摄像头。
+- **构建结果：** 两次 `BUILD SUCCESSFUL`（31 s 831 ms / 32 s 56 ms，`scripts/build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources`，默认 debug 模式），签名 HAP 681.2 MB；`arkts_check` 对两个改动文件均无错误。
+- **验证结果：** Pura 90 Pro 模拟器（`127.0.0.1:5555`，`abilist=x86_64`，API 26，`productModel=emulator`）`install bundle successfully` / `start ability successfully`；界面外壳完整渲染（底部 Dock 搜索/时间/位置/图层/更多功能 + 右上陀螺仪与音频按钮）；点击「时间」成功打开时间面板（标题「时间 --」、副标题 `1x`、日期转轮 `2026 / 08月 / 11日 / 20: / 00: / 00`、速度 chips 倒带/停止/实时/减速/快进），`.id()` 锚点 `panel-close`、`panel-scroll-zh_CN`、`panel-content-zh_CN` 均在。
+- **备注：** 按 §2.6 未提交，待用户明确要求。`docs/harmonyos/testing/PLATFORM-MATRIX.md` 中「Windows 模拟器无法运行本应用」的结论需补充本条 debug-only 例外（待确认后更新）。
+
 ## [2026-09-30] DevEco Code - 时间面板重排、时间/速率入标题栏、主界面 Dock 常驻时钟；新增两条协作规则
 
 - **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`（镜像；经 `scripts/sync-ohos-build-sources.sh` 同步到生成工程，生成目录不入库）、`docs/harmonyos/AGENTS.md`、`docs/harmonyos/CHANGELOG.md`。
