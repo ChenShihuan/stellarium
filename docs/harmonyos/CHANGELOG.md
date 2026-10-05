@@ -1,3 +1,18 @@
+## [2026-10-06] DevEco Code - M 轨道 M4：扩展域模型迁入 common/types/（Barrel 兜底，消费者零改动；宿主 8,017 行不变）
+
+- **背景**：`ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §11.2.1 的 **Barrel 策略**、M 轨道第 5 片，**纯路径迁移 + 一行式 barrel**，不改任何类型/常量内容与运行逻辑；开工 `git log -1` = `126228abd9`。
+- **移动**：`git mv pages/MainWindowModels.ets → common/types/MainWindowModels.ets`（整文件原样，767 行）。该文件为「扩展域模型」：40+ 接口 + 10+ 常量 + `OcularSelInfo` 类，含 1 处 `import ... from './StellariumTypes'`；移动后该行相对深度改为 `../../pages/StellariumTypes`（本片唯一内容改动，1 行）。
+- **default export 核查**：`grep 'export default'` = **0**；全部为命名导出（94 处 `export`），故 barrel 用 `export *` 即可覆盖接口 + 常量 + 类，**无需** `export { default } from ...`。
+- **barrel**：在 `pages/MainWindowModels.ets` 原位新建 2 行 shim（说明注释 + `export * from '../common/types/MainWindowModels'`），旧路径继续解析。
+- **消费者零改动**：全仓 **66 处** `import ... from '.../pages/MainWindowModels'`（`state/`、`bridge/`、`capability/`、`panels/`、`common/` 及宿主 `MainWindowNativeNode.ets`）全部**未改**，经 barrel 解析到新实体。
+- **不改**：无任何类型/常量/接口内容改动；无 `.id()`、`main_pages.json`、构建产物改动；`common/types/` 不 import `@ohos.*`（类型层无 NAPI，符合 `common/*` 约束）。
+- **度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（本片不动宿主）；`MainWindowModels.ets` 767 行（内容等价，仅 1 行 import 深度）；新增 `common/types/` 目录 + 1 个 2 行 barrel；`git diff --cached --stat` = 769 insertions / 767 deletions（重命名识别为 A+M）。
+- **验证**：`check-ohos-refactor-slice` 通过（括号深度 0）；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL in 1m1s`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 250+ 文件）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（5 个 `-pad`/`-performance` 需设备 + `verify-ohos-search` 的平台 hdc 路径），**无新增回归**（`scripts/*.mjs` 不引用 `MainWindowModels`，无夹具需同步）。
+- **真机（192.168.50.108:36717，`devecocli run --skip-build` → `Smoke: PASS`）**：模型消费域逐项实证 —— CLI `getSatellites` / `getOculars` / `getScriptList` / `listRecordings` / `getBookmarks` / `getTelescopeProfiles` 全部返回真实数据；UI 走查「更多功能 → 天体数据与扩展 → 卫星」（渲染离线轨道目录，`Satellites plugin version 0.15.0` / `目录更新时间：2026-08-27 09:54:53 UTC`）、「更多功能 → 观测工作区 → 书签」（空态渲染）、「… → 望远镜控制」（渲染 `Offline Telescope Simulator` 设备行）；`pidof com.cnchensh.stellarium` = 18034 存活，`hilog -T ArkTS` 无 jscrash/异常。
+- **未走查（待真机人工）**：脚本面板（本次未定位到入口，未开；已用 CLI `getScriptList`/`listRecordings` 覆盖其数据结构）；导入/picker 等运行期路径（无，本片仅搬类型）。
+- **本片新踩的坑**：① **`common/types/` 到 `pages/` 是两级相对深度** —— 首写 `../pages/StellariumTypes` 被 `arkts_check` 报 `Cannot find module`（解析成 `common/pages/...`），须改为 `../../pages/StellariumTypes`；搬家后务必以实测相对深度为准。② `Get-Content .Count` 对纯 LF 大文件给出偏小行数（8,017 → 7,573），度量须用 `\n` 计数（与仓库既有口径 8,017 一致）。
+- **后续轨道备注**：消费者直引新路径（`.../common/types/MainWindowModels`）后可删本 shim —— 归入 Phase 7 收口轨道。
+- **文档**：`ARKTS-PAGES-REFACTOR-PLAN.md` §15.12.20 追加本片完成结论 + 度量 + barrel 说明。
 ## [2026-10-06] DevEco Code - M 轨道 M6：MediaPort 接口隔离（拆 5 个子接口；宿主 8,017 行不变）
 
 - **背景**：`ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §11 的 M 轨道第 4 片，**类型层重构（接口隔离）**，不改任何运行逻辑。`bridge/MediaPort.ets`（原 107 行 / 25 法）混了图片解码、对象模型纹理、文件导出、文档导入、屏幕录制 5 个关注点，导致「只做图片解码的控制器也拿到录屏/相册/picker 能力」。开工 `git log -1` = `b72f3c542b`。

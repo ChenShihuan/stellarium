@@ -1889,3 +1889,31 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **验证**：`check-ohos-refactor-slice` 通过（括号深度 0）；`arkts_check` 13 文件 0 error；`BUILD SUCCESSFUL in 29s`；契约 44 锚点 intact（33 面板 / 24 静态 id / 17 动态前缀 / 249 文件）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（4 个 `-pad` / `mist-performance` / `verify-ohos-search`）。真机（192.168.50.108:36717）：`devecocli run --skip-build` → `Smoke: PASS`；图片解码经 `ImagePort` 实证（hilog `[detail-media] create image source kind=sky-culture-art-thumbnail …` + `[sky-culture-art] thumbnail ready` + `[body-warmup] ready path=textures/*.png`）；「更多功能 → 工具与数据」面板渲染正常；`pidof 12410` 存活、无 jscrash / 无 faultlog。另存为/CSV 导出、导入 picker、录屏入口因深链 + 系统 picker 未走查（仅类型收窄、调用序列逐字未改），记「待真机人工」。
 
 **本片新踩的坑**：① ArkTS 禁交叉类型（`arkts-no-intersection-types`）——跨多接口消费者只能靠子接口互相 `extends` 或本地组合接口。② 编辑工具会把部分 `.ets` 写回成裸 LF，而仓库 `.ets` 约定 CRLF（`core.autocrlf=true`）——收尾前须逐文件把裸 LF 归一回 CRLF（字节级），否则 `git status` 出现 eol 噪声。
+
+
+#### 15.12.20 M 轨道 M4：扩展域模型迁入 `common/types/`（2026-10-06，Barrel 兜底）
+
+> **依据**：STATE-REVIEW §11.2.1 的 **Barrel 策略**、M 轨道第 5 片。**纯路径迁移 + 一行式 barrel**，不改任何类型/常量内容与运行逻辑。
+> `pages/MainWindowModels.ets`（767 行）是「扩展域模型」（40+ 接口 + 10+ 常量 + `OcularSelInfo` 类），与页面无关却被 `state/` / `bridge/` / `capability/` / `panels/` 大量消费（架构倒挂）。
+> 开工 `git log -1` = `126228abd9`。
+
+**做法**
+
+1. `git mv pages/MainWindowModels.ets → common/types/MainWindowModels.ets`（**整文件原样**，不拆域——拆域是后续独立轨道）。该文件仅 1 处内部 import（`from './StellariumTypes'`），移动后相对深度改为 **`../../pages/StellariumTypes`**（本片唯一内容改动，1 行）。
+2. 在 `pages/MainWindowModels.ets` 原位新建 **2 行 shim**：说明注释 + `export * from '../common/types/MainWindowModels'`。
+
+**default export 核查（barrel 覆盖范围）**：`grep 'export default'` = **0**；全部为命名导出（94 处 `export`）——故 `export *` 即覆盖接口 + 常量 + 类，**无需** `export { default } from ...`。
+
+**消费者零改动**：全仓 **66 处** `import ... from '.../pages/MainWindowModels'`（`state/`、`bridge/`、`capability/`、`panels/`、`common/` 及宿主 `MainWindowNativeNode.ets`）**全部未改**，经 barrel 解析到新实体。
+
+**不改**：无任何类型/常量/接口内容改动；无 `.id()` / `main_pages.json` / 构建产物改动；`common/types/` 不 import `@ohos.*`（类型层无 NAPI，符合 §15.7 规则 1）。
+
+**度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（本片不动宿主）；`MainWindowModels.ets` 767 行（内容等价，仅 1 行 import 深度）；新增 `common/types/` 目录 + 1 个 2 行 barrel；`git diff --cached --stat` = 769 insertions / 767 deletions（重命名识别为 A+M）。
+
+**验证**：`check-ohos-refactor-slice` 通过（括号深度 0）；`arkts_check` 2 文件 0 error（首次 `../pages/StellariumTypes` 报 `Cannot find module`，改两级深度后通过）；`BUILD SUCCESSFUL in 1m1s`；契约 44 锚点 intact（33 面板 / 24 静态 id / 17 动态前缀 / 250+ 文件）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（5 个 `-pad`/`-performance` 需设备 + `verify-ohos-search` 的平台 hdc 路径），**无新增回归**（`scripts/*.mjs` 不引用 `MainWindowModels`，无夹具需同步）。真机（192.168.50.108:36717）：`devecocli run --skip-build` → `Smoke: PASS`；模型消费域逐项实证 —— CLI `getSatellites`/`getOculars`/`getScriptList`/`listRecordings`/`getBookmarks`/`getTelescopeProfiles` 全部返回真实数据；UI 走查「更多功能 → 天体数据与扩展 → 卫星」（渲染离线轨道目录：`Satellites plugin version 0.15.0` / `目录更新时间：2026-08-27 09:54:53 UTC`）、「更多功能 → 观测工作区 → 书签」（空态渲染）、「… → 望远镜控制」（渲染 `Offline Telescope Simulator` 设备行）；`pidof` = 18034 存活、`hilog -T ArkTS` 无 jscrash/异常。
+
+**未走查（待真机人工）**：脚本面板（本次未定位到入口，未开；已用 CLI `getScriptList`/`listRecordings` 覆盖其数据结构）；导入/picker 等运行期路径（本片仅搬类型，无行为改动）。
+
+**本片新踩的坑**：① **`common/types/` 到 `pages/` 是两级相对深度** —— 首写 `../pages/StellariumTypes` 被 `arkts_check` 报 `Cannot find module`（解析成 `common/pages/...`），须 `../../pages/StellariumTypes`；搬家后务必以实测相对深度为准。② `Get-Content .Count` 对纯 LF 大文件给出偏小行数（8,017 → 7,573），度量须用 `\n` 计数（与仓库既有口径 8,017 一致）。
+
+**后续轨道备注**：消费者直引新路径（`.../common/types/MainWindowModels`）后可删本 shim —— 归入 Phase 7 收口轨道。
