@@ -16026,7 +16026,7 @@ private loadPlanetPositions(): void {
             iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
             labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
             itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
-            isActive: (item: ShellAction) => this.dockActionActive(item),
+            activePanel: this.activePanel,
             onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
             onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
             onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) }
@@ -16192,7 +16192,7 @@ private loadPlanetPositions(): void {
           iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
           labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
           itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
-          isActive: (item: ShellAction) => this.dockActionActive(item),
+          activePanel: this.activePanel,
           onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
           onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
           onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) }
@@ -16304,7 +16304,7 @@ private loadPlanetPositions(): void {
           iconSize: this.isExpandedLayout ? 22 : this.compactDockIconSize(),
           labelFontSize: this.isExpandedLayout ? 10 : this.compactDockLabelFontSize(),
           itemHeight: this.isExpandedLayout ? 44 : this.compactDockItemHeight(),
-          isActive: (item: ShellAction) => this.dockActionActive(item),
+          activePanel: this.activePanel,
           onDockTouch: (event: TouchEvent) => { this.handleDockTouch(event) },
           onDockTap: (item: ShellAction) => { this.activateDockAction(item) },
           onPanelTouch: (event: TouchEvent) => { this.notePanelTouch(event) }
@@ -17076,10 +17076,6 @@ private loadPlanetPositions(): void {
     if (event.type === TouchType.Cancel) {
       this.dockTouchActive = false
     }
-  }
-
-  private dockActionActive(item: ShellAction): boolean {
-    return this.activePanel === item.panel && this.panelVisible
   }
 
   private morePanelActive(): boolean {
