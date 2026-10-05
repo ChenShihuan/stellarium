@@ -130,8 +130,8 @@ import { HarmonyShell } from '../panels/shell/HarmonyShell'
 import { HoverObservatoryShell } from '../panels/shell/HoverObservatoryShell'
 import { ExpandedShell } from '../panels/shell/ExpandedShell'
 import { ScriptKeyButton } from '../panels/tools/ScriptKeyButton'
-import { GuideButton } from '../panels/guide/GuideButton'
 import { GuideLibrary } from '../panels/guide/GuideLibrary'
+import { InteractiveGuideShell } from '../panels/shell/InteractiveGuideShell'
 import { AngleMeasurePanel } from '../panels/panels/AngleMeasurePanel'
 import { AudioPanel } from '../panels/panels/AudioPanel'
 import { Scenery3dPanel } from '../panels/panels/Scenery3dPanel'
@@ -14422,7 +14422,25 @@ private loadPlanetPositions(): void {
 
       if (this.scriptPlaybackVisible()) {
         if (this.guideState.active) {
-          this.interactiveGuideShell()
+          InteractiveGuideShell({
+            guidePhase: this.guideState.phase,
+            guideIndex: this.guideState.index,
+            guideCount: this.guideState.count,
+            guideAutomatic: this.guideState.automatic,
+            guideRemaining: this.guideState.remaining,
+            guideTitle: I18n.t(this.currentGuide().title),
+            guideCredit: I18n.t(this.currentGuide().credit),
+            guideStepTitle: this.planetZh(this.currentGuideStep().title),
+            guideStepText: this.currentGuideStep().text,
+            guideStepKey: this.currentGuideStep().target,
+            cardWidth: this.guideCardWidth(),
+            cardHeight: this.guideCardHeight(),
+            cardX: this.guideCardX(),
+            cardY: this.guideCardY(),
+            onSkyTouch: (event: TouchEvent) => { this.handleSkyTouch(event) },
+            onControlDragTouch: (event: TouchEvent) => { this.handleScriptControlDragTouch(event) },
+            onAction: (action: string) => { this.executeGuideRequest('guideAction', action) }
+          })
         } else {
           ScriptFocusShell({
             scriptWaiting: this.scriptWaiting,
@@ -15063,86 +15081,6 @@ private loadPlanetPositions(): void {
   private guideCardY(): number {
     return this.clamp(this.skyHeight - this.guideCardHeight() - 16 + this.scriptControlOffsetY,
       this.scriptControlSafeTop(), Math.max(this.scriptControlSafeTop(), this.skyHeight - this.guideCardHeight() - 12))
-  }
-
-  @Builder
-  interactiveGuideShell() {
-    Stack() {
-      Stack() { }.width('100%').height('100%').hitTestBehavior(HitTestMode.Block)
-        .onTouch((event: TouchEvent) => {
-          if (this.guideState.phase === 'exploring') this.handleSkyTouch(event)
-        })
-      Column({ space: 8 }) {
-        Row({ space: 8 }) {
-          Column({ space: 2 }) {
-            Text(I18n.t(this.currentGuide().title)).fontSize(13).fontColor('#A8BDD1').width('100%')
-            Text((this.guideState.index + 1).toString() + ' / ' + this.guideState.count.toString() + ' · ' + this.planetZh(this.currentGuideStep().title))
-              .fontSize(18).fontWeight(FontWeight.Medium).fontColor('#EFF8FF').width('100%')
-          }.layoutWeight(1).hitTestBehavior(HitTestMode.Block)
-            .onTouch((event: TouchEvent) => { this.handleScriptControlDragTouch(event) })
-          Button({ type: ButtonType.Circle }) { Image(getIcon('close', false)).width(20).height(20) }
-            .id('guide-stop').width(44).height(44).backgroundColor('rgba(255,255,255,0.10)')
-            .accessibilityText(I18n.t('guide_exit')).enabled(this.guideState.phase !== 'restoring')
-            .onClick(() => { this.executeGuideRequest('guideAction', 'stop') })
-        }.width('100%').constraintSize({ minHeight: 52 }).hitTestBehavior(HitTestMode.Default)
-        Scroll() {
-          Column({ space: 12 }) {
-            Text(I18n.t('guide_phase_' + this.guideState.phase)).fontSize(12).fontColor('#9CD6D3').width('100%')
-            ForEach([this.currentGuideStep()], (step: GuideStep) => {
-              Text(I18n.t(step.text)).fontSize(15).lineHeight(23).fontColor('#EFF8FF').width('100%')
-                .transition(TransitionEffect.OPACITY.animation({ duration: 220, curve: Curve.EaseInOut }))
-            }, (step: GuideStep) => step.target)
-            Text(I18n.t('guide_simulation')).fontSize(12).fontColor('#A8BDD1').width('100%')
-            if (this.guideState.phase === 'error') {
-              Text(I18n.t('guide_error')).fontSize(13).fontColor('#FFD2B6').width('100%')
-            } else if (this.guideState.phase === 'exploring') {
-              Text(I18n.t('guide_explore_hint')).fontSize(13).fontColor('#A8BDD1').width('100%')
-            } else {
-              Row({ space: 8 }) {
-                GuideButton({ label: 'guide_closer', action: 'closer', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-                GuideButton({ label: 'guide_wider', action: 'wider', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-                GuideButton({ label: 'guide_explore', action: 'explore', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-              }.width('100%')
-              Row() {
-                if (this.guideState.automatic) {
-                  GuideButton({ label: 'guide_manual', action: 'auto-off', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-                } else {
-                  GuideButton({ label: 'guide_auto', action: 'auto-on', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-                }
-                if (this.guideState.automatic) {
-                  Text(Math.ceil(this.guideState.remaining).toString() + ' s').fontSize(13).fontColor('#A8BDD1').margin({ left: 12 })
-                }
-              }.width('100%')
-            }
-            Text(I18n.t(this.currentGuide().credit)).fontSize(11).fontColor('#A8BDD1').width('100%')
-          }.width('100%').padding({ bottom: 8 })
-        }.id('guide-content').width('100%').layoutWeight(1).scrollBar(BarState.Auto).hitTestBehavior(HitTestMode.Default)
-        Row({ space: 8 }) {
-          if (this.guideState.phase === 'exploring') {
-            GuideButton({ label: 'guide_return', action: 'return', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-          } else if (this.guideState.phase === 'error') {
-            GuideButton({ label: 'guide_retry', action: 'retry', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-          } else {
-            GuideButton({ label: 'guide_previous', action: 'previous', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-            if (this.guideState.phase === 'paused') {
-              GuideButton({ label: 'btn_resume', action: 'resume', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-            } else {
-              GuideButton({ label: 'script_pause', action: 'pause', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-            }
-            if (this.guideState.index + 1 === this.guideState.count) {
-              GuideButton({ label: 'guide_finish', action: 'next', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-            } else {
-              GuideButton({ label: 'guide_next', action: 'next', phase: this.guideState.phase, index: this.guideState.index, onAction: (a: string) => { this.executeGuideRequest('guideAction', a) } })
-            }
-          }
-        }.width('100%').height(48).hitTestBehavior(HitTestMode.Default)
-      }.width(this.guideCardWidth()).height(this.guideCardHeight()).padding(14)
-        .position({ x: this.guideCardX(), y: this.guideCardY() })
-        .backgroundColor('rgba(10,18,30,0.92)').borderRadius(UI_RADIUS_PANEL)
-        .border({ width: 1, color: 'rgba(147,215,255,0.20)' })
-        .hitTestBehavior(HitTestMode.BLOCK_HIERARCHY)
-        .transition(TransitionEffect.OPACITY.animation({ duration: 220, curve: Curve.EaseOut }))
-    }.width('100%').height('100%').hitTestBehavior(HitTestMode.Transparent)
   }
 
   /**
