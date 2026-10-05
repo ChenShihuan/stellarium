@@ -1,3 +1,11 @@
+## [2026-10-01] DevEco Code - Phase 3z2b：星座文化段组件化 + 共享描述块组件
+
+- **新增 `panels/skyculture/SkyCultureDescriptionBlockView.ets`**：把参数化 `@Builder skyCultureDescriptionBlockView(block)`（heading / bullet / tableRow / 普通四型）改为**共享组件**（kind / headingLarge / 	ext / 	extColor 四个 `@Prop`）——它同时被**天体详情卡的星座文化段**与**星文化查看标签页**（`viewSkyCultureTab()`）使用，故不再留在宿主；`level` 的可选判断由调用方解析成 `headingLarge` 布尔量传入。
+- **新增 `panels/object/ConstellationCultureView.ets`**：`selectedConstellationCultureDescriptionView(tablet)`（54 行）→ 组件，以 `@ObjectLink store` 观察文化与展开状态、`@Prop visible`（宿主判定 `selectedObjectIsConstellation()`）与 `@Prop textColor`（`nmText()`）；展开/收起仍直接改写 store，因此点击后实时刷新。
+- **单体行数：** 28,715 → **28,646**（−69；删 2 个旧 builder，2 处调用点改为组件）。
+- **真机验证（`192.168.3.95:40565`，星座导航选 `仙女座`）：** 构建 / 契约校验（79 个 .ets）/ 安装启动通过；"资料"页的星座文化段由新组件渲染 —— `天空文化介绍`（段标题）、文化名 `现代`、`来源资料` 徽标全部正常，即宿主注入的 `visible`/`textColor` 与 store 读取链路可用。
+- **验证范围说明：** 该次运行中段落的**描述正文块文本为空**（渲染出约零高度的空块），属数据侧现象（同一数据在搬迁前也如此渲染），故正文未作视觉确认；共享描述块组件的渲染由星文化查看标签页同源使用并受 `test-ohos-skyculture-text/-refresh` 覆盖。
+- **测试同步：** 无（`scripts/*.mjs` 无引用被搬符号；`test-ohos-skyculture-*` 与 `verify-ohos-object-details` 均通过）。
 ## [2026-10-01] DevEco Code - Phase 3z2a：卫星过境段组件化（SatellitePassDetails）
 
 - **新增 `panels/object/SatellitePassDetails.ets`**：三个参数化 UI 函数改为组件 —— `satellitePassesDetails(tablet)`（45 行）→ `SatellitePassDetails`、`satellitePassCard(pass, tablet)`（36）→ `SatellitePassCard`、`satellitePassTimelineRow(label, time, tablet)`（14）→ `SatellitePassTimelineRow`；并把只服务于这一段的四个纯文本助手（`satellitePassTime` / `satellitePassVisibility` / `satellitePassAltitude` / `satellitePassAngle`）搬出宿主，改为**文件作用域函数**（过境的 `ForEach` 与 key 一并内收，宿主不再接触单条过境的格式化细节）。

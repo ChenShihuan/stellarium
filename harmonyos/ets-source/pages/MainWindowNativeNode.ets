@@ -59,6 +59,8 @@ import { ObjectDataTile, ObjectMetric, ObjectScheduleTile, ObjectDetailTab, Obje
 import { ObjectDistanceNotice, SelectedLiveInfoRows, SelectedCoordinateRow, SelectedCoordinateRows } from '../panels/object/DetailLiveRows'
 import { StructuredDetailRows } from '../panels/object/StructuredDetailRows'
 import { SatellitePassDetails } from '../panels/object/SatellitePassDetails'
+import { ConstellationCultureView } from '../panels/object/ConstellationCultureView'
+import { SkyCultureDescriptionBlockView } from '../panels/skyculture/SkyCultureDescriptionBlockView'
 import { SearchBar } from '../panels/search/SearchBar'
 import { SearchSuggestions } from '../panels/search/SearchSuggestions'
 import { SearchFilterMenu } from '../panels/search/SearchFilterMenu'
@@ -9053,22 +9055,6 @@ export struct WindowNativeNode {
     return this.cleanSkyCultureNarration(this.skyCultureNarration).split(/\n+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0)
   }
 
-  @Builder skyCultureDescriptionBlockView(block: SkyCultureDescriptionBlock) {
-    if (block.kind === 'heading') {
-      Text(block.text).fontSize(block.level !== undefined && block.level <= 1 ? 15 : 13)
-        .fontColor(this.nmText()).fontWeight(FontWeight.Medium).width('100%')
-        .margin({ top: 8, bottom: 3 })
-    } else if (block.kind === 'bullet') {
-      Text('• ' + block.text).fontSize(11).lineHeight(19).fontColor(this.nmText()).width('100%')
-        .padding({ left: 8, right: 4 })
-    } else if (block.kind === 'tableRow') {
-      Text(block.text).fontSize(10).lineHeight(17).fontColor(this.nmText()).width('100%')
-        .padding({ left: 8, right: 8, top: 5, bottom: 5 })
-        .backgroundColor('rgba(255,255,255,0.045)').borderRadius(UI_RADIUS_CONTROL)
-    } else {
-      Text(block.text).fontSize(11).lineHeight(19).fontColor(this.nmText()).width('100%')
-    }
-  }
 
   private skyCultureArtFilePath(rawPath: string): string {
     if (!this.isSafeSkyCultureArtPath(rawPath)) return ''
@@ -18489,7 +18475,7 @@ private loadPlanetPositions(): void {
             ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })
             this.tabletInspectorMedia()
             SatellitePassDetails({ store: this.objectDetailStore, tablet: false, visible: this.selectedObjectIsArtificialSatellite(), tleEpoch: this.selectedSatelliteTleEpoch(), accent: this.nmAccent(), onLoad: () => { this.loadSelectedSatellitePasses() } })
-            this.selectedConstellationCultureDescriptionView(false)
+            ConstellationCultureView({ store: this.objectDetailStore, tablet: false, visible: this.selectedObjectIsConstellation(), textColor: this.nmText() })
             Row({ space: 8 }) {
               Column({ space: 7 }) {
                 if (this.objectDetailStore.selectedCoordAlt.length > 0) { ObjectDataTile({ label: '实时高度 / 方位', value: this.selectedDisplayValue('selectedCoordAlt') }) }
@@ -19964,61 +19950,6 @@ private loadPlanetPositions(): void {
 
 
 
-  @Builder
-  selectedConstellationCultureDescriptionView(tablet: boolean) {
-    if (this.selectedObjectIsConstellation()) {
-      Column({ space: 6 }) {
-        Row({ space: 8 }) {
-          Column({ space: 2 }) {
-            Text(I18n.t('culture_constellation_intro')).fontSize(tablet ? 13 : 12).fontWeight(FontWeight.Medium)
-              .fontColor('#D9F2FF').width('100%')
-            Text(this.objectDetailStore.selectedConstellationCultureName.length > 0 ? this.objectDetailStore.selectedConstellationCultureName : I18n.t('culture_active_sky'))
-              .fontSize(10).fontColor('#8FBBD6').width('100%').maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }.layoutWeight(1)
-          Text(I18n.t('culture_source_material')).fontSize(9).fontColor('#8FBBD6')
-            .padding({ left: 7, right: 7, top: 4, bottom: 4 })
-            .backgroundColor('rgba(91,147,191,0.14)').borderRadius(UI_RADIUS_CONTROL)
-        }.width('100%')
-        Divider().color('rgba(143,211,255,0.14)').margin({ top: 2, bottom: 2 })
-        if (this.objectDetailStore.selectedConstellationCultureDescription.length > 0) {
-          if (this.objectDetailStore.selectedConstellationCultureDescriptionBlocks.length > 0) {
-            Column({ space: 4 }) {
-              ForEach(
-                this.objectDetailStore.selectedConstellationCultureDescriptionExpanded
-                  ? this.objectDetailStore.selectedConstellationCultureDescriptionBlocks
-                  : this.objectDetailStore.selectedConstellationCultureDescriptionBlocks.slice(0, 5),
-                (block: SkyCultureDescriptionBlock) => { this.skyCultureDescriptionBlockView(block) },
-                (block: SkyCultureDescriptionBlock) => 'selected-culture-' + block.index
-              )
-            }.width('100%')
-          } else {
-            Text(this.objectDetailStore.selectedConstellationCultureDescription).fontSize(tablet ? 12 : 11)
-              .fontColor('#C9E4F1').width('100%').lineHeight(tablet ? 19 : 18)
-              .maxLines(this.objectDetailStore.selectedConstellationCultureDescriptionExpanded ? 999 : 7)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-          if (this.objectDetailStore.selectedConstellationCultureDescriptionBlocks.length > 5 || this.objectDetailStore.selectedConstellationCultureDescription.length > 280) {
-            Button(this.objectDetailStore.selectedConstellationCultureDescriptionExpanded ? I18n.t('culture_collapse_intro') : I18n.t('culture_expand_intro'))
-              .fontSize(10).fontColor('#8FD3FF').backgroundColor('rgba(0,0,0,0)')
-              .height(26).padding({ left: 0, right: 8 })
-              .onClick(() => { this.objectDetailStore.selectedConstellationCultureDescriptionExpanded = !this.objectDetailStore.selectedConstellationCultureDescriptionExpanded })
-          }
-        } else {
-          Text(I18n.t('culture_no_constellation_intro')).fontSize(tablet ? 11 : 10)
-            .fontColor('#8FBBD6').width('100%').lineHeight(17)
-        }
-        if (this.objectDetailStore.selectedConstellationCultureDescriptionSource.length > 0) {
-          Text(this.objectDetailStore.selectedConstellationCultureDescriptionSource).fontSize(9).fontColor('#7599AD')
-            .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-      }
-        .width('100%').padding({ left: 10, right: 10, top: 10, bottom: 10 })
-        .backgroundColor('rgba(91,147,191,0.08)')
-        .border({ width: 0.5, color: 'rgba(143,211,255,0.18)' })
-        .borderRadius(UI_RADIUS_CONTROL)
-    }
-  }
 
 
   private pluginZh(en: string): string {
@@ -28128,7 +28059,7 @@ private loadPlanetPositions(): void {
             if (this.skyCultureDescriptionBlocks.length > 0) {
               Column({ space: 4 }) {
                 ForEach(this.skyCultureDescriptionExpanded ? this.skyCultureDescriptionBlocks : this.skyCultureDescriptionBlocks.slice(0, 6), (block: SkyCultureDescriptionBlock) => {
-                  this.skyCultureDescriptionBlockView(block)
+                  SkyCultureDescriptionBlockView({ kind: block.kind, headingLarge: block.level !== undefined && block.level <= 1, text: block.text, textColor: this.nmText() })
                 }, (block: SkyCultureDescriptionBlock) => 'description-' + block.index)
               }.width('100%')
             } else {
