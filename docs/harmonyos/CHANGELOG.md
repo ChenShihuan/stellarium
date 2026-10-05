@@ -1,3 +1,10 @@
+## [2026-10-01] DevEco Code - Phase 3aa（部分）：详情卡片"观测/坐标"两页组件化；真机发现 @BuilderParam 致命问题
+
+- **新增 `panels/object/ObjectDetailTabs.ets`**：`unifiedObjectDetailCard()` 里 `bottomCardIndex` 0/1 两个分支 → `ObjectDetailObserveTab`（28 行）与 `ObjectDetailCoordinateTab`（5 行）。两页都以 `@ObjectLink store` 观察状态，动态查值用注入的 `resolve: (key: string) => string`（宿主传 `(key) => this.selectedDisplayValue(key)`），因此宿主仍独享查值逻辑。
+- **单体行数：** 28,646 → **28,616**（−30；两页搬出、2 处调用点改写）。
+- **⚠️ 本片最重要的结论（已写入 §13.1 规则 9 与 §13.3）：首版把三页一起搬，其中"资料"页需要把宿主的无参 `@Builder tabletInspectorMedia()` 用 `@BuilderParam` 传进子组件 —— 真机上"资料"页一渲染（卡片默认页）应用即退出**：`arkts_check` 通过、`deveco build` 通过、hilog 无任何 ArkTS 报错，但 `pidof com.cnchensh.stellarium` 为空。用 A/B 法定位（`git stash -u` 回到 `9f512d05b3` 重新构建安装、同一交互序列正常；再二分只保留两页即恢复）确认差异就是 `@BuilderParam`。**正解：先把该 builder 改写成组件（下一片 `TabletInspectorMediaGroup`），再由宿主传数据与回调。**
+- **真机验证（`192.168.3.95:40565`）——本片两个组件：** 构建 / 契约校验（80 个 .ets）/ 安装启动通过；搜 `Mars` 选中后应用存活（`pidof` 有值）；点"观测"页 → `今晚观测窗口` + `升起 0h35m` / `中天 7h52m` / `落下 15h09m`（`ObjectScheduleTile` 经 `resolve` 取值）+ `大气影响` 三指标；点"坐标"页 → `当前天球位置` + `地平坐标 65.172°, 225.044°` / `几何地平` / `赤道坐标` / `J2000 赤道` 实时值正常。
+- **测试同步：** `test-ohos-detail-live-values` 的贴片断言改为跨"宿主 + 两页组件"（资料页贴片仍在宿主，观测页贴片在组件里用 `resolve`）；`verify-ohos-object-details` 的共享 builder 计数同时扫描两页组件文件；两者与其余切片脚本均通过（仅剩 §13.6 的设备参数类）。
 ## [2026-10-01] DevEco Code - Phase 3z2b：星座文化段组件化 + 共享描述块组件
 
 - **新增 `panels/skyculture/SkyCultureDescriptionBlockView.ets`**：把参数化 `@Builder skyCultureDescriptionBlockView(block)`（heading / bullet / tableRow / 普通四型）改为**共享组件**（kind / headingLarge / 	ext / 	extColor 四个 `@Prop`）——它同时被**天体详情卡的星座文化段**与**星文化查看标签页**（`viewSkyCultureTab()`）使用，故不再留在宿主；`level` 的可选判断由调用方解析成 `headingLarge` 布尔量传入。

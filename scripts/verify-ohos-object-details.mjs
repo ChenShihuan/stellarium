@@ -44,8 +44,11 @@ if (missingLabels.length > 0) failures.push(`missing labels: ${missingLabels.joi
 if (missingSections.length > 0) failures.push(`missing sections: ${missingSections.join(', ')}`)
 if (!types.includes('detailFields?: Array<ObjectDetailField>')) failures.push('detailFields bridge contract is missing')
 if (!ets.includes('LoadingProgress()')) failures.push('native detail loading indicator is missing')
-// 共享 builder 需覆盖现存的全部详情面板（死代码清理后剩两处调用），且它必须委托给共享的行组件。
-if ((ets.match(/StructuredDetailRows\(\{ store: this\.objectDetailStore/g) ?? []).length < 2) failures.push('not all object detail surfaces use the shared builder')
+// 共享 builder 需覆盖现存的全部详情面板（死代码清理后剩两处调用：卡片"资料"页与平板检查器，
+// 前者已随三页搬进 ObjectDetailTabs），且它必须委托给共享的行组件。
+const tabsPath = path.join(root, 'harmonyos/ets-source/panels/object/ObjectDetailTabs.ets')
+const tabsSource = fs.existsSync(tabsPath) ? fs.readFileSync(tabsPath, 'utf8') : ''
+if (((ets + tabsSource).match(/StructuredDetailRows\(\{ store: this\.(objectDetailStore|store)/g) ?? []).length < 2) failures.push('not all object detail surfaces use the shared builder')
 if (!detail.includes('StructuredDetailRow({ label: detailFieldLabel(field.key)')
   || !detail.includes('DetailSectionTitle({ title: detailSectionTitle(section)')) {
   failures.push('the shared detail builder no longer delegates to the shared row components')

@@ -59,6 +59,7 @@ import { ObjectDataTile, ObjectMetric, ObjectScheduleTile, ObjectDetailTab, Obje
 import { ObjectDistanceNotice, SelectedLiveInfoRows, SelectedCoordinateRow, SelectedCoordinateRows } from '../panels/object/DetailLiveRows'
 import { StructuredDetailRows } from '../panels/object/StructuredDetailRows'
 import { SatellitePassDetails } from '../panels/object/SatellitePassDetails'
+import { ObjectDetailObserveTab, ObjectDetailCoordinateTab } from '../panels/object/ObjectDetailTabs'
 import { ConstellationCultureView } from '../panels/object/ConstellationCultureView'
 import { SkyCultureDescriptionBlockView } from '../panels/skyculture/SkyCultureDescriptionBlockView'
 import { SearchBar } from '../panels/search/SearchBar'
@@ -18436,40 +18437,9 @@ private loadPlanetPositions(): void {
       Scroll(this.objectDetailScroller) {
         Column({ space: 8 }) {
           if (this.bottomCardIndex === 0) {
-            Text('今晚观测窗口').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
-            Row({ space: 6 }) {
-              ObjectScheduleTile({ label: I18n.t('s0700'), value: this.selectedDisplayValue('selectedRise') })
-              ObjectScheduleTile({ label: I18n.t('s0701'), value: this.selectedDisplayValue('selectedTransit') })
-              ObjectScheduleTile({ label: I18n.t('s0702'), value: this.selectedDisplayValue('selectedSet') })
-            }.width('100%')
-            if (this.objectDetailStore.selectedApparentMagnitude.length > 0 || this.objectDetailStore.selectedAirmass.length > 0 || this.objectDetailStore.selectedExtinction.length > 0) {
-              Text('大气影响').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%').margin({ top: 3 })
-              Row({ space: 8 }) {
-                if (this.objectDetailStore.selectedApparentMagnitude.length > 0) { ObjectMetric({ label: '大气后星等', value: this.selectedDisplayValue('selectedApparentMagnitude') }) }
-                if (this.objectDetailStore.selectedExtinction.length > 0) { ObjectMetric({ label: '大气衰减', value: this.selectedDisplayValue('extinctionUnits') }) }
-                if (this.objectDetailStore.selectedAirmass.length > 0) { ObjectMetric({ label: '气团质量', value: this.selectedDisplayValue('selectedAirmass') }) }
-              }.width('100%')
-            }
-            if (this.objectDetailStore.selectedPhase.length > 0 || this.objectDetailStore.selectedElongation.length > 0 || this.objectDetailStore.selectedSize.length > 0) {
-              Row({ space: 8 }) {
-                if (this.objectDetailStore.selectedPhase.length > 0) { ObjectMetric({ label: I18n.t('i0291'), value: this.selectedDisplayValue('selectedPhase') }) }
-                if (this.objectDetailStore.selectedElongation.length > 0) { ObjectMetric({ label: I18n.t('i0255'), value: this.selectedDisplayValue('selectedElongation') }) }
-                if (this.objectDetailStore.selectedSize.length > 0) { ObjectMetric({ label: I18n.t('i0290'), value: this.selectedDisplayValue('selectedSize') }) }
-              }.width('100%').margin({ top: 2 })
-            }
-            if (this.objectDetailStore.selectedDistanceStatus === 'invalid_orbit' || this.objectDetailStore.selectedTleOutdated) {
-              ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })
-            }
-            if (this.objectDetailStore.selectedInfo.length > 0) {
-              Text(this.objectDetailStore.selectedInfo).fontSize(12).fontColor('#C3DDEB').lineHeight(18).width('100%')
-                .padding({ top: 8, bottom: 2 })
-            }
+            ObjectDetailObserveTab({ store: this.objectDetailStore, distanceText: this.objectDistanceNoticeText(), resolve: (key: string) => this.selectedDisplayValue(key) })
           } else if (this.bottomCardIndex === 1) {
-            Text('当前天球位置').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
-            ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })
-            SelectedCoordinateRows({ store: this.objectDetailStore, tablet: false })
-            ObjectDataRow({ label: I18n.t('i0010'), value: this.selectedDisplayValue('selectedConstellation') })
-            Text('坐标会跟随时间、位置与视角更新。').fontSize(11).fontColor('#8FBBD6').lineHeight(16).width('100%').margin({ top: 4 })
+            ObjectDetailCoordinateTab({ store: this.objectDetailStore, distanceText: this.objectDistanceNoticeText(), resolve: (key: string) => this.selectedDisplayValue(key) })
           } else if (this.bottomCardIndex === 2) {
             Text('完整资料').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#D9F2FF').width('100%')
             ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })

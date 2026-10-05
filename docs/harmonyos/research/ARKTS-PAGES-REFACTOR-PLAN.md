@@ -720,6 +720,7 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
 | 6 | **跨域 / 桥 / 定时器依赖用注入解决，不硬搬**（如 `TimeWheelController` 的 `onSeek` / `onStopSpeed` / `getUtcOffsetHours`） | Phase 3m |
 | 7 | **`@Component` 的 `build()` 只能有唯一容器根节点**。原 `@Builder` 允许并列多根（如 `tabletInspectorFallbackVisual` 的 `Stack` + `Text`），下沉成组件后必须包进一个容器：用**与原调用点外层容器相同的 `space`**（该例外层是 `Column({ space: 8 })`），否则间距会变 | Phase 3v 编译报 `build method can have only one root node` |
 | 8 | **搬迁会打断"按文本切片单体"的测试脚本**：仓库里 23 个 `scripts/*.mjs` 用 `source.indexOf(...)`/`slice`/正则读 `MainWindowNativeNode.ets`，字段改 `this.store.X`、UI 改组件后它们会成片失败。每片必须跑一次受影响脚本并同步（切到组件文件、注入 `objectDetailStore` 之类的假宿主）。**存量失败（先于本会话、与本轮无关）见 §13.6** | Phase 3v 一次暴露 20+ 处 |
+| 9 | **不要把宿主的 `@Builder` 经 `@BuilderParam` 传进子组件**：真机实测**渲染该页即整个应用退出**（hilog 无 ArkTS 报错、`pidof` 直接为空，且 `arkts_check` 与构建均通过，属运行期）。正解是先把该 builder 改写成**组件**，由宿主把数据与回调传进去（Phase 3aa 的"观测/坐标"两页为对照组：同样用 `@ObjectLink` + 回调注入，正常）。 | Phase 3aa 真机 A/B |
 
 ### 13.2 每片协议（八步，缺一不可）
 
@@ -745,6 +746,7 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
 - **列表内滑动**可能被判为点选 → 用 `ui drag`（按压—移动—释放）。
 - **替换"外层有条件包裹的块"时必须保留/补回 `if (...) {` 那一行**：若起始标记落在条件语句内部、而替换文本只写了新内容，会把 `if` 的开括号一起删掉，其闭合 `}` 变成孤儿 → 文件括号深度失衡 → 数千行之后爆出上百条 `UI component ... cannot be used in this place` / `Cannot find name 'width'`。**定位法**：脚本扫描全文件括号净深度（与 HEAD 对比应为 0），再逐 diff hunk 统计 `{`/`}` 净差额，锁定"删了一个 `{` 未补回"的 hunk。
 - **`arkts_check` 会漏掉结构失衡，绝不可替代构建**：曾出现 `arkts_check` 对四个文件全部报 "No errors"、而 `devecocli build` 立即失败的情况（括号深度 −1）。§13.2 第 5 步的"必须跑构建"因此是硬性要求。
+- **"某页一渲染应用就退出"的排查法（A/B + 二分）**：`git stash -u` 回到**上一个已验证提交**重新构建安装，重走完全相同的点击序列 —— 旧构建正常、新构建退出，即锁定为新改动；再把新改动按"最小可删单元"二分（Phase 3aa 保留三页中的两页即恢复正常，从而把差异锁到 `@BuilderParam` 这一处）。运行期退出在 hilog 里可能**没有任何 ArkTS 报错**，所以只能靠 `pidof com.cnchensh.stellarium` 判存活 + A/B 复现，不要浪费时间抓日志。
 - **面板内的嵌套滚动会吞掉手势**：如搜索面板"目录天体"网格自身可滚动且占满可视区，`dumpLayout` 下无法把外层滚动拖到网格下方的块（星座 chips / 坐标输入曾因此无法交互验证）→ 需要交互验证尾部内容时，可先切到对象很少的分类让网格变短。
 - **批量改引用时必须同时补宿主 store 字段声明**：只把 `this.X` 改成 `this.store.X` 而忘了 `@State private store: XStore = new XStore()`，会让**所有**该引用推断为 `any`，构建报 `arkts-no-any-unknown`，且报错行号散落在毫不相关的业务方法里（13066/13948/18815…），极难一眼定位。**这两步必须成对执行。**
 - **类型导入要找对模块**：Phase 1c 的 `pages/MainWindowModels.ets` **只包含原单体序言区**的声明；`ObjectDetailField` / `ObjectDetailModel` / `SatellitePass` / `SkyCultureDescriptionBlock` 等类型的导出仍在 **`pages/StellariumTypes.ets`**。导入错模块会报 `declares 'X' locally, but it is not exported`。
