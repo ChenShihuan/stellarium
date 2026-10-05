@@ -1,7 +1,8 @@
 // 时间面板域状态。字段名沿用原 @State 名，便于逐片搬迁与对照回滚。
 //
-// 覆盖两块：① 速度/速率（`timeSpeedIndex` + `timeRateText` + 换挡待定窗口）；
-// ② 恒星时显示。时间轮的交互草稿状态在 `TimeWheelStore`，交互行为在 `TimeWheelController`。
+// 覆盖三块：① 速度/速率（`timeSpeedIndex` + `timeRateText` + 换挡待定窗口）；
+// ② 恒星时显示；③ 手工日期时间选择器模型（manualYear..manualMinute）。
+// 时间轮的交互草稿状态在 `TimeWheelStore`，交互行为在 `TimeWheelController`。
 @Observed
 export class TimeStore {
   timeSpeedIndex: number = 7  // 7=1x realtime (default, new index)
@@ -14,6 +15,16 @@ export class TimeStore {
   pendingTimeRateUntilMs: number = 0
   lastSyncedTimeRate: number = Number.NaN
   lastNonZeroSpeedIndex: number = 7
+
+  // ==== 手工日期时间选择器模型（原宿主 @State，review §2.7）====
+  // 时间面板（TimePanel → ManualTimeBlock）经 @Prop 消费；宿主 applyManualTime /
+  // syncManualTimeFromState 读写本簇。默认值沿用原宿主字面量（启动后由 syncManualTimeFromState
+  // 用当前 JD 覆盖）。
+  manualYear: number = 2026
+  manualMonth: number = 7
+  manualDay: number = 20
+  manualHour: number = 23
+  manualMinute: number = 0
 
   // 记录一次"用户主动换挡"：待定窗口内忽略引擎回报的旧速率。
   // 与 syncTimeRateState 的既有 500 ms 窗口同源，集中在这里以免两处各写一遍。

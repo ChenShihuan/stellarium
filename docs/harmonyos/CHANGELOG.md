@@ -1,3 +1,38 @@
+## [2026-10-04] DevEco Code - 重构：时间/历法残留与目录残留并入既有 store；死字段 pickedTime 清理（宿主 @State 162 → 147）
+
+- **依据**：review §2.7「Store 风格 vs Prop 风格」。本批把时间/历法、目录两簇残留的宿主 `@State` 下沉**并入既有** `@Observed` store（不新建），消费面板的 `@Prop` 数量不变、来源改为 `this.<store>.<field>`；加载/回调动作仍由宿主注入（V1 体系，不混 V2）。
+
+- **每簇明细**：
+
+  | 簇 | 字段 | 并入 store | 消费面板入参变化 |
+  |---|---|---|---|
+  | A 时间/历法残留 | 5（`manualYear`/`manualMonth`/`manualDay`/`manualHour`/`manualMinute`） | `state/TimeStore.ets` | `TimePanel` 5 个 `@Prop` 保留，来源改为 `this.timeStore.*`（`ManualTimeBlock` 仍 `@Prop`） |
+  | A 时间/历法残留 | 1（`presetSkyTime`） | `state/TimeSettingsStore.ets` | 无（宿主 `applyTimeSettings` 写、当前无 ArkTS 读取方） |
+  | A 时间/历法残留 | 6（`rtsCalendarStartYear/Month/Day`、`graphStartYear/Month/Day`） | `state/AstroStore.ets` | 无（宿主日期选择器方法读写，`AstroPanel` 经 host 回调消费） |
+  | B 目录残留 | 1（`starCatalogHealth`） | `state/CatalogStore.ets` | `SettingsQuickLegacyPanel` `@Prop` 保留，来源改为 `this.catalogStore.starCatalogHealth` |
+  | B 目录残留 | 1（`objectCatalogCategories`） | `state/CatalogStore.ets` | 无（经宿主 `searchAllCategoryOptions()` 进 `SearchPanel` `@Prop categories`） |
+  | C 死字段 | 1（`pickedTime`） | —— | 删除（独立 `chore(harmonyos)` 提交） |
+
+- **归组理由（写入 store 头注）**：`manual*` 是时间面板手工日期时间选择器模型，与「速度/恒星时」同属时间面板域，故并入 `TimeStore`（未选 `TimeSettingsStore`——后者是设置面板「时间」标签页的启动/格式域）；`presetSkyTime` 与 `startupPresetLocalTime`/`configDateFormat` 同由 `applyTimeSettings` 写入，属时间设置域，故并入 `TimeSettingsStore`；`rtsCalendarStart*`/`graphStart*` 是 RTS 日历与年度高度图的「指定日期」起始模型，与 `AstroStore.rtsCalendarStartOffsetDays`/`graphStartOffsetDays` 成对，故并入 `AstroStore`；`starCatalogHealth`/`objectCatalogCategories` 是星表/对象目录域缓存，故并入 `CatalogStore`。
+
+- **刻意留宿主（与既有 store 头注一致）**：`catalogHealthLoaded`/`catalogManifestPresent` 仍留宿主（`CatalogStore.ets:9` 头注：与卫星面板「卫星目录健康」及恒星表共用）；`pickedDate`（8 处，RTS 日历/星历/年度高度图/日食日期选择器共用）保留。
+
+- **原地变更普查**：14 个搬移字段均为标量或整体赋值（`this.starCatalogHealth = …`、`this.objectCatalogCategories = categories/[]`），`this.<f>.push|splice|pop|shift|sort|reverse(` 与 `this.<f>.<prop> =` 均为 0（`categories.push` 是本地数组，非字段），满足 `@ObjectLink` 只观测字段赋值的约束。
+
+- **store 新字段默认值**（逐条复制宿主原声明）：`TimeStore.manualYear/Month/Day/Hour/Minute = 2026/7/20/23/0`；`TimeSettingsStore.presetSkyTime = 0`；`AstroStore.rtsCalendarStartYear/Month/Day` 与 `graphStartYear/Month/Day = new Date().getFullYear()/getMonth()+1/getDate()`；`CatalogStore.starCatalogHealth = {}`、`objectCatalogCategories = []`。
+
+- **宿主 `@State`**：162 → 147（迁移 -14；死字段清理 -1）。
+
+- **验证**：`check-ohos-refactor-slice.mjs` 通过；`arkts_check` 5 文件无错；`build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources` = BUILD SUCCESSFUL；`check-ohos-ui-contract.mjs` = intact（33 面板 / 24 静态 id / 17 动态前缀 / 44 锚点 / 203+ 文件）；35 个 `scripts/*ohos*.mjs` 全量扫描仅 §13.6 的 7 个环境/存量失败（4 个 `-pad`、`mist-performance`、`location-search` 路径 bug、`search` macOS 假设），受影响脚本 `test-ohos-search-browser`(3/0)、`test-ohos-satellite-panel`(7/0)、`test-ohos-astro-motion`(9/0)、`test-ohos-plugin-panel-state`(4/0)、`verify-ohos-julian-date`(0/0) 全绿，无新增回归。
+
+- **真机（192.168.50.108:36717）**：装包、`aa force-stop`+`aa start` 后 `pidof` = 55964 存活。`openUiPanel time` → 手工时间块按钮渲染 store 默认 `23:00`；点按时间按钮 → 系统 TimePicker（下午 11:00），选 10 时并「确定」→ 按钮实时变为 `22:00`（`onPickTime` 回注宿主写 `timeStore.manualHour/Minute` → `@Prop` 刷新）；点按「同步星图当前时间」→ 按钮实时变为 `05:43`（`syncManualTimeFromState` 写 store）。`openUiPanel astro` → 「升降」标签渲染正常（`参数快照 · 升中天落 · 14 天`），但 RTS 起始日期控件需先选中天体且面板正文未进入视口，多次滚动/布局检查未出现「指定日期」，**未走查**（原因：控件受 `hasSelectedObject()` 门控且深链入口视口未渲染；该路径与已在第四批验证的 `eclipseStart*` 同构，且本批仅改存储位置）。测试未遗留持久化改动（未修改任何设置；仅 CLI 选中天体为非持久态）。
+
+- **测试同步**：本批 14 个字段未被任何 `scripts/*ohos*.mjs` 夹具引用，无需同步。
+
+- **§13.5 追加队列**：已记入「Prop 风格域转 Store 追加队列（review §2.7）」第八批。
+
+- **踩坑**：`hdc list targets` 已直连真机，无需 tconn；`devecocli ui layout` 只输出视口内节点，深滚动面板的正文不可见 —— 需配合多次 `ui swipe`；`stellarium-cli.mjs` 在 Windows 必须显式 `--hdc`（默认 macOS 路径）。
+
 ## [2026-10-04] DevEco Code - 重构：视图导航 / 视图偏好 / 大气三域转 Store；dso 死代码清理（宿主 @State 181 → 162）
 
 - **依据**：review §2.7「Store 风格 vs Prop 风格」。本批把三簇 Prop 风格域的宿主 `@State` 下沉为独立 `@Observed` store，消费面板改 `@ObjectLink` 订阅；加载/设置/桥回写等动作仍由宿主回调注入，store 只承载状态（V1 体系，不混 V2）。

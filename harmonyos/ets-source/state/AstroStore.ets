@@ -8,6 +8,8 @@
 // review §2.7 续作：食相起始日期 eclipseStartYear/Month/Day 属天文派生域，并入本 store
 // （原宿主 @State，仅被 eclipseStartOptionLabel / chooseEclipseStartDate / resolveEclipseStartJD
 // 读写；AstroPanel 经 eclipseStartOptionLabel 回调展示该日期，故放被观察 store 一致）。
+// 续作第二批：RTS 日历起始日期 rtsCalendarStartYear/Month/Day 与年度高度图起始日期
+// graphStartYear/Month/Day（原宿主 @State，宿主日期选择器回调读写，AstroPanel 经 host 回调消费）。
 import { TonightEvents, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, PlanetPosition, HeliocentricPosition, CelestialPosition } from '../pages/StellariumTypes'
 
 @Observed
@@ -24,6 +26,12 @@ export class AstroStore {
   rtsCalendarError: string = ''
   rtsCalendarDays: number = 14
   rtsCalendarStartOffsetDays: number = 0
+  // RTS 日历「指定日期」起始模型（原宿主 @State，review §2.7）。
+  // 宿主 resolveRtsCalendarStartJD / rtsCalendarStartOptionLabel / chooseRtsCalendarStartDate 读写，
+  // AstroPanel 经 host.rtsCalendarStartOptionLabel / host.chooseRtsCalendarStartDate 消费。
+  rtsCalendarStartYear: number = new Date().getFullYear()
+  rtsCalendarStartMonth: number = new Date().getMonth() + 1
+  rtsCalendarStartDay: number = new Date().getDate()
   rtsCalendarLoading: boolean = false
   rtsCalendarNeedsGeneration: boolean = false
   rtsCalendarProgress: number = 0
@@ -89,6 +97,12 @@ export class AstroStore {
   altAzShowMoon: boolean = false
   altAzMinimum: number = -90
   graphStartOffsetDays: number = 0
+  // 年度高度图「指定日期」起始模型（原宿主 @State，review §2.7）。
+  // 宿主 resolveGraphStartJD / graphCustomStartLabel / chooseGraphStartDate 读写，
+  // AstroPanel 经 host.graphCustomStartLabel / host.chooseGraphStartDate 消费。
+  graphStartYear: number = new Date().getFullYear()
+  graphStartMonth: number = new Date().getMonth() + 1
+  graphStartDay: number = new Date().getDate()
   graphMode: number = 0
   graphLoading: boolean = false
   annualElevationData: Array<AnnualElevationPoint> = []

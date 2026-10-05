@@ -257,7 +257,6 @@ export struct WindowNativeNode {
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
   @State private tools: ToolsStore = new ToolsStore()
   private searchHistory: string[] = []
-  @State private objectCatalogCategories: CatOption[] = []
   private searchPanelScroller: Scroller = new Scroller()
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
@@ -361,11 +360,7 @@ export struct WindowNativeNode {
   @State private julianStore: JulianDateStore = new JulianDateStore()
   private julianDateApplyInFlight: boolean = false
   private timeMarkLoading: boolean = false
-  @State private manualYear: number = 2026
-  @State private manualMonth: number = 7
-  @State private manualDay: number = 20
-  @State private manualHour: number = 23
-  @State private manualMinute: number = 0
+  // manualYear/Month/Day/Hour/Minute 已并入 state/TimeStore.ets（review §2.7）。
   @State private selectedLanguage: string = I18n.systemLanguage()
   @StorageLink('i18nLang') private i18nLang: string = I18n.systemLanguage()
   @State private languageRevision: number = 0
@@ -421,7 +416,7 @@ export struct WindowNativeNode {
   @State private informationSettingPending: boolean = false
   @State private timeSettingsPending: boolean = false
   @State private deltaTStore: DeltaTStore = new DeltaTStore()
-  @State private presetSkyTime: number = 0
+  // presetSkyTime 已并入 state/TimeSettingsStore.ets（review §2.7）。
   // 视图导航设置（9 字段）已下沉 state/NavigationSettingsStore.ets（review §2.7）。
   @State private navigationStore: NavigationSettingsStore = new NavigationSettingsStore()
   // Open AstroCalc on the observation-first view: it needs no selected object
@@ -437,18 +432,14 @@ export struct WindowNativeNode {
   // 桥接数据
   @State private moduleList: string[] = []
   private rtsRequestSequence: number = 0
-  @State private rtsCalendarStartYear: number = new Date().getFullYear()
-  @State private rtsCalendarStartMonth: number = new Date().getMonth() + 1
-  @State private rtsCalendarStartDay: number = new Date().getDate()
+  // rtsCalendarStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7）。
   private almanacRequestSequence: number = 0
   private planetPositionsRequestSequence: number = 0
   private hecPositionsRequestSequence: number = 0
   private celestialPositionsRequestSequence: number = 0
   private planetCalcRequestSequence: number = 0
   private planetPairDistanceRequestSequence: number = 0
-  @State private graphStartYear: number = new Date().getFullYear()
-  @State private graphStartMonth: number = new Date().getMonth() + 1
-  @State private graphStartDay: number = new Date().getDate()
+  // graphStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7）。
   private graphTargetPickerActive: boolean = false
   private rtsTargetPickerActive: boolean = false
   private ephemerisTargetPickerActive: boolean = false
@@ -574,7 +565,8 @@ export struct WindowNativeNode {
   @State private commandStore: CommandStore = new CommandStore()
   @State private catalogHealthLoaded: boolean = false
   @State private catalogManifestPresent: boolean = false
-  @State private starCatalogHealth: CatalogHealthEntry = {}
+  // starCatalogHealth 与 objectCatalogCategories 已并入 state/CatalogStore.ets（review §2.7）；
+  // catalogHealthLoaded / catalogManifestPresent 仍留宿主（与卫星面板共用）。
   private satelliteListRequestId: number = 0
   private satelliteLoadTimer: number = -1
   private satelliteLoadIncludeSources: boolean = false
@@ -4439,7 +4431,7 @@ export struct WindowNativeNode {
       this.catalogHealthLoaded = true
       this.catalogManifestPresent = health.manifestPresent === true
       this.satelliteStore.satelliteCatalogHealth = health.satellites ?? {}
-      this.starCatalogHealth = health.stars ?? {}
+      this.catalogStore.starCatalogHealth = health.stars ?? {}
     })
   }
   private catalogHealthText(title: string, health: CatalogHealthEntry): string {
@@ -5201,7 +5193,7 @@ export struct WindowNativeNode {
     this.timeSettingsStore.startupTimeStop = result.startupTimeStop ?? this.timeSettingsStore.startupTimeStop
     this.timeSettingsStore.startupTodayTime = result.todayTime ?? this.timeSettingsStore.startupTodayTime
     this.timeSettingsStore.startupPresetLocalTime = result.presetLocalTime ?? this.timeSettingsStore.startupPresetLocalTime
-    if (result.presetSkyTime !== undefined) this.presetSkyTime = Number(result.presetSkyTime)
+    if (result.presetSkyTime !== undefined) this.timeSettingsStore.presetSkyTime = Number(result.presetSkyTime)
     this.timeSettingsStore.configDateFormat = result.dateFormat ?? this.timeSettingsStore.configDateFormat
     this.timeSettingsStore.configTimeFormat = result.timeFormat ?? this.timeSettingsStore.configTimeFormat
     this.timeStore.observationTimeText = result.formattedTime ?? this.timeStore.observationTimeText
@@ -5714,7 +5706,7 @@ export struct WindowNativeNode {
 
   private resolveRtsCalendarStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
     if (this.astroStore.rtsCalendarStartOffsetDays < 0) {
-      onReady(this.dateToJD(this.rtsCalendarStartYear, this.rtsCalendarStartMonth, this.rtsCalendarStartDay, 0, 0))
+      onReady(this.dateToJD(this.astroStore.rtsCalendarStartYear, this.astroStore.rtsCalendarStartMonth, this.astroStore.rtsCalendarStartDay, 0, 0))
       return
     }
     if (this.astroStore.rtsCalendarStartOffsetDays === 0) {
@@ -5737,7 +5729,7 @@ export struct WindowNativeNode {
 
   private rtsCalendarStartOptionLabel(offsetDays: number): string {
     if (offsetDays < 0) {
-      return this.rtsCalendarStartYear.toString() + '-' + this.rtsCalendarStartMonth.toString().padStart(2, '0') + '-' + this.rtsCalendarStartDay.toString().padStart(2, '0')
+      return this.astroStore.rtsCalendarStartYear.toString() + '-' + this.astroStore.rtsCalendarStartMonth.toString().padStart(2, '0') + '-' + this.astroStore.rtsCalendarStartDay.toString().padStart(2, '0')
     }
     if (offsetDays === 0) return '当前'
     return '+' + offsetDays.toString() + ' 天'
@@ -5753,15 +5745,15 @@ export struct WindowNativeNode {
   }
 
   private chooseRtsCalendarStartDate(): void {
-    this.pickedDate = new Date(this.rtsCalendarStartYear, this.rtsCalendarStartMonth - 1, this.rtsCalendarStartDay)
+    this.pickedDate = new Date(this.astroStore.rtsCalendarStartYear, this.astroStore.rtsCalendarStartMonth - 1, this.astroStore.rtsCalendarStartDay)
     this.getUIContext().showDatePickerDialog({
       start: new Date('1900-01-01'),
       end: new Date('2100-12-31'),
       selected: this.pickedDate,
       onAccept: (value: DatePickerResult) => {
-        this.rtsCalendarStartYear = value.year ?? this.rtsCalendarStartYear
-        this.rtsCalendarStartMonth = (value.month ?? (this.rtsCalendarStartMonth - 1)) + 1
-        this.rtsCalendarStartDay = value.day ?? this.rtsCalendarStartDay
+        this.astroStore.rtsCalendarStartYear = value.year ?? this.astroStore.rtsCalendarStartYear
+        this.astroStore.rtsCalendarStartMonth = (value.month ?? (this.astroStore.rtsCalendarStartMonth - 1)) + 1
+        this.astroStore.rtsCalendarStartDay = value.day ?? this.astroStore.rtsCalendarStartDay
         this.astroStore.rtsCalendarStartOffsetDays = -1
         this.markRtsCalendarForRegeneration()
       },
@@ -6124,7 +6116,7 @@ export struct WindowNativeNode {
 
   private resolveGraphStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
     if (this.astroStore.graphStartOffsetDays < 0) {
-      onReady(this.dateToJD(this.graphStartYear, this.graphStartMonth, this.graphStartDay, 0, 0))
+      onReady(this.dateToJD(this.astroStore.graphStartYear, this.astroStore.graphStartMonth, this.astroStore.graphStartDay, 0, 0))
       return
     }
     if (this.astroStore.graphStartOffsetDays === 0) {
@@ -6154,19 +6146,19 @@ export struct WindowNativeNode {
 
   private graphCustomStartLabel(): string {
     if (this.astroStore.graphStartOffsetDays >= 0) return '指定日期'
-    return this.graphStartYear.toString() + '-' + this.graphStartMonth.toString().padStart(2, '0') + '-' + this.graphStartDay.toString().padStart(2, '0')
+    return this.astroStore.graphStartYear.toString() + '-' + this.astroStore.graphStartMonth.toString().padStart(2, '0') + '-' + this.astroStore.graphStartDay.toString().padStart(2, '0')
   }
 
   private chooseGraphStartDate(): void {
-    this.pickedDate = new Date(this.graphStartYear, this.graphStartMonth - 1, this.graphStartDay)
+    this.pickedDate = new Date(this.astroStore.graphStartYear, this.astroStore.graphStartMonth - 1, this.astroStore.graphStartDay)
     this.getUIContext().showDatePickerDialog({
       start: new Date('1900-01-01'),
       end: new Date('2100-12-31'),
       selected: this.pickedDate,
       onAccept: (value: DatePickerResult) => {
-        this.graphStartYear = value.year ?? this.graphStartYear
-        this.graphStartMonth = (value.month ?? (this.graphStartMonth - 1)) + 1
-        this.graphStartDay = value.day ?? this.graphStartDay
+        this.astroStore.graphStartYear = value.year ?? this.astroStore.graphStartYear
+        this.astroStore.graphStartMonth = (value.month ?? (this.astroStore.graphStartMonth - 1)) + 1
+        this.astroStore.graphStartDay = value.day ?? this.astroStore.graphStartDay
         this.astroStore.graphStartOffsetDays = -1
         this.reloadCurrentGraph()
       },
@@ -9315,7 +9307,7 @@ private loadPlanetPositions(): void {
           isPluginCatalog: item['isPluginCatalog'] === true
         })
       }
-      this.objectCatalogCategories = categories
+      this.catalogStore.objectCatalogCategories = categories
       this.publishSearchBrowserState()
       const pendingModuleId = this.searchStore.pendingPluginCatalogId
       if (pendingModuleId.length > 0 && categories.some((item: CatOption) => item.moduleId === pendingModuleId)) {
@@ -9356,7 +9348,7 @@ private loadPlanetPositions(): void {
   }
 
   private catalogLabelForModule(moduleId: string, fallback: ResourceStr): ResourceStr {
-    for (const option of this.objectCatalogCategories) {
+    for (const option of this.catalogStore.objectCatalogCategories) {
       if (option.moduleId === moduleId) return option.label
     }
     return fallback
@@ -9389,7 +9381,7 @@ private loadPlanetPositions(): void {
     for (const option of this.searchCategoryOptions()) {
       if (option.code === category) return option.moduleId ?? ''
     }
-    for (const option of this.objectCatalogCategories) {
+    for (const option of this.catalogStore.objectCatalogCategories) {
       if (option.code === category) return option.moduleId ?? ''
     }
     return ''
@@ -9455,7 +9447,7 @@ private loadPlanetPositions(): void {
     const knownModules: Record<string, boolean> = {}
     for (const option of core) knownModules[option.moduleId ?? ''] = true
     const dynamic: CatOption[] = []
-    for (const option of this.objectCatalogCategories) {
+    for (const option of this.catalogStore.objectCatalogCategories) {
       if (!knownModules[option.moduleId ?? ''] && option.isPluginCatalog === true) dynamic.push(option)
     }
     dynamic.sort((left: CatOption, right: CatOption) => String(left.label).localeCompare(String(right.label)))
@@ -9466,7 +9458,7 @@ private loadPlanetPositions(): void {
     for (const option of this.searchCategoryOptions()) {
       if (option.code === this.searchStore.searchCategory) return String(option.label)
     }
-    for (const option of this.objectCatalogCategories) {
+    for (const option of this.catalogStore.objectCatalogCategories) {
       if (option.code === this.searchStore.searchCategory) return String(option.label)
     }
     return I18n.t('search_browse_categories')
@@ -9498,7 +9490,7 @@ private loadPlanetPositions(): void {
     for (const option of this.searchCategoryOptions()) {
       if (option.code === category) return option.iconKey ?? 'catalog_plugin'
     }
-    for (const option of this.objectCatalogCategories) {
+    for (const option of this.catalogStore.objectCatalogCategories) {
       if (option.code === category) return option.iconKey ?? 'catalog_plugin'
     }
     return 'catalog_plugin'
@@ -9841,10 +9833,10 @@ private loadPlanetPositions(): void {
   }
 
   private applyManualTime(): void {
-    const jd = this.dateToJD(this.manualYear, this.manualMonth, this.manualDay, this.manualHour, this.manualMinute)
+    const jd = this.dateToJD(this.timeStore.manualYear, this.timeStore.manualMonth, this.timeStore.manualDay, this.timeStore.manualHour, this.timeStore.manualMinute)
     this.callInteractive('setJD', jd.toFixed(6), (r: StellariumBridgeResponse) => {
       this.refreshState()
-      this.flashHint(String(this.manualMonth).padStart(2, '0') + '-' + String(this.manualDay).padStart(2, '0') + ' ' + String(this.manualHour).padStart(2, '0') + ':' + String(this.manualMinute).padStart(2, '0'))
+      this.flashHint(String(this.timeStore.manualMonth).padStart(2, '0') + '-' + String(this.timeStore.manualDay).padStart(2, '0') + ' ' + String(this.timeStore.manualHour).padStart(2, '0') + ':' + String(this.timeStore.manualMinute).padStart(2, '0'))
     })
   }
 
@@ -9882,7 +9874,7 @@ private loadPlanetPositions(): void {
       this.callNativeWhenReady('setLanguage', lang, () => {
         if (this.languageRefreshSerial !== languageSerial) return
         const selectedCategoryModuleId = this.searchStore.categoryModuleId
-        this.objectCatalogCategories = []
+        this.catalogStore.objectCatalogCategories = []
         this.searchStore.categoryObjects = []
         this.searchStore.searchSuggestions = []
         this.searchStore.constellationNavigationItems = []
@@ -9916,11 +9908,11 @@ private loadPlanetPositions(): void {
       const dayFraction = f * 24
       const hour = Math.floor(dayFraction)
       const minute = Math.floor((dayFraction - hour) * 60)
-      this.manualYear = year
-      this.manualMonth = month
-      this.manualDay = day
-      this.manualHour = hour
-      this.manualMinute = minute
+      this.timeStore.manualYear = year
+      this.timeStore.manualMonth = month
+      this.timeStore.manualDay = day
+      this.timeStore.manualHour = hour
+      this.timeStore.manualMinute = minute
     }
     })
   }
@@ -17308,11 +17300,11 @@ private loadPlanetPositions(): void {
         julianStore: this.julianStore,
         nightModeStore: this.nightModeStore,
         atmosphereStore: this.atmosphereStore,
-        manualYear: this.manualYear,
-        manualMonth: this.manualMonth,
-        manualDay: this.manualDay,
-        manualHour: this.manualHour,
-        manualMinute: this.manualMinute,
+        manualYear: this.timeStore.manualYear,
+        manualMonth: this.timeStore.manualMonth,
+        manualDay: this.timeStore.manualDay,
+        manualHour: this.timeStore.manualHour,
+        manualMinute: this.timeStore.manualMinute,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         accentColor: this.nmAccent(),
@@ -17328,9 +17320,9 @@ private loadPlanetPositions(): void {
         onNightMode: (enabled: boolean) => { this.applyNightMode(enabled, true) },
         onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.applyAtmosphere(pressure, temperature, extinction) },
         onPickDate: (year: number, monthIndex: number, day: number) => {
-          this.manualYear = year; this.manualMonth = monthIndex + 1; this.manualDay = day
+          this.timeStore.manualYear = year; this.timeStore.manualMonth = monthIndex + 1; this.timeStore.manualDay = day
         },
-        onPickTime: (hour: number, minute: number) => { this.manualHour = hour; this.manualMinute = minute },
+        onPickTime: (hour: number, minute: number) => { this.timeStore.manualHour = hour; this.timeStore.manualMinute = minute },
         onApplyManual: () => { this.applyManualTime() },
         onResetManual: () => { this.syncManualTimeFromState(); this.flashHint(I18n.t('i0081')) }
       })
@@ -17489,7 +17481,7 @@ private loadPlanetPositions(): void {
         selectedLanguage: this.selectedLanguage,
         skyCultureViewStore: this.skyCultureViewStore,
         satelliteCatalogHealth: this.satelliteStore.satelliteCatalogHealth,
-        starCatalogHealth: this.starCatalogHealth,
+        starCatalogHealth: this.catalogStore.starCatalogHealth,
         gyroSensitivityText: this.sensZh(this.gyroStore.gyroscopeSensitivityText),
         textColor: this.nmText(),
         subColor: this.nmSub(),

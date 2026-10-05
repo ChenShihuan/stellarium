@@ -10,4 +10,7 @@ export class TimeSettingsStore {
   startupTodayTime: string = '12:00:00'
   startupPresetLocalTime: string = ''
   timeSettingsZone: string = ''
+  // 「预设天空时间」（JD）：宿主 applyTimeSettings 从配置回包写入。当前无 ArkTS 读取方，
+  // 按 review §2.7 随本域下沉保留（原宿主 @State，默认 0）。
+  presetSkyTime: number = 0
 }
