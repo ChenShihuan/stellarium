@@ -125,6 +125,9 @@ import { NavStarsStore } from '../state/NavStarsStore'
 import { MosaicStore } from '../state/MosaicStore'
 import { ObservingListStore } from '../state/ObservingListStore'
 import { AudioStore } from '../state/AudioStore'
+import { EphemerisStore } from '../state/EphemerisStore'
+import { NebulaTextureStore } from '../state/NebulaTextureStore'
+import { PluginStore } from '../state/PluginStore'
 import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
 import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
@@ -409,14 +412,7 @@ export struct WindowNativeNode {
   @State private configTab: number = 0  // 统一设置面板子标签索引；默认显示主设置
   @State private timeSettingsStore: TimeSettingsStore = new TimeSettingsStore()
   @State private configDitheringMode: string = 'Color888'
-  @State private ephemerisDe430Available: boolean = false
-  @State private ephemerisDe431Available: boolean = false
-  @State private ephemerisDe440Available: boolean = false
-  @State private ephemerisDe441Available: boolean = false
-  @State private ephemerisDe430Active: boolean = false
-  @State private ephemerisDe431Active: boolean = false
-  @State private ephemerisDe440Active: boolean = false
-  @State private ephemerisDe441Active: boolean = false
+  @State private ephemerisStore: EphemerisStore = new EphemerisStore()
   @State private informationMode: string = 'default'
   @State private informationCustomMask: number = 0
   @State private informationSettingPending: boolean = false
@@ -460,9 +456,6 @@ export struct WindowNativeNode {
   private planetPositionsRequestSequence: number = 0
   private hecPositionsRequestSequence: number = 0
   private celestialPositionsRequestSequence: number = 0
-  @State private ephemerisStartYear: number = new Date().getFullYear()
-  @State private ephemerisStartMonth: number = new Date().getMonth() + 1
-  @State private ephemerisStartDay: number = new Date().getDate()
   private planetCalcRequestSequence: number = 0
   private planetPairDistanceRequestSequence: number = 0
   @State private graphStartYear: number = new Date().getFullYear()
@@ -512,14 +505,9 @@ export struct WindowNativeNode {
   private polarScopeRestoreState: string = ''
   private polarScopeTransitionPending: boolean = false
   private polarScopeTransitionId: number = 0
-  @State private pluginList: Array<PluginItem> = []
-  @State private pluginListLoading: boolean = false
+  @State private pluginStore: PluginStore = new PluginStore()
   private pluginFeatureLoading: string[] = []
-  @State private nebulaTextureStatus: NebulaTextureStatus | undefined = undefined
-  @State private nebulaTextureLoading: boolean = false
-  @State private nebulaTexturePending: boolean = false
-  @State private nebulaTextureImporting: boolean = false
-  @State private nebulaTextureActionStatus: string = ''
+  @State private nebulaTextureStore: NebulaTextureStore = new NebulaTextureStore()
   private angleMeasureRequestId: number = 0
   // 航海星域状态已下沉 state/NavStarsStore.ets（review §2.7：Prop 风格 → Store 风格）。
   // 请求序号 navStarsLoadRequestId / navStarsMutationId 仍由宿主自持（见下方）。
@@ -1333,7 +1321,7 @@ export struct WindowNativeNode {
       }
       if (commandName === 'getNebulaTextureStatus' || commandName === 'setNebulaTexturesVisible' ||
         commandName === 'setNebulaTextureConflictAvoidance') {
-        if (response.ok === true) this.nebulaTextureStatus = response as NebulaTextureStatus
+        if (response.ok === true) this.nebulaTextureStore.nebulaTextureStatus = response as NebulaTextureStatus
         return
       }
       if (commandName === 'setTimeSetting' || commandName === 'getTimeSettings' ||
@@ -5111,14 +5099,14 @@ export struct WindowNativeNode {
     })
     this.callInteractive('getEphemerisSettings', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
-      this.ephemerisDe430Available = r.de430Available === true
-      this.ephemerisDe431Available = r.de431Available === true
-      this.ephemerisDe440Available = r.de440Available === true
-      this.ephemerisDe441Available = r.de441Available === true
-      this.ephemerisDe430Active = r.de430Active === true
-      this.ephemerisDe431Active = r.de431Active === true
-      this.ephemerisDe440Active = r.de440Active === true
-      this.ephemerisDe441Active = r.de441Active === true
+      this.ephemerisStore.ephemerisDe430Available = r.de430Available === true
+      this.ephemerisStore.ephemerisDe431Available = r.de431Available === true
+      this.ephemerisStore.ephemerisDe440Available = r.de440Available === true
+      this.ephemerisStore.ephemerisDe441Available = r.de441Available === true
+      this.ephemerisStore.ephemerisDe430Active = r.de430Active === true
+      this.ephemerisStore.ephemerisDe431Active = r.de431Active === true
+      this.ephemerisStore.ephemerisDe440Active = r.de440Active === true
+      this.ephemerisStore.ephemerisDe441Active = r.de441Active === true
     })
     this.callInteractive('getInformationSettings', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
@@ -5138,10 +5126,10 @@ export struct WindowNativeNode {
     }
     this.callInteractive('setEphemerisSetting', key + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) { this.flashHint(r.error ?? I18n.t('msg_apply_failed')); return }
-      if (key === 'de430') this.ephemerisDe430Active = enabled
-      else if (key === 'de431') this.ephemerisDe431Active = enabled
-      else if (key === 'de440') this.ephemerisDe440Active = enabled
-      else if (key === 'de441') this.ephemerisDe441Active = enabled
+      if (key === 'de430') this.ephemerisStore.ephemerisDe430Active = enabled
+      else if (key === 'de431') this.ephemerisStore.ephemerisDe431Active = enabled
+      else if (key === 'de440') this.ephemerisStore.ephemerisDe440Active = enabled
+      else if (key === 'de441') this.ephemerisStore.ephemerisDe441Active = enabled
     })
   }
 
@@ -5850,7 +5838,7 @@ export struct WindowNativeNode {
 
   private resolveEphemerisStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
     if (this.astroStore.ephemerisStartOffsetDays < 0) {
-      onReady(this.dateToJD(this.ephemerisStartYear, this.ephemerisStartMonth, this.ephemerisStartDay, 0, 0))
+      onReady(this.dateToJD(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth, this.ephemerisStore.ephemerisStartDay, 0, 0))
       return
     }
     if (this.astroStore.ephemerisStartOffsetDays === 0) {
@@ -5873,22 +5861,22 @@ export struct WindowNativeNode {
 
   private ephemerisStartOptionLabel(offsetDays: number): string {
     if (offsetDays < 0) {
-      return this.ephemerisStartYear.toString() + '-' + this.ephemerisStartMonth.toString().padStart(2, '0') + '-' + this.ephemerisStartDay.toString().padStart(2, '0')
+      return this.ephemerisStore.ephemerisStartYear.toString() + '-' + this.ephemerisStore.ephemerisStartMonth.toString().padStart(2, '0') + '-' + this.ephemerisStore.ephemerisStartDay.toString().padStart(2, '0')
     }
     if (offsetDays === 0) return '当前'
     return '+' + offsetDays.toString() + ' 天'
   }
 
   private chooseEphemerisStartDate(): void {
-    this.pickedDate = new Date(this.ephemerisStartYear, this.ephemerisStartMonth - 1, this.ephemerisStartDay)
+    this.pickedDate = new Date(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth - 1, this.ephemerisStore.ephemerisStartDay)
     this.getUIContext().showDatePickerDialog({
       start: new Date('1900-01-01'),
       end: new Date('2100-12-31'),
       selected: this.pickedDate,
       onAccept: (value: DatePickerResult) => {
-        this.ephemerisStartYear = value.year ?? this.ephemerisStartYear
-        this.ephemerisStartMonth = (value.month ?? (this.ephemerisStartMonth - 1)) + 1
-        this.ephemerisStartDay = value.day ?? this.ephemerisStartDay
+        this.ephemerisStore.ephemerisStartYear = value.year ?? this.ephemerisStore.ephemerisStartYear
+        this.ephemerisStore.ephemerisStartMonth = (value.month ?? (this.ephemerisStore.ephemerisStartMonth - 1)) + 1
+        this.ephemerisStore.ephemerisStartDay = value.day ?? this.ephemerisStore.ephemerisStartDay
         this.astroStore.ephemerisStartOffsetDays = -1
         this.loadEphemeris()
       },
@@ -8707,9 +8695,9 @@ export struct WindowNativeNode {
   }
 
   private loadPluginList(): void {
-    this.pluginListLoading = true
+    this.pluginStore.pluginListLoading = true
     this.callInteractive('getPluginList', '', (r: StellariumBridgeResponse) => {
-      this.pluginListLoading = false
+      this.pluginStore.pluginListLoading = false
       if (r.ok === true && r.items !== undefined && Array.isArray(r.items)) {
         const arr = r.items as Array<Record<string, Object>>;
         const list: Array<PluginItem> = [];
@@ -8734,15 +8722,15 @@ export struct WindowNativeNode {
             source: obj['source'] as string | undefined
           });
         }
-        this.pluginList = list;
+        this.pluginStore.pluginList = list;
       }
     }, () => {
-      this.pluginListLoading = false
+      this.pluginStore.pluginListLoading = false
     })
   }
 
   private updatePluginLoadedItem(id: string, loaded: boolean): void {
-    this.pluginList = this.pluginList.map((item: PluginItem) => {
+    this.pluginStore.pluginList = this.pluginStore.pluginList.map((item: PluginItem) => {
       if (item.id !== id) return item
       return {
         id: item.id,
@@ -8838,70 +8826,70 @@ export struct WindowNativeNode {
   }
 
   private loadNebulaTextureStatus(): void {
-    if (this.nebulaTextureLoading) return
-    this.nebulaTextureLoading = true
+    if (this.nebulaTextureStore.nebulaTextureLoading) return
+    this.nebulaTextureStore.nebulaTextureLoading = true
     this.callInteractive('getNebulaTextureStatus', '', (r: StellariumBridgeResponse) => {
-      this.nebulaTextureLoading = false
+      this.nebulaTextureStore.nebulaTextureLoading = false
       if (r.ok !== true) {
-        this.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_status_failed')
+        this.nebulaTextureStore.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_status_failed')
         return
       }
-      this.nebulaTextureStatus = r as NebulaTextureStatus
+      this.nebulaTextureStore.nebulaTextureStatus = r as NebulaTextureStatus
     }, () => {
-      this.nebulaTextureLoading = false
-      this.nebulaTextureActionStatus = I18n.t('nebula_texture_status_failed')
+      this.nebulaTextureStore.nebulaTextureLoading = false
+      this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_status_failed')
     })
   }
 
   private setNebulaTextureVisible(enabled: boolean): void {
-    this.setNebulaTextureFlag('setNebulaTexturesVisible', enabled, this.nebulaTextureStatus?.enabled === true)
+    this.setNebulaTextureFlag('setNebulaTexturesVisible', enabled, this.nebulaTextureStore.nebulaTextureStatus?.enabled === true)
   }
 
   private setNebulaTextureFlag(command: string, enabled: boolean, current: boolean): void {
-    if (this.nebulaTexturePending || this.nebulaTextureLoading || this.nebulaTextureImporting || enabled === current) return
-    this.nebulaTexturePending = true
+    if (this.nebulaTextureStore.nebulaTexturePending || this.nebulaTextureStore.nebulaTextureLoading || this.nebulaTextureStore.nebulaTextureImporting || enabled === current) return
+    this.nebulaTextureStore.nebulaTexturePending = true
     this.callInteractive(command, enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
-      this.nebulaTexturePending = false
-      if (r.ok === true) this.nebulaTextureStatus = r as NebulaTextureStatus
-      else this.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
+      this.nebulaTextureStore.nebulaTexturePending = false
+      if (r.ok === true) this.nebulaTextureStore.nebulaTextureStatus = r as NebulaTextureStatus
+      else this.nebulaTextureStore.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
     }, () => {
-      this.nebulaTexturePending = false
-      this.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed')
+      this.nebulaTextureStore.nebulaTexturePending = false
+      this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed')
     })
   }
 
   private refreshNebulaTextures(): void {
-    if (this.nebulaTextureLoading || this.nebulaTexturePending || this.nebulaTextureImporting) return
-    this.nebulaTextureLoading = true
+    if (this.nebulaTextureStore.nebulaTextureLoading || this.nebulaTextureStore.nebulaTexturePending || this.nebulaTextureStore.nebulaTextureImporting) return
+    this.nebulaTextureStore.nebulaTextureLoading = true
     this.callInteractive('refreshNebulaTextures', '', (r: StellariumBridgeResponse) => {
-      this.nebulaTextureLoading = false
+      this.nebulaTextureStore.nebulaTextureLoading = false
       const status = (r as NebulaTextureRefreshResponse).status
-      if (status !== undefined) this.nebulaTextureStatus = status
-      this.nebulaTextureActionStatus = r.ok === true ? I18n.t('nebula_texture_refreshed') : (r.error ?? I18n.t('nebula_texture_action_failed'))
+      if (status !== undefined) this.nebulaTextureStore.nebulaTextureStatus = status
+      this.nebulaTextureStore.nebulaTextureActionStatus = r.ok === true ? I18n.t('nebula_texture_refreshed') : (r.error ?? I18n.t('nebula_texture_action_failed'))
     }, () => {
-      this.nebulaTextureLoading = false
-      this.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed')
+      this.nebulaTextureStore.nebulaTextureLoading = false
+      this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed')
     })
   }
 
   private gotoNebulaTexture(imageUrl: string): void {
     this.callInteractive('gotoNebulaTexture', imageUrl, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) this.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
-    }, () => { this.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed') })
+      if (r.ok !== true) this.nebulaTextureStore.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
+    }, () => { this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed') })
   }
 
   private removeNebulaTexture(imageUrl: string): void {
     this.callInteractive('removeNebulaTexture', imageUrl, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
-        this.nebulaTextureActionStatus = I18n.t('nebula_texture_removed')
+        this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_removed')
         this.loadNebulaTextureStatus()
-      } else this.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
-    }, () => { this.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed') })
+      } else this.nebulaTextureStore.nebulaTextureActionStatus = r.error ?? I18n.t('nebula_texture_action_failed')
+    }, () => { this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_action_failed') })
   }
 
   private async importNebulaTextureFile(): Promise<void> {
-    if (this.nebulaTextureImporting) return
-    this.nebulaTextureImporting = true
+    if (this.nebulaTextureStore.nebulaTextureImporting) return
+    this.nebulaTextureStore.nebulaTextureImporting = true
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext
       const options = new picker.DocumentSelectOptions()
@@ -8909,8 +8897,8 @@ export struct WindowNativeNode {
       options.maxSelectNumber = 1
       const selectedUris = await new picker.DocumentViewPicker(context).select(options)
       if (selectedUris.length === 0 || selectedUris[0].length === 0) {
-        this.nebulaTextureActionStatus = I18n.t('nebula_texture_import_cancelled')
-        this.nebulaTextureImporting = false
+        this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_import_cancelled')
+        this.nebulaTextureStore.nebulaTextureImporting = false
         return
       }
       const importDir = context.filesDir + '/nebula-texture-imports'
@@ -8919,17 +8907,17 @@ export struct WindowNativeNode {
       const sourcePath = importDir + '/' + (sourceName.length > 0 ? sourceName : 'texture-' + Date.now().toString() + '.png')
       await fileIo.copy(selectedUris[0], fileUri.getUriFromPath(sourcePath))
       this.callInteractive('importNebulaTexture', JSON.stringify({ sourcePath: sourcePath }), (r: StellariumBridgeResponse) => {
-        this.nebulaTextureActionStatus = r.ok === true ? I18n.t('nebula_texture_imported') : (r.error ?? I18n.t('nebula_texture_import_failed'))
+        this.nebulaTextureStore.nebulaTextureActionStatus = r.ok === true ? I18n.t('nebula_texture_imported') : (r.error ?? I18n.t('nebula_texture_import_failed'))
         if (r.ok === true) this.loadNebulaTextureStatus()
-        this.nebulaTextureImporting = false
+        this.nebulaTextureStore.nebulaTextureImporting = false
       }, () => {
-        this.nebulaTextureActionStatus = I18n.t('nebula_texture_import_failed')
-        this.nebulaTextureImporting = false
+        this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_import_failed')
+        this.nebulaTextureStore.nebulaTextureImporting = false
       })
     } catch (error) {
       hilog.error(0x0000, 'StellariumArkUI', 'Nebula texture import failed: %{public}s', String(error))
-      this.nebulaTextureActionStatus = I18n.t('nebula_texture_import_failed')
-      this.nebulaTextureImporting = false
+      this.nebulaTextureStore.nebulaTextureActionStatus = I18n.t('nebula_texture_import_failed')
+      this.nebulaTextureStore.nebulaTextureImporting = false
     }
   }
 
@@ -17620,6 +17608,7 @@ private loadPlanetPositions(): void {
         overlayStore: this.overlayStore,
         deltaTStore: this.deltaTStore,
         timeSettingsStore: this.timeSettingsStore,
+        ephemerisStore: this.ephemerisStore,
         scroller: this.scriptListScroller,
         configTab: this.configTab,
         configTabContentOpacity: this.configTabContentOpacity,
@@ -17632,21 +17621,12 @@ private loadPlanetPositions(): void {
         informationSettingPending: this.informationSettingPending,
         currentProjection: this.currentProjection,
         configDitheringMode: this.configDitheringMode,
-        ephemerisDe430Available: this.ephemerisDe430Available,
-        ephemerisDe430Active: this.ephemerisDe430Active,
-        ephemerisDe431Available: this.ephemerisDe431Available,
-        ephemerisDe431Active: this.ephemerisDe431Active,
-        ephemerisDe440Available: this.ephemerisDe440Available,
-        ephemerisDe440Active: this.ephemerisDe440Active,
-        ephemerisDe441Available: this.ephemerisDe441Available,
-        ephemerisDe441Active: this.ephemerisDe441Active,
         timeSettingsPending: this.timeSettingsPending,
         observationTimeText: this.timeStore.observationTimeText,
         scriptLaunching: this.scriptStore.scriptLaunching,
         scriptLaunchingName: this.scriptStore.scriptLaunchingName,
         scriptList: this.scriptStore.scriptList,
-        pluginList: this.pluginList,
-        pluginListLoading: this.pluginListLoading,
+        pluginStore: this.pluginStore,
         fovText: this.fovText,
         viewLock: this.viewLock,
         navigationMouseEnabled: this.navigationMouseEnabled,
@@ -18005,17 +17985,7 @@ private loadPlanetPositions(): void {
       })
         } else if (this.activePanel === 'nebulaTextures') {
       NebulaTexturesPanel({
-        statusPresent: this.nebulaTextureStatus !== undefined,
-        statusEnabled: this.nebulaTextureStatus?.enabled === true,
-        statusAvoidConflict: this.nebulaTextureStatus?.avoidAreaConflict === true,
-        statusReadyCount: this.nebulaTextureStatus?.readyCount ?? 0,
-        statusCount: this.nebulaTextureStatus?.count ?? 0,
-        statusConfigLoaded: this.nebulaTextureStatus?.configLoaded === true,
-        statusItems: this.nebulaTextureStatus?.items ?? [],
-        pending: this.nebulaTexturePending,
-        loading: this.nebulaTextureLoading,
-        importing: this.nebulaTextureImporting,
-        actionStatus: this.nebulaTextureActionStatus,
+        store: this.nebulaTextureStore,
         textColor: this.nmText(),
         subColor: this.nmSub(),
         accentColor: this.nmAccent(),
@@ -18023,7 +17993,7 @@ private loadPlanetPositions(): void {
         onSetVisible: (enabled: boolean) => { this.setNebulaTextureVisible(enabled) },
         onRefresh: () => { this.refreshNebulaTextures() },
         onImport: () => { this.importNebulaTextureFile() },
-        onSetConflictAvoidance: (value: boolean) => { this.setNebulaTextureFlag('setNebulaTextureConflictAvoidance', value, this.nebulaTextureStatus?.avoidAreaConflict === true) },
+        onSetConflictAvoidance: (value: boolean) => { this.setNebulaTextureFlag('setNebulaTextureConflictAvoidance', value, this.nebulaTextureStore.nebulaTextureStatus?.avoidAreaConflict === true) },
         onGoto: (imageUrl: string) => { this.gotoNebulaTexture(imageUrl) },
         onRemove: (imageUrl: string) => { this.removeNebulaTexture(imageUrl) }
       })
