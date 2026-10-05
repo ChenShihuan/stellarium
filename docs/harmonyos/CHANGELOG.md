@@ -1,3 +1,13 @@
+## [2026-10-01] DevEco Code - Phase 3o：搜索域第一片（搜索输入栏 → SearchStore + SearchBar）
+
+- **背景：** search 域共 19 字段 / 143 处引用，按 §13.2 协议拆片推进；本片取最小的自包含部分——**搜索输入栏**。
+- **新增文件：** `state/SearchStore.ets`（`searchText` / `searchSuggestions`）、`panels/search/SearchBar.ets`（放大镜 + 输入框；`@ObjectLink store` + `onInput` / `onSubmit` / `onInputFocus` 三个回调）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— `@State searchText` / `@State searchSuggestions` 合并为 `@State private searchStore`；22 处引用改写；`this.centerSearchBar()`（40 行 builder）替换为 `SearchBar({...})` 调用，**原 builder 内的三处交互逻辑按职责搬回宿主回调**（输入 → `scheduleSuggestions`；回车 → 清定时器 + `searchObject` + 清候选；聚焦 → 手机端把面板吸附到 0.9 并 `scheduleSelectedObjectForUiChange`）；删除该 builder。
+- **顺带清理：** `searchHistory` **无任何渲染读取**（仅存储读写与 `searchObject()` 使用）→ 由 `@State` 降级为普通 `private` 字段，不进 store（少一个无谓的响应式变量）。
+- **第五次命中同名冲突：** `onFocus` 与 `CustomComponent` 基类属性方法冲突（编译报 `Property 'onFocus' ... is not assignable to the same property in base type 'CustomComponent'`）→ 改名 `onInputFocus`。累记禁用成员名：`borderColor` / `scale` / `onTouch` / `onFocus` / `onChange` 一族。
+- **真机验证（`192.168.3.95:40565`）：** 构建、契约校验、安装启动均通过；打开搜索面板后输入 `Mars` → 输入框经 store 正确显示，候选区**实时出现**「搜索结果 / **14 个候选**」以及 `Mars` / `Mars I` 等条目（候选列表仍在宿主渲染，证明宿主读 store 亦能实时重绘）；面板契约锚点 `#search-category-picker` / `#search-filter-picker` 完好。测后已重启应用清除临时输入。
+- **单体行数：** 29,614 → **29,587**。
+
 ## [2026-09-30] DevEco Code - Phase 3n：书签域重做（Phase 3a 回退项补完，真机四项实时验证通过）
 
 - **背景：** 本片是 **Phase 3a 被回退那一片的重做**。当时（BookmarkStore + BookmarkPanel）已通过构建与"状态归属"验证，但无法证明实时刷新等价，按"行为零变更"不变式回退。此后经真机实验确立了 (b) 方案的完整规则：① `@ObjectLink` 的宿主源必须是 `@State` 持有的可观察实例；② 组件成员名必须避开 `CustomComponent` 基类属性方法；③ 迁移 UI 不得保留**参数化 `@Builder`**；④ 宿主对 store 的写入确实会触发宿主自身重绘。具备这些规则后本片可干净重做。
