@@ -12,7 +12,7 @@
 - **模拟器（`127.0.0.1:5555`，Pura 90 Pro，x86_64 UI-only 通道；`pidof`=9095 全程存活）已验证**：① Dock 五个入口（`DockButton`）全部渲染，点「时间」「图层」「搜索」均在 2 s 内打开对应面板；② `PanelHeader` 标题随面板切换（更多功能 / 观测工作区 / 天体数据与扩展 / 时间（副标题 `1x`）/ 图层 / 天体分类），`panel-close` 点击后面板消失；③ `HubActionList` 三处列表渲染正确（观测工作区：观测列表/书签/双筒望远镜 + 说明「目标、书签与观测设备」；天体数据与扩展：天文计算/卫星/流星雨 + 说明「卫星、流星雨、地景与星表」；`panel-back` 在 hub 层出现、点击返回「更多功能」）；④ 反复开合 6 个面板后进程存活，无退出。
 - **模拟器无法覆盖（待真机）**：`UnifiedObjectDetailCard` 只在 `infoWinVisible && objectDetailStore.selectedName.length > 0` 时渲染，而模拟器无 Stellarium/Qt 引擎、天体搜索与选中不可用 —— 详情卡四个页签、媒体/模型解码、卡片拖拽、「资料」页 18 个媒体参数链路与 `observationTimeText` 的真实时间串**均未走查**（CLI `openUiPanel objectDetail` 也因无选中天体而空）。这些留待真机。
 - **本片新踩的坑（供后续切片）**：① **PowerShell 5.1 会把「无 BOM 的 UTF-8」`.ps1` 当 ANSI 读** —— 用 `write` 工具生成的含中文临时脚本直接 `-File` 执行会乱码并连带破坏字符串终止符（报 `Missing closing '}'`）。解决：临时脚本一律**纯 ASCII**，用 `@Builder` + 方法签名做正则锚点，不匹配中文注释。② `Measure-Object -Line` **严重低估行数**（同一单体 `Get-Content | Measure-Object -Line` 报 24,918，而 `(Get-Content).Count` 报 26,088）—— 量行数必须用 `(Get-Content).Count`。
-- **提交**：`22f2ded92a`（refactor：详情卡外壳 + `PanelHeader` + `DockButton` + `HubActionList` + 宿主手术 + 测试夹具同步，6 文件 421 增 / 233 删；含 `scripts/test-ohos-model-scroll.mjs`）；随后一个 `docs` 提交记录本条目与 §13.5。
+- **提交**：`22f2ded92a`（refactor：详情卡外壳 + `PanelHeader` + `DockButton` + `HubActionList` + 宿主手术 + 测试夹具同步，6 文件 491 增 / 235 删；含 `scripts/test-ohos-model-scroll.mjs`）；随后一个 `docs` 提交记录本条目与 §13.5。
 ## [2026-10-01] DevEco Code - 文档记录：陀螺仪校准面板入口不可发现（仅记录，未改代码）
 
 - **来源**：用户真机走查反馈 —— 点按右侧竖排栏的陀螺仪按钮只有开/关提示，长按看不到校准面板，且不清楚校准时是否需要额外操作。
