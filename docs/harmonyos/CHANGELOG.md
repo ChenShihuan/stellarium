@@ -1,3 +1,16 @@
+## [2026-09-30] DevEco Code - Phase 3n：书签域重做（Phase 3a 回退项补完，真机四项实时验证通过）
+
+- **背景：** 本片是 **Phase 3a 被回退那一片的重做**。当时（BookmarkStore + BookmarkPanel）已通过构建与"状态归属"验证，但无法证明实时刷新等价，按"行为零变更"不变式回退。此后经真机实验确立了 (b) 方案的完整规则：① `@ObjectLink` 的宿主源必须是 `@State` 持有的可观察实例；② 组件成员名必须避开 `CustomComponent` 基类属性方法；③ 迁移 UI 不得保留**参数化 `@Builder`**；④ 宿主对 store 的写入确实会触发宿主自身重绘。具备这些规则后本片可干净重做。
+- **新增文件：** `state/BookmarkStore.ets`（`list` / `loading` / `draftName`）、`panels/BookmarkPanel.ets`（`@ObjectLink store` + `@Prop selectedName` / `cardBorderColor` + 三个回调；列表用 ForEach 内联，不引入参数化 @Builder）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 3 个 `@State`（`bookmarkList` / `bookmarkLoading` / `newBookmarkName`）合并为 `@State private bookmarkStore`；12 处引用改写（持久化方法 `loadBookmarks` / `addCurrentBookmark` / `gotoBookmark` / `deleteBookmark` / `saveBookmarksToStorage` 照旧读写 store）；`activePanel === 'bookmarks'` 分支（原 65 行）替换为 `BookmarkPanel({...})` 调用。
+- **真机验证（`192.168.3.95:40565`，四项全部实时，无需重开面板）：**
+  1. 面板由新组件渲染：书签面板标题、名称输入框、保存按钮、空态文案。
+  2. **加载 → 空态**：进入面板后显示「还没有书签」而不是长期「正在加载书签…」（此前在模拟器上因引擎缺失无法判定，现已确认真机行为正确）。
+  3. **保存 → 列表出现**：点「保存当前视图」后列表项（`书签 / FOV 60.0°` + 删除按钮）**立即出现**——`addBookmark` → `loadBookmarks()` → store.list → 组件重渲染。
+  4. **删除 → 回到空态**：点「删除」后立即恢复「还没有书签」。测试数据已清理。
+- **验证结果：** `arkts_check` 三文件无错误；`BUILD SUCCESSFUL`；契约校验通过；真机安装启动成功。
+- **单体行数：** 29,670 → **29,614**（本片 −56；两文件承载原逻辑）。
+
 ## [2026-09-30] DevEco Code - Phase 3m：速度域入 TimeStore + TimeWheelController 拆分（时间域完工）
 
 - **本片目标：** 一次做完两片 —— ①（B）速度/速率域迁移；②（A）时间轮交互控制器拆分。完成后**时间域除面板 chrome 与刻意保留项外全部迁完**。
