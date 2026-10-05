@@ -2,7 +2,7 @@ import { curves } from '@kit.ArkUI'
 import { ShellAction } from '../../pages/StellariumTypes'
 import { BottomDock } from './BottomDock'
 import { CompactTopQuickControls } from './CompactTopQuickControls'
-import { DockClockLayer, SkyZoomLayer } from './PanelChromeExtras'
+import { DockClockLayer, DockFovLayer, SkyZoomLayer } from './PanelChromeExtras'
 import { GyroCalibPanel } from '../sensors/GyroCalibPanel'
 import { ObjectDetailConnectorLayer } from '../overlay/ObjectDetailConnectorLayer'
 import { UnifiedObjectDetailCard } from '../object/UnifiedObjectDetailCard'
@@ -44,6 +44,12 @@ export struct CompactShell {
   @Prop dockLabelFontSize: number
   @Prop dockItemHeight: number
   @Prop dockClockText: string
+  @Prop fovText: string
+  @Prop chromeRowY: number
+  @Prop chromeRowWidth: number
+  @Prop chromeRowPosXLeft: number
+  @Prop chromeRowPosXRight: number
+  @Prop chromeZoomHorizontal: boolean
   @Prop dockWidth: number
   @Prop dockLeft: number
   @Prop dockTop: number
@@ -164,14 +170,26 @@ export struct CompactShell {
         .hitTestBehavior(HitTestMode.Block)
         .zIndex(40)
 
+      // 三件套（FOV 读数 / 缩放按钮 / 常驻时钟）共用宿主给的锚点：手机·半折两端取同一个 x
+      // （等价于跟随 dock 两端），平板则贴屏幕左右缘，故壳里不再各自推算 dockTop/dockLeft。
       if (!this.panelVisible && !this.polarScopeVisible && this.dockClockText.length > 0) {
-        DockClockLayer({ clockText: this.dockClockText, layerWidth: this.dockWidth, posX: this.dockLeft, posY: this.dockTop - 48, onOpenTime: () => { this.onOpenTime() } })
+        DockClockLayer({ clockText: this.dockClockText, layerWidth: this.chromeRowWidth, posX: this.chromeRowPosXRight, posY: this.chromeRowY, onOpenTime: () => { this.onOpenTime() } })
       }
 
-      // 与常驻时钟左右对称的非手势缩放按钮：竖排 +放大 / −缩小。
+      // FOV 读数：贴左端，与右侧时钟左右对称（纯信息展示，整层不参与命中测试）。
+      // 首帧前 currentFovText 为 '--'，用 '°' 兜住，避免出现 "FOV --"。
+      if (!this.panelVisible && !this.polarScopeVisible && this.fovText.indexOf('°') >= 0) {
+        DockFovLayer({
+          fovText: this.fovText, layerWidth: this.chromeRowWidth, posX: this.chromeRowPosXLeft,
+          posY: this.chromeRowY, textColor: this.textColor
+        })
+      }
+
+      // 缩放按钮：紧贴读数行上沿；手机·半折竖排、平板横排（由 chromeZoomHorizontal 决定）。
       if (!this.panelVisible && !this.polarScopeVisible) {
         SkyZoomLayer({
-          layerWidth: this.dockWidth, posX: this.dockLeft, posY: this.dockTop - 104,
+          layerWidth: this.chromeRowWidth, posX: this.chromeRowPosXLeft,
+          rowY: this.chromeRowY, horizontal: this.chromeZoomHorizontal,
           textColor: this.textColor,
           onZoomIn: () => { this.onZoomIn() },
           onZoomOut: () => { this.onZoomOut() }

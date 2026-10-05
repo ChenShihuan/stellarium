@@ -1,3 +1,20 @@
+## [2026-10-04] DevEco Code - dock 上方 chrome 重构（FOV 读数 / 缩放按钮 + 平板适配）、命中错位修复、握姿方案实测结论、死代码清理
+
+- **需求（用户）**：① FOV 读数移到左侧、与右侧常驻时钟左右对称；② 缩放按钮 `+/−` 抬到**紧贴 FOV 上方**（单手不必下探到 dock 边缘），但**不要**挪到左上角；③ 平板/折叠屏此前只适配了手机——平板 dock 位于一侧且宽度封顶，需按平板布局适配；④ 评估"智感握姿自动换边"；⑤ 点击缩放按钮不要再弹"视场 xx°"；⑥ `FOV 20.8°` 单行太长、与时钟不对称，要更好的思路；⑦ 清掉无入口的视场预设死分支。
+- **实现**：
+  - **锚点抽象（宿主 `MainWindowNativeNode.ets`）**：新增 `chromeRowY / chromeRowWidth / chromeRowPosXLeft / chromeRowPosXRight / chromeZoomHorizontal`，两个壳（`CompactShell` / `ExpandedShell`）改为只消费锚点，不再各自推算 `dockTop/dockLeft`。**手机与半折两端取同一个 x（= `dockLeft()`），与改造前逐字等价**；平板（expanded）改为**贴屏幕左右缘**（`EDGE_MARGIN` / `skyWidth-EDGE_MARGIN-dockWidth`）——因为平板 `expandedDockWidth()` 封顶 640 且面板打开时 `expandedDockOccupiedLeft()` 会被推到面板右侧，继续跟随 dock 两端会让三件套随面板开合整体横移。
+  - **FOV 读数（`PanelChromeExtras.DockFovChip`）**：从"dock 居中"改为**贴左端**（`FlexAlign.Start` + `padding-left 4`），与右侧时钟镜像；初始按用户要求做单行 `FOV 20.8°`，实测宽度 ≈134vp、是时钟（`10:44` ≈83vp）的 **1.55 倍**，明显不对称 ⇒ 按用户选择的"方案 C 变体"改为**双行**：上行 `FOV` 10vp/`rgba(229,255,255,0.55)`，下行数值 16vp/0.85，内边距 14→12。**胶囊高度仍为 36vp**（与时钟同高，读数行高度不变 ⇒ 缩放按钮的贴靠关系不受影响），宽度实测 ≈**66vp，反而窄于时钟**；最长用例 `100.0°` ≈75vp 仍窄于时钟 ⇒ 长度不再随视场抖动。**不可点击**：整层与胶囊均 `HitTestMode.None`（时钟那片是 `Transparent`+`Block`，因为它本体可点）；首帧前 `currentFovText='--'`，用 `°` 兜住，避免出现 `FOV --`。
+  - **缩放按钮（`SkyZoomLayer`）**：自持几何 —— 竖排（手机·半折，两枚 44 + 8 间距 = 96 高）与横排（平板，一行 44 + 4 间隙）由 `horizontal` 切换，列底/行底**紧贴读数行上沿**；两个按钮的标记抽成 `@Builder` 复用（**保留 `skyZoomInButton` / `skyZoomOutButton` 两个字面量 `.id()`**，契约锚点数不变）。
+  - **新增 `common/ui/ChromeGeometry.ets`（绘制与命中同源）**：见下方"命中错位修复"。
+  - **去提示**：`zoomStep()` 不再 `flashHint('视场 …')` —— 胶囊常驻后属于重复反馈，且会盖住星图中央。
+  - **死代码清理**：`fov1…fov180` 九个短动作分支在全仓库**零引用**（也无动态拼 `'fov'+deg`），属不可达分支 ⇒ 连同仅被它们调用的 `setFovPreset()` 与只被它们使用的 i18n `i0090`–`i0098`（`FOV 1°…180°`）一并删除（9 个分支 + 1 个方法 + 9 个键）。
+- **命中错位修复（本轮用户报的 bug："点击 + 无响应、点击 − 实际是放大"）**：XComponent 吞掉 ArkUI `onClick`，缩放按钮只能像右上角快捷区那样**按坐标分派**（`skyZoomButtonAt`）。此前抬升 40vp 只改了绘制、没改命中，于是命中区仍是旧的 `dockTop()-104`：视觉 `+`（`dockTop-122`）落在旧 `in` 区之外 ⇒ 无响应；视觉 `−`（`dockTop-70`）落在旧 `in` 区内 ⇒ 触发放大。**根治**：新建 `common/ui/ChromeGeometry.ets`，把常量（行偏移 48 / 按钮 44 / 间距 8 / 内padding 4 / 竖排 96 / 横排 44+4）与公式（`chromeZoomLayerHeight/Top`、`chromeZoomButtonTop/Left`）集中一处，**`SkyZoomLayer` 的绘制与 `skyZoomButtonAt` 的命中都引用它**，杜绝再次漂移；命中区按横排（x 区分两枚）/竖排（y 区分两枚）分别构造。真机坐标实测：点视觉 `+`(142,2118) FOV 60→48→38.4，点视觉 `−`(142,2300) 38.4→48→60，日志 `sky zoom in/out` 顺序一致。
+- **智感握姿（Phase 0 实测后按用户决定放弃）**：真机实测 `@ohos.multimodalAwareness.motion`（OpenHarmony 公共 SDK，syscap `SystemCapability.MultimodalAwareness.Motion`）——`canIUse=true`（支持）；权限 `ohos.permission.ACTIVITY_MOTION` 可授权（**它是 `user_grant`，首启会弹一次授权框**，实测 `authResults=[0]`）；`getRecentOperatingHandStatus()` 授权后可调用但**恒为 `0`(UNKNOWN)**；`on('operatingHandChanged')` 订阅成功、有事件，但**右手/左手持机并刻意用对应拇指滑动均只出 `0`**，从未出现 `1`(左手)/`2`(右手)；`on('holdingHandChanged')` 抛 `code 201`（该事件**只接受 `ohos.permission.DETECT_GESTURE`**，不可用）。⇒ **能力在位、判据不产出**（疑为系统级"智感握姿"开关默认关闭）。据此用户决定**放弃 D4**，探针代码、`module.json5` 的 `ACTIVITY_MOTION` 声明与新增 reason 字符串**均已回退**，未进入交付物。
+- **踩坑记录**：hvigor `00303218 Configuration Error: The reason and usedScene attributes are mandatory for user_grant permissions.` —— 我起初由 `authResults=[2]` 误推 `ACTIVITY_MOTION` 是 `system_grant`（`2` 的真实含义是"该权限未在配置文件中声明"）；实际上它是 `user_grant`，**必须同时提供 `reason`（`$string:`）与 `usedScene`**。已在 `module.json5` 回退，此结论留档以免再犯。
+- **验证**：`arkts_check` 通过（改动文件）；UI 契约 `intact`（33 面板 / 24 静态 id / 17 动态前缀 / **44 锚点** / **185** 文件）；**BUILD SUCCESSFUL**；真机（`192.168.50.108:36717`）手机形态截图确认：左列 `+/−` 竖排、其正下方双行胶囊（`FOV` / `60.0°`）、右侧 `11:00`，胶囊窄于时钟且同高；点 `+` 无 toast、FOV 同步更新；坐标分派方向实测正确（见上）。
+- **未验证（如实标注）**：**平板/折叠展开**分支（贴屏幕左右缘 + `+/−` 横排）需要平板或模拟器才能走查，本轮未验；其几何沿用同一套锚点与公式，逻辑上与手机分支同源。
+- **备注**：`/−` 抬升后的顶端距底缘约 226vp，仍远低于右上角快捷区（`compactTopQuickY=50`），无冲突；若后续继续抬高需复查。
+
 ## [2026-10-04] DevEco Code - 修复：星图滑动在面板中终止后，面板内滑动会连带拖动星图（手势归属标志泄漏）
 
 - **现象**：打开 dock 面板后，在**星图**上按下开始滑动、并**在面板内部抬起**；此后**仅在面板里**上下滑动，**星图也会被连带平移**。
