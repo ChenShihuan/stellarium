@@ -1,3 +1,21 @@
+## [2026-10-02] DevEco Code - 修复：启动「星象仪」标题过早被门控隐藏 + 视野资料图加载横幅永久停留
+
+- **现象（用户报告）**：
+  1. 启动时「星象仪」三个字只在资源加载完之后才出现，随即散开；期望「先显示三个字 + 转圈加载 → 加载完成后散开并进入主界面」。
+  2. 缩放/捏合后界面常驻「正在载入当前视野资料图 · N 项待完成」，资源就绪后不消失。
+- **基准比对（`git worktree` 只读检出 `997c007e3` 后逐一核对，不臆测）**：启动层四个文件（`ApplicationRoot.ets` / `QAbility.ets` / `StartupSky.ets` / `StellariumResourceBootstrap.ets`）自基准起只有 Phase 0（`f7dd387daa`，"UI-only 模拟器通道"）动过 `ApplicationRoot`/`QAbility`；`StartupSky.ets`、`StartupStarGeometry.ts`、`StellariumResourceBootstrap.ets` 与资料图轮询逻辑自基准起**零改动**（`git diff 997c007e3..HEAD --stat -- <这四个文件>` 除 Phase 0 外为空）。故两缺陷**不是 pages 重构引入**，而是既有实现缺陷；基准 HEAD 真机行为与现行一致（下文 A/B 实证）。
+- **缺陷 1 根因（既有实现，非本会话回归）**：`pages/StartupSky.ets` 的 `updateMotion()` 中 `if (this.skyPrepared) this.assemblyElapsed += step` —— 标题粒子的「聚合」进度只在 `stellarariumStartupSkyReady`（由 `MainWindowNativeNode.dismissSplash()` 在原生视口呈现后才置 true）之后才开始累计，且 `draw()` 中 `startupParticle(..., this.skyPrepared ? this.assemblyElapsed : -1)` 在门未开时把进度强制为 `-1`（粒子停在背景位）。结果：整个资源加载期只画背景星点，标题要等 `skyReady` 后才聚合、再按 `STARTUP_REVEAL_AT_MS` 散开。真机 hilog（修复前）：`presented-frame-ready` 于 19.290 s → `title-assembled` 于 20.878 s（`skyReady+1590ms`）→ `sky-revealed` 22.003 s，即「标题只在加载完后出现」。
+- **缺陷 2 根因（既有实现死分支）**：`pages/MainWindowNativeNode.ets` 的 `pollSkyTextureStatus()` 原逻辑在回调里以 `else if (this.skyTextureStatusPolls < 24)` 决定是否续轮询，而入口的 `if (this.skyTextureStatusPolls >= 24)` 终止分支**永远到不了**（第 24 次后既不续轮询、也不进终止分支），于是原生 `getDeepSkyImageStatus` 的 `activeTexturePendingCount` 若长期不为 0，横幅就永久停在「正在载入…N 项待完成」。真机实证：捏合后 pending=4/5 持续 ≥38 s 不变，横幅不消失。
+- **修法（缺陷 1，`harmonyos/ets-source/pages/StartupSky.ets` 206 → 218 行）**：标题聚合解耦于门 —— `assemblyElapsed` 自 `onReady` 起累计（标题在加载期即成形并保持）；新增 `releaseStarted`/`releaseElapsed`，仅当 `skyPrepared && assemblyElapsed >= STARTUP_GATHER_MS` 才开始散开，`reveal = startupEase(releaseElapsed / STARTUP_REVEAL_MS)`；`artComplete`（交给 `ApplicationRoot` 淡出加载层）随散开起点置位。未改 `ApplicationRoot`（Phase 0 的 `aboutToAppear()→onSkyReady()` 仍是「门已开则收起」的兜底，UI-only 门不退化：`releaseUiOnlyStartupGates()` 仍能收起加载层）。未用 `@BuilderParam`、未迁 V2、无参数化 `@Builder`。
+- **修法（缺陷 2，`harmonyos/ets-source/pages/MainWindowNativeNode.ets` 18688 → 18724 行）**：快速轮询 24 次后**转入慢速后台轮询**（`SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS=2000`，文案改为诚实的「仍在后台准备当前视野资料图，完成后会自动显示」）；慢速期仍会在 `pending<=0` 时收起横幅（修复「资源就绪后不消失」）；到 `SKY_TEXTURE_STATUS_SETTLE_POLLS=40` 仍不就绪则给明确结束态「当前视野资料图暂未就绪，稍后自动重试」，`SKY_TEXTURE_STATUS_FINAL_HIDE_MS=5000` 后收起，不再永久停留。新增 `skyTextureStatusSlow`/`skyTextureStatusFinalTimer` 字段，`stopSkyTextureStatusObserver()` 一并复位。
+- **三项客观取证（真机 Mate 80 Pro `192.168.50.108:40565`，`snapshot_display` 连拍 ~300 ms/帧）**：
+  1. **标题提前出现**：修复后 `h6/h10/h14/h20/h24`（≈1.8–7 s，仍在加载、无主界面/无 dock）已见标题粒子；同窗口标题区域（y1200–1530，x250–1030，灰度阈值 >100）亮像素：修复前 `g10/g20/g28 = 139/121/123`，修复后 `h10/h14/h24 = 691/661/677`（≈5×）。hilog：修复后 `title-released activeMs=8460` 恰在 `presented-frame-ready` 同刻触发，⇒ 标题在加载期已聚合完毕、只有散开才等门。
+  2. **散开/交接有可辨中间帧**：`h35→h36` 全局平均绝对差 `1.509`、`h36→h37`（散开后主界面淡入）`3.322`，为全序列最大；`h36` 单帧可见加载粒子与主界面 dock 交叉淡入（关键帧 `startup-b3/h35..h37`）。
+  3. **缺陷 2 收敛**：捏合触发横幅 → 3 s 时「正在载入当前视野资料图 · 5 项待完成」（`bannerA`）→ 23 s 慢速期诚实文案（`bannerB`）→ 54 s 后横幅**消失**（`bannerC`；原生 `activeTexturePendingCount` 全程为 4/5，属「个别资源确实缺失」，状态如实收敛而非永久停留）。关键帧：`Temp\deveco\startup-b2`（修复前连拍）与 `startup-b3`、`bannerA/B/C`（修复后）。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check` 两文件 No errors → 构建 **BUILD SUCCESSFUL**（签名 HAP 708.8 MB）→ `check-ohos-ui-contract.mjs`（33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点 / 184 文件）全绿 → `test-ohos-startup-stars.mjs` **17/17**、`test-ohos-privacy-startup.mjs` **19/19** → 全量 `*ohos*.mjs` 35 个仅 §13.6 的 7 个存量环境类失败，无新增 → `audit-ohos-resource-coverage.mjs` 重写的审计文档已 `git checkout` 还原 → 真机 `pidof` 存活（49402）。
+- **测试同步**：`scripts/test-ohos-startup-stars.mjs` 194 → 216 行：更新旧断言（原断言 `this.skyPrepared && this.assemblyElapsed >= STARTUP_REVEAL_AT_MS` 已不存在），改为锁定「自首帧聚合 + 散开等门 + `releaseElapsed` 驱动 reveal」，并新增缺陷 2 回归测试（快速→慢速→明确结束态的收敛形状）。
+- **本片新踩的坑**：① 启动动画的「聚合」与「散开」共用同一 `assemblyElapsed` 计时器，任何「把某一段挪到门之后」的改动都会连带改变另一段，必须以独立计时器解耦。② 资料图横幅的 24 次上限分支因 `else if` 与入口上限同值而成为**不可达死代码**——上限逻辑要落在「下一次调用」而不是「同一次调用」里才可达。
+
 ## [2026-10-02] DevEco Code - 修复：Dock 开/关面板时入口重建、宽度过渡不流畅（Phase 3at / 7202 回归）
 
 - **现象（用户报告，`d7a2bc9768`/Phase 3at 之后）**：点 Dock 入口开/关面板时，入口元素像被重建；宽度在"宽 ↔ 窄"（紧凑档 `92% ↔ 76%`）间切换不自然。`7202d0e1b1`（"恢复 Dock 高亮"）之后高亮恢复正常但流畅度变差。

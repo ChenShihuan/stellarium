@@ -178,6 +178,16 @@ import {
   CommandCatalogEntry, CommandCatalogResponse
 } from './MainWindowModels'
 
+// Sky-texture status banner cadence. Poll fast while a fresh view settles, then
+// keep a slow background poll so the banner still clears when the textures land
+// late; after the settle window retract it with an honest final note instead of
+// leaving a stale "N 项待完成" loading state on screen forever (which happened
+// when the fast poll stopped at its cap while textures were still missing).
+const SKY_TEXTURE_STATUS_FAST_POLLS: number = 24
+const SKY_TEXTURE_STATUS_SETTLE_POLLS: number = 40
+const SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS: number = 2000
+const SKY_TEXTURE_STATUS_FINAL_HIDE_MS: number = 5000
+
 @Component
 export struct WindowNativeNode {
   @State private createInfo: WindowNativeNodeCreateInfo | undefined = undefined
@@ -264,6 +274,8 @@ export struct WindowNativeNode {
   private skyTextureStatusTimer: number = 0
   private skyTextureStatusDelayTimer: number = 0
   private skyTextureStatusPolls: number = 0
+  private skyTextureStatusSlow: boolean = false
+  private skyTextureStatusFinalTimer: number = 0
   private objectInspectorProceduralKey: string = ''
   private objectInspectorProceduralParticles: number[][] = []
   private objectInspectorModelOverlaySerial: number = 0
@@ -10044,7 +10056,12 @@ private loadPlanetPositions(): void {
       clearTimeout(this.skyTextureStatusDelayTimer)
       this.skyTextureStatusDelayTimer = 0
     }
+    if (this.skyTextureStatusFinalTimer !== 0) {
+      clearTimeout(this.skyTextureStatusFinalTimer)
+      this.skyTextureStatusFinalTimer = 0
+    }
     this.skyTextureStatusPolls = 0
+    this.skyTextureStatusSlow = false
   }
 
   private hideSkyTextureStatus(): void {
@@ -10073,19 +10090,36 @@ private loadPlanetPositions(): void {
     if (pending > 0 || status === 'loading') {
       this.tools.skyTextureStatusVisible = true
       this.tools.skyTextureStatusError = false
-      this.tools.skyTextureStatusText = '正在载入当前视野资料图 · ' + pending.toString() + ' 项待完成'
+      this.tools.skyTextureStatusText = this.skyTextureStatusSlow
+        ? '仍在后台准备当前视野资料图，完成后会自动显示'
+        : '正在载入当前视野资料图 · ' + pending.toString() + ' 项待完成'
       return
     }
     this.hideSkyTextureStatus()
   }
 
   private pollSkyTextureStatus(): void {
-    if (this.skyTextureStatusPolls >= 24) {
+    if (this.skyTextureStatusSlow) {
+      if (this.skyTextureStatusPolls >= SKY_TEXTURE_STATUS_SETTLE_POLLS) {
+        // The remaining textures never arrived. Retract the banner with an
+        // explicit final note, then take it down, so the UI converges honestly
+        // instead of showing a loading state that can never finish.
+        this.tools.skyTextureStatusVisible = true
+        this.tools.skyTextureStatusError = false
+        this.tools.skyTextureStatusText = '当前视野资料图暂未就绪，稍后自动重试'
+        this.stopSkyTextureStatusObserver()
+        this.skyTextureStatusFinalTimer = setTimeout(() => {
+          this.skyTextureStatusFinalTimer = 0
+          this.tools.skyTextureStatusVisible = false
+          this.tools.skyTextureStatusText = ''
+        }, SKY_TEXTURE_STATUS_FINAL_HIDE_MS) as number
+        return
+      }
+    } else if (this.skyTextureStatusPolls >= SKY_TEXTURE_STATUS_FAST_POLLS) {
+      this.skyTextureStatusSlow = true
       if (this.tools.skyTextureStatusVisible && !this.tools.skyTextureStatusError) {
         this.tools.skyTextureStatusText = '仍在后台准备当前视野资料图，完成后会自动显示'
       }
-      this.stopSkyTextureStatusObserver()
-      return
     }
     this.skyTextureStatusPolls++
     this.callInteractive('getDeepSkyImageStatus', '', (result: StellariumBridgeResponse) => {
@@ -10094,18 +10128,20 @@ private loadPlanetPositions(): void {
         ? result.activeTexturePendingCount as number : 0
       if (pending <= 0 || result.activeTextureStatus === 'error' || result.activeTextureStatus === 'partial-error') {
         this.stopSkyTextureStatusObserver()
-      } else if (this.skyTextureStatusPolls < 24) {
-        const delay = this.skyTextureStatusPolls <= 8 ? 350 : 900
-        this.skyTextureStatusTimer = setTimeout(() => {
-          this.skyTextureStatusTimer = 0
-          this.pollSkyTextureStatus()
-        }, delay) as number
+        return
       }
-    }, () => {
+      const delay = this.skyTextureStatusSlow ? SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS
+        : (this.skyTextureStatusPolls <= 8 ? 350 : 900)
       this.skyTextureStatusTimer = setTimeout(() => {
         this.skyTextureStatusTimer = 0
         this.pollSkyTextureStatus()
-      }, 900) as number
+      }, delay) as number
+    }, () => {
+      const delay = this.skyTextureStatusSlow ? SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS : 900
+      this.skyTextureStatusTimer = setTimeout(() => {
+        this.skyTextureStatusTimer = 0
+        this.pollSkyTextureStatus()
+      }, delay) as number
     })
   }
 
