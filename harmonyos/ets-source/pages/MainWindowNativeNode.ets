@@ -204,7 +204,7 @@ import {
   StarCatalogStatusResponse, LimitMagnitudeResponse, GyroGuideProjection, SkyUiObstacle, BookmarkItem,
   BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
-  MosaicCameraData, EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
+  EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteSourceInput, SatelliteUpdateSettings, SatelliteSourcesResponse, SatellitesResponse, CatalogHealthEntry,
   CatalogHealthResponse, MeteorShowersData, MeteorShowerItem, MeteorShowersResponse, Scenery3dResponse, LogResponse,
   ExportConfigResponse, ScreenshotResponse, ImportConfigResponse, SpokenTextResponse, RecordCmd,
@@ -595,10 +595,11 @@ export struct WindowNativeNode {
   // 视图/叠层域（指针坐标插件 + 视图中心坐标叠层 + 天体详情指向线）：状态已迁入 OverlayStore（Phase 3an）
   @State private overlayStore: OverlayStore = new OverlayStore()
   // 相机拼接视场域状态已下沉 state/MosaicStore.ets（review §2.7：Prop 风格 → Store 风格）。
+  // 加载器 loadMosaicCamera（§14 B1-4）已随桥注入搬入 store；写回动作 setMosaicCamera 仍在宿主。
   @State private mosaicStore: MosaicStore = new MosaicStore()
   @State private equationOfTimeStore: EquationOfTimeStore = new EquationOfTimeStore()
   // 古天文辅助线域状态已下沉 state/ArchaeoStore.ets（review §2.7：Prop 风格 → Store 风格）。
-  // 写回请求序号 archaeoMutationId 仍由宿主自持（见下方）。
+  // 加载器 loadArchaeoLines（§14 B1-4）已随桥注入搬入 store；写回请求序号 archaeoMutationId 仍由宿主自持（见下方）。
   @State private archaeoStore: ArchaeoStore = new ArchaeoStore()
   // 卫星（Satellites）
   // 卫星域状态已下沉 state/SatelliteStore.ets（review §2.7：Prop 风格 → Store 风格）。
@@ -1154,6 +1155,10 @@ export struct WindowNativeNode {
     // §14 B1-3：星表下载域复用同一 HostCommandPort 实例。其消费方（CatalogsPanel）为
     // @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，故 onChanged 传空实现。
     this.catalogStore.attachPort(hostPort, () => {})
+    // §14 B1-4：相机拼接（MosaicCamera）与古天文辅助线（ArchaeoLines）两域复用同一实例。
+    // 两者消费方均为 @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，onChanged 传空实现。
+    this.mosaicStore.attachPort(hostPort, () => {})
+    this.archaeoStore.attachPort(hostPort, () => {})
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -1296,7 +1301,7 @@ export struct WindowNativeNode {
         return
       }
       if (commandName === 'setMosaicCamera' || commandName === 'getMosaicCamera') {
-        if (response.ok === true) this.loadMosaicCamera(false)
+        if (response.ok === true) this.mosaicStore.loadMosaicCamera(false)
         return
       }
       if (commandName === 'getNebulaTextureStatus' || commandName === 'setNebulaTexturesVisible' ||
@@ -2278,9 +2283,9 @@ export struct WindowNativeNode {
       } else if (panel === 'oculars') {
         this.ensurePluginLoaded('Oculars', () => { this.telescopeStore.loadOculars(false) })
       } else if (panel === 'mosaicCamera') {
-        this.ensurePluginLoaded('MosaicCamera', () => { this.loadMosaicCamera() })
-      } else if (panel === 'archaeoLines') {
-        this.ensurePluginLoaded('ArchaeoLines', () => { this.loadArchaeoLines() })
+      this.ensurePluginLoaded('MosaicCamera', () => { this.mosaicStore.loadMosaicCamera() })
+    } else if (panel === 'archaeoLines') {
+      this.ensurePluginLoaded('ArchaeoLines', () => { this.archaeoStore.loadArchaeoLines() })
       } else if (panel === 'angleMeasure') {
         this.ensurePluginLoaded('AngleMeasure', () => { this.loadAngleMeasure() })
       } else if (panel === 'navStars') {
@@ -3771,31 +3776,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private loadMosaicCamera(initial: boolean = true): void {
-    this.mosaicStore.mosaicCameraLoading = initial
-    this.callNativeWhenReady('getMosaicCamera', '', (r: StellariumBridgeResponse) => {
-      const data = r.mosaicCamera as MosaicCameraData | undefined
-      if (r.ok !== true || data === undefined) {
-        this.mosaicStore.mosaicCameraStatus = I18n.t('plugin_status_unavailable')
-      } else {
-        this.mosaicStore.mosaicCameraEnabled = data.enabled
-        this.mosaicStore.mosaicCameraNames = data.names ?? []
-        this.mosaicStore.mosaicCameraCurrent = data.currentCamera
-        this.mosaicStore.mosaicCameraRA = data.ra
-        this.mosaicStore.mosaicCameraDec = data.dec
-        this.mosaicStore.mosaicCameraRotation = data.rotation
-        this.mosaicStore.mosaicCameraVisible = Boolean(data.visible)
-        this.mosaicStore.mosaicCameraStatus = ''
-      }
-      this.mosaicStore.mosaicCameraLoading = false
-      this.mosaicStore.mosaicCameraPending = false
-    }, 0, 100, 15, () => {
-      this.mosaicStore.mosaicCameraLoading = false
-      this.mosaicStore.mosaicCameraPending = false
-      this.mosaicStore.mosaicCameraStatus = I18n.t('plugin_status_unavailable')
-    })
-  }
-
   private setMosaicCamera(setting: string, value: string = ''): void {
     if (this.mosaicStore.mosaicCameraPending || this.mosaicStore.mosaicCameraLoading) return
     if (setting === 'enabled' && (value === '1') === this.mosaicStore.mosaicCameraEnabled) return
@@ -3808,7 +3788,7 @@ export struct WindowNativeNode {
         this.mosaicStore.mosaicCameraStatus = result.error ?? I18n.t('plugin_action_failed')
         return
       }
-      this.loadMosaicCamera(false)
+      this.mosaicStore.loadMosaicCamera(false)
     }, () => {
       this.mosaicStore.mosaicCameraPending = false
       this.mosaicStore.mosaicCameraStatus = I18n.t('plugin_action_failed')
@@ -3855,37 +3835,6 @@ export struct WindowNativeNode {
     })
   }
 
-
-  private loadArchaeoLines(): void {
-    this.archaeoStore.archaeoLoading = true
-    this.callNativeWhenReady('getArchaeoLines', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) {
-        this.archaeoStore.archaeoStatus = I18n.t('plugin_status_unavailable')
-      } else {
-        this.archaeoStore.archaeoLinesEnabled = r.enabled === true
-        this.archaeoStore.archaeoLineWidth = typeof r.lineWidth === 'number' ? r.lineWidth : 1
-        this.archaeoStore.archaeoEquinox = r.equinox === true
-        this.archaeoStore.archaeoSolstices = r.solstices === true
-        this.archaeoStore.archaeoCrossquarters = r.crossquarters === true
-        this.archaeoStore.archaeoMajorStandstills = r.majorStandstills === true
-        this.archaeoStore.archaeoMinorStandstills = r.minorStandstills === true
-        this.archaeoStore.archaeoPolarCircles = r.polarCircles === true
-        this.archaeoStore.archaeoZenithPassage = r.zenithPassage === true
-        this.archaeoStore.archaeoNadirPassage = r.nadirPassage === true
-        this.archaeoStore.archaeoSelectedObject = r.selectedObject === true
-        this.archaeoStore.archaeoSelectedObjectAzimuth = r.selectedObjectAzimuth === true
-        this.archaeoStore.archaeoSelectedObjectHourAngle = r.selectedObjectHourAngle === true
-        this.archaeoStore.archaeoCurrentSun = r.currentSun === true
-        this.archaeoStore.archaeoCurrentMoon = r.currentMoon === true
-        this.archaeoStore.archaeoCurrentPlanet = typeof r.currentPlanet === 'number' ? r.currentPlanet : 0
-        this.archaeoStore.archaeoStatus = ''
-      }
-      this.archaeoStore.archaeoLoading = false
-    }, 0, 100, 15, () => {
-      this.archaeoStore.archaeoLoading = false
-      this.archaeoStore.archaeoStatus = I18n.t('plugin_status_unavailable')
-    })
-  }
 
   private setArchaeoLineSetting(setting: string, value: string): void {
     const mutationId = ++this.archaeoMutationId
