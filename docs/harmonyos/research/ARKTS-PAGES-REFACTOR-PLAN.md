@@ -526,3 +526,117 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
    - 这条要写进后续每个切片的自检项：搬迁后必须实测"点击后是否实时更新"，而不只看布局是否一致。
 4. 该实验同时证明：**UI-only 模拟器不适合裁决此类刷新问题**（无引擎数据、定时器不产生写入，
    原生与重构版都会呈现"不刷新"），刷新类验收必须在真机做。
+
+---
+
+## 12. 附录：本轮死代码清理逐项清单（2026-09-30，三次提交）
+
+数据由 `git diff --unified=0 <rev>^ <rev> -- harmonyos/ets-source/pages/MainWindowNativeNode.ets` 提取；
+"原行号"为删除前文件中的行号。相邻条目在 diff 中会被合并计为一个区块（下表按区块列出，备注已标注合并项）。
+**用户已确认：其中相当一部分是用户本人有意删除的历史代码**，因此下表仅作为"已移除内容"的存档，不再作为缺陷线索。
+
+### 12.1 Phase 3h —— 旧转轴（滑杆）死子系统（提交 `e2f0c6f7e9`，−126 行）
+
+| 区块原行号 | 行数 | 内容 |
+|---|---|---|
+| L307 | 2 | `scrubberValue` / `scrubberLabel`（均为 `@State`，只写不读） |
+| L311 | 5 | `scrubberReferenceJd` / `scrubberPendingOffset` / `scrubberAnchorPending` / `scrubberLastSendMs` / `scrubberInteracting` |
+| L323 | 1 | `timeMarkLoading` 由 `@State` 降为普通字段（仅重入守卫，不参与渲染） |
+| L11799 | 111 | `updateScrubberLabel` / `beginScrubberInteraction` / `sendScrubberTime` / `applyScrubber` / `syncScrubberToSimulation` / `resetScrubberToRealtime`（入口 `applyScrubber` 无任何调用者） |
+
+> 附带性能收益：两个被删 `@State` 原由 `syncScrubberToSimulation` 在每次模拟时间刷新时写入 → 每次写都扩大重渲染范围。
+
+### 12.2 Phase 3i —— 39 个零引用 `private` 方法（提交 `3301201ef0`，−498 行）
+
+| 原行号 | 行数 | 名称 | 类别 |
+|---|---|---|---|
+| L1590 | 1 | `drawerLeft`（单行方法） | 抽屉几何 |
+| L2386 | 7 | `triggerAutoLocate` | 功能入口 |
+| L3197 | 6 | `runOnTouchUp` | 触摸工具 |
+| L4143 | 8 | `pauseScript` + `resumeScript`（合并计） | 脚本 |
+| L4979 | 3 | `cycleOcular` | 目镜 |
+| L5941 | 16 | `adjustTime`（+ `setTimeNow` 合并计） | 时间 |
+| L9001 | 4 | `skyCultureRangeModeIndex` | 星空文化 |
+| L9045 | 6 | `skyCultureClassificationFilterIndex` | 星空文化 |
+| L9066 | 11 | `skyCultureRegionFilterIndex` | 星空文化 |
+| L10018 | 18 | `defaultSkyCultureMakerDraft` | 星空文化编辑 |
+| L10639 | 4 | `pluginFeaturePanel` | 插件 |
+| L11719 | 4 | `tickPercent` | 工具 |
+| L11904 | 22 | `advanceTimeWheel` | 时间轮 |
+| L13288 | 22 | `gyroSlerpUnitVector` | 陀螺仪旧数学 |
+| L13313 | 11 | `gyroParallelTransportUp`（+ `alignGyroToMagneticNorth` 合并计） | 陀螺仪旧数学 |
+| L13339 | 11 | `calibrateGyroscopeQuaternionUnused` | 陀螺仪旧数学 |
+| L13443 | 23 | `gyroForwardFromGravityAndMagnetic` | 陀螺仪旧数学 |
+| L13528 | 17 | `gyroEffectiveAzOffset` | 陀螺仪旧数学 |
+| L13671 | 119 | `onRotationVectorData`（旧版旋转回调） | 陀螺仪旧路径 |
+| L13861 | 5 | `isConstellationSelection` | 命中判断 |
+| L14081 | 54 | `placeObjectCardAwayFromTarget` | 对象卡片布局 |
+| L14583 | 8 | `placeSelectedObjectInCompactSafeArea`（+ `placeSelectedObjectInExpandedSafeArea` 合并计） | 对象卡片布局 |
+| L14608 | 45 | `easeSelectedObjectTo` | 对象卡片动效 |
+| L17172 | 9 | `handleFloatingPanelTouch` | 面板触摸 |
+| L18764 | 13 | `infoWinLeft`（+ `infoWinWidth` 合并计） | 信息窗几何 |
+| L18818 | 4 | `toggleTracking` | 功能入口 |
+| L18948 | 8 | `bottomCardSwiperHeight`（+ `bottomCardHitHeight` 合并计） | 卡片几何 |
+| L19101 | 7 | `isTabletObjectInspectorPoint` | 命中判断 |
+| L19292 | 20 | `isCompactDrawerPoint`（+ `handleCompactMoreTap` 合并计） | 命中判断 |
+| L19892 | 5 | `objectInspectorFileUri` | 文件路径 |
+| L21537 | 3 | `nm` | 旧配色助手 |
+| L21603 | 4 | `trackStatusZh` | 文案 |
+
+> 活路径对照（用户已验证功能正常）：陀螺仪走 `gyroRotationCallback` / `gyroGravityCallback` / `gyroMagneticCallback` / `onOrientationData`（L12605–L12702）。
+
+### 12.3 Phase 3j —— 13 个零调用 `@Builder` + 31 个零引用字段 + 级联 9 方法（提交 `f82b483d2e`，−650 行）
+
+**A. 零调用 `@Builder`（11 个区块合并计 13 个方法，约 519 行）**
+
+| 原行号 | 行数 | 名称 |
+|---|---|---|
+| L18157 | 43 | `compactObjectPeek`（+ `compactQuickControls` 合并计） |
+| L18604 | 19 | `objectActionBar` |
+| L19232 | 39 | `expandedObjectSummary` |
+| L19273 | 119 | `tabletObjectInspector` |
+| L20776 | 93 | `objInfoFloat`（+ `observerBadge` 合并计） |
+| L20939 | 36 | `railShell` |
+| L21804 | 29 | `collapseButton` |
+| L22363 | 39 | `padExploreHome` |
+| L22552 | 25 | `smallRoundButton` |
+| L28979 | 24 | `detailInfoRow` |
+| L29028 | 53 | `configurationSkyDisplaySettings` |
+
+**B. 零引用字段（31 个，多为 1 行）**
+
+| 原行号 | 行数 | 内容 |
+|---|---|---|
+| L73 | 2 | `startupPreparing`（含其独立 `@StorageLink(...)` 装饰器行） |
+| L285 | 4 | `fpsDisplay` / `fpsFrameCount` / `fpsLastTime` / `fpsVisible` |
+| L342 | 1 | `autoLocateStarted` |
+| L1050 | 1 | `scriptPanelScroller` |
+| L1392 | 1 | `expandedTargetPlacementTimer` |
+| L1453 | 1 | `gyroLastDiagnosticMs` |
+| L12801 | 5 | `gyroReferenceAz` / `gyroReferenceAlt` / `gyroReferenceViewAz` / `gyroReferenceViewAlt`（+1） |
+| L12820 | 4 | `gyroAnchorQuat` / `gyroAnchorUp` / `gyroAnchorFwd` / `gyroAnchorValid` |
+| — | 各 1 | `visibleConstellations` / `infoTextExpanded` / `centerSearchText` / `tonightPlanets` / `lightPollution` / `asteroidLines` / `asteroidLabels` / `nightViewTab` / `showConfigPanel` / `showAstroPanel` / `showHelpPanel` / `timeScale` / `railCollapsed` / `gyroHeadingSyncInFlight` |
+
+**C. 级联不可达方法（3 轮收敛，9 个）**
+
+| 原行号 | 行数 | 名称 |
+|---|---|---|
+| L11734 | 27 | `startTimeWheelTransition`（唯一调用者是同批已删的 `advanceTimeWheel`） |
+| L13122 | 6 | `gyroAltAzVector` |
+| L13187 | 3 | `gyroEnuFromBridge` |
+| L13200 | 40 | `syncGyroAnchor` |
+| L13657 | 5 | `rectsOverlap` |
+| L14713 | 9 | `pad2` |
+| L18330 | 3 | `infoWinDetailH` |
+| L19396 | 6 | `objectInspectorSubtitle` |
+
+### 12.4 汇总
+
+| 提交 | 删除行数 | 方法 | Builder | 字段 |
+|---|---|---|---|---|
+| `e2f0c6f7e9`（3h） | 126 | 6 | 0 | 7（+1 降级） |
+| `3301201ef0`（3i） | 498 | 39 | 0 | 0 |
+| `f82b483d2e`（3j） | 650 | 9（级联） | 13 | 31（+1 孤立装饰器行） |
+| **合计** | **1,274** | **54** | **13** | **39** |
+
+单体行数 32,705 → 30,229。
