@@ -28,7 +28,8 @@ assert.match(core, /commandName == "setJulianDate"/);
 assert.match(core, /result\["mjd"\] = jd - 2400000\.5/);
 assert.match(core, /jd < 2299161\.0 \? "julian" : "gregorian"/);
 assert.match(catalog, /setJulianDate/);
-assert.match(ui, /this\.julianDateControls\(\)/);
+// 儒略日控件已从参数化 @Builder julianDateControls 改为 JulianDateControls 组件。
+assert.match(ui, /JulianDateControls\(\{/);
 assert.match(ui, /setJulianDate', scale \+ '\|' \+ value\.toString\(\)/);
 
 console.log('Julian Day checks passed: JD/MJD conversion, calendar boundary, command, catalog, and UI wiring.');

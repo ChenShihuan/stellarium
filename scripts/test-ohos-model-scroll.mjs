@@ -4,14 +4,18 @@ import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 
 const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
-const stageStart = source.indexOf(".id('object-model-inline-stage')");
-const stage = source.slice(stageStart, source.indexOf('Text(this.objectInspectorModelNotice())', stageStart));
+// 三维模型的舞台与触摸回调已下沉为 TabletInspectorModelBlock 组件（本轮搬迁），
+// 组件只负责把手势事件转交给宿主注入的 onModelTouch 回调；旋转/缩放算法仍留在宿主。
+const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/object/TabletInspectorMedia.ets', import.meta.url), 'utf8');
+const stageStart = mediaComponents.indexOf(".id('object-model-inline-stage')");
+const stage = mediaComponents.slice(stageStart, mediaComponents.indexOf('Text(this.modelNotice)', stageStart));
 
 test('only the bounded model captures touch; the outer card isolates the sky', () => {
   assert.match(stage, /HitTestMode.BLOCK_HIERARCHY/);
-  assert.match(stage, /onTouch.*handleObjectInspectorModelTouch\(event\)/);
+  assert.match(stage, /onTouch.*this\.onModelTouch\(event\)/);
   assert.doesNotMatch(stage, /PanDirection|onGestureJudgeBegin|parallelGesture/);
-  assert.match(source.slice(stageStart - 230, stageStart), /width\(this.objectInspectorInlineModelSize\(\)\).height\(this.objectInspectorInlineModelSize\(\)\)/);
+  assert.match(mediaComponents.slice(stageStart - 230, stageStart), /width\(this\.inlineModelSize\)\.height\(this\.inlineModelSize\)/);
+  assert.match(source, /onModelTouch: \(event: TouchEvent\) => \{ this\.handleObjectInspectorModelTouch\(event\) \}/);
   assert.equal((source.match(/height\(this.detailCardHeight\(\)\)\s*\.zIndex\(\d+\)\s*\.hitTestBehavior\(HitTestMode.BLOCK_HIERARCHY\)/g) ?? []).length, 3);
   assert.match(source, /Scroll\(this.objectDetailScroller\)/);
   assert.match(source, /stellariumObjectDetailScrollY.*currentOffset\(\)\?\.yOffset/);
@@ -51,7 +55,11 @@ function touchHarness() {
   const controller = new Controller();
   const moves = [];
   const renders = [];
-  Object.assign(controller, { objectInspectorModelScale: 1,
+  // 缩放与交互标志随状态搬迁进了 ObjectMediaStore，触摸计数等内部状态仍在宿主。
+  controller.objectMediaStore = { objectInspectorModelScale: 1, objectInspectorModelInteracting: false };
+  controller.objectInspectorModelTouchCount = 0;
+  controller.objectInspectorModelLastPinchDistance = 0;
+  Object.assign(controller, {
     touchScreenX: point => point.x, touchScreenY: point => point.y,
     rotateObjectInspectorModel: (...values) => moves.push(values),
     requestObjectInspectorModelRender: quality => renders.push(quality) });
@@ -69,19 +77,19 @@ test('touch handler preserves horizontal, vertical and diagonal movement', () =>
   touch('Up', []);
   assert.deepEqual(moves, [[20, 0], [0, 30], [-10, -15]]);
   assert.deepEqual(renders, [true]);
-  assert.equal(controller.objectInspectorModelInteracting, false);
+  assert.equal(controller.objectMediaStore.objectInspectorModelInteracting, false);
 });
 
 test('two-finger pinch changes scale without orbit and cancellation resets interaction', () => {
   const { moves, controller, touch } = touchHarness();
   touch('Down', [[0, 0], [100, 0]]);
   touch('Move', [[0, 0], [110, 0]]);
-  assert.ok(controller.objectInspectorModelScale > 1);
+  assert.ok(controller.objectMediaStore.objectInspectorModelScale > 1);
   touch('Move', [[0, 0], [90, 0]]);
-  assert.ok(controller.objectInspectorModelScale < 1);
+  assert.ok(controller.objectMediaStore.objectInspectorModelScale < 1);
   assert.deepEqual(moves, []);
   touch('Cancel', []);
-  assert.equal(controller.objectInspectorModelInteracting, false);
+  assert.equal(controller.objectMediaStore.objectInspectorModelInteracting, false);
   assert.equal(controller.objectInspectorModelTouchCount, 0);
   assert.equal(controller.objectInspectorModelLastPinchDistance, 0);
 });
