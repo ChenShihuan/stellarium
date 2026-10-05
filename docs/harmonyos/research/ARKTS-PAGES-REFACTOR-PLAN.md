@@ -19,7 +19,7 @@
 | `pages/location_hierarchy.ts` | 74,611 | 数据表（行政区划），不参与重构；**M2 已迁 `common/location/hierarchy.ts`**，见 §15.12.17 |
 | `pages/location_names_zh.ts` | 7,350 | 数据表；**M2 已迁 `common/location/names_zh.ts`** |
 | `pages/I18n.ets` | 2,354 | 翻译表 + 语言切换 |
-| `pages/StellariumTypes.ets` | 1,122 | 桥接协议类型集合 |
+| `pages/StellariumTypes.ets` | 1,122 | 桥接协议类型集合；**M5 已迁 `common/types/StellariumTypes.ets`**（旧路径留一行式 barrel），见 §15.12.21 |
 | `qability/StellariumResourceBootstrap.ets` | 943 | 资源预热 |
 | `pages/StellariumAudio.ets` | 927 | 音频；**M3 已迁 `capability/AudioEngine.ets`**（§15.7 规则 1 NAPI 判定，非 `common/media/`），见 §15.12.18 |
 | `qability/QAbility.ets` | 694 | UIAbility（启动链、隐私门控） |
@@ -1917,3 +1917,29 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **本片新踩的坑**：① **`common/types/` 到 `pages/` 是两级相对深度** —— 首写 `../pages/StellariumTypes` 被 `arkts_check` 报 `Cannot find module`（解析成 `common/pages/...`），须 `../../pages/StellariumTypes`；搬家后务必以实测相对深度为准。② `Get-Content .Count` 对纯 LF 大文件给出偏小行数（8,017 → 7,573），度量须用 `\n` 计数（与仓库既有口径 8,017 一致）。
 
 **后续轨道备注**：消费者直引新路径（`.../common/types/MainWindowModels`）后可删本 shim —— 归入 Phase 7 收口轨道。
+
+#### 15.12.21 M 轨道 M5：核心桥类型迁入 `common/types/`（2026-10-06，Barrel 兜底）
+
+> **依据**：STATE-REVIEW §11.2.1 的 **Barrel 策略**、M 轨道第 6 片（优先 P7）。**纯路径迁移 + 一行式 barrel**，不改任何类型内容与运行逻辑。
+> `pages/StellariumTypes.ets`（1,121 行，核心桥响应 / UI 模型 / 天文计算结果类型）与页面无关却被全项目消费（**~98 处** `import`，覆盖 `state/` / `bridge/` / `capability/` / `panels/` / `common/` 与宿主），架构倒挂最严重。
+> 开工 `git log -1` = `6b7852d037`，宿主 `MainWindowNativeNode.ets` 基线 8,017 行。
+
+**做法**
+
+1. `git mv pages/StellariumTypes.ets → common/types/StellariumTypes.ets`（**整文件原样**，R100；该文件**无任何内部 import**，搬家不需改相对深度）。
+2. 在 `pages/StellariumTypes.ets` 原位新建 **2 行 shim**：说明注释 + `export * from '../common/types/StellariumTypes'`。
+3. 消费者 **0 改动**（~98 处仍 `import … from '…/pages/StellariumTypes'`，经 barrel 解析到新实体）。
+4. `common/types/MainWindowModels.ets`（M4 迁入，内部 import `'../../pages/StellariumTypes'`）**保留旧路径经 barrel 解析**（未改为同目录 `./StellariumTypes`）——二选一取"零内容改动"。
+
+**default export 核查（barrel 覆盖范围）**：`grep 'export default'` = **0**；全部为命名导出（`export interface` 全表）——故 `export *` 即完整覆盖，**无需** `export { default } from ...`。
+
+**夹具同步（2 脚本 / 2 处）**：`scripts/test-ohos-mist-horizon.mjs`（改读 `common/types/StellariumTypes.ets`，断言 `actionShow_MistHorizon`）；`scripts/verify-ohos-object-details.mjs`（`typesPath` 改新路径）。
+
+**未改**：无任何类型 / 接口 / 常量内容改动；无 `.id()` / `main_pages.json` / 构建产物改动；`common/types/` 不 import `@ohos.*`（类型层无 NAPI，符合 §15.7 规则 1）；`docs/harmonyos/json/ui-contract-baseline.json` 的 `scannedFiles` 不回改（与 M1/M2/M3/M4 同例——不参与契约 diff）。
+
+**度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（本片不动宿主）；`StellariumTypes.ets` 1,121 行（内容等价，仅路径变化）；`common/types/` 新增 1 文件 + `pages/StellariumTypes.ets` 2 行 barrel；净 4 个跟踪文件改动（1 重命名 + 1 新增 barrel + 2 夹具）。
+
+**验证**：`check-ohos-refactor-slice` 通过（括号深度 0）；`arkts_check` 2 文件 0 error；`BUILD SUCCESSFUL in 1m4s`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 251 文件）；受影响 `test-ohos-mist-horizon`（5/5）、`verify-ohos-object-details`（121 字段 / 11 段）全绿；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（4 个 `-pad` / `mist-performance` / `verify-ohos-search`）。真机（192.168.50.108:36717）：`devecocli run --skip-build` → `Smoke: PASS`；① **桥响应**（`StellariumBridgeResponse`）— CLI `searchObject Mars` 返回完整响应（`found:true` + `detailModel` + 10 条 `liveDetailFields` + `distance`/`magnitude`/`ra`/`dec`）；② **详情卡** — `ui layout` 见 `Text "火星"` + `Scroll#object-detail-content-scroll`，hilog `[detail-model] render pixel map created` + `[detail-media-card] sphere loaded …mars.png`；③ **搜索** — `openUiPanel search` 渲染 `search-browser-scroll`，点搜索框输入 `Jupiter` → 建议 `Jupiter` / `JUPITER 3 (ECHOSTAR 24)`，点选 → 详情卡 `木星` + hilog `…jupiter.png`。`pidof 23856` 全程存活、无 jscrash / 无 faultlog；测试未改动任何持久化设置。
+
+**M 轨道收尾结论（2026-10-06，M5 后）**：STATE-REVIEW §11 的 **M 轨道**（渲染管线 / 纯计算 / 类型模块从 `pages/` 归位）已完成 **6/7 片** —— M1（DetailModel 渲染管线 → `capability/` + `common/derive/`）、M2（位置参考数据三文件 → `common/location/`）、M3（`AstronomyGuide` → `common/derive/`、`AudioEngine` → `capability/`）、M6（`MediaPort` 接口隔离）、M4（扩展域模型 → `common/types/`，barrel 兜底）、M5（核心桥类型 → `common/types/`，barrel 兜底）。**pages/ 现仅余页面壳 + `I18n.ets`；M7 待做**（候选：`pages/I18n.ets` → `common/i18n/`，STATE-REVIEW §11.3 长期建议）。
+
