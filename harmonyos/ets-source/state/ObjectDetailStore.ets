@@ -60,4 +60,9 @@ export class ObjectDetailStore {
   selectedDetailTimer: number = 0
   selectedDetailRequestPending: boolean = false
   selectedUiLayoutTimer: number = 0
+
+  // 详情主卡片当前页索引（0/1/2/3；2 = 资料页）。2026-10-04 review §2.7 残留并入：
+  // 原宿主 @State，被三个壳层以 `@Prop activeIndex` 消费（宿主读 store 后下发）；
+  // 与 `InfoWindowStore` 刻意不搬的同类宿主控制量区分 —— 本字段语义属详情卡页签。
+  bottomCardIndex: number = 0
 }
