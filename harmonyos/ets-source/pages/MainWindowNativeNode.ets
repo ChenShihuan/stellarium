@@ -44,6 +44,7 @@ import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNar
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, normalizeLocationSearchText, officialLocationAliases, sessionSignature } from '../common/derive/actions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
+import { objectInspectorPlanetTexturePath, objectInspectorPlanetRingSpec, objectInspectorDeepSkyImageName, objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeStore } from '../state/TimeStore'
@@ -194,7 +195,7 @@ import { ConfigFallbackPanel } from '../panels/panels/ConfigFallbackPanel'
 import { SkyCultureSectionHeader, SkyCultureMetaItem, SkyCultureLabelSettingCard, SkyCultureFilterPicker } from '../panels/skyculture/SkyCultureViewParts'
 import { SatelliteGroupSelector } from '../panels/satellite/SatelliteGroupSelector'
 import {
-  ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
+  ImageDecodeSize, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
   NebulaTextureItem, NebulaTextureStatus, NebulaTextureRefreshResponse, SkyCultureMakerArtworkAnchor, SkyCultureMakerArtwork, SkyCultureMakerConstellation,
   SkyCultureMakerDraft, SkyCultureMakerIssue, TelescopeControlResponse, TelescopeProfile, TelescopeProfilesResponse,
   TELESCOPE_SIMULATOR_MODEL, HeliocentricOrbit, ConfigurationOption, SkyCultureVisualColors, CelestialPositionOptions,
@@ -11722,9 +11723,9 @@ private loadPlanetPositions(): void {
                 modelRendering: this.objectInspectorModelRendering,
                 hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
                 modelNotice: this.objectInspectorModelNotice(),
-                warmupText: this.objectInspectorMediaWarmupText(),
-                fallbackKind: this.objectInspectorFallbackVisualKind(),
-                starColor: this.objectInspectorStarColor(),
+                warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
+                fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
+                starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
                 satelliteVisible: this.selectedObjectIsArtificialSatellite(),
                 tleEpoch: this.selectedSatelliteTleEpoch(),
                 accent: this.nmAccent(),
@@ -11827,9 +11828,9 @@ private loadPlanetPositions(): void {
                 modelRendering: this.objectInspectorModelRendering,
                 hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
                 modelNotice: this.objectInspectorModelNotice(),
-                warmupText: this.objectInspectorMediaWarmupText(),
-                fallbackKind: this.objectInspectorFallbackVisualKind(),
-                starColor: this.objectInspectorStarColor(),
+                warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
+                fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
+                starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
                 satelliteVisible: this.selectedObjectIsArtificialSatellite(),
                 tleEpoch: this.selectedSatelliteTleEpoch(),
                 accent: this.nmAccent(),
@@ -11949,9 +11950,9 @@ private loadPlanetPositions(): void {
                 modelRendering: this.objectInspectorModelRendering,
                 hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
                 modelNotice: this.objectInspectorModelNotice(),
-                warmupText: this.objectInspectorMediaWarmupText(),
-                fallbackKind: this.objectInspectorFallbackVisualKind(),
-                starColor: this.objectInspectorStarColor(),
+                warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
+                fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
+                starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
                 satelliteVisible: this.selectedObjectIsArtificialSatellite(),
                 tleEpoch: this.selectedSatelliteTleEpoch(),
                 accent: this.nmAccent(),
@@ -13146,18 +13147,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private objectInspectorMediaWarmupText(): string {
-    if (this.objectMediaStore.objectInspectorMediaWarmupTotal <= 0) {
-      return '正在检查离线图库'
-    }
-    let text = '离线图库已准备 ' + this.objectMediaStore.objectInspectorMediaWarmupInstalled.toString() + '/' +
-      this.objectMediaStore.objectInspectorMediaWarmupTotal.toString()
-    if (this.objectMediaStore.objectInspectorMediaWarmupFailed > 0) {
-      text += ' · ' + this.objectMediaStore.objectInspectorMediaWarmupFailed.toString() + ' 项失败'
-    }
-    return text
-  }
-
   private startObjectInspectorMediaWarmup(): void {
     if (this.objectInspectorMediaWarmupTimer !== 0) {
       return
@@ -13231,104 +13220,10 @@ private loadPlanetPositions(): void {
     this.bodyDetailWarmupPending = []
   }
 
-  private objectInspectorPlanetTexturePath(): string {
-    const objectKey = this.objectDetailStore.selectedEnglishName.toLowerCase().replace(/[^a-z0-9]/g, '')
-    const textures: Array<[string, string]> = [
-      ['sun', 'textures/sun.png'], ['mercury', 'textures/mercury.png'], ['venus', 'textures/venus.png'],
-      ['earth', 'textures/earth_cmap.png'], ['moon', 'textures/moon.png'], ['mars', 'textures/mars.png'],
-      ['jupiter', 'textures/jupiter.png'], ['saturn', 'textures/saturn.png'], ['uranus', 'textures/uranus.png'],
-      ['neptune', 'textures/neptune.png'], ['pluto', 'textures/pluto.png'], ['charon', 'textures/charon.png'],
-      ['ceres', 'textures/ceres.png'], ['vesta', 'textures/vesta.png'], ['eros', 'textures/eros.png'],
-      ['bennu', 'textures/bennu.png'], ['gaspra', 'textures/gaspra.png'], ['ida', 'textures/ida.png'],
-      ['sedna', 'textures/sedna.png'], ['eris', 'textures/eris.png'], ['haumea', 'textures/haumea.png'],
-      ['dysnomia', 'textures/dysnomia.png'], ['2007or10', 'textures/2007OR10.png'],
-      ['phobos', 'textures/phobos.png'], ['deimos', 'textures/deimos.png'], ['io', 'textures/io.png'],
-      ['europa', 'textures/europa.png'], ['ganymede', 'textures/ganymede.png'], ['callisto', 'textures/callisto.png'],
-      ['amalthea', 'textures/amalthea.png'], ['mimas', 'textures/mimas.png'], ['enceladus', 'textures/enceladus.png'],
-      ['tethys', 'textures/tethys.png'], ['dione', 'textures/dione.png'], ['rhea', 'textures/rhea.png'],
-      ['titan', 'textures/titan.png'], ['hyperion', 'textures/hyperion.png'], ['iapetus', 'textures/iapetus.png'],
-      ['phoebe', 'textures/phoebe.png'], ['janus', 'textures/janus.png'], ['epimetheus', 'textures/epimetheus.png'],
-      ['prometheus', 'textures/prometheus.png'], ['ariel', 'textures/ariel.png'], ['umbriel', 'textures/umbriel.png'],
-      ['titania', 'textures/titania.png'], ['oberon', 'textures/oberon.png'], ['miranda', 'textures/miranda.png'],
-      ['triton', 'textures/triton.png'], ['nereid', 'textures/nereid.png'], ['proteus', 'textures/proteus.png']
-    ]
-    for (const pair of textures) {
-      if (objectKey === pair[0] || objectKey.startsWith(pair[0] + 'observer')) {
-        return pair[1]
-      }
-    }
-    return ''
-  }
-
-  private objectInspectorPlanetRingSpec(): ObjectInspectorRingSpec | undefined {
-    const objectKey = this.objectDetailStore.selectedEnglishName.toLowerCase().replace(/[^a-z0-9]/g, '')
-    const specs: Array<[string, ObjectInspectorRingSpec]> = [
-      ['saturn', { texturePath: 'textures/saturn_rings_radial.png', innerRadius: 1.24, outerRadius: 2.33, tilt: 0.35, opacity: 0.94 }],
-      ['uranus', { texturePath: 'textures/uranus_rings.png', innerRadius: 1.05, outerRadius: 3.82, tilt: 0.55, opacity: 1.0 }],
-      ['neptune', { texturePath: 'textures/neptune_rings.png', innerRadius: 1.65, outerRadius: 2.54, tilt: 0.42, opacity: 0.9 }]
-    ]
-    for (const pair of specs) {
-      if (objectKey === pair[0] || objectKey.startsWith(pair[0] + 'observer')) {
-        return pair[1]
-      }
-    }
-    return undefined
-  }
-
-  private objectInspectorDeepSkyImageName(): string {
-    const visualKind = this.objectInspectorFallbackVisualKind()
-    if (visualKind !== 'galaxy' && visualKind !== 'nebula' && visualKind !== 'globular-cluster' && visualKind !== 'open-cluster') {
-      return ''
-    }
-    const text = this.objectInspectorSearchText()
-    // Some widely known objects use a Messier image while the core's primary
-    // catalog identifier is NGC. Keep these explicit rather than guessing.
-    const aliases: Record<string, string> = {
-      'ngc 224': 'm31.png', 'ngc224': 'm31.png', 'ngc 1952': 'm1dumont.png', 'ngc1952': 'm1dumont.png'
-    }
-    for (const key of Object.keys(aliases)) {
-      if (text.indexOf(key) >= 0) {
-        return aliases[key]
-      }
-    }
-    const match = text.match(/\b(m|ngc|ic)\s*0*(\d+)\b/i)
-    if (match === null || match.length < 3) { return '' }
-    const prefix = match[1].toLowerCase() === 'ngc' ? 'n' : match[1].toLowerCase()
-    return prefix + match[2] + '.png'
-  }
-
-  private objectInspectorFallbackVisualKind(): string {
-    const type = (this.objectDetailStore.selectedObjectType + ' ' + this.objectDetailStore.selectedType).toLowerCase()
-    const procedural = proceduralModelKind(type)
-    if (procedural.length > 0) return procedural
-    if (type.indexOf('comet') >= 0 || type.indexOf('彗') >= 0) return 'comet'
-    if (type.indexOf('asteroid') >= 0 || type.indexOf('minor planet') >= 0 || type.indexOf('小行星') >= 0) return 'asteroid'
-    if (type.indexOf('galaxy') >= 0 || type.indexOf('星系') >= 0) return 'galaxy'
-    if (type.indexOf('globular') >= 0 || type.indexOf('球状星团') >= 0) return 'globular-cluster'
-    if (type.indexOf('cluster') >= 0 || type.indexOf('星团') >= 0) return 'open-cluster'
-    if (type.indexOf('nebula') >= 0 || type.indexOf('星云') >= 0) return 'nebula'
-    if (type.indexOf('constellation') >= 0 || type.indexOf('星座') >= 0) return 'constellation'
-    if (type.indexOf('artificial') >= 0 || type.indexOf('人造') >= 0) return 'satellite'
-    if (type.indexOf('moon') >= 0) return 'moon'
-    if (type.indexOf('satellite') >= 0 || type.indexOf('卫星') >= 0) return 'satellite'
-    if (type.indexOf('star') >= 0 || type.indexOf('恒星') >= 0 || type.indexOf('变星') >= 0) return 'star'
-    return 'object'
-  }
-
-  private objectInspectorStarColor(): string {
-    const temperature = this.objectDetailStore.selectedTemperatureK
-    if (temperature >= 11000) return '#A8C8FF'
-    if (temperature >= 7500) return '#D6E5FF'
-    if (temperature >= 6000) return '#FFF5D8'
-    if (temperature >= 4500) return '#FFD3A3'
-    if (temperature > 0) return '#FFAA86'
-    return '#E8F4FF'
-  }
-
   private refreshObjectInspectorMedia(): void {
-    const planetTexturePath = this.objectInspectorPlanetTexturePath()
+    const planetTexturePath = objectInspectorPlanetTexturePath(this.objectDetailStore.selectedEnglishName)
     const deepSkyImageName = planetTexturePath.length === 0 && this.objectDetailStore.selectedDetailMediaPath.length === 0
-      ? this.objectInspectorDeepSkyImageName()
+      ? objectInspectorDeepSkyImageName(objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType), this.objectInspectorSearchText())
       : ''
     const requestedPath = planetTexturePath.length > 0
       ? planetTexturePath
@@ -13358,7 +13253,7 @@ private loadPlanetPositions(): void {
     const modelRawFilePath = kind === 'model' && resolvedPath.length > 0
       ? this.objectInspectorFilePath(resolvedPath + '.model.rgba')
       : ''
-    const ringSpec = kind === 'model' ? this.objectInspectorPlanetRingSpec() : undefined
+    const ringSpec = kind === 'model' ? objectInspectorPlanetRingSpec(this.objectDetailStore.selectedEnglishName) : undefined
     const ringRawFilePath = ringSpec === undefined
       ? ''
       : this.objectInspectorFilePath(ringSpec.texturePath + '.model.rgba')
@@ -13705,7 +13600,7 @@ private loadPlanetPositions(): void {
     this.objectInspectorModelLastLighting = lighting === undefined ? [] :
       lighting.viewToBody.concat(lighting.sunDirectionBody)
     if (this.objectMediaStore.objectInspectorModelPixelMap === undefined) this.objectMediaStore.objectInspectorMediaDecoding = true
-    const ring = this.objectInspectorPlanetRingSpec()
+    const ring = objectInspectorPlanetRingSpec(this.objectDetailStore.selectedEnglishName)
     const renderRing: DetailModelRing | undefined = ring === undefined ? undefined : {
       innerRadius: ring.innerRadius, outerRadius: ring.outerRadius, opacity: ring.opacity
     }
@@ -14336,9 +14231,9 @@ private loadPlanetPositions(): void {
         modelRendering: this.objectInspectorModelRendering,
         hasModelTexture: this.objectInspectorModelTexturePixels !== undefined,
         modelNotice: this.objectInspectorModelNotice(),
-        warmupText: this.objectInspectorMediaWarmupText(),
-        fallbackKind: this.objectInspectorFallbackVisualKind(),
-        starColor: this.objectInspectorStarColor(),
+        warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
+        fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
+        starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
         satVisible: this.selectedObjectIsArtificialSatellite(),
         tleEpoch: this.selectedSatelliteTleEpoch(),
         textColor: this.nmText(),

@@ -1,3 +1,31 @@
+## [2026-10-04] DevEco Code - 重构：§14 A2-1 objectInspector 媒体族
+
+- 依据 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.3（A2 三去向 A2-D/A2-G/A2-M）与 §14.8（规则 1「文件级函数禁 this」、规则 2「store 不得 import NAPI/UI」、规则 5「禁双写」、规则 6「纯函数模块无状态」、规则 7「声明与调用同片搬」）及 §13.1/§13.2/§13.3；承接 §14.2 已建成的 `common/derive/*.ets`。
+- 开工断言：`git log --oneline -1` = `b4e0dc7b49`（B3-5）；`git status --porcelain` 已跟踪文件干净。本片 = 轨道 A2 首片，按「先做 §2.12 行数最大 25 中非热路径的 `objectInspector*` 6 个」执行；开工逐名重测，宿主内 6 个仍在、无变化。
+
+- **逐方法（读取字段 / 调用点数 / 去向）**：
+  1. `objectInspectorMediaWarmupText`(11) / 读 `objectMediaStore.objectInspectorMediaWarmupTotal/Installed/Failed`（本 store 字段）→ **ObjectMediaStore 方法**（零入参）；调用点 4（壳层装配 3：HoverObservatoryShell/ExpandedShell/CompactShell，ObjectPanel 1）。
+  2. `objectInspectorPlanetTexturePath`(28) / 读 `objectDetailStore.selectedEnglishName` → `common/derive/media.ets` 纯函数 + 显式入参；调用点 1（宿主 `refreshObjectInspectorMedia`）。
+  3. `objectInspectorPlanetRingSpec`(14) / 读 `objectDetailStore.selectedEnglishName` → derive 纯函数；调用点 2（宿主 `refreshObjectInspectorMedia`、`requestObjectInspectorModelRender`）。
+  4. `objectInspectorDeepSkyImageName`(21) / 依赖 `objectInspectorFallbackVisualKind` + `objectInspectorSearchText`（读 `objectDetailStore.selectedCatalogId/selectedEnglishName/selectedName`）→ derive 纯函数（入参 `fallbackVisualKind, searchText`，`objectInspectorSearchText` 仍留宿主、其值在调用点传入）；调用点 1。
+  5. `objectInspectorFallbackVisualKind`(17) / 读 `objectDetailStore.selectedObjectType/selectedType` → derive 纯函数；调用点 4（组件装配）+ 1（宿主内部）。
+  6. `objectInspectorStarColor`(9) / 读 `objectDetailStore.selectedTemperatureK` → derive 纯函数；调用点 4（组件装配）。
+  - 停下 0；6 个均为非触摸/命中热路径。
+
+- **手法**：函数体逐字搬入；derive 侧差异仅 `this.objectDetailStore.<f>` → 显式入参；store 侧差异仅 `this.objectMediaStore.<f>` → `this.<f>`。宿主删除 6 个 `private` 声明、改 16 处调用点、删 1 个随迁移失效的类型 import（`ObjectInspectorRingSpec`）。
+- **@Prop 未删**：`warmupText`/`fallbackKind`/`starColor` 仍是数据通道（壳层 → ObjectPanel → UnifiedObjectDetailCard/TabletInspectorMediaGroup → TabletInspectorMedia），派生点搬走但值仍须逐层下发，故 `ObjectDetailTabs`/`UnifiedObjectDetailCard`/`ObjectPanel`/`CompactShell`/`ExpandedShell`/`HoverObservatoryShell`/`TabletInspectorMediaGroup` 的 `@Prop` 保留。
+
+- **body diff 摘要**：新增 `common/derive/media.ets` **97 行** 5 个纯函数；`ObjectMediaStore.ets` **109 → 123**（+14：1 个方法 + 注释）；宿主 `MainWindowNativeNode.ets` **15636 → 15531**（−105）；宿主 `private` 方法（`^\s{2}private <名>(` 口径）**730 → 724**（−6）。
+  - **残留复核**：宿主 `grep this\.objectInspector(MediaWarmupText|PlanetTexturePath|PlanetRingSpec|DeepSkyImageName|FallbackVisualKind|StarColor)` = **0**；derive 模块内 `this` = **0**、无 store/NAPI import；`ObjectMediaStore` 内 `this.objectMediaStore.` = **0**。
+  - **双写复核**：6 个方法名在宿主仅余调用点（无声明副本），store/derive 各仅 1 份实现。
+
+- **验证证据**：`node scripts/check-ohos-refactor-slice.mjs` 通过；`arkts_check`（media.ets / ObjectMediaStore / MainWindowNativeNode）无错；**BUILD SUCCESSFUL in 35s**（signed HAP 708.7 MB）；`check-ohos-ui-contract.mjs` = 33 panels / 24 static ids / 17 dynamic prefixes / 44 id anchors / over 215 files（**intact**）；受影响测试全绿（`test-ohos-procedural-model` **12/12**、`-detail-live-values` **7/7**、`-detail-image-layout` **5/5**、`-detail-model-geometry` **7/7**、`-model-scroll` **5/5**）；全量 `*ohos*.mjs` 扫描仅 §13.6 的 **7 个环境类**失败；扫描重写的 `RESOURCE-COVERAGE-AUDIT-2026-08-24.md` 已 `git checkout --` 还原。
+  - **测试同步**：`test-ohos-procedural-model.mjs` 第 3 项夹具由「从宿主切片 `private objectInspectorFallbackVisualKind` 构造 Controller」改为「从 `common/derive/media.ets` 切片导出函数 + 显式入参调用」。
+  - **模拟器冒烟（真机离线；`127.0.0.1:5555`，UI-only 无引擎）**：install → `aa start -a QAbility -b com.cnchensh.stellarium` → `pidof` = **22430 全程存活** → Dock「更多功能」面板打开并渲染（`#more-action-observeHub`/`#more-action-dataHub` 可见）→ `aa dump -l` 前台 `com.cnchensh.stellarium`。
+  - **模拟器无法覆盖（待真机）**：天体选中 → 详情卡（`ObjectPanel`/`UnifiedObjectDetailCard`/`TabletInspectorMedia`）的 `warmupText`/`fallbackKind`/`starColor` 派生值渲染与行星纹理/环带/深空图像路径命中 —— 依赖引擎的对象搜索与选中，UI-only 通道不可达（`stellarium-cli openUiPanel object` 超时），须真机走查。
+
+- **A2 进度（本片后）**：已迁 **6 / 214**。
+- 踩坑：无新增（新建 `common/derive/media.ets` 按既有 derive 模式；中文注释经 write 工具写入，未走命令行内联）。
 ## [2026-10-04] DevEco Code - 重构：§14 B3-5（B3 收尾：skyCultureDetails 保持登记 + scenery3d/catalogHealth 下沉）
 
 - 依据 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §14.6（B3 表最后 3 行）/ §14.7 / §14.8（规则 2「store 不得 import NAPI/UI」、规则 3「请求序号随加载器搬入 store、禁双序号」、规则 5「禁止双写」、规则 7「声明与调用同片」）与 §13.1/§13.2/§13.3；复用 §14.1 的 `bridge/CommandPort.ets` 与宿主同一 `HostCommandPort` 实例（AB-0 / B1 / B2 / B3-1…B3-4 先例）。**B3 轨道收尾片。**
