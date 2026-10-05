@@ -39,7 +39,7 @@ import {
 } from '../common/ui/ChromeGeometry'
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot } from '../common/derive/gyro'
 import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetMetricLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointSize, hecPointAngle, hecPlanetOrbitRadius, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
-import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, timezoneDisplayName } from '../common/derive/labels'
+import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, csvCell, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, telescopeUpdateTime, telescopeErrorText, validationFromResponse, normalizeLocationSearchText, officialLocationAliases, sessionSignature } from '../common/derive/actions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary } from '../common/derive/geometry'
@@ -1203,6 +1203,53 @@ export struct WindowNativeNode {
         this.commitObjectInspectorModelTexture(texture, ringTexture, mediaGeneration, expectedSelection, expectedPath, sourceLabel),
       failObjectInspectorModelTexture: (mediaGeneration: number, reason: string): void => this.failObjectInspectorModelTexture(mediaGeneration, reason)
     })
+    // §14 B2R-2：设置 / 观测点 / 时间附加三个加载器分别下沉 TimeSettingsStore / LocationPickerStore /
+    // TimeStore，均复用同一 HostCommandPort 实例。三者消费方均为 @ObjectLink（字段赋值即刷新），
+    // 且无 publish* 发布点，故 onChanged 传空实现。跨 store 写入的字段与两个与宿主动作共享的
+    // 助手（applySelectedInfoMode / applyTimeSettings / applyAtmosphereResponse / syncNightModeFromEngine）
+    // 按 §14.5「额外注入」经具名 hooks 回注。
+    this.locationPickerStore.attachPort(hostPort, () => {})
+    this.locationPickerStore.attachHooks({
+      setSkyCultureObserverLatitude: (value: number): void => { this.skyCultureSettingsStore.skyCultureObserverLatitude = value },
+      setObserverPlanet: (value: string): void => { this.sessionToolStore.observerPlanet = value }
+    })
+    this.timeStore.attachPort(hostPort, () => {})
+    this.timeStore.attachHooks({
+      syncNightModeFromEngine: (engineNight: boolean): void => this.syncNightModeFromEngine(engineNight),
+      applyAtmosphereResponse: (response: StellariumBridgeResponse): void => this.applyAtmosphereResponse(response)
+    })
+    this.timeSettingsStore.attachPort(hostPort, () => {})
+    this.timeSettingsStore.attachHooks({
+      setUseMetricUnits: (value: boolean): void => { this.viewSettingsStore.useMetricUnits = value },
+      setConfigDitheringMode: (mode: string): void => { this.viewSettingsStore.configDitheringMode = mode },
+      setAutoZoomResets: (value: boolean): void => { this.viewSettingsStore.autoZoomResets = value },
+      setNavigationMouseEnabled: (value: boolean): void => { this.navigationStore.navigationMouseEnabled = value },
+      setNavigationMouseZoomEnabled: (value: boolean): void => { this.navigationStore.navigationMouseZoomEnabled = value },
+      setNavigationMoveKeysEnabled: (value: boolean): void => { this.navigationStore.navigationMoveKeysEnabled = value },
+      setNavigationZoomKeysEnabled: (value: boolean): void => { this.navigationStore.navigationZoomKeysEnabled = value },
+      setNavigationGravityLabelsEnabled: (value: boolean): void => { this.navigationStore.navigationGravityLabelsEnabled = value },
+      setNavigationStartupFov: (value: number): void => { this.navigationStore.navigationStartupFov = value },
+      setNavigationStartupAzimuth: (value: number): void => { this.navigationStore.navigationStartupAzimuth = value },
+      setNavigationStartupAltitude: (value: number): void => { this.navigationStore.navigationStartupAltitude = value },
+      setNavigationMaxFov: (value: number): void => { this.navigationStore.navigationMaxFov = value },
+      setEphemerisAvailability: (de430Available: boolean, de431Available: boolean, de440Available: boolean, de441Available: boolean): void => {
+        this.ephemerisStore.ephemerisDe430Available = de430Available
+        this.ephemerisStore.ephemerisDe431Available = de431Available
+        this.ephemerisStore.ephemerisDe440Available = de440Available
+        this.ephemerisStore.ephemerisDe441Available = de441Available
+      },
+      setEphemerisActive: (de430Active: boolean, de431Active: boolean, de440Active: boolean, de441Active: boolean): void => {
+        this.ephemerisStore.ephemerisDe430Active = de430Active
+        this.ephemerisStore.ephemerisDe431Active = de431Active
+        this.ephemerisStore.ephemerisDe440Active = de440Active
+        this.ephemerisStore.ephemerisDe441Active = de441Active
+      },
+      informationMode: (): string => this.infoWindowStore.informationMode,
+      setInformationMode: (mode: string): void => { this.infoWindowStore.informationMode = mode },
+      setInformationCustomMask: (mask: number): void => { this.infoWindowStore.informationCustomMask = mask },
+      applySelectedInfoMode: (mode: string): void => this.applySelectedInfoMode(mode),
+      applyTimeSettings: (response: StellariumBridgeResponse): void => this.applyTimeSettings(response)
+    })
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -1736,11 +1783,11 @@ export struct WindowNativeNode {
       if (this.foregroundRefreshPaused) {
         this.foregroundRefreshPaused = false
         if (this.activePanel === 'time' && this.panelVisible) {
-          this.loadTimeExtras()
+          this.timeStore.loadTimeExtras()
           this.timePanelTimer = setInterval(() => { this.refreshSimTimeLight() }, 125)
           this.timePanelFullTimer = setInterval(() => {
             this.refreshState()
-            this.loadTimeExtras()
+            this.timeStore.loadTimeExtras()
           }, 3000)
         }
         if (this.objectDetailStore.selectedStatus === 'Selected' && ((this.activePanel === 'object' && this.panelVisible) || this.infoWindowStore.infoWinVisible)) {
@@ -2296,12 +2343,12 @@ export struct WindowNativeNode {
         if (this.searchStore.categoryObjects.length === 0) this.loadCategoryObjects(this.searchStore.searchCategory)
       }
       if (panel === 'time') {
-        this.loadTimeExtras()
+        this.timeStore.loadTimeExtras()
         this.ensurePluginLoaded('EquationOfTime', () => { this.equationOfTimeStore.loadEquationOfTime() })
         this.timePanelTimer = setInterval(() => { this.refreshSimTimeLight() }, 125)
         this.timePanelFullTimer = setInterval(() => {
           this.refreshState()
-          this.loadTimeExtras()
+          this.timeStore.loadTimeExtras()
         }, 3000)
       }
       if (panel === 'astro') {
@@ -2313,12 +2360,12 @@ export struct WindowNativeNode {
       } else if (panel === 'settings') {
         this.refreshState()
         this.loadCatalogHealth()
-        this.loadConfigurationSettings()
+        this.timeSettingsStore.loadConfigurationSettings()
         if (this.configTab === 6) this.pluginStore.loadPluginList()
       } else if (panel === 'place') {
         this.refreshState()
         this.sessionToolStore.loadPlanetList()
-        this.loadObserverInfo()
+        this.locationPickerStore.loadObserverInfo()
         this.locationStore.loadSavedLocations()
       } else if (panel === 'catalogs' && !OFFLINE_APPGALLERY_BUILD) {
         if (this.catalogStore.catalogList.length === 0) this.catalogStore.loadStarCatalogs()
@@ -3263,7 +3310,7 @@ export struct WindowNativeNode {
     // location/time controls never retain the script's temporary state.
     setTimeout(() => {
       this.refreshState()
-      this.loadObserverInfo(true)
+      this.locationPickerStore.loadObserverInfo(true)
       this.sessionToolStore.loadPlanetList()
     }, 220)
   }
@@ -4783,56 +4830,6 @@ export struct WindowNativeNode {
     })
   }
 
-  private loadConfigurationSettings(): void {
-    this.callInteractive('getDateFormat', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.format !== undefined) { this.timeSettingsStore.configDateFormat = r.format as string }
-    })
-    this.callInteractive('getTimeFormat', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.format !== undefined) { this.timeSettingsStore.configTimeFormat = r.format as string }
-    })
-    this.callInteractive('getConfigString', 'astronomy/flag_use_km_for_distance', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.value !== undefined) {
-        this.viewSettingsStore.useMetricUnits = (r.value as string).toLowerCase() === 'true' || r.value === '1'
-      }
-    })
-    this.callInteractive('getDitheringMode', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true && r.mode !== undefined) { this.viewSettingsStore.configDitheringMode = r.mode as string }
-    })
-    this.callInteractive('getNavigationSettings', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      if (r.mouseNavigation !== undefined) this.navigationStore.navigationMouseEnabled = r.mouseNavigation === true
-      if (r.mouseZooming !== undefined) this.navigationStore.navigationMouseZoomEnabled = r.mouseZooming === true
-      if (r.moveKeys !== undefined) this.navigationStore.navigationMoveKeysEnabled = r.moveKeys === true
-      if (r.zoomKeys !== undefined) this.navigationStore.navigationZoomKeysEnabled = r.zoomKeys === true
-      if (r.gravityLabels !== undefined) this.navigationStore.navigationGravityLabelsEnabled = r.gravityLabels === true
-      if (r.autoZoomResets !== undefined) this.viewSettingsStore.autoZoomResets = r.autoZoomResets === true
-      if (r.startupFov !== undefined) this.navigationStore.navigationStartupFov = Number(r.startupFov)
-      if (r.startupAzimuth !== undefined) this.navigationStore.navigationStartupAzimuth = Number(r.startupAzimuth)
-      if (r.startupAltitude !== undefined) this.navigationStore.navigationStartupAltitude = Number(r.startupAltitude)
-      if (r.maxFov !== undefined) this.navigationStore.navigationMaxFov = Number(r.maxFov)
-    })
-    this.callInteractive('getEphemerisSettings', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      this.ephemerisStore.ephemerisDe430Available = r.de430Available === true
-      this.ephemerisStore.ephemerisDe431Available = r.de431Available === true
-      this.ephemerisStore.ephemerisDe440Available = r.de440Available === true
-      this.ephemerisStore.ephemerisDe441Available = r.de441Available === true
-      this.ephemerisStore.ephemerisDe430Active = r.de430Active === true
-      this.ephemerisStore.ephemerisDe431Active = r.de431Active === true
-      this.ephemerisStore.ephemerisDe440Active = r.de440Active === true
-      this.ephemerisStore.ephemerisDe441Active = r.de441Active === true
-    })
-    this.callInteractive('getInformationSettings', '', (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) return
-      this.infoWindowStore.informationMode = r.infoMode ?? this.infoWindowStore.informationMode
-      if (r.customInfoMask !== undefined) this.infoWindowStore.informationCustomMask = Number(r.customInfoMask)
-      this.applySelectedInfoMode(this.infoWindowStore.informationMode)
-    })
-    this.callInteractive('getTimeSettings', '', (r: StellariumBridgeResponse) => {
-      this.applyTimeSettings(r)
-    })
-  }
-
   private setEphemerisEnabled(key: string, available: boolean, enabled: boolean): void {
     if (!available && enabled) {
       this.flashHint('该星历文件未安装，无法启用')
@@ -4967,7 +4964,7 @@ export struct WindowNativeNode {
         return
       }
       this.flashHint(I18n.t('settings_view_saved'))
-      this.loadConfigurationSettings()
+      this.timeSettingsStore.loadConfigurationSettings()
     })
   }
 
@@ -5003,7 +5000,7 @@ export struct WindowNativeNode {
         this.flashHint('渲染质量已更新')
       } else {
         this.flashHint(r.error ?? I18n.t('msg_apply_failed'))
-        this.loadConfigurationSettings()
+        this.timeSettingsStore.loadConfigurationSettings()
       }
     })
   }
@@ -5014,7 +5011,7 @@ export struct WindowNativeNode {
         this.viewSettingsStore.useMetricUnits = useMetric
       } else {
         this.flashHint(r.error ?? I18n.t('msg_apply_failed'))
-        this.loadConfigurationSettings()
+        this.timeSettingsStore.loadConfigurationSettings()
       }
     })
   }
@@ -5549,17 +5546,8 @@ export struct WindowNativeNode {
     })
   }
 
-  // ---- 时间面板扩展：恒星时 / 夜视 / 大气折射 ----
-  private loadTimeExtras(): void {
-    const st: StellariumBridgeResponse = this.callNative('getSiderealTime', '')
-    if (st.ok === true && st.text !== undefined) this.timeStore.siderealTimeText = st.text
-
-    const nm: StellariumBridgeResponse = this.callNative('getNightMode', '')
-    if (nm.ok === true) this.syncNightModeFromEngine(nm.night === true)
-
-    this.applyAtmosphereResponse(this.callNative('getAtmosphereParams', ''))
-  }
-
+  // 大气参数回包写入 AtmosphereStore。保留宿主实现（§13.1 规则 6）：与 applyAtmosphere 共用，
+  // 并由 TimeStore.loadTimeExtras 经 TimeHostHooks 注入调用（§14 B2R-2）。
   private applyAtmosphereResponse(r: StellariumBridgeResponse): void {
     if (r.ok !== true) return
     if (r.pressure !== undefined) this.atmosphereStore.atmoPressure = r.pressure
@@ -10881,7 +10869,7 @@ private loadPlanetPositions(): void {
   private applyPickerLocation(): void {
     this.setLocation(this.locationPickerStore.locationPickerName, this.locationPickerStore.locationPickerLatitude, this.locationPickerStore.locationPickerLongitude, this.locationPickerStore.locationPickerAltitude)
     // 延迟刷新时区信息（等C++侧location切换完成）
-    setTimeout(() => { this.loadObserverInfo(true) }, 500)
+    setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 500)
   }
 
 
@@ -10895,13 +10883,13 @@ private loadPlanetPositions(): void {
     this.locationText = this.locationPickerStore.locationDisplayName(name) + ' · ' + planetZh(targetPlanet)
     this.coordinateText = this.locationStore.formatDegrees(latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(longitude, 'E', 'W')
     this.altitudeText = altitude.toFixed(0) + ' m'
-    this.locationPickerStore.observerTimeZone = targetPlanet === 'Earth' ? this.approximateTimeZoneDisplay(longitude) : I18n.t('tz_system')
+    this.locationPickerStore.observerTimeZone = targetPlanet === 'Earth' ? approximateTimeZoneDisplay(longitude) : I18n.t('tz_system')
     this.flashHint(I18n.t('i0073').replace('%s', this.locationPickerStore.locationDisplayName(name)))
     if (targetPlanet !== currentPlanet || targetPlanet !== 'Earth') {
       this.callNativeWhenReady('setObserverPlanet', `${targetPlanet}|${latitude}|${longitude}|${altitude}`, (r: StellariumBridgeResponse) => {
         if (r.ok === true) {
           this.refreshState()
-          setTimeout(() => { this.loadObserverInfo(true) }, 300)
+          setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 300)
         } else {
           this.sessionToolStore.observerPlanet = currentPlanet
           this.flashHint('切换观测星球失败')
@@ -10913,19 +10901,19 @@ private loadPlanetPositions(): void {
     this.callNativeWhenReady('setLocation', `${name}|${latitude}|${longitude}|${altitude}`, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.refreshState()
-        setTimeout(() => { this.loadObserverInfo(true) }, 300)
+        setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 300)
       } else {
         hilog.info(0x0000, 'StellariumArkUI', 'setLocation failed, fallback to setLocationCoords')
         this.callNativeWhenReady('setLocationCoords', `${latitude},${longitude},${altitude}`, (r2: StellariumBridgeResponse) => {
           if (r2.ok === true) {
             this.refreshState()
-            setTimeout(() => { this.loadObserverInfo(true) }, 300)
+            setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 300)
           } else {
             hilog.info(0x0000, 'StellariumArkUI', 'setLocationCoords failed, fallback to setLocationByName')
             this.callNativeWhenReady('setLocationByName', name, (r3: StellariumBridgeResponse) => {
               if (r3.ok === true) {
                 this.refreshState()
-                setTimeout(() => { this.loadObserverInfo(true) }, 300)
+                setTimeout(() => { this.locationPickerStore.loadObserverInfo(true) }, 300)
               }
             })
           }
@@ -11128,32 +11116,8 @@ private loadPlanetPositions(): void {
   }
 
   // ===== 时区获取 =====
-
-  private approximateTimeZoneDisplay(longitude: number): string {
-    const offset = clamp(Math.round(longitude / 15), -12, 14)
-    if (offset === 0) {
-      return 'UTC'
-    }
-    return 'UTC' + (offset > 0 ? '+' : '') + offset.toString()
-  }
-
-  private loadObserverInfo(updateTimeZone: boolean = true): void {
-    this.callInteractive('getObserverInfo', '', (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        if (r.latitude !== undefined) {
-          this.skyCultureSettingsStore.skyCultureObserverLatitude = Number(r.latitude)
-        }
-        if (updateTimeZone && r.timeZone !== undefined && r.timeZone.length > 0 && r.timeZone !== 'system_default') {
-          this.locationPickerStore.observerTimeZone = timezoneDisplayName(r.timeZone)
-        } else if (updateTimeZone && this.locationPickerStore.observerTimeZone.length === 0 && r.longitude !== undefined) {
-          this.locationPickerStore.observerTimeZone = this.approximateTimeZoneDisplay(Number(r.longitude))
-        }
-        if (r.planetName) {
-          this.sessionToolStore.observerPlanet = r.planetName
-        }
-      }
-    })
-  }
+  // approximateTimeZoneDisplay 与 loadObserverInfo 已随 §14 B2R-2 下沉：
+  // 前者迁至 common/derive/labels.ets（纯函数），后者迁至 LocationPickerStore。
 
   // ===== 已保存位置管理（持久化到 preferences）=====
   private saveCurrentLocation(): void {
@@ -13007,7 +12971,7 @@ private loadPlanetPositions(): void {
           }
           this.guideGyroWasEnabled = false
           this.refreshState()
-          this.loadObserverInfo(true)
+          this.locationPickerStore.loadObserverInfo(true)
         }
       })
     }
@@ -15280,7 +15244,7 @@ private loadPlanetPositions(): void {
         onLoadTerritoryMap: () => { this.loadSkyCultureTerritoryMap() },
         onMapReady: () => { this.drawSkyCultureTerritoryMap() },
         onMapAreaChange: (width: number, height: number) => { this.skyCultureMapRenderWidth = width; this.skyCultureMapRenderHeight = height; this.drawSkyCultureTerritoryMap() },
-        onLoadObserverInfo: (force: boolean) => { this.loadObserverInfo(force) },
+        onLoadObserverInfo: (force: boolean) => { this.locationPickerStore.loadObserverInfo(force) },
         onArtDecodeError: (rawPath: string) => { this.setSkyCultureArtStatus(rawPath, 'decodeFailed') },
         onOpenArtPreview: (art: SkyCultureArtItem) => { this.openSkyCultureArtPreview(art) }
       })

@@ -1,8 +1,18 @@
 import { I18n } from '../pages/I18n'
-import { HierCity } from '../pages/StellariumTypes'
+import { HierCity, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { LOCATION_HIERARCHY } from '../pages/location_hierarchy'
 import { LOCATION_COUNTRY_NAMES } from '../pages/location_countries'
 import { LOCATION_ZH_NAMES } from '../pages/location_names_zh'
+import { timezoneDisplayName, approximateTimeZoneDisplay } from '../common/derive/labels'
+import { CommandPort } from '../bridge/CommandPort'
+
+// 宿主 → LocationPickerStore 的观测点助手（§14.5 B2R-2「额外注入」）。
+export interface LocationPickerHostHooks {
+  // 观测纬度写 SkyCultureSettingsStore.skyCultureObserverLatitude（领地地图旋转用）。
+  setSkyCultureObserverLatitude(value: number): void
+  // 观测星球写 SessionToolStore.observerPlanet（跨域共享，位置面板/今晚天象消费）。
+  setObserverPlanet(value: string): void
+}
 
 // 位置选择器（「位置」面板的层级列 + 地图选点）状态与纯计算。
 //
@@ -43,6 +53,63 @@ export class LocationPickerStore {
   hierCountry: string = ''
   hierRegion: string = ''
   hierCity: string = ''
+
+  // —— 桥 / 宿主助手注入（§14.1 AB-0 / §14 B2R-2）——
+  private port: CommandPort | null = null
+  // 本加载器不使用请求序号（交互读，无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  private seq: number = 0
+  private onChanged: (() => void) | null = null
+  private hooks: LocationPickerHostHooks | null = null
+
+  // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
+  attachPort(port: CommandPort, onChanged: () => void): void {
+    this.port = port
+    this.onChanged = onChanged
+  }
+
+  attachHooks(hooks: LocationPickerHostHooks): void {
+    this.hooks = hooks
+  }
+
+  // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  private notifyChanged(): void {
+    if (this.onChanged !== null) {
+      this.onChanged()
+    }
+  }
+
+  // 观测点信息：读回纬度 / 时区 / 观测星球（原宿主 loadObserverInfo，函数体逐字搬入；
+  // 仅 this.callInteractive → this.port.requestInteractive、this.locationPickerStore.observerTimeZone
+  // → 本 store 字段、时区助手 → derive/labels 模块、两个跨 store 写 → hooks.*）。
+  loadObserverInfo(updateTimeZone: boolean = true): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    const hooks = this.hooks
+    if (hooks === null) {
+      return
+    }
+    port.requestInteractive('getObserverInfo', '', (r: StellariumBridgeResponse) => {
+      if (r.ok === true) {
+        if (r.latitude !== undefined) {
+          hooks.setSkyCultureObserverLatitude(Number(r.latitude))
+        }
+        if (updateTimeZone && r.timeZone !== undefined && r.timeZone.length > 0 && r.timeZone !== 'system_default') {
+          this.observerTimeZone = timezoneDisplayName(r.timeZone)
+        } else if (updateTimeZone && this.observerTimeZone.length === 0 && r.longitude !== undefined) {
+          this.observerTimeZone = approximateTimeZoneDisplay(Number(r.longitude))
+        }
+        if (r.planetName) {
+          hooks.setObserverPlanet(r.planetName)
+        }
+      }
+    })
+  }
 
   // 原宿主私有 planetZh() 的本域副本：translateCountry('ZZ') 需要「月球表面地点」这类星球名。
   private planetZhName(en: string): string {
