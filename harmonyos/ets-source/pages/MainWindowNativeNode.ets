@@ -3,7 +3,6 @@ import { geoLocationManager } from '@kit.LocationKit'
 import { sensor } from '@kit.SensorServiceKit'
 import { curves } from '@kit.ArkUI'
 import { uniformTypeDescriptor as utd } from '@kit.ArkData'
-import { KeyCode } from '@kit.InputKit'
 import { media } from '@kit.MediaKit'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { systemShare } from '@kit.ShareKit'
@@ -56,6 +55,7 @@ import { StartupBridge, StartupHooks } from '../capability/StartupBridge'
 import { SensorController, GyroGuideLayout, SensorHostHooks } from '../capability/SensorController'
 import { RecordingController, RecordingHostHooks } from '../capability/RecordingController'
 import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
+import { SkyInputController, SkyInputHostHooks } from '../capability/SkyInputController'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
@@ -707,6 +707,8 @@ export struct WindowNativeNode {
   private recordingControllerImpl: RecordingController | null = null
   // M2-A：对象检查器三维模型渲染器（惰性构造；逐帧/草稿字段留控制器，可观测子集在 ObjectMediaStore）。
   private objectModelRendererImpl: ObjectModelRenderer | null = null
+  // M3-1：天空输入控制器骨架（惰性构造；鼠标/键盘/滚轮轴/点按序列/惯性方法 + 16 个草稿字段）。
+  private skyInputControllerImpl: SkyInputController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -1110,7 +1112,6 @@ export struct WindowNativeNode {
   private pinchNativePushPending: boolean = false
   /** 缩放 FOV 胶囊提示的节流时间戳 */
   private lastFovHintMs: number = 0
-  private pinchActive: boolean = false
   private nativeDragActive: boolean = false
   private lastDragCommandMs: number = 0
   private dragFilteredX: number = 0
@@ -1118,29 +1119,12 @@ export struct WindowNativeNode {
   private dragLastRawX: number = 0
   private dragLastRawY: number = 0
   private dragLastSampleMs: number = 0
-  private dragVelocityX: number = 0
-  private dragVelocityY: number = 0
-  private dragVelocitySampleValid: boolean = false
-  private skyInertiaTimer: number = 0
-  // Momentum runs in the Qt render loop. ArkTS only supplies the release
-  // velocity, avoiding a stream of cross-thread drag commands after lift-off.
-  private nativeSkyInertiaActive: boolean = false
   private skyDragging: boolean = false
   // gyro* 订阅/姿态/引导字段已随 M1-B 子组① 搬入 capability/SensorController.ets
   // （M1-B 子组「可观测子集入 GyroStore、逐帧草稿留控制器」，§15.7 规则 2）。
   private dragLogCount: number = 0
   private touchStartedOnUi: boolean = false
-  private lastSkyTapAt: number = 0
-  private lastSkyTapX: number = 0
-  private lastSkyTapY: number = 0
   private skySelectionRequestSerial: number = 0
-  private mouseSkyPressed: boolean = false
-  private mouseSkyMoved: boolean = false
-  private mouseSkyStartX: number = 0
-  private mouseSkyStartY: number = 0
-  private mouseSkyLastX: number = 0
-  private mouseSkyLastY: number = 0
-  private mouseSkyLastSampleMs: number = 0
   private lastCenterKeyAt: number = 0
   private lastDockActionAt: number = 0
   private lastDockActionPanel: string = ''
@@ -1561,6 +1545,35 @@ export struct WindowNativeNode {
     return this.objectModelRendererImpl
   }
 
+  // M3-1：天空输入控制器惰性构造。桥 fire 经同一 HostCommandPort；宿主保留动作（isUiPoint 热路径、
+  // 路由/选中/缩放/陀螺退出/夜间模式持久化/模型沉浸态）经 SkyInputHostHooks 具名回注，控制器不 import NAPI/UI。
+  private skyInputCtl(): SkyInputController {
+    if (this.skyInputControllerImpl === null) {
+      const hooks: SkyInputHostHooks = {
+        isUiPoint: (x: number, y: number): boolean => this.isUiPoint(x, y),
+        flashHint: (text: string): void => this.flashHint(text),
+        skyWidth: (): number => this.skyWidth,
+        skyHeight: (): number => this.skyHeight,
+        gyroscopeEnabled: (): boolean => this.gyroStore.gyroscopeEnabled,
+        stopGyroscope: (updateStatus: boolean): void => this.gyroCtl().stopGyroscope(updateStatus),
+        angleMeasureEnabled: (): boolean => this.tools.angleMeasureEnabled,
+        measureAngleAt: (x: number, y: number): void => this.measureAngleAt(x, y),
+        requestSkySelection: (x: number, y: number): void => this.requestSkySelection(x, y),
+        clearSkySelectionFromDoubleTap: (x: number, y: number): void => this.clearSkySelectionFromDoubleTap(x, y),
+        zoomStep: (factor: number): void => this.zoomStep(factor),
+        setPanel: (panel: string): void => this.setPanel(panel),
+        closePanel: (): void => this.closePanel(),
+        moveToSelectedObject: (): void => this.moveToSelectedObject(),
+        centerSelectedObjectFromKeyboard: (): void => this.centerSelectedObjectFromKeyboard(),
+        persistNightMode: (): void => this.persistNightMode(),
+        modelImmersive: (): boolean => this.objectMediaStore.objectInspectorModelImmersive,
+        setModelImmersive: (value: boolean): void => this.objectModelRendererCtl().setObjectInspectorModelImmersive(value)
+      }
+      this.skyInputControllerImpl = new SkyInputController(this.commandPort(), this.nightModeStore, hooks)
+    }
+    return this.skyInputControllerImpl
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
@@ -1699,7 +1712,7 @@ export struct WindowNativeNode {
       setGyroscopeEnabled: (value: boolean): void => { this.gyroStore.gyroscopeEnabled = value },
       startGyroscope: (): void => this.gyroCtl().startGyroscope(),
       stopGyroscope: (updateStatus: boolean): void => this.gyroCtl().stopGyroscope(updateStatus),
-      stopSkyInertia: (): void => this.stopSkyInertia(),
+      stopSkyInertia: (): void => this.skyInputCtl().stopSkyInertia(),
       stopCompetingTasks: (): void => {
         this.stopDetailAutoRefresh()
         this.stopTimePanelTimers()
@@ -2231,7 +2244,7 @@ export struct WindowNativeNode {
       this.searchSuggestionTimer = -1
     }
     this.saveAppSettings()
-    this.stopSkyInertia()
+    this.skyInputCtl().stop()
     this.gyroCtl().stopGyroscope(false)
     this.stopDetailAutoRefresh()
     this.stopObjectDetailConnectorRefresh()
@@ -2313,7 +2326,7 @@ export struct WindowNativeNode {
     this.stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
     this.stopDetailAutoRefresh()
-    this.stopSkyInertia()
+    this.skyInputCtl().stop()
     void AudioEngine.getInstance().stop()
     this.gyroCtl().pauseForBackground()
   }
@@ -3087,7 +3100,7 @@ export struct WindowNativeNode {
       this.viewCoordinateDragStartY = y
       this.viewCoordinateDragStartOffsetX = this.viewCoordinateOffsetX
       this.viewCoordinateDragStartOffsetY = this.viewCoordinateOffsetY
-      this.stopSkyInertia()
+      this.skyInputCtl().stopSkyInertia()
       return
     }
     if (event.type === TouchType.Move && this.viewCoordinateDragging) {
@@ -3332,7 +3345,7 @@ export struct WindowNativeNode {
       this.scriptControlDragStartY = y
       this.scriptControlDragStartOffsetX = this.scriptStore.scriptControlOffsetX
       this.scriptControlDragStartOffsetY = this.scriptStore.scriptControlOffsetY
-      this.stopSkyInertia()
+      this.skyInputCtl().stopSkyInertia()
       return
     }
     if (event.type === TouchType.Move && this.scriptControlDragging) {
@@ -9087,30 +9100,6 @@ private loadPlanetPositions(): void {
     }
   }
 
-  private resetSkyTapSequence(): void {
-    this.lastSkyTapAt = 0
-  }
-
-  private isSkyDoubleTap(x: number, y: number): boolean {
-    const now = Date.now()
-    const tapInterval = this.lastSkyTapAt > 0 ? now - this.lastSkyTapAt : 0
-    const withinTime = this.lastSkyTapAt > 0 && tapInterval <= 800
-    const withinDistance = distance(x, y, this.lastSkyTapX, this.lastSkyTapY) <= 28
-    if (this.lastSkyTapAt > 0) {
-      hilog.info(0x0000, 'StellariumArkUI', 'sky tap interval=' + tapInterval.toString() +
-        'ms distance=' + distance(x, y, this.lastSkyTapX, this.lastSkyTapY).toFixed(1) +
-        ' double=' + (withinTime && withinDistance).toString())
-    }
-    if (withinTime && withinDistance) {
-      this.resetSkyTapSequence()
-      return true
-    }
-    this.lastSkyTapAt = now
-    this.lastSkyTapX = x
-    this.lastSkyTapY = y
-    return false
-  }
-
   private requestSkySelection(x: number, y: number): void {
     const requestSerial = ++this.skySelectionRequestSerial
     const payload = Math.round(x).toString() + '|' + Math.round(y).toString() + '|' +
@@ -9130,7 +9119,7 @@ private loadPlanetPositions(): void {
 
   private clearSkySelectionFromDoubleTap(x: number, y: number): void {
     const requestSerial = ++this.skySelectionRequestSerial
-    this.resetSkyTapSequence()
+    this.skyInputCtl().resetSkyTapSequence()
     this.stopDetailAutoRefresh()
     this.stopObjectDetailConnectorRefresh()
     this.applySelectedObject({ ok: true, found: false } as StellariumBridgeResponse)
@@ -9141,94 +9130,6 @@ private loadPlanetPositions(): void {
       if (requestSerial !== this.skySelectionRequestSerial) { return }
       this.applySelectedObject(result)
     })
-  }
-
-  private handleSkyTap(x: number, y: number): void {
-    if (this.tools.angleMeasureEnabled) {
-      this.measureAngleAt(x, y)
-      return
-    }
-    if (this.isSkyDoubleTap(x, y)) {
-      this.clearSkySelectionFromDoubleTap(x, y)
-      return
-    }
-    this.requestSkySelection(x, y)
-  }
-
-  private handleSkyMouse(event: MouseEvent): void {
-    const x = event.windowX
-    const y = event.windowY
-    if (event.action === 0 && event.button === 0) {
-      this.mouseSkyPressed = !this.isUiPoint(x, y)
-      if (!this.mouseSkyPressed) { this.resetSkyTapSequence() }
-      this.mouseSkyMoved = false
-      this.mouseSkyStartX = x
-      this.mouseSkyStartY = y
-      this.mouseSkyLastX = x
-      this.mouseSkyLastY = y
-      this.mouseSkyLastSampleMs = Date.now()
-      if (this.mouseSkyPressed) { this.stopSkyInertia() }
-      return
-    }
-    if (event.action === 2 && this.mouseSkyPressed) {
-      const moveDistance = distance(x, y, this.mouseSkyStartX, this.mouseSkyStartY)
-      if (moveDistance > 3) {
-        this.resetSkyTapSequence()
-        if (!this.mouseSkyMoved && this.gyroStore.gyroscopeEnabled) {
-          this.gyroCtl().stopGyroscope(true)
-          this.flashHint('已退出陀螺仪')
-        }
-        this.mouseSkyMoved = true
-        const now = Date.now()
-        const dt = Math.max(1, now - this.mouseSkyLastSampleMs)
-        const vx = (x - this.mouseSkyLastX) / dt
-        const vy = (y - this.mouseSkyLastY) / dt
-        this.dragVelocityX = this.dragVelocityX * 0.35 + vx * 0.65
-        this.dragVelocityY = this.dragVelocityY * 0.35 + vy * 0.65
-        this.callNativeFire('dragView', Math.round(this.mouseSkyLastX).toString() + '|' +
-          Math.round(this.mouseSkyLastY).toString() + '|' + Math.round(x).toString() + '|' + Math.round(y).toString())
-        this.mouseSkyLastX = x
-        this.mouseSkyLastY = y
-        this.mouseSkyLastSampleMs = now
-      }
-      return
-    }
-    if (event.action === 1 && this.mouseSkyPressed) {
-      this.mouseSkyPressed = false
-      if (!this.mouseSkyMoved && !this.isUiPoint(x, y)) {
-        this.handleSkyTap(x, y)
-      } else if (this.mouseSkyMoved) {
-        if (Date.now() - this.mouseSkyLastSampleMs > 90) {
-          this.dragVelocityX *= 0.35
-          this.dragVelocityY *= 0.35
-        }
-        this.startSkyInertia()
-      }
-    }
-  }
-
-  private handleSkyAxis(event: AxisEvent): void {
-    const x = event.windowX
-    const y = event.windowY
-    if (this.isUiPoint(x, y)) { return }
-    const pinchScale = event.getPinchAxisScaleValue()
-    if (pinchScale > 0 && Math.abs(pinchScale - 1) > 0.001) {
-      this.callNativeFire('zoomBy', pinchScale.toFixed(4) + '|0')
-      return
-    }
-    const horizontal = event.getHorizontalAxisValue()
-    const vertical = event.getVerticalAxisValue()
-    if (event.scrollStep !== undefined) {
-      if (Math.abs(vertical) > 0.001) {
-        const scale = vertical > 0 ? 1.12 : 0.89
-        this.callNativeFire('zoomBy', scale.toFixed(3) + '|0')
-      }
-      return
-    }
-    if (Math.abs(horizontal) > 0.001 || Math.abs(vertical) > 0.001) {
-      this.callNativeFire('panBy', (-horizontal * 28).toFixed(2) + '|' +
-        (-vertical * 28).toFixed(2) + '|' + Math.round(this.skyWidth).toString() + '|' + Math.round(this.skyHeight).toString())
-    }
   }
 
   private centerSelectedObjectFromKeyboard(): void {
@@ -9245,55 +9146,6 @@ private loadPlanetPositions(): void {
     }
     this.navigateSelectedObjectTo(this.skyWidth / 2, this.skyHeight / 2, 'keyboard-center')
     this.flashHint('已居中')
-  }
-
-  private handleSkyKey(event: KeyEvent): boolean {
-    if (event.type !== 0) { return false }
-    const width = Math.round(this.skyWidth).toString()
-    const height = Math.round(this.skyHeight).toString()
-    const pan = (x: number, y: number): boolean => {
-      this.callNativeFire('panBy', x.toString() + '|' + y.toString() + '|' + width + '|' + height)
-      return true
-    }
-    switch (event.keyCode) {
-      case KeyCode.KEYCODE_DPAD_UP: return pan(0, -80)
-      case KeyCode.KEYCODE_DPAD_DOWN: return pan(0, 80)
-      case KeyCode.KEYCODE_DPAD_LEFT: return pan(-80, 0)
-      case KeyCode.KEYCODE_DPAD_RIGHT: return pan(80, 0)
-      case KeyCode.KEYCODE_PLUS:
-      case KeyCode.KEYCODE_EQUALS: this.zoomStep(0.8); return true
-      case KeyCode.KEYCODE_MINUS: this.zoomStep(1.25); return true
-      case KeyCode.KEYCODE_SPACE: this.centerSelectedObjectFromKeyboard(); return true
-      case KeyCode.KEYCODE_ENTER: this.moveToSelectedObject(); return true
-      case KeyCode.KEYCODE_F: this.setPanel('search'); return true
-      case KeyCode.KEYCODE_N:
-        this.nightModeStore.nightMode = !this.nightModeStore.nightMode
-                this.persistNightMode()
-        this.callNativeFire('setNightMode', this.nightModeStore.nightMode ? 'true' : 'false')
-        return true
-      case KeyCode.KEYCODE_ESCAPE:
-        if (this.objectMediaStore.objectInspectorModelImmersive) this.objectModelRendererCtl().setObjectInspectorModelImmersive(false)
-        else this.closePanel()
-        return true
-      default: return false
-    }
-  }
-
-  // The floating panel sits above the sky touch surface.  Keep its gestures
-  // owned by ArkUI so a Slider/Scroll drag can never become a sky pan.
-  private stopSkyInertia(resetVelocity: boolean = true): void {
-    if (this.skyInertiaTimer !== 0) {
-      clearInterval(this.skyInertiaTimer)
-      this.skyInertiaTimer = 0
-    }
-    if (this.nativeSkyInertiaActive) {
-      this.callNativeFire('stopPanInertia', '')
-      this.nativeSkyInertiaActive = false
-    }
-    if (resetVelocity) {
-      this.dragVelocityX = 0
-      this.dragVelocityY = 0
-    }
   }
 
   private dragFollowAlpha(dtMs: number): number {
@@ -9313,9 +9165,9 @@ private loadPlanetPositions(): void {
     if (sampleVelocity && this.dragLastSampleMs > 0 && dt >= 8 && dt <= 220) {
       const vx = rawDx * gain / dt
       const vy = rawDy * gain / dt
-      this.dragVelocityX = this.dragVelocityX * 0.35 + vx * 0.65
-      this.dragVelocityY = this.dragVelocityY * 0.35 + vy * 0.65
-      this.dragVelocitySampleValid = true
+      this.skyInputCtl().dragVelocityX = this.skyInputCtl().dragVelocityX * 0.35 + vx * 0.65
+      this.skyInputCtl().dragVelocityY = this.skyInputCtl().dragVelocityY * 0.35 + vy * 0.65
+      this.skyInputCtl().dragVelocitySampleValid = true
     }
     this.dragLastRawX = targetX
     this.dragLastRawY = targetY
@@ -9340,18 +9192,6 @@ private loadPlanetPositions(): void {
     this.touchLastY = nextY
   }
 
-  private startSkyInertia(): void {
-    // Do not discard the velocity sampled from the gesture that just ended.
-    this.stopSkyInertia(false)
-    const initialSpeed = Math.sqrt(this.dragVelocityX * this.dragVelocityX + this.dragVelocityY * this.dragVelocityY)
-    if (initialSpeed < 0.05 || !this.dragVelocitySampleValid || this.pinchActive) {
-      return
-    }
-    this.nativeSkyInertiaActive = true
-    this.callNativeFire('startPanInertia',
-      this.dragVelocityX.toFixed(4) + '|' + this.dragVelocityY.toFixed(4))
-  }
-
   private handleSkyTouch(event: TouchEvent): void {
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
     if (points.length === 0) {
@@ -9359,7 +9199,7 @@ private loadPlanetPositions(): void {
     }
 
     if (event.type === TouchType.Down) {
-      this.stopSkyInertia()
+      this.skyInputCtl().stopSkyInertia()
       const allowTouchFeedback = !this.panelVisible
       const downX = touchWindowX(points[0])
       const downY = touchWindowY(points[0])
@@ -9381,7 +9221,7 @@ private loadPlanetPositions(): void {
       // ArkUI onClick，必须在 Down 上按坐标分派，否则点击会穿到星图变成 selectAt。
       const zoomHit = this.skyZoomButtonAt(downX, downY)
       if (zoomHit.length > 0) {
-        this.resetSkyTapSequence()
+        this.skyInputCtl().resetSkyTapSequence()
         this.touchStartedOnUi = true
         this.skyTouchFeedback = false
         this.skyTouchActive = false
@@ -9395,7 +9235,7 @@ private loadPlanetPositions(): void {
         return
       }
       if (isDockPoint(downX, downY, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop())) {
-        this.resetSkyTapSequence()
+        this.skyInputCtl().resetSkyTapSequence()
         this.dockTouchActive = true
         this.touchStartedOnUi = true
         this.skyTouchFeedback = false
@@ -9403,7 +9243,7 @@ private loadPlanetPositions(): void {
         return
       }
       if (this.isUiPoint(downX, downY)) {
-        this.resetSkyTapSequence()
+        this.skyInputCtl().resetSkyTapSequence()
         this.touchStartedOnUi = true
         // A UI touch must never inherit sky-drag ownership. This branch used to
         // set only touchStartedOnUi, unlike the dock branch below which also
@@ -9448,7 +9288,7 @@ private loadPlanetPositions(): void {
       this.touchLastX = this.touchStartX
       this.touchLastY = this.touchStartY
       this.touchMoved = false
-        this.pinchActive = false
+        this.skyInputCtl().pinchActive = false
         this.callNativeFire('endPinch')
         this.nativeDragActive = false
       this.lastDragCommandMs = 0
@@ -9457,9 +9297,9 @@ private loadPlanetPositions(): void {
       this.dragLastRawX = downX
       this.dragLastRawY = downY
       this.dragLastSampleMs = Date.now()
-      this.dragVelocityX = 0
-      this.dragVelocityY = 0
-      this.dragVelocitySampleValid = false
+      this.skyInputCtl().dragVelocityX = 0
+      this.skyInputCtl().dragVelocityY = 0
+      this.skyInputCtl().dragVelocitySampleValid = false
       this.dragLogCount = 0
       this.skyTouchFeedback = allowTouchFeedback
       this.skyTouchX = downX
@@ -9467,7 +9307,7 @@ private loadPlanetPositions(): void {
       this.skyTouchFeedbackMulti = allowTouchFeedback && points.length >= 2
       hilog.info(0x0000, 'StellariumArkUI', 'sky touch down at ' + Math.round(this.touchStartX).toString() + ',' + Math.round(this.touchStartY).toString() + ' sky=' + this.skyWidth.toString() + 'x' + this.skyHeight.toString())
       if (points.length >= 2) {
-        this.resetSkyTapSequence()
+        this.skyInputCtl().resetSkyTapSequence()
         this.skyTouchX2 = touchWindowX(points[1])
         this.skyTouchY2 = touchWindowY(points[1])
         this.pinchCenterX = (touchWindowX(points[0]) + this.skyTouchX2) / 2
@@ -9479,7 +9319,7 @@ private loadPlanetPositions(): void {
         this.pinchLastScale = 1
         this.pinchLastNativePushMs = Date.now()
         this.pinchNativePushPending = false
-        this.pinchActive = true
+        this.skyInputCtl().pinchActive = true
         this.callNativeFire('zoomBy', '1|1|' + this.pinchCenterX.toFixed(2) + '|' +
           this.pinchCenterY.toFixed(2) + '|' + Math.round(this.skyWidth).toString() + '|' +
           Math.round(this.skyHeight).toString())
@@ -9516,13 +9356,13 @@ private loadPlanetPositions(): void {
         this.pinchCenterX = (x + this.skyTouchX2) / 2
         this.pinchCenterY = (y + this.skyTouchY2) / 2
         this.nativeDragActive = false
-        this.stopSkyInertia()
+        this.skyInputCtl().stopSkyInertia()
         const currentDistance = distance(
           x, y, touchWindowX(points[1]), touchWindowY(points[1]))
-        if (!this.pinchActive || this.pinchStartDistance <= 1) {
+        if (!this.skyInputCtl().pinchActive || this.pinchStartDistance <= 1) {
           this.pinchStartDistance = currentDistance
           this.pinchStartFov = clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
-          this.pinchActive = true
+          this.skyInputCtl().pinchActive = true
           this.pinchLastScale = 1
           this.pinchLastNativePushMs = Date.now()
           this.pinchNativePushPending = false
@@ -9573,7 +9413,7 @@ private loadPlanetPositions(): void {
       // 阈值放宽到 16vp:uitest/mock 注入的触摸常有几像素位移,
       // 4vp 会把"轻点"误判成"拖动",导致 selectAt 不触发。
       if (totalMove > 16) {
-        this.resetSkyTapSequence()
+        this.skyInputCtl().resetSkyTapSequence()
         this.cancelSelectedObjectUiChange()
         // Manual panning and sensor tracking must never drive the native
         // camera together. Leave gyro mode on the first real sky drag, while
@@ -9606,7 +9446,7 @@ private loadPlanetPositions(): void {
       const x = touchWindowX(points[0])
       const y = touchWindowY(points[0])
       const endedOnUi = this.isUiPoint(x, y)
-      const recordingViewChanged = this.touchMoved || this.pinchActive
+      const recordingViewChanged = this.touchMoved || this.skyInputCtl().pinchActive
       // End panel drag
       if (this.panelDragging) {
         this.panelDragging = false
@@ -9638,16 +9478,16 @@ private loadPlanetPositions(): void {
       }
       if (this.nativeDragActive && event.type === TouchType.Up) {
         this.emitFluidDrag(x, y, Date.now(), false)
-        this.startSkyInertia()
+        this.skyInputCtl().startSkyInertia()
       } else if (event.type === TouchType.Cancel) {
-        this.stopSkyInertia()
-      } else if (!this.touchMoved && !this.pinchActive && !endedOnUi && Date.now() - this.lastInfoWinCloseMs > 320) {
+        this.skyInputCtl().stopSkyInertia()
+      } else if (!this.touchMoved && !this.skyInputCtl().pinchActive && !endedOnUi && Date.now() - this.lastInfoWinCloseMs > 320) {
         hilog.info(0x0000, 'StellariumArkUI', 'selectAt payload: ' +
           Math.round(this.touchStartX).toString() + '|' + Math.round(this.touchStartY).toString() + '|' +
           Math.round(this.skyWidth).toString() + '|' + Math.round(this.skyHeight).toString())
-        this.handleSkyTap(this.touchStartX, this.touchStartY)
+        this.skyInputCtl().handleSkyTap(this.touchStartX, this.touchStartY)
       }
-      if (this.pinchActive) {
+      if (this.skyInputCtl().pinchActive) {
         if (this.pinchNativePushPending) {
           this.callNativeFire('zoomBy', this.pinchLastScale.toString() + '|0|' +
             this.pinchCenterX.toFixed(2) + '|' + this.pinchCenterY.toFixed(2) + '|' +
@@ -9656,17 +9496,17 @@ private loadPlanetPositions(): void {
         this.callNativeFire('endPinch')
         this.scheduleSkyTextureStatusCheck()
       }
-      this.pinchActive = false
+      this.skyInputCtl().pinchActive = false
       this.pinchNativePushPending = false
       this.nativeDragActive = false
       this.skyTouchActive = false
       this.skyTouchFeedback = false
       this.skyTouchFeedbackMulti = false
       this.skyDragging = false
-      if (event.type === TouchType.Cancel) { this.resetSkyTapSequence() }
+      if (event.type === TouchType.Cancel) { this.skyInputCtl().resetSkyTapSequence() }
       this.resumeDetailRefreshAfterSkyDrag()
       if (event.type === TouchType.Up && recordingViewChanged) {
-        this.recordingCtl().scheduleRecordingViewCheckpoint(this.nativeSkyInertiaActive ? 1100 : 180)
+        this.recordingCtl().scheduleRecordingViewCheckpoint(this.skyInputCtl().nativeSkyInertiaActive ? 1100 : 180)
       }
     }
   }
@@ -10306,13 +10146,13 @@ private loadPlanetPositions(): void {
       .focusable(true)
       .defaultFocus(true)
       .onKeyEvent((event: KeyEvent): boolean => {
-        return this.handleSkyKey(event)
+        return this.skyInputCtl().handleSkyKey(event)
       })
       .onMouse((event: MouseEvent) => {
-        this.handleSkyMouse(event)
+        this.skyInputCtl().handleSkyMouse(event)
       })
       .onAxisEvent((event: AxisEvent) => {
-        this.handleSkyAxis(event)
+        this.skyInputCtl().handleSkyAxis(event)
       })
       .onAreaChange((oldArea: Area, newArea: Area) => {
         // 布局硬回调：稳定触发。冷启动期 ArkUI setTimeout 重试不可靠，
@@ -10446,7 +10286,7 @@ private loadPlanetPositions(): void {
     const x = typeof windowX === 'number' ? windowX : this.compactTopQuickX() + (points[0].x ?? 0)
     const y = typeof windowY === 'number' ? windowY : compactTopQuickY() + (points[0].y ?? 0)
     if (event.type === TouchType.Down) {
-      this.stopSkyInertia()
+      this.skyInputCtl().stopSkyInertia()
       this.skyTouchFeedback = false
       this.compactQuickPressed = this.compactQuickIdAt(x, y)
       return
@@ -10705,7 +10545,7 @@ private loadPlanetPositions(): void {
       this.objectCardDragStartY = y
       this.objectCardDragStartOffsetX = this.cardOffsetX
       this.objectCardDragStartOffsetY = this.cardOffsetY
-      this.stopSkyInertia()
+      this.skyInputCtl().stopSkyInertia()
       this.resetPanelIdle()
       return
     }
@@ -10912,7 +10752,7 @@ private loadPlanetPositions(): void {
     const y = touchScreenY(points[0])
     if (event.type === TouchType.Down) {
       this.dockTouchActive = true
-      this.stopSkyInertia()
+      this.skyInputCtl().stopSkyInertia()
       hilog.info(0x0000, 'StellariumArkUI', '[DOCK] down screen=%{public}d,%{public}d left=%{public}d top=%{public}d width=%{public}d', Math.round(x), Math.round(y), Math.round(dockLeft(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent())), Math.round(this.dockTop()), Math.round(dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent())))
       return
     }
