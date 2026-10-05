@@ -369,7 +369,6 @@ export struct WindowNativeNode {
   private pendingNightMode: boolean | undefined = undefined
   private pendingNightModeUntilMs: number = 0
   @State private pickedDate: Date = new Date()
-  @State private pickedTime: Date = new Date()
   @State private locationText: string = '--'
   @State private coordinateText: string = '--'
   @State private altitudeText: string = '--'
