@@ -12,6 +12,8 @@ export interface BookmarkHostHooks {
   readBookmarksStorage(): Promise<string>
   // 持久化当前列表到 Preferences；宿主实现（原宿主 saveBookmarksToStorage）。
   saveBookmarksToStorage(): void
+  // D15：书签增删跳转的 UI 提示经此回注（store 不触碰 UI；先例 ToolsHostHooks.flashHint）。
+  flashHint(text: ResourceStr): void
 }
 
 // 书签域状态：面板（BookmarkPanel）@ObjectLink 订阅，持久化与命令逻辑留在宿主。
@@ -73,5 +75,58 @@ export class BookmarkStore {
     } catch (e) {
       hilog.warn(0xD002, 'Stellarium', 'load bookmarks failed: %{public}s', String(e))
     }
+  }
+
+  // D15：保存当前视图为书签（原宿主 addCurrentBookmark，函数体逐字搬入）。
+  // 差异仅：this.callNativeWhenReady → port.requestWhenReady、this.flashHint → hooks.flashHint、
+  // this.bookmarkStore.<f> → this.<f>；回包后 loadBookmarks 就地调用。
+  addCurrentBookmark(): void {
+    const hooks = this.hooks
+    const port = this.port
+    if (hooks === null || port === null) {
+      return
+    }
+    const name = this.draftName.trim()
+    port.requestWhenReady('addBookmark', name, (r: StellariumBridgeResponse) => {
+      if (r.ok === true) {
+        this.draftName = ''
+        hooks.flashHint(I18n.t('msg_bookmark_saved'))
+        this.loadBookmarks()
+      } else {
+        hooks.flashHint(I18n.t('msg_bookmark_save_failed'))
+      }
+    })
+  }
+
+  // D15：跳转到书签（原宿主 gotoBookmark，函数体逐字搬入）。
+  // 差异仅：this.callInteractive → port.requestInteractive、this.flashHint → hooks.flashHint。
+  gotoBookmark(id: string): void {
+    const hooks = this.hooks
+    const port = this.port
+    if (hooks === null || port === null) {
+      return
+    }
+    port.requestInteractive('gotoBookmark', id, (r: StellariumBridgeResponse) => {
+      if (r.ok === true) {
+        hooks.flashHint(I18n.t('msg_navigated'))
+      } else {
+        hooks.flashHint(I18n.t('msg_navigation_failed'))
+      }
+    })
+  }
+
+  // D15：删除书签（原宿主 deleteBookmark，函数体逐字搬入）。
+  deleteBookmark(id: string): void {
+    const hooks = this.hooks
+    const port = this.port
+    if (hooks === null || port === null) {
+      return
+    }
+    port.requestWhenReady('deleteBookmark', id, (r: StellariumBridgeResponse) => {
+      if (r.ok === true) {
+        hooks.flashHint(I18n.t('msg_bookmark_deleted'))
+        this.loadBookmarks()
+      }
+    })
   }
 }

@@ -2,16 +2,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url), 'utf8');
 // D12：setNebulaTextureFlag 已下沉 capability/NebulaTextureController.ets（桥经 CommandPort.requestInteractive）。
+// D9：setMosaicCamera 已下沉 capability/OcularController.ets（桥经 CommandPort.requestInteractive）。
 const nebulaSource = readFileSync(new URL('../harmonyos/ets-source/capability/NebulaTextureController.ets', import.meta.url), 'utf8');
+const ocularSource = readFileSync(new URL('../harmonyos/ets-source/capability/OcularController.ets', import.meta.url), 'utf8');
 const localization = { t: key => key };
 function methodIn(src, name, args) {
   const match = src.match(new RegExp(`(?:private )?${name}\\([^\\n]*\\): void \\{([\\s\\S]*?)\\n  \\}`));
   assert.ok(match, name);
   return new Function(...args, 'I18n', match[1].replaceAll(': StellariumBridgeResponse', '').replaceAll(' as NebulaTextureStatus', ''));
 }
-const mosaic = methodIn(source, 'setMosaicCamera', ['setting', 'value']);
+const mosaic = methodIn(ocularSource, 'setMosaicCamera', ['setting', 'value']);
 const texture = methodIn(nebulaSource, 'setNebulaTextureFlag', ['command', 'enabled', 'current']);
 
 function state() {

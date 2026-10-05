@@ -1,4 +1,4 @@
-import { StarCatalogItem, CatalogHealthEntry, StarCatalogsResponse, StarCatalogRaw, CatalogHealthResponse } from '../pages/MainWindowModels'
+import { StarCatalogItem, CatalogHealthEntry, StarCatalogsResponse, StarCatalogRaw, CatalogHealthResponse, StarCatalogStatusResponse } from '../pages/MainWindowModels'
 import { CatOption, NameItem, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { catalogIconForModule, catalogIconForObjectType } from '../common/derive/catalog'
@@ -13,6 +13,8 @@ import { CommandPort } from '../bridge/CommandPort'
 export interface CatalogHostHooks {
   // 宿主 languageRefreshSerial：回包返回时比对，丢弃过期请求（§14.8 规则 3 单序号）。
   languageSerial(): number
+  // D15：下载启动/轮询的 UI 提示经此回注（store 不触碰 UI；先例 ToolsHostHooks.flashHint）。
+  flashHint(text: ResourceStr): void
   // SearchStore 的待定插件目录 id（读 + 清）。
   pendingPluginCatalogId(): string
   clearPendingPluginCatalogId(): void
@@ -114,6 +116,74 @@ export class CatalogStore {
       this.catalogLoading = false
       this.notifyChanged()
     })
+  }
+
+  // D15：星表下载启动（原宿主 startCatalogDownload，函数体逐字搬入）。
+  // 差异仅：this.flashHint → hooks.flashHint、this.callNative → port.request、
+  // this.catalogStore.<f> → this.<f>、this.pollCatalogStatus → this.pollCatalogStatus。
+  startCatalogDownload(id: string): void {
+    const hooks = this.hooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    if (this.catalogBusy) {
+      hooks.flashHint(I18n.t('msg_catalog_downloading'))
+      return
+    }
+    this.catalogBusy = true
+    this.catalogDownloadingId = id
+    this.catalogMsg = '开始下载 ' + id + ' …'
+    hooks.flashHint('开始下载 ' + id)
+    const r = port.request('downloadStarCatalog', id)
+    if (!r || !r.ok) {
+      this.catalogBusy = false
+      this.catalogDownloadingId = ''
+      this.catalogMsg = '下载启动失败'
+      hooks.flashHint(I18n.t('msg_download_failed'))
+      return
+    }
+    this.pollCatalogStatus(id)
+  }
+
+  // D15：星表下载状态轮询（原宿主 pollCatalogStatus，函数体逐字搬入）。
+  // 差异同上；600ms setInterval 自我收口（done/error/回包失败即 clearInterval），非持续定时器。
+  private pollCatalogStatus(id: string): void {
+    const hooks = this.hooks
+    const port = this.ensurePort()
+    if (hooks === null || port === null) {
+      return
+    }
+    const timer = setInterval(() => {
+      const r = port.request('getStarCatalogStatus', '') as StarCatalogStatusResponse
+      if (!r || !r.ok) {
+        clearInterval(timer)
+        this.catalogBusy = false
+        this.catalogDownloadingId = ''
+        return
+      }
+      const state = r.state ?? 'downloading'
+      const bytes = r.bytes ?? 0
+      if (state === 'done') {
+        clearInterval(timer)
+        const md5ok = r.md5ok === true
+        this.catalogMsg = md5ok ? ('「' + id + '」下载完成并已加载') : ('「' + id + '」下载完成，校验未通过')
+        hooks.flashHint(this.catalogMsg)
+        this.catalogBusy = false
+        this.catalogDownloadingId = ''
+        this.loadStarCatalogs()
+      } else if (state === 'error') {
+        clearInterval(timer)
+        const err = r.error ?? '未知错误'
+        this.catalogMsg = '下载失败：' + err
+        hooks.flashHint('下载失败：' + err)
+        this.catalogBusy = false
+        this.catalogDownloadingId = ''
+      } else {
+        const mb = (bytes / (1024 * 1024)).toFixed(1)
+        this.catalogMsg = '下载中 ' + id + '：' + mb + ' MB'
+      }
+    }, 600)
   }
 
   // 对象目录分类 chips（原宿主 loadObjectCatalogCategories，函数体逐字搬入）。

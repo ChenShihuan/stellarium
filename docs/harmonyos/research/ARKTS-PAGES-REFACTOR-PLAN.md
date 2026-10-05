@@ -1487,3 +1487,36 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **未走查（待真机人工）**：图层面板「地景/文化」页地景加载（`viewTab===4`）；星云「导入图片」picker 路径；星云条目 `goto`/`remove`；标签切换两段动画的视觉本体。
 
 
+#### 15.12.6 D 轨道 D9/D15 完成结论与度量（2026-10-05）
+
+> **背景**：D2/D11/D12/D16 之后续做 STATE-REVIEW §10.2 的 **D9（Ocular / 望远镜工具）** 与
+> §10.5 的 **D15（目录下载 / 书签）**。D9 为两个 P1 控制器；D15 为 P4，按实测并入既有 store
+>（`CatalogStore`/`ObservingListStore`/`BookmarkStore`），**不新建 service**。
+
+**新增文件**
+
+- `capability/OcularController.ets`（180 行；16 法 + `equationOfTimeMutationId`/`archaeoMutationId` 2 草稿字段；注入 `CommandPort` + 4 store）。
+- `capability/TelescopeController.ets`（269 行；12 法；注入 `CommandPort` + `TelescopeStore`；定时器仍由 store 自持）。
+
+**修改**
+
+- `state/CatalogStore.ets` **+72**：`startCatalogDownload` / 私有 `pollCatalogStatus`（600ms setInterval 自我收口）+ `CatalogHostHooks.flashHint`。
+- `state/ObservingListStore.ets` **+14**：`persistObservingList` + `saveObservingListStorage` hook。
+- `state/BookmarkStore.ets` **+55**：`addCurrentBookmark` / `gotoBookmark` / `deleteBookmark` + `flashHint` hook。
+- 宿主 `MainWindowNativeNode.ets`：删 34 法 + 2 字段、新增 2 控制器惰性构造器与 3 hook 适配器、全部调用点改指向、清理 8 个未用导入。
+- `scripts/test-ohos-plugin-panel-state.mjs`：`setMosaicCamera` 夹具改读 `OcularController`。
+
+**D9 判定**：STATE-REVIEW 记「27 法（Ocular 17 + Telescope 10）」，工作区实测 **Ocular 16 + Telescope 12 = 28 法**（估数偏差 1）。`setPointerCoordinates` 位于目镜区块但写 `overlayStore`、属 D6，未搬。
+
+**D15 判定**：6 法全部并入对应既有 store（无新 service）；`pollCatalogStatus` 的 600ms setInterval 为**自我收口**轮询，随方法留在 store（非 §15.7 规则 3 所指的持续定时器）。
+
+**度量**：宿主 **11,370 → 10,938 行（−432）**、`private` 方法 **466 → 434（−32）**、`@State private` **132 不变**；新增 2 文件、扩展 3 store。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 6 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-plugin-panel-state` 4/4 全绿；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。
+
+**真机（192.168.50.108:36717）**：目镜开关（`setOcularMode`→`getOculars`）、望远镜保存/测试连接（`saveTelescopeProfile`/`testTelescopeConnection`）、均时差（`setEquationOfTime`）、古天文线（`setArchaeoLineSetting`）、相机拼接（`setMosaicCamera`）、书签增/跳/删（`addBookmark`/`gotoBookmark`/`deleteBookmark`）逐项经 hilog 实证；星表下载入口渲染；`pidof` 存活、无 jscrash；测试改动的持久化设置均复原。
+
+**未走查（待真机人工）**：`startCatalogDownload`/`pollCatalogStatus` 实际下载（当前构建无可用星表项）；望远镜 `readTelescopePosition`/`lx200Goto*`/`lx200Sync*`/`lx200Abort` 按钮（需滚至控制区）；目镜/望远镜滑杆。
+
+
+
