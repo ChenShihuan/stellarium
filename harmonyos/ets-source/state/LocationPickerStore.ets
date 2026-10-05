@@ -4,7 +4,7 @@ import { LOCATION_HIERARCHY } from '../pages/location_hierarchy'
 import { LOCATION_COUNTRY_NAMES } from '../pages/location_countries'
 import { LOCATION_ZH_NAMES } from '../pages/location_names_zh'
 import { timezoneDisplayName, approximateTimeZoneDisplay } from '../common/derive/labels'
-import { getCityPreset } from '../common/derive/actions'
+import { getCityPreset, matchesLocationSearch, locationSearchMatchScore } from '../common/derive/actions'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → LocationPickerStore 的观测点助手（§14.5 B2R-2「额外注入」）。
@@ -531,5 +531,46 @@ export class LocationPickerStore {
       items.push({ name: name, displayName: displayName, lat: preset.lat, lon: preset.lon, alt: preset.alt, planet: 'Earth', country: '', region: '' })
     }
     return items
+  }
+
+  // 位置搜索的国名显示（原宿主 locationSearchCountryName，A2-6）：observerPlanet 属 SessionToolStore
+  // 跨域，以显式入参传入；translateCountry 为本 store 方法。函数体逐字搬入。
+  locationSearchCountryName(countryCode: string, observerPlanet: string): string {
+    if (countryCode === 'TW' || countryCode === 'HK' || countryCode === 'MO') {
+      return I18n.isChineseLanguage()
+        ? (LOCATION_COUNTRY_NAMES[countryCode]?.zh ?? this.translateCountry(countryCode, observerPlanet))
+        : this.translateCountry(countryCode, observerPlanet)
+    }
+    return this.translateCountry(countryCode, observerPlanet)
+  }
+
+  // 位置结果上下文（省 / 国，原宿主 locationResultContext，A2-6）：读本 store 的 translateProvince
+  // 与 locationSearchCountryName；observerPlanet 显式传入。函数体逐字搬入。
+  locationResultContext(item: LocSearchItem, observerPlanet: string): string {
+    const parts: Array<string> = []
+    const append = (value: string): void => {
+      if (value.length > 0 && !parts.includes(value)) parts.push(value)
+    }
+    if (item.province) append(this.translateProvince(item.province))
+    else if (item.region) append(this.translateProvince(item.region))
+    if (item.country) append(this.locationSearchCountryName(item.country, observerPlanet))
+    return parts.join(' · ')
+  }
+
+  // 离线快速搜索（原宿主 quickLocationSearch，A2-6）：读本 store 的 quickLocationSearchItems，
+  // 过滤/排序用纯函数 matchesLocationSearch / locationSearchMatchScore（derive/actions）；
+  // observerPlanet 属 SessionToolStore 跨域，以显式入参传入。函数体逐字搬入。
+  quickLocationSearch(query: string, observerPlanet: string): Array<LocSearchItem> {
+    if (!query.trim()) return []
+    return this.quickLocationSearchItems()
+      .filter((item: LocSearchItem) => item.planet.toLowerCase() === observerPlanet.toLowerCase())
+      .filter((item: LocSearchItem) => matchesLocationSearch(
+        item.name + ' ' + (item.displayName ?? '') + ' ' + (LOCATION_ZH_NAMES[item.name] ?? ''), query))
+      .sort((left: LocSearchItem, right: LocSearchItem) => {
+        const leftText = left.name + ' ' + (left.displayName ?? '') + ' ' + (LOCATION_ZH_NAMES[left.name] ?? '')
+        const rightText = right.name + ' ' + (right.displayName ?? '') + ' ' + (LOCATION_ZH_NAMES[right.name] ?? '')
+        return locationSearchMatchScore(query, [left.name, left.displayName ?? '', LOCATION_ZH_NAMES[left.name] ?? ''], leftText) -
+          locationSearchMatchScore(query, [right.name, right.displayName ?? '', LOCATION_ZH_NAMES[right.name] ?? ''], rightText)
+      })
   }
 }

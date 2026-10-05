@@ -122,7 +122,7 @@ test('background suspends watchdog without losing the frame or creating another 
 
 test('UI submits snapshots, never executes pixel loops; selection generation guards completed frames', () => {
   const ui = source('MainWindowNativeNode');
-  const renderMethod = ui.slice(ui.indexOf('  private renderObjectInspectorModel(highQuality:'), ui.indexOf('  private objectInspectorModelReady()'));
+  const renderMethod = ui.slice(ui.indexOf('  private renderObjectInspectorModel(highQuality:'), ui.indexOf('  private resetObjectInspectorModelView()'));
   assert.doesNotMatch(renderMethod, /for \(|renderProceduralModel\(|renderDetailModel\(/);
   assert.match(renderMethod, /render\(resources, frame\)/);
   assert.equal((renderMethod.match(/generation !== this.objectInspectorModelRenderGeneration/g) ?? []).length, 3);
