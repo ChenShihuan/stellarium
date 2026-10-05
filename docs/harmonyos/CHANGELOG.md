@@ -1,3 +1,11 @@
+## [2026-09-30] DevEco Code - Phase 1b：把纯函数 getIcon 抽到 common/ui/ShellIcons
+
+- **新增文件：** `harmonyos/ets-source/common/ui/ShellIcons.ets` —— `export function getIcon(icon: string, isActive: boolean): Resource`，图标名到 `$r('app.media.*')` 的纯映射（原方法体逐行搬移）。
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets` —— 删除 52 行私有方法 `private getIcon(...)`，改为 `import { getIcon } from '../common/ui/ShellIcons'`；61 处调用点由 `this.getIcon(` 机械改为 `getIcon(`（保留 `isActive` 形参以免改动 61 个调用点的实参）。
+- **与方案的偏差（实测结论）：** Phase 1 原计划一并抽 `dockButton` / `switchRow` / `iconButton`，实测前两者都带宿主状态与事件回调（`isExpandedLayout`、`compactDockIconSize()`、`dockActionActive()`、`handleDockTouch()`、`activateDockAction()`、`switchRow` 的 `actionId`/`cmd`），不属于「无状态叶子」；`iconButton` 只有 1 处调用、仅 28 行。三者的组件化统一并入 Phase 4/6（届时以 `@ObjectLink` 接 store，避免先做一次会被推翻的组件化）。已把该偏差记入本条目，Phase 1 的叶子抽取到此收口。
+- **验证结果：** `arkts_check` 无错误；`BUILD SUCCESSFUL in 58 s 837 ms`；`node scripts/check-ohos-ui-contract.mjs` 通过；模拟器 `127.0.0.1:5555` 安装启动成功，Dock 五项文本与坐标与改动前逐项一致，且截图字节数与改动前完全相同（70,061 B）——渲染未发生变化。
+- **范围约束：** 纯搬移 + 机械改名，行为零变更；未改 `main_pages.json`。
+
 ## [2026-09-30] DevEco Code - Phase 1a：抽出 UI 视觉常量到 common/ui/UiTokens
 
 - **新增文件：** `harmonyos/ets-source/common/ui/UiTokens.ets`（`UI_RADIUS_CONTROL` 14 / `UI_RADIUS_PANEL` 22 / `UI_RADIUS_SHEET` 28 / `UI_RADIUS_PILL` 999 / `UI_OPTION_ANIMATION_MS` 180）。

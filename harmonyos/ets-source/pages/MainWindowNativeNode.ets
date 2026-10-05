@@ -32,6 +32,7 @@ import { AudioEngine } from './StellariumAudio'
 import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES, PROJECTION_KEYS } from './I18n'
 import { DeepSkyWarmupStatus, getDeepSkyResourceWarmupStatus, isStellariumDetailMediaPreparationFailed, resolveStellariumDetailMediaAsset } from '../qability/StellariumResourceBootstrap'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PANEL, UI_RADIUS_SHEET, UI_RADIUS_PILL, UI_OPTION_ANIMATION_MS } from '../common/ui/UiTokens'
+import { getIcon } from '../common/ui/ShellIcons'
 
 interface CityPreset {
   lat: number
@@ -10350,7 +10351,7 @@ export struct WindowNativeNode {
               .fontSize(15).fontColor(this.nmText()).fontWeight(FontWeight.Medium)
               .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             Button() {
-              Image(this.getIcon('close', false)).width(20).height(20).fillColor(this.nmText())
+              Image(getIcon('close', false)).width(20).height(20).fillColor(this.nmText())
             }
               .width(44).height(44).borderRadius(UI_RADIUS_PILL).backgroundColor('rgba(255,255,255,0.10)')
               .padding(0)
@@ -10415,7 +10416,7 @@ export struct WindowNativeNode {
           }
             .layoutWeight(1).alignItems(HorizontalAlign.Start)
           Button() {
-            Image(this.getIcon('close', false)).width(20).height(20).fillColor('#E4F5FC')
+            Image(getIcon('close', false)).width(20).height(20).fillColor('#E4F5FC')
           }
             .width(44).height(44).borderRadius(UI_RADIUS_PILL)
             .backgroundColor('rgba(255,255,255,0.10)')
@@ -10441,7 +10442,7 @@ export struct WindowNativeNode {
           } else if (this.objectInspectorMediaPreviewFailed ||
             (!this.objectInspectorMediaPreviewLoading && this.objectInspectorMediaPreviewPath.length === 0)) {
             Column({ space: 12 }) {
-              Image(this.getIcon('catalog_galaxy', false)).width(42).height(42).fillColor('#8EC9E9')
+              Image(getIcon('catalog_galaxy', false)).width(42).height(42).fillColor('#8EC9E9')
               Text('图像暂时无法显示').fontSize(14).fontColor('#E4F5FC')
               Button('重新加载')
                 .height(36).fontSize(12).fontColor('#E4F5FC')
@@ -10701,12 +10702,12 @@ export struct WindowNativeNode {
               .layoutWeight(1).margin({ left: 12 })
               .hitTestBehavior(HitTestMode.None)
             Button({ type: ButtonType.Circle }) {
-              Image(this.getIcon('polar_scope', false)).width(22).height(22).fillColor('#F4A7A1')
+              Image(getIcon('polar_scope', false)).width(22).height(22).fillColor('#F4A7A1')
             }.width(48).height(48).backgroundColor('rgba(244,111,107,0.12)')
               .accessibilityText(I18n.t('btn_center'))
               .id('polar-scope-center').onClick(() => { this.recenterPolarScope() })
             Button({ type: ButtonType.Circle }) {
-                Image(this.getIcon('close', false)).width(22).height(22).fillColor('#F4F4F5')
+                Image(getIcon('close', false)).width(22).height(22).fillColor('#F4F4F5')
             }
                 .width(48).height(48)
                 .backgroundColor('rgba(255,255,255,0.12)')
@@ -12088,7 +12089,7 @@ private loadPlanetPositions(): void {
   @Builder
   private catalogFilterRow(cat: CatOption) {
     Row({ space: 12 }) {
-      Image(this.getIcon(cat.iconKey ?? 'catalog_plugin', false)).width(24).height(24).objectFit(ImageFit.Contain).fillColor(this.nmSub())
+      Image(getIcon(cat.iconKey ?? 'catalog_plugin', false)).width(24).height(24).objectFit(ImageFit.Contain).fillColor(this.nmSub())
       Text(cat.label).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
       if (this.searchCategory === cat.code) {
         Text('✓').fontSize(18).fontColor('#8FD3FF').width(24).textAlign(TextAlign.Center)
@@ -12357,7 +12358,7 @@ private loadPlanetPositions(): void {
   searchFilterMenu() {
     Column({ space: 2 }) {
       Row({ space: 10 }) {
-        Image(this.getIcon('chevron_right', false)).width(18).height(18).fillColor(this.nmText()).rotate({ angle: 180 })
+        Image(getIcon('chevron_right', false)).width(18).height(18).fillColor(this.nmText()).rotate({ angle: 180 })
         Text(this.searchFilterMenuTitle())
           .fontSize(16).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }
@@ -12370,13 +12371,13 @@ private loadPlanetPositions(): void {
         Row() {
           Text(I18n.t('search_visibility')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(this.searchVisibilityLabel().length > 0 ? this.searchVisibilityLabel() : I18n.t('search_unlimited')).fontSize(11).fontColor(this.nmSub()).layoutWeight(0.7).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ right: 8 })
-          Image(this.getIcon('chevron_right', false)).width(16).height(16).fillColor(this.nmSub())
+          Image(getIcon('chevron_right', false)).width(16).height(16).fillColor(this.nmSub())
         }.width('100%').height(48).padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           .onClick(() => { this.setSearchFilterPage('visibility') })
         Row() {
           Text(I18n.t('search_instrument')).fontSize(14).fontColor(this.nmText()).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(this.searchInstrumentLabel().length > 0 ? this.searchInstrumentLabel() : I18n.t('search_unlimited')).fontSize(11).fontColor(this.nmSub()).layoutWeight(0.7).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ right: 8 })
-          Image(this.getIcon('chevron_right', false)).width(16).height(16).fillColor(this.nmSub())
+          Image(getIcon('chevron_right', false)).width(16).height(16).fillColor(this.nmSub())
         }.width('100%').height(48).padding({ left: 10, right: 10 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
           .onClick(() => { this.setSearchFilterPage('instrument') })
       } else if (this.searchFilterPage === 'categories') {
@@ -18885,7 +18886,7 @@ private loadPlanetPositions(): void {
               .fontSize(18).fontWeight(FontWeight.Medium).fontColor('#EFF8FF').width('100%')
           }.layoutWeight(1).hitTestBehavior(HitTestMode.Block)
             .onTouch((event: TouchEvent) => { this.handleScriptControlDragTouch(event) })
-          Button({ type: ButtonType.Circle }) { Image(this.getIcon('close', false)).width(20).height(20) }
+          Button({ type: ButtonType.Circle }) { Image(getIcon('close', false)).width(20).height(20) }
             .id('guide-stop').width(44).height(44).backgroundColor('rgba(255,255,255,0.10)')
             .accessibilityText(I18n.t('guide_exit')).enabled(this.guideState.phase !== 'restoring')
             .onClick(() => { this.executeGuideRequest('guideAction', 'stop') })
@@ -19024,7 +19025,7 @@ private loadPlanetPositions(): void {
 
           if (this.scriptWaiting) {
             Row({ space: 8 }) {
-              Image(this.getIcon('info', false)).width(16).height(16).fillColor('#D6EEFF')
+              Image(getIcon('info', false)).width(16).height(16).fillColor('#D6EEFF')
               Text(this.scriptWaitDisplayText())
                 .fontSize(11)
                 .fontColor('#E7F6FF')
@@ -19033,7 +19034,7 @@ private loadPlanetPositions(): void {
                 .layoutWeight(1)
               Button() {
                 Row({ space: 5 }) {
-                  Image(this.getIcon('time_resume', false)).width(16).height(16)
+                  Image(getIcon('time_resume', false)).width(16).height(16)
                   Text(I18n.t('script_continue'))
                     .fontSize(11)
                     .fontWeight(FontWeight.Medium)
@@ -19072,7 +19073,7 @@ private loadPlanetPositions(): void {
 
         Row({ space: 5 }) {
           Button() {
-            Image(this.getIcon('time_slower', false)).width(18).height(18)
+            Image(getIcon('time_slower', false)).width(18).height(18)
           }
             .backgroundColor('rgba(255,255,255,0.10)')
             .borderRadius(UI_RADIUS_CONTROL)
@@ -19087,7 +19088,7 @@ private loadPlanetPositions(): void {
             .textAlign(TextAlign.Center)
             .maxLines(1)
           Button() {
-            Image(this.getIcon('time_fast', false)).width(18).height(18)
+            Image(getIcon('time_fast', false)).width(18).height(18)
           }
             .backgroundColor('rgba(255,255,255,0.10)')
             .borderRadius(UI_RADIUS_CONTROL)
@@ -19097,7 +19098,7 @@ private loadPlanetPositions(): void {
             .onClick(() => { this.changePlaybackRate(1) })
           if (this.replaying) {
             Button() {
-              Image(this.getIcon(this.replayPaused ? 'time_realtime' : 'pause', false)).width(18).height(18)
+              Image(getIcon(this.replayPaused ? 'time_realtime' : 'pause', false)).width(18).height(18)
             }
               .backgroundColor('rgba(255,255,255,0.10)')
               .borderRadius(UI_RADIUS_CONTROL)
@@ -19108,7 +19109,7 @@ private loadPlanetPositions(): void {
           Blank()
           Button() {
             Row({ space: 5 }) {
-              Image(this.getIcon('time_stop', false)).width(17).height(17)
+              Image(getIcon('time_stop', false)).width(17).height(17)
               Text(I18n.t('script_stop'))
                 .fontSize(11)
                 .fontColor('#FFFFFF')
@@ -19631,7 +19632,7 @@ private loadPlanetPositions(): void {
   @Builder
   compactObjectPeek() {
     Row({ space: 8 }) {
-      Image(this.getIcon('info', false)).width(28).height(28).fillColor('#73C8FF')
+      Image(getIcon('info', false)).width(28).height(28).fillColor('#73C8FF')
         .clickEffect({ level: ClickEffectLevel.LIGHT })
         .onClick(() => { this.showFullObjectInspector() })
       Column() {
@@ -19773,7 +19774,7 @@ private loadPlanetPositions(): void {
   @Builder
   compactQuickButton(icon: string, active: boolean, action: () => void, receiveTap: boolean = true, pressed: boolean = false) {
     Row() {
-      Image(this.getIcon(icon, active))
+      Image(getIcon(icon, active))
         .width(22)
         .height(22)
         .fillColor(active ? '#FFFFFF' : this.nmText())
@@ -19873,7 +19874,7 @@ private loadPlanetPositions(): void {
   @Builder
   centerSearchBar() {
     Row({ space: 8 }) {
-      Image(this.getIcon('search', false))
+      Image(getIcon('search', false))
         .width(18).height(18).fillColor('#7FB3DC')
       TextInput({ text: this.searchText, placeholder: I18n.t('i0063') })
         .fontSize(14)
@@ -20581,7 +20582,7 @@ private loadPlanetPositions(): void {
         .hitTestBehavior(HitTestMode.Block)
         .onTouch((event: TouchEvent) => { this.handleObjectInspectorDragTouch(event) })
       Row() {
-        Image(this.getIcon(this.objectInspectorIcon(), false))
+        Image(getIcon(this.objectInspectorIcon(), false))
           .width(26).height(26).fillColor('#73C8FF').margin({ right: 7 })
         Text(this.zhNameOf(this.selectedName))
           .fontSize(18).fontWeight(FontWeight.Bold).fontColor('#FFFFFFFF')
@@ -20759,7 +20760,7 @@ private loadPlanetPositions(): void {
   expandedObjectSummary() {
     Column({ space: 7 }) {
       Row() {
-        Image(this.getIcon('info', false)).width(26).height(26).fillColor('#73C8FF').margin({ right: 3 })
+        Image(getIcon('info', false)).width(26).height(26).fillColor('#73C8FF').margin({ right: 3 })
           .clickEffect({ level: ClickEffectLevel.LIGHT })
           .onClick(() => { this.showFullObjectInspector() })
         Text(this.zhNameOf(this.selectedName)).fontSize(14).fontWeight(FontWeight.Medium).fontColor('#F1FAFF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -20805,7 +20806,7 @@ private loadPlanetPositions(): void {
           .margin({ top: 10, bottom: 12 })
 
         Row({ space: 8 }) {
-          Image(this.getIcon(this.objectInspectorIcon(), false))
+          Image(getIcon(this.objectInspectorIcon(), false))
             .width(22).height(22).fillColor('#8FD3FF').margin({ left: 2 })
           Column({ space: 2 }) {
             Text(this.zhNameOf(this.selectedName))
@@ -20815,11 +20816,11 @@ private loadPlanetPositions(): void {
               .fontSize(11).fontColor('#9DC6DB').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
           }
             .layoutWeight(1).alignItems(HorizontalAlign.Start)
-          Image(this.getIcon('more', false))
+          Image(getIcon('more', false))
             .width(24).height(24).fillColor(this.objectInspectorMoreOpen ? '#BCEAFF' : '#AFC5D1')
             .padding(4).clickEffect({ level: ClickEffectLevel.LIGHT })
             .onClick(() => { this.objectInspectorMoreOpen = !this.objectInspectorMoreOpen })
-          Image(this.getIcon('close', false))
+          Image(getIcon('close', false))
             .width(24).height(24).fillColor('#AFC5D1').padding(4).clickEffect({ level: ClickEffectLevel.LIGHT })
             .onClick(() => { this.dismissObjectInspector() })
         }
@@ -20842,7 +20843,7 @@ private loadPlanetPositions(): void {
           Stack({ alignContent: Alignment.Center }) {
             Circle().width(76).height(76).fill('rgba(91,147,191,0.10)').stroke('rgba(133,211,255,0.28)').strokeWidth(1)
             Circle().width(56).height(56).fill('rgba(74,158,219,0.12)').stroke('rgba(143,211,255,0.38)').strokeWidth(1)
-            Image(this.getIcon(this.objectInspectorIcon(), false)).width(30).height(30).fillColor('#BCEAFF')
+            Image(getIcon(this.objectInspectorIcon(), false)).width(30).height(30).fillColor('#BCEAFF')
           }
             .width(84).height(84)
           Column({ space: 5 }) {
@@ -21704,7 +21705,7 @@ private loadPlanetPositions(): void {
                 .fontSize(12).fontColor('#B8BDC8').width('100%')
             }.layoutWeight(1).alignItems(HorizontalAlign.Start)
             Button() {
-              Image(this.getIcon('close', false)).width(20).height(20).fillColor('#F2F4F8')
+              Image(getIcon('close', false)).width(20).height(20).fillColor('#F2F4F8')
             }.width(44).height(44).padding(0).borderRadius(UI_RADIUS_PILL)
               .backgroundColor('rgba(255,255,255,0.10)').zIndex(2)
               .accessibilityText(I18n.t('model_close'))
@@ -21801,7 +21802,7 @@ private loadPlanetPositions(): void {
   @Builder
   tabletInspectorAction(label: string, icon: string, action: () => void) {
     Row({ space: 10 }) {
-      Image(this.getIcon(icon, false)).width(17).height(17).fillColor('#A9DAF3')
+      Image(getIcon(icon, false)).width(17).height(17).fillColor('#A9DAF3')
       Text(label).fontSize(12).fontColor('#E3F4FC').layoutWeight(1)
     }
       .width('100%').height(36).padding({ left: 10, right: 10 }).borderRadius(UI_RADIUS_CONTROL)
@@ -21862,7 +21863,7 @@ private loadPlanetPositions(): void {
         .onClick(() => { this.openObjectInspectorMediaPreview() })
     } else if (this.objectInspectorMediaNoMatch) {
       Row({ space: 10 }) {
-        Image(this.getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
+        Image(getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
         Column({ space: 3 }) {
           Text('没有匹配的离线资源').fontSize(11).fontColor('#E4F5FC').width('100%')
           Text('当前天体没有随应用分发的对应图像或纹理').fontSize(10).fontColor('#9EC8DC').width('100%').maxLines(2)
@@ -21877,7 +21878,7 @@ private loadPlanetPositions(): void {
         .backgroundColor('rgba(91,147,191,0.08)').borderRadius(UI_RADIUS_CONTROL)
     } else if (this.objectInspectorMediaPreparationFailed) {
       Row({ space: 10 }) {
-        Image(this.getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#F1C27D')
+        Image(getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#F1C27D')
         Column({ space: 3 }) {
           Text('离线资源准备失败').fontSize(11).fontColor('#E4F5FC').width('100%')
           Text('文件未能完整复制到本地缓存，请重试').fontSize(10).fontColor('#9EC8DC').width('100%').maxLines(2)
@@ -21891,7 +21892,7 @@ private loadPlanetPositions(): void {
     } else if ((this.objectInspectorMediaKind === 'image' || this.objectInspectorMediaKind === 'constellation' ||
       this.objectInspectorMediaKind === 'model') && this.objectInspectorMediaLoadFailed) {
       Row({ space: 10 }) {
-        Image(this.getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
+        Image(getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
         Column({ space: 3 }) {
           Text('本地资源解码失败').fontSize(11).fontColor('#E4F5FC').width('100%')
           Text('资源已找到，但当前设备无法显示此文件').fontSize(10).fontColor('#9EC8DC').width('100%').maxLines(2)
@@ -21992,7 +21993,7 @@ private loadPlanetPositions(): void {
       this.tabletInspectorFallbackVisual()
     } else {
       Row({ space: 10 }) {
-        Image(this.getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
+        Image(getIcon(this.objectInspectorIcon(), false)).width(24).height(24).fillColor('#8EC9E9')
         Text('暂无与当前天体准确匹配的本地资料图像').fontSize(11).fontColor('#9EC8DC').layoutWeight(1).maxLines(2)
       }
         .width('100%').height(54).padding({ left: 12, right: 12 })
@@ -22009,45 +22010,45 @@ private loadPlanetPositions(): void {
       if (this.objectInspectorFallbackVisualKind() === 'star') {
         Circle().width(112).height(112).fill(this.objectInspectorStarColor()).opacity(0.10)
         Circle().width(68).height(68).fill(this.objectInspectorStarColor()).opacity(0.28)
-        Image(this.getIcon('catalog_star', false)).width(66).height(66).fillColor(this.objectInspectorStarColor())
+        Image(getIcon('catalog_star', false)).width(66).height(66).fillColor(this.objectInspectorStarColor())
       } else if (this.objectInspectorFallbackVisualKind() === 'comet') {
         Ellipse().width(150).height(35).fill('rgba(133,211,255,0.14)').rotate({ angle: -24 }).translate({ x: -22, y: 10 })
         Circle().width(44).height(44).fill('rgba(208,244,255,0.76)').translate({ x: 46, y: -14 })
-        Image(this.getIcon('catalog_comet', false)).width(104).height(104).fillColor('#B7E8FF')
+        Image(getIcon('catalog_comet', false)).width(104).height(104).fillColor('#B7E8FF')
       } else if (this.objectInspectorFallbackVisualKind() === 'asteroid') {
         Circle().width(98).height(98).fill('rgba(159,178,191,0.26)').stroke('rgba(222,239,247,0.50)').strokeWidth(1)
         Circle().width(16).height(16).fill('rgba(7,16,25,0.36)').translate({ x: -18, y: -15 })
         Circle().width(12).height(12).fill('rgba(7,16,25,0.30)').translate({ x: 20, y: 18 })
-        Image(this.getIcon('catalog_asteroid', false)).width(72).height(72).fillColor('#D6E5EB')
+        Image(getIcon('catalog_asteroid', false)).width(72).height(72).fillColor('#D6E5EB')
       } else if (this.objectInspectorFallbackVisualKind() === 'galaxy') {
         Ellipse().width(150).height(50).fill('rgba(158,181,255,0.12)').stroke('rgba(171,204,255,0.38)').strokeWidth(2).rotate({ angle: -18 })
         Ellipse().width(96).height(34).fill('rgba(135,190,255,0.14)').stroke('rgba(188,217,255,0.46)').strokeWidth(2).rotate({ angle: 16 })
         Circle().width(30).height(30).fill('rgba(240,250,255,0.75)')
-        Image(this.getIcon('catalog_galaxy', false)).width(90).height(90).fillColor('#C5DEFF')
+        Image(getIcon('catalog_galaxy', false)).width(90).height(90).fillColor('#C5DEFF')
       } else if (this.objectInspectorFallbackVisualKind() === 'globular-cluster' || this.objectInspectorFallbackVisualKind() === 'open-cluster') {
         Circle().width(124).height(124).fill(this.objectInspectorFallbackVisualKind() === 'globular-cluster' ? 'rgba(244,224,177,0.12)' : 'rgba(160,212,255,0.08)')
         ForEach([[-32, -20], [18, -34], [35, -4], [-5, 12], [-34, 28], [27, 32], [5, -3]], (point: number[], index: number) => {
           Circle().width(index % 2 === 0 ? 10 : 7).height(index % 2 === 0 ? 10 : 7).fill('#EAF7FF').translate({ x: point[0], y: point[1] })
         }, (point: number[], index: number) => point[0].toString() + index.toString())
-        Image(this.getIcon('catalog_cluster', false)).width(78).height(78).fillColor('#D8EEFF')
+        Image(getIcon('catalog_cluster', false)).width(78).height(78).fillColor('#D8EEFF')
       } else if (this.objectInspectorFallbackVisualKind() === 'nebula') {
         Circle().width(128).height(128).fill('rgba(143,128,210,0.13)')
         Ellipse().width(146).height(78).fill('rgba(117,190,222,0.16)').rotate({ angle: -22 })
         Ellipse().width(92).height(116).fill('rgba(222,137,174,0.13)').rotate({ angle: 24 })
-        Image(this.getIcon('catalog_nebula', false)).width(88).height(88).fillColor('#D7E8FF')
+        Image(getIcon('catalog_nebula', false)).width(88).height(88).fillColor('#D7E8FF')
       } else if (this.objectInspectorFallbackVisualKind() === 'constellation') {
         ForEach([[-54, 22], [-26, -34], [8, -8], [42, -44], [54, 32]], (point: number[], index: number) => {
           Circle().width(9).height(9).fill('#DFF5FF').translate({ x: point[0], y: point[1] })
         }, (point: number[], index: number) => point[0].toString() + index.toString())
-        Image(this.getIcon('catalog_constellation', false)).width(116).height(116).fillColor('#C5E8FA')
+        Image(getIcon('catalog_constellation', false)).width(116).height(116).fillColor('#C5E8FA')
       } else if (this.objectInspectorFallbackVisualKind() === 'satellite') {
-        Image(this.getIcon('catalog_satellite', false)).width(72).height(72)
+        Image(getIcon('catalog_satellite', false)).width(72).height(72)
           .objectFit(ImageFit.Contain).fillColor('#A9DAF3')
           .hitTestBehavior(HitTestMode.None).id('object-detail-satellite-icon')
       } else if (this.objectInspectorFallbackVisualKind() === 'moon') {
-        Image(this.getIcon('catalog_moon', false)).width(76).height(76).fillColor('#D9EAF5')
+        Image(getIcon('catalog_moon', false)).width(76).height(76).fillColor('#D9EAF5')
       } else {
-        Image(this.getIcon(this.objectInspectorIcon(), false)).width(92).height(92).fillColor('#C5E8FA')
+        Image(getIcon(this.objectInspectorIcon(), false)).width(92).height(92).fillColor('#C5E8FA')
       }
     }
       .width('100%').height(this.objectInspectorFallbackVisualKind() === 'satellite' ? 104 : 194)
@@ -22309,7 +22310,7 @@ private loadPlanetPositions(): void {
     Column() {
       // 头部：点名称/类型/箭头展开收起；✕ 关闭（不影响当前菜单）
       Row() {
-        Image(this.getIcon('info', false))
+        Image(getIcon('info', false))
           .width(18).height(18).fillColor('#5B93BF').margin({ right: 8 })
         Text(this.zhNameOf(this.selectedName))
           .fontSize(15).fontWeight(FontWeight.Bold).fontColor('#FFFFFFFF')
@@ -23253,58 +23254,6 @@ private loadPlanetPositions(): void {
     return I18n.satGroup(en)
   }
 
-  private getIcon(icon: string, isActive: boolean): Resource {
-    const map: Record<string, Resource> = {
-      'search': $r('app.media.ic_search'),
-      'clock': $r('app.media.ic_clock'),
-      'location': $r('app.media.ic_location'),
-      'layers': $r('app.media.ic_layers'),
-      'info': $r('app.media.ic_info'),
-      'settings': $r('app.media.ic_settings'),
-      'catalogs': $r('app.media.ic_download'),
-      'bookmarks': $r('app.media.ic_bookmark'),
-      'telescope': $r('app.media.ic_telescope'),
-      'oculars': $r('app.media.ic_oculars'),
-      'angle': $r('app.media.ic_tune'),
-      'nav_stars': $r('app.media.ic_catalog_star'),
-      'satellite': $r('app.media.ic_satellite'),
-      'meteor': $r('app.media.ic_meteor'),
-      'script': $r('app.media.ic_code'),
-      'code': $r('app.media.ic_code'),
-      'tune': $r('app.media.ic_tune'),
-      'orbit': $r('app.media.ic_orbit'),
-      'help': $r('app.media.ic_help'),
-      'grid': $r('app.media.ic_grid'),
-      'more': $r('app.media.ic_more'),
-      'close': $r('app.media.ic_close'),
-      'back': $r('app.media.ic_back'),
-      'gyro': $r('app.media.ic_gyro'),
-      'zoom_in': $r('app.media.ic_zoom_in'),
-      'zoom_out': $r('app.media.ic_zoom_out'),
-      'lock': $r('app.media.ic_lock'),
-      'unlock': $r('app.media.ic_unlock'),
-      'projection': $r('app.media.ic_screenshot'),
-      'observe': $r('app.media.ic_list'), 'audio': $r('app.media.ic_audio'), 'forward': $r('app.media.ic_forward'),
-      'chevron_right': $r('app.media.ic_chevron_right'),
-      'time_slower': $r('app.media.ic_time_slower'), 'time_fast': $r('app.media.ic_time_fast'),
-      'time_stop': $r('app.media.ic_time_stop'), 'time_realtime': $r('app.media.ic_time_realtime'),
-      'time_resume': $r('app.media.ic_time_resume'),
-      'pause': $r('app.media.ic_pause'),
-      'catalog_planet': $r('app.media.ic_catalog_planet'), 'catalog_moon': $r('app.media.ic_catalog_moon'),
-      'catalog_star': $r('app.media.ic_catalog_star'), 'catalog_variable_star': $r('app.media.ic_catalog_variable_star'),
-      'catalog_comet': $r('app.media.ic_catalog_comet'), 'catalog_asteroid': $r('app.media.ic_catalog_asteroid'),
-      'catalog_constellation': $r('app.media.ic_catalog_constellation'), 'catalog_galaxy': $r('app.media.ic_catalog_galaxy'),
-      'catalog_cluster': $r('app.media.ic_catalog_cluster'), 'catalog_nebula': $r('app.media.ic_catalog_nebula'),
-      'catalog_messier': $r('app.media.ic_catalog_messier'), 'catalog_satellite': $r('app.media.ic_catalog_satellite'),
-      'catalog_exoplanet': $r('app.media.ic_catalog_exoplanet'), 'catalog_pulsar': $r('app.media.ic_catalog_pulsar'),
-      'catalog_nova': $r('app.media.ic_catalog_nova'), 'catalog_supernova': $r('app.media.ic_catalog_supernova'),
-      'catalog_quasar': $r('app.media.ic_catalog_quasar'), 'catalog_aircraft': $r('app.media.ic_catalog_aircraft'), 'catalog_plugin': $r('app.media.ic_catalog_plugin'),
-      'polar_scope': $r('app.media.ic_polar_scope'),
-      'scenery3d': $r('app.media.ic_globe'),
-      'tools': $r('app.media.ic_tune'),
-    }
-    return map[icon] || $r('app.media.ic_search')
-  }
   @Builder
   ocularSelector(kind: string, label: string) {
     Column({ space: 6 }) {
@@ -23360,7 +23309,7 @@ private loadPlanetPositions(): void {
   @Builder
   iconButton(item: ShellAction) {
     Column() {
-      Image(this.getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
+      Image(getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
         .width(22).height(22)
         .fillColor(this.activePanel === item.panel && this.panelVisible ? '#FFFFFF' : this.nmText())
     }
@@ -23394,7 +23343,7 @@ private loadPlanetPositions(): void {
   @Builder
   collapseButton() {
     Column() {
-      Image(this.getIcon('forward', false))
+      Image(getIcon('forward', false))
         .width(22)
         .height(22)
         .fillColor(this.panelVisible ? '#FFFFFF' : this.nmText())
@@ -23459,7 +23408,7 @@ private loadPlanetPositions(): void {
   @Builder
   musicButton() {
     Stack() {
-      Image(this.getIcon('audio', this.musicEnabled))
+      Image(getIcon('audio', this.musicEnabled))
         .width(22)
         .height(22)
         .fillColor(this.musicEnabled ? '#FFFFFF' : this.nmText())
@@ -23487,7 +23436,7 @@ private loadPlanetPositions(): void {
   @Builder
   gyroButton() {
     Stack() {
-      Image(this.getIcon('gyro', this.gyroscopeEnabled))
+      Image(getIcon('gyro', this.gyroscopeEnabled))
         .width(22)
         .height(22)
         .fillColor(this.gyroscopeEnabled ? '#FFFFFF' : this.nmText())
@@ -23681,7 +23630,7 @@ private loadPlanetPositions(): void {
               .width(32)
               .height(32)
               .fill(this.activePanel === item.panel && this.panelVisible ? 'rgba(91, 147, 191, 0.28)' : 'rgba(255, 255, 255, 0.06)')
-            Image(this.getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
+            Image(getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
               .width(18)
               .height(18)
               .fillColor(this.activePanel === item.panel && this.panelVisible ? '#93D7FF' : this.nmText())
@@ -23763,7 +23712,7 @@ private loadPlanetPositions(): void {
                   .width(30)
                   .height(30)
                   .fill(this.activePanel === item.panel && this.panelVisible ? 'rgba(91, 147, 191, 0.26)' : 'rgba(255, 255, 255, 0.06)')
-                Image(this.getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
+                Image(getIcon(item.icon, this.activePanel === item.panel && this.panelVisible))
                   .width(17)
                   .height(17)
                   .fillColor(this.activePanel === item.panel && this.panelVisible ? '#7FB3DC' : this.nmText())
@@ -23838,7 +23787,7 @@ private loadPlanetPositions(): void {
   @Builder
   dockButton(item: ShellAction) {
     Column() {
-      Image(this.getIcon(item.icon, this.dockActionActive(item)))
+      Image(getIcon(item.icon, this.dockActionActive(item)))
         .width(this.isExpandedLayout ? 22 : this.compactDockIconSize())
         .height(this.isExpandedLayout ? 22 : this.compactDockIconSize())
         .objectFit(ImageFit.Contain)
@@ -23926,7 +23875,7 @@ private loadPlanetPositions(): void {
     Column({ space: 5 }) {
       Stack() {
         Circle().width(42).height(42).fill('rgba(91,147,191,0.22)')
-        Image(this.getIcon(icon, false)).width(24).height(24).fillColor('#B9E7FF')
+        Image(getIcon(icon, false)).width(24).height(24).fillColor('#B9E7FF')
       }.width(52).height(52).alignContent(Alignment.Center)
       Text(label).fontSize(12).fontWeight(FontWeight.Medium).fontColor('#F3FAFF').width('100%')
         .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).textAlign(TextAlign.Center)
@@ -23958,7 +23907,7 @@ private loadPlanetPositions(): void {
           Text('今晚').fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
           Text('从当前时间开始探索天空').fontSize(10).fontColor('#C5D7E4')
         }.layoutWeight(1)
-        Image(this.getIcon('clock', false)).width(22).height(22).fillColor('#B9E7FF')
+        Image(getIcon('clock', false)).width(22).height(22).fillColor('#B9E7FF')
       }
         .width('100%').height(82).padding({ left: 14, right: 14 })
         .backgroundColor('rgba(29,52,78,0.94)')
@@ -24073,7 +24022,7 @@ private loadPlanetPositions(): void {
     Row() {
       if (this.canGoBackPanel()) {
         Button() {
-          Image(this.getIcon('back', false)).width(17).height(17).fillColor('#D9F1FF')
+          Image(getIcon('back', false)).width(17).height(17).fillColor('#D9F1FF')
         }
           .id('panel-back')
           .width(44)
@@ -24497,12 +24446,12 @@ private loadPlanetPositions(): void {
           Row({ space: 12 }) {
             Stack() {
               Circle().width(38).height(38).fill('rgba(91, 147, 191, 0.20)')
-              Image(this.getIcon(item.icon, false)).width(21).height(21).fillColor('#B8E4FF')
+              Image(getIcon(item.icon, false)).width(21).height(21).fillColor('#B8E4FF')
             }.width(38).height(38)
             Text(item.label)
               .fontSize(15).fontWeight(FontWeight.Medium).fontColor('#EAF7FF')
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-            Image(this.getIcon('chevron_right', false)).width(19).height(19).fillColor('rgba(184, 228, 255, 0.72)')
+            Image(getIcon('chevron_right', false)).width(19).height(19).fillColor('rgba(184, 228, 255, 0.72)')
           }
             .width('100%').height('100%').padding({ left: 12, right: 12 })
         }
@@ -24542,7 +24491,7 @@ private loadPlanetPositions(): void {
                   .width(38)
                   .height(38)
                   .fill('rgba(91, 147, 191, 0.20)')
-                Image(this.getIcon(item.icon, false))
+                Image(getIcon(item.icon, false))
                   .width(21)
                   .height(21)
                   .fillColor('#B8E4FF')
@@ -24556,7 +24505,7 @@ private loadPlanetPositions(): void {
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
                 .layoutWeight(1)
-              Image(this.getIcon('chevron_right', false))
+              Image(getIcon('chevron_right', false))
                 .width(19)
                 .height(19)
                 .fillColor('rgba(184, 228, 255, 0.72)')
@@ -25372,7 +25321,7 @@ private loadPlanetPositions(): void {
             Column({ space: 4 }) {
               ForEach(this.searchSuggestions, (item: SearchSug) => {
                 Row() {
-                  Image(this.getIcon('search', false)).width(16).height(16).fillColor('#7FB3DC').margin({ right: 10 })
+                  Image(getIcon('search', false)).width(16).height(16).fillColor('#7FB3DC').margin({ right: 10 })
                   Column({ space: 1 }) {
                     Text(item.zh).fontSize(14).fontColor(this.nmText()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     if (item.fuzzy === true || item.crossLanguage === true || (item.type ?? '').length > 0 || this.celestialSubtitle(item.zh, item.en).length > 0) {
@@ -25395,12 +25344,12 @@ private loadPlanetPositions(): void {
       } else {
         Row({ space: 10 }) {
           Row({ space: 10 }) {
-            Image(this.getIcon(this.searchCategoryIcon(this.searchCategory), false)).width(22).height(22).objectFit(ImageFit.Contain).fillColor('#8FD3FF')
+            Image(getIcon(this.searchCategoryIcon(this.searchCategory), false)).width(22).height(22).objectFit(ImageFit.Contain).fillColor('#8FD3FF')
             Column({ space: 3 }) {
               Text(I18n.t('search_browse_categories')).fontSize(11).fontColor(this.nmSub()).width('100%')
               Text(this.searchCategoryLabel()).fontSize(14).fontColor(this.nmText()).width('100%').maxLines(2)
             }.layoutWeight(1)
-            Image(this.getIcon('chevron_right', false)).width(16).height(16).fillColor(this.nmSub())
+            Image(getIcon('chevron_right', false)).width(16).height(16).fillColor(this.nmSub())
           }
             .layoutWeight(1).height(66).padding({ left: 12, right: 12 })
             .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
@@ -25430,7 +25379,7 @@ private loadPlanetPositions(): void {
           Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
             ForEach(this.categoryObjects, (item: NameItem) => {
               Row({ space: 8 }) {
-                Image(this.getIcon(this.categoryObjectIcon(item), false)).width(22).height(22).fillColor(item.visibleNow === false ? this.nmSub() : '#91C8E8')
+                Image(getIcon(this.categoryObjectIcon(item), false)).width(22).height(22).fillColor(item.visibleNow === false ? this.nmSub() : '#91C8E8')
                 Column({ space: 2 }) {
                   Text(item.zh ?? item.name ?? '')
                     .fontSize(12).minFontSize(10).fontColor(this.nmText()).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -27313,7 +27262,7 @@ private loadPlanetPositions(): void {
                     Text('选择类别').fontSize(12).fontColor(this.nmSub()).width('100%')
                     Text(this.wutCategoryTitle()).fontSize(14).fontColor(this.nmText()).width('100%')
                   }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                  Image(this.getIcon('chevron_right', false)).width(18).height(18).fillColor(this.nmSub())
+                  Image(getIcon('chevron_right', false)).width(18).height(18).fillColor(this.nmSub())
                     .rotate({ angle: this.wutCategoriesExpanded ? 90 : 0 })
                 }.width('100%')
               }.width('100%').padding(12).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
