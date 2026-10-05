@@ -21,7 +21,7 @@
 | `pages/I18n.ets` | 2,354 | 翻译表 + 语言切换 |
 | `pages/StellariumTypes.ets` | 1,122 | 桥接协议类型集合 |
 | `qability/StellariumResourceBootstrap.ets` | 943 | 资源预热 |
-| `pages/StellariumAudio.ets` | 927 | 音频 |
+| `pages/StellariumAudio.ets` | 927 | 音频；**M3 已迁 `capability/AudioEngine.ets`**（§15.7 规则 1 NAPI 判定，非 `common/media/`），见 §15.12.18 |
 | `qability/QAbility.ets` | 694 | UIAbility（启动链、隐私门控） |
 | 其余 20 余个文件 | < 250 各自 | |
 | **业务代码合计（不含 `location_*` 数据表）** | **40,548** | 其中主文件占 80.8% |
@@ -1822,3 +1822,28 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（本片不动宿主）；无 store / 端口新增；净 7 个跟踪文件改动（3 重命名 + 3 消费者 import + 4 脚本内 7 处路径）。
 
 **验证**：预检通过；`arkts_check` 3 文件 0 error；`BUILD SUCCESSFUL in 30s`；契约 44 锚点 intact（249 文件）；受影响 `verify-ohos-location-search` 全绿（7,387 地点中文名齐全 + 12 项本地化/归一化检索）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败。真机（192.168.50.108:36717）：`pidof` 存活、无 jscrash；位置面板「按地区选」层级四列实证数据运行期可加载（大洲「亚洲」→ 国家/地区「不丹/东帝汶/中国」→ 地区「上海市/中国台湾地区/中国澳门特别行政区」→ 城市「上海」），点「上海」后坐标实时刷新为 `31.22°N / 121.46°E`、位置名「上海 · 地球」，`setLocation` 全链生效；测试改动的持久化观测点已恢复到测试前显示值。
+
+#### 15.12.18 M 轨道 M3：导览模型与音频引擎迁出 pages/（2026-10-06，纯路径迁移）
+
+> **依据**：STATE-REVIEW §11.2.2 / §11.2.3 的 M 轨道规划。本片为 M 轨道第 3 片，**纯路径迁移**（`git mv` + 同步消费者相对深度），**不改任何运行逻辑**；开工 `git log -1` = `0c73bbb6ed`，宿主 `MainWindowNativeNode.ets` 基线 8,017 行。
+
+**文件移动清单（旧 → 新，`git mv` 保留历史）**
+
+| 旧路径 | 新路径 | 行 |
+|---|---|---:|
+| `pages/AstronomyGuide.ts` | `common/derive/AstronomyGuide.ts` | 197 |
+| `pages/StellariumAudio.ets` | `capability/AudioEngine.ets` | 927 |
+
+**`AudioEngine` 落点判定（§15.7 规则 1）**：STATE-REVIEW §11.2.2 原记 `common/media/AudioEngine.ets`，但开工核查发现该文件**直接调用音频 NAPI**——`import { audio } from '@kit.AudioKit'` 且 `audio.createAudioRenderer(...)`（另 `import hilog from '@ohos.hilog'`）；§15.7 规则 1 要求 `common/*` 不 import NAPI，故按判定改落 **`capability/AudioEngine.ets`**。判定口径为「是否**调用**设备能力」而非「是否 import 其模块」：既有 `common/media/ImageDecoder.ets` 只把 `@kit.ImageKit` 用作 `image.PixelMap` 类型、设备能力调用均经 `MediaPort`，仍属合规的 `common/media/`；`AudioEngine` 真调 `createAudioRenderer`，故归 `capability/`。文件名按计划改为 `AudioEngine.ets`；原文件同时导出 `export class AudioEngine` 与 `export default AudioEngine`，**两种导出逐字保留**，运行期日志标签 `TAG='StellariumAudio'` **刻意不改**，故所有消费者 import 形式无需变更。
+
+**内部相对深度（2 处）**：`capability/AudioEngine.ets` 的 `./StellariumTypes` → `../pages/StellariumTypes`；文件首行注释更新为新文件名（`AstronomyGuide.ts` 无 import，仅改路径）。
+
+**消费者 import（4 文件 / 4 行）**：宿主 `pages/MainWindowNativeNode.ets`（`./AstronomyGuide` → `../common/derive/AstronomyGuide`、`./StellariumAudio` → `../capability/AudioEngine`）；`state/GuideStore.ets`（`../pages/AstronomyGuide` → `../common/derive/AstronomyGuide`）；`panels/guide/GuideLibrary.ets`（`../../pages/AstronomyGuide` → `../../common/derive/AstronomyGuide`）；`capability/StartupBridge.ets`（`../pages/StellariumAudio` → `./AudioEngine`）。导出名 `ASTRONOMY_GUIDES` / `AstronomyGuide` / `GuideState` / `GuideStep` / `AudioEngine` 全部保持不变。
+
+**夹具同步（2 脚本 / 2 处）**：`scripts/test-ohos-guide.mjs`、`scripts/test-ohos-mist-horizon.mjs` 改读 `common/derive/AstronomyGuide.ts`。
+
+**未改**：`docs/harmonyos/json/ui-contract-baseline.json` 的 `scannedFiles` 与历史 `CHANGELOG` / `HANDOFF.md` 构建产物索引（与 M1/M2 同例——`scannedFiles` 不参与契约 diff，历史文档不回改）。
+
+**度量**：宿主 `MainWindowNativeNode.ets` **8,017 → 8,017 行**（本片不动宿主）；无 store / 端口新增；净 8 个跟踪文件改动（2 重命名 + 4 消费者 import + 2 夹具）。
+
+**验证**：预检通过；`arkts_check` 5 文件 0 error；`BUILD SUCCESSFUL in 30s`；契约 44 锚点 intact（249 文件）；受影响 `test-ohos-guide`（9/9）/ `test-ohos-mist-horizon`（5/5）全绿；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败（4 个 `-pad` / `mist-performance` / `verify-ohos-search`）。真机（192.168.50.108:36717）：`devecocli run --skip-build` → `Smoke: PASS`；导览 CLI `startGuide solar-neighbours` → `getGuideState` 返回 `active/index/count` 与两条完整 `guides[]`、`guideAction next` 前进、`guideAction stop` 复位（`AstronomyGuide`/`GuidePlayer` 迁出后全链生效）；音频「更多功能 → 脚本与自动化 → 音频控制」→ AudioPanel 点「背景音乐」→ hilog `StellariumAudio: audio engine started (v2 ethereal)` + `muted = false`，再点 → `muted = true`（`AudioEngine` 迁出后 `createAudioRenderer` 成功；两次点按 off→on→off 已复原）；`pidof 4005` 全程存活、无 jscrash / 无 faultlog。

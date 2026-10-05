@@ -1,4 +1,4 @@
-import { GuidePlayer, GuideState, GuideResult, AstronomyGuide, ASTRONOMY_GUIDES } from '../pages/AstronomyGuide'
+import { GuidePlayer, GuideState, GuideResult, AstronomyGuide, ASTRONOMY_GUIDES } from '../common/derive/AstronomyGuide'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'

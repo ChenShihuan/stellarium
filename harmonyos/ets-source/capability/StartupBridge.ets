@@ -17,7 +17,7 @@
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { LimitMagnitudeResponse } from '../pages/MainWindowModels'
 import { I18n } from '../pages/I18n'
-import { AudioEngine } from '../pages/StellariumAudio'
+import { AudioEngine } from './AudioEngine'
 import { astroGroupForTab, clamp } from '../common/derive/astro'
 import { CommandPort } from '../bridge/CommandPort'
 import { SkyCultureViewStore } from '../state/SkyCultureViewStore'
