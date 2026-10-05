@@ -1360,7 +1360,7 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 | ID | 批次 | 组成 | 前置 | 状态 |
 |---|---|---|---|---|
 | **M1-A** | M1 | 端口组 + 服务层 + 启动/会话 + P2 并入（原 M1-1/4/5/6） | — | **已完成（2026-10-04）**：新增 3 端口（`MediaPort`/`PlatformPort`/`SensorPort` + 具名适配器）、4 服务（`common/media/ImageDecoder`、`common/platform/{Clipboard,Share,Screenshot}`、`common/SpeechService`）、`capability/StartupBridge`；`SessionToolStore` 并入会话四法；`ScriptStore`（脚本播放四法）/`GuideStore`（导览 + 自持定时器）并入。宿主 **14,357 → 14,161 行**、`private` **594 → 575**、`@State` **132 不变**；4 次提交 `333f51e23d`/`88dab09304`/`c61a693eb5`/`bf5b6b6ede`；登记保留：skyCulture 美术解码二法（§15.6-3）、启动隐私生命周期杂项（§15.6-4）、`toggleReplayPause`/`changePlaybackRate`（归 M1-B）、`setTrackingState`（引擎耦合） |
-| **M1-B** | M1 | `SensorController` + `RecordingController`（原 M1-2/3） | M1-A | 待做 |
+| **M1-B** | M1 | `SensorController` + `RecordingController`（原 M1-2/3） | M1-A | **已完成（2026-10-04）**：① `capability/SensorController.ets`（21 方法 + 52 私有字段；真传感器经 `SensorPort`（label 化 + 4 类型别名）、桥经 `CommandPort`、`watchGyro*` 实为桥驱动虚拟指星笔；`GyroStore` 可观测子集 M1-A 已齐备；`watchLastSend` 保留字段经 hooks）；② `capability/RecordingController.ets`（21 方法 + 12 私有字段 + 自持 `recordViewCheckpointTimer`/`replayTimer`；状态在 `ScriptStore` 不重复搬；`recordBuffer` 保留字段经 hooks；系统录屏 NAPI 收在扩展后的 `HostMediaPort`/`MediaPort`）；纳入 M1-A 遗留 `toggleReplayPause`/`changePlaybackRate`。宿主 **14,161 → 13,140 行**、`private` **574 → 536**、`@State` **132 不变**；2 次提交 `f452b228bf`/`7355472cfc`；真机三路传感器订阅 + callbacks 1→301 + `stopGyroscope` 归零、视频帧序列桥命令、脚本录制 UI 开关均存活；未走查：回放 UI（内层滚动容器）、系统录屏授权对话框、陀螺引导叠层 |
 | **M2-A** | M2 | `ObjectModelRenderer` 整体（原 M2-1/2） | M1-A | 待做 |
 | **M3-1** | M3 | `SkyInputController` 骨架（89 字段 + 鼠标/键盘/轴/惯性） | — | 待做（最后） |
 | **M3-2** | M3 | `SkyInputController` 主路径（`handleSkyTouch` 318） | M3-1 | 待做（最后） |
