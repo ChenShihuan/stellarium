@@ -1553,3 +1553,32 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 
 
 
+
+
+#### 15.12.8 D 轨道 D7/D14 完成结论与度量（2026-10-05）
+
+> **背景**：D5/D6/D13 之后续做 STATE-REVIEW §10.2 的 **D7（AstroCalc 行为）** 与 **D14（插件功能）**。
+> 两片均为 P1 控制器；D7 涉天文计算面板全部动作 + CSV 导出 + 上下文定时器，D14 涉插件加载与跨域路由。
+
+**新增文件**
+
+- `capability/AstroCalcController.ets`（429 行；29 行为法 + 7 私有字段；注入 `CommandPort`/`MediaPort` + `astroStore`/`ephemerisStore`/`wutStore`/`searchStore` + `AstroCalcHostHooks`；定时器自持 `syncAstroCalcContextTimer`/`stopAstroCalcContextTimer`）。
+- `capability/PluginFeatureController.ets`（183 行；8 行为法 + `pluginFeatureLoading`；注入 `CommandPort` + `pluginStore`/`searchStore`/`astroStore` + `PluginFeatureHostHooks`）。
+
+**修改**
+
+- `bridge/MediaPort.ets` **+3**：新增具名 `saveTextFileAs(text, fileName, suffixLabel, onDone)`；宿主 `HostMediaPort` 逐字承载原 `exportCurrentAstroCsv` 的 `fileIo.writeSync` + picker + `fileIo.copy` 段。
+- 宿主 `MainWindowNativeNode.ets`：删 38 法 + 9 字段声明 + 4 未用导入，增 2 惰性构造器（`astroCalcCtl()`/`pluginFeatureCtl()`）与全部调用点改指向。
+- `scripts/test-ohos-astro-motion.mjs`：夹具改读 `capability/AstroCalcController.ets`（假 hooks 提供 `animateAstroIn/Out` + `astroPanelOnScreen`）。
+
+**D7 判定**：STATE-REVIEW §10.1 记「32 法」（含 5 个 `chooseXxxStartDate` / 3 个 `openXxxTargetPicker`）；实测 **4 个 choose（无 `chooseWutStartDate`，RTS 的为 `chooseRtsCalendarStartDate`）+ 4 个 picker + 22 个其余 = 30 法 = 29 行为 + 1 `publish*`**。`publishAstroPanelState`（§15.6-4）本体留宿主、只迁调用方，宿主经 `requestedAstroTab()`/`astroTransitionSerial()` 回读 `astroRequestedTab`/`astroTransitionId`。4 个 `fmt*` 留控制器（非 `common/derive/`；理由：AstroStore 已以 `AstroHostHooks.fmtDateTime` 消费同一实现，留此零改动 store 接口）。
+
+**D14 判定**：STATE-REVIEW §10.1 记「10 法」；实测 8 行为法（`pluginZh`/`pluginDesc`/`pluginFeatureRoute` 属 `common/derive/labels` 纯函数，不属行为层）。`openPluginFeatureAfterLoad` **可逐字等价下沉**（`astroStore`/`searchStore` 直注，`viewTab`/`openSubPanel` 经 hooks），非登记保留；原 `ensurePluginLoaded` 两处 hilog 诊断日志按 §15.7 规则 1 不再保留。
+
+**度量**：宿主 **10,682 → 10,288 行（−394）**、`private` 方法 **414 → 378（−36）**、`@State private` **132 → 131（−1，死字段 `pickedDate` 随 choose 迁移后零引用删除）**；新增 2 控制器文件、扩展 1 端口。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 4 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**；`test-ohos-astro-motion` 9/9 全绿；全量 `*-ohos*.mjs` 仅 §13.6 的 6 个环境类失败。
+
+**真机（192.168.50.108:36717）**：`Smoke: PASS`；`openUiPanel astro` + `setAstroTab 2`（`transitionId=1`）/ `setAstroGroup 1`（tab→0、`transitionId=2`）/ `setAstroFilter direction|east`（`getAstroPanelState.direction=east`）；`openPluginFeature TelescopeControl`/`Oculars` → hilog `[cli-ui] opened plugin feature=...`（`ensurePluginLoaded` + `openPluginFeatureAfterLoad` 跨域路由存活）；`searchObject Sirius` → `getSelectedObjectInfo found:true`（`searchObject` 经 `astroCalcCtl().*PickerActive()` 回跳分支存活）；`pidof` 存活、无 jscrash；测试后 `setAstroTab 5` 复原持久化 tab。
+
+**未走查（待真机人工）**：目标选择 picker 按钮（`devecocli` 简化树与 `verify_ui` 下均未呈现，需「未选天体且计算报错」态）；`chooseXxxStartDate` 的 DatePickerDialog 弹层；`exportCurrentAstroCsv` 的另存为 picker。

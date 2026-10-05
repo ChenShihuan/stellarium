@@ -21,7 +21,7 @@ import { LOCATION_ZH_NAMES } from './location_names_zh'
 import { proceduralModelKind, proceduralParticles } from './ProceduralDetailModel'
 import { ASTRONOMY_GUIDES, AstronomyGuide, GuideState, GuideStep } from './AstronomyGuide'
 
-import { StellariumBridgeResponse, SessionSnapshot, TonightEvents, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, CatOption, NameItem, SearchSug, WindowNativeNodeCreateInfo, TabItem, ChipItem, LandscapeItem, ScriptMetadata, PlanetPosition, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass } from './StellariumTypes'
+import { StellariumBridgeResponse, SessionSnapshot, TonightEvents, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, CatOption, NameItem, SearchSug, WindowNativeNodeCreateInfo, ChipItem, LandscapeItem, ScriptMetadata, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass } from './StellariumTypes'
 import { setLifecycleListener } from '../common/StellariumLifecycle'
 import { AudioEngine } from './StellariumAudio'
 import { I18n, LANGUAGE_DISPLAY, PROJECTION_KEYS } from './I18n'
@@ -34,7 +34,7 @@ import {
   chromeZoomButtonTop
 } from '../common/ui/ChromeGeometry'
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot, gyroMagneticHeadingFromDeviceVectors } from '../common/derive/gyro'
-import { dateToJD, jdToLocalTimeText, astroTabItemsForGroup, astroGroupForTab, graphModeLabel, graphStartOptionLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointColor, hecLayoutPositions, hecPointLeft, hecPointTop, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
+import { dateToJD, jdToLocalTimeText, graphModeLabel, graphStartOptionLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointColor, hecLayoutPositions, hecPointLeft, hecPointTop, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, informationMaskBit, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
@@ -68,6 +68,8 @@ import { TelescopeController } from '../capability/TelescopeController'
 import { PolarScopeController, PolarScopeHostHooks, PolarScopeSessionFlags } from '../capability/PolarScopeController'
 import { ViewCoordinateController, ViewCoordinateHostHooks } from '../capability/ViewCoordinateController'
 import { SatelliteController, SatelliteHostHooks } from '../capability/SatelliteController'
+import { AstroCalcController, AstroCalcHostHooks } from '../capability/AstroCalcController'
+import { PluginFeatureController, PluginFeatureHostHooks } from '../capability/PluginFeatureController'
 import { BehaviorHostHooks } from '../capability/ControllerHooks'
 import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
@@ -399,6 +401,42 @@ class HostMediaPort implements MediaPort {
         onDone(MediaSaveResult.Saved)
       } catch (error) {
         hilog.error(0x0000, 'StellariumArkUI', 'Export file failed: %{public}s', String(error))
+        onDone(MediaSaveResult.Failed)
+      }
+    }
+    void run()
+  }
+
+  // D7：文本另存为——把文本写入缓存临时文件后弹 picker 并拷贝（原宿主 exportCurrentAstroCsv 的
+  // fileIo.writeSync + picker.save + fileIo.copy + unlink 段逐字保留；控制器经本方法不 import NAPI）。
+  saveTextFileAs(text: string, fileName: string, suffixLabel: string, onDone: (result: MediaSaveResult) => void): void {
+    const factory = this.contextFactory
+    if (factory === null) {
+      onDone(MediaSaveResult.Failed)
+      return
+    }
+    const run = async (): Promise<void> => {
+      try {
+        const context = factory()
+        const saveOptions = new picker.DocumentSaveOptions()
+        saveOptions.newFileNames = [fileName]
+        saveOptions.fileSuffixChoices = [suffixLabel]
+        const selectedUris = await new picker.DocumentViewPicker(context).save(saveOptions)
+        if (selectedUris.length === 0 || selectedUris[0].length === 0) {
+          onDone(MediaSaveResult.Cancelled)
+          return
+        }
+        const scratchPath = context.cacheDir + '/' + fileName
+        const file = fileIo.openSync(scratchPath, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE)
+        const encoder = new util.TextEncoder('utf-8')
+        const bytes = encoder.encodeInto(text)
+        fileIo.writeSync(file.fd, bytes.buffer)
+        fileIo.closeSync(file)
+        await fileIo.copy(fileUri.getUriFromPath(scratchPath), selectedUris[0])
+        try { fileIo.unlinkSync(scratchPath) } catch (error) {}
+        onDone(MediaSaveResult.Saved)
+      } catch (error) {
+        hilog.error(0x0000, 'StellariumArkUI', 'Export text file failed: %{public}s', String(error))
         onDone(MediaSaveResult.Failed)
       }
     }
@@ -838,6 +876,11 @@ export struct WindowNativeNode {
   private viewCoordinateControllerImpl: ViewCoordinateController | null = null
   // D13：卫星行为控制器（惰性构造；状态在 SatelliteStore，publish* 保留项经 hooks 回注）。
   private satelliteControllerImpl: SatelliteController | null = null
+  // D7：天文计算行为控制器（惰性构造；状态在 astro/ephemeris/wut store，picker/animateTo/Scroller
+  // 与保留项 publishAstroPanelState/applyAtmosphereResponse/applySelectedObject 经 hooks 回注）。
+  private astroCalcControllerImpl: AstroCalcController | null = null
+  // D14：插件功能行为控制器（惰性构造；状态在 PluginStore，跨域路由经 hooks 回注）。
+  private pluginFeatureControllerImpl: PluginFeatureController | null = null
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
   // The compact phone quick controls are tapped through a transparent layer
@@ -926,7 +969,7 @@ export struct WindowNativeNode {
   @State private bridgeSyncStarted: boolean = false
   @State private nightModeStore: NightModeStore = new NightModeStore()
   // D16：pendingNightMode / pendingNightModeUntilMs 随夜视模式行为并入 state/NightModeStore.ets。
-  @State private pickedDate: Date = new Date()
+  // pickedDate 随 D7 的 4 个 chooseXxxStartDate 移入 capability/AstroCalcController.ets（已无引用，删除）。
   @State private locationText: string = '--'
   @State private coordinateText: string = '--'
   @State private altitudeText: string = '--'
@@ -970,10 +1013,7 @@ export struct WindowNativeNode {
   // presetSkyTime 已并入 state/TimeSettingsStore.ets（review §2.7）。
   // 视图导航设置（9 字段）已下沉 state/NavigationSettingsStore.ets（review §2.7）。
   @State private navigationStore: NavigationSettingsStore = new NavigationSettingsStore()
-  // Open AstroCalc on the observation-first view: it needs no selected object
-  // and immediately gives a useful answer for the current location and date.
-  private astroTransitionId: number = 0
-  private astroRequestedTab: number = -1
+  // astroTransitionId / astroRequestedTab 随 D7 移入 capability/AstroCalcController.ets。
   private astroPanelScroller: Scroller = new Scroller()
   // 视图交互偏好（autoZoomResets / useMetricUnits / viewLock / verticalClamp / flatHorizon，
   // 共 5 字段）已下沉 state/ViewSettingsStore.ets（review §2.7）。
@@ -982,13 +1022,11 @@ export struct WindowNativeNode {
   @State private viewSettingsStore: ViewSettingsStore = new ViewSettingsStore()
   // 桥接数据
   // rtsCalendarStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7）。
-  private planetPositionsRequestSequence: number = 0
+  // planetPositionsRequestSequence 随 D7 移入 capability/AstroCalcController.ets。
   // graphStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7）。
-  private graphTargetPickerActive: boolean = false
-  private rtsTargetPickerActive: boolean = false
-  private ephemerisTargetPickerActive: boolean = false
+  // graphTargetPickerActive / rtsTargetPickerActive / ephemerisTargetPickerActive 随 D7 移入控制器。
   // eclipseStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7，食相属天文派生域）。
-  private astroContextTimer: number = 0
+  // astroContextTimer 随 D7 移入 capability/AstroCalcController.ets（自持 sync/stop）。
   // 月相 / 天文计算上下文的请求态（moonPhaseRequestId / moonPhaseLoadingDays /
   // astroContextRequestId / astroContextRequestPending）随加载器下沉 state/AstroStore.ets（§14 B3-2）。
   // 大气观测辅助（atmoPressure / atmoTemperature / atmoExtinction / refractionOn，共 4 字段）
@@ -1022,7 +1060,7 @@ export struct WindowNativeNode {
   // capability/PolarScopeController.ets；几何（ControlWidth / FooterHeight / TopInset）仍留宿主。
   @State private polarScopeStore: PolarScopeStore = new PolarScopeStore()
   @State private pluginStore: PluginStore = new PluginStore()
-  private pluginFeatureLoading: string[] = []
+  // pluginFeatureLoading 随 D14 移入 capability/PluginFeatureController.ets（瞬时动作串）。
   @State private nebulaTextureStore: NebulaTextureStore = new NebulaTextureStore()
   // angleMeasureRequestId 已随 §14 B3-1 搬入 ToolsStore 的 `seq`（与 toggleAngleMeasure 同片）。
   // 航海星域状态已下沉 state/NavStarsStore.ets（review §2.7：Prop 风格 → Store 风格）。
@@ -1971,6 +2009,75 @@ export struct WindowNativeNode {
     return this.satelliteControllerImpl
   }
 
+  // D7：天文计算行为控制器惰性构造。桥经 HostCommandPort；picker/fileIo 经 HostMediaPort；
+  // 状态在 astro/ephemeris/wut/search store；DatePicker/animateTo/Scroller/tab 过渡与保留宿主方法
+  // （publishAstroPanelState / applyAtmosphereResponse / applySelectedObject）经宿主 hooks 回注。
+  private astroCalcCtl(): AstroCalcController {
+    if (this.astroCalcControllerImpl === null) {
+      const hooks: AstroCalcHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        publishAstroPanelState: (): void => { this.publishAstroPanelState() },
+        astroPanelContextActive: (): boolean => this.applicationInForeground && this.activePanel === 'astro' && this.panelVisible,
+        astroPanelOnScreen: (): boolean => this.panelVisible && this.activePanel === 'astro',
+        scrollAstroPanelToTop: (): void => { this.astroPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false }) },
+        saveAppSettings: (): void => { this.saveAppSettings() },
+        animateAstroIn: (durationMs: number, onFinish: () => void, action: () => void): void => {
+          this.getUIContext().animateTo({ duration: durationMs, curve: Curve.EaseIn, onFinish: onFinish }, action)
+        },
+        animateAstroOut: (durationMs: number, onFinish: () => void, action: () => void): void => {
+          this.getUIContext().animateTo({ duration: durationMs, curve: Curve.EaseOut, onFinish: onFinish }, action)
+        },
+        showDatePicker: (selected: Date, onAccept: (year: number | undefined, month: number | undefined, day: number | undefined) => void): void => {
+          this.getUIContext().showDatePickerDialog({
+            start: new Date('1900-01-01'),
+            end: new Date('2100-12-31'),
+            selected: selected,
+            onAccept: (value: DatePickerResult) => { onAccept(value.year, value.month, value.day) },
+            onCancel: () => {}
+          })
+        },
+        applySelectedObject: (result: StellariumBridgeResponse, fromRefresh: boolean, placement: string, userReselect: boolean): void => {
+          this.applySelectedObject(result, fromRefresh, placement, userReselect)
+        },
+        setPanel: (panel: string): void => { this.setPanel(panel) },
+        applyAtmosphereResponse: (result: StellariumBridgeResponse): void => { this.applyAtmosphereResponse(result) }
+      }
+      this.astroCalcControllerImpl = new AstroCalcController(
+        this.commandPort(), this.hostMediaPort, this.astroStore, this.ephemerisStore, this.wutStore, this.searchStore, hooks)
+    }
+    return this.astroCalcControllerImpl
+  }
+
+  // D14：插件功能行为控制器惰性构造。桥经 HostCommandPort；状态整体写 PluginStore；跨域路由
+  // （astro/search store、viewTab 宿主 @State、openSubPanel 壳层路由）经宿主 hooks 回注。
+  private pluginFeatureCtl(): PluginFeatureController {
+    if (this.pluginFeatureControllerImpl === null) {
+      const hooks: PluginFeatureHostHooks = {
+        refreshState: (): void => { this.refreshState() },
+        flashHint: (text: ResourceStr): void => { this.flashHint(text) },
+        panelChange: (panel: string, visible: boolean): void => {
+          this.activePanel = panel
+          this.panelVisible = visible
+          this.syncDockClockTimer()
+        },
+        refreshCatalogCategoriesIfSearchVisible: (): void => {
+          if (this.activePanel === 'search') this.catalogStore.loadObjectCatalogCategories(this.languageStore.languageRefreshSerial)
+        },
+        setViewTab: (value: number): void => { this.viewTab = value },
+        openSubPanel: (panel: string): void => { this.openSubPanel(panel) }
+      }
+      this.pluginFeatureControllerImpl = new PluginFeatureController(
+        this.commandPort(), this.pluginStore, this.searchStore, this.astroStore, hooks)
+    }
+    return this.pluginFeatureControllerImpl
+  }
+
   aboutToAppear(): void {
     hilog.info(0x0000, 'StellariumArkUI', '[privacy-probe] phase=main-page-appear')
     const localStorage = this.getUIContext().getSharedLocalStorage()
@@ -2126,7 +2233,7 @@ export struct WindowNativeNode {
         this.detailConnectorCtl().stopDetailAutoRefresh()
         this.stopTimePanelTimers()
         this.stopSkyCultureTimeFollowTimer()
-        this.stopAstroCalcContextTimer()
+        this.astroCalcCtl().stopAstroCalcContextTimer()
         this.telescopeStore.stopTelescopeLivePosition(false)
       },
       refreshState: (): void => { this.refreshState() },
@@ -2180,7 +2287,7 @@ export struct WindowNativeNode {
     this.skyCultureMakerStore.attachPort(hostPort, () => {})
     this.skyCultureMakerStore.attachHooks({
       applySkyCultureMakerDraft: (draft: SkyCultureMakerDraft): void => this.applySkyCultureMakerDraft(draft),
-      ensurePluginLoaded: (pluginName: string, callback: () => void, failureCallback?: () => void): void => this.ensurePluginLoaded(pluginName, callback, failureCallback),
+      ensurePluginLoaded: (pluginName: string, callback: () => void, failureCallback?: () => void): void => this.pluginFeatureCtl().ensurePluginLoaded(pluginName, callback, failureCallback),
       skyCultureMakerDraftFromResponse: (response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined => this.skyCultureMakerDraftFromResponse(response)
     })
     // §14 B1-6：卫星域有 publish* CLI 发布点（publishSatellitePanelState），
@@ -2223,9 +2330,9 @@ export struct WindowNativeNode {
       wutObservationTime: () => this.wutStore.wutObservationTime,
       loadWutTargets: () => { this.wutStore.loadWutTargets() },
       ephemerisCustomStartJD: () => dateToJD(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth, this.ephemerisStore.ephemerisStartDay, 0, 0),
-      fmtDateTime: (s: string | undefined) => this.fmtDateTime(s),
+      fmtDateTime: (s: string | undefined) => this.astroCalcCtl().fmtDateTime(s),
       hecLayoutPositions: (positions: Array<HeliocentricPosition>) => hecLayoutPositions(positions),
-      loadPlanetPositions: () => { this.loadPlanetPositions() }
+      loadPlanetPositions: () => { this.astroCalcCtl().loadPlanetPositions() }
     })
     // §14 B3-2：极轴镜加载器下沉 PolarScopeStore；「是否应刷新」谓词随 D5 移入
     // capability/PolarScopeController.ets（读 applicationInForeground + store.polarScopeVisible），
@@ -2316,7 +2423,7 @@ export struct WindowNativeNode {
       languageSerial: (): number => this.languageStore.languageRefreshSerial,
       publishSearchBrowserState: (): void => { this.publishSearchBrowserState() },
       categoryModuleIdFor: (category: string): string => this.catalogStore.categoryModuleIdFor(category),
-      ensurePluginLoaded: (pluginName: string, callback: () => void, failureCallback?: () => void): void => this.ensurePluginLoaded(pluginName, callback, failureCallback),
+      ensurePluginLoaded: (pluginName: string, callback: () => void, failureCallback?: () => void): void => this.pluginFeatureCtl().ensurePluginLoaded(pluginName, callback, failureCallback),
         celestialTitle: (nativeName: string, englishName: string): string => celestialTitle(nativeName, englishName),
       readSearchHistoryStorage: (): Promise<string> => this.readSearchHistoryStorage(),
       writeSearchHistoryStorage: (json: string): Promise<void> => this.writeSearchHistoryStorage(json)
@@ -2407,15 +2514,15 @@ export struct WindowNativeNode {
       }
       if (commandName === 'setAstroTab' || commandName === 'setAstroGroup') {
         if (this.panelVisible && this.activePanel === 'astro') {
-          if (commandName === 'setAstroTab') this.selectAstroTab(Number(event['payload']))
-          else this.selectAstroGroup(Number(event['payload']))
+          if (commandName === 'setAstroTab') this.astroCalcCtl().selectAstroTab(Number(event['payload']))
+          else this.astroCalcCtl().selectAstroGroup(Number(event['payload']))
         }
         this.publishAstroPanelState()
         return
       }
       if (commandName === 'setAstroFilter') {
         const parts = String(event['payload'] ?? '').split('|')
-        this.selectAstroFilter(parts[0], parts[1])
+        this.astroCalcCtl().selectAstroFilter(parts[0], parts[1])
         return
       }
       if (commandName === 'setAstroScroll') {
@@ -2503,7 +2610,7 @@ export struct WindowNativeNode {
       if (commandName === 'openPluginFeature') {
         const pluginId = String(event['payload'] ?? '').trim()
         if (pluginId.length > 0) {
-          this.openPluginFeature(pluginId)
+          this.pluginFeatureCtl().openPluginFeature(pluginId)
           hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] opened plugin feature=%{public}s', pluginId)
         } else {
           hilog.warn(0x0000, 'StellariumArkUI', '[cli-ui] rejected empty plugin feature')
@@ -2714,7 +2821,7 @@ export struct WindowNativeNode {
     if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
     this.stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
-    this.stopAstroCalcContextTimer()
+    this.astroCalcCtl().stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
     this.stopScriptStatusPolling()
     this.recordingCtl().stop()
@@ -2749,7 +2856,7 @@ export struct WindowNativeNode {
       this.syncDockClockTimer()
       this.syncSkyCultureTimeFollowTimer()
       this.polarScopeCtl().syncPolarScopeTimer()
-      this.syncAstroCalcContextTimer()
+      this.astroCalcCtl().syncAstroCalcContextTimer()
       this.telescopeStore.syncTelescopeLivePosition()
       return
     }
@@ -2763,7 +2870,7 @@ export struct WindowNativeNode {
     if (this.timeWheelController !== undefined) { this.timeWheelController.stop() }
     this.stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
-    this.stopAstroCalcContextTimer()
+    this.astroCalcCtl().stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
     this.detailConnectorCtl().stopDetailAutoRefresh()
     this.skyInputCtl().stop()
@@ -2814,28 +2921,6 @@ export struct WindowNativeNode {
     this.skyCultureTimeFollowTimer = setInterval(() => {
       this.refreshSkyCultureSimulationYear()
     }, 500)
-  }
-
-  private shouldRefreshAstroCalcContext(): boolean {
-    return this.applicationInForeground && this.activePanel === 'astro' && this.panelVisible
-  }
-
-  private stopAstroCalcContextTimer(): void {
-    if (this.astroContextTimer !== 0) {
-      clearInterval(this.astroContextTimer)
-      this.astroContextTimer = 0
-    }
-    this.astroStore.cancelAstroCalcContext()
-  }
-
-  private syncAstroCalcContextTimer(): void {
-    if (!this.shouldRefreshAstroCalcContext()) {
-      this.stopAstroCalcContextTimer()
-      return
-    }
-    if (this.astroContextTimer !== 0) return
-    this.astroStore.loadAstroCalcContext()
-    this.astroContextTimer = setInterval(() => { this.astroStore.loadAstroCalcContext() }, 1000)
   }
 
   private shouldRefreshTelescopePosition(): boolean {
@@ -2941,7 +3026,7 @@ export struct WindowNativeNode {
     this.stopTimePanelTimers()
     this.stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
-    this.stopAstroCalcContextTimer()
+    this.astroCalcCtl().stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
     if (!nextVisible) {
       this.schedulePanelDataLoad(panel, false)
@@ -3019,7 +3104,7 @@ export struct WindowNativeNode {
       }
       if (panel === 'time') {
         this.timeStore.loadTimeExtras()
-        this.ensurePluginLoaded('EquationOfTime', () => { this.equationOfTimeStore.loadEquationOfTime() })
+        this.pluginFeatureCtl().ensurePluginLoaded('EquationOfTime', () => { this.equationOfTimeStore.loadEquationOfTime() })
         this.timePanelTimer = setInterval(() => { this.refreshSimTimeLight() }, 125)
         this.timePanelFullTimer = setInterval(() => {
           this.refreshState()
@@ -3047,28 +3132,28 @@ export struct WindowNativeNode {
       } else if (panel === 'bookmarks') {
         this.bookmarkStore.loadBookmarks()
       } else if (panel === 'oculars') {
-        this.ensurePluginLoaded('Oculars', () => { this.telescopeStore.loadOculars(false) })
+        this.pluginFeatureCtl().ensurePluginLoaded('Oculars', () => { this.telescopeStore.loadOculars(false) })
       } else if (panel === 'mosaicCamera') {
-      this.ensurePluginLoaded('MosaicCamera', () => { this.mosaicStore.loadMosaicCamera() })
+      this.pluginFeatureCtl().ensurePluginLoaded('MosaicCamera', () => { this.mosaicStore.loadMosaicCamera() })
     } else if (panel === 'archaeoLines') {
-      this.ensurePluginLoaded('ArchaeoLines', () => { this.archaeoStore.loadArchaeoLines() })
+      this.pluginFeatureCtl().ensurePluginLoaded('ArchaeoLines', () => { this.archaeoStore.loadArchaeoLines() })
       } else if (panel === 'angleMeasure') {
-        this.ensurePluginLoaded('AngleMeasure', () => { this.tools.loadAngleMeasure() })
+        this.pluginFeatureCtl().ensurePluginLoaded('AngleMeasure', () => { this.tools.loadAngleMeasure() })
       } else if (panel === 'navStars') {
-        this.ensurePluginLoaded('NavStars', () => { this.navStarsStore.loadNavStars(false) })
+        this.pluginFeatureCtl().ensurePluginLoaded('NavStars', () => { this.navStarsStore.loadNavStars(false) })
       } else if (panel === 'satellites') {
         this.catalogStore.loadCatalogHealth()
-        this.ensurePluginLoaded('Satellites', () => { this.satelliteStore.loadSatellites(true, true) })
+        this.pluginFeatureCtl().ensurePluginLoaded('Satellites', () => { this.satelliteStore.loadSatellites(true, true) })
       } else if (panel === 'meteorshowers') {
-        this.ensurePluginLoaded('MeteorShowers', () => { this.meteorStore.loadMeteorShowers() })
+        this.pluginFeatureCtl().ensurePluginLoaded('MeteorShowers', () => { this.meteorStore.loadMeteorShowers() })
       } else if (panel === 'scenery3d') {
-        this.ensurePluginLoaded('Scenery3d', () => { this.sceneryStore.loadScenery3d() })
+        this.pluginFeatureCtl().ensurePluginLoaded('Scenery3d', () => { this.sceneryStore.loadScenery3d() })
       } else if (panel === 'nebulaTextures') {
-        this.ensurePluginLoaded('NebulaTextures', () => { this.nebulaTextureStore.loadNebulaTextureStatus() })
+        this.pluginFeatureCtl().ensurePluginLoaded('NebulaTextures', () => { this.nebulaTextureStore.loadNebulaTextureStatus() })
       } else if (panel === 'skyCultureMaker') {
         this.skyCultureMakerStore.loadSkyCultureMakerDraft()
       } else if (panel === 'pointerCoordinates') {
-        this.ensurePluginLoaded('PointerCoordinates', () => { this.overlayStore.loadPointerCoordinates() })
+        this.pluginFeatureCtl().ensurePluginLoaded('PointerCoordinates', () => { this.overlayStore.loadPointerCoordinates() })
       } else if (panel === 'observing') {
       } else if (panel === 'commands') {
         this.commandStore.loadCommandCatalog()
@@ -3170,16 +3255,14 @@ export struct WindowNativeNode {
     this.stopTimePanelTimers()
     this.stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
-    this.stopAstroCalcContextTimer()
+    this.astroCalcCtl().stopAstroCalcContextTimer()
     this.telescopeStore.stopTelescopeLivePosition(false)
     if (this.panelDataLoadTimer >= 0) {
       clearTimeout(this.panelDataLoadTimer)
       this.panelDataLoadTimer = -1
     }
     if (this.activePanel === 'search') {
-      this.graphTargetPickerActive = false
-      this.rtsTargetPickerActive = false
-      this.ephemerisTargetPickerActive = false
+      this.astroCalcCtl().clearTargetPickerFlags()
     }
     const closingObjectPanel = this.activePanel === 'object'
     this.panelNavigationStack = []
@@ -3586,15 +3669,6 @@ export struct WindowNativeNode {
 
   // loadScriptList / setScriptMetadata 已下沉 ScriptStore（§14 B2R-4）。
 
-  private pluginMetaLine(plugin: PluginItem): string {
-    const values: string[] = []
-    if (plugin.version && plugin.version.trim().length > 0) { values.push(I18n.t('resource_version') + ': ' + plugin.version.trim()) }
-    if (plugin.contact && plugin.contact.trim().length > 0) { values.push(I18n.t('resource_contact') + ': ' + plugin.contact.trim()) }
-    if (plugin.acknowledgements && plugin.acknowledgements.trim().length > 0) { values.push(I18n.t('resource_acknowledgements') + ': ' + plugin.acknowledgements.trim()) }
-    if (plugin.source && plugin.source.trim().length > 0) { values.push(I18n.t('resource_source') + ': ' + plugin.source.trim()) }
-    return values.join(' · ')
-  }
-
   private scriptImportFileName(uri: string): string {
     let name = uri.substring(uri.lastIndexOf('/') + 1)
     const queryIndex = name.indexOf('?')
@@ -3766,57 +3840,6 @@ export struct WindowNativeNode {
   }
 
   // 确保插件已加载，未加载时先 loadPlugin 再回调
-  private ensurePluginLoaded(pluginName: string, callback: () => void, failureCallback?: () => void): void {
-    if (this.pluginFeatureLoading.indexOf(pluginName) >= 0) {
-      hilog.info(0x0000, 'StellariumArkUI', 'Plugin feature load already pending: ' + pluginName)
-      return
-    }
-    this.pluginFeatureLoading = this.pluginFeatureLoading.concat([pluginName])
-    const finish = (): void => {
-      this.pluginFeatureLoading = this.pluginFeatureLoading.filter((id: string) => id !== pluginName)
-    }
-    this.callNativeWhenReady('getPluginList', '', (r: StellariumBridgeResponse) => {
-      const items = r.items as Array<PluginItem> | undefined
-      let loaded = false
-      if (items) {
-        for (let index = 0; index < items.length; index++) {
-          if (items[index].id === pluginName && items[index].loaded) {
-            loaded = true
-            break
-          }
-        }
-      }
-      if (loaded) {
-        finish()
-        callback()
-      } else {
-        hilog.info(0x0000, 'StellariumArkUI', 'Auto-loading plugin: ' + pluginName)
-        this.callInteractive('loadPlugin', pluginName, (loadResult: StellariumBridgeResponse) => {
-          finish()
-          if (loadResult.ok === true) {
-            this.updatePluginLoadedItem(pluginName, true)
-            // Loading a feature plugin must not rebuild unrelated panels. The
-            // catalog chips only need refreshing while the search panel is
-            // visible; doing it for every plugin caused a full-shell flash.
-            if (this.activePanel === 'search') this.catalogStore.loadObjectCatalogCategories(this.languageStore.languageRefreshSerial)
-            callback()
-          }
-          else {
-            this.flashHint(I18n.t('plugin_load_failed'))
-            if (failureCallback !== undefined) failureCallback()
-          }
-        }, () => {
-          finish()
-          this.flashHint(I18n.t('plugin_load_failed'))
-          if (failureCallback !== undefined) failureCallback()
-        })
-      }
-    }, 0, 100, 15, () => {
-      finish()
-      if (failureCallback !== undefined) failureCallback()
-    })
-  }
-
   // ===== 流星雨（MeteorShowers 插件桥）=====
   // loadMeteorShowers / setMeteorShowersFlag 已随 §14 B3-1 同片搬入 state/MeteorStore.ets。
 
@@ -4444,185 +4467,6 @@ export struct WindowNativeNode {
       + ' ' + date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0')
   }
 
-  private jumpToRts(key: string): void {
-    const jd = this.astroStore.rtsData.get(key) ?? '0'
-    if (parseFloat(jd) <= 0) {
-      this.flashHint('该天体在当前位置没有这个事件。')
-      return
-    }
-    this.callInteractive('setJD', jd, (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.refreshState()
-    })
-  }
-
-  private async exportCurrentAstroCsv(): Promise<void> {
-    this.astroStore.updateAstroCalcSnapshot()
-    const exportData = this.astroStore.astroCsvExport(this.wutStore.wutTargets, this.wutStore.wutObservationTime)
-    if (exportData === undefined || exportData.rows.length === 0) {
-      this.flashHint('当前页没有可导出的计算结果，请先生成数据。')
-      return
-    }
-    this.astroStore.astroExporting = true
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const saveOptions = new picker.DocumentSaveOptions()
-      saveOptions.newFileNames = ['astrocalc-' + Date.now().toString() + '.csv']
-      saveOptions.fileSuffixChoices = ['CSV 表格|.csv']
-      const viewPicker = new picker.DocumentViewPicker(context)
-      const selectedUris = await viewPicker.save(saveOptions)
-      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
-        this.flashHint('已取消保存。')
-        return
-      }
-      const scratchPath = context.cacheDir + '/astrocalc-' + Date.now().toString() + '.csv'
-      const file = fileIo.openSync(scratchPath, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE)
-      const encoder = new util.TextEncoder('utf-8')
-      const bytes = encoder.encodeInto(this.astroStore.makeAstroCsv(exportData))
-      fileIo.writeSync(file.fd, bytes.buffer)
-      fileIo.closeSync(file)
-      await fileIo.copy(fileUri.getUriFromPath(scratchPath), selectedUris[0])
-      try { fileIo.unlinkSync(scratchPath) } catch (error) {}
-      this.flashHint('已保存 ' + exportData.title + ' CSV。')
-    } catch (error) {
-      hilog.error(0x0000, 'StellariumArkUI', 'AstroCalc CSV export failed: %{public}s', String(error))
-      this.flashHint('保存失败，请检查文件管理权限后重试。')
-    } finally {
-      this.astroStore.astroExporting = false
-    }
-  }
-
-  private chooseRtsCalendarStartDate(): void {
-    this.pickedDate = new Date(this.astroStore.rtsCalendarStartYear, this.astroStore.rtsCalendarStartMonth - 1, this.astroStore.rtsCalendarStartDay)
-    this.getUIContext().showDatePickerDialog({
-      start: new Date('1900-01-01'),
-      end: new Date('2100-12-31'),
-      selected: this.pickedDate,
-      onAccept: (value: DatePickerResult) => {
-        this.astroStore.rtsCalendarStartYear = value.year ?? this.astroStore.rtsCalendarStartYear
-        this.astroStore.rtsCalendarStartMonth = (value.month ?? (this.astroStore.rtsCalendarStartMonth - 1)) + 1
-        this.astroStore.rtsCalendarStartDay = value.day ?? this.astroStore.rtsCalendarStartDay
-        this.astroStore.rtsCalendarStartOffsetDays = -1
-        this.astroStore.markRtsCalendarForRegeneration()
-      },
-      onCancel: () => {}
-    })
-  }
-
-  private jumpToRtsCalendar(day: RtsCalendarDay): void {
-    const jd = day.transitJD ?? day.riseJD ?? day.setJD ?? 0
-    if (jd <= 0) return
-    this.callInteractive('setJD', jd.toString(), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.refreshState()
-    })
-  }
-
-  private chooseEphemerisStartDate(): void {
-    this.pickedDate = new Date(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth - 1, this.ephemerisStore.ephemerisStartDay)
-    this.getUIContext().showDatePickerDialog({
-      start: new Date('1900-01-01'),
-      end: new Date('2100-12-31'),
-      selected: this.pickedDate,
-      onAccept: (value: DatePickerResult) => {
-        this.ephemerisStore.ephemerisStartYear = value.year ?? this.ephemerisStore.ephemerisStartYear
-        this.ephemerisStore.ephemerisStartMonth = (value.month ?? (this.ephemerisStore.ephemerisStartMonth - 1)) + 1
-        this.ephemerisStore.ephemerisStartDay = value.day ?? this.ephemerisStore.ephemerisStartDay
-        this.astroStore.ephemerisStartOffsetDays = -1
-        this.astroStore.loadEphemeris()
-      },
-      onCancel: () => {}
-    })
-  }
-
-  private jumpToEphemerisRow(row: EphemerisRow): void {
-    if (row.jd === undefined || row.jd <= 0) return
-    this.callInteractive('setJD', String(row.jd), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.refreshState()
-        this.astroStore.loadEphemeris()
-      }
-    })
-  }
-
-  private chooseGraphStartDate(): void {
-    this.pickedDate = new Date(this.astroStore.graphStartYear, this.astroStore.graphStartMonth - 1, this.astroStore.graphStartDay)
-    this.getUIContext().showDatePickerDialog({
-      start: new Date('1900-01-01'),
-      end: new Date('2100-12-31'),
-      selected: this.pickedDate,
-      onAccept: (value: DatePickerResult) => {
-        this.astroStore.graphStartYear = value.year ?? this.astroStore.graphStartYear
-        this.astroStore.graphStartMonth = (value.month ?? (this.astroStore.graphStartMonth - 1)) + 1
-        this.astroStore.graphStartDay = value.day ?? this.astroStore.graphStartDay
-        this.astroStore.graphStartOffsetDays = -1
-        this.reloadCurrentGraph()
-      },
-      onCancel: () => {}
-    })
-  }
-
-  private reloadCurrentGraph(): void {
-    if (this.astroStore.graphMode === 2) this.astroStore.loadAnnualElevation()
-    else if (this.astroStore.graphMode === 3) this.astroStore.loadObservabilityCalendar()
-    else if (this.astroStore.graphMode === 4) this.astroStore.loadLunarElongation()
-    else if (this.astroStore.graphMode === 5) this.astroStore.loadPlanetTimeSeries()
-    else this.astroStore.loadAltAzCurve()
-  }
-
-  private openGraphTargetPicker(): void {
-    this.graphTargetPickerActive = true
-    this.searchStore.searchText = ''
-    this.searchStore.searchSuggestions = []
-    this.searchStore.loadCategoryObjects('planet')
-    this.setPanel('search')
-  }
-
-  private openRtsTargetPicker(): void {
-    this.rtsTargetPickerActive = true
-    this.searchStore.searchText = ''
-    this.searchStore.searchSuggestions = []
-    this.searchStore.loadCategoryObjects('planet')
-    this.setPanel('search')
-  }
-
-  private openEphemerisTargetPicker(): void {
-    this.ephemerisTargetPickerActive = true
-    this.searchStore.searchText = ''
-    this.searchStore.searchSuggestions = []
-    this.searchStore.loadCategoryObjects('planet')
-    this.setPanel('search')
-  }
-
-  private jumpToObservabilityDay(day: ObservabilityDay): void {
-    if (day.bestJD === undefined || day.bestJD <= 0) return
-    this.callInteractive('setJD', String(day.bestJD), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.refreshState()
-    })
-  }
-
-  private chooseEclipseStartDate(): void {
-    this.pickedDate = new Date(this.astroStore.eclipseStartYear, this.astroStore.eclipseStartMonth - 1, this.astroStore.eclipseStartDay)
-    this.getUIContext().showDatePickerDialog({
-      start: new Date('1900-01-01'),
-      end: new Date('2100-12-31'),
-      selected: this.pickedDate,
-      onAccept: (value: DatePickerResult) => {
-        this.astroStore.eclipseStartYear = value.year ?? this.astroStore.eclipseStartYear
-        this.astroStore.eclipseStartMonth = (value.month ?? (this.astroStore.eclipseStartMonth - 1)) + 1
-        this.astroStore.eclipseStartDay = value.day ?? this.astroStore.eclipseStartDay
-        this.astroStore.eclipseStartOffsetDays = -1
-        this.astroStore.reloadEclipses()
-      },
-      onCancel: () => {}
-    })
-  }
-
-  private jumpToPhenomenon(item: PhenomenonItem): void {
-    if (item.jd === undefined || item.jd <= 0) return
-    this.callInteractive('setJD', String(item.jd), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.refreshState()
-    })
-  }
-
   private addWutTargetToObservingList(target: WutTarget): void {
     const name = (target.englishName ?? '').trim()
     if (name.length === 0 || this.obsListStore.observingList.includes(name)) { return }
@@ -4637,24 +4481,6 @@ export struct WindowNativeNode {
     this.flashHint(I18n.t('i0079'))
   }
 
-  private jumpToWutTarget(target: WutTarget): void {
-    if (target.jd === undefined || target.jd <= 0 || target.englishName === undefined) return
-    const targetName = target.englishName
-    this.callInteractive('setJD', String(target.jd), (timeResult: StellariumBridgeResponse) => {
-      if (timeResult.ok !== true) { return }
-      // Selecting is not centring. searchObject only marks the target; the
-      // engine's own handler never moves the view (on device the log showed a
-      // bare setJD + searchObject and no moveToSelected*/setTracking command at
-      // all), so this row button looked dead. Run the same post-selection
-      // placement the global search uses - applySelectedObject with
-      // placement 'center' - so the row centres like every other entry point.
-      this.callInteractive('searchObject', targetName, (selectResult: StellariumBridgeResponse) => {
-        if (selectResult.found !== true) { return }
-          this.applySelectedObject(selectResult, false, 'center', true)
-      })
-    })
-  }
-
   // 大气参数回包写入 AtmosphereStore。保留宿主实现（§13.1 规则 6）：与 applyAtmosphere 共用，
   // 并由 TimeStore.loadTimeExtras 经 TimeHostHooks 注入调用（§14 B2R-2）。
   private applyAtmosphereResponse(r: StellariumBridgeResponse): void {
@@ -4663,11 +4489,6 @@ export struct WindowNativeNode {
     if (r.temperature !== undefined) this.atmosphereStore.atmoTemperature = r.temperature
     if (r.extinction !== undefined) this.atmosphereStore.atmoExtinction = r.extinction
     this.atmosphereStore.refractionOn = (r.refractionOn === true)
-  }
-
-  private applyAtmosphere(pressure: number, temperature: number, extinction: number): void {
-    this.applyAtmosphereResponse(this.callNative('setAtmosphereParams',
-      JSON.stringify({ pressure: pressure, temperature: temperature, extinction: extinction })))
   }
 
   // ---- 天文计算辅助：高度曲线 ----
@@ -4681,122 +4502,19 @@ export struct WindowNativeNode {
     return position.type
   }
 
-  // ---- 通用格式化：把 ISO 时间截成 "MM-DD HH:MM" / "HH:MM" ----
-  private fmtDateTime(s: string | undefined): string {
-    if (s === undefined || s.length === 0) return '--'
-    return s.replace('T', ' ').slice(0, 16)
-  }
-
-  private fmtClock(s: string | undefined): string {
-    if (s === undefined || s.length < 16) return '--:--'
-    return s.slice(11, 16)
-  }
-
-  private fmtEphemerisDate(s: string | undefined): string {
-    if (s === undefined || s.length < 16) return '--'
-    return s.slice(5, 16).replace('T', ' ')
-  }
-
-  private fmtNum(v: number | undefined, digits: number, suffix: string): string {
-    if (v === undefined) return '--'
-    return v.toFixed(digits) + suffix
-  }
-
+  // §15.6-4 保留的 CLI 发布点：本体留宿主，「天文计算」tab 过渡态经 D7 控制器回读
+  //（requestedAstroTab / astroTransitionSerial 即原 astroRequestedTab / astroTransitionId）。
   private publishAstroPanelState(): void {
+    const requestedTab = this.astroCalcCtl().requestedAstroTab()
     AppStorage.setOrCreate('stellariumAstroPanelState', JSON.stringify({
       ok: true, group: this.astroStore.astroGroup, tab: this.astroStore.astroTab,
-      requestedTab: this.astroRequestedTab, transitionId: this.astroTransitionId,
-      transitioning: this.astroRequestedTab >= 0,
+      requestedTab: requestedTab, transitionId: this.astroCalcCtl().astroTransitionSerial(),
+      transitioning: requestedTab >= 0,
       loading: this.wutStore.wutLoading,
       period: this.wutStore.wutPeriod, altitude: this.wutStore.wutMinAltitude,
       magnitude: this.wutStore.wutMaxMagnitude, direction: this.wutStore.wutDirection,
       scrollY: this.activePanel === 'astro' && this.panelVisible ? this.astroPanelScroller.currentOffset().yOffset : 0
     }))
-  }
-
-  private selectAstroFilter(key: string, value: string): void {
-    if (key === 'period' && ['evening', 'midnight', 'morning', 'night'].includes(value)) {
-      if (this.wutStore.wutPeriod === value) return
-      this.wutStore.wutPeriod = value
-    } else if (key === 'altitude' && ['0', '10', '20', '30', '45'].includes(value)) {
-      if (this.wutStore.wutMinAltitude === Number(value)) return
-      this.wutStore.wutMinAltitude = Number(value)
-    } else if (key === 'magnitude' && ['4', '6', '8', '10'].includes(value)) {
-      if (this.wutStore.wutMaxMagnitude === Number(value)) return
-      this.wutStore.wutMaxMagnitude = Number(value)
-    } else if (key === 'direction' && ['all', 'north', 'east', 'south', 'west'].includes(value)) {
-      if (this.wutStore.wutDirection === value) return
-      this.wutStore.wutDirection = value
-    } else return
-    this.publishAstroPanelState()
-    this.wutStore.loadWutTargets()
-  }
-
-  private selectAstroGroup(group: number): void {
-    if (group < 0 || group > 2) return
-    const tabs = astroTabItemsForGroup(group)
-    const currentTab = tabs.find((item: TabItem) => item.id === this.astroStore.astroTab)
-    this.selectAstroTab(currentTab !== undefined ? currentTab.id : tabs[0].id)
-  }
-
-  private selectAstroTab(tab: number): void {
-    if (!Number.isInteger(tab) || tab < 0 || tab > 9 || tab === this.astroRequestedTab) return
-    if (tab === this.astroStore.astroTab && this.astroRequestedTab < 0) return
-    const order: number[] = [5, 2, 4, 9, 0, 1, 6, 3, 7, 8]
-    const direction: number = order.indexOf(tab) >= order.indexOf(this.astroStore.astroTab) ? 1 : -1
-    const transitionId = ++this.astroTransitionId
-    this.astroRequestedTab = tab
-    this.publishAstroPanelState()
-    this.getUIContext().animateTo({ duration: 100, curve: Curve.EaseIn, onFinish: () => {
-      if (transitionId !== this.astroTransitionId) return
-      if (!this.panelVisible || this.activePanel !== 'astro') {
-        this.astroRequestedTab = -1
-        this.astroStore.astroContentOpacity = 1
-        this.astroStore.astroContentOffsetX = 0
-        this.publishAstroPanelState()
-        return
-      }
-      this.astroStore.astroTab = tab
-      this.astroStore.astroGroup = astroGroupForTab(tab)
-      this.astroPanelScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false })
-      this.astroStore.astroContentOffsetX = direction * 10
-      this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut, onFinish: () => {
-        if (transitionId !== this.astroTransitionId) return
-        this.astroRequestedTab = -1
-        this.publishAstroPanelState()
-        if (!this.panelVisible || this.activePanel !== 'astro') return
-        this.saveAppSettings()
-        this.astroStore.loadAstroTab(tab)
-      } }, () => {
-        this.astroStore.astroContentOpacity = 1
-        this.astroStore.astroContentOffsetX = 0
-      })
-    } }, () => {
-      this.astroStore.astroContentOpacity = 0
-      this.astroStore.astroContentOffsetX = (0 - direction) * 8
-    })
-  }
-
-  private openAstroTargetPicker(): void {
-    if (this.astroStore.astroTab === 2) {
-      this.openRtsTargetPicker()
-    } else if (this.astroStore.astroTab === 4) {
-      this.openGraphTargetPicker()
-    } else {
-      this.openEphemerisTargetPicker()
-    }
-  }
-
-  private jumpToMoonPhase(item: MoonPhaseItem): void {
-    if (item.jd === undefined || item.jd <= 0) return
-    this.callInteractive('setJD', String(item.jd), () => { this.refreshState() })
-  }
-
-  private jumpToAlmanacSeason(event: SeasonEvent): void {
-    if (event.jd === undefined || event.jd <= 0) return
-    this.callInteractive('setJD', String(event.jd), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.refreshState()
-    })
   }
 
   private selectSkyCulture(id: string): void {
@@ -5925,84 +5643,6 @@ export struct WindowNativeNode {
     }
   }
 
-  private updatePluginLoadedItem(id: string, loaded: boolean): void {
-    this.pluginStore.pluginList = this.pluginStore.pluginList.map((item: PluginItem) => {
-      if (item.id !== id) return item
-      return {
-        id: item.id,
-        name: item.name,
-        loaded: loaded,
-        loadAtStartup: item.loadAtStartup,
-        description: item.description,
-        authors: item.authors,
-        contact: item.contact,
-        version: item.version,
-        license: item.license,
-        acknowledgements: item.acknowledgements,
-        hasPreviewImage: item.hasPreviewImage,
-        source: item.source
-      }
-    })
-  }
-
-  private pluginFeatureDestination(id: string): string {
-    const route = pluginFeatureRoute(id)
-    if (route.kind === 'control') return I18n.format('plugin_destination_control', [pluginHostName(route.panel)])
-    if (route.kind === 'catalog') return I18n.format('plugin_destination_catalog', [pluginZh(id)])
-    if (route.kind === 'host') {
-      let destination = pluginHostName(route.panel)
-      if (id === 'ObjectVisibility') destination += ' > ' + pluginZh('Observability')
-      else destination += ' > ' + pluginZh(id)
-      return I18n.format('plugin_destination_host', [destination])
-    }
-    if (route.kind === 'network') return I18n.t('plugin_network_disabled')
-    if (route.kind === 'offline') return I18n.t('plugin_offline_disabled')
-    return I18n.t('plugin_no_arkui_panel')
-  }
-
-  private pluginFeatureIsActionable(id: string): boolean {
-    const kind = pluginFeatureRoute(id).kind
-    return kind === 'control' || kind === 'catalog' || kind === 'host'
-  }
-
-  private pluginFeatureActionLabel(id: string): string {
-    return pluginFeatureRoute(id).kind === 'catalog'
-      ? I18n.t('plugin_open_catalog')
-      : I18n.t('plugin_open_feature')
-  }
-
-  private openPluginFeature(id: string): void {
-    const route = pluginFeatureRoute(id)
-    if (route.kind === 'offline') {
-      this.flashHint(I18n.t('plugin_offline_disabled'))
-      return
-    }
-    if (route.kind === 'unavailable' || route.panel.length === 0) {
-      this.flashHint(I18n.t('plugin_no_arkui_panel'))
-      return
-    }
-    if (id === 'TelescopeControl') {
-      this.openPluginFeatureAfterLoad(id, route)
-      return
-    }
-    this.ensurePluginLoaded(id, () => { this.openPluginFeatureAfterLoad(id, route) }, () => {
-      this.flashHint(I18n.t('plugin_load_failed'))
-    })
-  }
-
-  private openPluginFeatureAfterLoad(id: string, route: PluginFeatureRoute): void {
-    if (route.astroTab !== undefined) this.astroStore.astroTab = route.astroTab
-    if (route.graphMode !== undefined) this.astroStore.graphMode = route.graphMode
-    if (route.layerTab !== undefined) this.viewTab = route.layerTab
-    if (route.catalogModuleId !== undefined) {
-      this.searchStore.searchText = ''
-      this.searchStore.searchCategory = 'module:' + route.catalogModuleId
-      this.searchStore.loadCategoryObjects(this.searchStore.searchCategory, route.catalogModuleId)
-      this.searchStore.pendingPluginCatalogId = route.catalogModuleId
-    }
-    this.openSubPanel(route.panel)
-  }
-
     private loadFov(): void {
     this.callInteractive('getFieldOfView', '', (r: StellariumBridgeResponse) => {
       if (r.ok === true && typeof r.fov === 'number') {
@@ -6020,39 +5660,6 @@ export struct WindowNativeNode {
 
   private setFovMarkerSetting(setting: string, value: number): void {
     this.callInteractive('setFovMarkerSetting', setting + '|' + value.toFixed(1), () => {})
-  }
-
-private loadPlanetPositions(): void {
-    this.astroStore.updateAstroCalcSnapshot()
-    const requestId = ++this.planetPositionsRequestSequence
-    this.astroStore.planetPositions = []
-    this.astroStore.planetPositionsError = ''
-    this.astroStore.planetPositionsLoading = true
-    this.callInteractive('getObjectPositions', '', (r: StellariumBridgeResponse) => {
-      if (requestId !== this.planetPositionsRequestSequence) return
-      this.astroStore.planetPositionsLoading = false
-      if (r.ok === true && Array.isArray(r.items)) {
-        this.astroStore.planetPositions = (r.items as Array<PlanetPosition>).map((p: PlanetPosition): PlanetPosition => ({
-          name: p.name,
-          englishName: p.englishName,
-          rightAscension: p.rightAscension,
-          declination: p.declination,
-          altitude: Math.round(p.altitude * 10) / 10,
-          azimuth: Math.round(p.azimuth * 10) / 10,
-          magnitude: Math.round(p.magnitude * 100) / 100,
-          distanceAU: p.distanceAU,
-          angularSizeArcmin: p.angularSizeArcmin,
-          transit: p.transit,
-        }))
-        if (this.astroStore.planetPositions.length === 0) this.astroStore.planetPositionsError = '当前没有可显示的行星位置。'
-      } else {
-        this.astroStore.planetPositionsError = r.error ?? '行星位置计算失败，请点刷新后重试。'
-      }
-    }, () => {
-      if (requestId !== this.planetPositionsRequestSequence) return
-      this.astroStore.planetPositionsLoading = false
-      this.astroStore.planetPositionsError = '行星位置计算失败，请点刷新后重试。'
-    })
   }
 
   private selectLandscape(id: string, name: string): void {
@@ -6599,9 +6206,9 @@ private loadPlanetPositions(): void {
       if (result.found === true) {
         const selectedEnglishName = result.englishName ?? result.name ?? query
         const observerPlanetSelection = this.sessionToolStore.isObserverPlanetSelection(selectedEnglishName)
-        const returnToGraph = this.graphTargetPickerActive
-        const returnToRts = this.rtsTargetPickerActive
-        const returnToEphemeris = this.ephemerisTargetPickerActive
+        const returnToGraph = this.astroCalcCtl().graphPickerActive()
+        const returnToRts = this.astroCalcCtl().rtsPickerActive()
+        const returnToEphemeris = this.astroCalcCtl().ephemerisPickerActive()
         const returnToAstroCalc = returnToGraph || returnToRts || returnToEphemeris
         // Close the search sheet before calculating the target's final safe
         // point. Otherwise the first navigation avoids the old 9/10 sheet,
@@ -6618,15 +6225,15 @@ private loadPlanetPositions(): void {
         const selectionPlacement = placement.length > 0 ? placement : (returnToAstroCalc ? '' : 'center')
         this.applySelectedObject(result, false, selectionPlacement, true)
         if (returnToGraph) {
-          this.graphTargetPickerActive = false
+          this.astroCalcCtl().clearTargetPickerFlags()
           this.astroStore.astroTab = 4
           this.setPanel('astro')
         } else if (returnToRts) {
-          this.rtsTargetPickerActive = false
+          this.astroCalcCtl().clearTargetPickerFlags()
           this.astroStore.astroTab = 2
           this.setPanel('astro')
         } else if (returnToEphemeris) {
-          this.ephemerisTargetPickerActive = false
+          this.astroCalcCtl().clearTargetPickerFlags()
           this.astroStore.astroTab = 1
           this.setPanel('astro')
           this.astroStore.loadEphemeris()
@@ -9772,7 +9379,7 @@ private loadPlanetPositions(): void {
         onAdjustJulian: (scale: string, direction: number) => { this.julianStore.adjustJulianDate(scale, direction) },
         onApplyJulian: (scale: string) => { this.julianStore.applyJulianDateInput(scale) },
         onNightMode: (enabled: boolean) => { this.nightModeStore.applyNightMode(enabled, true) },
-        onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.applyAtmosphere(pressure, temperature, extinction) },
+        onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.astroCalcCtl().applyAtmosphere(pressure, temperature, extinction) },
         onPickDate: (year: number, monthIndex: number, day: number) => {
           this.timeStore.manualYear = year; this.timeStore.manualMonth = monthIndex + 1; this.timeStore.manualDay = day
         },
@@ -10047,10 +9654,10 @@ private loadPlanetPositions(): void {
         lineColor: this.nightModeStore.nmBorder(),
         inputColor: this.nightModeStore.nmInput(),
         informationMaskHas: (key: string) => { return this.infoWindowStore.informationMaskHas(key) },
-        pluginMetaLine: (plugin: PluginItem) => { return this.pluginMetaLine(plugin) },
-        pluginFeatureDestination: (id: string) => { return this.pluginFeatureDestination(id) },
-        pluginFeatureIsActionable: (id: string) => { return this.pluginFeatureIsActionable(id) },
-        pluginFeatureActionLabel: (id: string) => { return this.pluginFeatureActionLabel(id) },
+        pluginMetaLine: (plugin: PluginItem) => { return this.pluginFeatureCtl().pluginMetaLine(plugin) },
+        pluginFeatureDestination: (id: string) => { return this.pluginFeatureCtl().pluginFeatureDestination(id) },
+        pluginFeatureIsActionable: (id: string) => { return this.pluginFeatureCtl().pluginFeatureIsActionable(id) },
+        pluginFeatureActionLabel: (id: string) => { return this.pluginFeatureCtl().pluginFeatureActionLabel(id) },
         scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
         hasSelectedObject: () => { return this.objectDetailStore.hasSelectedObject() },
@@ -10078,7 +9685,7 @@ private loadPlanetPositions(): void {
         toggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
         confirmPrivacyRevocation: () => { this.confirmPrivacyRevocation() },
         loadPluginList: () => { this.pluginStore.loadPluginList() },
-        openPluginFeature: (id: string) => { this.openPluginFeature(id) },
+        openPluginFeature: (id: string) => { this.pluginFeatureCtl().openPluginFeature(id) },
         playScriptByName: (filename: string) => { this.scriptStore.playScriptByName(filename) },
         triggerAction: (actionId: string) => { this.triggerAction(actionId) },
         moveToSelectedObject: () => { this.moveToSelectedObject() },
@@ -10115,18 +9722,18 @@ private loadPlanetPositions(): void {
           callNative: (name: string, payload?: string) => { this.callNative(name, payload) },
           celestialPositionSubtitle: (position: CelestialPosition) => this.celestialPositionSubtitle(position),
           celestialPositionTitle: (position: CelestialPosition) => celestialTitle(position.name, position.englishName),
-          chooseEclipseStartDate: () => { this.chooseEclipseStartDate() },
-          chooseEphemerisStartDate: () => { this.chooseEphemerisStartDate() },
-          chooseGraphStartDate: () => { this.chooseGraphStartDate() },
-          chooseRtsCalendarStartDate: () => { this.chooseRtsCalendarStartDate() },
+          chooseEclipseStartDate: () => { this.astroCalcCtl().chooseEclipseStartDate() },
+          chooseEphemerisStartDate: () => { this.astroCalcCtl().chooseEphemerisStartDate() },
+          chooseGraphStartDate: () => { this.astroCalcCtl().chooseGraphStartDate() },
+          chooseRtsCalendarStartDate: () => { this.astroCalcCtl().chooseRtsCalendarStartDate() },
           eclipseStartOptionLabel: (offsetDays: number) => this.astroStore.eclipseStartOptionLabel(offsetDays),
           ephemerisStartOptionLabel: (offsetDays: number) => this.ephemerisStore.ephemerisStartOptionLabel(offsetDays),
-          exportCurrentAstroCsv: () => this.exportCurrentAstroCsv(),
+          exportCurrentAstroCsv: () => this.astroCalcCtl().exportCurrentAstroCsv(),
           filteredEclipses: () => this.astroStore.filteredEclipses(),
-          fmtClock: (s: string | undefined) => this.fmtClock(s),
-          fmtDateTime: (s: string | undefined) => this.fmtDateTime(s),
-          fmtEphemerisDate: (s: string | undefined) => this.fmtEphemerisDate(s),
-          fmtNum: (v: number | undefined, digits: number, suffix: string) => this.fmtNum(v, digits, suffix),
+          fmtClock: (s: string | undefined) => this.astroCalcCtl().fmtClock(s),
+          fmtDateTime: (s: string | undefined) => this.astroCalcCtl().fmtDateTime(s),
+          fmtEphemerisDate: (s: string | undefined) => this.astroCalcCtl().fmtEphemerisDate(s),
+          fmtNum: (v: number | undefined, digits: number, suffix: string) => this.astroCalcCtl().fmtNum(v, digits, suffix),
           graphCustomStartLabel: () => this.astroStore.graphCustomStartLabel(),
           graphTargetLabel: () => this.astroStore.graphTargetLabel(),
           hasSelectedObject: () => this.objectDetailStore.hasSelectedObject(),
@@ -10135,14 +9742,14 @@ private loadPlanetPositions(): void {
           hecPointTop: (position: HeliocentricPosition) => hecPointTop(position),
           hecTitle: (position: HeliocentricPosition) => celestialTitle(position.name, position.englishName),
           jdToDateStr: (jd: string) => this.jdToDateStr(jd),
-          jumpToAlmanacSeason: (event: SeasonEvent) => { this.jumpToAlmanacSeason(event) },
-          jumpToEphemerisRow: (row: EphemerisRow) => { this.jumpToEphemerisRow(row) },
-          jumpToMoonPhase: (item: MoonPhaseItem) => { this.jumpToMoonPhase(item) },
-          jumpToObservabilityDay: (day: ObservabilityDay) => { this.jumpToObservabilityDay(day) },
-          jumpToPhenomenon: (item: PhenomenonItem) => { this.jumpToPhenomenon(item) },
-          jumpToRts: (key: string) => { this.jumpToRts(key) },
-          jumpToRtsCalendar: (day: RtsCalendarDay) => { this.jumpToRtsCalendar(day) },
-          jumpToWutTarget: (target: WutTarget) => { this.jumpToWutTarget(target) },
+          jumpToAlmanacSeason: (event: SeasonEvent) => { this.astroCalcCtl().jumpToAlmanacSeason(event) },
+          jumpToEphemerisRow: (row: EphemerisRow) => { this.astroCalcCtl().jumpToEphemerisRow(row) },
+          jumpToMoonPhase: (item: MoonPhaseItem) => { this.astroCalcCtl().jumpToMoonPhase(item) },
+          jumpToObservabilityDay: (day: ObservabilityDay) => { this.astroCalcCtl().jumpToObservabilityDay(day) },
+          jumpToPhenomenon: (item: PhenomenonItem) => { this.astroCalcCtl().jumpToPhenomenon(item) },
+          jumpToRts: (key: string) => { this.astroCalcCtl().jumpToRts(key) },
+          jumpToRtsCalendar: (day: RtsCalendarDay) => { this.astroCalcCtl().jumpToRtsCalendar(day) },
+          jumpToWutTarget: (target: WutTarget) => { this.astroCalcCtl().jumpToWutTarget(target) },
           loadAlmanac: () => { this.astroStore.loadAlmanac() },
           loadAltAzCurve: () => { this.astroStore.loadAltAzCurve() },
           loadAnnualElevation: () => { this.astroStore.loadAnnualElevation() },
@@ -10156,7 +9763,7 @@ private loadPlanetPositions(): void {
           loadPhenomena: () => { this.astroStore.loadPhenomena() },
           loadPlanetCalc: () => { this.astroStore.loadPlanetCalc() },
           loadPlanetPairDistance: () => { this.astroStore.loadPlanetPairDistance() },
-          loadPlanetPositions: () => { this.loadPlanetPositions() },
+          loadPlanetPositions: () => { this.astroCalcCtl().loadPlanetPositions() },
           loadPlanetTimeSeries: () => { this.astroStore.loadPlanetTimeSeries() },
           loadPlanetaryTransits: () => { this.astroStore.loadPlanetaryTransits() },
           loadRTS: () => { this.astroStore.loadRTS() },
@@ -10168,10 +9775,10 @@ private loadPlanetPositions(): void {
           lunarElongationLineTop: () => this.astroStore.lunarElongationLineTop(),
           lunarElongationNowLabel: () => this.astroStore.lunarElongationNowLabel(),
           markRtsCalendarForRegeneration: () => { this.astroStore.markRtsCalendarForRegeneration() },
-          openAstroTargetPicker: () => { this.openAstroTargetPicker() },
-          openEphemerisTargetPicker: () => { this.openEphemerisTargetPicker() },
-          openGraphTargetPicker: () => { this.openGraphTargetPicker() },
-          openRtsTargetPicker: () => { this.openRtsTargetPicker() },
+          openAstroTargetPicker: () => { this.astroCalcCtl().openAstroTargetPicker() },
+          openEphemerisTargetPicker: () => { this.astroCalcCtl().openEphemerisTargetPicker() },
+          openGraphTargetPicker: () => { this.astroCalcCtl().openGraphTargetPicker() },
+          openRtsTargetPicker: () => { this.astroCalcCtl().openRtsTargetPicker() },
           phenomenaBodyName: (body: string) => this.astroStore.phenomenaBodyName(body),
           planetPairBarWidth: () => this.astroStore.planetPairBarWidth(),
           planetPairCurrentIndex: () => this.astroStore.planetPairCurrentIndex(),
@@ -10180,13 +9787,13 @@ private loadPlanetPositions(): void {
           planetTimeSeriesSegmentWidth: () => this.astroStore.planetTimeSeriesSegmentWidth(),
           planetTimeSeriesValueLabel: (value: number | undefined, metric: string) => this.planetTimeSeriesValueLabel(value, metric),
           publishAstroPanelState: () => { this.publishAstroPanelState() },
-          reloadCurrentGraph: () => { this.reloadCurrentGraph() },
+          reloadCurrentGraph: () => { this.astroCalcCtl().reloadCurrentGraph() },
           reloadEclipses: () => { this.astroStore.reloadEclipses() },
           rtsCalendarStartOptionLabel: (offsetDays: number) => this.astroStore.rtsCalendarStartOptionLabel(offsetDays),
           searchObject: (name: string, catalogModuleId?: string, exactSelectionPayload?: string, placement?: string) => { this.searchObject(name, catalogModuleId, exactSelectionPayload, placement) },
-          selectAstroFilter: (key: string, value: string) => { this.selectAstroFilter(key, value) },
-          selectAstroGroup: (group: number) => { this.selectAstroGroup(group) },
-          selectAstroTab: (tab: number) => { this.selectAstroTab(tab) },
+          selectAstroFilter: (key: string, value: string) => { this.astroCalcCtl().selectAstroFilter(key, value) },
+          selectAstroGroup: (group: number) => { this.astroCalcCtl().selectAstroGroup(group) },
+          selectAstroTab: (tab: number) => { this.astroCalcCtl().selectAstroTab(tab) },
           wutCategoryTitle: () => this.wutStore.wutCategoryTitle(),
           wutTargetSubtitle: (target: WutTarget) => this.searchStore.wutTargetSubtitle(target),
           wutTargetTitle: (target: WutTarget) => this.wutTargetTitle(target),
@@ -10438,7 +10045,7 @@ private loadPlanetPositions(): void {
           }
         },
         onRefreshTargets: () => { this.wutStore.loadWutTargets() },
-        onJumpTarget: (target: WutTarget) => { this.jumpToWutTarget(target) },
+        onJumpTarget: (target: WutTarget) => { this.astroCalcCtl().jumpToWutTarget(target) },
         onAddTarget: (target: WutTarget) => { this.addWutTargetToObservingList(target) },
         onRemoveTarget: (name: string) => { this.removeObservingTarget(name) },
         onSearchName: (name: string) => { this.searchObject(name) },

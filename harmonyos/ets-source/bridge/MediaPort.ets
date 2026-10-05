@@ -53,6 +53,9 @@ export interface MediaPort {
   // onDone(result) 区分落盘/取消/失败；由调用方决定提示与收尾（对应宿主 exportScreenshotToUserStorage
   // 的 picker + fileIo.copy 段）。
   saveFileAs(sourcePath: string, fileName: string, suffixLabel: string, onDone: (result: MediaSaveResult) => void): void
+  // 把文本写入缓存临时文件后弹「另存为」并把临时文件拷到用户选择的位置（对应宿主 exportCurrentAstroCsv
+  // 的 fileIo.writeSync + DocumentViewPicker.save + fileIo.copy + unlink 段）；onDone 区分落盘/取消/失败。
+  saveTextFileAs(text: string, fileName: string, suffixLabel: string, onDone: (result: MediaSaveResult) => void): void
   // 删除文件（对应 fileIo.unlinkSync，用于截图导出后的临时文件清理）。
   deleteFile(path: string): void
   // 选择单个文档并复制到 <filesDir>/<dirName>，返回落盘路径；用户取消时 cancelled=true。
