@@ -70,6 +70,10 @@ export interface MediaPort {
   // 后缀过滤（'Stellarium 脚本|.ssc'）/ 单文件 / 名称清洗（scriptImportFileName 语义）/ 同名碰撞改名逐字
   // 对应原宿主 importScriptFile 的 picker + fileIo 段（D10）。
   importScriptDocument(): Promise<MediaImportResult>
+  // 选择单个 Stellarium 地景 ZIP 并复制到 <filesDir>/stellarium_userdir/landscape-imports，返回落盘路径；
+  // 用户取消时 cancelled=true。后缀过滤（'Stellarium 地景 ZIP|.zip'）/ 单文件 / 名称清洗
+  //（landscapeImportFileName 语义）/ 同名碰撞改名逐字对应原宿主 importLandscapeFile 的 picker + fileIo 段（E2）。
+  importLandscapeDocument(): Promise<MediaImportResult>
 
   // ── 对象模型渲染（M2-A ObjectModelRenderer）──
   // 由原始 RGBA 字节创建像素图（对应 image.createPixelMap(buffer, { size, RGBA_8888, UNPREMUL })）：
