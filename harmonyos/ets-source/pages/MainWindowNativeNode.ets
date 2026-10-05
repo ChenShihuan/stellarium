@@ -51,6 +51,8 @@ import { BookmarkStore } from '../state/BookmarkStore'
 import { BookmarkPanel } from '../panels/BookmarkPanel'
 import { SearchStore } from '../state/SearchStore'
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
+import { GyroStore } from '../state/GyroStore'
+import { GyroCalibPanel } from '../panels/sensors/GyroCalibPanel'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
 import { ObjectDataRow, StructuredDetailRow, DetailSectionTitle } from '../panels/object/DetailRows'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from '../panels/object/TabletInspectorMedia'
@@ -130,16 +132,13 @@ export struct WindowNativeNode {
   private lastPanelBackAt: number = 0
   @State private searchStore: SearchStore = new SearchStore()
   @State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()
+  @State private gyroStore: GyroStore = new GyroStore()
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
   private searchHistory: string[] = []
   @State private objectCatalogCategories: CatOption[] = []
   private searchPanelScroller: Scroller = new Scroller()
   // 陀螺仪观测时，若已选目标落在视场外，在安全边缘给出方向提示。
   // 坐标本身不参与渲染，只有这三个 @State 会驱动提示箭头刷新。
-  @State private gyroGuideVisible: boolean = false
-  @State private gyroGuideAngle: number = 0
-  @State private gyroGuideX: number = 0
-  @State private gyroGuideY: number = 0
   // The compact phone quick controls are tapped through a transparent layer
   // above Qt, so keep their pressed appearance in explicit ArkUI state.
   @State private compactQuickPressed: string = ''
@@ -889,17 +888,9 @@ export struct WindowNativeNode {
   @State private horizonLine: boolean = false
   @State private planetLabels: boolean = false
   @State private starLabels: boolean = false
-  @State private gyroscopeEnabled: boolean = false
-  @State private gyroscopeStatus: ResourceStr = I18n.t('m_gyro_off')
-  @State private gyroscopeSensitivityText: string = 'Standard'
-  @State private gyroCalibPanelOpen: boolean = false
   private applicationInForeground: boolean = true
   private gyroPausedForBackground: boolean = false
   // The gyro control itself becomes a live compass while it is enabled.
-  @State private gyroCompassText: string = '罗盘 --'
-  @State private gyroCompassAngle: number = 0
-  @State private gyroOffsetAz: number = 0    // 方位角校准偏移（度）
-  @State private gyroOffsetAlt: number = 0   // 高度角校准偏移（度）
   @State private liveMode: boolean = true
   @State private currentFovText: string = '--'
   @State private viewCoordinatesVisible: boolean = false
@@ -1344,7 +1335,6 @@ export struct WindowNativeNode {
   // Automatic, session-local alignment from the physical magnetic compass to
   // Stellarium's Alt/Az frame. The visible slider remains a separate manual
   // fine adjustment, so it stays predictable for the user.
-  private gyroCompassAzAlignment: number = 0
   private gyroAbsolutePoseReady: boolean = false
   private gyroAbsoluteUp: number[] = [0, 1, 0]
   private gyroDisplayRotation: number = 0
@@ -2186,10 +2176,10 @@ export struct WindowNativeNode {
           this.callNativeWhenReady('setActionChecked', 'actionSwitch_Equatorial_Mount|' + (this.equatorialMount ? '1' : '0'), () => {})
         }
         if (saved.gyroscopeEnabled !== undefined) {
-          this.gyroscopeEnabled = false
-          this.gyroscopeStatus = I18n.t('m_gyro_off')
+          this.gyroStore.gyroscopeEnabled = false
+          this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_off')
         }
-        if (saved.gyroscopeSensitivityText !== undefined) { this.gyroscopeSensitivityText = saved.gyroscopeSensitivityText as string }
+        if (saved.gyroscopeSensitivityText !== undefined) { this.gyroStore.gyroscopeSensitivityText = saved.gyroscopeSensitivityText as string }
         if (saved.selectedLanguage !== undefined) {
           const language = saved.selectedLanguage as string
           if (language !== this.selectedLanguage) {
@@ -2240,8 +2230,8 @@ export struct WindowNativeNode {
     AppStorage.setOrCreate("stellariumSettings", JSON.stringify({
       nightMode: this.nightModeStore.nightMode,
       equatorialMount: this.equatorialMount,
-      gyroscopeEnabled: this.gyroscopeEnabled,
-      gyroscopeSensitivityText: this.gyroscopeSensitivityText,
+      gyroscopeEnabled: this.gyroStore.gyroscopeEnabled,
+      gyroscopeSensitivityText: this.gyroStore.gyroscopeSensitivityText,
       selectedLanguage: this.selectedLanguage,
       useMetricUnits: this.useMetricUnits,
       musicEnabled: this.musicEnabled,
@@ -2373,7 +2363,7 @@ export struct WindowNativeNode {
     this.stopDetailAutoRefresh()
     this.stopSkyInertia()
     void AudioEngine.getInstance().stop()
-    if (this.gyroscopeEnabled) {
+    if (this.gyroStore.gyroscopeEnabled) {
       this.gyroPausedForBackground = true
       this.stopGyroscope(false)
       hilog.info(0x0000, 'StellariumArkUI', 'background: gyroscope subscriptions released')
@@ -3801,7 +3791,7 @@ export struct WindowNativeNode {
     if (!this.recordingUiExpanded) {
       this.panelVisible = false
       this.infoWinVisible = false
-      this.gyroCalibPanelOpen = false
+      this.gyroStore.gyroCalibPanelOpen = false
     }
   }
 
@@ -10787,7 +10777,7 @@ private loadPlanetPositions(): void {
     this.scriptStartGraceUntil = Date.now() + 2500
     this.panelVisible = false
     this.infoWinVisible = false
-    this.gyroCalibPanelOpen = false
+    this.gyroStore.gyroCalibPanelOpen = false
     this.stopTimePanelTimers()
     this.stopSkyCultureTimeFollowTimer()
     this.stopPolarScopeTimer()
@@ -12071,7 +12061,7 @@ private loadPlanetPositions(): void {
   }
 
   private toggleGyroscope(enabled: boolean): void {
-    hilog.info(0x0000, 'StellariumArkUI', 'toggleGyroscope enabled=%{public}s current=%{public}s', enabled.toString(), this.gyroscopeEnabled.toString())
+    hilog.info(0x0000, 'StellariumArkUI', 'toggleGyroscope enabled=%{public}s current=%{public}s', enabled.toString(), this.gyroStore.gyroscopeEnabled.toString())
     if (enabled) {
       this.startGyroscope()
     } else {
@@ -12142,7 +12132,7 @@ private loadPlanetPositions(): void {
     if (!this.privacyNativeStartupAllowed || !this.applicationInForeground || !hasCurrentPrivacyConsent()) {
       return
     }
-    if (this.gyroscopeEnabled) {
+    if (this.gyroStore.gyroscopeEnabled) {
       hilog.info(0x0000, 'StellariumArkUI', 'startGyroscope ignored already enabled')
       return
     }
@@ -12196,13 +12186,13 @@ private loadPlanetPositions(): void {
     this.gyroFilteredGravityDevice = []
     this.gyroFilteredMagneticDevice = []
     this.gyroMagneticHeading = Number.NaN
-    this.gyroCompassAzAlignment = 0
-    this.gyroCompassText = '罗盘 --'
-    this.gyroCompassAngle = 0
+    this.gyroStore.gyroCompassAzAlignment = 0
+    this.gyroStore.gyroCompassText = '罗盘 --'
+    this.gyroStore.gyroCompassAngle = 0
     this.gyroUsingRotationVector = false
-    this.gyroscopeEnabled = true
+    this.gyroStore.gyroscopeEnabled = true
     this.refreshGyroDisplayRotation('start')
-    this.gyroscopeStatus = '正在校准'
+    this.gyroStore.gyroscopeStatus = '正在校准'
     this.callNativeFire('beginGyroViewTransition')
 
     const rotationSupported = this.probeGyroSensor(sensor.SensorId.ROTATION_VECTOR, 'rotation-vector')
@@ -12245,7 +12235,7 @@ private loadPlanetPositions(): void {
       try {
         sensor.on(sensor.SensorId.ORIENTATION, this.gyroCallback, { interval: 16666667 })
         this.gyroOrientationSubscribed = true
-        this.gyroscopeStatus = '正在校准'
+        this.gyroStore.gyroscopeStatus = '正在校准'
         hilog.warn(0x0000, 'StellariumArkUI', '[gyro-probe] start mode=orientation-fallback')
         return
       } catch (error) {
@@ -12253,9 +12243,9 @@ private loadPlanetPositions(): void {
       }
     }
 
-    this.gyroscopeEnabled = false
+    this.gyroStore.gyroscopeEnabled = false
     this.callNativeFire('cancelGyroViewTransition')
-    this.gyroscopeStatus = I18n.t('m_gyro_unavailable')
+    this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_unavailable')
     this.flashHint(I18n.t('m_gyro_unavailable'))
     hilog.error(0x0000, 'StellariumArkUI', '[gyro-probe] start failed no supported orientation sensor')
   }
@@ -12320,13 +12310,13 @@ private loadPlanetPositions(): void {
     this.gyroFilteredGravityDevice = []
     this.gyroFilteredMagneticDevice = []
     this.gyroMagneticHeading = Number.NaN
-    this.gyroCompassAzAlignment = 0
-    this.gyroCompassText = '罗盘 --'
-    this.gyroCompassAngle = 0
-    this.gyroGuideVisible = false
-    this.gyroscopeEnabled = false
+    this.gyroStore.gyroCompassAzAlignment = 0
+    this.gyroStore.gyroCompassText = '罗盘 --'
+    this.gyroStore.gyroCompassAngle = 0
+    this.gyroStore.gyroGuideVisible = false
+    this.gyroStore.gyroscopeEnabled = false
     if (updateStatus) {
-      this.gyroscopeStatus = I18n.t('m_gyro_off')
+      this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_off')
     }
   }
 
@@ -12376,23 +12366,23 @@ private loadPlanetPositions(): void {
   // across the boundary look like a full-circle spin.
   private setGyroGuidePose(x: number, y: number, targetAngle: number): void {
     let angle = targetAngle
-    if (this.gyroGuideVisible) {
-      let delta = (targetAngle - this.gyroGuideAngle) % 360
+    if (this.gyroStore.gyroGuideVisible) {
+      let delta = (targetAngle - this.gyroStore.gyroGuideAngle) % 360
       if (delta > 180) { delta -= 360 }
       if (delta < -180) { delta += 360 }
-      angle = this.gyroGuideAngle + delta
+      angle = this.gyroStore.gyroGuideAngle + delta
     }
-    this.gyroGuideX = x
-    this.gyroGuideY = y
-    this.gyroGuideAngle = angle
-    this.gyroGuideVisible = true
+    this.gyroStore.gyroGuideX = x
+    this.gyroStore.gyroGuideY = y
+    this.gyroStore.gyroGuideAngle = angle
+    this.gyroStore.gyroGuideVisible = true
   }
 
   private updateGyroTargetGuide(force: boolean = false): void {
-    if (!this.gyroscopeEnabled || this.objectDetailStore.selectedStatus !== 'Selected' ||
+    if (!this.gyroStore.gyroscopeEnabled || this.objectDetailStore.selectedStatus !== 'Selected' ||
       !Number.isFinite(this.gyroGuideTargetAz) || !Number.isFinite(this.gyroGuideTargetAlt) ||
       !Number.isFinite(this.gyroLastAz) || !Number.isFinite(this.gyroLastAlt)) {
-      this.gyroGuideVisible = false
+      this.gyroStore.gyroGuideVisible = false
       this.gyroGuideReachedAtMs = 0
       return
     }
@@ -12429,7 +12419,7 @@ private loadPlanetPositions(): void {
         // The arrow confirms that the target has arrived, then gets out of
         // the way. It reappears only after the object leaves the clear sky.
         if (now - this.gyroGuideReachedAtMs >= 1800) {
-          this.gyroGuideVisible = false
+          this.gyroStore.gyroGuideVisible = false
           return
         }
         // The guide sits above its target and points down. At the very top,
@@ -12473,7 +12463,7 @@ private loadPlanetPositions(): void {
     const separation = Math.sqrt(horizontal * horizontal + vertical * vertical)
     const fov = Math.max(5, this.fovSliderValue > 0 ? this.fovSliderValue : 60)
     if (separation <= fov * 0.48) {
-      this.gyroGuideVisible = false
+      this.gyroStore.gyroGuideVisible = false
       this.gyroGuideReachedAtMs = 0
       return
     }
@@ -12502,20 +12492,20 @@ private loadPlanetPositions(): void {
   // anchor it to the existing sky view: doing so makes "flat" retain an
   // arbitrary altitude instead of consistently looking at the nadir.
   private calibrateGyroscope(): void {
-    if (!this.gyroscopeEnabled || this.gyroFirstReading) { return }
+    if (!this.gyroStore.gyroscopeEnabled || this.gyroFirstReading) { return }
     this.gyroAbsolutePoseReady = false
     this.gyroHeadingReferenceReady = false
     this.gyroLastDispatchMs = 0
     this.gyroCalibrated = true
-    this.gyroscopeStatus = '已校准'
+    this.gyroStore.gyroscopeStatus = '已校准'
   }
 
   private onOrientationData(data: sensor.OrientationResponse): void {
-    if (!this.gyroscopeEnabled) { return }
+    if (!this.gyroStore.gyroscopeEnabled) { return }
     this.gyroCallbackCount += 1
     let smoothFactor: number = 0.18
-    if (this.gyroscopeSensitivityText === 'Low') { smoothFactor = 0.10 }
-    else if (this.gyroscopeSensitivityText === 'High') { smoothFactor = 0.28 }
+    if (this.gyroStore.gyroscopeSensitivityText === 'Low') { smoothFactor = 0.10 }
+    else if (this.gyroStore.gyroscopeSensitivityText === 'High') { smoothFactor = 0.28 }
 
     if (!Number.isFinite(data.alpha) || !Number.isFinite(data.beta) || !Number.isFinite(data.gamma)) {
       this.gyroInvalidEventCount += 1
@@ -12540,7 +12530,7 @@ private loadPlanetPositions(): void {
     const forwardX = -normalX
     const forwardY = -normalY
     const forwardZ = -normalZ
-    const targetAlt = this.clamp(Math.asin(this.clamp(forwardZ, -1, 1)) * 180 / Math.PI + this.gyroOffsetAlt, -90, 90)
+    const targetAlt = this.clamp(Math.asin(this.clamp(forwardZ, -1, 1)) * 180 / Math.PI + this.gyroStore.gyroOffsetAlt, -90, 90)
     // A display pointing near the zenith or nadir has no meaningful heading:
     // tiny sensor noise can map to any azimuth and makes the horizon slide
     // sideways while lifting the Pad. alpha is the fused compass heading and
@@ -12551,7 +12541,7 @@ private loadPlanetPositions(): void {
     // Stellarium's azimuth frame. More importantly, it becomes ambiguous when
     // the Pad is flat. Anchor only once the display has a real horizontal aim;
     // after that use its delta, not its changing Euler-angle zero point.
-    const rawHeading = this.wrapGyroAzimuth(-data.alpha + this.gyroOffsetAz)
+    const rawHeading = this.wrapGyroAzimuth(-data.alpha + this.gyroStore.gyroOffsetAz)
     let targetAz = rawHeading
     if (this.gyroAbsolutePoseReady) {
       if (!this.gyroHeadingReferenceReady && horizontalStrength >= 0.42) {
@@ -12620,7 +12610,7 @@ private loadPlanetPositions(): void {
     this.gyroEventCount += 1
     this.gyroDispatchCount += 1
     if (this.gyroEventCount % 20 === 0) {
-      this.gyroscopeStatus = I18n.t('m_gyro_working')
+      this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_working')
     }
   }
 
@@ -12816,14 +12806,14 @@ private loadPlanetPositions(): void {
     this.gyroMagneticHeading = heading
     // Keep the needle continuous through 359 -> 0 rather than animating a
     // full revolution in the opposite direction.
-    let delta = (heading - this.gyroCompassAngle) % 360
+    let delta = (heading - this.gyroStore.gyroCompassAngle) % 360
     if (delta > 180) { delta -= 360 }
     if (delta < -180) { delta += 360 }
-    this.gyroCompassAngle += delta
+    this.gyroStore.gyroCompassAngle += delta
     const now = Date.now()
     if (now - this.gyroLastCompassUiUpdateMs < 120) { return }
     this.gyroLastCompassUiUpdateMs = now
-    this.gyroCompassText = '磁北 ' + this.gyroCompassDirection(heading) + ' ' + Math.round(heading).toString().padStart(3, '0') + '°'
+    this.gyroStore.gyroCompassText = '磁北 ' + this.gyroCompassDirection(heading) + ' ' + Math.round(heading).toString().padStart(3, '0') + '°'
   }
 
   private emitGyroPoseProbe(reason: string, rawForward: number[] = [], rawUp: number[] = [], rawAz: number = Number.NaN, rawAlt: number = Number.NaN): void {
@@ -12836,7 +12826,7 @@ private loadPlanetPositions(): void {
   }
 
   private onRotationVectorDirect(data: sensor.RotationVectorResponse): void {
-    if (!this.gyroscopeEnabled) { return }
+    if (!this.gyroStore.gyroscopeEnabled) { return }
     this.gyroCallbackCount += 1
     if (!Number.isFinite(data.x) || !Number.isFinite(data.y) ||
       !Number.isFinite(data.z) || !Number.isFinite(data.w)) {
@@ -12871,13 +12861,13 @@ private loadPlanetPositions(): void {
     let forward = this.gyroBridgeFromEnu([-screenFrontWorld[0], -screenFrontWorld[1], -screenFrontWorld[2]])
     forward = this.gyroNormalizeVector(forward)
 
-    if (this.gyroOffsetAz !== 0) {
-      forward = this.gyroRotateAboutVertical(forward, this.gyroOffsetAz)
+    if (this.gyroStore.gyroOffsetAz !== 0) {
+      forward = this.gyroRotateAboutVertical(forward, this.gyroStore.gyroOffsetAz)
     }
-    if (this.gyroOffsetAlt !== 0) {
+    if (this.gyroStore.gyroOffsetAlt !== 0) {
       const horizontal = Math.sqrt(forward[0] * forward[0] + forward[1] * forward[1])
       if (horizontal > 0.001) {
-        forward = this.gyroRotateAboutAxis(forward, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroOffsetAlt)
+        forward = this.gyroRotateAboutAxis(forward, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroStore.gyroOffsetAlt)
         forward = this.gyroNormalizeVector(forward)
       }
     }
@@ -12890,13 +12880,13 @@ private loadPlanetPositions(): void {
       return
     }
     this.updateGyroCompassReadout()
-    if (this.gyroOffsetAz !== 0) {
-      up = this.gyroRotateAboutVertical(up, this.gyroOffsetAz)
+    if (this.gyroStore.gyroOffsetAz !== 0) {
+      up = this.gyroRotateAboutVertical(up, this.gyroStore.gyroOffsetAz)
     }
-    if (this.gyroOffsetAlt !== 0) {
+    if (this.gyroStore.gyroOffsetAlt !== 0) {
       const horizontal = Math.sqrt(forward[0] * forward[0] + forward[1] * forward[1])
       if (horizontal > 0.001) {
-        up = this.gyroRotateAboutAxis(up, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroOffsetAlt)
+        up = this.gyroRotateAboutAxis(up, [forward[1] / horizontal, -forward[0] / horizontal, 0], this.gyroStore.gyroOffsetAlt)
       }
     }
     up = this.gyroOrthonormalizeUp(forward, up)
@@ -12919,8 +12909,8 @@ private loadPlanetPositions(): void {
       // frames even when rendering was healthy. Keep only enough damping for
       // hand tremor and use the same time-based amount for forward and up.
       let tau = 0.045
-      if (this.gyroscopeSensitivityText === 'Low') { tau = 0.08 }
-      else if (this.gyroscopeSensitivityText === 'High') { tau = 0.025 }
+      if (this.gyroStore.gyroscopeSensitivityText === 'Low') { tau = 0.08 }
+      else if (this.gyroStore.gyroscopeSensitivityText === 'High') { tau = 0.025 }
       poseSmoothingAmount = 1 - Math.exp(-dt / tau)
       this.gyroFwd = this.gyroNormalizeVector([
         this.gyroFwd[0] + (forward[0] - this.gyroFwd[0]) * poseSmoothingAmount,
@@ -12953,8 +12943,8 @@ private loadPlanetPositions(): void {
       + this.gyroUp[0].toFixed(5) + '|' + this.gyroUp[1].toFixed(5) + '|' + this.gyroUp[2].toFixed(5))
     this.gyroEventCount += 1
     this.gyroDispatchCount += 1
-    if (this.gyroEventCount % 20 === 0 && this.gyroscopeStatus !== I18n.t('m_gyro_working')) {
-      this.gyroscopeStatus = I18n.t('m_gyro_working')
+    if (this.gyroEventCount % 20 === 0 && this.gyroStore.gyroscopeStatus !== I18n.t('m_gyro_working')) {
+      this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_working')
     }
   }
 
@@ -12972,7 +12962,7 @@ private loadPlanetPositions(): void {
     hist.unshift(query)
     this.searchHistory = hist.slice(0, 20)
     this.saveSearchHistoryToStorage()
-    const gyroSelection = this.gyroscopeEnabled
+    const gyroSelection = this.gyroStore.gyroscopeEnabled
     let payload = exactSelectionPayload.length > 0
       ? exactSelectionPayload
       : (catalogModuleId.length > 0 ? 'catalog|' + catalogModuleId + '|' + query : query)
@@ -13222,7 +13212,7 @@ private loadPlanetPositions(): void {
         top: this.skyHeight - this.polarScopeFooterHeight() - 12, right: right,
         bottom: this.skyHeight - 12 })
     }
-    if (this.gyroscopeEnabled && this.gyroCalibPanelOpen) {
+    if (this.gyroStore.gyroscopeEnabled && this.gyroStore.gyroCalibPanelOpen) {
       const calibrationLeft = this.isExpandedLayout ? this.EDGE_MARGIN + 64 : 16
       const calibrationTop = this.isExpandedLayout ? this.railTop() + 120 : 80
       obstacles.push({ label: 'gyro-calibration', left: calibrationLeft - 8, top: calibrationTop - 8,
@@ -13448,7 +13438,7 @@ private loadPlanetPositions(): void {
     // Sensor pose is the camera owner while gyro mode is active. Starting a
     // second auto-move here creates a visible jump when the next pose sample
     // correctly takes control back, so center/track only refresh the guide.
-    if (this.gyroscopeEnabled) {
+    if (this.gyroStore.gyroscopeEnabled) {
       this.updateGyroTargetGuide(true)
       this.flashHint(I18n.t('center_unavailable_gyro'))
       return
@@ -14008,7 +13998,7 @@ private loadPlanetPositions(): void {
       // A stationary device may not pass the sensor movement threshold again
       // after a search. Recalculate the edge guide at selection time instead
       // of waiting for the next meaningful orientation delta.
-      if (this.gyroscopeEnabled) {
+      if (this.gyroStore.gyroscopeEnabled) {
         this.updateGyroTargetGuide(true)
       }
       this.objectDetailStore.selectedCoordAlt = showObservedInfo && (hasAlt || hasAz)
@@ -14065,7 +14055,7 @@ private loadPlanetPositions(): void {
         this.objectDetailStore.selectedSatellitePassesRequested = false
         // Sensor tracking owns the camera. A gyro-mode search selects the
         // target and opens its card, but never starts a safe-area fly-to.
-        if (!this.gyroscopeEnabled && !this.isObserverPlanetSelection(incomingName)) {
+        if (!this.gyroStore.gyroscopeEnabled && !this.isObserverPlanetSelection(incomingName)) {
           if (placement === 'center') {
             this.navigateSelectedObjectTo(this.skyWidth / 2, this.skyHeight / 2, 'center')
           }
@@ -14129,7 +14119,7 @@ private loadPlanetPositions(): void {
       this.objectDetailStore.selectedTleOutdated = false
       this.gyroGuideTargetAz = Number.NaN
       this.gyroGuideTargetAlt = Number.NaN
-      this.gyroGuideVisible = false
+      this.gyroStore.gyroGuideVisible = false
       this.objectDetailStore.selectedSize = ''
       this.objectDetailStore.selectedRise = ''
       this.objectDetailStore.selectedSet = ''
@@ -16109,7 +16099,7 @@ private loadPlanetPositions(): void {
       const distance = this.distance(x, y, this.mouseSkyStartX, this.mouseSkyStartY)
       if (distance > 3) {
         this.resetSkyTapSequence()
-        if (!this.mouseSkyMoved && this.gyroscopeEnabled) {
+        if (!this.mouseSkyMoved && this.gyroStore.gyroscopeEnabled) {
           this.stopGyroscope(true)
           this.flashHint('已退出陀螺仪')
         }
@@ -16174,7 +16164,7 @@ private loadPlanetPositions(): void {
       this.flashHint('请先选择天体')
       return
     }
-    if (this.gyroscopeEnabled) {
+    if (this.gyroStore.gyroscopeEnabled) {
       this.updateGyroTargetGuide(true)
       return
     }
@@ -16332,7 +16322,7 @@ private loadPlanetPositions(): void {
           if (downX >= qx && downX <= qx + 44 && downY >= qy && downY <= qy + 44) {
             hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro tap via handleSkyTouch')
             this.resetPanelIdle()
-            this.toggleGyroscope(!this.gyroscopeEnabled)
+            this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
             return
           }
           // 音频按钮（下方的 44x44，间距 10vp，圆心约 qx+22, qy+54+22）
@@ -16486,7 +16476,7 @@ private loadPlanetPositions(): void {
         // Manual panning and sensor tracking must never drive the native
         // camera together. Leave gyro mode on the first real sky drag, while
         // keeping taps and pinch zoom available without changing its state.
-        if (!this.touchMoved && this.gyroscopeEnabled) {
+        if (!this.touchMoved && this.gyroStore.gyroscopeEnabled) {
           this.stopGyroscope(true)
           this.flashHint('已退出陀螺仪')
         }
@@ -16782,7 +16772,7 @@ private loadPlanetPositions(): void {
           this.guideTimer = -1
           this.panelVisible = this.guidePanelWasVisible
           if (this.guideGyroWasEnabled && this.applicationInForeground) {
-            this.gyroscopeEnabled = true
+            this.gyroStore.gyroscopeEnabled = true
             this.startGyroscope()
           }
           this.guideGyroWasEnabled = false
@@ -16797,9 +16787,9 @@ private loadPlanetPositions(): void {
         result = { ok: false, error: 'session_busy_or_unknown_guide' }
       } else {
         this.guidePanelWasVisible = this.panelVisible
-        this.guideGyroWasEnabled = this.gyroscopeEnabled
+        this.guideGyroWasEnabled = this.gyroStore.gyroscopeEnabled
         this.stopGyroscope(false)
-        this.gyroscopeEnabled = false
+        this.gyroStore.gyroscopeEnabled = false
         this.stopSkyInertia()
         this.panelVisible = false
         this.infoWinVisible = false
@@ -17269,9 +17259,9 @@ private loadPlanetPositions(): void {
 
       // Gyroscope target guide: it is deliberately visual-only, so it never
       // steals a pan, pinch, or button press from the sky and chrome layers.
-      if (this.gyroGuideVisible) {
+      if (this.gyroStore.gyroGuideVisible) {
         Stack() { this.gyroTargetGuide() }
-          .position({ x: this.gyroGuideX, y: this.gyroGuideY })
+          .position({ x: this.gyroStore.gyroGuideX, y: this.gyroStore.gyroGuideY })
           .width(44)
           .height(44)
           .zIndex(4)
@@ -17371,7 +17361,7 @@ private loadPlanetPositions(): void {
         .fontSize(29)
         .fontWeight(FontWeight.Medium)
         .fontColor('#E5FAFF')
-        .rotate({ angle: this.gyroGuideAngle + 90 })
+        .rotate({ angle: this.gyroStore.gyroGuideAngle + 90 })
         .animation({ duration: 130, curve: Curve.Linear })
     }
       .width(44)
@@ -17421,8 +17411,8 @@ private loadPlanetPositions(): void {
         }
       }
       // 陀螺仪校准面板（开启陀螺仪时显示在侧栏右侧）
-      if (this.gyroscopeEnabled && this.gyroCalibPanelOpen) {
-        Stack() { this.gyroCalibPanel() }
+      if (this.gyroStore.gyroscopeEnabled && this.gyroStore.gyroCalibPanelOpen) {
+        Stack() { GyroCalibPanel({ store: this.gyroStore, onFlashHint: (text: string) => { this.flashHint(text) }, onCalibrate: () => { this.calibrateGyroscope() }, onToggle: (enabled: boolean) => { this.toggleGyroscope(enabled) } }) }
           .position({ x: this.EDGE_MARGIN + 64, y: this.railTop() + 120 })
           .hitTestBehavior(HitTestMode.Block)
           .zIndex(60)
@@ -17593,8 +17583,8 @@ private loadPlanetPositions(): void {
             this.handleCompactTopQuickTouch(event)
           })
       // 陀螺仪校准面板（紧凑布局）
-      if (this.gyroscopeEnabled && this.gyroCalibPanelOpen) {
-        Stack() { this.gyroCalibPanel() }
+      if (this.gyroStore.gyroscopeEnabled && this.gyroStore.gyroCalibPanelOpen) {
+        Stack() { GyroCalibPanel({ store: this.gyroStore, onFlashHint: (text: string) => { this.flashHint(text) }, onCalibrate: () => { this.calibrateGyroscope() }, onToggle: (enabled: boolean) => { this.toggleGyroscope(enabled) } }) }
           .position({ x: 16, y: 80 })
           .hitTestBehavior(HitTestMode.Block)
           .zIndex(60)
@@ -17634,10 +17624,10 @@ private loadPlanetPositions(): void {
   @Builder
   compactTopQuickControls() {
     Column({ space: 10 }) {
-      this.compactQuickButton('gyro', this.gyroscopeEnabled, () => {
-        hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroscopeEnabled.toString())
+      this.compactQuickButton('gyro', this.gyroStore.gyroscopeEnabled, () => {
+        hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
         this.resetPanelIdle()
-        this.toggleGyroscope(!this.gyroscopeEnabled)
+        this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
       }, false, this.compactQuickPressed === 'gyro')
       this.compactQuickButton('audio', this.musicEnabled, () => {
         hilog.info(0x0000, 'StellariumArkUI', '[DIAG] audio button CLICKED musicEnabled=%{public}s', this.musicEnabled.toString())
@@ -17689,8 +17679,8 @@ private loadPlanetPositions(): void {
     const quickId = this.compactQuickIdAt(x, y)
     if (quickId === 'gyro') {
       this.resetPanelIdle()
-      this.toggleGyroscope(!this.gyroscopeEnabled)
-      this.flashHint(this.gyroscopeEnabled ? '陀螺仪已开启，正在校准' : '陀螺仪已关闭')
+      this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
+      this.flashHint(this.gyroStore.gyroscopeEnabled ? '陀螺仪已开启，正在校准' : '陀螺仪已关闭')
       return true
     }
     if (quickId === 'audio') {
@@ -17761,7 +17751,7 @@ private loadPlanetPositions(): void {
       this.flashHint(I18n.t('tracking_requires_selection'))
       return
     }
-    if (this.gyroscopeEnabled) {
+    if (this.gyroStore.gyroscopeEnabled) {
       this.updateGyroTargetGuide(true)
       this.flashHint(I18n.t('tracking_unavailable_gyro'))
       return
@@ -19546,13 +19536,13 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       .position({ x: 7, y: this.RAIL_TOP_PAD + this.pinnedActions().length * this.RAIL_ITEM_STEP + this.RAIL_GYRO_OFFSET })
       .hitTestBehavior(HitTestMode.Block)
       .onClick(() => {
-        this.toggleGyroscope(!this.gyroscopeEnabled)
-        this.flashHint(this.gyroscopeEnabled ? '陀螺仪：开' : '陀螺仪：关')
+        this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
+        this.flashHint(this.gyroStore.gyroscopeEnabled ? '陀螺仪：开' : '陀螺仪：关')
       })
       .gesture(LongPressGesture({ repeat: false, duration: 600 })
         .onAction(() => {
-          if (this.gyroscopeEnabled) {
-            this.gyroCalibPanelOpen = !this.gyroCalibPanelOpen
+          if (this.gyroStore.gyroscopeEnabled) {
+            this.gyroStore.gyroCalibPanelOpen = !this.gyroStore.gyroCalibPanelOpen
           }
         }))
   }
@@ -20062,22 +20052,22 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   @Builder
   gyroButton() {
     Stack() {
-      Image(getIcon('gyro', this.gyroscopeEnabled))
+      Image(getIcon('gyro', this.gyroStore.gyroscopeEnabled))
         .width(22)
         .height(22)
-        .fillColor(this.gyroscopeEnabled ? '#FFFFFF' : this.nmText())
+        .fillColor(this.gyroStore.gyroscopeEnabled ? '#FFFFFF' : this.nmText())
     }
       .width(44)
       .height(44)
       .alignContent(Alignment.Center)
-      .backgroundColor(this.gyroscopeEnabled ? 'rgba(91, 147, 191, 0.22)' : 'rgba(255, 255, 255, 0.06)')
-      .border({ width: 1, color: this.gyroscopeEnabled ? 'rgba(107, 163, 214, 0.45)' : 'rgba(255, 255, 255, 0.08)' })
+      .backgroundColor(this.gyroStore.gyroscopeEnabled ? 'rgba(91, 147, 191, 0.22)' : 'rgba(255, 255, 255, 0.06)')
+      .border({ width: 1, color: this.gyroStore.gyroscopeEnabled ? 'rgba(107, 163, 214, 0.45)' : 'rgba(255, 255, 255, 0.08)' })
       .borderRadius(UI_RADIUS_PANEL)
       .margin({ top: 4, bottom: 4 })
-      .scale({ x: this.gyroscopeEnabled ? 1.06 : 1.0, y: this.gyroscopeEnabled ? 1.06 : 1.0 })
+      .scale({ x: this.gyroStore.gyroscopeEnabled ? 1.06 : 1.0, y: this.gyroStore.gyroscopeEnabled ? 1.06 : 1.0 })
       .onClick(() => {
-        this.toggleGyroscope(!this.gyroscopeEnabled)
-        this.flashHint(this.gyroscopeEnabled ? '陀螺仪：开' : '陀螺仪：关')
+        this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
+        this.flashHint(this.gyroStore.gyroscopeEnabled ? '陀螺仪：开' : '陀螺仪：关')
       })
       .clickEffect({ level: ClickEffectLevel.LIGHT })
       .stateStyles({
@@ -20090,106 +20080,6 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
   }
 
   // ── 陀螺仪校准面板 ──
-  @Builder
-  gyroCalibPanel() {
-    Column({ space: 12 }) {
-      // 标题行
-      Row() {
-        Stack() {
-          Circle().width(10).height(10)
-            .fill(this.gyroscopeEnabled ? '#5BDF7F' : '#666')
-            .opacity(0.9)
-        }.width(16).height(16)
-        Text(I18n.t('i0060'))
-          .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#E5FFFFFF').layoutWeight(1).margin({ left: 6 })
-        Text('×')
-          .fontSize(18).fontColor('#99FFFFFF')
-          .onClick(() => { this.gyroCalibPanelOpen = false })
-      }
-      .width('100%')
-
-      Text(I18n.t('i0043'))
-        .fontSize(11).fontColor('#8099BBCC').width('100%')
-
-      // 灵敏度选择
-      Row({ space: 8 }) {
-        Text(I18n.t('i0061')).fontSize(12).fontColor('#CCCCCC').width(44)
-        Row({ space: 6 }) {
-          ForEach(['Low', 'Standard', 'High'], (s: string, idx: number) => {
-            Text(s)
-              .fontSize(11)
-              .fontColor(this.gyroscopeSensitivityText === s ? '#FFFFFF' : '#8099BBCC')
-              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .borderRadius(UI_RADIUS_CONTROL)
-              .backgroundColor(this.gyroscopeSensitivityText === s ? 'rgba(91,147,191,0.35)' : 'rgba(255,255,255,0.06)')
-              .onClick(() => {
-                this.gyroscopeSensitivityText = s
-                this.flashHint(s)
-              })
-          })
-        }.layoutWeight(1).justifyContent(FlexAlign.End)
-      }.width('100%')
-
-      // 方位角校准
-      Row({ space: 10 }) {
-        Text(I18n.t('i0084') + '→' + I18n.t('i0086')).fontSize(11).fontColor('#CCCCCC').width(50)
-        Slider({ value: this.gyroOffsetAz, min: -30, max: 30, step: 0.5 })
-          .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-          .layoutWeight(1)
-          .selectedColor('#5B93BF')
-          .trackColor('rgba(255,255,255,0.12)')
-          .onChange((v: number) => { this.gyroOffsetAz = v })
-        Text(this.gyroOffsetAz.toFixed(1) + '°')
-          .fontSize(11).fontColor('#7FB3DC').width(48).textAlign(TextAlign.End)
-      }.width('100%')
-
-      // 高度角校准
-      Row({ space: 10 }) {
-        Text(I18n.t('i0016')).fontSize(11).fontColor('#CCCCCC').width(50)
-        Slider({ value: this.gyroOffsetAlt, min: -30, max: 30, step: 0.5 })
-          .sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-          .layoutWeight(1)
-          .selectedColor('#5B93BF')
-          .trackColor('rgba(255,255,255,0.12)')
-          .onChange((v: number) => { this.gyroOffsetAlt = v })
-        Text(this.gyroOffsetAlt.toFixed(1) + '°')
-          .fontSize(11).fontColor('#7FB3DC').width(48).textAlign(TextAlign.End)
-      }.width('100%')
-
-      // 重置按钮
-      Row({ space: 8 }) {
-        Button(I18n.t('i0053'))
-          .fontSize(12).fontColor('#E5FFFFFF')
-          .backgroundColor('rgba(91,147,191,0.25)').borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1)
-          .onClick(() => {
-            this.gyroOffsetAz = 0
-            this.gyroOffsetAlt = 0
-            this.gyroCompassAzAlignment = 0
-            this.calibrateGyroscope()
-            this.flashHint('已重新校准')
-          })
-        Button(I18n.t('i0051'))
-          .fontSize(12).fontColor('#E5FFFFFF')
-          .backgroundColor('rgba(200,80,60,0.25)').borderRadius(UI_RADIUS_CONTROL).height(32).layoutWeight(1)
-          .onClick(() => {
-            this.toggleGyroscope(false)
-            this.gyroCalibPanelOpen = false
-          })
-      }.width('100%').margin({ top: 4 })
-
-      // 状态信息
-      Row() {
-        Text((this.gyroscopeStatus as string))
-          .fontSize(10).fontColor('#8099BBCC')
-      }.width('100%')
-    }
-    .width(280)
-    .padding(16)
-    .backgroundColor('rgba(12, 16, 28, 0.92)')
-    .border({ width: 0.5, color: 'rgba(91, 147, 191, 0.18)' })
-    .borderRadius(UI_RADIUS_PILL)
-    .shadow({ radius: 20, color: 'rgba(0,0,0,0.30)', offsetX: 0, offsetY: 8 })
-  }
 
   // 切换音乐开关（带 350ms 防抖，避免坐标命中与 onClick 双触发导致来回跳）
   private toggleMusic(): void {
@@ -20396,8 +20286,8 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
               .animation({ duration: 180, curve: curves.springMotion(0.42, 0.86) })
               .onClick(() => {
                 if (item.panel === 'gyro') {
-                  this.toggleGyroscope(!this.gyroscopeEnabled)
-                  this.flashHint(this.gyroscopeEnabled ? '陀螺仪：开' : '陀螺仪：关')
+                  this.toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
+                  this.flashHint(this.gyroStore.gyroscopeEnabled ? '陀螺仪：开' : '陀螺仪：关')
                   return
                 }
                 this.drawerOpen = false
@@ -22060,7 +21950,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
               }.layoutWeight(1).alignItems(HorizontalAlign.Start)
               Button(I18n.t('settings_view_center')).fontSize(10).fontColor(this.nmText()).backgroundColor(this.nmBg())
                 .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 })
-                .opacity(this.hasSelectedObject() && !this.gyroscopeEnabled ? 1 : 0.58)
+                .opacity(this.hasSelectedObject() && !this.gyroStore.gyroscopeEnabled ? 1 : 0.58)
                 .onClick(() => { this.moveToSelectedObject() })
             }.width('100%').padding({ left: 10, right: 8, top: 7, bottom: 7 })
               .backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
@@ -25498,8 +25388,8 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       this.infoRow(I18n.t('i0057'), this.isExpandedLayout ? I18n.t('s0703') : I18n.t('s0704'))
       this.infoRow(I18n.t('i0058'), 'Stellarium Core')
       this.infoRow(I18n.t('i0059'), this.fovText)
-      this.infoRow(I18n.t('i0060'), this.gyroscopeStatus)
-      this.infoRow(I18n.t('i0061'), this.sensZh(this.gyroscopeSensitivityText))
+      this.infoRow(I18n.t('i0060'), this.gyroStore.gyroscopeStatus)
+      this.infoRow(I18n.t('i0061'), this.sensZh(this.gyroStore.gyroscopeSensitivityText))
       this.gyroscopeRow()
       this.languageRow()
       Row() {
@@ -26283,7 +26173,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
         .fontSize(14)
         .fontColor('#E5FFFFFF')
         .layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: this.gyroscopeEnabled })
+      Toggle({ type: ToggleType.Switch, isOn: this.gyroStore.gyroscopeEnabled })
         .width(46)
         .height(28)
         .selectedColor('#5B93BF')
@@ -26303,7 +26193,7 @@ ObjectDetailCardTabs({ activeIndex: this.bottomCardIndex, onSelect: (index: numb
       this.gyroscopeRow()
       Row() {
         Text(I18n.t('i0230')).fontSize(12).fontColor(this.nmSub()).width(86)
-        Text(this.sensZh(this.gyroscopeSensitivityText)).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
+        Text(this.sensZh(this.gyroStore.gyroscopeSensitivityText)).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
       }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
       Text(I18n.t('settings_gyro_desc'))
         .fontSize(10).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 8 })

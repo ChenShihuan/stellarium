@@ -1,3 +1,10 @@
+## [2026-10-01] DevEco Code - Phase 3ae：sensor 域起步 —— GyroStore + 陀螺仪校准面板组件化
+
+- **新增 `state/GyroStore.ets`**：13 个 gyro/gyroscope 字段（`gyroGuideVisible/Angle/X/Y`、`gyroscopeEnabled/Status/SensitivityText`、`gyroCalibPanelOpen`、`gyroCompassText/Angle`、`gyroOffsetAz/Alt`、`gyroCompassAzAlignment`）整体迁入（123 处引用改写；宿主字段声明合并为 `@State private gyroStore`）。**迁入不改变刷新语义**：这些字段本就以宿主 `@State` 承载（含传感器事件逐次更新 `gyroGuideX/Y/Angle`），宿主照旧重绘（§13.1 规则 4）。
+- **新增 `panels/sensors/GyroCalibPanel.ets`**（113 行）：原 99 行 @Builder `gyroCalibPanel()` → 组件，仅 `@ObjectLink store` + 3 个回调（`onFlashHint` / `onCalibrate` / `onToggle`）；面板内对 `gyroOffsetAz/Alt`、`gyroscopeSensitivityText`、`gyroCalibPanelOpen` 的写入仍落在 store（原为直接写宿主 `@State`，语义等价），重置按钮里对 `gyroCompassAzAlignment` 的写亦同。
+- **单体行数：** 28,448 → **28,338**（−110）。
+- **验证：** 构建 / 契约校验（84 个 .ets）/ 全量切片脚本（仅剩 §13.6 的 6 个环境类）/ 安装启动与选星冒烟通过（`pidof` 有值、`Mars` 资料页正常）。**面板入口在图层/更多面板深处，本次未做面板本体真机走查**，属如实记录的验证范围。
+- **踩坑（重复已记录的教训 → 本次加硬性做法）：** ①组件提取时**必须逐字段改写残留引用** —— 本轮又漏了 13 个 gyro 字段（`Cannot find name` 型报错）。**以后在构建前先对新组件文件执行 `grep 'this\.(被搬字段前缀)'` 并确认无残留**。②宿主侧删除 builder **不要用"边扫边 continue"的写法**（本轮它把 `gyroCalibPanel` 的体留成孤儿，导致数百行之外爆 `Only UI component syntax can be written here`），必须**先算出起止索引、再按索引重建数组**（此前各片均用此法且从未出错）。
 ## [2026-10-01] DevEco Code - Phase 3ac：详情卡"资料"页组件化 —— 四页全部组件化达成
 
 - **`ObjectDetailTabs.ets` 新增 `ObjectDetailDataTab`**：`unifiedObjectDetailCard()` 里 `bottomCardIndex === 2` 的分支（42 行）搬出，内含 `ObjectDistanceNotice` / `TabletInspectorMediaGroup` / `SatellitePassDetails` / `ConstellationCultureView` / 12 个 `ObjectDataTile` / `StructuredDetailRows`。至此**卡片四页（观测 / 坐标 / 资料 / 操作）全部为组件**，宿主的 `Scroll` 内只剩四个分支调用。
