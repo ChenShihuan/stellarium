@@ -37,6 +37,9 @@ import { TimeStore } from '../state/TimeStore'
 import { TimeSpeedChips } from '../panels/time/TimeSpeedChips'
 import { JulianDateStore } from '../state/JulianDateStore'
 import { JulianDateControls } from '../panels/time/JulianDateControls'
+import { SiderealTimeRow } from '../panels/time/SiderealTimeRow'
+import { EquationOfTimeBlock } from '../panels/time/EquationOfTimeBlock'
+import { EquationOfTimeStore } from '../state/EquationOfTimeStore'
 
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
@@ -769,7 +772,6 @@ export struct WindowNativeNode {
   @State private wutHint: string = ''
   private wutRequestSequence: number = 0
   @State private wutHasResult: boolean = false
-  @State private siderealTimeText: string = '--'
   @State private nightModeOn: boolean = false
   @State private atmoPressure: number = 1013
   @State private atmoTemperature: number = 10
@@ -1155,13 +1157,7 @@ export struct WindowNativeNode {
   @State private mosaicCameraLoading: boolean = false
   @State private mosaicCameraPending: boolean = false
   @State private mosaicCameraStatus: string = ''
-  @State private equationOfTimeEnabled: boolean = false
-  @State private equationOfTimeMsFormat: boolean = false
-  @State private equationOfTimeInverted: boolean = false
-  @State private equationOfTimeStartup: boolean = false
-  @State private equationOfTimeMinutes: number = 0
-  @State private equationOfTimeLoading: boolean = false
-  @State private equationOfTimeStatus: string = ''
+  @State private equationOfTimeStore: EquationOfTimeStore = new EquationOfTimeStore()
   @State private archaeoLinesEnabled: boolean = false
   @State private archaeoLineWidth: number = 1
   @State private archaeoEquinox: boolean = false
@@ -4750,56 +4746,45 @@ export struct WindowNativeNode {
   }
 
   private loadEquationOfTime(): void {
-    this.equationOfTimeLoading = true
+    this.equationOfTimeStore.equationOfTimeLoading = true
     this.callNativeWhenReady('getEquationOfTime', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) {
-        this.equationOfTimeStatus = I18n.t('plugin_status_unavailable')
+        this.equationOfTimeStore.equationOfTimeStatus = I18n.t('plugin_status_unavailable')
       } else {
-        this.equationOfTimeEnabled = r.enabled === true
-        this.equationOfTimeMsFormat = r.msFormat === true
-        this.equationOfTimeInverted = r.inverted === true
-        this.equationOfTimeStartup = r.enableAtStartup === true
-        this.equationOfTimeMinutes = typeof r.minutes === 'number' ? r.minutes : 0
-        this.equationOfTimeStatus = ''
+        this.equationOfTimeStore.equationOfTimeEnabled = r.enabled === true
+        this.equationOfTimeStore.equationOfTimeMsFormat = r.msFormat === true
+        this.equationOfTimeStore.equationOfTimeInverted = r.inverted === true
+        this.equationOfTimeStore.equationOfTimeStartup = r.enableAtStartup === true
+        this.equationOfTimeStore.equationOfTimeMinutes = typeof r.minutes === 'number' ? r.minutes : 0
+        this.equationOfTimeStore.equationOfTimeStatus = ''
       }
-      this.equationOfTimeLoading = false
+      this.equationOfTimeStore.equationOfTimeLoading = false
     }, 0, 100, 15, () => {
-      this.equationOfTimeLoading = false
-      this.equationOfTimeStatus = I18n.t('plugin_status_unavailable')
+      this.equationOfTimeStore.equationOfTimeLoading = false
+      this.equationOfTimeStore.equationOfTimeStatus = I18n.t('plugin_status_unavailable')
     })
   }
 
   private setEquationOfTime(setting: string, enabled: boolean): void {
     const mutationId = ++this.equationOfTimeMutationId
     let previous: boolean | undefined
-    if (setting === 'enabled') { previous = this.equationOfTimeEnabled; this.equationOfTimeEnabled = enabled }
-    else if (setting === 'msFormat') { previous = this.equationOfTimeMsFormat; this.equationOfTimeMsFormat = enabled }
-    else if (setting === 'inverted') { previous = this.equationOfTimeInverted; this.equationOfTimeInverted = enabled }
-    else if (setting === 'enableAtStartup') { previous = this.equationOfTimeStartup; this.equationOfTimeStartup = enabled }
-    this.equationOfTimeStatus = ''
+    if (setting === 'enabled') { previous = this.equationOfTimeStore.equationOfTimeEnabled; this.equationOfTimeStore.equationOfTimeEnabled = enabled }
+    else if (setting === 'msFormat') { previous = this.equationOfTimeStore.equationOfTimeMsFormat; this.equationOfTimeStore.equationOfTimeMsFormat = enabled }
+    else if (setting === 'inverted') { previous = this.equationOfTimeStore.equationOfTimeInverted; this.equationOfTimeStore.equationOfTimeInverted = enabled }
+    else if (setting === 'enableAtStartup') { previous = this.equationOfTimeStore.equationOfTimeStartup; this.equationOfTimeStore.equationOfTimeStartup = enabled }
+    this.equationOfTimeStore.equationOfTimeStatus = ''
     this.callInteractive('setEquationOfTime', setting + '|' + (enabled ? '1' : '0'), () => {}, () => {
       if (mutationId !== this.equationOfTimeMutationId) return
       if (previous !== undefined) {
-        if (setting === 'enabled') this.equationOfTimeEnabled = previous
-        else if (setting === 'msFormat') this.equationOfTimeMsFormat = previous
-        else if (setting === 'inverted') this.equationOfTimeInverted = previous
-        else if (setting === 'enableAtStartup') this.equationOfTimeStartup = previous
+        if (setting === 'enabled') this.equationOfTimeStore.equationOfTimeEnabled = previous
+        else if (setting === 'msFormat') this.equationOfTimeStore.equationOfTimeMsFormat = previous
+        else if (setting === 'inverted') this.equationOfTimeStore.equationOfTimeInverted = previous
+        else if (setting === 'enableAtStartup') this.equationOfTimeStore.equationOfTimeStartup = previous
       }
-      this.equationOfTimeStatus = I18n.t('plugin_action_failed')
+      this.equationOfTimeStore.equationOfTimeStatus = I18n.t('plugin_action_failed')
     })
   }
 
-  private equationOfTimeDisplay(): string {
-    const signedMinutes = (this.equationOfTimeInverted ? -1 : 1) * this.equationOfTimeMinutes
-    const sign = signedMinutes >= 0 ? '+' : '-'
-    const absoluteMinutes = Math.abs(signedMinutes)
-    if (!this.equationOfTimeMsFormat) return sign + absoluteMinutes.toFixed(1) + ' ' + I18n.t('equation_of_time_minutes')
-    const wholeMinutes = Math.floor(absoluteMinutes)
-    const seconds = Math.round((absoluteMinutes - wholeMinutes) * 60)
-    const normalizedMinutes = seconds >= 60 ? wholeMinutes + 1 : wholeMinutes
-    const normalizedSeconds = seconds >= 60 ? 0 : seconds
-    return sign + normalizedMinutes.toString() + ':' + (normalizedSeconds < 10 ? '0' : '') + normalizedSeconds.toString()
-  }
 
   private loadArchaeoLines(): void {
     this.archaeoLoading = true
@@ -7566,7 +7551,7 @@ export struct WindowNativeNode {
   // ---- 时间面板扩展：恒星时 / 夜视 / 大气折射 ----
   private loadTimeExtras(): void {
     const st: StellariumBridgeResponse = this.callNative('getSiderealTime', '')
-    if (st.ok === true && st.text !== undefined) this.siderealTimeText = st.text
+    if (st.ok === true && st.text !== undefined) this.timeStore.siderealTimeText = st.text
 
     const nm: StellariumBridgeResponse = this.callNative('getNightMode', '')
     if (nm.ok === true) this.nightModeOn = (nm.night === true)
@@ -23928,52 +23913,18 @@ private loadPlanetPositions(): void {
         { id: 'sunRise', label: '日出' }, { id: 'sunTransit', label: '中天' },
         { id: 'sunSet', label: '日落' }, { id: 'astronomicalSet', label: '天文昏' }
       ])
-      Row() {
-        Text('恒星时').fontSize(11).fontColor('#99FFFFFF').width(64).textAlign(TextAlign.Start)
-        Text(this.siderealTimeText)
-          .fontSize(13).fontColor('#E5FFFFFF').layoutWeight(1)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%').padding({ left: 10, right: 10, top: 3, bottom: 3 })
-      Text('恒星时 = 此刻正好在你头顶中天的那条赤经线，用来判断某个天体现在转到哪儿了。')
-        .fontSize(9).fontColor(this.nmSub()).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 2 })
-      Row() {
-        Column({ space: 2 }) {
-          Text(I18n.t('equation_of_time_title')).fontSize(12).fontColor(this.nmText()).width('100%')
-          Text(I18n.t('equation_of_time_hint')).fontSize(9).fontColor(this.nmSub()).width('100%').maxLines(2)
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        if (this.equationOfTimeLoading) {
-          LoadingProgress().width(18).height(18).color(this.nmAccent())
-        }
-        Toggle({ type: ToggleType.Switch, isOn: this.equationOfTimeEnabled })
-          .enabled(!this.equationOfTimeLoading)
-          .onChange((v: boolean) => { this.setEquationOfTime('enabled', v) })
-      }.width('100%').padding({ left: 10, right: 10, top: 6, bottom: 6 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        Row() {
-          Text(I18n.t('equation_of_time_value')).fontSize(11).fontColor(this.nmSub()).layoutWeight(1)
-          Text(this.equationOfTimeDisplay())
-            .fontSize(13).fontColor(this.nmText())
-        }.width('100%').padding({ left: 10, right: 10, top: 4, bottom: 4 })
-        Row() {
-          Text(I18n.t('equation_of_time_ms_format')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.equationOfTimeMsFormat })
-            .enabled(!this.equationOfTimeLoading)
-            .onChange((v: boolean) => { this.setEquationOfTime('msFormat', v) })
-        }.width('100%').padding({ left: 10, right: 10, top: 4, bottom: 4 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        Row() {
-          Text(I18n.t('equation_of_time_inverted')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.equationOfTimeInverted })
-            .enabled(!this.equationOfTimeLoading)
-            .onChange((v: boolean) => { this.setEquationOfTime('inverted', v) })
-        }.width('100%').padding({ left: 10, right: 10, top: 4, bottom: 4 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-        Row() {
-          Text(I18n.t('equation_of_time_startup')).fontSize(11).fontColor(this.nmText()).layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.equationOfTimeStartup })
-            .enabled(!this.equationOfTimeLoading)
-            .onChange((v: boolean) => { this.setEquationOfTime('enableAtStartup', v) })
-        }.width('100%').padding({ left: 10, right: 10, top: 4, bottom: 4 }).backgroundColor(this.nmBg()).borderRadius(UI_RADIUS_CONTROL)
-      if (this.equationOfTimeStatus.length > 0) {
-        Text(this.equationOfTimeStatus).fontSize(10).fontColor('#FFD59A').width('100%').padding({ left: 10, right: 10 })
-      }
+      SiderealTimeRow({
+        store: this.timeStore,
+        subColor: this.nmSub()
+      })
+      EquationOfTimeBlock({
+        store: this.equationOfTimeStore,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        accentColor: this.nmAccent(),
+        panelColor: this.nmBg(),
+        onToggle: (setting: string, enabled: boolean) => { this.setEquationOfTime(setting, enabled) }
+      })
       JulianDateControls({
         store: this.julianStore,
         textColor: this.nmText(),

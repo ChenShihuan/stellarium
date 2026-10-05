@@ -1,3 +1,14 @@
+## [2026-09-30] DevEco Code - Phase 3e：恒星时行 + 时间方程块迁移（真机验证数值实时与开关联动）
+
+- **新增文件：** `state/EquationOfTimeStore.ets`（7 字段：`equationOfTimeEnabled/MsFormat/Inverted/Startup/Minutes/Loading/Status`，字段名沿用原 `@State` 名）、`panels/time/SiderealTimeRow.ets`（恒星时行 + 说明，`@ObjectLink TimeStore`）、`panels/time/EquationOfTimeBlock.ets`（标题开关 + 当前值 + 三个显示选项 + 失败提示；格式化逻辑 `displayText()` 从单体方法搬入组件，store 保持不含 UI 逻辑）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 删除 `@State siderealTimeText`（并入既有 `TimeStore.siderealTimeText`）与 7 个 `equationOfTime*` `@State`（合并为 `@State private equationOfTimeStore`）；28 处引用改写（`this.equationOfTimeX` → `this.equationOfTimeStore.equationOfTimeX`；`equationOfTimeMutationId` 是普通字段仍留在宿主）；恒星时行/说明/时间方程块的整段 UI 替换为 `SiderealTimeRow({...})` 与 `EquationOfTimeBlock({...})` 两个组件调用；删除已搬入组件的 `equationOfTimeDisplay()`。
+- **注意点（迁移顺序陷阱）：** 恒星时数值在旧实现下**本来就是实时**的（builder 内直接读状态）。若只把它移入 store 而不把读取它的 UI 一起搬进组件，宿主无法观测 store → 反而会**退化成不刷新**。本片因此把该行一并组件化。
+- **验证结果（真机 `192.168.3.95:40565`）：** `arkts_check` 五文件无错误；`BUILD SUCCESSFUL`；契约校验通过；安装启动成功。
+  - **数值实时：** 恒星时连续 3 次采样（间隔约 7.5 s）`22h 54m 05s → 22h 54m 11s → 22h 54m 17s`，随时间推进，无回归。
+  - **开关联动：** 点「显示分钟和秒」后当前值由 `+10:04`（mm:ss）**立即**变为 `+10.1 分钟`，再点回恢复 `+10:04` —— 证明子组件写 store 经 `@ObjectLink` 实时驱动自身重渲染。
+  - 测试后已把该设置点回原值（该开关经引擎持久化）。
+- **范围约束：** 纯搬移 + 状态归属迁移，行为零变更。
+
 ## [2026-09-30] DevEco Code - Phase 3d：儒略日块迁移为 JulianDateStore + 两级组件（真机验证 JD 实时跳动）
 
 - **新增文件：** `state/JulianDateStore.ets`（`@Observed`：`julianDayInput` / `modifiedJulianDayInput` / `julianDateEditing` / `julianDateError` / `julianCalendarSystem`）、`panels/time/JulianDateControls.ets`（容器：历法提示 + 两行输入 + 校验错误 + 说明）、`panels/time/JulianDateInputRow.ets`（行组件：标签 + 「-」/「+」+ 输入框）。
