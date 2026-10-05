@@ -1,7 +1,7 @@
 import { curves } from '@kit.ArkUI'
 import { ShellAction } from '../../pages/StellariumTypes'
 import { BottomDock } from './BottomDock'
-import { DockClockLayer } from './PanelChromeExtras'
+import { DockClockLayer, SkyZoomLayer } from './PanelChromeExtras'
 import { GyroCalibPanel } from '../sensors/GyroCalibPanel'
 import { ObjectDetailConnectorLayer } from '../overlay/ObjectDetailConnectorLayer'
 import { UnifiedObjectDetailCard } from '../object/UnifiedObjectDetailCard'
@@ -102,6 +102,8 @@ export struct ExpandedShell {
   onDockTap: (item: ShellAction) => void = () => {}
   onPanelTouch: (event: TouchEvent) => void = () => {}
   onOpenTime: () => void = () => {}
+  onZoomIn: () => void = () => {}
+  onZoomOut: () => void = () => {}
   onFlashHint: (text: string) => void = () => {}
   onCalibrate: () => void = () => {}
   onToggleGyroscope: (enabled: boolean) => void = () => {}
@@ -158,6 +160,15 @@ export struct ExpandedShell {
           .animation({ duration: 300, curve: curves.springMotion(0.46, 0.86) })
         if (!this.panelVisible && !this.polarScopeVisible && this.dockClockText.length > 0) {
           DockClockLayer({ clockText: this.dockClockText, layerWidth: this.dockWidth, posX: this.dockLeft, posY: this.dockTop - 48, onOpenTime: () => { this.onOpenTime() } })
+        }
+        // 与常驻时钟左右对称的非手势缩放按钮：竖排 +放大 / −缩小。
+        if (!this.panelVisible && !this.polarScopeVisible) {
+          SkyZoomLayer({
+            layerWidth: this.dockWidth, posX: this.dockLeft, posY: this.dockTop - 104,
+            textColor: this.textColor,
+            onZoomIn: () => { this.onZoomIn() },
+            onZoomOut: () => { this.onZoomOut() }
+          })
         }
       }
       // 陀螺仪校准面板（开启陀螺仪时显示在侧栏右侧）
