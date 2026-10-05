@@ -1,3 +1,8 @@
+## [2026-10-01] DevEco Code - 文档记录：陀螺仪校准面板入口不可发现（仅记录，未改代码）
+
+- **来源**：用户真机走查反馈 —— 点按右侧竖排栏的陀螺仪按钮只有开/关提示，长按看不到校准面板，且不清楚校准时是否需要额外操作。
+- **记录位置**：`docs/harmonyos/KNOWN-ISSUES.md` 新增 **第 21 条**（入口现状代码事实、三种候选原因、校准语义、A/B/C 三种候选修法、真机三步定位法、以及"记录时设备已掉线、未验证"的状态说明）。
+- **未做**：没有改任何 ArkTS 代码（用户指示"只记录文档"）。修法选定后另开切片，按协议做真机实测再提交。
 ## [2026-10-01] DevEco Code - Phase 3ao：工具与录制域（ToolsStore + `panels/tools` 三个组件）
 
 - **新增 `state/ToolsStore.ets`（42 行）**：把「工具 / 帮助 / 角度测量 / 天空资料图状态提示 / 录制控制条 UI 状态」五簇状态整体迁入 `@Observed` store —— **25 个字段**：帮助面板 14（`aboutVersion` / `aboutQt` / `aboutUserDir` / `aboutConfigFile` / `logText` / `logVisible` / `configExportText` / `configExportVisible` / `configImportText` / `configImportMsg` / `screenshotSaving` / `sessionExportText` / `sessionImportText` / `sessionImportMsg`）、角度测量 5（`angleMeasureEnabled` / `angleMeasureHasStart` / `angleMeasureHasEnd` / `angleMeasureText` / `angleMeasurePending`）、天空资料图状态 3（`skyTextureStatusVisible` / `skyTextureStatusText` / `skyTextureStatusError`）、录制控制条 3（`recording` / `recordingPaused` / `recordingUiExpanded`）。类型与默认值逐条照抄。
