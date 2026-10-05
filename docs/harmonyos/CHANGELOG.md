@@ -1,3 +1,16 @@
+## [2026-10-04] DevEco Code - 重构：卫星域由 Prop 风格转 Store 风格（review §2.7 第一批；宿主 @State 333 → 306）
+
+- **依据**：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` **§2.7**（两种组件接入风格）——文档指出 **Prop 风格域是"残留 333 个宿主 `@State`"的主要来源**，并明确"这些域是后续继续瘦身（或翻 V2）最明确的目标清单"，其中首个点名的就是 `SatellitesPanel`（25+ 个 `sat*` 字段）。目标 store 名沿用计划 §2 蓝图里早已规划的 **`SatelliteStore`**。
+- **本片内容**：
+  - **新增 `state/SatelliteStore.ets`**：`@Observed export class SatelliteStore`，承载原宿主 **28 个** `@State`（`sat*` 簇 + `activeSatGroup` + `satelliteListLoading` + `satelliteCatalogHealth`），字段名沿用原名以便与既有引用机械对应。
+  - **`panels/panels/SatellitesPanel.ets`**：**33 个 `@Prop` → 5 个**（仅 `textColor/subColor/panelColor/inputColor/accentColor`）+ **1 个 `@ObjectLink satelliteStore`**；动作（输入/开关/刷新/导入/删除/分组/检索/目录健康文案）**仍为宿主注入的回调** —— 状态进 store、动作走回调，与 `AstroPanel`/`LayersPanel` 既有写法一致（§2.11）。头注同步改写（原文自证"本片不搬状态（搬动会牵动 160 处引用）"，现已过时，review 文档正是引用它作为 Prop 风格的自证）。
+  - **宿主 `MainWindowNativeNode.ets`**：删除 28 个 `@State`，新增 `@State private satelliteStore: SatelliteStore = new SatelliteStore()`，**114 处 `this.<字段>` 机械改为 `this.satelliteStore.<字段>`**（词边界单遍替换；复核：83 处经 store、0 残留、0 双重前缀）；面板调用点 28 条绑定收敛为 `satelliteStore: this.satelliteStore,`。**保留** `catalogHealthLoaded` / `catalogManifestPresent`（与星表域共用、非卫星面板入参）。
+- **改造前必做的语义普查（否则会引入隐性回归）**：`@ObjectLink` 只观测**字段赋值**，观测不到数组原地 `push/splice` 或对象原地改属性（而宿主原 `@State` 数组是观测 push 的）。已逐项确认：`satSources` / `satGroups` / `satItems` **无任何原地变更**，`satUpdateSettings` / `satelliteCatalogHealth` **无原地属性写入** ⇒ 转换语义等价。该结论已写入 store 头注，供后续域照做。
+- **收益（实测）**：宿主 `@State` **333 → 306**（净 −27 = −28 字段 +1 store）；`SatellitesPanel` 入参 **`@Prop` 33 → 5**。刷新粒度由"宿主整棵树"收缩到"订阅该 store 的组件"。
+- **验证**：`arkts_check` 通过；UI 契约 `intact`（33 面板 / 24 静态 id / 17 动态前缀 / **44 锚点** / **186** 文件）；**BUILD SUCCESSFUL**；真机（`192.168.50.108:36717`）走查：`更多功能 → 天体数据与扩展 → 卫星` 打开面板（仍无"打开面板"的语义命令，只能用坐标点击）——面板**完全由 store 渲染**并正确显示 `离线内置轨道数据`(satOffline)、目录更新时间(satNewestUpdate)、原版目录(satCatalogCreator)、内置快照(satCatalogSnapshot)、来源(satCatalogSource)、目录健康文案(satelliteCatalogHealth)、历元过期提示(satOutdatedCount/satDateInRange)、`总数 3134`(satCount) 与 `在线更新` 开关**因 `satOffline` 被禁用**；点击 `自动显示新卫星` 开关由 ON 变 OFF，面板**即时重渲染** ⇒ store 写入 → `@ObjectLink` → 刷新链路打通。
+- **中途一次构建失败（记录以免再犯）**：我在面板 import 里删掉了 `SatelliteSource` / `SatelliteUpdateSettings`，误以为它们只服务 `@Prop` 类型；实际它们在 `ForEach` 回调里当**局部类型标注**用（`(source: SatelliteSource, i: number) => …`），已恢复 —— 删 import 前必须确认类型只在被删声明处出现。
+- **后续队列（同一 §2.7 目标清单）**：`ScriptsPanel`（19 个宿主 `@State`/28 个 `@Prop`）→ `astroExtras` 簇 55 个（navStars / archaeo / mosaic / catalogs / meteorShowers / scenery3d）→ 其余 `other` 232 个。每片按本片同样的"先普查原地变更、再搬状态、动作留回调"口径推进。
+
 ## [2026-10-04] DevEco Code - 记录：平板/折叠分支的验证结论与两项限制（补充 d5799a0175 的"未验证"项）
 
 - **模拟器为何不可用（先排障）**：`MatePad Pro 13`（tablet）与 `Mate X7`（foldable）**均无法启动**（`devecocli emulator start` 后状态仍为 `stopped`、无任何模拟器进程）。根因是 **Hyper-V/VBS 正在运行**：`systeminfo` 报 `Virtualization-based security: Status: Running` / `Hyper-V Requirements: A hypervisor has been detected`。HarmonyOS 模拟器需要独占的 hypervisor，与 Hyper-V 冲突；磁盘空间（C: 63GB / D: 67GB / E: 828GB 可用）与残留进程均已排除。修复需关闭 VBS/Hyper-V 并**重启** —— 属系统级改动，本片未擅自执行。
