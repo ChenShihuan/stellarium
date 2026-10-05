@@ -1755,3 +1755,27 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 7 文件 0 error；`BUILD SUCCESSFUL`；契约 44 锚点 intact（33 面板 / 24 静态 id / 17 动态前缀 / 250+ 文件）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败。真机（192.168.50.108:36717）：搜索筛选全链（`setSearchBrowserPage browse/categories`、`setSearchBrowserFilter visibility|above` / `instrument|binocular`、`selectSearchCategory galaxy`→`NebulaMgr:0`，`getSearchBrowserState` 回读，测后复原）；详情卡「固定位置」→ hilog `setViewLock "1"`→`"0"`；音频面板「背景音乐」→ `StellariumAudio: muted = true`→`false`；位置面板 → `getTonightEvents`；Dock 时钟 1s 节拍；`pidof` 存活、无 jscrash。未走查：紧凑音频快捷 `toggleMusic`（无语义命令）、`pointerCoordinates` 面板（本布局内容为空、既有行为）、`selfTestAllActions`（`SELFTEST=false`）。
 
 **E 轨道收尾结论（E1–E4 全清）**：E1 位置层级选择薄胶水 + 死代码、E2 显示/图层 16 法并入 `LayerController`、E3 设置选项 18 法 → `SettingsController`、E4 搜索/音频/自检/视锁/今晚天象。宿主 **8,646 → 7,993 行（−653）**、`private` **277 → 219（−58）**。**「几何不宜下沉」评审结论**：`viewCoordinateOverlayWidth/Left/Top` + `clampedViewCoordinateOffsetX/Y`、`bottomCardX/Y` 等几何助手与 A2 热路径（`isUiPoint` / `skyZoomButtonAt` / `dockActionAt` / `expandedSafeTargetPoint`）与布局 / 命中逐帧同源，下沉会割裂绘制—命中一致性，**保留宿主**（§15.6-2 已登记）。
+
+#### 15.12.15 E 轨道 E5：解散 `SettingsController`，18 法按字段归属并回各 store（2026-10-05）
+
+> **背景**：E3 曾把 18 个设置/配置行为收进 `capability/SettingsController.ets`（350 行）。E5 按「字段所在处即归宿 / 读本域 store 字段 → 并入该 store 方法」（§14.3，参照 D16 `syncNightModeFromEngine` / `applyJulianDate`）把控制器整体解散、方法并回各域 store，**不新建控制器**（§14.3 P2 范式）。
+
+**18 法逐条归属（以工作区实测为准）**
+
+| 法 | 归宿 | 判定 |
+|---|---|---|
+| `setInformationMode` / `setInformationField` | `state/InfoWindowStore.ets` | 逐字等价；桥经新增 `attachPort`；`InfoWindowHostHooks` 回注 `flashHint` / `applySelectedInfoMode` / `refreshSelectedObject` / `clearSelectedDetailLoaded` |
+| `applyCustomInformationMask` | **`state/ObjectDetailStore.ets`（分配调整）** | 30 个被清字段 + `selectedDetailFields` 过滤全在本 store；`informationMode` 与掩码谓词以参数传入（避免 store 相互 import） |
+| `saveAllCoreSettings` / `restoreCoreDefaults` / `exportConfig` / `importConfig` | `state/ToolsStore.ets` | 逐字等价；hooks 增 `saveAppSettings` / `copyConfigExportText`；`ExportConfigResponse` / `ImportConfigResponse` 随方法迁入 |
+| `setNavigationBoolean` / `setNavigationMaxFov` | `state/NavigationSettingsStore.ets` | 逐字等价；hooks `flashHint` / `setAutoZoomResets`（autoZoomResets 分支写 ViewSettingsStore） |
+| `setEphemerisEnabled` | `state/EphemerisStore.ets` | 逐字等价；hook `flashHint` |
+| `setConfigurationDithering` / `setDistanceUnit` / `setFovMarkerSetting` / `setProjection` | `state/ViewSettingsStore.ets` | 逐字等价；hooks `flashHint` / `setCurrentProjection` / `reloadConfigurationSettings` / `logProjectionError`（store 不 import hilog） |
+| `applyAtmosphereResponse` | `state/AtmosphereStore.ets` | 逐字等价（纯回包写本域 4 字段，无端口 / hook） |
+| `setConfigurationDateFormat` | **保留宿主** | 本体即 `timeCtl().saveTimePreference`，内联到宿主 `selectSettingsChoice` 的 `date` 分支 |
+| `settingsChoiceSelected` / `selectSettingsChoice` | **保留宿主** | 跨 4 store 的谓词 / 分派，留宿主薄分派 |
+
+**新增 / 补齐的 attachPort / hooks**：`InfoWindowStore`（+port +hooks）、`NavigationSettingsStore`（+port +hooks）、`EphemerisStore`（+port +hooks）、`ViewSettingsStore`（+port +hooks）、`ToolsStore`（hooks +2）；`AtmosphereStore` / `ObjectDetailStore` / `TimeSettingsStore` 无需新增（无端口依赖 / 以参数与既有 hook 传递）。端口复用 `HostCommandPort`（无 publish*，`attachPort(port)` 单参形态，同 `NightModeStore`）。宿主全部 `settingsCtl().setXxx` 调用点改指对应 store；删除 `SettingsController` / `SettingsHostHooks` import、`settingsControllerImpl` 字段与 `settingsCtl()` 访问器（零残留）。
+
+**度量**：宿主 **7,992 → 8,017 行（+25）**、`private` 方法 **211 → 212（−1 删 `settingsCtl()` + 2 增薄分派）**、`@State private` **131 不变**；删除 `capability/SettingsController.ets`（350 行）；`InfoWindowStore` 57→147、`ObjectDetailStore` 231→284、`ToolsStore` 207→292、`NavigationSettingsStore` 25→99、`EphemerisStore` 43→92、`ViewSettingsStore` 36→135、`AtmosphereStore` 19→32。
+
+**验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 9 文件 0 error；`BUILD SUCCESSFUL`；契约 **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀 / 249 文件）；`test-ohos-information-policy` 3/3、`test-ohos-settings-choice-motion` 4/4 全绿（两夹具同步）；全量 `*-ohos*.mjs` 仅 §13.6 六项环境类失败。真机（192.168.50.108:36717）：`Smoke: PASS`；信息模式 `default → short → default`（`getInformationSettings` 回读）、距离单位 `英里 → 千米`（hilog `flag_use_km_for_distance=false→true`）、时间面板冒烟（`AtmosphereStore` 消费方渲染）；`pidof` 存活、无 jscrash；测试改动的持久化设置已复原。**未走查同 E3**（保存设置 / 恢复默认 / 投影 / FOV 标记 / 抖动 / 星历 / 导出导入）。

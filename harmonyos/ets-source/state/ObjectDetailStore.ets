@@ -147,6 +147,59 @@ export class ObjectDetailStore {
     hooks.requestSatellitePasses(this.selectedName)
   }
 
+  // 自定义信息模式下按位掩码清空明细字段（原 SettingsController.applyCustomInformationMask，2026-10-05
+  // 解散 SettingsController 时按「字段所在处即归宿」并入本 store —— 被清的 30 个字段全在本 store；
+  // 信息模式 / 掩码判定由调用方以谓词传入，避免 store 相互 import 与新增 hooks）。函数体逐字搬入，
+  // 仅 this.objectDetailStore.<f> → this.<f>、this.infoWindowStore.informationMaskHas(k) → informationMaskHas(k)。
+  applyCustomInformationMask(informationMode: string, informationMaskHas: (key: string) => boolean): void {
+    if (informationMode !== 'custom') return
+    if (!informationMaskHas('magnitude')) {
+      this.selectedMagnitude = ''
+      this.selectedApparentMagnitude = ''
+      this.selectedAirmass = ''
+      this.selectedExtinction = ''
+    }
+    if (!informationMaskHas('raOfDate')) this.selectedCoordEq = ''
+    if (!informationMaskHas('raJ2000')) this.selectedCoordEqJ2000 = ''
+    if (!informationMaskHas('altAz')) {
+      this.selectedCoordAlt = ''
+      this.selectedCoordApparentAltAz = ''
+      this.selectedCoordGeometricAltAz = ''
+    }
+    if (!informationMaskHas('eclipticOfDate')) this.selectedCoordEcliptic = ''
+    if (!informationMaskHas('eclipticJ2000')) this.selectedCoordEclipticJ2000 = ''
+    if (!informationMaskHas('galactic')) this.selectedCoordGalactic = ''
+    if (!informationMaskHas('supergalactic')) this.selectedCoordSupergalactic = ''
+    if (!informationMaskHas('otherCoordinates')) this.selectedCoordParallactic = ''
+    if (!informationMaskHas('hourAngle')) this.selectedHourAngle = ''
+    if (!informationMaskHas('constellation')) this.selectedConstellation = ''
+    if (!informationMaskHas('distance')) this.selectedDistance = ''
+    if (!informationMaskHas('size')) this.selectedSize = ''
+    if (!informationMaskHas('siderealTime')) {
+      this.selectedMeanSiderealTime = ''
+      this.selectedApparentSiderealTime = ''
+    }
+    if (!informationMaskHas('riseTransitSet')) {
+      this.selectedRise = ''
+      this.selectedSet = ''
+      this.selectedTransit = ''
+    }
+    if (!informationMaskHas('elongation')) {
+      this.selectedPhase = ''
+      this.selectedElongation = ''
+    }
+    const groups = new Map<string, string>([
+      ['designations', 'catalog'], ['designation', 'catalog'], ['catalogNumber', 'catalog'], ['internationalDesignator', 'catalog'], ['culturalNames', 'name'],
+      ['hourAngle', 'hourAngle'], ['meanSiderealTime', 'siderealTime'], ['apparentSiderealTime', 'siderealTime'],
+      ['equatorialOfDate', 'raOfDate'], ['equatorialJ2000', 'raJ2000'], ['apparentAltAz', 'altAz'], ['geometricAltAz', 'altAz'],
+      ['eclipticCurrent', 'eclipticOfDate'], ['eclipticJ2000', 'eclipticJ2000'], ['galactic', 'galactic'], ['supergalactic', 'supergalactic'],
+      ['parallacticAngle', 'otherCoordinates'], ['blueMagnitude', 'magnitude'], ['surfaceBrightness', 'magnitude'], ['colorIndex', 'magnitude'],
+      ['angularAxes', 'size'], ['positionAngle', 'size']
+    ])
+    this.selectedDetailFields = this.selectedDetailFields.filter((field: ObjectDetailField) =>
+      informationMaskHas(groups.get(field.key) ?? 'extra'))
+  }
+
   // ==== 选中天体的「取值/标签」助手（§14 A2-3，原宿主私有方法逐字搬入）====
   //
   // 均读本 store 的 selected* 字段（含 selectedSatellitePasses 等），按 §14.3「读本域 store 字段
