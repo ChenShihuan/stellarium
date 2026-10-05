@@ -18,6 +18,10 @@
 //   - liveMode —— 实时模式开关显示值，SettingsQuickLegacyPanel 经 @Prop 快照消费。
 //   二者消费方都已持有本 store，故并入而不新建。
 //
+// 2026-10-04 追加一字段（review §2.7 残留并入）：
+//   - uiLocked —— 界面锁定标志，门控面板关闭与空闲淡出（`closePanel` / `handleUiTap` 关闭按钮 /
+//     `resetPanelIdle`）。属"视图交互锁定"，与 `viewLock`（锁定视图中心）同域，故并入本 store 而不新建。
+//
 // 约束：均为标量，只做整体赋值，无原地变更。
 @Observed
 export class ViewSettingsStore {
@@ -28,4 +32,5 @@ export class ViewSettingsStore {
   flatHorizon: boolean = true
   configDitheringMode: string = 'Color888'
   liveMode: boolean = true
+  uiLocked: boolean = false
 }

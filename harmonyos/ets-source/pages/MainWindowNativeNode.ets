@@ -133,6 +133,7 @@ import { ViewSettingsStore } from '../state/ViewSettingsStore'
 import { InfoWindowStore } from '../state/InfoWindowStore'
 import { LanguageStore } from '../state/LanguageStore'
 import { AtmosphereStore } from '../state/AtmosphereStore'
+import { GuideStore } from '../state/GuideStore'
 import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
 import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
@@ -270,7 +271,7 @@ export struct WindowNativeNode {
   // informationSettingPending / infoLevel 已下沉 state/InfoWindowStore.ets（review §2.7）。
   @State private infoWindowStore: InfoWindowStore = new InfoWindowStore()
   @State private fullInspectorRequested: boolean = false
-  @State private bottomCardIndex: number = 0
+  // bottomCardIndex 已并入 state/ObjectDetailStore.ets（review §2.7，2026-10-04）。
   @State private compactPanelSnapRatio: number = 0.6
   @State private compactPanelDragOffsetY: number = 0
   private lastInfoWinCloseMs: number = 0
@@ -515,7 +516,7 @@ export struct WindowNativeNode {
   private utcOffsetHours: number = 8
   @State private fovSliderValue: number = 60
   @State private currentProjection: string = 'ProjectionPerspective'
-  @State private uiLocked: boolean = false
+  // uiLocked 已并入 state/ViewSettingsStore.ets（review §2.7，2026-10-04）。
   @State private panelIdleOpacity: number = 1.0
   @State private panelIdleGlass: boolean = false
   @State private panelRouteOpacity: number = 1.0
@@ -588,10 +589,10 @@ export struct WindowNativeNode {
   private lx200LivePositionRequestPending: boolean = false
   private lx200LivePositionRequestId: number = 0
   @State private actionHint: ResourceStr = ''
-  @State private speechStatus: string = ''
-  // ===== 脚本录制 / 回放（#39）=====
+  // ===== 脚本录制 / 回放（39）=====
   @State private recordBuffer: Array<RecordCmd> = []
-  @State private guideState: GuideState = { active: false, phase: 'idle', guideId: '', index: 0, count: 0, automatic: false, remaining: 0, error: '' }
+  // speechStatus / guideState 已并入 state/GuideStore.ets（review §2.7，2026-10-04）。
+  @State private guideStore: GuideStore = new GuideStore()
   private guidePlayer?: GuidePlayer
   private guideTimer: number = -1
   private guideGyroWasEnabled: boolean = false
@@ -647,7 +648,7 @@ export struct WindowNativeNode {
     this.panelIdleOpacity = 1.0
     this.panelIdleGlass = false
     this.panelIdleTimer = setTimeout(() => {
-      if (!this.uiLocked) {
+      if (!this.viewSettingsStore.uiLocked) {
         this.panelIdleOpacity = 0.88
         this.panelIdleGlass = true
       }
@@ -1702,7 +1703,7 @@ export struct WindowNativeNode {
 
   private handleApplicationLifecycle = (foreground: boolean): void => {
     this.applicationInForeground = foreground
-    if (!foreground && this.guideState.phase === 'observing') this.guidePlayer?.action('pause')
+    if (!foreground && this.guideStore.guideState.phase === 'observing') this.guidePlayer?.action('pause')
     this.objectInspectorModelRenderClient?.setSuspended(!foreground)
     if (foreground) {
       if (this.foregroundRefreshPaused) {
@@ -2424,7 +2425,7 @@ export struct WindowNativeNode {
   }
 
   private closePanel(force: boolean = false): void {
-    if (this.uiLocked && !force) {
+    if (this.viewSettingsStore.uiLocked && !force) {
       return
     }
     if (this.polarScopeStore.polarScopeVisible) {
@@ -3194,7 +3195,7 @@ export struct WindowNativeNode {
   }
 
   private scriptPlaybackVisible(): boolean {
-    return this.guideState.active || this.scriptStore.scriptFocusActive || this.scriptStore.scriptLaunching || this.scriptStore.replaying
+    return this.guideStore.guideState.active || this.scriptStore.scriptFocusActive || this.scriptStore.scriptLaunching || this.scriptStore.replaying
   }
 
   private scriptSessionActive(): boolean {
@@ -3246,7 +3247,7 @@ export struct WindowNativeNode {
     }
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.scriptControlDragging = false
-      if (this.guideState.active) {
+      if (this.guideStore.guideState.active) {
         this.scriptStore.scriptControlOffsetX = this.guideCardX() - (this.isExpandedLayout ? 12 : (this.skyWidth - this.guideCardWidth()) / 2)
         this.scriptStore.scriptControlOffsetY = this.guideCardY() - (this.skyHeight - this.guideCardHeight() - 16)
       } else {
@@ -3297,7 +3298,7 @@ export struct WindowNativeNode {
   }
 
   private refreshScriptStatus(): void {
-    if (this.guideState.active || this.scriptStatusRequestPending || !this.scriptPlaybackVisible()) { return }
+    if (this.guideStore.guideState.active || this.scriptStatusRequestPending || !this.scriptPlaybackVisible()) { return }
     this.scriptStatusRequestPending = true
     this.callInteractive('getScriptStatus', '', (r: StellariumBridgeResponse) => {
       this.scriptStatusRequestPending = false
@@ -3367,7 +3368,7 @@ export struct WindowNativeNode {
   }
 
   private stopScriptPlayback(): void {
-    if (this.guideState.active) {
+    if (this.guideStore.guideState.active) {
       this.executeGuideRequest('guideAction', 'stop')
       return
     }
@@ -4654,7 +4655,7 @@ export struct WindowNativeNode {
         this.flashHint(I18n.t('msg_no_selection_for_tts'))
         return
       }
-      this.speechStatus = resp.text
+      this.guideStore.speechStatus = resp.text
       this.flashHint('已生成朗读文本（当前 SDK 未集成语音合成）')
     })
   }
@@ -12345,7 +12346,7 @@ private loadPlanetPositions(): void {
         this.infoWindowStore.infoWinExpanded = true
         this.fullInspectorRequested = true
         this.objectMediaStore.objectInspectorMoreOpen = false
-        this.bottomCardIndex = 2
+        this.objectDetailStore.bottomCardIndex = 2
         this.objectCardPlacementPending = true
         // The lightweight tap/search response deliberately has no detailFields.
         // Never leave the previous target's structured data visible while loading.
@@ -13389,7 +13390,7 @@ private loadPlanetPositions(): void {
   }
 
   private isUiPoint(x: number, y: number): boolean {
-    if (this.guideState.active) {
+    if (this.guideStore.guideState.active) {
       return x >= this.guideCardX() && x <= this.guideCardX() + this.guideCardWidth() &&
         y >= this.guideCardY() && y <= this.guideCardY() + this.guideCardHeight()
     }
@@ -13514,7 +13515,7 @@ private loadPlanetPositions(): void {
       return true
     }
     if (x >= right - 60 && x <= right && y >= top && y <= top + 60) {
-      if (!this.uiLocked) {
+      if (!this.viewSettingsStore.uiLocked) {
         this.closePanel(true)
       }
       return true
@@ -14274,13 +14275,13 @@ private loadPlanetPositions(): void {
         })
 
       if (this.scriptPlaybackVisible()) {
-        if (this.guideState.active) {
+        if (this.guideStore.guideState.active) {
           InteractiveGuideShell({
-            guidePhase: this.guideState.phase,
-            guideIndex: this.guideState.index,
-            guideCount: this.guideState.count,
-            guideAutomatic: this.guideState.automatic,
-            guideRemaining: this.guideState.remaining,
+            guidePhase: this.guideStore.guideState.phase,
+            guideIndex: this.guideStore.guideState.index,
+            guideCount: this.guideStore.guideState.count,
+            guideAutomatic: this.guideStore.guideState.automatic,
+            guideRemaining: this.guideStore.guideState.remaining,
             guideTitle: I18n.t(this.currentGuide().title),
             guideCredit: I18n.t(this.currentGuide().credit),
             guideStepTitle: this.planetZh(this.currentGuideStep().title),
@@ -14348,14 +14349,14 @@ private loadPlanetPositions(): void {
                 dockLabelFontSize: this.compactDockLabelFontSize(),
                 dockItemHeight: this.compactDockItemHeight(),
                 infoWinVisible: this.infoWindowStore.infoWinVisible,
-                bottomCardIndex: this.bottomCardIndex,
+                bottomCardIndex: this.objectDetailStore.bottomCardIndex,
                 liveInfoVisible: this.selectedLiveInfoVisible(),
                 contentOpacity: this.objectDetailContentOpacity,
                 contentTranslateX: this.objectDetailContentTranslateX,
                 cardWidth: this.bottomCardWidth(),
                 cardHeight: this.bottomCardHeight(),
                 viewLock: this.viewSettingsStore.viewLock,
-                speechStatus: this.speechStatus,
+                speechStatus: this.guideStore.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectInspectorIcon(),
                 distanceText: this.objectDistanceNoticeText(),
@@ -14453,14 +14454,14 @@ private loadPlanetPositions(): void {
                 gyroPanelLeft: this.EDGE_MARGIN + 64,
                 gyroPanelTop: this.railTop() + 120,
                 infoWinVisible: this.infoWindowStore.infoWinVisible,
-                bottomCardIndex: this.bottomCardIndex,
+                bottomCardIndex: this.objectDetailStore.bottomCardIndex,
                 liveInfoVisible: this.selectedLiveInfoVisible(),
                 contentOpacity: this.objectDetailContentOpacity,
                 contentTranslateX: this.objectDetailContentTranslateX,
                 cardWidth: this.bottomCardWidth(),
                 cardHeight: this.bottomCardHeight(),
                 viewLock: this.viewSettingsStore.viewLock,
-                speechStatus: this.speechStatus,
+                speechStatus: this.guideStore.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectInspectorIcon(),
                 distanceText: this.objectDistanceNoticeText(),
@@ -14575,14 +14576,14 @@ private loadPlanetPositions(): void {
                 quickX: this.compactTopQuickX(),
                 quickY: this.compactTopQuickY(),
                 infoWinVisible: this.infoWindowStore.infoWinVisible,
-                bottomCardIndex: this.bottomCardIndex,
+                bottomCardIndex: this.objectDetailStore.bottomCardIndex,
                 liveInfoVisible: this.selectedLiveInfoVisible(),
                 contentOpacity: this.objectDetailContentOpacity,
                 contentTranslateX: this.objectDetailContentTranslateX,
                 cardWidth: this.bottomCardWidth(),
                 cardHeight: this.bottomCardHeight(),
                 viewLock: this.viewSettingsStore.viewLock,
-                speechStatus: this.speechStatus,
+                speechStatus: this.guideStore.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectInspectorIcon(),
                 distanceText: this.objectDistanceNoticeText(),
@@ -14859,7 +14860,7 @@ private loadPlanetPositions(): void {
   }
   private publishGuideState(): void {
     AppStorage.setOrCreate('stellariumGuideState', JSON.stringify({
-      ok: true, state: this.guideState, lastRequestId: this.guideLastRequest,
+      ok: true, state: this.guideStore.guideState, lastRequestId: this.guideLastRequest,
       result: this.guideLastResult, guides: ASTRONOMY_GUIDES
     }))
   }
@@ -14873,11 +14874,11 @@ private loadPlanetPositions(): void {
             () => resolve({ ok: false, error: 'bridge_timeout' }))
         })
       }, (state: GuideState) => {
-        const ended = this.guideState.active && !state.active
-        if (this.guideState.phase !== state.phase || this.guideState.index !== state.index) {
-          this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => { this.guideState = state })
+        const ended = this.guideStore.guideState.active && !state.active
+        if (this.guideStore.guideState.phase !== state.phase || this.guideStore.guideState.index !== state.index) {
+          this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, () => { this.guideStore.guideState = state })
         } else {
-          this.guideState = state
+          this.guideStore.guideState = state
         }
         this.publishGuideState()
         if (ended) {
@@ -14929,10 +14930,10 @@ private loadPlanetPositions(): void {
   }
 
   private currentGuide(): AstronomyGuide {
-    return ASTRONOMY_GUIDES.find((guide: AstronomyGuide) => guide.id === this.guideState.guideId) ?? ASTRONOMY_GUIDES[0]
+    return ASTRONOMY_GUIDES.find((guide: AstronomyGuide) => guide.id === this.guideStore.guideState.guideId) ?? ASTRONOMY_GUIDES[0]
   }
 
-  private currentGuideStep(): GuideStep { return this.currentGuide().steps[this.guideState.index] }
+  private currentGuideStep(): GuideStep { return this.currentGuide().steps[this.guideStore.guideState.index] }
   private guideCardWidth(): number { return Math.max(200, Math.min(440, this.skyWidth - 24)) }
   private guideCardHeight(): number { return Math.max(160, Math.min(390, this.skyHeight - this.scriptControlSafeTop() - 24)) }
   private guideCardX(): number {
@@ -15403,7 +15404,7 @@ private loadPlanetPositions(): void {
     this.infoWindowStore.infoWinExpanded = true
     this.fullInspectorRequested = true
     this.objectMediaStore.objectInspectorMoreOpen = false
-    this.bottomCardIndex = 2
+    this.objectDetailStore.bottomCardIndex = 2
     this.objectCardPlacementPending = true
     this.dismissedObjectName = ''
     this.resetPanelIdle()
@@ -16349,7 +16350,7 @@ private loadPlanetPositions(): void {
   }
 
   private refreshObjectInspectorModelLighting(): void {
-    if (!this.infoWindowStore.infoWinVisible || this.bottomCardIndex !== 2) return
+    if (!this.infoWindowStore.infoWinVisible || this.objectDetailStore.bottomCardIndex !== 2) return
     const lighting = this.objectDetailStore.selectedDetailModel?.lighting
     if (lighting === undefined || this.objectInspectorModelTexturePixels === undefined) return
     const values = lighting.viewToBody.concat(lighting.sunDirectionBody)
@@ -16692,12 +16693,12 @@ private loadPlanetPositions(): void {
 
 
   private selectObjectDetailTab(index: number): void {
-    if (index === this.bottomCardIndex) return
-    const direction = index > this.bottomCardIndex ? 1 : -1
+    if (index === this.objectDetailStore.bottomCardIndex) return
+    const direction = index > this.objectDetailStore.bottomCardIndex ? 1 : -1
     const transitionId = ++this.objectDetailTabTransitionId
     this.getUIContext().animateTo({ duration: 100, curve: Curve.EaseIn, onFinish: () => {
       if (transitionId !== this.objectDetailTabTransitionId) return
-      this.bottomCardIndex = index
+      this.objectDetailStore.bottomCardIndex = index
       this.objectDetailContentTranslateX = 0 - direction * 10
       this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
         this.objectDetailContentOpacity = 1
@@ -17242,7 +17243,7 @@ private loadPlanetPositions(): void {
         telescopeStore: this.telescopeStore,
         fullInspectorRequested: this.fullInspectorRequested,
         viewLock: this.viewSettingsStore.viewLock,
-        speechStatus: this.speechStatus,
+        speechStatus: this.guideStore.speechStatus,
         observingListStore: this.obsListStore,
         isPlannedModel: this.objectDetailStore.selectedDetailModel !== undefined && this.objectDetailStore.selectedDetailModel.state === 'planned',
         imageHeight: this.objectInspectorImageHeight(),
