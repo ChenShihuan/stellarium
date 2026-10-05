@@ -483,14 +483,8 @@ export struct WindowNativeNode {
   // flatHorizon 限制最大视场角、保持地平线平直。
   @State private viewSettingsStore: ViewSettingsStore = new ViewSettingsStore()
   // 桥接数据
-  private rtsRequestSequence: number = 0
   // rtsCalendarStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7）。
-  private almanacRequestSequence: number = 0
   private planetPositionsRequestSequence: number = 0
-  private hecPositionsRequestSequence: number = 0
-  private celestialPositionsRequestSequence: number = 0
-  private planetCalcRequestSequence: number = 0
-  private planetPairDistanceRequestSequence: number = 0
   // graphStartYear/Month/Day 已并入 state/AstroStore.ets（review §2.7）。
   private graphTargetPickerActive: boolean = false
   private rtsTargetPickerActive: boolean = false
@@ -501,7 +495,6 @@ export struct WindowNativeNode {
   private astroContextTimer: number = 0
   private astroContextRequestId: number = 0
   private astroContextRequestPending: boolean = false
-  private wutRequestSequence: number = 0
   // 大气观测辅助（atmoPressure / atmoTemperature / atmoExtinction / refractionOn，共 4 字段）
   // 已下沉 state/AtmosphereStore.ets（review §2.7）。
   @State private atmosphereStore: AtmosphereStore = new AtmosphereStore()
@@ -1177,6 +1170,27 @@ export struct WindowNativeNode {
     this.satelliteStore.attachPort(hostPort, () => { this.publishSatellitePanelState() })
     // §14 B1-6：位置域的 loadSavedLocations 读 AppStorage 而非桥，port 暂未使用（预留）。
     this.locationStore.attachPort(hostPort, () => {})
+    // §14 B2A：Astro 簇加载器下沉。astroStore 复用同一 HostCommandPort；onChanged 走
+    // publishAstroPanelState，保持 CLI 侧 stellariumAstroPanelState 同步；跨 store
+    // （objectDetailStore / wutStore / ephemerisStore）与未随本片下沉的宿主加载器
+    // （loadPlanetPositions / loadMoonPhases / loadAstroCalcContext）经 AstroHostHooks 具名注入。
+    this.astroStore.attachPort(hostPort, () => { this.publishAstroPanelState() })
+    this.astroStore.attachHooks({
+      hasSelectedObject: () => this.hasSelectedObject(),
+      selectedObjectName: () => this.objectDetailStore.selectedName,
+      wutCategory: () => this.wutStore.wutCategory,
+      wutObservationTime: () => this.wutStore.wutObservationTime,
+      loadWutTargets: () => { this.wutStore.loadWutTargets() },
+      ephemerisCustomStartJD: () => dateToJD(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth, this.ephemerisStore.ephemerisStartDay, 0, 0),
+      fmtDateTime: (s: string | undefined) => this.fmtDateTime(s),
+      hecLayoutPositions: (positions: Array<HeliocentricPosition>) => this.hecLayoutPositions(positions),
+      loadPlanetPositions: () => { this.loadPlanetPositions() },
+      loadMoonPhases: () => { this.loadMoonPhases() },
+      loadAstroCalcContext: () => { this.loadAstroCalcContext() }
+    })
+    // §14 B2A：今晚观测目标（WUT）簇的 loadWutTargets 下沉 state/WutStore.ets；onChanged 走
+    // publishAstroPanelState，保持 CLI 侧 astroPanelState 的 wut 字段同步。
+    this.wutStore.attachPort(hostPort, () => { this.publishAstroPanelState() })
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -2262,7 +2276,7 @@ export struct WindowNativeNode {
         this.refreshTonight()
       }
       if (panel === 'observing' && !this.wutStore.wutHasResult && !this.wutStore.wutLoading) {
-        this.loadWutTargets()
+        this.wutStore.loadWutTargets()
       }
       if (panel === 'search') {
         this.loadObjectCatalogCategories()
@@ -2280,7 +2294,7 @@ export struct WindowNativeNode {
       }
       if (panel === 'astro') {
         this.publishAstroPanelState()
-        this.loadAstroTab(this.astroStore.astroTab)
+        this.astroStore.loadAstroTab(this.astroStore.astroTab)
       } else if (panel === 'layers') {
         this.refreshState()
         if (this.viewTab === 4) this.layerViewStore.loadLandscapeList()
@@ -5129,47 +5143,6 @@ export struct WindowNativeNode {
       + ' ' + date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0')
   }
 
-  private loadRTS(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = ++this.rtsRequestSequence
-    this.astroStore.rtsError = ''
-    this.astroStore.rtsLoading = true
-    if (!this.hasSelectedObject()) {
-      this.astroStore.rtsLoading = false
-      this.clearRtsSelectionResults()
-      return
-    }
-    this.callInteractive('getRTS', '', (r: StellariumBridgeResponse) => {
-      if (requestId !== this.rtsRequestSequence) return
-      this.astroStore.rtsLoading = false
-      if (r.ok === true && r.rts !== undefined) {
-        const rv = r.rts as Record<string, Object>
-        const data = new Map<string, string>()
-        data.set('name', rv['name'] !== undefined ? rv['name'] as string : 'N/A')
-        data.set('nextRiseJD', rv['nextRiseJD'] !== undefined ? String(rv['nextRiseJD']) : '0')
-        data.set('nextTransitJD', rv['nextTransitJD'] !== undefined ? String(rv['nextTransitJD']) : '0')
-        data.set('nextSetJD', rv['nextSetJD'] !== undefined ? String(rv['nextSetJD']) : '0')
-        data.set('prevRiseJD', rv['prevRiseJD'] !== undefined ? String(rv['prevRiseJD']) : '0')
-        data.set('prevTransitJD', rv['prevTransitJD'] !== undefined ? String(rv['prevTransitJD']) : '0')
-        data.set('prevSetJD', rv['prevSetJD'] !== undefined ? String(rv['prevSetJD']) : '0')
-        data.set('nextRiseText', rv['nextRiseText'] !== undefined ? String(rv['nextRiseText']) : (rv['nextRiseJD'] !== undefined ? String(rv['nextRiseJD']) : '0'))
-        data.set('nextTransitText', rv['nextTransitText'] !== undefined ? String(rv['nextTransitText']) : (rv['nextTransitJD'] !== undefined ? String(rv['nextTransitJD']) : '0'))
-        data.set('nextSetText', rv['nextSetText'] !== undefined ? String(rv['nextSetText']) : (rv['nextSetJD'] !== undefined ? String(rv['nextSetJD']) : '0'))
-        data.set('prevRiseText', rv['prevRiseText'] !== undefined ? String(rv['prevRiseText']) : (rv['prevRiseJD'] !== undefined ? String(rv['prevRiseJD']) : '0'))
-        data.set('prevTransitText', rv['prevTransitText'] !== undefined ? String(rv['prevTransitText']) : (rv['prevTransitJD'] !== undefined ? String(rv['prevTransitJD']) : '0'))
-        data.set('prevSetText', rv['prevSetText'] !== undefined ? String(rv['prevSetText']) : (rv['prevSetJD'] !== undefined ? String(rv['prevSetJD']) : '0'))
-        this.astroStore.rtsData = data
-      } else {
-        this.astroStore.rtsData = new Map()
-        this.astroStore.rtsError = r.error ?? '请先在星图上选中一个天体，再计算升中天落。'
-      }
-    }, () => {
-      if (requestId !== this.rtsRequestSequence) return
-      this.astroStore.rtsLoading = false
-      this.astroStore.rtsData = new Map()
-      this.astroStore.rtsError = '升中天落计算失败，请点刷新后重试。'
-    })
-  }
 
   private jumpToRts(key: string): void {
     const jd = this.astroStore.rtsData.get(key) ?? '0'
@@ -5280,7 +5253,7 @@ export struct WindowNativeNode {
   }
 
   private async exportCurrentAstroCsv(): Promise<void> {
-    this.updateAstroCalcSnapshot()
+    this.astroStore.updateAstroCalcSnapshot()
     const exportData = this.currentAstroCsvExport()
     if (exportData === undefined || exportData.rows.length === 0) {
       this.flashHint('当前页没有可导出的计算结果，请先生成数据。')
@@ -5315,84 +5288,9 @@ export struct WindowNativeNode {
     }
   }
 
-  private loadRtsCalendar(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = ++this.rtsCalendarLoadSequence
-    this.astroStore.rtsCalendarData = []
-    this.astroStore.rtsCalendarError = ''
-    this.astroStore.rtsCalendarNeedsGeneration = false
-    if (!this.hasSelectedObject()) {
-      this.clearRtsSelectionResults()
-      return
-    }
-    this.astroStore.rtsCalendarLoading = true
-    this.astroStore.rtsCalendarProgress = 0
-    this.astroStore.rtsCalendarTotalDays = this.astroStore.rtsCalendarDays
-    this.resolveRtsCalendarStartJD(requestId, (startJD: number) => {
-      const options: RtsCalendarOptions = { days: this.astroStore.rtsCalendarDays }
-      if (startJD > 0) options.jd = startJD
-      this.callLongRunningInteractive('getRTSCalendar', JSON.stringify(options), (r: StellariumBridgeResponse) => {
-        if (requestId !== this.rtsCalendarLoadSequence) return
-        this.astroStore.rtsCalendarLoading = false
-        if (r.ok === true && r.rtsCalendar !== undefined) {
-          this.astroStore.rtsCalendarData = r.rtsCalendar as Array<RtsCalendarDay>
-          this.astroStore.rtsCalendarName = r.name ?? ''
-          this.astroStore.rtsCalendarProgress = this.astroStore.rtsCalendarDays
-        } else {
-          this.astroStore.rtsCalendarError = '请先在星图上选中一个天体，再生成升中天落日期表。'
-        }
-      }, () => {
-        if (requestId !== this.rtsCalendarLoadSequence) return
-        this.astroStore.rtsCalendarLoading = false
-        this.astroStore.rtsCalendarError = '日期表计算时间较长，请缩短时长后重试。'
-      }, (progress: StellariumBridgeResponse) => {
-        if (requestId !== this.rtsCalendarLoadSequence) return
-        const completed = Number(progress.progress)
-        const total = Number(progress.totalDays)
-        if (Number.isFinite(completed) && completed > 0) this.astroStore.rtsCalendarProgress = completed
-        if (Number.isFinite(total) && total > 0) this.astroStore.rtsCalendarTotalDays = total
-      }, 480)
-    }, () => {
-      if (requestId !== this.rtsCalendarLoadSequence) return
-      this.astroStore.rtsCalendarLoading = false
-      this.astroStore.rtsCalendarError = '无法读取当前模拟时间，请点生成日期表后重试。'
-    })
-  }
 
-  private rtsCalendarLoadSequence: number = 0
 
-  private markRtsCalendarForRegeneration(): void {
-    ++this.rtsCalendarLoadSequence
-    this.astroStore.rtsCalendarLoading = false
-    this.astroStore.rtsCalendarData = []
-    this.astroStore.rtsCalendarError = ''
-    this.astroStore.rtsCalendarNeedsGeneration = true
-    this.astroStore.rtsCalendarProgress = 0
-    this.astroStore.rtsCalendarTotalDays = 0
-  }
 
-  private resolveRtsCalendarStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
-    if (this.astroStore.rtsCalendarStartOffsetDays < 0) {
-      onReady(dateToJD(this.astroStore.rtsCalendarStartYear, this.astroStore.rtsCalendarStartMonth, this.astroStore.rtsCalendarStartDay, 0, 0))
-      return
-    }
-    if (this.astroStore.rtsCalendarStartOffsetDays === 0) {
-      onReady(0)
-      return
-    }
-    this.callInteractive('getState', '', (state: StellariumBridgeResponse) => {
-      if (requestId !== this.rtsCalendarLoadSequence) return
-      const currentJD = Number(state.jd)
-      if (state.ok === true && Number.isFinite(currentJD) && currentJD > 0) {
-        onReady(currentJD + this.astroStore.rtsCalendarStartOffsetDays)
-        return
-      }
-      onFailure()
-    }, () => {
-      if (requestId !== this.rtsCalendarLoadSequence) return
-      onFailure()
-    })
-  }
 
   private rtsCalendarStartOptionLabel(offsetDays: number): string {
     if (offsetDays < 0) {
@@ -5414,7 +5312,7 @@ export struct WindowNativeNode {
         this.astroStore.rtsCalendarStartMonth = (value.month ?? (this.astroStore.rtsCalendarStartMonth - 1)) + 1
         this.astroStore.rtsCalendarStartDay = value.day ?? this.astroStore.rtsCalendarStartDay
         this.astroStore.rtsCalendarStartOffsetDays = -1
-        this.markRtsCalendarForRegeneration()
+        this.astroStore.markRtsCalendarForRegeneration()
       },
       onCancel: () => {}
     })
@@ -5428,73 +5326,8 @@ export struct WindowNativeNode {
     })
   }
 
-  private loadEphemeris(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = ++this.ephemerisLoadSequence
-    this.astroStore.ephemerisData = []
-    this.astroStore.ephemerisName = ''
-    this.astroStore.ephemerisError = ''
-    this.astroStore.ephemerisLoading = true
-    this.resolveEphemerisStartJD(requestId, (startJD: number) => {
-      const options: EphemerisOptions = { days: this.astroStore.ephemerisDays, stepHours: this.astroStore.ephemerisStepHours }
-      if (startJD > 0) options.jd = startJD
-      if (this.astroStore.ephemerisMode === 1) options.names = [this.astroStore.ephemerisPrimary, this.astroStore.ephemerisSecondary]
-      if (this.astroStore.ephemerisMode === 2) options.allNakedEye = true
-      this.callNativeWhenReady('getEphemeris', JSON.stringify(options), (r: StellariumBridgeResponse) => {
-        if (requestId !== this.ephemerisLoadSequence) return
-        this.astroStore.ephemerisLoading = false
-        if (r.ok === true && r.ephemeris !== undefined) {
-          this.astroStore.ephemerisData = r.ephemeris as Array<EphemerisRow>
-          this.astroStore.ephemerisName = r.name !== undefined ? String(r.name) : ''
-          const location = r.observerLocation !== undefined ? String(r.observerLocation) : ''
-          const timeZone = r.timeZone !== undefined ? String(r.timeZone) : ''
-          const frame = r.coordinateFrame !== undefined ? String(r.coordinateFrame) : 'J2000'
-          const calculatedAt = r.calculationTime !== undefined ? this.fmtDateTime(String(r.calculationTime)) : ''
-          this.astroStore.ephemerisMeta = '坐标系 ' + frame + (location.length > 0 ? ' · 观测地 ' + location : '')
-            + (timeZone.length > 0 ? ' · 时区 ' + timeZone : '')
-            + (calculatedAt.length > 0 ? ' · 计算于 ' + calculatedAt : '')
-        } else {
-          this.astroStore.ephemerisMeta = ''
-          this.astroStore.ephemerisError = r.error ?? '请先在星图上选中一个天体，再生成它的星历。'
-        }
-      }, 0, 100, 80, () => {
-        if (requestId !== this.ephemerisLoadSequence) return
-        this.astroStore.ephemerisLoading = false
-        this.astroStore.ephemerisMeta = ''
-        this.astroStore.ephemerisError = '星历计算时间较长，请缩短时间范围或增大采样间隔后重试。'
-      })
-    }, () => {
-      if (requestId !== this.ephemerisLoadSequence) return
-      this.astroStore.ephemerisLoading = false
-      this.astroStore.ephemerisMeta = ''
-      this.astroStore.ephemerisError = '无法读取当前模拟时间，请点刷新后重试。'
-    })
-  }
 
-  private ephemerisLoadSequence: number = 0
 
-  private resolveEphemerisStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
-    if (this.astroStore.ephemerisStartOffsetDays < 0) {
-      onReady(dateToJD(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth, this.ephemerisStore.ephemerisStartDay, 0, 0))
-      return
-    }
-    if (this.astroStore.ephemerisStartOffsetDays === 0) {
-      onReady(0)
-      return
-    }
-    this.callInteractive('getState', '', (state: StellariumBridgeResponse) => {
-      if (requestId !== this.ephemerisLoadSequence) return
-      const currentJD = Number(state.jd)
-      if (state.ok === true && Number.isFinite(currentJD) && currentJD > 0) {
-        onReady(currentJD + this.astroStore.ephemerisStartOffsetDays)
-        return
-      }
-      onFailure()
-    }, () => {
-      if (requestId !== this.ephemerisLoadSequence) return
-      onFailure()
-    })
-  }
 
   private ephemerisStartOptionLabel(offsetDays: number): string {
     if (offsetDays < 0) {
@@ -5515,7 +5348,7 @@ export struct WindowNativeNode {
         this.ephemerisStore.ephemerisStartMonth = (value.month ?? (this.ephemerisStore.ephemerisStartMonth - 1)) + 1
         this.ephemerisStore.ephemerisStartDay = value.day ?? this.ephemerisStore.ephemerisStartDay
         this.astroStore.ephemerisStartOffsetDays = -1
-        this.loadEphemeris()
+        this.astroStore.loadEphemeris()
       },
       onCancel: () => {}
     })
@@ -5526,277 +5359,22 @@ export struct WindowNativeNode {
     this.callInteractive('setJD', String(row.jd), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.refreshState()
-        this.loadEphemeris()
+        this.astroStore.loadEphemeris()
       }
     })
   }
 
-  private loadPlanetCalc(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = ++this.planetCalcRequestSequence
-    this.astroStore.planetCalcData = []
-    this.astroStore.planetCalcError = ''
-    this.astroStore.planetCalcLoading = true
-    this.callInteractive('getPlanetCalc', '', (r: StellariumBridgeResponse) => {
-      if (requestId !== this.planetCalcRequestSequence) return
-      this.astroStore.planetCalcLoading = false
-      if (r.ok === true && r.planetCalc !== undefined) {
-        this.astroStore.planetCalcData = r.planetCalc as Array<PlanetCalcItem>
-        if (this.astroStore.planetCalcData.length === 0) this.astroStore.planetCalcError = '当前没有可显示的行星数据。'
-      } else {
-        this.astroStore.planetCalcError = r.error ?? '行星实时数据计算失败，请点刷新后重试。'
-      }
-    }, () => {
-      if (requestId !== this.planetCalcRequestSequence) return
-      this.astroStore.planetCalcLoading = false
-      this.astroStore.planetCalcError = '行星实时数据计算失败，请点刷新后重试。'
-    })
-  }
 
-  private loadPlanetPairDistance(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = ++this.planetPairDistanceRequestSequence
-    this.astroStore.planetPairDistanceData = []
-    this.astroStore.planetPairDistanceError = ''
-    this.astroStore.planetPairDistanceLoading = true
-    const options = JSON.stringify({
-      first: this.astroStore.planetPairFirst,
-      second: this.astroStore.planetPairSecond,
-      days: this.astroStore.planetPairDays,
-      stepDays: this.astroStore.planetPairStepDays
-    })
-    this.callInteractive('getPlanetPairDistanceCurve', options, (r: StellariumBridgeResponse) => {
-      if (requestId !== this.planetPairDistanceRequestSequence) return
-      this.astroStore.planetPairDistanceLoading = false
-      if (r.ok === true && r.planetPairDistance !== undefined) {
-        const data = r.planetPairDistance as Array<PlanetPairDistancePoint>
-        this.astroStore.planetPairDistanceData = data
-        this.astroStore.planetPairFirstName = planetPairBodyName(this.astroStore.planetPairFirst)
-        this.astroStore.planetPairSecondName = planetPairBodyName(this.astroStore.planetPairSecond)
-        this.astroStore.planetPairAngularAvailable = r.angularAvailable === true
-        this.updatePlanetPairDistanceRanges(data)
-      } else {
-        this.astroStore.planetPairDistanceData = []
-        this.astroStore.planetPairDistanceError = r.error ?? '请选择两个不同的太阳系天体。'
-      }
-    }, () => {
-      if (requestId !== this.planetPairDistanceRequestSequence) return
-      this.astroStore.planetPairDistanceLoading = false
-      this.astroStore.planetPairDistanceError = '距离曲线计算失败，请点刷新后重试。'
-    })
-  }
 
-  private updatePlanetPairDistanceRanges(data: Array<PlanetPairDistancePoint>): void {
-    let linearMin: number = Number.MAX_VALUE
-    let linearMax: number = -Number.MAX_VALUE
-    let angularMin: number = Number.MAX_VALUE
-    let angularMax: number = -Number.MAX_VALUE
-    for (const point of data) {
-      const linear: number = point.linearDistance ?? 0
-      linearMin = Math.min(linearMin, linear)
-      linearMax = Math.max(linearMax, linear)
-      if (point.angularDistance !== undefined) {
-        angularMin = Math.min(angularMin, point.angularDistance)
-        angularMax = Math.max(angularMax, point.angularDistance)
-      }
-    }
-    this.astroStore.planetPairLinearMin = linearMin === Number.MAX_VALUE ? 0 : linearMin
-    this.astroStore.planetPairLinearMax = linearMax <= linearMin ? linearMin + 1 : linearMax
-    this.astroStore.planetPairAngularMin = angularMin === Number.MAX_VALUE ? 0 : angularMin
-    this.astroStore.planetPairAngularMax = angularMax <= angularMin ? angularMin + 1 : angularMax
-  }
 
-  private loadAltAzCurve(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = this.beginGraphLoad()
-    this.astroStore.altAzCurve = []
-    this.astroStore.altAzError = ''
-    this.resolveGraphStartJD(requestId, (startJD: number) => {
-      this.callInteractive('getAltAzCurve', JSON.stringify({
-        jd: startJD,
-        hours: this.astroStore.altAzHours,
-        stepMin: this.astroStore.altAzStepMin,
-        includeSun: this.astroStore.graphMode === 0 && this.astroStore.altAzShowSun,
-        includeMoon: this.astroStore.graphMode === 0 && this.astroStore.altAzShowMoon
-      }), (r: StellariumBridgeResponse) => {
-        if (requestId !== this.graphLoadSequence) return
-        this.finishGraphLoad(requestId)
-        if (r.ok === true && r.curve !== undefined) {
-          this.astroStore.altAzCurve = r.curve as Array<AltAzPoint>
-          this.astroStore.altAzName = r.name !== undefined ? r.name : ''
-          this.astroStore.altAzError = ''
-        } else {
-          this.astroStore.altAzCurve = []
-          this.astroStore.altAzError = '请先在星图上选中一个天体，再来看它的' + (this.astroStore.graphMode === 0 ? '高度' : '方位角') + '曲线。'
-        }
-      }, () => {
-        if (requestId !== this.graphLoadSequence) return
-        this.finishGraphLoad(requestId)
-        this.astroStore.altAzError = '计算等待超时，请点刷新后重试。'
-      })
-    }, () => {
-      this.astroStore.altAzError = '无法读取当前模拟时间，请点刷新后重试。'
-    })
-  }
 
-  private loadObservabilityCalendar(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = this.beginGraphLoad()
-    this.astroStore.observabilityData = []
-    this.astroStore.observabilityError = ''
-    this.astroStore.observabilityProgress = '准备计算…'
-    this.resolveGraphStartJD(requestId, (startJD: number) => {
-      const options = JSON.stringify({ jd: startJD, days: this.astroStore.observabilityDays, minAltitude: this.astroStore.observabilityMinAltitude })
-      this.callLongRunningInteractive('getObservabilityCalendar', options, (r: StellariumBridgeResponse) => {
-        if (requestId !== this.graphLoadSequence) return
-        this.finishGraphLoad(requestId)
-        this.astroStore.observabilityProgress = ''
-        if (r.ok === true && r.observability !== undefined) {
-          this.astroStore.observabilityData = r.observability as Array<ObservabilityDay>
-          this.astroStore.observabilityName = r.name ?? ''
-        } else {
-          this.astroStore.observabilityData = []
-          this.astroStore.observabilityError = (r.error ?? '').toString().includes('no object')
-            ? '请先在星图上选中一个天体，再查看它未来多晚的可见性。'
-            : '观测窗口计算失败，请稍后重试。'
-        }
-      }, () => {
-        if (requestId !== this.graphLoadSequence) return
-        this.finishGraphLoad(requestId)
-        this.astroStore.observabilityProgress = ''
-        this.astroStore.observabilityError = '计算等待超时，请稍后重试。'
-      }, (progress: StellariumBridgeResponse) => {
-        if (requestId !== this.graphLoadSequence) return
-        const completed = Number(progress.progress ?? 0)
-        const total = Number(progress.totalDays ?? this.astroStore.observabilityDays)
-        this.astroStore.observabilityProgress = '正在计算：' + Math.min(completed, total).toFixed(0) + ' / ' + total.toFixed(0) + ' 天'
-      })
-    }, () => {
-      this.astroStore.observabilityProgress = ''
-      this.astroStore.observabilityError = '无法读取当前模拟时间，请点刷新后重试。'
-    })
-  }
 
-  private loadAnnualElevation(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = this.beginGraphLoad()
-    this.astroStore.annualElevationData = []
-    this.astroStore.annualElevationError = ''
-    this.callInteractive('getAnnualElevation', JSON.stringify({ hour: this.astroStore.annualElevationHour }), (r: StellariumBridgeResponse) => {
-      if (requestId !== this.graphLoadSequence) return
-      this.finishGraphLoad(requestId)
-      if (r.ok === true && r.annualElevation !== undefined) {
-        this.astroStore.annualElevationData = r.annualElevation as Array<AnnualElevationPoint>
-        this.astroStore.annualElevationName = r.name ?? ''
-      } else {
-        this.astroStore.annualElevationData = []
-        this.astroStore.annualElevationError = '请先在星图上选中一个天体，再生成全年高度曲线。'
-      }
-    }, () => {
-      if (requestId !== this.graphLoadSequence) return
-      this.finishGraphLoad(requestId)
-      this.astroStore.annualElevationError = '计算等待超时，请点刷新后重试。'
-    })
-  }
 
-  private loadLunarElongation(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = this.beginGraphLoad()
-    this.astroStore.lunarElongationData = []
-    this.astroStore.lunarElongationError = ''
-    this.resolveGraphStartJD(requestId, (startJD: number) => {
-      const options = JSON.stringify({ jd: startJD, days: this.astroStore.lunarElongationDays, stepHours: this.astroStore.lunarElongationStepHours })
-      this.callInteractive('getLunarElongationCurve', options, (r: StellariumBridgeResponse) => {
-        if (requestId !== this.graphLoadSequence) return
-        this.finishGraphLoad(requestId)
-        if (r.ok === true && r.lunarElongation !== undefined) {
-          this.astroStore.lunarElongationData = r.lunarElongation as Array<LunarElongationPoint>
-          this.astroStore.lunarElongationName = r.name ?? ''
-        } else {
-          this.astroStore.lunarElongationData = []
-          this.astroStore.lunarElongationError = '请先选中除月亮和人造卫星之外的天体，再生成月距曲线。'
-        }
-      }, () => {
-        if (requestId !== this.graphLoadSequence) return
-        this.finishGraphLoad(requestId)
-        this.astroStore.lunarElongationError = '计算等待超时，请点刷新后重试。'
-      })
-    }, () => {
-      this.astroStore.lunarElongationError = '无法读取当前模拟时间，请点刷新后重试。'
-    })
-  }
 
-  private loadPlanetTimeSeries(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = this.beginGraphLoad()
-    this.astroStore.planetTimeSeriesData = []
-    this.astroStore.planetTimeSeriesError = ''
-    this.resolveGraphStartJD(requestId, (startJD: number) => {
-      const options = JSON.stringify({
-        jd: startJD,
-        days: this.astroStore.planetTimeSeriesDays,
-        stepHours: this.astroStore.planetTimeSeriesStepHours,
-        leftMetric: this.astroStore.planetTimeSeriesLeftMetric,
-        rightMetric: this.astroStore.planetTimeSeriesRightMetric
-      })
-      this.callInteractive('getPlanetTimeSeries', options, (r: StellariumBridgeResponse) => {
-        if (requestId !== this.graphLoadSequence) return
-        this.finishGraphLoad(requestId)
-        if (r.ok === true && r.timeSeries !== undefined) {
-          const data = r.timeSeries as Array<PlanetTimeSeriesPoint>
-          this.astroStore.planetTimeSeriesData = data
-          this.astroStore.planetTimeSeriesName = r.name ?? ''
-          this.updatePlanetTimeSeriesRanges(data)
-        } else {
-          this.astroStore.planetTimeSeriesData = []
-          this.astroStore.planetTimeSeriesError = '请先选中一个太阳系天体（行星、太阳或月亮），再生成双曲线。'
-        }
-      }, () => {
-        if (requestId !== this.graphLoadSequence) return
-        this.finishGraphLoad(requestId)
-        this.astroStore.planetTimeSeriesError = '计算等待超时，请点刷新后重试。'
-      })
-    }, () => {
-      this.astroStore.planetTimeSeriesError = '无法读取当前模拟时间，请点刷新后重试。'
-    })
-  }
 
-  private graphLoadSequence: number = 0
 
-  private beginGraphLoad(): number {
-    this.graphLoadSequence += 1
-    this.astroStore.graphLoading = true
-    return this.graphLoadSequence
-  }
 
-  private finishGraphLoad(requestId: number): void {
-    if (requestId === this.graphLoadSequence) this.astroStore.graphLoading = false
-  }
 
-  private resolveGraphStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
-    if (this.astroStore.graphStartOffsetDays < 0) {
-      onReady(dateToJD(this.astroStore.graphStartYear, this.astroStore.graphStartMonth, this.astroStore.graphStartDay, 0, 0))
-      return
-    }
-    if (this.astroStore.graphStartOffsetDays === 0) {
-      onReady(0)
-      return
-    }
-    this.callInteractive('getState', '', (state: StellariumBridgeResponse) => {
-      if (requestId !== this.graphLoadSequence) return
-      const currentJD = Number(state.jd)
-      if (state.ok === true && Number.isFinite(currentJD) && currentJD > 0) {
-        onReady(currentJD + this.astroStore.graphStartOffsetDays)
-        return
-      }
-      this.finishGraphLoad(requestId)
-      onFailure()
-    }, () => {
-      if (requestId !== this.graphLoadSequence) return
-      this.finishGraphLoad(requestId)
-      onFailure()
-    })
-  }
 
 
   private graphCustomStartLabel(): string {
@@ -5822,11 +5400,11 @@ export struct WindowNativeNode {
   }
 
   private reloadCurrentGraph(): void {
-    if (this.astroStore.graphMode === 2) this.loadAnnualElevation()
-    else if (this.astroStore.graphMode === 3) this.loadObservabilityCalendar()
-    else if (this.astroStore.graphMode === 4) this.loadLunarElongation()
-    else if (this.astroStore.graphMode === 5) this.loadPlanetTimeSeries()
-    else this.loadAltAzCurve()
+    if (this.astroStore.graphMode === 2) this.astroStore.loadAnnualElevation()
+    else if (this.astroStore.graphMode === 3) this.astroStore.loadObservabilityCalendar()
+    else if (this.astroStore.graphMode === 4) this.astroStore.loadLunarElongation()
+    else if (this.astroStore.graphMode === 5) this.astroStore.loadPlanetTimeSeries()
+    else this.astroStore.loadAltAzCurve()
   }
 
   private openGraphTargetPicker(): void {
@@ -5857,43 +5435,8 @@ export struct WindowNativeNode {
     return this.objectDetailStore.selectedStatus === 'Selected' && this.objectDetailStore.selectedName.length > 0
   }
 
-  private clearRtsSelectionResults(): void {
-    ++this.rtsRequestSequence
-    this.astroStore.rtsLoading = false
-    this.astroStore.rtsData = new Map()
-    this.astroStore.rtsError = '升起、中天和落下时间需要先选择一个天体。'
-    this.astroStore.rtsCalendarData = []
-    this.astroStore.rtsCalendarName = ''
-    this.astroStore.rtsCalendarLoading = false
-    this.astroStore.rtsCalendarError = '请先选择一个天体，再生成升中天落日期表。'
-    this.astroStore.rtsCalendarNeedsGeneration = false
-    this.astroStore.rtsCalendarProgress = 0
-    ++this.rtsCalendarLoadSequence
-  }
 
-  private graphTargetLabel(): string {
-    if (this.objectDetailStore.selectedName.length === 0) return '尚未选择天体'
-    return zhNameOf(this.objectDetailStore.selectedName)
-  }
 
-  private updatePlanetTimeSeriesRanges(data: Array<PlanetTimeSeriesPoint>): void {
-    let leftMin: number = Number.MAX_VALUE
-    let leftMax: number = -Number.MAX_VALUE
-    let rightMin: number = Number.MAX_VALUE
-    let rightMax: number = -Number.MAX_VALUE
-    for (const point of data) {
-      const left: number = point.left ?? 0
-      const right: number = point.right ?? 0
-      leftMin = Math.min(leftMin, left)
-      leftMax = Math.max(leftMax, left)
-      rightMin = Math.min(rightMin, right)
-      rightMax = Math.max(rightMax, right)
-    }
-    this.astroStore.planetTimeSeriesLeftMin = leftMin === Number.MAX_VALUE ? 0 : leftMin
-    this.astroStore.planetTimeSeriesLeftMax = leftMax <= leftMin ? leftMin + 1 : leftMax
-    this.astroStore.planetTimeSeriesRightMin = rightMin === Number.MAX_VALUE ? 0 : rightMin
-    this.astroStore.planetTimeSeriesRightMax = rightMax <= rightMin ? rightMin + 1 : rightMax
-  }
 
   private jumpToObservabilityDay(day: ObservabilityDay): void {
     if (day.bestJD === undefined || day.bestJD <= 0) return
@@ -5902,67 +5445,9 @@ export struct WindowNativeNode {
     })
   }
 
-  private loadEclipses(): void {
-    this.updateAstroCalcSnapshot()
-    if (this.astroStore.eclipseData.length > 0 || this.astroStore.eclipseLoading) return
-    const requestId = ++this.eclipseLoadSequence
-    this.astroStore.eclipseLoading = true
-    this.astroStore.eclipseError = ''
-    this.resolveEclipseStartJD(requestId, (startJD: number) => {
-      const options: EclipseOptions = { months: this.astroStore.eclipseMonths }
-      if (startJD > 0) options.jd = startJD
-      this.callNativeWhenReady('getEclipses', JSON.stringify(options), (r: StellariumBridgeResponse) => {
-        if (requestId !== this.eclipseLoadSequence) return
-        this.astroStore.eclipseLoading = false
-        if (r.ok === true && r.eclipses !== undefined) {
-          this.astroStore.eclipseData = r.eclipses as Array<EclipseItem>
-          return
-        }
-        this.astroStore.eclipseError = r.error ?? '日月食计算未能完成，请重试。'
-      }, 0, 100, 200, () => {
-        if (requestId !== this.eclipseLoadSequence) return
-        this.astroStore.eclipseLoading = false
-        this.astroStore.eclipseError = '日月食计算时间较长，请缩短预测范围后重试。'
-      })
-    }, () => {
-      if (requestId !== this.eclipseLoadSequence) return
-      this.astroStore.eclipseLoading = false
-      this.astroStore.eclipseError = '无法读取当前模拟时间，请重试。'
-    })
-  }
 
-  private eclipseLoadSequence: number = 0
 
-  private reloadEclipses(): void {
-    ++this.eclipseLoadSequence
-    this.astroStore.eclipseLoading = false
-    this.astroStore.eclipseData = []
-    this.astroStore.eclipseError = ''
-    this.loadEclipses()
-  }
 
-  private resolveEclipseStartJD(requestId: number, onReady: (startJD: number) => void, onFailure: () => void): void {
-    if (this.astroStore.eclipseStartOffsetDays < 0) {
-      onReady(dateToJD(this.astroStore.eclipseStartYear, this.astroStore.eclipseStartMonth, this.astroStore.eclipseStartDay, 0, 0))
-      return
-    }
-    if (this.astroStore.eclipseStartOffsetDays === 0) {
-      onReady(0)
-      return
-    }
-    this.callInteractive('getState', '', (state: StellariumBridgeResponse) => {
-      if (requestId !== this.eclipseLoadSequence) return
-      const currentJD = Number(state.jd)
-      if (state.ok === true && Number.isFinite(currentJD) && currentJD > 0) {
-        onReady(currentJD + this.astroStore.eclipseStartOffsetDays)
-        return
-      }
-      onFailure()
-    }, () => {
-      if (requestId !== this.eclipseLoadSequence) return
-      onFailure()
-    })
-  }
 
   private eclipseStartOptionLabel(offsetDays: number): string {
     if (offsetDays < 0) {
@@ -5983,7 +5468,7 @@ export struct WindowNativeNode {
         this.astroStore.eclipseStartMonth = (value.month ?? (this.astroStore.eclipseStartMonth - 1)) + 1
         this.astroStore.eclipseStartDay = value.day ?? this.astroStore.eclipseStartDay
         this.astroStore.eclipseStartOffsetDays = -1
-        this.reloadEclipses()
+        this.astroStore.reloadEclipses()
       },
       onCancel: () => {}
     })
@@ -6004,71 +5489,10 @@ export struct WindowNativeNode {
     return filtered
   }
 
-  private loadPlanetaryTransits(): void {
-    this.updateAstroCalcSnapshot()
-    if (!this.astroStore.planetaryTransitLoaded && !this.astroStore.planetaryTransitLoading) {
-      const requestId = ++this.planetaryTransitRequestSequence
-      this.astroStore.planetaryTransitLoading = true
-      this.astroStore.planetaryTransitError = ''
-      this.callNativeWhenReady('getPlanetaryTransits', JSON.stringify({ years: this.astroStore.planetaryTransitYears }), (r: StellariumBridgeResponse) => {
-        if (requestId !== this.planetaryTransitRequestSequence) return
-        this.astroStore.planetaryTransitLoading = false
-        if (r.ok === true && r.planetaryTransits !== undefined) {
-          this.astroStore.planetaryTransitData = r.planetaryTransits as Array<PlanetaryTransitItem>
-          this.astroStore.planetaryTransitError = ''
-        } else {
-          this.astroStore.planetaryTransitError = '行星凌日只能按地球上的当前观测地点计算。'
-        }
-        this.astroStore.planetaryTransitLoaded = true
-      }, 0, 100, 200, () => {
-        if (requestId !== this.planetaryTransitRequestSequence) return
-        this.astroStore.planetaryTransitLoading = false
-        this.astroStore.planetaryTransitLoaded = true
-        this.astroStore.planetaryTransitError = '行星凌日计算时间较长，请缩短预测范围后重试。'
-      })
-    }
-  }
 
-  private planetaryTransitRequestSequence: number = 0
 
-  private loadPhenomena(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = ++this.phenomenaRequestSequence
-    this.astroStore.phenomenaData = []
-    this.astroStore.phenomenaHint = ''
-    this.astroStore.phenomenaLoading = true
-    const options: PhenomenaOptions = {
-      bodyA: this.astroStore.phenomenaPrimary,
-      bodyB: this.astroStore.phenomenaTarget,
-      days: this.astroStore.phenomenaDays,
-      startOffsetMonths: this.astroStore.phenomenaStartOffsetMonths,
-      maxSeparation: this.astroStore.phenomenaMaxSeparation,
-      includeOppositions: this.astroStore.phenomenaIncludeOppositions,
-      includePerihelionAphelion: this.astroStore.phenomenaIncludePerihelionAphelion,
-      includeElongationsQuadratures: this.astroStore.phenomenaIncludeElongationsQuadratures,
-      includeStations: this.astroStore.phenomenaIncludeStations,
-    }
-    this.callNativeWhenReady('getPhenomena', JSON.stringify(options), (r: StellariumBridgeResponse) => {
-      if (requestId !== this.phenomenaRequestSequence) return
-      this.astroStore.phenomenaLoading = false
-      if (r.ok === true && r.phenomena !== undefined) {
-        this.astroStore.phenomenaData = r.phenomena as Array<PhenomenonItem>
-        if (this.astroStore.phenomenaData.length === 0) this.astroStore.phenomenaHint = '所选时段内没有符合角距条件的天象。'
-      } else {
-        this.astroStore.phenomenaHint = r.error ?? '暂时无法完成天象计算，请稍后重试。'
-      }
-    }, 0, 100, 300, () => {
-      if (requestId !== this.phenomenaRequestSequence) return
-      this.astroStore.phenomenaLoading = false
-      this.astroStore.phenomenaHint = '计算时间较长，请缩短预测范围或减少比较对象后重试。'
-    })
-  }
 
-  private phenomenaRequestSequence: number = 0
 
-  private phenomenaBodyName(body: string): string {
-    return body === 'all' ? '全部行星' : planetPairBodyName(body)
-  }
 
 
 
@@ -6079,71 +5503,7 @@ export struct WindowNativeNode {
     })
   }
 
-  private loadTonightAstro(): void {
-    if (this.astroStore.tonightAstro === null) {
-      this.callInteractive('getTonightEvents', '', (r: StellariumBridgeResponse) => {
-        if (r.ok === true && r.tonight !== undefined) this.astroStore.tonightAstro = r.tonight as TonightEvents
-      })
-    }
-    this.loadWutTargets()
-  }
 
-  private loadWutTargets(): void {
-    const requestId = ++this.wutRequestSequence
-    // Drop the previous job first: the engine answers "pending" for a mismatching
-    // key instead of discarding the running job, so a deliberate category switch
-    // has to cancel explicitly.
-    this.callNativeFire('getWutTargets', '{"cancel":true}')
-    this.wutStore.wutLoading = true
-    this.wutStore.wutHasResult = false
-    this.wutStore.wutProgress = I18n.t('observing_loading') as string
-    this.wutStore.wutHint = ''
-    this.publishAstroPanelState()
-    const options = JSON.stringify({
-      category: this.wutStore.wutCategory,
-      period: this.wutStore.wutPeriod,
-      minAltitude: this.wutStore.wutMinAltitude,
-      maxMagnitude: this.wutStore.wutMaxMagnitude,
-      limitAngularSize: this.wutStore.wutLimitAngularSize,
-      minAngularSizeArcmin: this.wutStore.wutMinAngularSizeArcmin,
-      maxAngularSizeArcmin: this.wutStore.wutMaxAngularSizeArcmin,
-      direction: this.wutStore.wutDirection
-    })
-    this.callLongRunningInteractive('getWutTargets', options, (r: StellariumBridgeResponse) => {
-      if (requestId !== this.wutRequestSequence) return
-      this.wutStore.wutLoading = false
-      this.wutStore.wutProgress = ''
-      this.wutStore.wutHasResult = true
-      if (r.ok === true && r.wutTargets !== undefined) {
-        this.wutStore.wutTargets = r.wutTargets as Array<WutTarget>
-        this.wutStore.wutObservationTime = r.observationTime ?? ''
-        this.wutStore.wutAngularSizeAvailable = r.angularSizeAvailable !== false
-        if (!this.wutStore.wutAngularSizeAvailable) this.wutStore.wutLimitAngularSize = false
-        if (this.wutStore.wutTargets.length === 0) this.wutStore.wutHint = I18n.t('observing_no_matches') + this.wutCategoryTitle() + '。'
-      } else {
-        this.wutStore.wutTargets = []
-        this.wutStore.wutHint = (r.error ?? '').toString().includes('twilight')
-          ? I18n.t('observing_no_twilight')
-          : I18n.t('observing_compute_failed')
-      }
-      this.publishAstroPanelState()
-    }, () => {
-      if (requestId !== this.wutRequestSequence) return
-      this.wutStore.wutLoading = false
-      this.wutStore.wutProgress = ''
-      this.wutStore.wutHasResult = true
-      this.wutStore.wutTargets = []
-      this.wutStore.wutHint = I18n.t('observing_compute_unavailable')
-      this.publishAstroPanelState()
-    }, (progress: StellariumBridgeResponse) => {
-      if (requestId !== this.wutRequestSequence) return
-      const completed = Number(progress.progress ?? 0)
-      const total = Number(progress.totalCandidates ?? 0)
-      this.wutStore.wutProgress = total > 0
-        ? I18n.t('observing_filtering') + ' ' + completed.toFixed(0) + ' / ' + total.toFixed(0)
-        : I18n.t('observing_filtering')
-    }, 900, () => requestId !== this.wutRequestSequence)
-  }
 
   private addWutTargetToObservingList(target: WutTarget): void {
     const name = (target.englishName ?? '').trim()
@@ -6585,7 +5945,7 @@ export struct WindowNativeNode {
       this.wutStore.wutDirection = value
     } else return
     this.publishAstroPanelState()
-    this.loadWutTargets()
+    this.wutStore.loadWutTargets()
   }
 
   private selectAstroGroup(group: number): void {
@@ -6622,7 +5982,7 @@ export struct WindowNativeNode {
         this.publishAstroPanelState()
         if (!this.panelVisible || this.activePanel !== 'astro') return
         this.saveAppSettings()
-        this.loadAstroTab(tab)
+        this.astroStore.loadAstroTab(tab)
       } }, () => {
         this.astroStore.astroContentOpacity = 1
         this.astroStore.astroContentOffsetX = 0
@@ -6651,100 +6011,11 @@ export struct WindowNativeNode {
   }
 
 
-  private updateAstroCalcSnapshot(): void {
-    if (this.astroStore.astroTab === 0) {
-      const mode = this.astroStore.positionMode === 0 ? '地平位置' : (this.astroStore.positionMode === 1 ? '日心黄道' : '目录天体')
-      this.astroStore.astroCalcSnapshot = mode + (this.astroStore.positionMode === 2 ? ' · 星等 ≤ ' + this.astroStore.celestialPositionMagnitude.toFixed(1) : '')
-      return
-    }
-    if (this.astroStore.astroTab === 1) {
-      const target = this.astroStore.ephemerisMode === 0 ? '当前选中天体' : (this.astroStore.ephemerisMode === 1 ? '两个天体' : '全部肉眼行星')
-      this.astroStore.astroCalcSnapshot = target + ' · ' + this.astroStore.ephemerisDays.toString() + ' 天 · 每 ' + this.astroStore.ephemerisStepHours.toString() + ' 小时'
-      return
-    }
-    if (this.astroStore.astroTab === 2) {
-      this.astroStore.astroCalcSnapshot = '升中天落 · ' + this.astroStore.rtsCalendarDays.toString() + ' 天 · ' + (this.hasSelectedObject() ? this.graphTargetLabel() : '未选择天体')
-      return
-    }
-    if (this.astroStore.astroTab === 3) {
-      this.astroStore.astroCalcSnapshot = this.phenomenaBodyName(this.astroStore.phenomenaPrimary) + ' / ' + this.phenomenaBodyName(this.astroStore.phenomenaTarget) + ' · ' + this.astroStore.phenomenaDays.toString() + ' 天'
-      return
-    }
-    if (this.astroStore.astroTab === 4) {
-      let detail = ''
-      if (this.astroStore.graphMode === 0 || this.astroStore.graphMode === 1) {
-        detail = this.astroStore.altAzHours.toString() + ' 小时 · 每 ' + this.astroStore.altAzStepMin.toString() + ' 分钟'
-      } else if (this.astroStore.graphMode === 2) {
-        detail = '每日 ' + this.astroStore.annualElevationHour.toString().padStart(2, '0') + ':00'
-      } else if (this.astroStore.graphMode === 3) {
-        detail = this.astroStore.observabilityDays.toString() + ' 天 · 最低 ' + this.astroStore.observabilityMinAltitude.toString() + '°'
-      } else if (this.astroStore.graphMode === 4) {
-        detail = this.astroStore.lunarElongationDays.toString() + ' 天 · 每 ' + this.astroStore.lunarElongationStepHours.toString() + ' 小时'
-      } else {
-        detail = this.astroStore.planetTimeSeriesDays.toString() + ' 天 · 每 ' + this.astroStore.planetTimeSeriesStepHours.toString() + ' 小时'
-      }
-      this.astroStore.astroCalcSnapshot = graphModeLabel(this.astroStore.graphMode) + ' · ' + this.graphTargetLabel() + ' · '
-        + graphStartOptionLabel(this.astroStore.graphStartOffsetDays) + ' · ' + detail
-      return
-    }
-    if (this.astroStore.astroTab === 5) {
-      this.astroStore.astroCalcSnapshot = '今晚可观测 · ' + this.wutStore.wutCategory + ' · ' + this.wutStore.wutObservationTime
-      return
-    }
-    if (this.astroStore.astroTab === 6) {
-      this.astroStore.astroCalcSnapshot = this.astroStore.planetCalcMode === 0 ? '行星实时位置' : planetPairBodyName(this.astroStore.planetPairFirst)
-        + ' / ' + planetPairBodyName(this.astroStore.planetPairSecond) + ' · ' + this.astroStore.planetPairDays.toString() + ' 天'
-      return
-    }
-    if (this.astroStore.astroTab === 7) {
-      this.astroStore.astroCalcSnapshot = (this.astroStore.eclipseMode === 0 ? '日月食' : '行星凌日') + ' · ' + (this.astroStore.eclipseMode === 0 ? this.astroStore.eclipseMonths.toString() + ' 个月' : this.astroStore.planetaryTransitYears.toString() + ' 年')
-      return
-    }
-    if (this.astroStore.astroTab === 9) {
-      this.astroStore.astroCalcSnapshot = '月相 · 未来 ' + this.astroStore.moonPhaseDays.toString() + ' 天'
-      return
-    }
-    if (this.astroStore.astroTab === 8) {
-      this.astroStore.astroCalcSnapshot = '年历 · 当前模拟日期 · 当前观测地点'
-      return
-    }
-    this.astroStore.astroCalcSnapshot = ''
-  }
 
 
-  private loadAstroTab(id: number): void {
-    this.updateAstroCalcSnapshot()
-    this.loadAstroCalcContext()
-    if (id === 0) {
-      if (this.astroStore.positionMode === 0) this.loadPlanetPositions()
-      else if (this.astroStore.positionMode === 1) this.loadHeliocentricPositions()
-      else this.loadCelestialPositions()
-    }
-    else if (id === 1) this.loadEphemeris()
-    else if (id === 2) this.loadRTS()
-    else if (id === 3) this.loadPhenomena()
-    else if (id === 4) {
-      if (this.astroStore.graphMode === 2) this.loadAnnualElevation()
-      else if (this.astroStore.graphMode === 3) this.loadObservabilityCalendar()
-      else if (this.astroStore.graphMode === 4) this.loadLunarElongation()
-      else if (this.astroStore.graphMode === 5) this.loadPlanetTimeSeries()
-      else this.loadAltAzCurve()
-    }
-    else if (id === 5) this.loadTonightAstro()
-    else if (id === 6) {
-      if (this.astroStore.planetCalcMode === 1) this.loadPlanetPairDistance()
-      else this.loadPlanetCalc()
-    }
-    else if (id === 7) {
-      if (this.astroStore.eclipseMode === 0) this.loadEclipses()
-      else this.loadPlanetaryTransits()
-    }
-    else if (id === 8) this.loadAlmanac()
-    else if (id === 9) this.loadMoonPhases()
-  }
 
   private loadMoonPhases(): void {
-    this.updateAstroCalcSnapshot()
+    this.astroStore.updateAstroCalcSnapshot()
     const days = this.astroStore.moonPhaseDays
     if (this.astroStore.moonPhaseLoading && this.moonPhaseLoadingDays === days) return
     const requestId = ++this.moonPhaseRequestId
@@ -6784,49 +6055,6 @@ export struct WindowNativeNode {
     this.callInteractive('setJD', String(item.jd), () => { this.refreshState() })
   }
 
-  private loadAlmanac(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = ++this.almanacRequestSequence
-    this.astroStore.almanacSeasons = []
-    this.astroStore.almanacSeasonYear = ''
-    this.astroStore.almanacData = new Map()
-    this.astroStore.almanacError = ''
-    this.astroStore.almanacLoading = true
-    this.callInteractive('getAlmanac', '', (r: StellariumBridgeResponse) => {
-      if (requestId !== this.almanacRequestSequence) return
-      this.astroStore.almanacLoading = false
-      if (r.ok === true && r.almanac !== undefined) {
-        const av = r.almanac as Record<string, Object>
-        const textValue = (name: string): string => av[name + 'Text'] !== undefined ? String(av[name + 'Text']) : (av[name] !== undefined ? String(av[name]) : '0')
-        const data = new Map<string, string>()
-        data.set('sunRise', textValue('sunRise'))
-        data.set('sunTransit', textValue('sunTransit'))
-        data.set('sunSet', textValue('sunSet'))
-        data.set('moonRise', textValue('moonRise'))
-        data.set('moonTransit', textValue('moonTransit'))
-        data.set('moonSet', textValue('moonSet'))
-        data.set('civilRise', textValue('civilRise'))
-        data.set('civilSet', textValue('civilSet'))
-        data.set('nauticalRise', textValue('nauticalRise'))
-        data.set('nauticalSet', textValue('nauticalSet'))
-        data.set('astronomicalRise', textValue('astronomicalRise'))
-        data.set('astronomicalSet', textValue('astronomicalSet'))
-        data.set('daylightHours', av['daylightHours'] !== undefined ? String(av['daylightHours']) : '')
-        data.set('nightHours', av['nightHours'] !== undefined ? String(av['nightHours']) : '')
-        data.set('moonPhase', av['moonPhase'] !== undefined ? String(av['moonPhase']) : '0')
-        this.astroStore.almanacData = data
-        if (Array.isArray(av['seasonEvents'])) this.astroStore.almanacSeasons = av['seasonEvents'] as Array<SeasonEvent>
-        if (av['seasonYear'] !== undefined) this.astroStore.almanacSeasonYear = String(av['seasonYear'])
-        if (this.astroStore.almanacData.size === 0) this.astroStore.almanacError = '当前没有可显示的年历数据。'
-      } else {
-        this.astroStore.almanacError = r.error ?? '年历计算失败，请点刷新后重试。'
-      }
-    }, () => {
-      if (requestId !== this.almanacRequestSequence) return
-      this.astroStore.almanacLoading = false
-      this.astroStore.almanacError = '年历计算失败，请点刷新后重试。'
-    })
-  }
 
   private jumpToAlmanacSeason(event: SeasonEvent): void {
     if (event.jd === undefined || event.jd <= 0) return
@@ -8330,7 +7558,7 @@ export struct WindowNativeNode {
   }
 
 private loadPlanetPositions(): void {
-    this.updateAstroCalcSnapshot()
+    this.astroStore.updateAstroCalcSnapshot()
     const requestId = ++this.planetPositionsRequestSequence
     this.astroStore.planetPositions = []
     this.astroStore.planetPositionsError = ''
@@ -8362,71 +7590,7 @@ private loadPlanetPositions(): void {
     })
   }
 
-  private loadHeliocentricPositions(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = ++this.hecPositionsRequestSequence
-    this.astroStore.hecPositions = []
-    this.astroStore.hecPositionsError = ''
-    this.astroStore.hecPositionsLoading = true
-    const options: HeliocentricPositionOptions = {
-      includeSelectedMinor: this.astroStore.hecIncludeSelectedMinor,
-      includeBrightComets: this.astroStore.hecIncludeBrightComets,
-      cometMagnitudeLimit: this.astroStore.hecCometMagnitudeLimit,
-    }
-    this.callInteractive('getHeliocentricEclipticPositions', JSON.stringify(options), (r: StellariumBridgeResponse) => {
-      if (requestId !== this.hecPositionsRequestSequence) return
-      this.astroStore.hecPositionsLoading = false
-      if (r.ok === true && r.hecPositions !== undefined) {
-        const positions = (r.hecPositions as Array<HeliocentricPosition>).map((p: HeliocentricPosition): HeliocentricPosition => ({
-          name: p.name,
-          englishName: p.englishName,
-          latitude: p.latitude,
-          longitude: p.longitude,
-          distanceAU: p.distanceAU,
-          isComet: p.isComet === true,
-          isSelectedMinor: p.isSelectedMinor === true,
-        }))
-        this.astroStore.hecPositions = this.hecLayoutPositions(positions)
-        this.astroStore.hecTime = r.hecTime ?? ''
-        if (this.astroStore.hecPositions.length === 0) this.astroStore.hecPositionsError = '当前没有可显示的日心位置。'
-      } else {
-        this.astroStore.hecPositionsError = r.error ?? '日心黄道位置计算失败，请点刷新后重试。'
-      }
-    }, () => {
-      if (requestId !== this.hecPositionsRequestSequence) return
-      this.astroStore.hecPositionsLoading = false
-      this.astroStore.hecPositionsError = '日心黄道位置计算失败，请点刷新后重试。'
-    })
-  }
 
-  private loadCelestialPositions(): void {
-    this.updateAstroCalcSnapshot()
-    const requestId = ++this.celestialPositionsRequestSequence
-    this.astroStore.celestialPositions = []
-    this.astroStore.celestialPositionsError = ''
-    this.astroStore.celestialPositionsLoading = true
-    const options: CelestialPositionOptions = {
-      category: this.astroStore.celestialPositionCategory,
-      horizontal: this.astroStore.celestialPositionHorizontal,
-      magnitudeLimit: this.astroStore.celestialPositionMagnitude,
-      maximumRows: 80,
-    }
-    this.callInteractive('getCelestialPositions', JSON.stringify(options), (r: StellariumBridgeResponse) => {
-      if (requestId !== this.celestialPositionsRequestSequence) return
-      this.astroStore.celestialPositionsLoading = false
-      if (r.ok === true && r.celestialPositions !== undefined) {
-        this.astroStore.celestialPositions = r.celestialPositions as Array<CelestialPosition>
-        this.astroStore.celestialPositionTime = r.positionTime ?? ''
-        if (this.astroStore.celestialPositions.length === 0) this.astroStore.celestialPositionsError = '当前筛选条件下没有可显示的目录天体。'
-      } else {
-        this.astroStore.celestialPositionsError = r.error ?? '目录天体位置计算失败，请点刷新后重试。'
-      }
-    }, () => {
-      if (requestId !== this.celestialPositionsRequestSequence) return
-      this.astroStore.celestialPositionsLoading = false
-      this.astroStore.celestialPositionsError = '目录天体位置计算失败，请点刷新后重试。'
-    })
-  }
 
   private selectLandscape(id: string, name: string): void {
     this.callInteractive('setLandscape', id, (response: StellariumBridgeResponse) => {
@@ -10511,7 +9675,7 @@ private loadPlanetPositions(): void {
           this.ephemerisTargetPickerActive = false
           this.astroStore.astroTab = 1
           this.setPanel('astro')
-          this.loadEphemeris()
+          this.astroStore.loadEphemeris()
         }
         // Search navigation and safe-area placement already own the camera.
         // Enabling tracking here would call moveToObject() a second time after
@@ -11233,13 +10397,6 @@ private loadPlanetPositions(): void {
     return this.celestialTitle(target.name ?? '', target.englishName ?? '')
   }
 
-  private wutCategoryTitle(): string {
-    const options = wutCategoryOptions()
-    for (const option of options) {
-      if (wutCategoryKey(option.id) === this.wutStore.wutCategory) return String(option.label)
-    }
-    return '天体'
-  }
 
 
 
@@ -11556,7 +10713,7 @@ private loadPlanetPositions(): void {
       this.objectMediaStore.objectInspectorMediaPreviewFailed = false
       this.infoWindowStore.infoWinVisible = false
       this.objectDetailStore.selectedInfo = '当前位置没有可选天体，请放大或使用搜索'
-      this.clearRtsSelectionResults()
+      this.astroStore.clearRtsSelectionResults()
     }
   }
 
@@ -16397,7 +15554,7 @@ private loadPlanetPositions(): void {
           fmtEphemerisDate: (s: string | undefined) => this.fmtEphemerisDate(s),
           fmtNum: (v: number | undefined, digits: number, suffix: string) => this.fmtNum(v, digits, suffix),
           graphCustomStartLabel: () => this.graphCustomStartLabel(),
-          graphTargetLabel: () => this.graphTargetLabel(),
+          graphTargetLabel: () => this.astroStore.graphTargetLabel(),
           hasSelectedObject: () => this.hasSelectedObject(),
           hecPointColor: (position: HeliocentricPosition) => this.hecPointColor(position),
           hecPointLeft: (position: HeliocentricPosition) => this.hecPointLeft(position),
@@ -16412,36 +15569,36 @@ private loadPlanetPositions(): void {
           jumpToRts: (key: string) => { this.jumpToRts(key) },
           jumpToRtsCalendar: (day: RtsCalendarDay) => { this.jumpToRtsCalendar(day) },
           jumpToWutTarget: (target: WutTarget) => { this.jumpToWutTarget(target) },
-          loadAlmanac: () => { this.loadAlmanac() },
-          loadAltAzCurve: () => { this.loadAltAzCurve() },
-          loadAnnualElevation: () => { this.loadAnnualElevation() },
-          loadCelestialPositions: () => { this.loadCelestialPositions() },
-          loadEclipses: () => { this.loadEclipses() },
-          loadEphemeris: () => { this.loadEphemeris() },
-          loadHeliocentricPositions: () => { this.loadHeliocentricPositions() },
-          loadLunarElongation: () => { this.loadLunarElongation() },
+          loadAlmanac: () => { this.astroStore.loadAlmanac() },
+          loadAltAzCurve: () => { this.astroStore.loadAltAzCurve() },
+          loadAnnualElevation: () => { this.astroStore.loadAnnualElevation() },
+          loadCelestialPositions: () => { this.astroStore.loadCelestialPositions() },
+          loadEclipses: () => { this.astroStore.loadEclipses() },
+          loadEphemeris: () => { this.astroStore.loadEphemeris() },
+          loadHeliocentricPositions: () => { this.astroStore.loadHeliocentricPositions() },
+          loadLunarElongation: () => { this.astroStore.loadLunarElongation() },
           loadMoonPhases: () => { this.loadMoonPhases() },
-          loadObservabilityCalendar: () => { this.loadObservabilityCalendar() },
-          loadPhenomena: () => { this.loadPhenomena() },
-          loadPlanetCalc: () => { this.loadPlanetCalc() },
-          loadPlanetPairDistance: () => { this.loadPlanetPairDistance() },
+          loadObservabilityCalendar: () => { this.astroStore.loadObservabilityCalendar() },
+          loadPhenomena: () => { this.astroStore.loadPhenomena() },
+          loadPlanetCalc: () => { this.astroStore.loadPlanetCalc() },
+          loadPlanetPairDistance: () => { this.astroStore.loadPlanetPairDistance() },
           loadPlanetPositions: () => { this.loadPlanetPositions() },
-          loadPlanetTimeSeries: () => { this.loadPlanetTimeSeries() },
-          loadPlanetaryTransits: () => { this.loadPlanetaryTransits() },
-          loadRTS: () => { this.loadRTS() },
-          loadRtsCalendar: () => { this.loadRtsCalendar() },
-          loadTonightAstro: () => { this.loadTonightAstro() },
-          loadWutTargets: () => { this.loadWutTargets() },
+          loadPlanetTimeSeries: () => { this.astroStore.loadPlanetTimeSeries() },
+          loadPlanetaryTransits: () => { this.astroStore.loadPlanetaryTransits() },
+          loadRTS: () => { this.astroStore.loadRTS() },
+          loadRtsCalendar: () => { this.astroStore.loadRtsCalendar() },
+          loadTonightAstro: () => { this.astroStore.loadTonightAstro() },
+          loadWutTargets: () => { this.wutStore.loadWutTargets() },
           lunarElongationBarWidth: () => this.lunarElongationBarWidth(),
           lunarElongationClosestLabel: () => this.lunarElongationClosestLabel(),
           lunarElongationLineTop: () => this.lunarElongationLineTop(),
           lunarElongationNowLabel: () => this.lunarElongationNowLabel(),
-          markRtsCalendarForRegeneration: () => { this.markRtsCalendarForRegeneration() },
+          markRtsCalendarForRegeneration: () => { this.astroStore.markRtsCalendarForRegeneration() },
           openAstroTargetPicker: () => { this.openAstroTargetPicker() },
           openEphemerisTargetPicker: () => { this.openEphemerisTargetPicker() },
           openGraphTargetPicker: () => { this.openGraphTargetPicker() },
           openRtsTargetPicker: () => { this.openRtsTargetPicker() },
-          phenomenaBodyName: (body: string) => this.phenomenaBodyName(body),
+          phenomenaBodyName: (body: string) => this.astroStore.phenomenaBodyName(body),
           planetPairBarWidth: () => this.planetPairBarWidth(),
           planetPairCurrentIndex: () => this.planetPairCurrentIndex(),
           planetPairSegmentWidth: () => this.planetPairSegmentWidth(),
@@ -16450,13 +15607,13 @@ private loadPlanetPositions(): void {
           planetTimeSeriesValueLabel: (value: number | undefined, metric: string) => this.planetTimeSeriesValueLabel(value, metric),
           publishAstroPanelState: () => { this.publishAstroPanelState() },
           reloadCurrentGraph: () => { this.reloadCurrentGraph() },
-          reloadEclipses: () => { this.reloadEclipses() },
+          reloadEclipses: () => { this.astroStore.reloadEclipses() },
           rtsCalendarStartOptionLabel: (offsetDays: number) => this.rtsCalendarStartOptionLabel(offsetDays),
           searchObject: (name: string, catalogModuleId?: string, exactSelectionPayload?: string, placement?: string) => { this.searchObject(name, catalogModuleId, exactSelectionPayload, placement) },
           selectAstroFilter: (key: string, value: string) => { this.selectAstroFilter(key, value) },
           selectAstroGroup: (group: number) => { this.selectAstroGroup(group) },
           selectAstroTab: (tab: number) => { this.selectAstroTab(tab) },
-          wutCategoryTitle: () => this.wutCategoryTitle(),
+          wutCategoryTitle: () => this.wutStore.wutCategoryTitle(),
           wutTargetSubtitle: (target: WutTarget) => this.wutTargetSubtitle(target),
           wutTargetTitle: (target: WutTarget) => this.wutTargetTitle(target),
         }
@@ -16700,10 +15857,10 @@ private loadPlanetPositions(): void {
         onSelectCategory: (category: string) => {
           if (this.wutStore.wutCategory !== category) {
             this.wutStore.wutCategory = category
-            this.loadWutTargets()
+            this.wutStore.loadWutTargets()
           }
         },
-        onRefreshTargets: () => { this.loadWutTargets() },
+        onRefreshTargets: () => { this.wutStore.loadWutTargets() },
         onJumpTarget: (target: WutTarget) => { this.jumpToWutTarget(target) },
         onAddTarget: (target: WutTarget) => { this.addWutTargetToObservingList(target) },
         onRemoveTarget: (name: string) => { this.removeObservingTarget(name) },
