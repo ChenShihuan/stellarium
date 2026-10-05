@@ -1332,3 +1332,41 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 
 **与 §15.1–§15.5 的关系**：本节**取代** §15.1–§15.5 的 19 片细分（后者保留作模块普查与依赖说明）；**执行以 §15.10 为准**。§15.6 保留项、§15.7 硬规则、§15.8 度量、§15.9 风险**继续有效**。
 
+
+### 15.11 M1/M2 步长再放大（2026-10-04 二次重排；用户要求"M1 M2 步子再迈大一些"）
+
+> **口径**：M1 由 §15.10 的 6 片并为 **2 片**，M2 由 2 片并为 **1 片**；**M3（高风险）保持 3 片不变**。
+> 合并原则：**按模块性质成组**——"端口 + 服务 + 并入"归一片（纯新增/迁移，无状态机），"控制器状态机"归另一片；**不把控制器与纯迁移混在一片**。
+> 批次顺序、风险分级与全部硬规则不变。本节**取代 §15.10 的 M1/M2 粒度**（§15.10 保留作依赖与内容说明；M3 定义以 §15.10 为准）。
+
+| 片 | 组成（原 ID） | 内容 | 规模 | 风险 | 前置 |
+|---|---|---|---:|---|---|
+| **M1-A** | M1-1+M1-4+M1-5+M1-6 | **端口 + 服务层 + P2 并入**：① 三端口 `MediaPort`/`SensorPort`/`PlatformPort`（各含最小试点）；② `common/media/ImageDecoder.ets` ＋ `common/platform/{Share,Clipboard,Screenshot}.ets` ＋ `common/SpeechService.ets`；③ `capability/StartupBridge.ets` ＋ `state/SessionStore.ets` ＋ 启动/隐私杂项（§9.1 该模块 ~18 方法）；④ P2 三域并入既有 store（脚本播放→`ScriptStore`、导览→`GuideStore`、跟踪→`ViewSettingsStore`） | **~1,200 行** | 低–中低 | — |
+| **M1-B** | M1-2+M1-3 | **控制器批（两个状态机）**：`SensorController` 整体（22 方法 + **48 字段** + 先扩 `state/GyroStore.ets`）＋ `RecordingController` 整体（23 方法 + 13 字段 + 自持 `videoStateTimer`/`recordViewCheckpointTimer`） | **~1,150 行** | 中 | M1-A（端口） |
+| **M2-A** | M2-1+M2-2 | **`ObjectModelRenderer` 整体**：渲染/纹理提交 ＋ 触摸/光照 ＋ ~25 个 `objectInspectorModel*` 字段 ＋ 自持 `objectInspectorModelRenderTimer`；可观测子集入 `ObjectMediaStore` | ~750 行 | 中高 | M1-A |
+| **M3-1/2/3** | 不变 | 天空输入骨架（89 字段）／天空输入主路径（`handleSkyTouch` 318）／选中服务决策片（搬或登记保留） | ~400+400+1,200 | 高 | — |
+
+**预期收益**：M1 后宿主 **14,347 → ≈12,000 行**、`private` **593 → ≈500**（与 §15.10 同，仅片数 6 → 2）；M2 后再 − ~29 方法 / ~650 行。
+
+**M1-A 片内顺序建议**：① 三端口（每落地一个即 构建/契约/真机冒烟）→ ② 服务层（`SpeechService` 最小 → `ImageDecoder` → `PlatformServices`）→ ③ `StartupBridge`/`SessionStore` → ④ P2 并入三域（各域独立小节，可与前序交错）。
+
+**M1-B 片内顺序建议**：① 扩 `GyroStore` 可观测子集 → ② `SensorController`（订阅/回调 → 姿态解算/目标引导）→ ③ `RecordingController`（先搬定时器与 `start()/stop()` → 再搬行为）。
+
+**片内提交纪律**：M1-A/M1-B **允许一片内多次提交**（如 ① 端口 ② 服务 ③ 控制器 各一次），但**同片内不停顿、不汇报**；片末在 CHANGELOG 记**总账**并标注 §15.11 队列行。
+**回滚粒度**：片子变大后若整片不宜回滚，**以片内每个提交为回滚单位** —— 因此**片内每个提交必须自洽可构建**（构建/契约必须在每个提交点上跑过）。
+
+#### 重排后队列（共 6 片）
+
+| ID | 批次 | 组成 | 前置 | 状态 |
+|---|---|---|---|---|
+| **M1-A** | M1 | 端口组 + 服务层 + 启动/会话 + P2 并入（原 M1-1/4/5/6） | — | 待做 |
+| **M1-B** | M1 | `SensorController` + `RecordingController`（原 M1-2/3） | M1-A | 待做 |
+| **M2-A** | M2 | `ObjectModelRenderer` 整体（原 M2-1/2） | M1-A | 待做 |
+| **M3-1** | M3 | `SkyInputController` 骨架（89 字段 + 鼠标/键盘/轴/惯性） | — | 待做（最后） |
+| **M3-2** | M3 | `SkyInputController` 主路径（`handleSkyTouch` 318） | M3-1 | 待做（最后） |
+| **M3-3** | M3 | `SelectionService` 决策片（搬或登记保留） | — | 待做（最后） |
+
+**建议首序**：`M1-A` → `M1-B` → `M2-A` → `M3-1` → `M3-2` → `M3-3`。
+
+**仍未变**：§15.6 保留项、§15.7 硬规则、§15.8 度量与验收、§15.9 风险与取舍、M3 的"登记保留"许可（§15.10）。
+
