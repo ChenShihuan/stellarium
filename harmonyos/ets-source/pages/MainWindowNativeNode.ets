@@ -200,8 +200,8 @@ import {
   TELESCOPE_SIMULATOR_MODEL, HeliocentricOrbit, ConfigurationOption, SkyCultureVisualColors, CelestialPositionOptions,
   CelestialPositionCategory, PhenomenaOptions, PhenomenaStartOption, EphemerisOptions, RtsCalendarOptions, EclipseOptions,
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
-  HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS, TonightPlanetRow, StarCatalogItem, StarCatalogRaw,
-  StarCatalogsResponse, StarCatalogStatusResponse, LimitMagnitudeResponse, GyroGuideProjection, SkyUiObstacle, BookmarkItem,
+  HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS, TonightPlanetRow,
+  StarCatalogStatusResponse, LimitMagnitudeResponse, GyroGuideProjection, SkyUiObstacle, BookmarkItem,
   BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, OcularModeResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   MosaicCameraData, EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
@@ -1151,6 +1151,9 @@ export struct WindowNativeNode {
     // §14 B1-2：图层视图域（地景列表 / 行星轨道 / 行星轨迹）复用同一实例；消费方均为
     // @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，onChanged 传空实现。
     this.layerViewStore.attachPort(hostPort, () => {})
+    // §14 B1-3：星表下载域复用同一 HostCommandPort 实例。其消费方（CatalogsPanel）为
+    // @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，故 onChanged 传空实现。
+    this.catalogStore.attachPort(hostPort, () => {})
     this.startPageAfterPrivacyIfNeeded()
   }
 
@@ -2269,7 +2272,7 @@ export struct WindowNativeNode {
         this.loadObserverInfo()
         this.loadSavedLocations()
       } else if (panel === 'catalogs' && !OFFLINE_APPGALLERY_BUILD) {
-        if (this.catalogStore.catalogList.length === 0) this.loadStarCatalogs()
+        if (this.catalogStore.catalogList.length === 0) this.catalogStore.loadStarCatalogs()
       } else if (panel === 'bookmarks') {
         this.loadBookmarks()
       } else if (panel === 'oculars') {
@@ -2723,25 +2726,6 @@ export struct WindowNativeNode {
   }
 
   // ===== 星表下载（C++ 桥：getStarCatalogs / downloadStarCatalog / getStarCatalogStatus）=====
-  private loadStarCatalogs(): void {
-    this.catalogStore.catalogLoading = true
-    this.callNativeWhenReady('getStarCatalogs', '', (r: StellariumBridgeResponse) => {
-      const resp = r as StarCatalogsResponse
-      const list = resp.catalogs ?? []
-      this.catalogStore.catalogList = list.map((c: StarCatalogRaw): StarCatalogItem => ({
-        id: c.id ?? '',
-        name: c.name ?? (c.id ?? I18n.t('catalog_fallback')),
-        size: c.size ?? '',
-        key: c.key ?? '',
-        fileName: c.fileName ?? '',
-        url: c.url ?? '',
-        html: c.html ?? '',
-        checked: c.checked === true || c.checked === 'true' || c.checked === 1,
-      }))
-      this.catalogStore.catalogLoading = false
-    })
-  }
-
   private startCatalogDownload(id: string): void {
     if (this.catalogStore.catalogBusy) {
       this.flashHint(I18n.t('msg_catalog_downloading'))
@@ -2780,7 +2764,7 @@ export struct WindowNativeNode {
         this.flashHint(this.catalogStore.catalogMsg)
         this.catalogStore.catalogBusy = false
         this.catalogStore.catalogDownloadingId = ''
-        this.loadStarCatalogs()
+        this.catalogStore.loadStarCatalogs()
       } else if (state === 'error') {
         clearInterval(timer)
         const err = r.error ?? '未知错误'
