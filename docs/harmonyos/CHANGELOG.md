@@ -1,3 +1,19 @@
+## [2026-10-02] DevEco Code - Phase 5b：抽取 `objectInspectorMediaPreviewOverlay` 叠层
+
+- **背景/范围**：Phase 5（overlay，每片只做一个）第二片。把 `pages/MainWindowNativeNode.ets` 的 `@Builder private objectInspectorMediaPreviewOverlay()`（66 行）下沉为 `harmonyos/ets-source/panels/overlay/ObjectInspectorMediaPreviewOverlay.ets`（88 行）。**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 3/9），不迁 V2。
+- **分工（可见性/派生值留宿主，§13.1 规则 4/6）**：`objectInspectorMediaFullscreen` 判定留在宿主调用点；标题由宿主 `zhNameOf(objectDetailStore.selectedName)` 算好后以 `@Prop titleText` 传入；顶部安全区 `mediaPreviewTopInset()` 由宿主算好后以 `@Prop topInset` 传入；媒体数据（PixelMap / label / loading / failed / path）经 `@ObjectLink objectMediaStore` 读取；解码完成/失败/重试/关闭四个动作全部回注宿主，成员名与宿主方法一致（`closeObjectInspectorMediaPreview` / `onObjectInspectorMediaPreviewLoaded` / `onObjectInspectorMediaPreviewError` / `retryObjectInspectorMediaPreview`），使既有 `onClick`/`onComplete`/`onError` 语义逐字保留。
+- **单容器根（规则 7）**：根为全屏 `Stack`（`zIndex(1000)` + `hitTestBehavior(HitTestMode.Transparent)` 逐字保留），内含背景拦截层与内容 `Column`；`Image(...).objectFit(ImageFit.Contain)`、`UI_RADIUS_PILL` / `UI_RADIUS_CONTROL` 逐字保留。该 overlay 原本无 `.id(...)` 锚点（契约 42 锚点不变）。
+- **单体手术**（`pages/MainWindowNativeNode.ets`）：**19,230 → 19,173 行，净 −57**：删旧 `@Builder`（以边界签名正则删除，非行号算术）、调用点改为 `if (this.objectMediaStore.objectInspectorMediaFullscreen) { ObjectInspectorMediaPreviewOverlay({...}) }`、新增 1 行 import。提取后先 `grep` 新文件 `this.` 残留：仅 `objectMediaStore` / `titleText` / `topInset` / 4 个回调，全部为组件自身成员。
+- **验证链**：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check`（2 文件 0 错）→ `devecocli build`（`-SkipEngine -SkipDeploy -SkipResources`）**BUILD SUCCESSFUL**（39 s）→ `check-ohos-ui-contract.mjs` 33 面板 / 22 静态 id / 17 动态前缀 / 42 锚点完好（>175 文件）→ 全量 `*-ohos*.mjs` 扫描：失败 7 个，**全部为 §13.6 存量环境类**（4 个 `-pad` 需设备、`mist-performance` 需设备、`verify-ohos-location-search` 路径 bug、`verify-ohos-search` macOS hdc 假设）。
+- **测试同步（规则 8）**：`scripts/test-ohos-detail-image-layout.mjs` 的 `preview` 切片由「从单体切 `objectInspectorMediaPreviewOverlay`」改为直接读新组件文件；因组件保留 `@ObjectLink objectMediaStore` 与回调名 `closeObjectInspectorMediaPreview`，两条断言逐字不变 → 5/5 全绿。
+- **真机**（`com.cnchensh.stellarium`，`192.168.50.108:40565`，1280×2832；`aa dump -l` 确认 `QAbility` 前台；`pidof` 全程存活）：
+  1. 搜索「Andromeda」→ 选仙女座 → 详情卡媒体区显示「点按查看」（`kind='constellation'` 且 PixelMap 已解码）；
+  2. 点按媒体卡 → **全屏叠层渲染**：`devecocli ui layout` 看到标题 `Text [84,156,1042,230] "仙女座"`（`@Prop titleText`）、标签 `"当前天空文化星座绘图"`（`@ObjectLink objectMediaStore.objectInspectorMediaLabel`）、关闭按钮 `Button [1042,144,1196,298]`、页脚 `"图像来自本地随应用分发的 Stellarium 资源；未在此页面联网下载。"`；
+  3. 点按关闭按钮 → `hilog` 实测 `[detail-media-preview] close`（注入回调链路生效），叠层消失，`pidof`=11467 仍存活，排除规则 9 运行期退出；
+  4. 注：本机 Mars 媒体 `kind='model'`（走 `objectInspectorModelOverlay`，非本片），其 PNG 纹理解码失败与本片无关；本片改用可解码的仙女座深空绘图路径完成全屏预览走查。
+- **测后恢复**：未改动任何持久化设置（仅搜索框文本，非持久化）。
+- **本片新踩的坑**：回调成员名沿用宿主方法名（而非 `onXxx`）可让按文本切片的测试断言零改动；前提是这些名字不与 `CustomComponent` 属性方法冲突（`closeObjectInspectorMediaPreview` 等安全）。
+
 ## [2026-10-02] DevEco Code - Phase 5a：抽取 `polarScopeOverlay` 叠层（Phase 5 首片）
 
 - **背景/范围**：`panelContent` 收口（Phase 4l）后进入 Phase 5（overlay，每片只做一个）。本片把 `pages/MainWindowNativeNode.ets` 的 `@Builder private polarScopeOverlay()`（127 行）下沉为 `harmonyos/ets-source/panels/overlay/PolarScopeOverlay.ets`（147 行）。**无 `@BuilderParam`、无参数化 `@Builder`**（§13.1 规则 3/9），不迁 V2。

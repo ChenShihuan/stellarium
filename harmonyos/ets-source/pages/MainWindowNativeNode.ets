@@ -115,6 +115,7 @@ import { PointerCoordinatesPanel } from '../panels/view/PointerCoordinatesPanel'
 import { ViewCenterCoordinateOverlay } from '../panels/overlay/ViewCenterCoordinateOverlay'
 import { ObjectDetailConnectorLayer } from '../panels/overlay/ObjectDetailConnectorLayer'
 import { PolarScopeOverlay } from '../panels/overlay/PolarScopeOverlay'
+import { ObjectInspectorMediaPreviewOverlay } from '../panels/overlay/ObjectInspectorMediaPreviewOverlay'
 import { ToolsStore } from '../state/ToolsStore'
 import { ToolsPanel } from '../panels/tools/ToolsPanel'
 import { RecordingControlBar } from '../panels/tools/RecordingControlBar'
@@ -8274,74 +8275,6 @@ export struct WindowNativeNode {
     }
   }
 
-  @Builder
-  private objectInspectorMediaPreviewOverlay() {
-    if (this.objectMediaStore.objectInspectorMediaFullscreen) {
-      Stack() {
-        Stack() { }
-          .width('100%').height('100%')
-          .backgroundColor('rgba(2,6,12,0.99)')
-          .hitTestBehavior(HitTestMode.Block)
-        Column({ space: 0 }) {
-        Row() {
-          Column({ space: 3 }) {
-            Text(this.zhNameOf(this.objectDetailStore.selectedName)).fontSize(18).fontWeight(FontWeight.Medium).fontColor('#F0FAFF')
-              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-            Text(this.objectMediaStore.objectInspectorMediaLabel).fontSize(11).fontColor('#9CC7DB').width('100%')
-          }
-            .layoutWeight(1).alignItems(HorizontalAlign.Start)
-          Button() {
-            Image(getIcon('close', false)).width(20).height(20).fillColor('#E4F5FC')
-          }
-            .width(44).height(44).borderRadius(UI_RADIUS_PILL)
-            .backgroundColor('rgba(255,255,255,0.10)')
-            .clickEffect({ level: ClickEffectLevel.LIGHT })
-            .padding(0)
-            .zIndex(10).hitTestBehavior(HitTestMode.Block)
-            .onClick(() => { this.closeObjectInspectorMediaPreview() })
-        }
-          .width('100%').height(54)
-
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.objectMediaStore.objectInspectorMediaPixelMap !== undefined) {
-            Image(this.objectMediaStore.objectInspectorMediaPixelMap)
-              .width('100%').height('100%').objectFit(ImageFit.Contain)
-              .onComplete(() => { this.onObjectInspectorMediaPreviewLoaded() })
-              .onError(() => { this.onObjectInspectorMediaPreviewError() })
-          }
-          if (this.objectMediaStore.objectInspectorMediaPreviewLoading) {
-            Column({ space: 12 }) {
-              LoadingProgress().width(36).height(36).color('#8EC9E9')
-              Text('正在打开本地图像').fontSize(12).fontColor('#B8D7E6')
-            }
-          } else if (this.objectMediaStore.objectInspectorMediaPreviewFailed ||
-            (!this.objectMediaStore.objectInspectorMediaPreviewLoading && this.objectMediaStore.objectInspectorMediaPreviewPath.length === 0)) {
-            Column({ space: 12 }) {
-              Image(getIcon('catalog_galaxy', false)).width(42).height(42).fillColor('#8EC9E9')
-              Text('图像暂时无法显示').fontSize(14).fontColor('#E4F5FC')
-              Button('重新加载')
-                .height(36).fontSize(12).fontColor('#E4F5FC')
-                .backgroundColor('rgba(91,147,191,0.28)').borderRadius(UI_RADIUS_CONTROL)
-                .onClick(() => { this.retryObjectInspectorMediaPreview() })
-            }
-          }
-        }
-          .width('100%').layoutWeight(1)
-          .backgroundColor('#02060C').borderRadius(UI_RADIUS_CONTROL)
-
-        Text('图像来自本地随应用分发的 Stellarium 资源；未在此页面联网下载。')
-          .fontSize(11).fontColor('#9CC7DB').lineHeight(17).width('100%').height(41)
-          .padding({ top: 12 })
-        }
-          .width('100%').height('100%')
-          .padding({ left: 24, right: 24, top: this.mediaPreviewTopInset(), bottom: 18 })
-          .zIndex(1)
-      }
-        .width('100%').height('100%')
-        .zIndex(1000).hitTestBehavior(HitTestMode.Transparent)
-    }
-  }
-
   private openObjectInspectorMediaPreview(): void {
     if (this.objectMediaStore.objectInspectorMediaPath.length === 0) { return }
     this.objectMediaStore.objectInspectorMediaPreviewLoading = this.objectMediaStore.objectInspectorMediaPixelMap === undefined && !this.objectMediaStore.objectInspectorMediaLoadFailed
@@ -14578,7 +14511,17 @@ private loadPlanetPositions(): void {
           })
         }
         this.skyCultureArtPreviewOverlay()
-        this.objectInspectorMediaPreviewOverlay()
+        if (this.objectMediaStore.objectInspectorMediaFullscreen) {
+          ObjectInspectorMediaPreviewOverlay({
+            objectMediaStore: this.objectMediaStore,
+            titleText: this.zhNameOf(this.objectDetailStore.selectedName),
+            topInset: this.mediaPreviewTopInset(),
+            closeObjectInspectorMediaPreview: () => { this.closeObjectInspectorMediaPreview() },
+            onObjectInspectorMediaPreviewLoaded: () => { this.onObjectInspectorMediaPreviewLoaded() },
+            onObjectInspectorMediaPreviewError: () => { this.onObjectInspectorMediaPreviewError() },
+            retryObjectInspectorMediaPreview: () => { this.retryObjectInspectorMediaPreview() }
+          })
+        }
         this.objectInspectorModelOverlay()
       }
 

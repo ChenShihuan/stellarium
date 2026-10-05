@@ -6,7 +6,9 @@ const source = readFileSync(new URL('../harmonyos/ets-source/pages/MainWindowNat
 const mediaComponents = readFileSync(new URL('../harmonyos/ets-source/panels/object/TabletInspectorMedia.ets', import.meta.url), 'utf8');
 // 媒体卡片已下沉为 TabletInspectorMediaCard 组件（本轮搬迁），宿主只保留分支判定并向组件传参。
 const card = mediaComponents.slice(mediaComponents.indexOf('export struct TabletInspectorMediaCard {'), mediaComponents.indexOf('export struct TabletInspectorNoticeRow {'));
-const preview = source.slice(source.indexOf('  private objectInspectorMediaPreviewOverlay() {'), source.indexOf('  private openObjectInspectorMediaPreview(): void'));
+// 全屏大图叠层已下沉为 ObjectInspectorMediaPreviewOverlay 组件（Phase 5b），断言改读组件文件；
+// 组件保留 @ObjectLink `objectMediaStore` 与回调名 `closeObjectInspectorMediaPreview`，故下方断言逐字不变。
+const preview = readFileSync(new URL('../harmonyos/ets-source/panels/overlay/ObjectInspectorMediaPreviewOverlay.ets', import.meta.url), 'utf8');
 // 天体详情分支已下沉为 ObjectPanel 组件（Phase 4e）：媒体卡片的调用点现在组件内，
 // 但视口高度仍由宿主按实时视口状态算好后以 @Prop 传入。
 const objectPanel = readFileSync(new URL('../harmonyos/ets-source/panels/panels/ObjectPanel.ets', import.meta.url), 'utf8');
