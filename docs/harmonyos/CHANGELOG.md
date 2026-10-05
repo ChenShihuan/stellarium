@@ -1,3 +1,10 @@
+## [2026-10-01] DevEco Code - Phase 3u：详情行族组件化（ObjectDataRow / StructuredDetailRow / DetailSectionTitle）
+
+- **新增文件：** `panels/object/DetailRows.ets`（三个纯展示组件）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— **12 处** `this.objectDataRow(label, key)`、1 处 `this.structuredObjectDetailRow(field.key, tablet)`、4 处 `this.tabletInspectorSection(...)` / 非平板标题，全部替换为组件调用；删除上述**三个带参数的 UI 函数**。
+- **注入取舍：** 原三个 builder 内部通过 `selectedDisplayValue(key)` / `detailFieldLabel(key)` / `detailFieldValue(key)` / `detailSectionTitle(section)` **按名字查值**；组件化后改由父方把**已解析的标签与数值**以 `@Prop` 传入，解析逻辑仍留宿主（多处共用），既去掉了参数按值捕获的冻结，也避免了在组件里做动态字段查找。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验（70 个 .ets）/ 安装启动通过；搜索 `Mars` → 选中 → 详情卡正常，信息行显示 `时角`、`平恒星时 7h46m47.7s`、`实时高度/方位 高度 69°50'24″ 方位 159°23'11″` 等实时值。
+- **单体行数：** 29,326 → **29,295**。
 ## [2026-10-01] DevEco Code - Phase 3t：object/detail 域第一片 —— `selected*` 数据簇入 ObjectDetailStore
 
 - **本片范围：** object/detail 域共 **96 字段 / 736 处引用**，按 §13.2 拆片；本片先抽出最大的数据簇（`selected*` + `objectInfo`，**56 字段 / 418 处引用**），它是详情卡、信息行与平板检查器三类 UI 的共同数据源，也是后续组件化的前提。
