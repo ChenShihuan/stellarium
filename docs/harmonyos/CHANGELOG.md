@@ -1,3 +1,11 @@
+## [2026-10-01] DevEco Code - Phase 3z：结构化资料段整体迁出（StructuredDetailRows）
+
+- **新增 `panels/object/StructuredDetailRows.ets`**：`structuredObjectDetails(tablet)`（28 行）改为组件，并把它的**五个段落助手**（`detailSectionIds` 3 行 / `detailSectionTitle` 16 / `detailFieldLabel` 128 / `detailFieldValue` 23 / `detailFieldsForSection` 11，共 185 行）一并搬出宿主 —— 它们此前只被这一个界面使用，且只依赖 `ObjectDetailStore`。
+- **形态**：助手改为**文件作用域函数**（ArkTS 规则：不用嵌套函数），其中两个读状态的改为接收 `store` 形参（`detailFieldValue(store, key)` / `detailFieldsForSection(store, section)`）；组件以 `@ObjectLink` 观察 store、`tablet` 由 `@Prop` 传入；原 `DetailSectionTitle` 的 `if (tablet) {...} else {...}` 双分支（参数化 `@Builder` 时代按值捕获的遗留写法）合并为单次调用。
+- **单体行数：** 29,045 → **28,832**（−213 = 删 185 行助手 + 28 行 builder，另 2 处调用点改写为组件）。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验（76 个 .ets）/ 安装启动通过；火星卡"资料"页向下滚动可见结构化段落 `物理性质` 及其行（`反照率 0.150` …），即搬走的 `detailSectionTitle` / `detailFieldLabel` / `detailFieldValue` 全部正常工作。
+- **测试同步：** `verify-ohos-object-details.mjs` 的标签/段落来源改为新模块（并保留"121 个字段 / 11 个段落"校验）；"共享 builder 计数"改为统计 `StructuredDetailRows({ store: this.objectDetailStore`；`test-ohos-detail-live-values.mjs` 第 3 条改为从新文件取 `function detailFieldValue(store, key)` 并按新签名注入。
+- **踩坑记录（新增）：** 用脚本"整块搬运"方法到文件作用域时，**缩进必须一并调整** —— 只改 `private X` → `function X` 而保留原缩进，会让函数的闭合 `}` 停在 2 空格缩进，任何以 `\n}` 为边界的后续脚本（含测试）都会**越过函数边界吃掉后面的 `function`**（表现为 `Unexpected token 'function'`）。搬运后应统一去缩进并核对。
 ## [2026-10-01] DevEco Code - 取消跟踪 `build/` 下的 11 个生成副本
 
 - **现象：** 每改一次 ArkTS 源码，`build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets` 等副本就变脏，导致每片都要额外做一次"同步生成副本"提交（本会话此前已因此产生 20+ 次提交）。

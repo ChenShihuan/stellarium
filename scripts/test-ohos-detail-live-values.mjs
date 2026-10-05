@@ -28,14 +28,17 @@ test('hidden or unavailable coordinates do not retain their last value', () => {
 });
 
 test('structured row resolves replaced fields and handles fields that disappear', () => {
-  const body = source.match(/private detailFieldValue\(key: string\): string \{([\s\S]*?)\n  \}/)[1];
-  const value = new Function('key', body.replace('item: ObjectDetailField', 'item'));
-  const state = { objectDetailStore: { selectedDetailFields: [{ key: 'range', value: '1200 km' }] } };
-  assert.equal(value.call(state, 'range'), '1200 km');
-  state.objectDetailStore.selectedDetailFields = [{ key: 'range', value: '1100 km' }];
-  assert.equal(value.call(state, 'range'), '1100 km');
-  state.objectDetailStore.selectedDetailFields = [];
-  assert.equal(value.call(state, 'range'), '--');
+  // 段落助手（detailFieldLabel/detailFieldValue/...）已随结构化资料界面搬进 StructuredDetailRows.ets，
+  // 并改成接收 store 的文件作用域函数。
+  const detailSource = readFileSync(new URL('../harmonyos/ets-source/panels/object/StructuredDetailRows.ets', import.meta.url), 'utf8');
+  const body = detailSource.match(/function detailFieldValue\(store: ObjectDetailStore, key: string\): string \{([\s\S]*?)\n\}/)[1];
+  const value = new Function('store', 'key', body.replace('item: ObjectDetailField', 'item'));
+  const store = { selectedDetailFields: [{ key: 'range', value: '1200 km' }] };
+  assert.equal(value(store, 'range'), '1200 km');
+  store.selectedDetailFields = [{ key: 'range', value: '1100 km' }];
+  assert.equal(value(store, 'range'), '1100 km');
+  store.selectedDetailFields = [];
+  assert.equal(value(store, 'range'), '--');
 });
 
 test('live detail polling does not wait for optional satellite pass predictions', () => {
