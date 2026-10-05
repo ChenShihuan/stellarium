@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 
 const directory = new URL('../harmonyos/ets-source/pages/', import.meta.url);
 const source = name => readFileSync(new URL(name + '.ets', directory), 'utf8');
-const plain = text => stripTypeScriptTypes(text.replace(/^import .*\n/gm, '').replace(/export /g, ''));
+const plain = text => stripTypeScriptTypes(text.replace(/^import .*\r?\n/gm, '').replace(/export /g, ''));
 const procedural = new Function(plain(source('ProceduralDetailModel')) + ';return { renderProceduralModel, proceduralParticles };')();
 const geometry = new Function(plain(source('DetailModelGeometry')) + ';return { modelIdentity, modelDrag };')();
 const render = new Function('renderProceduralModel', plain(source('DetailModelRasterizer')) + ';return renderDetailModel;')(procedural.renderProceduralModel);

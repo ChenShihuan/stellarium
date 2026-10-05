@@ -79,5 +79,5 @@ test('orbit samples reject failed propagation and restore the current epoch', ()
   const sampling = satellite.slice(satellite.indexOf('void Satellite::computeOrbitPoints()'), satellite.indexOf('bool operator <'));
   assert.equal((sampling.match(/if \(!validSample\(\)\) return;/g) ?? []).length, 3);
   assert.match(sampling, /getPropagationStatus\(\) == QLatin1String\("valid"\)/);
-  assert.match(sampling, /pSatWrapper->setEpoch\(epochTime\);\n\}/);
+  assert.match(sampling, /pSatWrapper->setEpoch\(epochTime\);\r?\n\}/);
 });

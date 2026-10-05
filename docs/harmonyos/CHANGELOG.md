@@ -1,3 +1,15 @@
+## [2026-10-01] DevEco Code - Phase 3y：详情"活数据行"组件化（DetailLiveRows）
+
+- **新增 `panels/object/DetailLiveRows.ets`**：四个参数化 UI 函数改为组件 —— `objectDistanceNotice`（6 行）→ `ObjectDistanceNotice`、`selectedLiveInfoRows(compact)`（19）→ `SelectedLiveInfoRows`、`selectedCoordinateRow(label,key,tablet)`（10）→ `SelectedCoordinateRow`、`selectedCoordinateRows(tablet)`（13）→ `SelectedCoordinateRows`。
+- **入参策略：** 坐标行与时角行直接以 `@ObjectLink store: ObjectDetailStore` 观察状态（值随天体实时刷新，不依赖入参传递）；`selectedDisplayValue('selectedCoordApparentAltAz')` 的"缺值回落到高度方位"规则随该行一起搬进组件并加注释；只有"是否可见 / 是否紧凑 / 距离提示文案"由宿主以 `@Prop` 传入（`visible` / `compact` / `text: this.objectDistanceNoticeText()`）。
+- **单体行数：** 29,096 → **29,045**（−51）。
+- **真机验证（`192.168.3.95:40565`）：** 构建 / 契约校验（75 个 .ets）/ 安装启动通过；火星卡头部时角行（`时角` + `平恒星时 8h50m19.9s`，紧凑单行形态）与坐标页九行（`地平坐标 69.550°, 203.170°` / `几何地平` / `赤道坐标 8h16m44.7s +20°46'13.4"` / `J2000 赤道` / `当日黄道 121.699°, 1.017°` …）全部正常显示实时值。
+## [2026-10-01] DevEco Code - 测试夹具修复：CRLF 敏感下的成片假失败
+
+- **根因：** **JS 正则的 `.` 不匹配 `\r`**，而 Windows 工作副本是 CRLF，因此 `replace(/^import .*\n/gm, '')` 永远剥不掉 import，`new Function` 直接抛 `Cannot use import statement outside a module`；同理 `;\n}` 这类换行锚定断言在 CRLF 下永不匹配。这些脚本在 LF（Linux）检出下正常，所以此前被误判为"既有失败"。
+- **修复：** `test-ohos-privacy-startup.mjs` / `test-ohos-clipboard.mjs` / `test-ohos-model-worker.mjs` 的 `plain()` 改为 `/^import .*\r?\n/gm`；`test-ohos-satellite-panel.mjs` 的 `;\n}` 改为 `;\r?\n}`；`test-ohos-privacy-startup.mjs` 的 `ability()` 夹具补上 Phase 0 新增的 `deviceInfo` / `BuildProfile` 依赖（按真机 release 配置注入，使 `engineLessEmulatorUiOnly()` 保持 false）；`verify-ohos-location-search.mjs` 修掉 `new URL('..').pathname` 在 Windows 上拼出 `E:\E:\...` 的路径 bug（改用 `fileURLToPath`）。
+- **效果：** `privacy-startup` 11 失败 → **19/19 通过**；`clipboard` 3 失败 → **4/4**；`model-worker` 语法错误 → **6/6**；`satellite-panel` 1 失败 → **7/7**；`location-search` 路径异常 → **通过**（7387 地点 / 12 次搜索）。
+- **仍受环境限制（非回归）：** 五个 `*-pad.mjs` 与 `mist-performance` 必须显式传设备 ID 且面向 Pad 设备；`verify-ohos-search.mjs` 硬编码 macOS 的 `hdc` 路径（`/Applications/DevEco-Studio.app/...`）且需要应用在跑。
 ## [2026-10-01] DevEco Code - Phase 3x：详情贴片族组件化（DetailTiles）
 
 - **新增 `panels/object/DetailTiles.ets`**：把五个**参数化 UI 函数**改为组件 —— `objectDataTile`（8 行）→ `ObjectDataTile`、`objectMetric`（8）→ `ObjectMetric`、`objectScheduleTile`（8）→ `ObjectScheduleTile`、`objectDetailTab`（12）→ `ObjectDetailTab`、`objectCompactMetric`（11）→ `ObjectCompactMetric`。它们原先按值捕获参数，导致"实时高度 / 方位"这类随天体变化的数值**首帧后冻结**（§13.1 规则 3）。

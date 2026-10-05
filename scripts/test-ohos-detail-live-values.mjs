@@ -60,13 +60,25 @@ test('live merging preserves row order and static records while removing expired
   assert.deepEqual(state.objectDetailStore.selectedDetailFields, [{ key: 'tleEpoch', value: 'epoch' }]);
 });
 
-// objectDataRow / tabletInspectorRow 已改为组件（ObjectDataRow / StructuredDetailRow：由父方解析好数值后以 @Prop 传入），
-// 贴片族（objectDataTile / objectMetric / objectScheduleTile / objectDetailTab / objectCompactMetric）同样已改为
-// DetailTiles.ets 里的组件，因此这条“只传稳定 key、不传字符串快照”的守卫只覆盖仍然是“传 key”的宿主 builder。
-test('coordinate and summary builders receive stable keys, not string snapshots', () => {
-  const calls = source.split('\n').filter(line => /this\.(selectedCoordinateRow|expandedSummaryMetric|expandedSummaryLine)\(/.test(line));
-  assert.ok(calls.length > 5, `call sites found: ${calls.length}`);
-  for (const line of calls) assert.doesNotMatch(line, /, this\.selected\w+|, this\.zhNameOf/, line);
+// 详情卡片的行/贴片已全部组件化（DetailRows / DetailTiles / DetailLiveRows），宿主里不再有
+// "参数化 @Builder 内部按 key 查值"的形态 —— 那正是子树首帧冻结的来源（§13.1 规则 3）。
+// 这条守卫固定"组件收已解析的值、宿主留查值逻辑"的分工。
+test('detail rows and tiles come from components while the host keeps the lookups', () => {
+  for (const wired of [
+    'ObjectDataRow({ label:',
+    'ObjectDataTile({ label:',
+    'ObjectMetric({ label:',
+    'ObjectScheduleTile({ label:',
+    'ObjectDetailTab({ label:',
+    'ObjectCompactMetric({ label:',
+    'SelectedCoordinateRows({ store: this.objectDetailStore',
+    'SelectedLiveInfoRows({ store: this.objectDetailStore',
+    'ObjectDistanceNotice({ text: this.objectDistanceNoticeText() })'
+  ]) {
+    assert.ok(source.includes(wired), wired);
+  }
+  assert.ok(source.includes("value: this.selectedDisplayValue('selectedRise')"), 'the host resolves tile values');
+  assert.ok(source.includes('active: this.bottomCardIndex ==='), 'the active tab derives from live state');
 });
 
 test('tile components receive resolved values while the host keeps the lookups', () => {

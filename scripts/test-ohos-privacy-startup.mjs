@@ -6,7 +6,7 @@ import test from 'node:test';
 const root = new URL('../harmonyos/ets-source/', import.meta.url);
 const read = path => readFileSync(new URL(path, root), 'utf8');
 const logger = { info() {}, warn() {}, error() {} };
-const plain = source => stripTypeScriptTypes(source.replace(/^import .*\n/gm, '').replaceAll('export default ', '').replaceAll('export ', ''));
+const plain = source => stripTypeScriptTypes(source.replace(/^import .*\r?\n/gm, '').replaceAll('export default ', '').replaceAll('export ', ''));
 const source = read('qability/QAbility.ets');
 
 function manager() {
@@ -31,9 +31,11 @@ function ability(accepted = false) {
   const qpa = new Proxy({}, { get: (_target, key) => () => calls.push(key) });
   const storage = new Map();
   const Stage = { releasePrivacyGate() { calls.push('release'); }, async initQtAppContextIfNeeded() { calls.push('init'); } };
-  const Class = new Function('UIAbility', 'QAbilityStage', 'hasCurrentPrivacyConsent', 'qpa', 'hilog', 'LOG_DOMAIN', 'LOG_TAG', 'AppStorage', 'setInterval', 'clearInterval', 'setDeepSkyImageExtractionForeground', 'LocalStorage', 'QtWindowStageAdapter', 'canIUse',
+  const Class = new Function('UIAbility', 'QAbilityStage', 'hasCurrentPrivacyConsent', 'qpa', 'hilog', 'LOG_DOMAIN', 'LOG_TAG', 'AppStorage', 'setInterval', 'clearInterval', 'setDeepSkyImageExtractionForeground', 'LocalStorage', 'QtWindowStageAdapter', 'canIUse', 'deviceInfo', 'BuildProfile',
     plain(source) + ';return QAbility;')(class {}, Stage, () => accepted, qpa, logger, 0, 'test',
-      { setOrCreate: (key, value) => storage.set(key, value) }, () => 1, () => {}, () => {}, class extends Map {}, class {}, () => false);
+      { setOrCreate: (key, value) => storage.set(key, value) }, () => 1, () => {}, () => {}, class extends Map {}, class {}, () => false,
+      // 真机（非模拟器）release 配置：engineLessEmulatorUiOnly() 必须保持为 false。
+      { productModel: 'phone', abiList: 'arm64-v8a' }, { DEBUG: false });
   const instance = new Class();
   instance.context = { getApplicationContext: () => ({}) };
   instance.pendingWant = {};
