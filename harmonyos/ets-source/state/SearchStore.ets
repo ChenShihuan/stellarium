@@ -1,4 +1,5 @@
 import { NameItem, SearchSug } from '../pages/StellariumTypes'
+import { ConstellationNavigationItem } from '../pages/MainWindowModels'
 
 // 搜索域状态：输入文本与候选建议。
 //
@@ -28,4 +29,8 @@ export class SearchStore {
   categoryCatalogMessage: string = ''
   categoryModuleId: string = ''
   pendingPluginCatalogId: string = ''
+  // ==== 星座快捷导航与 RA/Dec 坐标输入 ====
+  constellationNavigationItems: ConstellationNavigationItem[] = []
+  coordInputRA: string = ''
+  coordInputDec: string = ''
 }
