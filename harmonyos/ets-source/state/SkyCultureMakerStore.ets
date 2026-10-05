@@ -1,6 +1,18 @@
 import { image } from '@kit.ImageKit'
 import { I18n } from '../pages/I18n'
-import { SkyCultureMakerArtworkAnchor, SkyCultureMakerConstellation, SkyCultureMakerValidation } from '../pages/MainWindowModels'
+import { SkyCultureMakerArtworkAnchor, SkyCultureMakerConstellation, SkyCultureMakerDraft, SkyCultureMakerValidation } from '../pages/MainWindowModels'
+import { StellariumBridgeResponse } from '../pages/StellariumTypes'
+import { CommandPort } from '../bridge/CommandPort'
+
+// 宿主 → SkyCultureMakerStore 的加载助手（§14.5 B2R-3「额外注入」）。
+// 三者均为宿主内**被多个动作方法共用**的实现（applySkyCultureMakerDraft 亦被保存/校验/重置/撤销等
+// 回包消费，skyCultureMakerDraftFromResponse 亦然，ensurePluginLoaded 为宿主通用插件加载器），
+// 故保留宿主、经具名 hooks 回注（store 不 import 桥/插件管理层）。
+export interface SkyCultureMakerHostHooks {
+  applySkyCultureMakerDraft(draft: SkyCultureMakerDraft): void
+  ensurePluginLoaded(pluginName: string, callback: () => void, failureCallback?: () => void): void
+  skyCultureMakerDraftFromResponse(response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined
+}
 
 // 星文化制作器（activePanel === 'skyCultureMaker'）的向导状态簇。
 //
@@ -59,6 +71,34 @@ export class SkyCultureMakerStore {
   artworkPixelMap: image.PixelMap | undefined = undefined
   artworkPreviewState: string = 'empty'
 
+  // —— 桥 / 宿主助手注入（§14.1 AB-0；§14 B2R-3 自持 loadSkyCultureMakerDraft）——
+  private port: CommandPort | null = null
+  // 本加载器使用启动期重试（0/100/150），无并发抑制序号；预留以满足 §14.8 规则 3 的统一约定。
+  private seq: number = 0
+  private onChanged: (() => void) | null = null
+  private hooks: SkyCultureMakerHostHooks | null = null
+
+  // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
+  attachPort(port: CommandPort, onChanged: () => void): void {
+    this.port = port
+    this.onChanged = onChanged
+  }
+
+  attachHooks(hooks: SkyCultureMakerHostHooks): void {
+    this.hooks = hooks
+  }
+
+  // 加载器统一守卫：未注入端口时静默跳过（不 crash，也不 import 桥）。
+  private ensurePort(): CommandPort | null {
+    return this.port
+  }
+
+  private notifyChanged(): void {
+    if (this.onChanged !== null) {
+      this.onChanged()
+    }
+  }
+
   // —— 纯派生/纯变换（无桥、无定时器、无解码）——
 
   selected(): SkyCultureMakerConstellation | undefined {
@@ -111,5 +151,39 @@ export class SkyCultureMakerStore {
     const key = 'sky_culture_maker_issue_' + code
     const localized = I18n.t(key)
     return localized === key ? fallback : localized
+  }
+
+  // 星文化制作器：桥读草稿并落状态（原宿主 loadSkyCultureMakerDraft，函数体逐字搬入；仅
+  // this.callNativeWhenReady → this.port.requestWhenReady、this.skyCultureMakerStore.<f> → this.<f>、
+  // this.skyCultureMakerDraftFromResponse / this.applySkyCultureMakerDraft / this.ensurePluginLoaded →
+  // hooks.*；重试档 0/100/150 逐字保留）。
+  loadSkyCultureMakerDraft(): void {
+    const port = this.ensurePort()
+    if (port === null) {
+      return
+    }
+    const hooks = this.hooks
+    if (hooks === null) {
+      return
+    }
+    if (this.loading) return
+    this.loading = true
+    this.draftReady = false
+    port.requestWhenReady('getSkyCultureMakerDraft', '', (response: StellariumBridgeResponse) => {
+      this.loading = false
+      const draft = hooks.skyCultureMakerDraftFromResponse(response)
+      if (response.ok !== true || draft === undefined) {
+        this.status = response.error ?? I18n.t('sky_culture_maker_load_failed')
+        return
+      }
+      hooks.applySkyCultureMakerDraft(draft)
+      const values = response as Record<string, Object>
+      this.canUndo = values['canUndo'] === true
+      this.status = ''
+      hooks.ensurePluginLoaded('SkyCultureMaker', () => {})
+    }, () => {
+      this.loading = false
+      this.status = I18n.t('sky_culture_maker_load_failed')
+    }, 0, 100, 150)
   }
 }
