@@ -1,3 +1,14 @@
+## [2026-09-30] DevEco Code - Phase 3d：儒略日块迁移为 JulianDateStore + 两级组件（真机验证 JD 实时跳动）
+
+- **新增文件：** `state/JulianDateStore.ets`（`@Observed`：`julianDayInput` / `modifiedJulianDayInput` / `julianDateEditing` / `julianDateError` / `julianCalendarSystem`）、`panels/time/JulianDateControls.ets`（容器：历法提示 + 两行输入 + 校验错误 + 说明）、`panels/time/JulianDateInputRow.ets`（行组件：标签 + 「-」/「+」+ 输入框）。
+- **修改文件：** `pages/MainWindowNativeNode.ets` —— 5 个 `@State` 合并为 `@State private julianStore`；16 处引用改写为 `this.julianStore.*`；调用点 `this.julianDateControls()` 换成 `JulianDateControls({...})`（传 `nmText()/nmSub()/nmInput()` 主题色与 `onAdjust`/`onApply` 回调）；删除已迁走的 `julianDateControls()` 与**参数化** `julianDateInputRow(label, value, scale)` 两个 builder。
+- **为什么用两级组件而非内联：** 本片避免重复代码（两行结构完全相同），改为 `@Prop` 行组件。真机实测确认 `@Prop` 能实时驱动（上一片的 chips 已验证同机制），因此无需像 chips 那样内联。
+- **又一次命中同名冲突（第三次）：** `@Prop scale` 与 `CustomComponent` 内置属性方法 `.scale()` 冲突，编译报 `Property 'scale' ... is not assignable to the same property in base type 'CustomComponent'`；改名 `scaleKey` 后通过。已累记为规则：`borderColor`、`scale` 都不能作组件成员名。
+- **验证结果：** `arkts_check` 四文件无错误；`BUILD SUCCESSFUL`；契约校验通过；真机安装启动成功。**实时刷新实测：** 滚动面板到儒略日块，连续 5 次采样（间隔约 6.8 s）输入框数值 `2461314.10052 → .10060 → .10067 → .10075 → .10083`（MJD 同步 `61313.60052 → .60083`），与经过时间一致——证明数值随时间实时刷新；旧实现的参数化 `@Builder` 会冻结该值（同机制已在速度 chips 上实测确认，本块未单独回测旧版）。
+- **顺带确认（未改动）：** 恒星时行（`恒星时 22h 47m 17s`）与时间方程块（`当前值 +10:03`）在旧实现下即实时刷新——它们是在 builder 内直接读状态，不受参数化陷阱影响。
+- **环境变更记录：** 真机 DHCP 换网段，串号由 `192.168.1.4:40565` 变为 **`192.168.3.95:40565`**（后续验证用新串号）。
+- **范围约束：** 纯搬移 + 状态归属迁移；除 JD 值现在实时刷新（修复既有冻结）外无行为变更。
+
 ## [2026-09-30] DevEco Code - 修两个真机问题：速度 chip 标签去掉倍率（超宽）+ 消除「实时→倒带→实时」抖动
 
 - **来源：** 用户在真机实测 store 版后反馈的两个问题。

@@ -35,6 +35,8 @@ import { getIcon } from '../common/ui/ShellIcons'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { TimeStore } from '../state/TimeStore'
 import { TimeSpeedChips } from '../panels/time/TimeSpeedChips'
+import { JulianDateStore } from '../state/JulianDateStore'
+import { JulianDateControls } from '../panels/time/JulianDateControls'
 
 import {
   CityPreset, ImageDecodeSize, ObjectInspectorRingSpec, HeliocentricPositionOptions, ConstellationNavigationItem, PluginFeatureRoute,
@@ -315,11 +317,7 @@ export struct WindowNativeNode {
 
   // JD/MJD are edited explicitly, so the periodic native time poll does not
   // replace a partially typed number while the user is still entering it.
-  @State private julianDayInput: string = ''
-  @State private modifiedJulianDayInput: string = ''
-  @State private julianDateEditing: boolean = false
-  @State private julianDateError: string = ''
-  @State private julianCalendarSystem: string = 'gregorian'
+  @State private julianStore: JulianDateStore = new JulianDateStore()
   private julianDateApplyInFlight: boolean = false
   @State private timeWheelTickLabels: string[] = []
   @State private timeWheelVisualOffset: number = 0
@@ -23976,7 +23974,14 @@ private loadPlanetPositions(): void {
       if (this.equationOfTimeStatus.length > 0) {
         Text(this.equationOfTimeStatus).fontSize(10).fontColor('#FFD59A').width('100%').padding({ left: 10, right: 10 })
       }
-      this.julianDateControls()
+      JulianDateControls({
+        store: this.julianStore,
+        textColor: this.nmText(),
+        subColor: this.nmSub(),
+        inputColor: this.nmInput(),
+        onAdjust: (scale: string, direction: number) => { this.adjustJulianDate(scale, direction) },
+        onApply: (scale: string) => { this.applyJulianDateInput(scale) }
+      })
       // 观测辅助：夜视模式 / 大气折射
       Row()
         .width('100%').height(0.5)
@@ -29578,101 +29583,51 @@ private loadPlanetPositions(): void {
 
   private syncJulianDateFields(response: StellariumBridgeResponse, jd: number): void {
     const mjd = response.mjd !== undefined ? Number(response.mjd) : jd - 2400000.5
-    this.julianCalendarSystem = response.calendarSystem === 'julian' ? 'julian' : 'gregorian'
-    if (!this.julianDateEditing) {
-      this.julianDayInput = jd.toFixed(5)
-      this.modifiedJulianDayInput = mjd.toFixed(5)
+    this.julianStore.julianCalendarSystem = response.calendarSystem === 'julian' ? 'julian' : 'gregorian'
+    if (!this.julianStore.julianDateEditing) {
+      this.julianStore.julianDayInput = jd.toFixed(5)
+      this.julianStore.modifiedJulianDayInput = mjd.toFixed(5)
     }
   }
 
   private applyJulianDateInput(scale: string): void {
     if (this.julianDateApplyInFlight) { return }
-    const text = (scale === 'mjd' ? this.modifiedJulianDayInput : this.julianDayInput).trim()
+    const text = (scale === 'mjd' ? this.julianStore.modifiedJulianDayInput : this.julianStore.julianDayInput).trim()
     const value = Number(text)
     if (!Number.isFinite(value)) {
-      this.julianDateError = I18n.t('julian_date_invalid')
+      this.julianStore.julianDateError = I18n.t('julian_date_invalid')
       return
     }
-    this.julianDateError = ''
+    this.julianStore.julianDateError = ''
     this.julianDateApplyInFlight = true
     this.callInteractive('setJulianDate', scale + '|' + value.toString(), (r: StellariumBridgeResponse) => {
       this.julianDateApplyInFlight = false
       if (r.ok !== true || r.jd === undefined) {
-        this.julianDateError = r.error ?? I18n.t('julian_date_invalid')
+        this.julianStore.julianDateError = r.error ?? I18n.t('julian_date_invalid')
         return
       }
-      this.julianDateEditing = false
+      this.julianStore.julianDateEditing = false
       this.syncJulianDateFields(r, Number(r.jd))
       this.syncScrubberToSimulation(Number(r.jd))
       this.syncTimeWheelFromSimulation(Number(r.jd))
       this.refreshSimTimeLight()
     }, (r: StellariumBridgeResponse) => {
       this.julianDateApplyInFlight = false
-      this.julianDateError = r.error ?? I18n.t('julian_date_invalid')
+      this.julianStore.julianDateError = r.error ?? I18n.t('julian_date_invalid')
     })
   }
 
   private adjustJulianDate(scale: string, direction: number): void {
-    const text = scale === 'mjd' ? this.modifiedJulianDayInput : this.julianDayInput
+    const text = scale === 'mjd' ? this.julianStore.modifiedJulianDayInput : this.julianStore.julianDayInput
     const value = Number(text)
     if (!Number.isFinite(value)) {
-      this.julianDateError = I18n.t('julian_date_invalid')
+      this.julianStore.julianDateError = I18n.t('julian_date_invalid')
       return
     }
     const adjusted = value + direction * 0.00001
-    if (scale === 'mjd') this.modifiedJulianDayInput = adjusted.toFixed(5)
-    else this.julianDayInput = adjusted.toFixed(5)
+    if (scale === 'mjd') this.julianStore.modifiedJulianDayInput = adjusted.toFixed(5)
+    else this.julianStore.julianDayInput = adjusted.toFixed(5)
     this.applyJulianDateInput(scale)
-  }
-
-  @Builder
-  julianDateControls() {
-    Column({ space: 7 }) {
-      Row() {
-        Text(I18n.t('julian_date')).fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.nmText()).layoutWeight(1)
-        Text(this.julianCalendarSystem === 'julian' ? I18n.t('julian_calendar_active') : I18n.t('gregorian_calendar_active'))
-          .fontSize(9).fontColor(this.nmSub()).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('58%')
-      }.width('100%')
-      this.julianDateInputRow(I18n.t('julian_date'), this.julianDayInput, 'jd')
-      this.julianDateInputRow(I18n.t('modified_julian_date'), this.modifiedJulianDayInput, 'mjd')
-      Text(I18n.t('julian_date_hint')).fontSize(9).lineHeight(14).fontColor(this.nmSub()).width('100%')
-      if (this.julianDateError.length > 0) {
-        Text(this.julianDateError).fontSize(10).fontColor('#F59B9B').width('100%')
-      }
-    }
-    .width('100%')
-    .padding({ left: 12, right: 12, top: 8, bottom: 9 })
-    .backgroundColor('rgba(12, 18, 29, 0.62)')
-    .border({ width: 1, color: 'rgba(190, 220, 240, 0.16)' })
-    .borderRadius(UI_RADIUS_CONTROL)
-    .margin({ left: 12, right: 12, top: 2, bottom: 4 })
-  }
-
-  @Builder
-  julianDateInputRow(label: string, value: string, scale: string) {
-    Row({ space: 7 }) {
-      Text(label).fontSize(10).fontColor(this.nmSub()).width(72).maxLines(1)
-      Button() {
-        Text('-').fontSize(17).fontColor('#C9DDEA').textAlign(TextAlign.Center).width('100%')
-      }
-        .width(28).height(30).padding(0).backgroundColor('rgba(91, 147, 191, 0.16)').borderRadius(UI_RADIUS_CONTROL)
-        .onClick(() => { this.adjustJulianDate(scale, -1) })
-      TextInput({ text: value, placeholder: '0.00000' })
-        .layoutWeight(1).height(30).fontSize(12).fontColor(this.nmText()).placeholderColor(this.nmSub())
-        .backgroundColor(this.nmInput()).border({ width: 1, color: 'rgba(214, 238, 255, 0.14)' }).borderRadius(UI_RADIUS_CONTROL)
-        .onFocus(() => { this.julianDateEditing = true; this.julianDateError = '' })
-        .onChange((next: string) => {
-          if (scale === 'mjd') this.modifiedJulianDayInput = next
-          else this.julianDayInput = next
-        })
-        .onSubmit(() => { this.applyJulianDateInput(scale) })
-        .onBlur(() => { this.applyJulianDateInput(scale) })
-      Button() {
-        Text('+').fontSize(17).fontColor('#C9DDEA').textAlign(TextAlign.Center).width('100%')
-      }
-        .width(28).height(30).padding(0).backgroundColor('rgba(91, 147, 191, 0.16)').borderRadius(UI_RADIUS_CONTROL)
-        .onClick(() => { this.adjustJulianDate(scale, 1) })
-    }.width('100%')
   }
 
   @Builder
