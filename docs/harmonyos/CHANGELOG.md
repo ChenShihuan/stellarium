@@ -1,3 +1,44 @@
+## [2026-10-05] DevEco Code - M3-3：SelectionService 决策片（登记保留，0 行代码）（PLAN §15.10/§15.11 第三批 M3 收尾）
+
+> 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.10/§15.11 **M3-3**（高风险·决策片，最后一片）。提交：本条（`docs(harmonyos)`）。
+
+**结论：登记保留（0 行代码）** —— 满足 §15.10 M3 许可（"允许登记保留并写明理由，不得为凑指标硬搬"）与 §9.3 明确给出的二选一（"跨域选中/居中管线的单例；**或按 §14.3.1 判据保留宿主**"）。判定标准（开工前重测）：**能否在不改任何比较边界/分支/顺序的前提下整体搬入 `capability/SelectionService.ets`**；实测因写 §15.6 保留裸字段、服务层禁 NAPI、互调成环、47 个组件/宿主入口，**无法逐字等价**，故登记保留。
+
+**普查（开工重测，宿主 12,309 行 / `private` 方法 500 / `@State private` 132）**
+
+- **候选 6 法实测行数**（边界重新定位）：`applySelectedObject` **236**（8114–8349）、`navigateSelectedObjectTo` **33**（7776–7808）、`refreshSelectedObject` **29**（7359–7387）、`requestSelectedDetails` **28**（7706–7733）、`moveToSelectedObject` **19**（7756–7774）、`scheduleSelectedObjectForUiChange` **15**（7943–7957），合计 **≈360 行**。
+- **入口数：合计 47 个调用点**
+  - `applySelectedObject` 11：星图点选/桥回包 2201/2204、搜索结果 4852、WUT 行 7322、搜索失败回退 7350、后台刷新 7381（`fromRefresh=true`）、`requestSelectedDetails` 回包 7726、`navigateSelectedObjectTo` 回包 7801、键盘选星 9142、CLI 同步路径 9154/9160。
+  - `refreshSelectedObject` 14：1Hz 自动刷新 7398、Dock 命中 9075、`onRefresh` 组件回调 9402/9519/9653、`onReselect` 回调 9403/9520/9654、astro 10247/12019、其他 2073/4412/4432/4565。
+  - `requestSelectedDetails` 2：递归重试 7720、`applySelectedObject` 8272。
+  - `navigateSelectedObjectTo` 5：7773（`moveToSelectedObject`）、7815/7819（`placeSelectedObjectInSafeArea`）、8259（`applySelectedObject` center）、9176（键盘居中）。
+  - `moveToSelectedObject` 7：`SkyInputHostHooks` 1544、Dock 9076、`onCenter` 组件回调 9399/9516/9650、设置面板宿主 11503、键盘路径 12022。
+  - `scheduleSelectedObjectForUiChange` 8：`SkyInputHostHooks` 1585、响应式布局 2703/2717/2730/2943、面板开合 10249/10312、astro 11408。
+- **回调环**：`applySelectedObject` ↔ `requestSelectedDetails`（8272 → 7726）↔ `navigateSelectedObjectTo`（8259 → 7801）三法互调成环；`refreshSelectedObject` 7381 回环 `applySelectedObject`。
+- **依赖 store**：`ObjectDetailStore`（选中详情字段族，`selected*` 约 60 个）、`ObjectMediaStore`、`InfoWindowStore`、`GyroStore`、`AstroStore`（`clearRtsSelectionResults`）、`SessionToolStore`（`isObserverPlanetSelection`）。
+- **依赖控制器/单例**：`ObjectModelRenderer`（`refreshObjectInspectorModelLighting`）、`SensorController`（`gyroCtl().setGuideTarget`/`updateGyroTargetGuide`/`clearGuideTarget`）、`AudioEngine` 单例（`chimeForSelection`）、宿主保留控制器 `startDetailAutoRefresh`（§15.6-4 刷新/收口）。
+- **写入的保留字段**：`fullInspectorRequested`（§2.7.1 F 类）、`objectDetailConnectorLength`（E 类）—— 均属 §15.6-1 的 86 个保留 `@State`；另写 6 个机制私有字段 `dismissedObjectName`/`objectCardPlacementPending`/`objectInspectorMediaRequestPath`/`objectInspectorMediaResolvedRequestPath`/`objectInspectorMediaResolvedPath`/`objectInspectorMediaResolutionComplete`，与媒体/渲染/选中管线共享。
+- **定时器**：`detailTimer`（180ms 轮询，宿主保留）、`detailRefreshGuard`（1800ms 兜底）、`objectDetailStore.selectedDetailTimer`（550ms，有主）、`objectDetailStore.selectedUiLayoutTimer`（UI 变更防抖，有主）。
+- **热路径交叉**：`moveToSelectedObject` → `placeSelectedObjectInSafeArea` → A2 登记热路径 `expandedSafeTargetPoint` + `compactSafeTargetPoint` + `selectedObjectLayoutAvoidanceTarget`。
+- **`userReselect` 修复交叉（`25688dbe16`）**：第 4 参与 `targetChanged`/`reopenDismissedDetail`/`preserveClosedDetail`/`dismissedObjectName`/`fullInspectorRequested`/`infoWindowStore.infoWinExpanded` 交织；`refreshSelectedObject`/`requestSelectedDetails` 均以 `applySelectedObject(r, true)`（`userReselect=false`）回调，逐字语义未变。
+
+**障碍清单（为何不能逐字等价整体搬入 `capability/SelectionService.ets`）**
+
+1. **写 §15.6 保留项**：`applySelectedObject` 写 2 个 §15.6-1 保留 `@State`（`fullInspectorRequested`/`objectDetailConnectorLength`）+ 6 个媒体机制私有字段；搬入须复制所有权（违反 §14.8 规则 5 禁双写）或改保留决定（违反 §15.7 规则 6），二者都改语义。
+2. **服务层禁 NAPI**：`navigateSelectedObjectTo`/`placeSelectedObjectInSafeArea` 内联 `hilog.info`（4 处）；服务不 import NAPI（§15.7 规则 1），搬入须改写日志调用，超出"参数化 + 所有权转移"。
+3. **互调成环 + 多入口**：三法互调 + `refreshSelectedObject` 回环，47 入口散布于 `SkyInputHostHooks` 与 `SettingsPanel`/`AstroPanel`/详情卡 `onCenter`/`onRefresh`/`onReselect` 等组件 host 接口；搬入须重接全部组件接口，回归面覆盖全应用选中管线（§15.9 高风险）。
+4. **热路径依赖**：`moveToSelectedObject` 依赖 §15.6-2 的 A2 登记热路径 `expandedSafeTargetPoint`，为保证 §15.7 规则 5 的逐字等价须连同注入热路径。
+5. **钩子面过大**：`applySelectedObject` 依赖保留控制器（`startDetailAutoRefresh`/`objectModelRendererCtl`/`gyroCtl`）与 `AudioEngine` 单例，参数化 + 钩子注入面 ≥20，跨域 store 6 个，收益/风险比不成立。
+
+**后续可行路径**
+
+- **先解耦"详情刷新"**：`requestSelectedDetails` 的 550ms 主定时器与 `refreshSelectedObject` 的 `detailRefreshGuard` 是唯一自持点，可先收进独立的 `DetailRefreshController`（非选中管线、边界清晰），再评估 `applySelectedObject`。
+- **或等 §7（V1→V2）迁移**：由 V2 的 `@ObservedV2`/`@Trace` 接管可观测选中态后，"选中管线"边界更清晰再搬。
+
+**改动文件**：仅文档 —— `docs/harmonyos/CHANGELOG.md`（本条目）+ `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md`（§15.11 M3-3 行、§15.6 同步）。**0 行代码**。
+
+**验证（0 行文档片，按 §13.2 步 1/3/4）**：`node scripts/check-ohos-refactor-slice.mjs` 预检通过（括号深度 0、@Builder 成对）；`scripts\build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy -SkipResources` → `BUILD SUCCESSFUL`；`node scripts/check-ohos-ui-contract.mjs` 44 锚点 intact（33 面板 / 24 静态 id / 17 动态前缀 / 228 文件）。无 `.ets` 改动，故不跑 `arkts_check`、切片测试与真机。
+
 ## [2026-10-05] DevEco Code - M3-2：SkyInputController 主路径（handleSkyTouch / emitFluidDrag）（PLAN §15.10/§15.11 第三批 M3，最高风险）
 
 > 队列：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` §15.10/§15.11 **M3-2**（高风险，最后一批）。
