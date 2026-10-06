@@ -19,6 +19,9 @@ import { ScriptStore } from '../state/ScriptStore'
 import { PluginStore } from '../state/PluginStore'
 import { BehaviorHostHooks } from './ControllerHooks'
 
+// 「全部网格与标记」总闸的 action id（= 引擎 GridLinesMgr::gridlinesDisplayed）。见 applyLayerSwitch 的联动。
+const GRIDLINES_MASTER_ACTION = 'actionShow_Gridlines'
+
 // 宿主 → 控制器回注：图层开关分派、持久化、标签切换动画与宿主 @State 读写。
 export interface LayerHostHooks extends BehaviorHostHooks {
   // 视图锁定回读的跟踪状态文案（宿主 @State trackingText，组件 @Prop 消费）。
@@ -102,6 +105,12 @@ export class LayerController {
 
   // 图层开关的统一写回。
   applyLayerSwitch(actionId: string, cmd: string, value: boolean): void {
+    if (cmd.length === 0 && value && actionId !== GRIDLINES_MASTER_ACTION &&
+      MARKING_LAYER_ACTION_IDS.indexOf(actionId) >= 0) {
+      // 网格/标记单项重新打开时先联动打开总闸：总闸是 GridLinesMgr 的 `gridlinesDisplayed`，
+      // 引擎 draw() 里 `if (!gridlinesDisplayed) return;` 会拦掉整组，单项看着完全没反应。
+      this.setLayer(GRIDLINES_MASTER_ACTION, true)
+    }
     if (cmd.length > 0) {
       if (cmd.indexOf('setSkyDisplay') === 0) {
         this.setSkyDisplaySetting(actionId, value)
