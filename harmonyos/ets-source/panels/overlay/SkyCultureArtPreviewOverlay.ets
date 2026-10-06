@@ -79,6 +79,8 @@ export struct SkyCultureArtPreviewOverlay {
       .zIndex(1)
     }
     .width('100%').height('100%').backgroundColor('rgba(3,7,15,0.94)')
-    .zIndex(101).hitTestBehavior(HitTestMode.Transparent)
+    // 必须 Default（默认值）：Transparent 不阻塞兄弟节点，点关闭按钮会穿透打到下层（手机端会误触
+    // 右上角陀螺仪按钮）。Default 只阻塞兄弟节点，子节点（关闭按钮等）照常响应。
+    .zIndex(101).hitTestBehavior(HitTestMode.Default)
   }
 }
