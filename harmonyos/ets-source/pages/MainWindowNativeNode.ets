@@ -151,8 +151,6 @@ import { SearchFilterChips } from '../panels/search/SearchFilterChips'
 import { SearchCategoryBrowse } from '../panels/search/SearchCategoryBrowse'
 import { SearchConstellationChips } from '../panels/search/SearchConstellationChips'
 import { SearchCoordinateInput } from '../panels/search/SearchCoordinateInput'
-import { NightModeToggleRow } from '../common/ui/NightModeToggleRow'
-import { ObservationAidBlock } from '../panels/time/ObservationAidBlock'
 import { TimeJumpActions } from '../panels/time/TimeJumpActions'
 import { ManualTimeBlock } from '../panels/time/ManualTimeBlock'
 import { TimeWheelStore } from '../state/TimeWheelStore'
@@ -7076,7 +7074,6 @@ export struct WindowNativeNode {
         equationOfTimeStore: this.equationOfTimeStore,
         julianStore: this.julianStore,
         nightModeStore: this.nightModeStore,
-        atmosphereStore: this.atmosphereStore,
         manualYear: this.timeStore.manualYear,
         manualMonth: this.timeStore.manualMonth,
         manualDay: this.timeStore.manualDay,
@@ -7095,7 +7092,6 @@ export struct WindowNativeNode {
         onAdjustJulian: (scale: string, direction: number) => { this.julianStore.adjustJulianDate(scale, direction) },
         onApplyJulian: (scale: string) => { this.julianStore.applyJulianDateInput(scale) },
         onNightMode: (enabled: boolean) => { this.nightModeStore.applyNightMode(enabled, true) },
-        onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.astroCalcCtl().applyAtmosphere(pressure, temperature, extinction) },
         onPickDate: (year: number, monthIndex: number, day: number) => {
           this.timeStore.manualYear = year; this.timeStore.manualMonth = monthIndex + 1; this.timeStore.manualDay = day
         },
@@ -7150,6 +7146,7 @@ export struct WindowNativeNode {
         layerViewStore: this.layerViewStore,
         skyCultureViewStore: this.skyCultureViewStore,
         skyCultureSettingsStore: this.skyCultureSettingsStore,
+        atmosphereStore: this.atmosphereStore,
         nightModeOn: this.nightModeStore.nightMode,
         viewTab: this.viewTab,
         expandedLayout: this.isExpandedLayout,
@@ -7179,6 +7176,7 @@ export struct WindowNativeNode {
         onSetSkyDisplay: (setting: string, value: boolean | number) => { this.layerCtl().setSkyDisplaySetting(setting, value) },
         onStarMagLimit: (value: number) => { this.layerCtl().applyStarMagLimit(value) },
         onMilkyWayBright: (value: number) => { this.layerCtl().applyMilkyWayBright(value) },
+        onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.astroCalcCtl().applyAtmosphere(pressure, temperature, extinction) },
         onSetOrbitFlag: (setting: string, enabled: boolean) => { this.layerCtl().setOrbitDisplayFlag(setting, enabled) },
         onSetOrbitThickness: (value: number) => { this.layerCtl().setOrbitDisplayThickness(value) },
         onSetOrbitColorStyle: (index: number) => { this.layerCtl().setOrbitColorStyle(index) },

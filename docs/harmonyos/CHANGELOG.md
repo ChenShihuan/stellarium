@@ -1,3 +1,16 @@
+## [2026-10-06] DevEco Code - 图层面板「天空」页三节重组 + 大气设置迁入 + 时间面板夜间模式行统一
+
+- **依据**：用户要求 —— ① 图层面板按「恒星 / 天空 / 观测条件」分节，把大气与观测设置从时间面板迁入观测条件节；② 时间面板夜间模式改用图层同款行样式并置于面板最末，末尾各行间距统一。
+- **修改文件（8 改 1 删 1 迁）**：`panels/layers/LayerViewTabs.ets`（`LayerSkyTab` 重组 + 内嵌大气块）、`panels/layers/ObservationAidBlock.ets`（自 `panels/time/` 迁入）、`panels/panels/LayersPanel.ets`、`panels/panels/TimePanel.ets`、`panels/time/ManualTimeBlock.ets`、`pages/MainWindowNativeNode.ets`、`state/AtmosphereStore.ets`、`state/NightModeStore.ets`（后两者仅消费方注释）；删除 `common/ui/NightModeToggleRow.ets`。
+- **天空页三节（`LayerSkyTab`）**：**恒星** = 恒星(s0530) / 极限星等 / 亮星光晕 / 星芒效果 / 星星闪烁(+无大气时保持闪烁)；**天空** = 银河(s0531)+银河亮度 / 星标签(s0532) / 流星(s0308)+理论流星率 / 黄道光+亮度 / 夜间模式(s0300) / 水平·垂直翻转(s0309/s0310)；**观测条件** = 大气(s0305) / 地景(s0306) / 雾效(s0307) / 光污染等级(Bortle) / 人眼动态视觉调适 + **大气折射块**。节间沿用既有 `Row().height(0.5)` 分隔线 + `fontSize(11)` 节标题（与旧版「天空与恒星 / 观测条件」两节同款）。银河亮度步进器由原先「流星之后」上移到银河开关正下方。
+- **大气设置迁移**：`ObservationAidBlock`（折射开关 / 气压 / 气温 / 消光）整文件迁 `panels/time/` → `panels/layers/`，改由观测条件节内嵌；`AtmosphereStore` 经 `LayersPanel` 新增的 `@ObjectLink` 下发 4 个 `@Prop`，`onAtmosphere` 回调仍接宿主 `astroCalcCtl().applyAtmosphere(...)`（`TimePanel` 的 `atmosphereStore` / `onAtmosphere` 同步移除，接线在宿主内平移到 `LayersPanel`）。`TimePanel` 由「六个 store」降为五个。
+- **时间面板夜间模式**：删除 `NightModeToggleRow`（仅时间面板使用、带副标题的独立行），改用与图层面板**同一组件** `LayerSwitchRow`（`label: I18n.t('s0300')`，zh_CN「夜间模式」），并从「儒略日之后」移到面板**最末**（`ManualTimeBlock` 之后）。文档 `DEVELOPMENT-MCP-WORKFLOW.md` §CLI 优先同步补录本次踩到的包名坑与 `ui layout` 视口限制。
+- **末尾间距统一（8px）**：`ManualTimeBlock` 应用按钮 `margin({top:4})` → `{top:4, bottom:4}`、重置按钮 `margin({top:2})` → `{top:4, bottom:4}`；夜间模式行外包一层 `Column().margin({top:4})`。原「应用→重置 2px、重置→夜间模式 0px」改为与「选择日期→选择时间」(4+4) 一致的 8px（ArkUI 相邻 margin 不折叠，逐项相加）。
+- **顺带清理**：宿主删除 2 个死 import（`ObservationAidBlock`、`NightModeToggleRow`）；`AtmosphereStore` / `NightModeStore` 头部「消费方」注释改为新的消费位置。
+- **验证**：`arkts_check` 0 error（分两轮共 6 文件）；`BUILD SUCCESSFUL`（2 次，各 ~27s）；`check-ohos-ui-contract` **44 锚点 intact**（33 面板 / 24 静态 id / 17 动态前缀）；`check-ohos-i18n` 无新增/缺失 key（复用既有 `s0300`、`s0305`–`s0310`，无新文案）。
+- **真机（192.168.50.108:36717）**：天空页三节 + 大气折射块由用户实测确认；夜间模式行样式与末尾间距随本次构建装机，用户确认后提交。
+- **本片新踩的坑（影响所有后续真机走查）**：`scripts/stellarium-cli.mjs:8` 的 `DEFAULT_BUNDLE = 'com.joinother.skyinstrument'` 是**发布身份**，而 Windows 开发构建装的是 `com.cnchensh.stellarium`。设备上两个 app 同时存在时，**不带 `--bundle` 的 CLI 调用会启动/操作另一个 app**，其后所有 `devecocli ui screenshot` / `layout` 都在拍错对象 —— 曾据此把「另一个 app 的旧 UI」误判为「本机构建未生效」并白跑一轮排查。另：`devecocli ui layout` 只 dump 视口内节点，Scroll 折叠区看不到。
+- **备注**：时间轮滚轮曾出现一次疑似「显示不正常」，复看为启动过渡态（`tickOpacity` 随 `timeWheelVisualOffset` 收敛），非缺陷，未改 `TimeWheelScrubber` / `TimeWheelStore`。
 ## [2026-10-06] DevEco Code - STATE-REVIEW 第 3 版全量重写（§1–§8 + 附录；§9–§11 原样保留）
 
 - **修改文件：** `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md`（1,600 → 1,476 行；纯文档，无源码改动）。

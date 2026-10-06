@@ -1,7 +1,7 @@
 // 夜视模式（红光）状态。
 //
 // 为什么单独一份 store：夜视模式是全局视觉模式，状态需被宿主之外的组件共享
-//（NightModeToggleRow 与未来的主界面按钮）。宿主以 @State 持有本 store，`nm*()` 系列配色
+//（时间面板与图层页共用的夜间模式开关行）。宿主以 @State 持有本 store，`nm*()` 系列配色
 // 方法读 this.nightModeStore.nightMode，组件以 @ObjectLink 订阅同一实例。自持 CommandPort，
 // 并在 store 内直接完成 AppStorage 持久化。
 // 只 import 纯接口 CommandPort（不触碰 libentry.so / @ohos.*）。
