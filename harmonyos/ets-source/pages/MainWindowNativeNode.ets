@@ -980,9 +980,12 @@ export struct WindowNativeNode {
   @State private hasUsableFoldAngle: boolean = false
   @State private responsiveLayoutMode: string = 'compact'
   @State private activePanel: string = 'object'
-  @State private panelVisible: boolean = false
+  // 面板可见性变化时同步"返回可消费"镜像（系统返回手势据此决定接管还是退出），见 publishBackConsumable。
+  @Watch('publishBackConsumable') @State private panelVisible: boolean = false
   @State private panelNavigationDepth: number = 0
   private panelNavigationStack: string[] = []
+  // 系统返回请求令牌：ApplicationRoot.onBackPress 置为 Date.now()，此处 @Watch 执行应用内返回。
+  @StorageLink('stellariumRequestBack') @Watch('onRequestBack') private requestBackToken: number = 0
   private lastPanelBackAt: number = 0
   @State private searchStore: SearchStore = new SearchStore()
   @State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()
@@ -3474,10 +3477,57 @@ export struct WindowNativeNode {
     }
   }
 
+  // ===== 返回栈（面板 + 面板内标签）=====
+  // 栈条目编码为 'panel#viewTab#configTab'（兼容仅 'panel' 的旧式条目）。这样"在同一个面板里换了
+  // 界面"（图层面板的视图标签、设置面板的页签、更多菜单进入子面板）都能被返回手势/返回按钮撤销；
+  // 此前只记面板名，换过标签后返回会因栈空而直接关面板。
+  private encodePanelRoute(panel: string, viewTab: number, configTab: number): string {
+    return panel + '#' + viewTab.toString() + '#' + configTab.toString()
+  }
+
+  private pushPanelRoute(): void {
+    if (!this.panelVisible || this.activePanel.length === 0) return
+    const entry = this.encodePanelRoute(this.activePanel, this.viewTab, this.configTab)
+    const n = this.panelNavigationStack.length
+    if (n > 0 && this.panelNavigationStack[n - 1] === entry) return
+    let next = this.panelNavigationStack.concat([entry])
+    if (next.length > 32) next = next.slice(next.length - 32)
+    this.panelNavigationStack = next
+    this.panelNavigationDepth = next.length
+  }
+
+  // 面板内标签切换（UI 回调经此进入）：先压返回栈，再交给 LayerController 切标签。
+  private switchViewTab(id: number): void {
+    if (id === this.viewTab) return
+    this.pushPanelRoute()
+    this.layerCtl().selectViewTab(id)
+  }
+
+  private switchConfigTab(id: number): void {
+    if (id === this.configTab) return
+    this.pushPanelRoute()
+    this.layerCtl().selectConfigTab(id)
+  }
+
+  // "返回可消费"镜像：供 ApplicationRoot.onBackPress 同步判定（系统返回手势是否由应用接管）。
+  private publishBackConsumable(): void {
+    const consumable = this.panelVisible || this.infoWindowStore.infoWinVisible || this.polarScopeStore.polarScopeVisible
+    if (AppStorage.get<boolean>('stellariumBackConsumable') !== consumable) {
+      AppStorage.setOrCreate<boolean>('stellariumBackConsumable', consumable)
+    }
+  }
+
+  // 系统返回请求（ApplicationRoot.onBackPress → AppStorage → 此处执行应用内返回）。
+  private onRequestBack(): void {
+    if (this.requestBackToken === 0) return
+    if (this.infoWindowStore.infoWinVisible) { this.dismissObjectInspector(); return }
+    if (this.polarScopeStore.polarScopeVisible) { this.polarScopeCtl().closePolarScope(); return }
+    if (this.panelVisible) { this.handlePanelBackTap() }
+  }
+
   private openSubPanel(panel: string): void {
     if (this.activePanel !== panel && this.panelVisible) {
-      this.panelNavigationStack = this.panelNavigationStack.concat([this.activePanel])
-      this.panelNavigationDepth = this.panelNavigationStack.length
+      this.pushPanelRoute()
     }
     this.setPanel(panel, true, true)
   }
@@ -3496,19 +3546,41 @@ export struct WindowNativeNode {
   }
 
   private goBackPanel(): void {
-    let previous = ''
+    let entry = ''
     if (this.panelNavigationStack.length > 0) {
-      previous = this.panelNavigationStack[this.panelNavigationStack.length - 1]
+      entry = this.panelNavigationStack[this.panelNavigationStack.length - 1]
       this.panelNavigationStack = this.panelNavigationStack.slice(0, this.panelNavigationStack.length - 1)
     } else {
-      previous = panelRouteParent(this.activePanel)
+      entry = panelRouteParent(this.activePanel)
     }
-    if (previous.length === 0) {
+    if (entry.length === 0) {
       this.closePanel(true)
       return
     }
     this.panelNavigationDepth = this.panelNavigationStack.length
-    this.setPanel(previous, true, true, -1)
+    const parts: string[] = entry.split('#')
+    const targetPanel: string = parts.length > 0 ? parts[0] : ''
+    if (targetPanel.length === 0) {
+      this.closePanel(true)
+      return
+    }
+    if (targetPanel === this.activePanel) {
+      // 同一面板内返回上一个标签：只恢复标签，不重开面板。
+      if (parts.length >= 3) {
+        const v = Number(parts[1])
+        const c = Number(parts[2])
+        if (Number.isFinite(v)) this.viewTab = v
+        if (Number.isFinite(c)) this.configTab = c
+      }
+      return
+    }
+    this.setPanel(targetPanel, true, true, -1)
+    if (parts.length >= 3) {
+      const v = Number(parts[1])
+      const c = Number(parts[2])
+      if (Number.isFinite(v)) this.viewTab = v
+      if (Number.isFinite(c)) this.configTab = c
+    }
   }
 
   private closePanel(force: boolean = false): void {
@@ -3868,6 +3940,7 @@ export struct WindowNativeNode {
   // （getObjectSpokenText 命令），点按按钮即在面板中显示该文本，验证命令通道，
   // 待切换到含 CoreSpeechKit 的 SDK 后即可接真实语音合成。
   private refreshState(): void {
+    this.publishBackConsumable()
     if (this.stateRefreshRequestPending) {
       this.stateRefreshQueued = true
       return
@@ -7321,7 +7394,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         pickerOption: this.nightModeStore.nmPickerOption(),
         onPreset: (preset: string) => { this.layerCtl().applyLayerPreset(preset) },
         onClear: () => { this.layerCtl().clearMarkingLayers() },
-        onSelectTab: (id: number) => { this.layerCtl().selectViewTab(id) },
+        onSelectTab: (id: number) => { this.switchViewTab(id) },
         onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
         onSetSkyDisplay: (setting: string, value: boolean | number) => { this.layerCtl().setSkyDisplaySetting(setting, value) },
         onStarMagLimit: (value: number) => { this.layerCtl().applyStarMagLimit(value) },
@@ -7521,7 +7594,7 @@ if (x >= 1095 && x < 1220) { this.timeCtl().advanceTime(12); return true }
         scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
         hasSelectedObject: () => { return this.objectDetailStore.hasSelectedObject() },
-        selectConfigTab: (tabId: number) => { this.layerCtl().selectConfigTab(tabId) },
+        selectConfigTab: (tabId: number) => { this.switchConfigTab(tabId) },
         setViewCoordinatesVisible: (visible: boolean) => { this.viewCoordinateCtl().setViewCoordinatesVisible(visible) },
         setViewCoordinateFamily: (family: string) => { this.viewCoordinateCtl().setViewCoordinateFamily(family) },
         setViewEquatorialEpoch: (epoch: string) => { this.viewCoordinateCtl().setViewEquatorialEpoch(epoch) },
