@@ -12,7 +12,7 @@ export function primaryDockActions(): ShellAction[] {
   return [
     { label: I18n.t('dock_search'), icon: 'search', panel: 'search' },
     { label: I18n.t('dock_time'), icon: 'clock', panel: 'time' },
-    { label: I18n.t('dock_place'), icon: 'location', panel: 'place' },
+    { label: I18n.t('dock_quick'), icon: 'quick_actions', panel: 'quick' },
     { label: I18n.t('dock_layers'), icon: 'layers', panel: 'layers' }
   ]
 }
@@ -20,6 +20,8 @@ export function primaryDockActions(): ShellAction[] {
 export function moreActions(): ShellAction[] {
   return [
     { label: I18n.t('more_workspace_observing'), icon: 'observe', panel: 'observeHub', section: I18n.t('more_section_workspace') },
+    // 「位置」自从 Dock 中间让位给快捷操作面板后，入口落在工作区组第 2 行（正值天体数据组标题之前）。
+    { label: I18n.t('dock_place'), icon: 'location', panel: 'place', section: I18n.t('more_section_workspace') },
     { label: I18n.t('more_sky_data'), icon: 'satellite', panel: 'dataHub', section: I18n.t('more_section_data') },
     { label: I18n.t('more_automation'), icon: 'script', panel: 'automationHub', section: I18n.t('more_section_automation') },
     { label: I18n.t('panel_tools_data'), icon: 'tools', panel: 'tools', section: I18n.t('more_section_system') },
@@ -145,7 +147,7 @@ export function sessionSignature(r: StellariumBridgeResponse): string {
 // 面板路由查表（原宿主 panelRouteRoot / panelRouteParent，A2-6）：零宿主状态读取，纯查表，
 // 与上方 *HubActions 同源，故并入本模块。函数体逐字搬入，仅去 this.。
 export function panelRouteRoot(panel: string): string {
-  const mainPanels = ['search', 'time', 'place', 'layers', 'more']
+  const mainPanels = ['search', 'time', 'quick', 'layers', 'more']
   if (mainPanels.indexOf(panel) >= 0) return panel
   return 'more'
 }
@@ -163,7 +165,7 @@ export function panelRouteParent(panel: string): string {
 // （仅调用上面两个纯函数），属 A1 残留而非 A2，故下沉本模块，语义逐字不变。
 export function inferredPanelRouteDirection(fromPanel: string, toPanel: string): number {
   if (fromPanel === toPanel) return 1
-  const routeOrder = ['search', 'time', 'place', 'layers', 'more']
+  const routeOrder = ['search', 'time', 'quick', 'layers', 'more']
   const fromRoot = panelRouteRoot(fromPanel)
   const toRoot = panelRouteRoot(toPanel)
   const fromIndex = routeOrder.indexOf(fromRoot)

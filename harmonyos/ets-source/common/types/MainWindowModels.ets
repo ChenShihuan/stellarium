@@ -415,6 +415,8 @@ export interface ObserverLocationRecord {
   longitude: number
   altitude: number
   planet: string
+  // 位置来源（gps / map / named）：快捷操作面板标题据此显示 `GPS` 或名称；旧记录缺失时回落 named。
+  source?: string
 }
 
 export const BOOKMARK_STORE: string = 'stellarium_bookmarks'

@@ -47,6 +47,18 @@ export function getIcon(icon: string, isActive: boolean): Resource {
     'polar_scope': $r('app.media.ic_polar_scope'),
     'scenery3d': $r('app.media.ic_globe'),
     'tools': $r('app.media.ic_tune'),
+    // 快捷操作面板：Dock 中间入口 + 10 枚 Stellarium 官方「灭」态图标（亮态由 colorFilter 着色，不用官方 -on）。
+    'quick_actions': $r('app.media.ic_quick_actions'),
+    'bt_constellation_lines': $r('app.media.bt_constellation_lines'),
+    'bt_constellation_labels': $r('app.media.bt_constellation_labels'),
+    'bt_constellation_art': $r('app.media.bt_constellation_art'),
+    'bt_equatorial_grid': $r('app.media.bt_equatorial_grid'),
+    'bt_azimuthal_grid': $r('app.media.bt_azimuthal_grid'),
+    'bt_ground': $r('app.media.bt_ground'),
+    'bt_atmosphere': $r('app.media.bt_atmosphere'),
+    'bt_cardinal_points': $r('app.media.bt_cardinal_points'),
+    'bt_nebula': $r('app.media.bt_nebula'),
+    'bt_night_view': $r('app.media.bt_night_view'),
   }
   return map[icon] || $r('app.media.ic_search')
 }
