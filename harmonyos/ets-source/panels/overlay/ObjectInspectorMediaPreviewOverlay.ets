@@ -87,6 +87,7 @@ export struct ObjectInspectorMediaPreviewOverlay {
         .zIndex(1)
     }
       .width('100%').height('100%')
-      .zIndex(1000).hitTestBehavior(HitTestMode.Transparent)
+      // 同 SkyCultureArtPreviewOverlay：Transparent 会让点击穿透到下层按钮，改为 Default。
+      .zIndex(1000).hitTestBehavior(HitTestMode.Default)
   }
 }
