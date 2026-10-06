@@ -966,6 +966,9 @@ export struct WindowNativeNode {
   // 系统返回请求令牌：ApplicationRoot.onBackPress 置为 Date.now()，此处 @Watch 执行应用内返回。
   @StorageLink('stellariumRequestBack') @Watch('onRequestBack') private requestBackToken: number = 0
   private lastPanelBackAt: number = 0
+  // 主界面「两次返回确认」的窗口与上一次时间戳（见 handleHomeBackConfirm）。
+  private readonly HOME_BACK_CONFIRM_MS: number = 2500
+  private lastHomeBackAt: number = 0
   @State private searchStore: SearchStore = new SearchStore()
   @State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()
   @State private gyroStore: GyroStore = new GyroStore()
@@ -3100,11 +3103,11 @@ export struct WindowNativeNode {
     }))
   }
 
-  // "返回可消费"镜像：供 ApplicationRoot.onBackPress 同步判定（系统返回手势是否由应用接管）。
+  // "返回可消费"镜像：ApplicationRoot.onBackPress 据此决定系统返回是否由应用接管。
+  // 恒为 true：主界面也接管（两次确认才退出，避免夜间误返回打断暗视力），退出由 handleHomeBackConfirm 显式执行。
   private publishBackConsumable(): void {
-    const consumable = this.panelVisible || this.infoWindowStore.infoWinVisible || this.polarScopeStore.polarScopeVisible
-    if (AppStorage.get<boolean>('stellariumBackConsumable') !== consumable) {
-      AppStorage.setOrCreate<boolean>('stellariumBackConsumable', consumable)
+    if (AppStorage.get<boolean>('stellariumBackConsumable') !== true) {
+      AppStorage.setOrCreate<boolean>('stellariumBackConsumable', true)
     }
   }
 
@@ -3494,11 +3497,40 @@ export struct WindowNativeNode {
   }
 
   // 系统返回请求（ApplicationRoot.onBackPress → AppStorage → 此处执行应用内返回）。
+  // 顺序 = 叠层由上到下：全屏叠层 → 信息窗 → 极轴镜 → 面板 → 主界面两次确认退出。
   private onRequestBack(): void {
     if (this.requestBackToken === 0) return
+    if (this.objectMediaStore.objectInspectorMediaFullscreen) {
+      this.objectInspectorMediaCtl().closeObjectInspectorMediaPreview()
+      return
+    }
+    if (this.objectMediaStore.objectInspectorModelImmersive) {
+      this.objectModelRendererCtl().setObjectInspectorModelImmersive(false)
+      return
+    }
+    if (this.skyCultureViewStore.artPreviewOpen) {
+      this.skyCultureCtl().closeSkyCultureArtPreview()
+      return
+    }
     if (this.infoWindowStore.infoWinVisible) { this.dismissObjectInspector(); return }
     if (this.polarScopeStore.polarScopeVisible) { this.polarScopeCtl().closePolarScope(); return }
-    if (this.panelVisible) { this.handlePanelBackTap() }
+    if (this.panelVisible) { this.handlePanelBackTap(); return }
+    this.handleHomeBackConfirm()
+  }
+
+  // 已在主界面（无面板/无叠层）时按返回：夜间误触直接退回桌面会打断暗视力，所以改为两次确认。
+  private handleHomeBackConfirm(): void {
+    const now = Date.now()
+    if (now - this.lastHomeBackAt < this.HOME_BACK_CONFIRM_MS) {
+      this.lastHomeBackAt = 0
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+      void context.terminateSelf().catch((err: Error) => {
+        hilog.error(0x0000, 'StellariumArkUI', 'Failed to terminate on back confirm: %{public}s', JSON.stringify(err))
+      })
+      return
+    }
+    this.lastHomeBackAt = now
+    this.flashHint(I18n.t('back_again_to_exit'))
   }
 
   private openSubPanel(panel: string): void {
