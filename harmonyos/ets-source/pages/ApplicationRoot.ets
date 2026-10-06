@@ -33,6 +33,17 @@ struct ApplicationRoot {
     this.loadingLabel = startupLoadingLabel(I18n.t('msg_loading'))
   }
 
+  // 系统返回手势 / 返回键：优先交由应用内处理（关闭详情卡 → 退出极轴镜 → 面板返回或关闭）。
+  // 宿主（WindowNativeNode）把"当前是否有可返回的应用内状态"镜像到 AppStorage，这里据此决定是否
+  // 消费；无可返回时才交回系统（退出应用）。此前没有 onBackPress，系统返回会直接退到桌面。
+  onBackPress(): boolean {
+    if (AppStorage.get<boolean>('stellariumBackConsumable') === true) {
+      AppStorage.setOrCreate('stellariumRequestBack', Date.now())
+      return true
+    }
+    return false
+  }
+
   private onSkyReady(): void {
     if (!this.skyReady || !this.artComplete || this.loadingOpacity === 0) return
     this.getUIContext().animateTo({ duration: STARTUP_REVEAL_MS, curve: Curve.EaseInOut,
