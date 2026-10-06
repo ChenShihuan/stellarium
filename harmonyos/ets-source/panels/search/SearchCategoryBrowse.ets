@@ -6,11 +6,11 @@ import { SearchFilterChips } from './SearchFilterChips'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 搜索面板的"分类浏览"块：分类选择 + 筛选入口 + 已选条件 chips + 目录天体网格。
+// 本组件职责：搜索面板的"分类浏览"块 —— 分类选择 + 筛选入口 + 已选条件 chips + 目录天体网格。
 //
 // 分类/加载状态经 SearchStore（@ObjectLink）订阅；图标键、标签与两个格式化方法
-// （`categoryObjectIcon` / `categoryObservationSubtitle`）仍由宿主提供（在其它面板也可能用到），
-// 因此以 @Prop / 回调注入。
+// （`categoryObjectIcon` / `categoryObservationSubtitle`）由宿主提供（其它面板也可能用到），
+// 故以 @Prop / 回调注入。
 @Component
 export struct SearchCategoryBrowse {
   @ObjectLink store: SearchStore

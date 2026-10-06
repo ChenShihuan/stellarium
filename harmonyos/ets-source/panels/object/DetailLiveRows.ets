@@ -2,17 +2,10 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { ObjectDataRow } from './DetailRows'
 
-// 详情卡片的"活数据行"组件。
+// 详情卡片的"活数据行"组件：距离提示条、时角 / 恒星时行与九条坐标行。
 //
-// 原为四个参数化 UI 函数：
-// - `objectDistanceNotice()`：距离提示条（文案由宿主的 `objectDistanceNoticeText()` 决定）
-// - `selectedLiveInfoRows(compact)`：时角 / 平恒星时 / 视恒星时（紧凑单行 or 三行卡片）
-// - `selectedCoordinateRow(label, key, tablet)`：单条坐标行
-// - `selectedCoordinateRows(tablet)`：九条坐标行
-//
-// 参数按值捕获会让子树首帧后冻结（§13.1 规则 3），故改为组件：
-// 坐标行与时角行直接以 `@ObjectLink` 观察 `ObjectDetailStore`（值随状态实时刷新），
-// 只有"是否可见/是否紧凑"这类判定由宿主以 `@Prop` 传入。
+// 坐标行与时角行以 `@ObjectLink` 观察 `ObjectDetailStore`，数值随状态实时刷新；
+// 只有"是否可见 / 是否紧凑"这类判定由宿主以 `@Prop` 传入。
 
 @Component
 export struct ObjectDistanceNotice {

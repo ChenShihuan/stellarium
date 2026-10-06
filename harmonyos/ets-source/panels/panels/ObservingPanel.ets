@@ -4,13 +4,11 @@ import { WutStore } from '../../state/WutStore'
 import { ObservingListStore } from '../../state/ObservingListStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 观测列表面板（原宿主 panelContent() 的 `observing` 分支，分支体原样下沉）。
+// 观测列表面板，对应 `activePanel === 'observing'`。
 //
-// 判定条件 `activePanel === 'observing'` 留在宿主。WUT 目标数据来自宿主持有的
-// `wutStore`，观测列表与就绪标志来自 `observingListStore`，二者均以 @ObjectLink 实时刷新。
-// 列表增删、分类切换、刷新、点按搜索/居中、清除全部与打开搜索面板都回注宿主，
-// 组件自身不修改宿主状态。文案/副标题/类型名与显示名由宿主的纯助手算好后回调返回。
-// 顶层用 Column({ space: 8 }) 与原分支根一致。
+// WUT 目标来自 wutStore，观测列表与就绪标志来自 observingListStore，均 @ObjectLink。
+// 列表增删/分类切换/刷新/搜索居中/清除全部/打开搜索面板等动作回调注入宿主；
+// 文案与显示名由宿主纯助手回注。
 
 @Component
 export struct ObservingPanel {

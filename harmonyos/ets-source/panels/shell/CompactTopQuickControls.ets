@@ -1,6 +1,6 @@
 import { CompactQuickButton } from './CompactQuickButton'
 
-// 手机端右上角常驻快捷区：陀螺仪 + 音频控制（原宿主无参 @Builder compactTopQuickControls）。
+// 手机端右上角常驻快捷区：陀螺仪 + 音频控制。
 //
 // 两项的开关状态、按下态、整体透明度由宿主以 @Prop 传入；点按动作本体
 // （含诊断日志、空闲复位、状态翻转与提示）由宿主回注，组件只负责外观与命中。

@@ -1,14 +1,11 @@
 import { TabItem } from '../../pages/StellariumTypes'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 「图层」面板的视图标签页选择器（原宿主 @Builder `viewTabs()`，只服务图层面板）。
+// 本组件职责：「图层」面板的视图标签页选择器。
 //
-// 标签数据（layerTabItems()，含离线构建过滤）与当前选中项（viewTab）仍由宿主持有，
-// 以 @Prop 传入；点选走 onSelectTab 回调，宿主在里面做 animateTo 过渡与
-// loadLandscapeList / syncSkyCultureTimeFollowTimer 等副作用（§13.1 规则 6：跨域依赖注入）。
-//
-// 视觉逐字保留：横向 Scroll（高 38、top 4 / bottom 10）、Row 间距 fold 版 5 / 普通 6、
-// 选中项 accentColor 底 + textColor 字，未选中 panelColor 底 + subColor 字，180ms EaseInOut。
+// 标签数据（layerTabItems()，含离线构建过滤）与当前选中项（viewTab）由宿主以 @Prop 传入；
+// 点选走 onSelectTab 回调，宿主在里面做 animateTo 过渡与
+// loadLandscapeList / syncSkyCultureTimeFollowTimer 等副作用。
 @Component
 export struct LayerTabs {
   @Prop tabs: TabItem[]

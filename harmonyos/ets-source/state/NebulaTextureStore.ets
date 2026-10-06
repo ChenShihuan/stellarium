@@ -3,24 +3,11 @@ import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 星云贴图（nebulaTextures）面板状态（原宿主 @State，Phase 4m）。
-//
-// review §2.7：本域原为 "Prop 风格" —— 宿主把 NebulaTextureStatus 拆成若干 @Prop 标志/计数/条目
-// 传给 NebulaTexturesPanel。现改为 @Observed store + 面板 @ObjectLink，面板就地读
-// nebulaTextureStatus 与加载/导入态，刷新范围收窄到本面板。
-//
-// 本域 5 个字段全部下沉：状态对象 nebulaTextureStatus、加载态 nebulaTextureLoading、
-// 待确认 nebulaTexturePending、导入中 nebulaTextureImporting、动作提示 nebulaTextureActionStatus。
-//
-// 刻意留在宿主（非本 store 状态）：宿主私有动作
-// setNebulaTextureVisible / setNebulaTextureFlag / refreshNebulaTextures /
-// gotoNebulaTexture / removeNebulaTexture / importNebulaTextureFile 与文件选择器；
-// 这些动作继续写本 store（宿主持有 @State 实例，读 store 会重绘宿主，符合 §13.1 规则 4）。
-// loadNebulaTextureStatus（§14 B1-5）已随桥注入搬入本 store。
-//
-// 约束：所有更新必须是"字段整体赋值"。改造前已普查确认
-// nebulaTextureStatus 只被整体赋值（`= r as NebulaTextureStatus` / `= status`），
-// 其余 4 个标量无原地变更。
+// 星云贴图（nebulaTextures）面板域状态：持有状态对象 nebulaTextureStatus、加载态
+// nebulaTextureLoading、待确认 nebulaTexturePending、导入中 nebulaTextureImporting、
+// 动作提示 nebulaTextureActionStatus；宿主持有实例，NebulaTexturesPanel 以 @ObjectLink 观察。
+// 自持 CommandPort 与发布回调，并自持加载器 loadNebulaTextureStatus。
+// 约束：所有更新必须是"字段整体赋值"（nebulaTextureStatus 只被整体赋值，其余为标量）。
 @Observed
 export class NebulaTextureStore {
   nebulaTextureStatus: NebulaTextureStatus | undefined = undefined
@@ -29,9 +16,9 @@ export class NebulaTextureStore {
   nebulaTextureImporting: boolean = false
   nebulaTextureActionStatus: string = ''
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-5 起本 store 自持 loadNebulaTextureStatus） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（无并发抑制需求）；保留字段以统一各 store 的加载器约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
 
@@ -52,8 +39,7 @@ export class NebulaTextureStore {
     }
   }
 
-  // 星云贴图面板：桥查询贴图加载状态（原宿主 loadNebulaTextureStatus，函数体逐字搬入；
-  // 仅 this.callInteractive → this.port.requestInteractive、this.nebulaTextureStore.<f> → this.<f>）。
+  // 星云贴图面板：桥查询贴图加载状态。
   loadNebulaTextureStatus(): void {
     const port = this.ensurePort()
     if (port === null) {

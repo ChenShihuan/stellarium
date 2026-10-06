@@ -3,27 +3,21 @@ import { I18n } from '../../pages/I18n'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 「天体详情·三维模型」全屏沉浸叠层（原宿主 @Builder `objectInspectorModelOverlay()`，约 45 行）。
+// 「天体详情·三维模型」全屏沉浸叠层。
 //
-// 分工（§13.1 规则 4/6）：
+// 分工：
 //   - 可见性判定 `objectMediaStore.objectInspectorModelImmersive` 留在宿主调用点，组件根即那个全屏
-//     `Stack`（zIndex 1100 / BLOCK_HIERARCHY 逐字保留）；
+//     `Stack`（zIndex 1100 / BLOCK_HIERARCHY）；
 //   - 模型数据（`objectInspectorModelPixelMap` / `objectInspectorProceduralKind` /
 //     `objectInspectorModelOverlayOpacity`）经 @ObjectLink `objectMediaStore` 引用语义读取 —— 跨组件
-//     传 `image.PixelMap` 必须走 @ObjectLink（Phase 5c 真机实测：@Prop 深拷贝 PixelMap 会使 `Image`
-//     立即 `onError`）；
+//     传 `image.PixelMap` 必须走 @ObjectLink（@Prop 深拷贝 PixelMap 会使 `Image` 立即 `onError`）；
 //   - 标题 `objectDetailStore.selectedName`、模式提示 `objectInspectorModelNotice()`、顶部安全区
 //     `mediaPreviewTopInset()` 由宿主算好后以 @Prop（titleText/noticeText/topInset）传入；
 //   - 关闭/重置/舞台手势三个动作回注宿主：`setObjectInspectorModelImmersive(false)` /
 //     `resetObjectInspectorModelView()` / `handleObjectInspectorModelTouch(event)`（旋转与双指缩放的
-//     算法、触摸计数等内部状态仍留在宿主）。
+//     算法、触摸计数等内部状态仍留宿主）。
 //
-// 单容器根（§13.1 规则 7）：原 @Builder 的唯一根是 `if (immersive) { Stack() … }`，下沉后把可见性判定
-// 留在宿主调用点，组件根即那个全屏 `Stack`。
-//
-// 既有语义逐字保留：`object-model-close` / `object-model-stage` 两个 id 锚点、
-// `hitTestBehavior(HitTestMode.Block / None / BLOCK_HIERARCHY)`、`ImageFit.Contain`、
-// `UI_RADIUS_PILL`（test-ohos-model-scroll.mjs / test-ohos-procedural-model.mjs 切片断言）。
+// 组件根即全屏 `Stack`（`object-model-close` / `object-model-stage` 为跨会话 id 锚点）。
 @Component
 export struct ObjectInspectorModelOverlay {
   @ObjectLink objectMediaStore: ObjectMediaStore

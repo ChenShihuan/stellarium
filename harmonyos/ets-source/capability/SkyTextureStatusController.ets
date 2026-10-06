@@ -1,22 +1,15 @@
-// 星空纹理加载状态观察控制器（STATE-REVIEW §10.2 D11，PLAN §15 D 轨道 D11）。
+// 星空纹理加载状态观察控制器：轮询 getDeepSkyImageStatus，把当前视野资料图的
+// 加载中 / 失败 / 就绪状态写入 ToolsStore 的状态条字段。
 //
-// 原宿主 MainWindowNativeNode 的 6 个方法逐字下沉：
-//   stopSkyTextureStatusObserver / hideSkyTextureStatus / updateSkyTextureStatus /
-//   pollSkyTextureStatus / scheduleSkyTextureStatusCheck / retrySkyTextureStatus。
-// 四个私有字段（两个定时器句柄 + 轮询计数 + 慢轮询标志）随控制器（§15.7 规则 2，不入 @Observed store）。
-//
-// 自含状态机 + 定时器：入口 start()（原 scheduleSkyTextureStatusCheck），收口 stop()
-//（原 stopSkyTextureStatusObserver），宿主生命周期直接调用（§15.7 规则 3）。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；状态条 UI 读 ToolsStore 四个字段，
-// 控制器只写 store。
+// 自含状态机 + 定时器：start() 启动观察（延迟 180ms 后重置并轮询），stop() 为收口点，
+// 宿主生命周期直接调用。桥经 CommandPort，控制器不 import NAPI/UI，只写 store。
 import hilog from '@ohos.hilog'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 import { ToolsStore } from '../state/ToolsStore'
 import { BehaviorHostHooks } from './ControllerHooks'
 
-// 快轮询 24 次后转慢轮询，90 次仍未就绪则升级为可操作的错误态（与宿主原常量一致）。
+// 快轮询 24 次后转慢轮询，90 次仍未就绪则升级为可操作的错误态。
 const SKY_TEXTURE_STATUS_FAST_POLLS: number = 24
 const SKY_TEXTURE_STATUS_SLOW_INTERVAL_MS: number = 2000
 const SKY_TEXTURE_STATUS_STALL_POLLS: number = 90
@@ -39,12 +32,12 @@ export class SkyTextureStatusController {
     this.hooks = hooks
   }
 
-  // 定时器自持入口：延迟 180ms 后重置观察并开始轮询（原 scheduleSkyTextureStatusCheck）。
+  // 定时器自持入口：延迟 180ms 后重置观察并开始轮询。
   start(): void {
     this.scheduleSkyTextureStatusCheck()
   }
 
-  // 定时器自持收口：停止两个定时器并复位轮询计数（原 stopSkyTextureStatusObserver）。
+  // 定时器自持收口：停止两个定时器并复位轮询计数。
   stop(): void {
     this.stopSkyTextureStatusObserver()
   }

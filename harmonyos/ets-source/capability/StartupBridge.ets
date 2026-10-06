@@ -1,19 +1,15 @@
-// 启动桥接服务（PLAN §15.2 P1-4 / §15.10 M1-5，本片 M1-A 子组③）。
+// 启动桥接服务。
 //
-// 原宿主 MainWindowNativeNode 的 startupBridgeSync(11) / runStartupBridgeTasks(37) /
-// restoreStartupSettings(65) / saveCurrentViewAsStartup(10) 四个私有方法逐字下沉。
+// 负责冷启动阶段的引擎查询与界面恢复：拉取天文化 / 脚本 / 投影列表，恢复 AppStorage 中的界面设置与
+// 观测点，并把当前视角存为启动视角。
 //
-// 本类**不 import NAPI/UI**（§15.7 规则 1）：桥命令经 CommandPort；Preferences 样式设置读的是
-// AppStorage（全局，不是 NAPI）；跨域 store 以**构造注入的实例引用**持有（不 import 他 store 的方法）；
-// 宿主生命周期/UI 相关的动作（dismissSplash / setLanguage / 两个定时器 sync / currentProjection /
-// selfTest / bridgeSyncStarted 标志）经 StartupHooks 具名回注（§13.1 规则 6）。
+// 不 import NAPI/UI：桥命令经 CommandPort；Preferences 样式设置读的是 AppStorage（全局，不是 NAPI）；
+// 跨域 store 以构造注入的实例引用持有；宿主生命周期/UI 动作（dismissSplash / setLanguage / 两个定时器
+// sync / currentProjection / selfTest / bridgeSyncStarted 标志）经 StartupHooks 具名回注。
 //
-// 保留启动/隐私杂项（未随本片下沉，§15.6 第 4 条「生命周期/回调」登记）：
-//   onPrivacyNativeStartupAllowedChanged / startPageAfterPrivacyIfNeeded / dismissSplash /
-//   startTwinkle / registerFoldListeners / subscribeApplicationLifecycle / unsubscribeApplicationLifecycle /
-//   confirmPrivacyRevocation / revokePrivacyConsent / selfTestAllActions —— 均为 ArkUI 生命周期回调
-//   或宿主 UI/上下文动作（getUIContext / terminateSelf / 渲染时机），逐字等价需要注入 UI 上下文，
-//   故登记保留（见 CHANGELOG / §15.11）。
+// 隐私授权与启动序列中其余 ArkUI 生命周期回调（onPrivacyNativeStartupAllowedChanged /
+// registerFoldListeners / subscribeApplicationLifecycle / confirmPrivacyRevocation / selfTestAllActions 等）
+// 涉及 UI 上下文，仍由宿主持有。
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { LimitMagnitudeResponse } from '../pages/MainWindowModels'
 import { I18n } from '../pages/I18n'
@@ -35,7 +31,7 @@ import { ScriptStore } from '../state/ScriptStore'
 import { LayerStore } from '../state/LayerStore'
 import { TimeSettingsStore } from '../state/TimeSettingsStore'
 
-// 宿主生命周期 / UI 动作注入（§13.1 规则 6：启动桥服务不触碰 UI 与宿主私有标志）。
+// 宿主生命周期 / UI 动作注入（启动桥服务不触碰 UI 与宿主私有标志）。
 export interface StartupHooks {
   flashHint(text: ResourceStr): void
   dismissSplash(): void
@@ -106,10 +102,7 @@ export class StartupBridge {
     this.timeSettingsStore = timeSettingsStore
   }
 
-  // 启动期只用一个轻量查询确认 Qt 核心就绪（原宿主 startupBridgeSync，逐字搬入）。
-  // 差异仅：this.callNativeWhenReady → port.requestWhenReady、this.bridgeSyncStarted →
-  // hooks.bridgeSyncStarted()/setBridgeSyncStarted()、this.dismissSplash → hooks.dismissSplash、
-  // this.skyCultureViewStore.<f> → this.skyCultureViewStore.<f>（同实例）。
+  // 启动期只用一个轻量查询确认 Qt 核心就绪；成功后拉取天文化列表并放行后续启动任务。
   startupBridgeSync(): void {
     if (this.hooks.bridgeSyncStarted()) { return }
     this.hooks.setBridgeSyncStarted(true)
@@ -122,7 +115,7 @@ export class StartupBridge {
     })
   }
 
-  // 分批执行其余启动查询（原宿主 runStartupBridgeTasks，逐字搬入）。
+  // 分批执行其余启动查询。
   runStartupBridgeTasks(): void {
     const tasks: Array<() => void> = [
       () => this.port.requestWhenReady('setLanguage', this.languageStore.selectedLanguage, () => {}),
@@ -164,9 +157,7 @@ export class StartupBridge {
     runNext()
   }
 
-  // 从 AppStorage 的 stellariumSettings 恢复界面设置（原宿主 restoreStartupSettings，逐字搬入）。
-  // 差异仅：桥调用 → port.requestWhenReady、跨域 store 引用就地读同实例、
-  // this.setLanguage/syncViewCoordinateTimer/syncDockClockTimer → hooks。
+  // 从 AppStorage 的 stellariumSettings 恢复界面设置。
   restoreStartupSettings(): void {
     this.skyCultureViewStore.loadSkyCultureList()
     this.pluginStore.loadPluginList()
@@ -233,7 +224,7 @@ export class StartupBridge {
     this.hooks.syncDockClockTimer()
   }
 
-  // 把当前视角存为启动视角（原宿主 saveCurrentViewAsStartup，逐字搬入）。
+  // 把当前视角存为启动视角。
   saveCurrentViewAsStartup(): void {
     this.port.requestInteractive('saveCurrentView', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true) {

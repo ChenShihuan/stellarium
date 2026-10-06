@@ -1,13 +1,11 @@
 import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 天体详情主卡片的"操作"页（原 `unifiedObjectDetailCard()` 里 `bottomCardIndex === 3` 的分支）。
+// 天体详情主卡片的"操作"页。
 //
-// 该分支只读三个派生值（视角锁定、朗读状态、是否已加入观测清单）并触发六个宿主动作，
-// 因此下沉为组件后不需要带走任何参数化 @Builder：动作全部以回调注入，
-// 交互与状态仍由宿主掌握（`moveToSelectedObject` / `toggleViewLock` / `toggleSelectedObservingList` /
-// `refreshSelectedObject` + `refreshState` / `triggerAction` / `speakSelectedObject`）。
-// 外层的 `Column({ space: 8 })` 与原 Scroll 内层容器的间距保持一致。
+// 读取视角锁定、朗读状态、是否已加入观测清单三个派生值，动作以回调触发；
+// 交互与状态由宿主掌握，本组件不持有 store。
+// `Column({ space: 8 })` 的间距与详情 Scroll 内层容器保持一致。
 
 @Component
 export struct ObjectDetailActionsTab {

@@ -2,26 +2,22 @@ import { SkyCultureViewStore } from '../../state/SkyCultureViewStore'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 「星空文化·离线绘图」全屏预览叠层（原宿主 @Builder `skyCultureArtPreviewOverlay()`，约 60 行）。
+// 「星空文化·离线绘图」全屏预览叠层。
 //
-// 分工（§13.1 规则 4/6）：
+// 分工：
 //   - 可见性判定 `skyCultureViewStore.artPreviewOpen` 留在宿主调用点，组件根即那个全屏 `Stack`
-//     （zIndex 101 / Transparent 逐字保留）；
+//     （zIndex 101 / Transparent）；
 //   - 标题/加载/失败三态、`artPreviewName` 与解码结果 `artPreviewPixelMap` 全部经 @ObjectLink
-//     `skyCultureViewStore` 实时读取。PixelMap 必须走 @ObjectLink 的**引用语义**：Phase 5c 真机实测，
-//     若以 @Prop 传入 PixelMap，组件拿到的是被拷贝过的对象，`Image` 立即 `onError` 显示「绘图资源无法
-//     显示」；收进 store 后渲染正常（与 Phase 5b `objectMediaStore` 同法）；
+//     `skyCultureViewStore` 实时读取。PixelMap 必须走 @ObjectLink 的**引用语义**：若以 @Prop 传入
+//     PixelMap，组件拿到的是被拷贝过的对象，`Image` 立即 `onError` 显示「绘图资源无法显示」；
+//     收进 store 后渲染正常；
 //   - 主题色 `nmText/nmSub/nmAccent/nmBg` 与顶部安全区 `mediaPreviewTopInset()` 由宿主算好后以
 //     @Prop（textColor/subColor/accentColor/bgColor/topInset）传入，随夜间模式实时刷新；
 //   - 关闭/加载完成/解码失败/重新加载四个动作全部回注宿主
 //     （`closeSkyCultureArtPreview` / `onSkyCultureArtLoaded` / `onSkyCultureArtError` /
-//     `onRetrySkyCultureArtPreview`，前三个成员名与宿主方法一致，逐字保留既有语义）。
+//     `onRetrySkyCultureArtPreview`）。
 //
-// 单容器根（§13.1 规则 7）：原 @Builder 的唯一根是 `if (artPreviewOpen) { Stack() … }`，
-// 下沉后把可见性判定留在宿主调用点，组件根即那个全屏 `Stack`（原文并列双根已天然包于 Stack）。
-//
-// 既有语义逐字保留：`Image(...).objectFit(ImageFit.Contain)`、`hitTestBehavior(HitTestMode.Block)`、
-// `UI_RADIUS_PILL` / `UI_RADIUS_CONTROL`、`Button('重新加载')`。
+// 组件根即全屏 `Stack`（并列双根包于 Stack）。
 @Component
 export struct SkyCultureArtPreviewOverlay {
   @ObjectLink skyCultureViewStore: SkyCultureViewStore

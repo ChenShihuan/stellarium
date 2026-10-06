@@ -1,16 +1,12 @@
-// 时间设置（设置面板「时间」标签页）域状态：日期/时间格式与启动时间来源。
-// `timeSettingsPending` 刻意不并入：它同时被启动时间设置区与其他面板读取，
-// 仍由宿主持有并以 @Prop 传入。
-//
-// §14 B2R-2：设置面板打开时的配置回读加载器 loadConfigurationSettings 下沉本 store。
-// 它跨 5 个 store 写入（时间设置 / 视图偏好 / 导航 / 行星历表 / 信息窗），按 §14.5 B2R-2
-// 把本 store 作「主要归属」（时间格式字段 + applyTimeSettings 的主要写入域），其余 store
-// 经 TimeSettingsHostHooks 具名 setter 写入；applySelectedInfoMode / applyTimeSettings 两个
-// 与宿主动作共享的助手保留宿主实现，同样经 hooks 注入（store 不持有他域 store）。
+// 时间设置（设置面板「时间」标签页）域状态：日期/时间格式与启动时间来源；消费方以 @ObjectLink 观察。
+// `timeSettingsPending` 刻意不并入：它同时被启动时间设置区与其他面板读取，仍由宿主持有并以 @Prop 传入。
+// 自持 CommandPort；设置面板打开时的配置回读加载器 loadConfigurationSettings 跨 5 个 store 写入，
+// 本 store 作主要归属，其余 store 经 TimeSettingsHostHooks 具名 setter 写入（store 不持有他域 store）。
+// applySelectedInfoMode / applyTimeSettings 等与宿主动作共享的助手同样经 hooks 注入。
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → TimeSettingsStore 的加载助手（§14.5 B2R-2「额外注入」）。
+// 宿主 → TimeSettingsStore 的加载助手注入（store 不持有他域 store，跨域写入经具名 setter）。
 export interface TimeSettingsHostHooks {
   // ViewSettingsStore
   setUseMetricUnits(value: boolean): void
@@ -33,7 +29,7 @@ export interface TimeSettingsHostHooks {
   informationMode(): string
   setInformationMode(mode: string): void
   setInformationCustomMask(mask: number): void
-  // 与宿主动作共享、未随本片下沉的助手（§13.1 规则 6）
+  // 与宿主动作共享的助手（经注入调用）
   applySelectedInfoMode(mode: string): void
   applyTimeSettings(response: StellariumBridgeResponse): void
 }
@@ -47,13 +43,13 @@ export class TimeSettingsStore {
   startupTodayTime: string = '12:00:00'
   startupPresetLocalTime: string = ''
   timeSettingsZone: string = ''
-  // 「预设天空时间」（JD）：宿主 applyTimeSettings 从配置回包写入。当前无 ArkTS 读取方，
-  // 按 review §2.7 随本域下沉保留（原宿主 @State，默认 0）。
+  // 「预设天空时间」（JD）：由宿主 applyTimeSettings 从配置回包写入；当前无 ArkTS 读取方，
+  // 保留以供后续使用（默认 0）。
   presetSkyTime: number = 0
 
-  // —— 桥 / 宿主助手注入（§14.1 AB-0 / §14 B2R-2）——
+  // —— 桥 / 宿主助手注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（交互读，无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（交互读，无并发抑制需求）；预留以统一各 store 的桥注入约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
   private hooks: TimeSettingsHostHooks | null = null
@@ -79,9 +75,7 @@ export class TimeSettingsStore {
     }
   }
 
-  // 设置面板配置回读（原宿主 loadConfigurationSettings，函数体逐字搬入；仅
-  // this.callInteractive → this.port.requestInteractive、时间格式字段 → 本 store 字段、
-  // 其余 store 字段写 → hooks 具名 setter、applySelectedInfoMode / applyTimeSettings → hooks）。
+  // 设置面板配置回读：时间格式字段写本 store，其余 store 字段经 hooks 具名 setter 写入。
   loadConfigurationSettings(): void {
     const port = this.ensurePort()
     if (port === null) {

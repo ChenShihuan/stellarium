@@ -2,13 +2,10 @@ import { CommandCatalogEntry, CommandCatalogResponse } from '../pages/MainWindow
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 命令控制台（command console）域的面板状态（原宿主 7 个 @State）。
+// 命令控制台（command console）域的面板状态，由面板以 @ObjectLink 订阅。
+// 本 store 自持 loadCommandCatalog 加载器，并持有 CommandPort 注入（不 import 桥）。
 //
-// review §2.7 第三批（小簇批处理）之一。本簇面板入参与宿主字段**同名**，机械替换即可。
-// 已确认本域无原地变更（`commandNameInput` 上报的那处实为 `length === 0` 读取，是普查
-// 正则把 `===` 误判为赋值）⇒ @ObjectLink 语义等价。
-//
-// §14 B1-5：加载器 loadCommandCatalog 已随桥注入搬入本 store（宿主不再持有同名方法）。
+// 约束：本域无原地变更（commandNameInput 的 `length === 0` 为读取比较），@ObjectLink 语义等价。
 @Observed
 export class CommandStore {
   commandCatalog: Array<CommandCatalogEntry> = []
@@ -19,9 +16,9 @@ export class CommandStore {
   commandPendingConfirmation: string = ''
   commandBusy: boolean = false
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-5 起本 store 自持 loadCommandCatalog） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（无并发抑制需求）；seq 预留以保持统一约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
 
@@ -42,8 +39,7 @@ export class CommandStore {
     }
   }
 
-  // 命令控制台：桥查询命令目录（原宿主 loadCommandCatalog，函数体逐字搬入；
-  // 仅 this.callInteractive → this.port.requestInteractive、this.commandStore.<f> → this.<f>）。
+  // 命令控制台：桥查询命令目录；成功时回填并默认选中首个命令。
   loadCommandCatalog(): void {
     const port = this.ensurePort()
     if (port === null) {

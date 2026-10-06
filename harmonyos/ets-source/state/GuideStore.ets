@@ -3,32 +3,25 @@ import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 「交互导览 / 语音播报」域状态簇（review §2.7 残留并入，2026-10-04）。
+// 「交互导览 / 语音播报」域状态 store：持有导览播放器会话快照 guideState（phase / guideId /
+// index / count / automatic / remaining / error）与朗读文本 speechStatus，并自持导览引擎、
+// 请求序号与 tick 定时器（guidePlayer / guideTimer / guideLastRequest / guideLastResult /
+// guideGyroWasEnabled / guidePanelWasVisible）。
 //
-// 本批从宿主并入 2 个 `@State` 字段（字段名沿用宿主原名，便于与既有引用机械对应）：
-//   - guideState —— 导览播放器（GuidePlayer）的会话快照：phase / guideId / index / count /
-//     automatic / remaining / error。宿主多处以 `guideState.active` 做门控分发，`InteractiveGuideShell`
-//     经 `@Prop` 逐项接收 phase/index/count/automatic/remaining（简单类型按值下发，规则 3）；
-//   - speechStatus —— `getObjectSpokenText` 回包生成的朗读文本。当前构建基于 OpenHarmony 基础 SDK
-//     （API 24），未含 CoreSpeechKit，故仅在各详情面板内显示，不做真实 TTS。
+// 为何独立成 store：state/ 下无同义 store —— ToolsStore 是工具/帮助/角度测量/录制，ScriptStore
+// 是脚本播放/录制/视频，SessionToolStore 是会话续传；导览与播报同属独立的「交互导览 + 朗读」链。
 //
-// 为何**新建** GuideStore 而不并入既有 store：`state/` 下无同义 store —— `ToolsStore` 是工具/帮助/
-// 角度测量/录制，`ScriptStore` 是脚本播放/录制/视频，`SessionToolStore` 是会话续传；导览与播报同属
-// 独立的一条「交互导览 + 朗读」链，故合并为独立 store。消费方仍以 `@Prop` 快照接收、来源改为宿主读
-// store（与 `InfoWindowStore` / `PolarScopeStore` 的既定取舍一致，行为逐字等价）。
+// 消费方：InteractiveGuideShell 经 @Prop 逐项接收 phase/index/count/automatic/remaining
+// （简单类型按值下发），由宿主读 store 后下发；speechStatus 仅在各详情面板内显示。
 //
-// M1-A 子组④（PLAN §15.4 P2-2 / §15.11 M1-A）：`executeGuideRequest`(63) 与导览引擎/请求序号/
-// 定时器（guidePlayer / guideTimer / guideLastRequest / guideLastResult / guideGyroWasEnabled /
-// guidePanelWasVisible）整体并入本 store。**定时器由本 store 自持 start/stop**（§15.7 规则 3）：
-// `startGuideTimer()` / `stopGuideTimer()` 在 executeGuideRequest 与宿主生命周期（aboutToDisappear /
-// 前台切换）收口。跨域/UI/引擎动作经 GuideHostHooks 具名注入（store 不 import UI/他 store）。
+// 定时器由本 store 自持 start/stop：在 executeGuideRequest 与宿主生命周期（aboutToDisappear /
+// 前台切换）收口；跨域/UI/引擎动作经 GuideHostHooks 具名注入（store 不 import UI / 他 store）。
 //
-// 约束：`guideState` 只做**整体赋值**（含 animateTo 内赋值），`speechStatus` 只做整体赋值；
-// 改造前已普查确认无 `this.guideState.<prop> =` 之类的原地变更。
+// 约束：guideState 与 speechStatus 只做整体赋值（含 animateTo 内赋值），不得原地变更字段。
 export interface GuideHostHooks {
   flashHint(text: ResourceStr): void
   publishGuideState(): void
-  // 是否已有脚本/录制裁会话（原宿主 scriptStore.scriptSessionActive(tools.recording, guideState.active)）。
+  // 是否已有脚本/录制裁会话（宿主聚合 tools.recording 与 guideState.active）。
   sessionBusy(): boolean
   polarScopeVisible(): boolean
   panelVisible(): boolean
@@ -53,7 +46,7 @@ export class GuideStore {
   guideState: GuideState = { active: false, phase: 'idle', guideId: '', index: 0, count: 0, automatic: false, remaining: 0, error: '' }
   speechStatus: string = ''
 
-  // —— 导览引擎 / 请求 / 定时器（原宿主私有字段，M1-A 子组④迁入） ——
+  // —— 导览引擎 / 请求 / 定时器（私有，不入被观察语义） ——
   guidePlayer: GuidePlayer | undefined = undefined
   guideTimer: number = -1
   guideGyroWasEnabled: boolean = false
@@ -72,7 +65,7 @@ export class GuideStore {
     this.hooks = hooks
   }
 
-  // 导览 tick 定时器（原宿主 executeGuideRequest 内的 setInterval，逐字搬入；由本 store 自持）。
+  // 导览 tick 定时器：每 250ms 在前台时推进播放器 0.25；由本 store 自持 start/stop。
   startGuideTimer(): void {
     const hooks = this.hooks
     this.stopGuideTimer()
@@ -88,7 +81,7 @@ export class GuideStore {
     }
   }
 
-  // 宿主生命周期收口：停止播放器与定时器（原宿主 aboutToDisappear / 后台切换调用点，逐字等价）。
+  // 宿主生命周期收口：停止播放器与定时器（aboutToDisappear / 后台切换时调用）。
   stopPlayer(): void {
     this.guidePlayer?.stop()
   }
@@ -97,9 +90,8 @@ export class GuideStore {
     this.guidePlayer?.action('pause')
   }
 
-  // 执行导览请求（原宿主 executeGuideRequest，逐字搬入）。差异仅：this.callInteractive →
-  // port.requestInteractive、this.guideStore.<f> → this.<f>、getUIContext().animateTo → hooks.animateTo、
-  // publishGuideState/panelVisible/gyro*/stop* → hooks 具名回注、guideTimer → 本 store 自持。
+  // 执行导览请求：桥经 port.requestInteractive，导览状态回包经 hooks.animateTo（不触碰 UI 上下文），
+  // 面板/陀螺仪等动作经 hooks 具名回注，tick 定时器由本 store 自持。
   async executeGuideRequest(commandName: string, payload: string, requestId: string = ''): Promise<void> {
     const hooks = this.hooks
     const port = this.port

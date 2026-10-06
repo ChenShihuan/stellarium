@@ -1,7 +1,6 @@
 // 观测辅助块：大气折射（气压 / 气温 / 消光）。
 //
-// 夜视模式已单独拆出为 `NightModeToggleRow` + `NightModeStore`（后续要在主界面加独立按钮）。
-// 本块的状态刻意仍由宿主持有、以 @Prop 下发，因为 `applyAtmosphere()` 是宿主的命令桥入口。
+// 状态由宿主持有、以 @Prop 下发，因为 `applyAtmosphere()` 是宿主的命令桥入口。
 @Component
 export struct ObservationAidBlock {
   @Prop refractionOn: boolean

@@ -1,22 +1,9 @@
-// 「配置（旧版）」回退面板（原宿主 panelContent() 末尾 `else` 分支，分支体原样下沉，Phase 4j）。
+// 「配置（旧版）」回退面板：panelContent 链未命中任何具名面板时的兜底页（历史“应用配置”页）；
+// setPanel() 把 `config` / `pluginManager` 归一为 `settings` 后，正常导航不会走到这里，
+// 仅当 CLI 用未知面板名打开时才可能渲染。
 //
-// 该分支是 panelContent() 链上未命中任何具名面板时的兜底页（历史“应用配置”页）。
-// 自 setPanel() 把 `config` / `pluginManager` 归一为 `settings` 后，正常导航不会走到这里；
-// 仅当 CLI 用未知面板名打开时才可能渲染。判定条件（无名 else）留在宿主，分支体原样下沉。
-//
-// 状态体系（§13.1 规则 1/5/6）：
-//   - gyroStore / layerStore / nightModeStore / telescopeStore / observingListStore /
-//     skyCultureViewStore / viewSettingsStore 七个 @Observed store 走 @ObjectLink（宿主源均为 @State 实例）；组件内对其属性的写入会被宿主观测到（规则 4）。
-//   - 其余标量/数组状态走 @Prop，主题色由宿主算好后传入（panelColor）。
-//   - sensZh 已直连 common/derive/labels（§14.2 A1-3）；宿主私有动作（flashHint /
-//     handleChip / refreshState / saveScreenshot / observing* / setLanguage /
-//     setSkyCulture / triggerAction 等）按规则 6 回注。
-//   - 原 `useMetricUnits = <x>; callInteractive('setConfigString', ...)` 合并为
-//     setLegacyDistanceUnit(useMetric) 单一回调；观测列表清空合并为 clearObservingList()；
-//     观测项点选合并为 selectObservingTarget(name)。
-// 顶层用 Column().width('100%') 包住原多根分支体（规则 7），与原宿主
-// `Column() { this.panelContent() }.width('100%')` 的层叠与宽度一致。
-// 本文件不含 @BuilderParam，不含参数化 @Builder（规则 3/9）。
+// 消费 gyro / layer / nightMode / telescope / observingList / skyCultureView / viewSettings
+// 七个 store（@ObjectLink）与标量、主题色 @Prop；宿主私有动作经回调注入。
 
 import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES } from '../../pages/I18n'
 import { OFFLINE_APPGALLERY_BUILD } from '../../pages/MainWindowModels'
@@ -30,7 +17,7 @@ import { ViewSettingsStore } from '../../state/ViewSettingsStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 import { InfoRow } from '../../common/ui/InfoRow'
 import { GyroscopeRow, LanguageRow } from '../settings/DeviceAndLanguageRows'
-import { QuickChipRow } from '../QuickChipRow'
+import { QuickChipRow } from '../../common/ui/QuickChipRow'
 import { sensZh } from '../../common/derive/labels'
 
 @Component
@@ -98,7 +85,6 @@ export struct ConfigFallbackPanel {
       }
         .height(40)
         .width('100%')
-      // 观测列表
       if (this.observingListStore.observingList.length > 0) {
         Row() {
           Text(I18n.t('i0022') + ' (' + this.observingListStore.observingList.length + ')')
@@ -135,7 +121,6 @@ export struct ConfigFallbackPanel {
         }.width("100%").height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       }
       InfoRow({ label: I18n.t('i0062'), value: I18n.t('s0706') })
-      // 分区：方向
       Row()
         .width('100%').height(0.5)
         .backgroundColor('rgba(255,255,255,0.06)')
@@ -148,7 +133,6 @@ export struct ConfigFallbackPanel {
         QuickChipRow({ items: [{ id: 'east', label: I18n.t('s0725') }, { id: 'south', label: I18n.t('s0726') }, { id: 'west', label: I18n.t('s0727') }, { id: 'north', label: I18n.t('s0728') }, { id: 'zenith', label: I18n.t('i0088') }, { id: 'ncp', label: I18n.t('i0089') }], onChip: (id: string) => { this.handleChip(id) } })
       }
       .width('100%')
-      // 分区：视场
       Row()
         .width('100%').height(0.5)
         .backgroundColor('rgba(255,255,255,0.06)')
@@ -161,7 +145,6 @@ export struct ConfigFallbackPanel {
         QuickChipRow({ items: [{ id: 'fov1', label: '1°' }, { id: 'fov2', label: '2°' }, { id: 'fov5', label: '5°' }, { id: 'fov10', label: '10°' }, { id: 'fov20', label: '20°' }, { id: 'fov45', label: '45°' }, { id: 'fov60', label: '60°' }, { id: 'fov90', label: '90°' }, { id: 'fov180', label: '180°' }], onChip: (id: string) => { this.handleChip(id) } })
       }
       .width('100%')
-      // 天球投影切换
       Row() {
         Text(I18n.t('i0025')).fontSize(12).fontColor('#99FFFFFF').width(72)
         Text(this.telescopeStore.equatorialMount ? I18n.t('i0008') : I18n.t('i0009'))
@@ -199,7 +182,6 @@ export struct ConfigFallbackPanel {
           })
       }
       .width('100%').margin({ top: 4, bottom: 4 })
-      // 星空翻转
       Row() {
         Text(I18n.t('i0277')).fontSize(12).fontColor('#99FFFFFF').width(72)
         Row() {
@@ -227,7 +209,6 @@ export struct ConfigFallbackPanel {
       }
       .width('100%').padding({ left: 10, right: 10 }).margin({ top: 2, bottom: 4 })
       QuickChipRow({ items: [{ id: 'refresh', label: I18n.t('s0721') }, { id: 'now', label: I18n.t('s0754') }], onChip: (id: string) => { this.handleChip(id) } })
-      // 帮助说明
       Row() {
         Text(I18n.t('i0026')).fontSize(12).fontColor("#99FFFFFF").width(72)
       }
@@ -236,7 +217,6 @@ export struct ConfigFallbackPanel {
         .fontSize(11).fontColor("#99FFFFFF").width("100%").padding({ left: 4, right: 4 })
       Text(I18n.t('i0028'))
         .fontSize(11).fontColor("#99FFFFFF").width("100%").padding({ left: 4, right: 4 }).margin({ top: 2 })
-      // 语言选择
       Row() {
         Text(I18n.t('i0029')).fontSize(12).fontColor("#99FFFFFF").width(72)
         Text(LANGUAGE_DISPLAY[this.selectedLanguage] ?? this.selectedLanguage)

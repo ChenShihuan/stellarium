@@ -6,8 +6,8 @@ import { SettingsSwitchRow } from '../../common/ui/SettingsSwitchRow'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
 // 设置面板「时间」标签页的上半部分：日期格式 / 时间格式 / 启动时间来源。
-// 原实现由三个参数化 @Builder 组装（选中态与开关都会冻结），现改为组件 + @Prop 实时刷新。
-// ΔT 算法块是独立组件，仍由宿主紧随本组件之后渲染。
+// 选中态与开关经 store / @Prop 实时刷新。
+// ΔT 算法块是独立组件，由宿主紧随本组件之后渲染。
 @Component
 export struct TimeSettingsSection {
   @ObjectLink store: TimeSettingsStore

@@ -1,11 +1,8 @@
-// 「望远镜」面板（原宿主 panelContent() 的 `telescope` 分支，分支体原样下沉，Phase 4i）。
+// 「望远镜」面板，对应 `activePanel === 'telescope'`：把 Lx200Panel 包进 Scroll + Column
+// 并加一行提示文案。
 //
-// 判定条件 `activePanel === 'telescope'` 留在宿主；分支体只是把既有 Lx200Panel 包进
-// Scroll + Column 并加一行提示文案，因此本组件除 @ObjectLink store 外都是主题色 @Prop
-// 与回注宿主的动作（新建 / 选择 / 校验 / 保存 / 删除 / 连接测试 / GoTo / 同步 / 中止 /
-// 读取位置 / 实时位置，§13.1 规则 6）。
-// 视觉逐字保留：Scroll 撑满（layoutWeight(1)）+ Column({ space: 8 }) + 四周 8 内边距。
-// 本文件不含 @BuilderParam，不含参数化 @Builder（规则 9）。
+// 设备状态来自 TelescopeStore（@ObjectLink），其余为主题色 @Prop；
+// 新建/选择/校验/保存/删除/连接测试/GoTo/同步/中止/读取位置/实时位置等动作回调注入宿主。
 import { I18n } from '../../pages/I18n'
 import { TelescopeStore } from '../../state/TelescopeStore'
 import { Lx200Panel } from '../telescope/Lx200Panel'

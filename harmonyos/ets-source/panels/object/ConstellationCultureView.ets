@@ -4,11 +4,10 @@ import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { SkyCultureDescriptionBlock } from '../../pages/StellariumTypes'
 import { SkyCultureDescriptionBlockView } from '../skyculture/SkyCultureDescriptionBlockView'
 
-// 天体详情卡"资料"页里的星座文化段（原宿主 `selectedConstellationCultureDescriptionView(tablet)`）。
+// 天体详情卡"资料"页里的星座文化段。
 //
-// 段落由共享组件 `SkyCultureDescriptionBlockView` 渲染；"是否星座"的判定留在宿主
-// （`selectedObjectIsConstellation()`）以 `@Prop visible` 传入；展开/收起直接改写 store
-// （`@ObjectLink` 允许），因此点击后本组件与卡片其余部分都会实时刷新。
+// 段落由共享组件 `SkyCultureDescriptionBlockView` 渲染；"是否星座"由宿主以 `@Prop visible` 决定；
+// 展开 / 收起直接改写 `@ObjectLink` 观察的 `ObjectDetailStore`，点击后本组件与卡片其余部分都会实时刷新。
 
 @Component
 export struct ConstellationCultureView {

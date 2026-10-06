@@ -1,15 +1,7 @@
-// 天文计算面板（astro）状态（原宿主 @State 的 astro 域字段，Phase 4l）。
-//
-// 面板 UI 已下沉到 panels/astro/AstroPanel.ets，以 @ObjectLink 观察本 store；
-// 宿主保留 astro 域的加载/导出/路由/持久化方法（它们继续写本 store），
-// 组件通过注入的回调（AstroPanelHost）驱动这些方法。
-// 高频/跨域字段（夜视三色、objectDetailStore、wutStore、Scroller）不进本 store。
-//
-// review §2.7 续作：食相起始日期 eclipseStartYear/Month/Day 属天文派生域，并入本 store
-// （原宿主 @State，仅被 eclipseStartOptionLabel / chooseEclipseStartDate / resolveEclipseStartJD
-// 读写；AstroPanel 经 eclipseStartOptionLabel 回调展示该日期，故放被观察 store 一致）。
-// 续作第二批：RTS 日历起始日期 rtsCalendarStartYear/Month/Day 与年度高度图起始日期
-// graphStartYear/Month/Day（原宿主 @State，宿主日期选择器回调读写，AstroPanel 经 host 回调消费）。
+// 天文计算面板（astro）域状态：面板子标签/分组、各计算页回包数据与请求态、日期起始模型等。
+// 面板 AstroPanel.ets 以 @ObjectLink 观察本 store；加载 / 导出 / 路由方法由本 store 自持，
+// 跨 store（Wut / Ephemeris / objectDetail）与宿主几何 / 格式化助手经 AstroHostHooks 注入。
+// 高频/逐帧或跨域字段（夜视三色、objectDetailStore、wutStore、Scroller）不入本 store。
 import { TonightEvents, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, PlanetPosition, HeliocentricPosition, CelestialPosition, StellariumBridgeResponse, WutTarget } from '../pages/StellariumTypes'
 import { EphemerisOptions, RtsCalendarOptions, EclipseOptions, PhenomenaOptions, HeliocentricPositionOptions, CelestialPositionOptions, AstroCsvExport } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
@@ -17,7 +9,7 @@ import { dateToJD, graphModeLabel, graphStartOptionLabel, hourOffsetLabel, plane
 import { zhNameOf, planetZh, celestialTitle } from '../common/derive/labels'
 import { csvCell } from '../common/derive/skycult'
 
-// 本域辅助端口接口（§14.8：store 不 import NAPI/UI，跨 store / 未下沉宿主逻辑经具名回调注入）。
+// 本域辅助端口接口：store 不 import NAPI/UI，跨 store 与宿主逻辑经具名回调注入。
 export interface AstroHostHooks {
   // 跨域读取（objectDetailStore：选中天体）
   hasSelectedObject(): boolean
@@ -28,7 +20,7 @@ export interface AstroHostHooks {
   loadWutTargets(): void
   // 跨 store 读取（EphemerisStore：星历「指定日期」起始 JD）
   ephemerisCustomStartJD(): number
-  // 未随本片下沉的宿主助手 / 加载器
+  // 宿主助手 / 加载器（几何布局与格式化）
   fmtDateTime(s: string | undefined): string
   hecLayoutPositions(positions: Array<HeliocentricPosition>): Array<HeliocentricPosition>
   loadPlanetPositions(): void
@@ -48,9 +40,7 @@ export class AstroStore {
   rtsCalendarError: string = ''
   rtsCalendarDays: number = 14
   rtsCalendarStartOffsetDays: number = 0
-  // RTS 日历「指定日期」起始模型（原宿主 @State，review §2.7）。
-  // 宿主 resolveRtsCalendarStartJD / rtsCalendarStartOptionLabel / chooseRtsCalendarStartDate 读写，
-  // AstroPanel 经 host.rtsCalendarStartOptionLabel / host.chooseRtsCalendarStartDate 消费。
+  // RTS 日历「指定日期」起始模型。
   rtsCalendarStartYear: number = new Date().getFullYear()
   rtsCalendarStartMonth: number = new Date().getMonth() + 1
   rtsCalendarStartDay: number = new Date().getDate()
@@ -119,9 +109,7 @@ export class AstroStore {
   altAzShowMoon: boolean = false
   altAzMinimum: number = -90
   graphStartOffsetDays: number = 0
-  // 年度高度图「指定日期」起始模型（原宿主 @State，review §2.7）。
-  // 宿主 resolveGraphStartJD / graphCustomStartLabel / chooseGraphStartDate 读写，
-  // AstroPanel 经 host.graphCustomStartLabel / host.chooseGraphStartDate 消费。
+  // 年度高度图「指定日期」起始模型。
   graphStartYear: number = new Date().getFullYear()
   graphStartMonth: number = new Date().getMonth() + 1
   graphStartDay: number = new Date().getDate()
@@ -192,13 +180,11 @@ export class AstroStore {
   astroCalcSnapshot: string = ''
   tonightAstro: TonightEvents | null = null
 
-  // —— §14 B2A：Astro 簇加载器下沉（19 个中的 18 个；loadWutTargets 见 state/WutStore.ets） ——
+  // —— 加载器 ——
   //
   // 桥端口复用宿主同一 HostCommandPort 实例；store 只依赖 CommandPort 接口（不 import NAPI/UI）。
-  // 跨 store（WutStore / EphemerisStore / objectDetailStore）与未随本片下沉的宿主加载器
-  // （loadPlanetPositions）经 AstroHostHooks 具名注入；月相 / 天文计算上下文加载器已在
-  // §14 B3-2 连同其请求态一起下沉本 store（宿主计时器只调用，不再持有请求态裸字段）。
-  // 请求序号/代际随对应加载器搬入本 store（各自独立字段；宿主不再保留同名序号）。
+  // 跨 store（WutStore / EphemerisStore / objectDetailStore）与宿主加载器 loadPlanetPositions
+  // 经 AstroHostHooks 具名注入；各加载器的请求序号 / 代际为独立私有字段，用于丢弃过期回包。
   private port: CommandPort | null = null
   private onChanged: (() => void) | null = null
   private hooks: AstroHostHooks | null = null
@@ -214,8 +200,7 @@ export class AstroStore {
   private almanacRequestSequence: number = 0
   private hecPositionsRequestSequence: number = 0
   private celestialPositionsRequestSequence: number = 0
-  // §14 B3-2：月相 / 天文计算上下文的请求态（原宿主裸字段 moonPhaseRequestId /
-  // moonPhaseLoadingDays / astroContextRequestId / astroContextRequestPending 随加载器搬入）。
+  // 月相 / 天文计算上下文的请求态（各自的请求序号与进行中标志）。
   private moonPhaseRequestSequence: number = 0
   private moonPhaseLoadingDays: number = 0
   private astroContextRequestSequence: number = 0
@@ -323,8 +308,7 @@ export class AstroStore {
     this.astroCalcSnapshot = ''
   }
 
-  // 升中天落（RTS）：原宿主 loadRTS，函数体逐字搬入；仅 this.callInteractive → port.requestInteractive、
-  // this.astroStore.<f> → this.<f>、this.hasSelectedObject() → this.hasSelected()。
+  // 升中天落（RTS）：桥查询选中天体的升起 / 中天 / 落下时刻。
   loadRTS(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.rtsRequestSequence
@@ -472,8 +456,7 @@ export class AstroStore {
     })
   }
 
-  // 星历表：原宿主 loadEphemeris。callNativeWhenReady 的 (name,payload,onOk,attempt,intervalMs,maxAttempts,onFailure)
-  // 按端口签名前移为 (name,payload,onOk,onFailure,attempt,intervalMs,maxAttempts)；原重试档 0/100/80 保留。
+  // 星历表：桥查询选中天体（或指定天体组）的星历序列（重试档 0/100/80）。
   loadEphemeris(): void {
     this.updateAstroCalcSnapshot()
     const requestId = ++this.ephemerisLoadSequence
@@ -870,7 +853,7 @@ export class AstroStore {
     this.planetTimeSeriesRightMax = rightMax <= rightMin ? rightMin + 1 : rightMax
   }
 
-  // 日月食：原宿主 loadEclipses（callNativeWhenReady 重试档 0/100/200 保留）。
+  // 日月食：桥查询未来日食 / 月食（重试档 0/100/200）。
   loadEclipses(): void {
     this.updateAstroCalcSnapshot()
     if (this.eclipseData.length > 0 || this.eclipseLoading) return
@@ -940,7 +923,7 @@ export class AstroStore {
     })
   }
 
-  // 行星凌日：原宿主 loadPlanetaryTransits（callNativeWhenReady 重试档 0/100/200 保留）。
+  // 行星凌日：桥查询未来行星凌日（重试档 0/100/200）。
   loadPlanetaryTransits(): void {
     this.updateAstroCalcSnapshot()
     const port = this.ensurePort()
@@ -970,7 +953,7 @@ export class AstroStore {
     }
   }
 
-  // 天象预报：原宿主 loadPhenomena（callNativeWhenReady 重试档 0/100/300 保留）。
+  // 天象预报：桥查询两目标间的天象（合 / 冲 / 大距等；重试档 0/100/300）。
   loadPhenomena(): void {
     this.updateAstroCalcSnapshot()
     const port = this.ensurePort()
@@ -1025,7 +1008,7 @@ export class AstroStore {
     }
   }
 
-  // 年历：原宿主 loadAlmanac。
+  // 年历：桥查询当日天文历（日出日落、月相、四季节点等）。
   loadAlmanac(): void {
     this.updateAstroCalcSnapshot()
     const port = this.ensurePort()
@@ -1074,7 +1057,7 @@ export class AstroStore {
     })
   }
 
-  // 日心黄道位置：原宿主 loadHeliocentricPositions；hecLayoutPositions 属宿主渲染几何，经 hooks 注入。
+  // 日心黄道位置：桥查询各行星 / 彗星的日心黄道坐标（几何布局经 hooks 注入）。
   loadHeliocentricPositions(): void {
     this.updateAstroCalcSnapshot()
     const port = this.ensurePort()
@@ -1117,7 +1100,7 @@ export class AstroStore {
     })
   }
 
-  // 目录天体位置：原宿主 loadCelestialPositions。
+  // 目录天体位置：按分类 / 星等筛选查询目录天体位置。
   loadCelestialPositions(): void {
     this.updateAstroCalcSnapshot()
     const port = this.ensurePort()
@@ -1151,9 +1134,7 @@ export class AstroStore {
     })
   }
 
-  // §14 B3-2：月相加载器（原宿主 loadMoonPhases，函数体逐字搬入；仅
-  // this.callLongRunningInteractive → port.requestLongRunning、this.astroStore.<f> → this.<f>、
-  // this.moonPhaseRequestId/moonPhaseLoadingDays → 本 store 私有请求态）。
+  // 月相加载器：桥查询未来月相序列（进行中且天数未变时跳过重复请求）。
   loadMoonPhases(): void {
     this.updateAstroCalcSnapshot()
     const days = this.moonPhaseDays
@@ -1192,9 +1173,7 @@ export class AstroStore {
     }, days >= 90 ? 600 : 240)
   }
 
-  // §14 B3-2：天文计算上下文加载器（原宿主 loadAstroCalcContext，函数体逐字搬入；仅
-  // this.callInteractive → port.requestInteractive、this.astroStore.astroContext → this.astroContext、
-  // this.astroContextRequestId/astroContextRequestPending → 本 store 私有请求态）。
+  // 天文计算上下文加载器：桥查询当前模拟时刻的观测地 / 恒星时 / 太阳月亮状态。
   loadAstroCalcContext(): void {
     if (this.astroContextRequestPending) return
     const port = this.ensurePort()
@@ -1233,14 +1212,12 @@ export class AstroStore {
     })
   }
 
-  // §14 B3-2：宿主关闭天文面板时作废在途上下文请求（原宿主 stopAstroCalcContextTimer 的
-  // `++astroContextRequestId`；只递增序号、不复位 pending，逐字保留原语义）。
+  // 宿主关闭天文面板时作废在途上下文请求：只递增序号、不复位 pending。
   cancelAstroCalcContext(): void {
     ++this.astroContextRequestSequence
   }
 
-  // 标签页分发：原宿主 loadAstroTab；loadPlanetPositions 未随本片下沉（经 hooks 注入）；
-  // loadMoonPhases / loadAstroCalcContext 已于 §14 B3-2 下沉本 store。
+  // 标签页分发：按当前子标签 / 模式触发对应加载器（loadPlanetPositions 经 hooks 注入）。
   loadAstroTab(id: number): void {
     this.updateAstroCalcSnapshot()
     this.loadAstroCalcContext()
@@ -1277,9 +1254,7 @@ export class AstroStore {
     }
   }
 
-  // ===== A2-2：读本 store 字段的派生取值方法（plan §14.3 A2-D）=====
-  // 以下方法原先在宿主中读取 this.astroStore.*；函数体逐字迁入本 store，改为零宿主引用。
-  // 宿主 AstroPanel 端口对象与 exportCurrentAstroCsv 调用点改为 this.astroStore.<name>()。
+  // ===== 派生取值方法（读本 store 字段生成展示文本）=====
 
   makeAstroCsv(exportData: AstroCsvExport): string {
     const lines: Array<string> = []
@@ -1396,9 +1371,7 @@ export class AstroStore {
     return this.graphStartYear.toString() + '-' + this.graphStartMonth.toString().padStart(2, '0') + '-' + this.graphStartDay.toString().padStart(2, '0')
   }
 
-  // 当前星历/日历页是否必须先选中天体（原宿主 astroNeedsSelectedObject，§14 A2-3 逐字搬入）。
-  // 读本 store 的 astroTab / ephemerisMode / planetCalcMode，按 §14.3「读本域 store 字段 →
-  // 并入该 store 方法」。
+  // 当前星历 / 日历页是否必须先选中天体。
   astroNeedsSelectedObject(): boolean {
     if (this.astroTab === 2 || this.astroTab === 4) return true
     if (this.astroTab === 1 && this.ephemerisMode < 2) return true
@@ -1406,9 +1379,7 @@ export class AstroStore {
     return false
   }
 
-  // ---- A2-5：当前页的 CSV 导出模型（原宿主 private currentAstroCsvExport 逐字迁入）----
-  // 跨域读取 WutStore 的目标与观测时刻，按 §14.8 规则 6 改为显式入参；
-  // 天体标题助手改直连 common/derive/labels 的 celestialTitle。
+  // ---- 当前页的 CSV 导出模型 ----
   astroCsvExport(wutTargets: WutTarget[], wutObservationTime: string): AstroCsvExport | undefined {
     if (this.astroTab === 0) {
       if (this.positionMode === 0 && this.planetPositions.length > 0) {
@@ -1486,7 +1457,7 @@ export class AstroStore {
     return undefined
   }
 
-  // ---- A2-5：天文图表尺寸/标签族（原宿主 private，逐字迁入；读本 store 字段）----
+  // ---- 天文图表尺寸 / 标签族 ----
   altAzRangeLabel(): string {
     return '未来 ' + this.altAzHours.toString() + ' 小时'
   }

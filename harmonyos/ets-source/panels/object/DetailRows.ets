@@ -1,11 +1,9 @@
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 天体详情行族的三个纯展示组件。
+// 天体详情行族的三个纯展示组件：数据行、结构化资料行与段落标题。
 //
-// 原为三个**带参数的 UI 函数**（`objectDataRow` / `structuredObjectDetailRow` / `tabletInspectorSection`，
-// 参数按值捕获 → 值变化不会实时刷新）。改为组件后由父方把**已解析好的标签与数值**以 @Prop 传入：
-// 解析逻辑（`selectedDisplayValue` / `detailFieldLabel` / `detailFieldValue` / `detailSectionTitle`）
-// 仍留在宿主，因为它被多处共用。
+// 标签与数值以 `@Prop` 传入（带值参数按值捕获后不会随状态刷新，故由父方解析后传入）；
+// 组件内不含解析逻辑。
 
 @Component
 export struct ObjectDataRow {

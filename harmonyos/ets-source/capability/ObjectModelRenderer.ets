@@ -1,23 +1,15 @@
-// 对象检查器三维模型渲染器（PLAN §15.2 P1-3a/P1-3b / §15.11 M2-A）。
+// 对象检查器三维模型渲染器。
 //
-// 原宿主 MainWindowNativeNode 的模型渲染/纹理提交/触摸/光照方法整体下沉，共 12 个方法 +
-// 22 个 objectInspectorModel* 逐帧/草稿字段。职责划分（§15.7 规则 2）：
-//   - 可观测子集（objectInspectorModelPixelMap / Immersive / OverlayOpacity / Scale / Interacting /
-//     objectInspectorProceduralKind）已在 state/ObjectMediaStore.ets，本控制器只读写该 store，
-//     不新建可观察字段；
-//   - 逐帧/草稿字段（纹理三量 + 环纹理三量、旋转/缩放采样、渲染代际/挂起/播放中标志、
-//     一次性渲染防抖定时器）留本控制器普通字段，**不入被观察 store**（§13.3 两字段不入 store 的
-//     既有结论由本片承接并扩展：整套逐帧字段都不入 store，避免每帧触发刷新）。
+// 负责天体模型的纹理提交、worker 光栅化调度、模型触摸交互与光照刷新，以及沉浸叠层的发布。
+// 可观测子集（objectInspectorModelPixelMap / Immersive / OverlayOpacity / Scale / Interacting /
+// objectInspectorProceduralKind）在 state/ObjectMediaStore.ets，本控制器只读写该 store，不新建可观察字段；
+// 逐帧/草稿字段（纹理与环纹理三量、旋转/缩放采样、渲染代际/挂起/播放中标志、一次性渲染防抖定时器）
+// 留本控制器普通字段，不入被观察 store，避免每帧触发刷新。
 //
-// 依赖注入（§15.7 规则 1/3/4、§13.1 规则 6）：
-//   - MediaPort：纹理解码（decodeLocalImage/releaseDecodedImage 共用）、模型光栅化结果的
-//     原始 RGBA → 像素图（createPixelMapFromRgba）、PNG 回退读回（readPixelMapPixels）——本类
-//     不 import fileIo/image 的设备能力调用（image 仅用于 PixelMap 类型，与 MediaPort 同源）；
-//   - DetailModelRenderClient：既有 worker 客户端（§15.11：经既有 worker），与 StartupBridge
-//     引用 AudioEngine 同例；
-//   - ObjectMediaStore / ObjectDetailStore / InfoWindowStore：以实例引用持有；
-//   - ObjectModelRendererHostHooks：AppStorage 发布、UI 动画（getUIContext().animateTo）、
-//     媒体管线保留字段（procedural 去重键/粒子、媒体解码代际）回注。
+// 依赖：ObjectModelMediaPort 封装纹理解码 / RGBA→像素图 / PNG 回退读回，本类不 import fileIo/image 的
+// 设备能力调用（image 仅用于 PixelMap 类型）；DetailModelRenderClient 为既有 worker 客户端；
+// ObjectMediaStore / ObjectDetailStore / InfoWindowStore 以实例引用持有；ObjectModelRendererHostHooks
+// 回注 AppStorage 发布、UI 动画（getUIContext().animateTo）与媒体管线保留字段。
 import hilog from '@ohos.hilog'
 import { image } from '@kit.ImageKit'
 import { ObjectMediaStore } from '../state/ObjectMediaStore'
@@ -32,13 +24,12 @@ import { decodeLocalImage, releaseDecodedImage } from '../common/media/ImageDeco
 import { describeDecodeError } from '../common/derive/labels'
 import { touchScreenX, touchScreenY } from '../common/derive/geometry'
 
-// 宿主 → 控制器回注（§13.1 规则 6）：
+// 宿主 → 控制器回注：
 //   - publishModelView：AppStorage.setOrCreate('stellariumObjectModelView', json)（UI 全局观察通道，
 //     QAbility 与 CLI 侧读取）；
 //   - animateOverlay：getUIContext().animateTo(...)，沉浸叠层的淡入/淡出动画（UI）；
 //   - mediaDecodeGeneration / proceduralParticles / resetProcedural：媒体管线保留字段
-//     （§2.7.1「逐帧/媒体管线」——objectInspectorProceduralKey/Particles、objectInspectorMediaDecodeGeneration），
-//     由宿主 refreshObjectInspectorMedia 持有，经 hooks 只读/重置。
+//     （objectInspectorProceduralKey/Particles、objectInspectorMediaDecodeGeneration），经 hooks 只读/重置。
 export interface ObjectModelRendererHostHooks {
   publishModelView(json: string): void
   animateOverlay(open: boolean, body: () => void, onFinish: () => void): void
@@ -78,7 +69,7 @@ export class ObjectModelRenderer {
   private objectInspectorModelRenderHighQuality: boolean = false
   // 一次性防抖定时器（requestObjectInspectorModelRender 按需挂起，18ms 后自清；非周期轮询）。
   private objectInspectorModelRenderTimer: number = 0
-  // 前后台标志（DetailModelRenderClient.setSuspended 的入参来源，替代宿主 applicationInForeground）。
+  // 前后台标志（DetailModelRenderClient.setSuspended 的入参来源）。
   private foreground: boolean = true
 
   constructor(
@@ -95,14 +86,14 @@ export class ObjectModelRenderer {
     this.hooks = hooks
   }
 
-  // ── 宿主生命周期收口（§15.7 规则 3）──
+  // ── 宿主生命周期收口 ──
   // 本控制器只持一个一次性防抖 setTimeout：requestObjectInspectorModelRender 挂起、触发即自清，
   // 或在 clear()/高画质请求时被 clearTimeout。stop() 清除在途防抖（宿主 aboutToDisappear 收口）。
   stop(): void {
     this.cancelRenderTimer()
   }
 
-  // 应用前后台切换：更新标志并挂起/恢复 worker 看门狗（等价宿主原 setSuspended(!foreground)）。
+  // 应用前后台切换：更新标志并挂起/恢复 worker 看门狗（setSuspended(!foreground)）。
   setForeground(foreground: boolean): void {
     this.foreground = foreground
     this.objectInspectorModelRenderClient?.setSuspended(!foreground)
@@ -122,7 +113,7 @@ export class ObjectModelRenderer {
       this.objectInspectorModelTexturePixels, this.objectInspectorModelTextureWidth, this.objectInspectorModelTextureHeight)
   }
 
-  // 新选择/media 变更时重置视角与双指采样（原宿主 refreshObjectInspectorMedia 内联两行的等价封装）。
+  // 新选择/media 变更时重置视角与双指采样。
   resetRotationForNewMedia(): void {
     this.objectInspectorModelRotation = this.mediaStore.defaultObjectInspectorModelRotation()
     this.objectInspectorModelLastPinchDistance = 0
@@ -135,14 +126,12 @@ export class ObjectModelRenderer {
     }
   }
 
-  // 选中身份（渲染/纹理提交的代际校验键），与宿主 refreshObjectInspectorMedia 同一拼接口径。
+  // 选中身份（渲染/纹理提交的代际校验键）。
   private selectionKey(): string {
     return this.detailStore.selectedName + '\n' + this.detailStore.selectedEnglishName + '\n' + this.detailStore.selectedCatalogId
   }
 
-  // 原宿主 clearObjectInspectorModelRenderer，函数体逐字搬入。
-  // 差异仅：this.objectMediaStore.* → this.mediaStore.*；AppStorage 发布 → hooks.publishModelView；
-  // 宿主 procedural 保留字段重置 → hooks.resetProcedural。
+  // 清空模型渲染器：销毁 worker、复位 store 与纹理、发布未就绪视图。
   clearObjectInspectorModelRenderer(): void {
     this.objectInspectorModelRenderClient?.dispose()
     this.objectInspectorModelRenderClient = undefined
@@ -175,8 +164,7 @@ export class ObjectModelRenderer {
     releaseDecodedImage(this.mediaPort, oldModelPixelMap, 'object-inspector-model')
   }
 
-  // 原宿主 failObjectInspectorModelTexture，函数体逐字搬入。
-  // 差异仅：this.objectInspectorMediaDecodeGeneration → hooks.mediaDecodeGeneration()。
+  // 纹理提交失败：仅在解码代际未过期时置失败状态并记录日志。
   failObjectInspectorModelTexture(mediaGeneration: number, reason: string): void {
     if (mediaGeneration !== this.hooks.mediaDecodeGeneration()) {
       return
@@ -189,8 +177,7 @@ export class ObjectModelRenderer {
       this.mediaStore.objectInspectorMediaPath, reason)
   }
 
-  // 原宿主 commitObjectInspectorModelTexture，函数体逐字搬入。
-  // 差异仅：选中身份 / 解码代际 / store 前缀改写。
+  // 提交 CPU 纹理：校验选中身份 / 路径 / 解码代际后写入纹理并触发渲染。
   commitObjectInspectorModelTexture(
     texture: ArrayBuffer,
     ringTexture: ArrayBuffer | undefined,
@@ -228,8 +215,7 @@ export class ObjectModelRenderer {
     this.requestObjectInspectorModelRender(true)
   }
 
-  // 原宿主 decodeObjectInspectorModelTextureFromPng，函数体逐字搬入。
-  // 差异仅：fileIo/image 解码与读回经 MediaPort；releaseDecodedImage 共享 common/media/ImageDecoder。
+  // 从 PNG 侧车文件解码模型纹理（可选环纹理），解码与读回经 MediaPort。
   decodeObjectInspectorModelTextureFromPng(
     pngFilePath: string,
     ringPngFilePath: string,
@@ -277,7 +263,7 @@ export class ObjectModelRenderer {
     }, { width: 512, height: 256 })
   }
 
-  // 原宿主 refreshObjectInspectorModelLighting，函数体逐字搬入。
+  // 光照变化时触发重渲染（250ms 节流）。
   refreshObjectInspectorModelLighting(): void {
     if (!this.infoStore.infoWinVisible || this.detailStore.bottomCardIndex !== 2) return
     const lighting = this.detailStore.selectedDetailModel?.lighting
@@ -290,13 +276,13 @@ export class ObjectModelRenderer {
     }
   }
 
-  // 原宿主 rotateObjectInspectorModel，函数体逐字搬入。
+  // 按拖动增量旋转模型并请求低画质重渲染。
   rotateObjectInspectorModel(deltaX: number, deltaY: number): void {
     this.objectInspectorModelRotation = modelDrag(this.objectInspectorModelRotation, deltaX, deltaY)
     this.requestObjectInspectorModelRender(false)
   }
 
-  // 原宿主 requestObjectInspectorModelRender，函数体逐字搬入。
+  // 请求渲染：低画质经 18ms 防抖合帧，高画质立即冲刷。
   requestObjectInspectorModelRender(highQuality: boolean): void {
     if (!this.modelReady()) {
       return
@@ -323,7 +309,7 @@ export class ObjectModelRenderer {
     this.flushObjectInspectorModelRender()
   }
 
-  // 原宿主 flushObjectInspectorModelRender，函数体逐字搬入。
+  // 冲刷挂起的渲染请求（合并高画质标志）。
   private flushObjectInspectorModelRender(): void {
     if (this.objectInspectorModelRendering || !this.objectInspectorModelRenderPending ||
       !this.modelReady()) {
@@ -336,10 +322,7 @@ export class ObjectModelRenderer {
     this.renderObjectInspectorModel(renderHighQuality)
   }
 
-  // 原宿主 renderObjectInspectorModel，函数体逐字搬入。
-  // 差异仅：this.objectMediaStore.* → this.mediaStore.*；this.objectDetailStore.* → this.detailStore.*；
-  // AppStorage 发布 → hooks.publishModelView；image.createPixelMap → mediaPort.createPixelMapFromRgba；
-  // 释放共享 common/media/ImageDecoder；proceduralParticles 经 hooks 读取。
+  // 执行一次 worker 光栅化，结果经代际校验后发布像素图并回收旧图。
   private renderObjectInspectorModel(highQuality: boolean): void {
     if (!this.modelReady()) {
       this.objectInspectorModelRendering = false
@@ -445,7 +428,7 @@ export class ObjectModelRenderer {
     })
   }
 
-  // 原宿主 resetObjectInspectorModelView，函数体逐字搬入。
+  // 复位视角与缩放并请求高画质重渲染。
   resetObjectInspectorModelView(): void {
     this.objectInspectorModelRotation = this.mediaStore.defaultObjectInspectorModelRotation()
     this.mediaStore.objectInspectorModelScale = 1
@@ -454,8 +437,7 @@ export class ObjectModelRenderer {
     this.requestObjectInspectorModelRender(true)
   }
 
-  // 原宿主 setObjectInspectorModelImmersive，函数体逐字搬入。
-  // 差异仅：getUIContext().animateTo → hooks.animateOverlay（UI 动画归宿主）。
+  // 切换沉浸叠层（淡入/淡出经 hooks.animateOverlay）。
   setObjectInspectorModelImmersive(open: boolean): void {
     if (open === this.mediaStore.objectInspectorModelImmersive &&
       this.mediaStore.objectInspectorModelOverlayOpacity === (open ? 1 : 0)) return
@@ -478,8 +460,7 @@ export class ObjectModelRenderer {
     }
   }
 
-  // 原宿主 handleObjectInspectorModelTouch，函数体逐字搬入。
-  // 差异仅：this.objectMediaStore.* → this.mediaStore.*。
+  // 处理模型触摸：单指旋转、双指缩放。
   handleObjectInspectorModelTouch(event: TouchEvent): void {
     event.stopPropagation()
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {

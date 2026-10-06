@@ -1,12 +1,12 @@
-import { BookmarkItem } from '../pages/MainWindowModels'
-import { BookmarkStore } from '../state/BookmarkStore'
-import { I18n } from '../pages/I18n'
-import { UI_RADIUS_CONTROL } from '../common/ui/UiTokens'
+import { BookmarkItem } from '../../pages/MainWindowModels'
+import { BookmarkStore } from '../../state/BookmarkStore'
+import { I18n } from '../../pages/I18n'
+import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
 // 书签面板：保存当前视图 + 已存书签列表（点击跳转 / 删除）。
 //
-// 状态经 BookmarkStore 以 @ObjectLink 订阅，宿主只传入回调与当前选中目标名。
-// 列表用 ForEach 内联渲染（不引入参数化 @Builder —— 其参数按值捕获、子树首帧后冻结）。
+// 状态经 `BookmarkStore` 以 `@ObjectLink` 订阅，宿主只传入回调与当前选中目标名。
+// 列表用 ForEach 内联渲染——参数化 `@Builder` 的参数按值捕获、子树首帧后会冻结。
 @Component
 export struct BookmarkPanel {
   @ObjectLink store: BookmarkStore

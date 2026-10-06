@@ -3,13 +3,10 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { SatellitePass } from '../../pages/StellariumTypes'
 
-// 卫星过境段（原宿主 `satellitePassesDetails(tablet)` / `satellitePassCard(pass, tablet)` /
-// `satellitePassTimelineRow(label, time, tablet)` 三个参数化 UI 函数，以及只服务于它们的四个纯文本助手）。
+// 卫星过境段：过境卡片、时间线与加载 / 空 / 未请求态。
 //
-// 助手（`satellitePassTime` / `satellitePassVisibility` / `satellitePassAltitude` / `satellitePassAngle`）
-// 在宿主里只被这一处引用，因此随界面一起搬出，作为**文件作用域函数**保留；过境的 ForEach 与 key 也一并内收，
-// 宿主不再需要接触单条过境的格式化细节。夜视强调色 `nmAccent()` 由宿主以 `@Prop accent` 注入
-// （宿主观测得到夜视状态变化，会重新传入新值）。
+// 以 `@ObjectLink` 观察 `ObjectDetailStore`，`accent`（夜视强调色）等由宿主以 `@Prop` 注入；
+// 单条过境的格式化用文件作用域函数实现，ForEach 的 key 由过境时间派生。
 
 function satellitePassTime(value: string | undefined): string {
   if (value === undefined || value.length === 0) return '--'

@@ -5,20 +5,16 @@ import { LayerViewStore } from '../../state/LayerViewStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { LayerSwitchRow } from './LayerSwitchRow'
 
-// 「图层」面板六个视图标签页（原宿主 private @Builder viewXxxTab，Phase 4f）。
+// 本组件文件：「图层」面板六个视图标签页（天空与恒星 / 太阳系天体 / 深空天体 /
+// 标记与网格 / 地景 / 巡天）。
 //
-// 为什么拆成组件：
-//   - `panelContent()` 的 `layers` 分支要下沉成 LayersPanel 组件，而组件不能调用宿主的
-//     `@Builder`（规则 9：`@BuilderParam` 会在真机上渲染即退出）；
-//   - 原 @Builder 体内直接读 `this.<宿主 @State>`，组件读不到 → 这些字段与读它的 UI 必须
-//     同片搬迁（规则 5）。开关布尔值走既有的 LayerStore，数值/展开态走新增 LayerViewStore。
+// 纯展示值经 @ObjectLink 实时读，一切 native 桥动作经回调回注宿主：
+// 开关布尔值走 LayerStore，数值 / 展开态走 LayerViewStore。
+// 本文件不含 `@BuilderParam`，也不含参数化 `@Builder`（组件若承载宿主 `@Builder`，会渲染即退出）。
 //
-// 本文件不含 `@BuilderParam`，不含参数化 `@Builder`；纯展示值经 @ObjectLink 实时读，
-// 一切 native 桥动作经回调回注宿主（规则 6）。视觉逐字保留，未改字号 / 间距 / 圆角 / 动画。
-//
-// 第七个标签页 `viewSkyCultureTab`（819 行、约 70 个 skyCulture* 设置字段）另行切片。
+// 第七个标签页「天文化」由独立组件另行承载。
 
-// 天空与恒星（原 `viewSkyTab`）。
+// 天空与恒星。
 @Component
 export struct LayerSkyTab {
   @ObjectLink layerStore: LayerStore
@@ -147,7 +143,7 @@ export struct LayerSkyTab {
   }
 }
 
-// 太阳系天体（原 `viewSSOTab`）。
+// 太阳系天体。
 @Component
 export struct LayerSsoTab {
   @ObjectLink layerStore: LayerStore
@@ -335,7 +331,7 @@ export struct LayerSsoTab {
   }
 }
 
-// 深空天体（原 `viewDSOTab`）。
+// 深空天体。
 @Component
 export struct LayerDsoTab {
   @ObjectLink layerStore: LayerStore
@@ -352,7 +348,7 @@ export struct LayerDsoTab {
   }
 }
 
-// 标记与网格（原 `viewMarkingsTab`）。
+// 标记与网格。
 @Component
 export struct LayerMarkingsTab {
   @ObjectLink layerStore: LayerStore
@@ -513,7 +509,7 @@ export struct LayerMarkingsTab {
   }
 }
 
-// 地景（原 `viewLandscapeTab`）。
+// 地景。
 @Component
 export struct LayerLandscapeTab {
   @ObjectLink layerStore: LayerStore
@@ -622,7 +618,7 @@ export struct LayerLandscapeTab {
   }
 }
 
-// 巡天（原 `viewSurveysTab`，离线 AppGallery 构建下不渲染）。
+// 巡天（离线 AppGallery 构建下不渲染）。
 @Component
 export struct LayerSurveysTab {
   @ObjectLink layerStore: LayerStore

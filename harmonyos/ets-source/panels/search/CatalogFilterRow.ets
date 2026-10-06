@@ -2,10 +2,9 @@ import { CatOption } from '../../pages/StellariumTypes'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 分类筛选的一行：图标 + 名称 + 选中对勾。
+// 本组件职责：分类筛选的一行 —— 图标 + 名称 + 选中对勾。
 //
-// 原为带参数的 UI 函数（`catalogFilterRow(cat)`，参数按值捕获、选中态不会实时刷新），
-// 改为子组件用 @Prop 承载 `isSelected`，选中态由宿主的 store 变化实时驱动。
+// 选中态经 @Prop `isSelected` 由宿主 store 变化实时驱动。
 // `.id('search-category-' + cat.code)` 是 uitest 契约锚点，必须保持。
 @Component
 export struct CatalogFilterRow {

@@ -1,9 +1,8 @@
 import { getIcon } from '../../common/ui/ShellIcons'
 import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 
-// 手机端右上快捷区的单个圆形按钮（原宿主参数化 @Builder compactQuickButton）。
+// 手机端右上快捷区的单个圆形按钮。
 //
-// 参数化 @Builder 不能保留（简单类型参数按值捕获，首帧后冻结），故下沉为组件：
 // 图标名、激活态、按下态、文字色由宿主以 @Prop 传入；点按语义（receiveTap 门控 +
 // action）在组件内保留，动作本体由宿主回注。
 

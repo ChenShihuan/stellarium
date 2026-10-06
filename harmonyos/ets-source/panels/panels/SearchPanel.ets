@@ -9,14 +9,12 @@ import { SearchCategoryBrowse } from '../search/SearchCategoryBrowse'
 import { SearchConstellationChips } from '../search/SearchConstellationChips'
 import { SearchCoordinateInput } from '../search/SearchCoordinateInput'
 
-// 搜索面板（原宿主 panelContent() 的 `search` 分支，分支体原样下沉）。
+// 搜索面板，对应 `activePanel === 'search'`。
 //
-// 判定条件 `activePanel === 'search'` 留在宿主。搜索状态在宿主持有的 `searchStore`
-// 上，以 @ObjectLink 实时刷新；其余派生标签、图标键与分类选项由宿主算好后以 @Prop 传入。
-// 定时器（搜索候选防抖）、软键盘避让动画、订阅/点按动作、滚动位置回写与坐标跳转
-// 都回注宿主（组件不修改宿主 @State）。Scroller 以普通成员传入（宿主仍持有同一实例，
-// 其 scrollTo 与 currentOffset 仍要作用于本 Scroll）。
-// 标签用 suggestionSubtitle / categorySubtitle 区分两种不同签名。
+// 搜索状态来自 SearchStore（@ObjectLink）；派生标签、图标键与分类选项由宿主算好后 @Prop 传入。
+// 防抖定时器、软键盘避让动画、订阅/点按动作、滚动位置回写与坐标跳转回调注入宿主。
+// Scroller 以普通成员传入：宿主持有同一实例，其 scrollTo/currentOffset 须作用于本 Scroll。
+// 两个标签回调 suggestionSubtitle / categorySubtitle 签名不同，故分开传。
 
 @Component
 export struct SearchPanel {

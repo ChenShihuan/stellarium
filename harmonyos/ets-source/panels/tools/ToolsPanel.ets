@@ -2,15 +2,14 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { I18n } from '../../pages/I18n'
 import { ToolsStore } from '../../state/ToolsStore'
 
-// 「工具」面板内容（原宿主 @Builder `toolsPanel()`，76 行；panelContent 的 `tools` 分支唯一入口）。
+// 「工具」面板内容。
 //
-// 原 @Builder 无参，不存在"简单类型按值捕获冻结"问题；本片按协议（§13.2 步 3）把面板级 @Builder
-// 一并下沉为组件。导出/导入/截图/会话导出应用/取日志等**副作用**都走原生桥，留在宿主、以回调注入。
+// 导出/导入/截图/会话导出应用/取日志等**副作用**都走原生桥，留在宿主、以回调注入。
 //
-// 输入框沿用 SkyCultureMakerFields 的既有写法：值走 @Prop、编辑走 onChange 回调，避免子组件直接写
+// 输入框值走 @Prop、编辑走 onChange 回调，避免子组件直接写
 // @ObjectLink 的属性。数据（可见性、日志/配置文本、消息）走 @ObjectLink 实时刷新。
 //
-// 视觉逐字保留：标题 15 号 top4、提示 10 号；三张卡片 padding(10) + panelColor 底 + UI_RADIUS_CONTROL；
+// 视觉：标题 15 号 top4、提示 10 号；三张卡片 padding(10) + panelColor 底 + UI_RADIUS_CONTROL；
 // 按钮高 30 / 11 号 / panelColor 底；配置预览高 120、会话预览高 100、日志高 180、等宽 9 号；
 // 外层 Column space 10 / padding 8，Scroll 占满并 layoutWeight(1)。
 @Component

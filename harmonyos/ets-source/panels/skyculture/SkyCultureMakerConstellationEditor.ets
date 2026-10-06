@@ -5,13 +5,11 @@ import { SkyCultureMakerStore } from '../../state/SkyCultureMakerStore'
 import { SkyCultureMakerArtworkEditor } from './SkyCultureMakerArtworkEditor'
 import { SkyCultureMakerField } from './SkyCultureMakerFields'
 
-// 星文化制作器「星座」页（原宿主无参 `@Builder skyCultureMakerConstellationEditor`）。
+// 星文化制作器「星座」页。
 //
-// 选中项写入、增删星座/星线、把当前选中星加入线、以及刷新配图预览都要碰桥或解码，全部经回调
-// 交回宿主（onAdd/onSelect/onUpdate/onRemoveSelected/onRemoveLine/onAddHipLine/onAddSelectedStar）；
-// HIP 输入框只改 store.hipLine（与原来一致，不触发排程）。
-// 配图编辑器直接内嵌 `SkyCultureMakerArtworkEditor`，转发其三枚回调。
-// 视觉逐字保留：Column space 9、星座切条高 34、深色开关行高 24、HIP 输入高 38。
+// 选中项写入、增删星座 / 星线、把当前选中星加入线、刷新配图预览都要碰桥或解码，全部经回调交回宿主；
+// HIP 输入框只改 store.hipLine，不触发排程。配图编辑器内嵌 `SkyCultureMakerArtworkEditor` 并转发回调。
+// Column space 9，星座切条高 34，深色开关行高 24，HIP 输入高 38。
 @Component
 export struct SkyCultureMakerConstellationEditor {
   @ObjectLink store: SkyCultureMakerStore

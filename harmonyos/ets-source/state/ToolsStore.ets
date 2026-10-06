@@ -3,51 +3,37 @@ import { AboutResponse, LogResponse, ExportConfigResponse, ImportConfigResponse 
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → ToolsStore 的 UI 提示注入（§13.1 规则 6 / §14.8 规则 2：store 不触碰 UI）。
-// 角度测量动作（toggleAngleMeasure）回包后经宿主 flashHint 提示（原宿主 this.flashHint 逐字语义）。
-// 2026-10-05（解散 SettingsController）：配置整包动作（保存设置 / 恢复默认 / 导出 / 导入）并入本
-// store —— 保存动作（宿主既有 saveAppSettings）与导出配置的剪贴板落点（PlatformPort 适配器留宿主）
-// 经具名 hook 回注。
+// 宿主 → ToolsStore 的 UI 提示注入：store 不触碰 UI，角度测量动作回包后经宿主 flashHint 提示。
+// 配置整包动作（保存设置 / 恢复默认 / 导出 / 导入）的宿主动作（saveAppSettings 与导出配置的
+// 剪贴板落点）经具名 hook 回注。
 export interface ToolsHostHooks {
   flashHint(text: ResourceStr): void
   saveAppSettings(): void
   copyConfigExportText(text: string, successHint: ResourceStr): void
 }
 
-// 「工具 / 帮助 / 角度测量 / 录制控制」域的状态簇（Phase 3ao）。
+// 「工具 / 帮助 / 角度测量 / 录制控制」域的状态簇：持有帮助 / 工具面板
+// （about*、log*、configExport* / configImport*、screenshotSaving、会话导入导出文本等）、
+// 角度测量工具、天空资料图加载状态提示与录制控制条 UI 状态。
+// 消费方以 @ObjectLink 观察；自持 CommandPort、请求序号 seq，宿主经 ToolsHostHooks 注入 UI 提示。
 //
-// 本片边界：只搬**数据**字段（原宿主 `@State`），不搬任何副作用：
-//   - 帮助 / 工具面板：about*（4）、log*（2）、configExport* / configImport*（4）、
-//     screenshotSaving（1）、sessionExportText / sessionImportText / sessionImportMsg（3），共 14 个；
-//   - 角度测量工具（面板 `angleMeasure`）：angleMeasure*（5）；
-//   - 天空资料图加载状态提示：skyTextureStatus*（3）；
-//   - 录制控制条的 UI 状态：recording / recordingPaused / recordingUiExpanded（3）。
-//   合计 25 个字段。
-//
-// 刻意**不入 store**（§13.1 规则 4 / 高频进度字段以 @Prop 传入）：
-//   - recordCount —— 录制过程中每个可录制命令都写一次，属高频进度读数，保持宿主字段、以 @Prop 传入
-//     `RecordingControlBar`；
-//   - 录制引擎其余字段（recordBuffer / recordMsg / recordings / replay* / video* / screenVideo* /
-//     screenCapture* / scriptControl* 拖拽瞬时量）—— 由桥回调、定时器与触摸每帧写入，留在宿主；
-//   - skyTextureStatusTimer / DelayTimer / Polls —— 定时器标识，非 UI 状态；
-//   - angleMeasureRequestId —— 请求序号随角度测量加载器/动作同片搬入 store 的 `seq`
-//    （§14 B3-1：它由 loadAngleMeasure 与 toggleAngleMeasure 共享，二者必须同一持有者）；
-//   - sessionJson / sessionExportSig / sessionHint —— 与会话续传（`sessionApply` 500ms 后二次比对）及
-//     `ContinuationSection`（astro 域）共享，刻意**不并入 ToolsStore**；2026-10-04 已并入语义更贴的
-//     `SessionToolStore`（PlacePanel 早已 `@ObjectLink sessionToolStore`）。
+// 刻意不入 store：recordCount 是录制过程中每个可录制命令都写一次的高频进度读数，保持宿主字段并以
+// @Prop 传入 RecordingControlBar；录制引擎其余字段（recordBuffer / recordMsg / recordings / replay* /
+// video* / screenVideo* / screenCapture* / scriptControl* 拖拽瞬时量）由桥回调、定时器与触摸每帧写入，
+// 留在宿主；skyTextureStatusTimer / DelayTimer / Polls 为定时器标识，非 UI 状态；
+// sessionJson / sessionExportSig / sessionHint 与 500ms 后二次比对的会话续传共享，归 SessionToolStore。
 //
 // 只放数据与纯计算，不 import UI / NAPI（只额外 import 纯类型 AboutResponse 与纯接口
 // CommandPort，两者都不触碰 libentry.so / @ohos.*）。
 //
-// —— 桥注入约定（§14.1，AB-0 起，供后续 B1/B2 加载器复用） ——
-// 本 store 的加载器（load*）由 store 自持，宿主不再持有同名方法：宿主在 aboutToAppear 调用
-// attachPort(port, onChanged) 注入 CommandPort 与发布回调，store 侧用 ensurePort() 守卫。
-// 请求序号 seq 随加载器搬入 store（禁止宿主 / store 双序号，§14.8 规则 3），本加载器暂未用到。
-// ToolsStore 的消费方均为 @ObjectLink，字段赋值即刷新，故宿主注入的 onChanged 目前为等价的
-// 空实现（§14.1 备注：该域无 publish* 发布点）。
+// —— 桥注入 ——
+// 本 store 的加载器（load*）自持：宿主在 aboutToAppear 调用 attachPort(port, onChanged) 注入
+// CommandPort 与发布回调，store 侧用 ensurePort() 守卫；请求序号 seq 由 store 单一持有
+// （禁止宿主 / store 双序号），本加载器暂未用到。
+// 消费方均为 @ObjectLink，字段赋值即刷新，故宿主注入的 onChanged 为空实现（该域无 publish* 发布点）。
 @Observed
 export class ToolsStore {
-  // —— 帮助 / 工具面板（原宿主注释：关于 / 日志 / 配置导入导出） ——
+  // —— 帮助 / 工具面板（关于 / 日志 / 配置导入导出） ——
   aboutVersion: string = ''
   aboutQt: string = ''
   aboutUserDir: string = ''
@@ -80,13 +66,12 @@ export class ToolsStore {
   recordingPaused: boolean = false
   recordingUiExpanded: boolean = true
 
-  // —— 桥注入（§14.1 AB-0） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 原宿主请求序号搬入 store（§14.8 规则 3）。§14 B3-1：angleMeasureRequestId 原与宿主动作
-  // toggleAngleMeasure 共享，现加载器与动作同片搬入，共用本 `seq`（单一持有者，宿主零副本）。
+  // 请求序号 seq 由本 store 单一持有：loadAngleMeasure 与 toggleAngleMeasure 共用它作废在途回包。
   private seq: number = 0
   private onChanged: (() => void) | null = null
-  // 宿主 UI 提示注入（§14 B3-1 toggleAngleMeasure）。
+  // 宿主 UI 提示注入（toggleAngleMeasure 回包提示）。
   private hooks: ToolsHostHooks | null = null
 
   // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
@@ -110,7 +95,7 @@ export class ToolsStore {
     }
   }
 
-  // 帮助面板「关于」：桥查询版本 / Qt 版本 / 用户目录 / 配置文件（原宿主 loadAboutInfo）。
+  // 帮助面板「关于」：桥查询版本 / Qt 版本 / 用户目录 / 配置文件。
   loadAboutInfo(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -126,8 +111,7 @@ export class ToolsStore {
     })
   }
 
-  // 帮助面板「日志」：桥拉取最近日志文本并置为可见（原宿主 loadLog，函数体逐字搬入；
-  // 仅 this.callNativeWhenReady → this.port.requestWhenReady、this.tools.<f> → this.<f>）。
+  // 帮助面板「日志」：桥拉取最近日志文本并置为可见。
   loadLog(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -141,9 +125,8 @@ export class ToolsStore {
     })
   }
 
-  // 角度测量开关状态（原宿主 loadAngleMeasure，§14 B3-1 自 ToolsStore 同片搬入；函数体逐字）。
-  // 差异仅：this.callNativeWhenReady → port.requestWhenReady、this.tools.<f> → this.<f>、
-  // this.angleMeasureRequestId → this.seq（与 toggleAngleMeasure 共用同一序号）。
+  // 角度测量开关状态：拉取 enabled / hasStart / hasEnd / 角度文本；
+  // 回包按 seq 作废在途请求（与 toggleAngleMeasure 共用）。
   loadAngleMeasure(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -160,9 +143,7 @@ export class ToolsStore {
     })
   }
 
-  // 切换角度测量（原宿主 toggleAngleMeasure，§14 B3-1 与 loadAngleMeasure 同片搬入；函数体逐字）。
-  // 差异仅：this.callInteractive → port.requestInteractive、this.tools.<f> → this.<f>、
-  // this.angleMeasureRequestId → this.seq、this.flashHint → hooks.flashHint（store 不触碰 UI）。
+  // 切换角度测量：乐观写入后按回包确认或回滚（store 不触碰 UI，提示经 hooks.flashHint）。
   toggleAngleMeasure(targetEnabled?: boolean): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -212,12 +193,8 @@ export class ToolsStore {
   }
 
   // ==== 配置整包（保存设置 / 恢复默认 / 导出 / 导入）====
-  // 2026-10-05 解散 capability/SettingsController.ets：四法按「读本域 store 字段 → 并入该 store 方法」
-  // 下沉（原 SettingsController.saveAllCoreSettings / restoreCoreDefaults / exportConfig / importConfig），
-  // 函数体逐字搬入；差异仅 this.port.request* → port.request*、this.hooks.* → hooks.*、
-  // this.tools.<f> → this.<f>。
 
-  // 保存全部核心设置（原 SettingsController.saveAllCoreSettings）：宿主持久化动作经 hooks.saveAppSettings。
+  // 保存全部核心设置：宿主持久化动作经 hooks.saveAppSettings。
   saveAllCoreSettings(): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -230,7 +207,7 @@ export class ToolsStore {
     })
   }
 
-  // 恢复默认设置（原 SettingsController.restoreCoreDefaults）。
+  // 恢复默认设置。
   restoreCoreDefaults(): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -246,7 +223,7 @@ export class ToolsStore {
     })
   }
 
-  // 导出配置（原 SettingsController.exportConfig）：导出文本落本 store，剪贴板经 hooks（适配器留宿主）。
+  // 导出配置：导出文本落本 store，剪贴板经 hooks（适配器留宿主）。
   exportConfig(): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -265,7 +242,7 @@ export class ToolsStore {
     })
   }
 
-  // 导入配置（原 SettingsController.importConfig）。
+  // 导入配置。
   importConfig(): void {
     const hooks = this.hooks
     const port = this.ensurePort()

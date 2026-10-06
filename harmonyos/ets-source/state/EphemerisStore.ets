@@ -1,30 +1,23 @@
-// DE 行星历表（JPL 数值星历）配置状态（原宿主 @State 的 "ephemeris" 域字段，Phase 4m）。
+// DE 行星历表（JPL 数值星历）配置域状态 store：持有「设置 > 主设置」的 DE 内核开关
+// （ephemerisDe430/431/440/441Available / Active）与 AstroPanel 星历表的起始日期
+// （ephemerisStartYear / Month / Day）。
 //
-// 为何独立成 store（不并入 AstroStore）：
-//   - AstroStore 里已有一族**同名前缀但语义完全不同**的字段 ——
-//     ephemerisData / ephemerisName / ephemerisMeta / ephemerisError / ephemerisDays /
-//     ephemerisStepHours / ephemerisStartOffsetDays / ephemerisMode / ephemerisPrimary /
-//     ephemerisSecondary / ephemerisLoading，那是 AstroPanel「星历表」自身的数据。
-//   - 本 store 的 ephemerisDe4xxAvailable / Active 是「设置 > 主设置」里的 DE 内核开关，
-//     ephemerisStartYear/Month/Day 是 AstroPanel 星历表的起始日期（经 ephemerisStartOptionLabel /
-//     chooseEphemerisStartDate / resolveEphemerisStartJD 回调读写）。并入 AstroStore 会造成
-//     前缀语义混淆与字段名冲突，故独立。
+// 消费方：SettingsPanel 以 @ObjectLink 读 8 个 DE 开关；AstroPanel 经宿主回调读起始日期。
 //
-// 消费方：SettingsPanel（@ObjectLink，读 8 个 DE 开关）、AstroPanel（经宿主回调读起始日期）。
-// 刻意留在宿主（非本 store 状态）：请求序号、load / toggle / picker 等方法与 pickedDate；
-// dsoTotalCount / dsoGalaxies / dsoClusters / dsoNebulae 亦留在宿主（见本次切片报告：
-// 零读取、loadDSOCounts 未被调用，无面板消费）。
+// 为何独立成 store（不并入 AstroStore）：AstroStore 里已有一族同名前缀但语义不同的字段
+// （ephemerisData / Name / Meta / Error / Days / StepHours / StartOffsetDays / Mode /
+// Primary / Secondary / Loading），那是 AstroPanel「星历表」自身的展示数据；本 store 的
+// 前缀字段是设置项与起始日期，并入会造成前缀语义混淆与字段名冲突，故独立。
 //
-// 约束：所有更新必须是"字段整体赋值"。改造前已普查确认无
-// `this.ephemerisDe4xx.push|sort` 或 `this.ephemerisDe4xx.<prop> =` 之类的原地变更。
+// 本 store 自持 CommandPort 与 EphemerisHostHooks；桥动作 setEphemerisEnabled 在此，
+// UI 提示经 hooks 回注。
 //
-// 2026-10-05（解散 capability/SettingsController.ets）：DE 内核开关动作 setEphemerisEnabled 按
-// 「写本域 store 字段 → 并入该 store 方法」下沉；桥经 CommandPort，UI 提示经 EphemerisHostHooks 回注。
+// 约束：所有更新必须是"字段整体赋值"，不得对 ephemerisDe4xx 做 push / sort / 属性原地赋值。
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → EphemerisStore 回注（§13.1 规则 6 / §15.7 规则 4）。
+// 宿主 → EphemerisStore 回注（store 不触碰 UI 提示，经 hooks 回注）。
 export interface EphemerisHostHooks {
   flashHint(text: ResourceStr): void
 }
@@ -43,7 +36,7 @@ export class EphemerisStore {
   ephemerisStartMonth: number = new Date().getMonth() + 1
   ephemerisStartDay: number = new Date().getDate()
 
-  // —— 桥 / 宿主回注（§14.1 AB-0；2026-10-05 随 DE 开关动作并入） ——
+  // —— 桥 / 宿主回注 ——
   private port: CommandPort | null = null
   private hooks: EphemerisHostHooks | null = null
 
@@ -59,8 +52,7 @@ export class EphemerisStore {
     return this.port
   }
 
-  // DE 内核启用开关（原 SettingsController.setEphemerisEnabled，函数体逐字搬入；差异仅
-  // this.ephemerisStore.<f> → this.<f>、提示经 hooks.flashHint、桥经 port）。
+  // DE 内核启用开关：未安装的星历不允许启用；桥经 CommandPort，UI 提示经 hooks.flashHint 回注。
   setEphemerisEnabled(key: string, available: boolean, enabled: boolean): void {
     const port = this.ensurePort()
     const hooks = this.hooks
@@ -80,8 +72,7 @@ export class EphemerisStore {
     })
   }
 
-  // 星历表起始日期选项标签（原宿主 ephemerisStartOptionLabel，§14 A2-3 逐字搬入）。
-  // 读本 store 的 ephemerisStartYear/Month/Day，按 §14.3「读本域 store 字段 → 并入该 store 方法」。
+  // 星历表起始日期选项标签：读本 store 的起始日期字段，负偏移显示 YYYY-MM-DD、0 显示"当前"、正偏移显示 +N 天。
   ephemerisStartOptionLabel(offsetDays: number): string {
     if (offsetDays < 0) {
       return this.ephemerisStartYear.toString() + '-' + this.ephemerisStartMonth.toString().padStart(2, '0') + '-' + this.ephemerisStartDay.toString().padStart(2, '0')

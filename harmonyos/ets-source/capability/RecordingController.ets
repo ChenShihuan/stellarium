@@ -1,18 +1,15 @@
-// 录制 / 回放 / 录屏控制器（PLAN §15.3 P1-2 / §15.11 M1-B 子组②）。
+// 录制 / 回放 / 录屏控制器。
 //
-// 原宿主 MainWindowNativeNode 的录制/回放状态机与系统录屏方法整体下沉。职责划分（§15.9）：
-//   - 状态（recordings / video* / screenVideo* / replaying / replayPaused / replayRate…）已在
-//     state/ScriptStore.ets，本控制器**只搬行为与定时器**，不重复搬状态；
-//   - 追加型录制缓冲 recordBuffer 属 §2.7.1 保留字段（§15.7 规则 6），**不搬入本类/store**，
-//     经 RecordingHostHooks 读写；
-//   - 本类自持 replayTimer / recordViewCheckpointTimer，由宿主生命周期 stop() 收口。
+// 负责脚本录制与回放状态机、录制视图检查点，以及视频帧序列与系统屏幕录制（MP4）。
+// 状态（recordings / video* / screenVideo* / replaying / replayPaused / replayRate…）在
+// state/ScriptStore.ets，本控制器只管理行为与定时器，不重复保存状态；追加型录制缓冲 recordBuffer
+// 属保留字段，经 RecordingHostHooks 读写；本类自持 replayTimer / recordViewCheckpointTimer，
+// 由宿主生命周期 stop() 收口。
 //
-// 依赖注入（§15.7 规则 1/3/4、§13.1 规则 6）：
-//   - CommandPort：saveRecording / loadRecording / getSessionState / startVideoRecording…；
-//   - MediaPort：系统录屏（fileIo / display / media / photoAccessHelper）由宿主适配器实现，
-//     本类不 import 这些设备能力模块；
-//   - ScriptStore / ToolsStore：以实例引用持有；
-//   - RecordingHostHooks：UI 提示、会话忙判定、面板动作、脚本速率回退、recordBuffer 读写。
+// 依赖：CommandPort（saveRecording / loadRecording / getSessionState / startVideoRecording…）；
+// ScreenCapturePort 封装系统录屏（fileIo / display / media / photoAccessHelper），本类不 import 这些
+// 设备能力模块；ScriptStore / ToolsStore 以实例引用持有；RecordingHostHooks 回注 UI 提示、会话忙判定、
+// 面板动作、脚本速率回退、recordBuffer 读写。
 import hilog from '@ohos.hilog'
 import { I18n } from '../pages/I18n'
 import { ScriptStore } from '../state/ScriptStore'
@@ -23,18 +20,18 @@ import { StellariumBridgeResponse, SessionSnapshot } from '../pages/StellariumTy
 import { RecordCmd, RecordingDetailResponse } from '../pages/MainWindowModels'
 import { isRecordable } from '../common/derive/skycult'
 
-// 宿主 → 控制器回注（§13.1 规则 6）：
-//   - recordBuffer 属 §2.7.1 保留字段，仍留宿主 @State，经长度/快照/追加/清空四个 hook 读写；
+// 宿主 → 控制器回注：
+//   - recordBuffer 属保留字段，仍留宿主 @State，经长度/快照/追加/清空四个 hook 读写；
 //   - UI 提示 / 面板动作 / 脚本速率回退 / 会话忙判定均不触碰 NAPI 之外的宿主私有逻辑。
 export interface RecordingHostHooks {
   flashHint(text: ResourceStr): void
-  // 原宿主 scriptStore.scriptSessionActive(tools.recording, guideStore.guideState.active)。
+  // 会话忙判定（录制 / 引导 / 回放任一活动）。
   sessionBusy(): boolean
-  // 原宿主 startRecording：panelVisible=false + infoWindowStore.infoWinVisible=false。
+  // 开始录制时隐藏面板与信息窗。
   hidePanelAndInfo(): void
-  // 原宿主 stopRecording：setPanel('scripts')。
+  // 停止录制后打开脚本面板。
   openScriptsPanel(): void
-  // 原宿主 changePlaybackRate 在非回放时的回退：changeScriptRate(direction)。
+  // 非回放时切换脚本速率。
   changeScriptRate(direction: number): void
   recordBufferLength(): number
   recordBufferSnapshot(): Array<RecordCmd>
@@ -79,7 +76,7 @@ export class RecordingController {
     this.hooks = hooks
   }
 
-  // ── 生命周期收口（§15.7 规则 3：宿主 aboutToDisappear 调用）──
+  // ── 生命周期收口（宿主 aboutToDisappear 调用）──
   stop(): void {
     this.cancelRecordingViewCheckpoint()
     if (this.scriptStore.replaying) {
@@ -135,7 +132,7 @@ export class RecordingController {
     }, delayMs) as number
   }
 
-  // ===== 脚本录制 / 回放（#39）=====
+  // ===== 脚本录制 / 回放 =====
   startRecording(): void {
     if (this.hooks.sessionBusy()) {
       this.hooks.flashHint('脚本或回放进行中，结束后再开始录制')

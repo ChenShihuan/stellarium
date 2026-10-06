@@ -1,11 +1,11 @@
 import { curves } from '@kit.ArkUI'
-import { ChipItem } from '../pages/StellariumTypes'
-import { UI_RADIUS_PILL } from '../common/ui/UiTokens'
+import { ChipItem } from '../../pages/StellariumTypes'
+import { UI_RADIUS_PILL } from './UiTokens'
 
-// 快捷 chips 行（原参数化 @Builder quickChips(items) 的替代，5 处调用共用）。
+// 快捷 chips 行，多处调用共用。
 //
-// 参数化 @Builder 的数组参数按值捕获、子树首帧后冻结；改为组件后由 @Prop 承载 items，
-// 点击经 onChip 回调交回宿主（宿主决定是 handleChip 还是其它动作）。
+// items 经 `@Prop` 承载（参数化 `@Builder` 的数组参数会按值捕获、子树首帧后冻结）；
+// 点击经 `onChip` 回调交回宿主决定处理方式。
 @Component
 export struct QuickChipRow {
   @Prop items: ChipItem[]

@@ -2,11 +2,9 @@ import { ASTRONOMY_GUIDES, AstronomyGuide } from '../../common/derive/AstronomyG
 import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 脚本面板顶部的天文导览库（原宿主无参 @Builder guideLibrary）。
+// 脚本面板顶部的天文导览库。
 //
 // 夜色配色由宿主以 @Prop 传入；启动某条导览回注 executeGuideRequest。
-// 原 @Builder 的四个并列根节点（标题/说明/导览列表/遗留提示）收进一个
-// Column({ space: 10 }) —— 与原调用点外层容器的 space 一致（§13.1 规则 7）。
 
 @Component
 export struct GuideLibrary {

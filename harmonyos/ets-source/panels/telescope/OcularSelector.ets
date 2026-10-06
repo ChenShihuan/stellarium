@@ -3,16 +3,15 @@ import { OcularInstrumentItem } from '../../pages/MainWindowModels'
 import { TelescopeStore } from '../../state/TelescopeStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 「目镜（Oculars）」面板的设备选择行（原宿主参数化 `@Builder ocularSelector(kind, label)`，约 45 行）。
+// 「目镜（Oculars）」面板的设备选择行。
 //
-// 为什么必须改成组件（§13.1 规则 3）：原 @Builder 用简单类型形参 kind/label，参数按值捕获，
-// 子树首帧后冻结 —— 换目镜/望远镜/镜头/CCD 后选中态与摘要不再刷新。
+// @Prop 驱动选中态，换目镜/望远镜/镜头/CCD 后选中态与摘要实时刷新。
 //
-// 迁移时把原生桥分派移出组件：`selectOcularInstrument(kind, index)` 经 onSelect 回调由宿主执行；
+// 原生桥分派 `selectOcularInstrument(kind, index)` 经 onSelect 回调由宿主执行；
 // 列表查表与选中判断（ocularInstrumentItems / ocularInstrumentIndex / ocularInstrumentSummary /
-// ocularSelInfo）是纯计算，随状态一起下沉到 TelescopeStore，组件经 @ObjectLink 实时读取。
+// ocularSelInfo）是纯计算，随状态在 TelescopeStore，组件经 @ObjectLink 实时读取。
 //
-// 视觉逐字保留：标题 12 号 subColor + 计数 10 号 subColor / 空态 11 号高 42 / 横向 Scroll 高 52 /
+// 视觉：标题 12 号 subColor + 计数 10 号 subColor / 空态 11 号高 42 / 横向 Scroll 高 52 /
 // 按钮高 48（minWidth 116、maxWidth 180）/ 选中 #FFFFFF 与 #D8EEFF。
 @Component
 export struct OcularSelector {

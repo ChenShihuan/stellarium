@@ -1,8 +1,8 @@
 // 时间轮（转轴）域状态 + 纯取值计算。
 //
-// 只在 store 里放"数据 + 纯计算"：日期/字段取值、tick 标签生成与刻度量值；
-// 手势拖动、惯性、过渡、轨道重基准与引擎同步等交互逻辑仍留在宿主，
-// 宿主通过 @State 持有本 store，视图以 @ObjectLink 订阅。
+// 只在 store 里放「数据 + 纯计算」：日期/字段取值、tick 标签生成与刻度量值。
+// 交互（拖动 / 惯性 / 轨道重基准 / 引擎同步）在 TimeWheelController，视图在 TimeWheelScrubber；
+// 宿主以 @State 持有本 store，视图以 @ObjectLink 订阅。
 @Observed
 export class TimeWheelStore {
   timeWheelUnit: string = 'hour'

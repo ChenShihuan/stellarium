@@ -1,14 +1,8 @@
-// 「快捷设置（旧版）」面板（原宿主 panelContent() 的 `settings_quick_legacy` 分支，
-// 分支体原样下沉，Phase 4i）。
+// 「快捷设置（旧版）」面板，对应 `activePanel === 'settings_quick_legacy'`。
 //
-// 判定条件 `activePanel === 'settings_quick_legacy'` 留在宿主；分支体内的 if / ForEach
-// 全部随 UI 下沉。陀螺仪、坐标显示、夜视、望远镜赤道仪、星空文化、视图设置六个 store 走 @ObjectLink
-// （viewSettingsStore 承载 autoZoomResets / verticalClamp / flatHorizon / useMetricUnits，原 4 个 @Prop）；面板读取
-// 的宿主 @State 标量（FOV / 投影 / 语言 / 目录健康）走 @Prop；所有写回
-// 与动作（速度控制、切换投影 / 语言 / 星文化 / 单位、陀螺仪开关、隐私撤销、目录健康查表）
-// 回注宿主（§13.1 规则 6）。
-// 视觉逐字保留：Scroll 撑满（layoutWeight(1)）+ Column({ space: 0 })。
-// 本文件不含 @BuilderParam，不含参数化 @Builder（规则 9）。
+// 陀螺仪/坐标显示/夜视/望远镜赤道仪/星空文化/视图设置六个 store 走 @ObjectLink；
+// FOV/投影/语言/目录健康等标量走 @Prop；速度控制、切换投影/语言/星文化/单位、
+// 陀螺仪开关、隐私撤销、目录健康查表等动作回调注入宿主。
 import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES, PROJECTION_KEYS } from '../../pages/I18n'
 import { CatalogHealthEntry } from '../../pages/MainWindowModels'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
@@ -60,7 +54,6 @@ export struct SettingsQuickLegacyPanel {
   catalogHealthColorOf: (health: CatalogHealthEntry) => string = () => ''
 
   build() {
-      // 快捷设置面板
       Scroll() {
         Column({ space: 0 }) {
           DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: this.gyroSensitivityText, textColor: this.textColor, subColor: this.subColor, onToggleGyroscope: (v: boolean) => { this.onToggleGyroscope(v) }, onRevoke: () => { this.onRevoke() } })
@@ -142,7 +135,6 @@ export struct SettingsQuickLegacyPanel {
             Text(I18n.projectionName(this.currentProjection)).fontSize(11).fontColor(this.textColor).layoutWeight(1)
           }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
 
-          // 投影方式选项（中文标签 + 点击后显示说明）
           Scroll() {
             Row({ space: 6 }) {
               ForEach(PROJECTION_KEYS, (name: string) => {
@@ -156,7 +148,6 @@ export struct SettingsQuickLegacyPanel {
             }.padding({ left: 4, right: 4 })
           }.width('100%').height(32).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
 
-          // 当前投影的功能说明（一句话帮助用户理解）
           Text(I18n.projectionDesc(this.currentProjection))
             .fontSize(10).fontColor('rgba(180,210,235,0.55)')
             .width('100%')

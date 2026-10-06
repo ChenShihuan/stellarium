@@ -1,26 +1,10 @@
-// 对象检查器媒体控制器（PLAN §15.12 D17，STATE-REVIEW §10.2 D17）。
+// 对象检查器媒体控制器：解析选中天体的 detail 媒体请求（行星纹理 / 深空图 / 三维模型 /
+// 程序化示意），预热并提交解码，管理全屏预览开合与重试。
 //
-// 原宿主 MainWindowNativeNode 的媒体解析 / 预热 / 解码提交 / 预览开合 / 重试方法整体下沉，
-// 共 15 个方法 + 11 个私有字段：
-//   - 媒体请求解析：objectInspectorFilePath / refreshObjectInspectorMedia / retryObjectInspectorMedia；
-//   - 预热：start/stopObjectInspectorMediaWarmup + updateObjectInspectorMediaWarmup；
-//   - detail 纹理预热：start/step/stopBodyDetailWarmup；
-//   - 预览开合：open/closeObjectInspectorMediaPreview / retryObjectInspectorMediaPreview /
-//     onObjectInspectorMediaPreviewLoaded / onObjectInspectorMediaPreviewError；
-//   - 解码清理：clearObjectInspectorDecodedImage。
-//
-// 职责边界（§15.7 规则 1/2）：
-//   - 可观测状态（objectInspectorMedia* / Model*）留在 state/ObjectMediaStore.ets；
-//     逐帧/草稿字段（解码代际、预热定时器、请求路径、procedural 去重键/粒子）留本控制器普通字段，
-//     不入被观察 store（§13.3 既有结论：逐帧写入入 store 会造成重渲染风暴）；
-//   - 三维模型渲染/纹理提交/触摸在既有 capability/ObjectModelRenderer.ets，本控制器经 hook 持有其实例，
-//     不与其职责重叠；readRawSidecar（fileIo 侧车）已上移到 bridge/MediaPort（宿主具名适配器承载）。
-//
-// 依赖注入（§15.7 规则 3/4、§13.1 规则 6）：
-//   - MediaPort：本机图像解码（decodeLocalImage/releaseDecodedImage 共享）；
-//   - ObjectMediaStore / ObjectDetailStore：以实例引用持有；
-//   - ObjectInspectorMediaHostHooks：UI 上下文/应用上下文派生量（filesDir / pathToUri / 预热状态 /
-//     媒体资源解析 / 准备失败判定）、ObjectModelRenderer 实例、提醒文案与错误描述由宿主注入。
+// 依赖 ObjectMediaStore / ObjectDetailStore（可观测状态）与 ImagePort（本机解码）；
+// ObjectInspectorMediaHostHooks 回注 filesDir / pathToUri / warmupStatus / 资源解析 /
+// 准备失败判定与 ObjectModelRenderer 实例；控制器不 import NAPI/UI，stop() 收口两个预热定时器。
+// 三维模型渲染 / 纹理提交 / 触摸在 ObjectModelRenderer，本控制器经 hook 持有其实例，不与其重叠。
 import hilog from '@ohos.hilog'
 import { image } from '@kit.ImageKit'
 import { I18n } from '../pages/I18n'
@@ -34,7 +18,7 @@ import { objectInspectorPlanetTexturePath, objectInspectorDeepSkyImageName, obje
 import { decodeLocalImage, releaseDecodedImage } from '../common/media/ImageDecoder'
 import { describeDecodeError } from '../common/derive/labels'
 
-// 宿主 → 控制器回注（§13.1 规则 6 / §15.7 规则 4）：
+// 宿主 → 控制器回注：
 //   - filesDir：宿主 stellariumFilesDir()（getUIContext().getHostContext() 派生，控制器不 import UI 上下文）；
 //   - pathToUri：宿主 fileUri.getUriFromPath（CoreFileKit NAPI 收在端口/宿主侧）；
 //   - warmupStatus / resolveDetailMediaAsset / isPreparationFailed：ResourceBootstrap 三个需要应用上下文的
@@ -62,7 +46,7 @@ export class ObjectInspectorMediaController {
   private mediaPort: ImagePort
   private hooks: ObjectInspectorMediaHostHooks
 
-  // ── 草稿/逐帧字段（留控制器，不入被观察 store）──
+  // ── 草稿/逐帧字段（留控制器，不入被观察 store：逐帧写入被观察 store 会造成重渲染风暴）──
   private objectInspectorMediaRequestPath: string = ''
   private objectInspectorMediaResolvedRequestPath: string = ''
   private objectInspectorMediaResolvedPath: string = ''
@@ -87,13 +71,13 @@ export class ObjectInspectorMediaController {
     this.hooks = hooks
   }
 
-  // ── 宿主生命周期收口（§15.7 规则 3）──
+  // ── 宿主生命周期收口 ──
   stop(): void {
     this.stopObjectInspectorMediaWarmup()
     this.stopBodyDetailWarmup()
   }
 
-  // ── ObjectModelRenderer 媒体管线回注（原宿主两字段的只读/重置访问）──
+  // ── ObjectModelRenderer 媒体管线回注（媒体解码代际与程序化粒子的只读/复位）──
   mediaDecodeGeneration(): number {
     return this.objectInspectorMediaDecodeGeneration
   }
@@ -107,7 +91,7 @@ export class ObjectInspectorMediaController {
     this.objectInspectorProceduralParticles = []
   }
 
-  // 选中切换/清空时的请求解析状态复位（宿主原内联四行）。
+  // 选中切换/清空时的请求解析状态复位。
   clearResolutionState(): void {
     this.objectInspectorMediaRequestPath = ''
     this.objectInspectorMediaResolvedRequestPath = ''

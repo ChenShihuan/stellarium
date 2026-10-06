@@ -2,13 +2,13 @@ import { curves } from '@kit.ArkUI'
 import { UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 import { getIcon } from '../../common/ui/ShellIcons'
 
-// 面板头部 chrome（原宿主 ``panelHeader()``）：返回按钮 + 标题/副标题 + 关闭按钮。
+// 面板头部 chrome：返回按钮 + 标题/副标题 + 关闭按钮。
 //
 // 标题与副标题文本、返回可用性、路由过渡的透明度/位移都由宿主算好后传入；
-// 返回与关闭动作以回调注入（``handlePanelBackTap`` / ``closePanel(true) + resetPanelIdle``）。
+// 返回与关闭动作以回调注入。
 // 长按/点按后的实时刷新仍由宿主状态驱动（``panelTitle()`` 会随 ``observationTimeText`` /
 // ``timeStore.timeRateText`` 变化重新求值，再经 ``@Prop`` 刷新本组件）。
-// ``panel-back`` / ``panel-close`` 两个静态 id 锚点原样保留。
+// ``panel-back`` / ``panel-close`` 为跨会话静态 id 锚点。
 
 @Component
 export struct PanelHeader {

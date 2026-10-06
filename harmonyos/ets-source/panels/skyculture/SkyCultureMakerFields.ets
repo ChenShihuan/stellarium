@@ -1,12 +1,10 @@
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 星文化制作器的单行文本字段（原宿主参数化 `@Builder skyCultureMakerField`）。
+// 星文化制作器的单行文本字段。
 //
-// 为什么要改成组件（§13.1 规则 3）：原 @Builder 的 value/placeholder 是简单类型形参，按值捕获，
-// 首帧之后整段冻结 —— 撤销 / 重置 / 导入草稿后字段不会刷新。改成组件后由 @Prop 实时刷新。
-// 编辑后通过 onEdited 回调让宿主重新排一次自动保存（原 builder 内联的 scheduleSkyCultureMakerSave）。
-//
-// 视觉逐字保留：标签 10 号、输入框高 38 / 字号 12、圆角 UI_RADIUS_CONTROL、边框 1。
+// 做成组件而非参数化 @Builder：@Builder 的 value/placeholder 是简单类型形参，按值捕获、首帧后整段冻结，
+// 撤销 / 重置 / 导入草稿后字段不会刷新；组件由 @Prop 实时刷新。
+// 编辑后经 onEdited 回调让宿主重新排一次自动保存。标签 10 号，输入框高 38 / 字号 12，圆角 UI_RADIUS_CONTROL。
 @Component
 export struct SkyCultureMakerField {
   @Prop label: ResourceStr
@@ -30,7 +28,7 @@ export struct SkyCultureMakerField {
   }
 }
 
-// 星文化制作器的多行文本字段（原宿主参数化 `@Builder skyCultureMakerLongField`）。同上。
+// 星文化制作器的多行文本字段。同上。
 @Component
 export struct SkyCultureMakerLongField {
   @Prop label: ResourceStr

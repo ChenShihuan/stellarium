@@ -4,17 +4,11 @@ import { SatelliteGroupSelector } from '../satellite/SatelliteGroupSelector'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { SatelliteStore } from '../../state/SatelliteStore'
 
-// 卫星面板（原宿主 panelContent() 的 `satellites` 分支，分支体原样下沉）。
+// 卫星面板，对应 `activePanel === 'satellites'`。
 //
-// 判定条件 `activePanel === 'satellites'` 留在宿主。
-//
-// **接入风格：Store 风格（review §2.7 的第一片从 Prop 风格转过来）**。此前本面板的 28 个
-// 域字段以 @Prop 快照传入、状态留在宿主的 @State 上，任一处变化都会让宿主整棵重渲染；
-// 现在状态下沉 `state/SatelliteStore.ets`，面板以 `@ObjectLink` 实时订阅，刷新粒度收缩到
-// 订阅该 store 的组件。**动作**（文本输入、开关、刷新/导入/删除、分组选择、检索、目录健康
-// 文案）仍是宿主注入的回调，组件自身不修改 store —— store 只承载状态，符合 §2.11 的分类。
-// 两个 Scroller 以普通成员传入（宿主同一实例仍被 publishSatellitePanelState 读取）。
-// 顶层 Scroll + Column({ space: 10 }) 与原分支根一致。
+// 域状态集中在 SatelliteStore（@ObjectLink），刷新粒度收缩到订阅该 store 的组件；
+// 文本输入/开关/刷新/导入/删除/分组选择/检索等动作回调注入宿主，组件不修改 store。
+// 两个 Scroller 以普通成员传入：宿主仍持有同一实例供 publishSatellitePanelState 读取。
 
 @Component
 export struct SatellitesPanel {

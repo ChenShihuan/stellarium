@@ -3,11 +3,10 @@ import { I18n } from '../../pages/I18n'
 import { SkyCultureMakerIssue } from '../../pages/MainWindowModels'
 import { SkyCultureMakerStore } from '../../state/SkyCultureMakerStore'
 
-// 星文化制作器「校验收尾」页（原宿主无参 `@Builder skyCultureMakerValidationPanel`）。
+// 星文化制作器「校验收尾」页。
 //
 // 校验 / 导入 / 导出 / 分享 / 另存为都要碰桥或系统面板，经回调交回宿主；
-// 逐条问题的本地化文案（原 `skyCultureMakerIssueText`）已移入 store.issueText。
-// 视觉逐字保留：Column space 9、错误/警告统计行高 34、按钮高 34/32。
+// 逐条问题的本地化文案由 store.issueText 提供。Column space 9，统计行高 34，按钮高 34/32。
 @Component
 export struct SkyCultureMakerValidationPanel {
   @ObjectLink store: SkyCultureMakerStore

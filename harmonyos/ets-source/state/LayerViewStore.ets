@@ -1,29 +1,20 @@
 import { StellariumBridgeResponse, LandscapeItem } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 「图层」面板（activePanel === 'layers'）六个视图标签页的**数值/展开态设置**簇。
+// 「图层」面板（activePanel === 'layers'）六个视图标签页的数值/展开态设置簇。
 //
-// 本片边界（Phase 4f）：原宿主 31 个 `@State` 字段（天空显示 6、行星轨道 8、轨迹 7、
-// 视场标记 4、地景 6）逐条搬到这里，保留原类型与默认值。宿主以
-// `@State private layerViewStore: LayerViewStore = new LayerViewStore()` 持有，
-// 组件经 @ObjectLink 读到实时值（§13.1 规则 4/5：这些字段只被图层面板的 viewXxxTab 读取，
-// 必须与读它的 UI 同片搬迁）。
+// 持有天空显示、行星轨道、行星轨迹、视场标记尺寸与地景列表等字段，以及图层面板独占的
+// orbitSettingsExpanded / trailSettingsExpanded，被图层面板的 viewXxxTab 组件以 @ObjectLink 观察。
+// 本域加载器（loadLandscapeList / loadOrbitDisplaySettings / loadTrailDisplaySettings）自持
+// CommandPort 与请求序号，无 hooks；开关布尔值归 LayerStore。
 //
-// 不搬的宿主职责：
-//   - native 桥（setSkyDisplaySetting / setLimitMagnitude / setMilkyWayIntensity /
-//     setOrbitDisplaySetting / setTrailDisplaySetting / setFovMarkerSetting /
-//     setLandscape* / setLandscape）仍留宿主，由组件回调触发；
-//   - 纯 UI 展开标记里与宿主其它 UI 共享的不搬（本 store 只收图层面板独占的
-//     orbitSettingsExpanded / trailSettingsExpanded）；
-//   - 开关布尔值仍归 LayerStore（Phase 3ak）。
-//
-// 只放数据，不 import UI / NAPI（只额外 import 纯类型 StellariumBridgeResponse /
+// 只放数据，不 import UI / NAPI（仅额外 import 纯类型 StellariumBridgeResponse /
 // LandscapeItem 与纯接口 CommandPort，均不触碰 libentry.so / @ohos.*）。
 //
-// —— 桥注入约定（§14.1 AB-0 起；§14 B1-2 起本域加载器自持） ——
-// 宿主在 aboutToAppear 用同一个 HostCommandPort 实例 attachPort(port, onChanged) 注入；
-// 请求序号 seq 随加载器搬入 store（§14.8 规则 3）。消费方均为 @ObjectLink，字段赋值即刷新，
-// 本域无 publish* 发布点，故宿主注入的 onChanged 目前为等价空实现，notifyChanged() 为无副作用调用。
+// —— 桥注入 ——
+// 宿主在 aboutToAppear 用同一个 HostCommandPort 实例 attachPort(port, onChanged) 注入。
+// 消费方均为 @ObjectLink，字段赋值即刷新，本域无 publish* 发布点，故宿主注入的 onChanged
+// 目前为等价空实现，notifyChanged() 为无副作用调用。
 @Observed
 export class LayerViewStore {
   // —— 天空与恒星显示 ——
@@ -67,9 +58,9 @@ export class LayerViewStore {
   landscapeTransp: number = 0
   landscapeFadeWithZoom: boolean = true
 
-  // —— 桥注入（§14.1 AB-0 约定；§14 B1-2 起本域加载器自持） ——
+  // —— 桥注入：本域加载器自持 ——
   private port: CommandPort | null = null
-  // 原宿主的请求序号搬入 store（§14.8 规则 3）；本片加载器暂未用到，供后续 B 片复用。
+  // 请求序号：给加载器回包做并发抑制；当前加载器为交互读，预留复用。
   private seq: number = 0
   private onChanged: (() => void) | null = null
 
@@ -88,8 +79,7 @@ export class LayerViewStore {
     }
   }
 
-  // 地景列表加载（原宿主 loadLandscapeList，函数体逐字搬入；仅 this.callNativeWhenReady →
-  // this.port.requestWhenReady、this.layerViewStore.<f> → this.<f>）。
+  // 地景列表加载（重试档 0/100/15）。
   loadLandscapeList(): void {
     const port = this.ensurePort()
     if (port === null) return
@@ -106,7 +96,7 @@ export class LayerViewStore {
     }, 0, 100, 15)
   }
 
-  // 行星轨道显示设置加载（原宿主 loadOrbitDisplaySettings，函数体逐字搬入）。
+  // 行星轨道显示设置加载。
   loadOrbitDisplaySettings(): void {
     const port = this.ensurePort()
     if (port === null) return
@@ -123,7 +113,7 @@ export class LayerViewStore {
     })
   }
 
-  // 行星轨迹显示设置加载（原宿主 loadTrailDisplaySettings，函数体逐字搬入）。
+  // 行星轨迹显示设置加载。
   loadTrailDisplaySettings(): void {
     const port = this.ensurePort()
     if (port === null) return

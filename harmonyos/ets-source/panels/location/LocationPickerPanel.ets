@@ -4,21 +4,20 @@ import { clamp } from '../../common/derive/astro'
 import { LocationStore } from '../../state/LocationStore'
 import { LocationPickerStore } from '../../state/LocationPickerStore'
 import { LocationSearchPanel } from './LocationSearchPanel'
-import { HierColumn } from '../common/HierColumn'
+import { HierColumn } from '../../common/ui/HierColumn'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 「位置」面板的位置选择器（原宿主 @Builder `locationPickerPanel()`，约 153 行）。
+// 本组件职责：「位置」面板的位置选择器。
 //
-// 组件只收两个 store（搜索簇 + 选择器簇）与一批回调：
+// 组件收两个 store（搜索簇 + 选择器簇）与一批回调：
 //   - 选择器状态（picker 坐标/名称/状态、层级选择、地图渲染尺寸、时区、选点方式）与
 //     层级翻译/过滤全部走 @ObjectLink pickerStore（LocationPickerStore），实时刷新；
-//   - 离线搜索框复用 LocationSearchPanel，其 store 仍走 locationStore；
-//   - native 桥 / 定时器（使用设备位置、应用、地图点按、层级落地）留在宿主，以回调注入；
+//   - 离线搜索框复用 LocationSearchPanel，其 store 走 locationStore；
+//   - native 桥 / 定时器（使用设备位置、应用、地图点按、层级落地）由宿主完成，以回调注入；
 //   - 地图尺寸由宿主按布局算好（mapWidth/mapHeight），夜视三色与输入框底色按 @Prop 传入；
-//   - 四列层级列的 Scroller 由本组件自持（columnScrollers），不再由宿主持有。
+//   - 四列层级列的 Scroller 由本组件自持（columnScrollers）。
 //
-// 原参数化 `@Builder locationModeChip(mode, label)` 按 §13.1 规则 3 改写为
-// `LocationModeChip` 子组件（选中态由 selected 传入）。
+// 选点方式 chip（地图 / 层级），选中态由 selected 传入。
 @Component
 export struct LocationModeChip {
   @Prop mode: string
@@ -48,7 +47,7 @@ export struct LocationPickerPanel {
   @ObjectLink pickerStore: LocationPickerStore
   @ObjectLink locationStore: LocationStore
   @Prop observerPlanet: string
-  // §15.12：地图几何随组件（A2-G）——由宿主布局态算出，不再由宿主预算 mapWidth/mapHeight。
+  // 地图几何：是否展开由宿主布局态决定。
   @Prop expandedLayout: boolean
   @Prop skyWidth: number
   @Prop subColor: string
@@ -67,7 +66,7 @@ export struct LocationPickerPanel {
   onSelectCity: (c: string) => void = () => {}
 
   private columnScrollers: Array<Scroller> = [new Scroller(), new Scroller(), new Scroller(), new Scroller()]
-  // §15.12：地图触摸草稿（随组件走，非可观测）。
+  // 地图触摸草稿（非可观测，随组件持有）。
   private mapTouchStartX: number = 0
   private mapTouchStartY: number = 0
   private mapTouchMoved: boolean = false
@@ -77,7 +76,7 @@ export struct LocationPickerPanel {
     return this.columnScrollers[index]
   }
 
-  // §15.12：地图渲染宽度/高度（原宿主 locationMapWidth/locationMapHeight，逐字搬入）。
+  // 地图渲染宽度 / 高度。
   private locationMapWidth(): number {
     if (this.expandedLayout) {
       return 292
@@ -89,7 +88,7 @@ export struct LocationPickerPanel {
     return this.expandedLayout ? 146 : 156
   }
 
-  // §15.12：地图点选 → 反算经纬度并写入 picker（原宿主 updatePickerFromMap，逐字搬入）。
+  // 地图点选 → 反算经纬度并写入 picker。
   private updatePickerFromMap(x: number, y: number): void {
     const width = this.pickerStore.mapRenderWidth
     const height = this.pickerStore.mapRenderHeight
@@ -99,7 +98,7 @@ export struct LocationPickerPanel {
     this.locationStore.locSearchQuery = ''
   }
 
-  // §15.12：地图触摸（原宿主 handleLocationMapTouch，逐字搬入；点选后的 apply 走既有 onApply 回调）。
+  // 地图触摸处理；点选后的 apply 走 onApply 回调。
   private handleLocationMapTouch(event: TouchEvent): boolean {
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
     if (points.length < 1) {

@@ -1,29 +1,10 @@
-// 天文计算（astro）行为控制器（STATE-REVIEW §10.2 D7，PLAN §15 D 轨道 D7）。
-//
-// 原宿主 MainWindowNativeNode 的 astro 计算面板动作逐字下沉：
-//   jumpToRts / jumpToRtsCalendar / jumpToEphemerisRow / jumpToObservabilityDay /
-//   jumpToPhenomenon / jumpToWutTarget / jumpToMoonPhase / jumpToAlmanacSeason /
-//   chooseRtsCalendarStartDate / chooseEphemerisStartDate / chooseGraphStartDate / chooseEclipseStartDate /
-//   openAstroTargetPicker / openGraphTargetPicker / openRtsTargetPicker / openEphemerisTargetPicker /
-//   reloadCurrentGraph / selectAstroFilter / selectAstroGroup / selectAstroTab /
-//   exportCurrentAstroCsv / applyAtmosphere / loadPlanetPositions /
-//   shouldRefreshAstroCalcContext / syncAstroCalcContextTimer / stopAstroCalcContextTimer /
-//   fmtDateTime / fmtClock / fmtEphemerisDate / fmtNum。
-//
-// STATE-REVIEW §10.1 记「32 法」；工作区实测为 29 个行为法 + 1 个 publish*（保留宿主）：
-//   - `publishAstroPanelState` 属 §15.6-4 publish* 保留项 —— 只迁调用方，本体留宿主，经
-//     AstroCalcHostHooks 回注；宿主 publishAstroPanelState 经 requestedAstroTab() /
-//     astroTransitionSerial() 回读本控制器的 astroRequestedTab / astroTransitionId（§10.2 字段）。
-//   - STATE-REVIEW 估的「5 个 chooseXxxStartDate / 3 个 openXxxTargetPicker」实测为 4 / 4
-//     （无 chooseWutStartDate；RTS 的为 chooseRtsCalendarStartDate）。
-//   - 4 个格式化纯函数（fmtDateTime/fmtClock/fmtEphemerisDate/fmtNum）选择留在本控制器
-//     （而非 common/derive/）：AstroStore 已以 AstroHostHooks.fmtDateTime 消费同一实现，
-//     留此可零改动 store 接口（§10.2 许可的二选一，理由记于 CHANGELOG）。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；picker/fileIo 经 MediaPort；
-// DatePickerDialog / animateTo / Scroller / 壳层路由 / 保留宿主方法（publishAstroPanelState /
-// applyAtmosphereResponse / applySelectedObject）经 AstroCalcHostHooks 具名回注（§13.1 规则 6）。
-// 定时器 `/ astroContextTimer` 由控制器自持（syncAstroCalcContextTimer / stopAstroCalcContextTimer）。
+// 天文计算（astro）行为控制器：负责 RTS/星历/高度曲线/可观测日历/食相/月相/季节等
+// 计算面板的日期与行跳转、目标选择器路由、标签切换动画编排、上下文轮询、行星位置刷新、
+// 大气参数写回与当前页 CSV 导出。
+// 依赖 CommandPort、FileExportPort（picker/fileIo）、AstroStore / EphemerisStore / WutStore /
+// SearchStore；DatePicker、animateTo、Scroller、壳层路由与保留宿主方法经 AstroCalcHostHooks 回注。
+// 定时器 astroContextTimer 由控制器自持；纯格式化工具（fmtDateTime/fmtClock/fmtEphemerisDate/fmtNum）
+// 留此以便 AstroStore 零改动复用同一实现。
 import { StellariumBridgeResponse, EphemerisRow, RtsCalendarDay, ObservabilityDay, PhenomenonItem, WutTarget, MoonPhaseItem, SeasonEvent, PlanetPosition, TabItem } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 import { FileExportPort, MediaSaveResult } from '../bridge/MediaPort'
@@ -34,10 +15,9 @@ import { SearchStore } from '../state/SearchStore'
 import { astroTabItemsForGroup, astroGroupForTab } from '../common/derive/astro'
 import { BehaviorHostHooks } from './ControllerHooks'
 
-// 宿主 → 控制器回注（§13.1 规则 6 / §15.7 规则 1）：UI（DatePicker / animateTo / Scroller）、
-// 壳层路由与 §15.6 保留宿主方法。
+// 宿主 → 控制器回注：UI（DatePicker / animateTo / Scroller）、壳层路由与保留宿主方法。
 export interface AstroCalcHostHooks extends BehaviorHostHooks {
-  // §15.6-4 保留的 CLI 发布点（宿主 publishAstroPanelState，写 AppStorage）。
+  // 保留的 CLI 发布点（宿主 publishAstroPanelState，写 AppStorage）。
   publishAstroPanelState(): void
   // 天文面板是否处于前台上下文（applicationInForeground && activePanel==='astro' && panelVisible）。
   astroPanelContextActive(): boolean
@@ -52,11 +32,11 @@ export interface AstroCalcHostHooks extends BehaviorHostHooks {
   animateAstroOut(durationMs: number, onFinish: () => void, action: () => void): void
   // 「指定日期」DatePickerDialog（宿主 getUIContext().showDatePickerDialog；控制器不触碰 UI）。
   showDatePicker(selected: Date, onAccept: (year: number | undefined, month: number | undefined, day: number | undefined) => void): void
-  // WUT 目标跳转的选中放置（宿主保留方法 applySelectedObject，§15.6-6 SelectionService 族）。
+  // WUT 目标跳转的选中放置（宿主保留方法 applySelectedObject，SelectionService 族）。
   applySelectedObject(result: StellariumBridgeResponse, fromRefresh: boolean, placement: string, userReselect: boolean): void
-  // 目标选择器路由到搜索面板（壳层路由 §15.6-4）。
+  // 目标选择器路由到搜索面板（壳层路由，保留宿主）。
   setPanel(panel: string): void
-  // 大气参数回包写入 AtmosphereStore（§13.1 规则 6 保留宿主实现，与 TimeStore 共用）。
+  // 大气参数回包写入 AtmosphereStore（保留宿主实现，与 TimeStore 共用）。
   applyAtmosphereResponse(result: StellariumBridgeResponse): void
 }
 
@@ -68,7 +48,7 @@ export class AstroCalcController {
   private wutStore: WutStore
   private searchStore: SearchStore
   private hooks: AstroCalcHostHooks
-  // 草稿/瞬时字段随控制器（§15.7 规则 2，不入 @Observed store）。
+  // 草稿/瞬时字段随控制器，不入 @Observed store。
   private astroTransitionId: number = 0
   private astroRequestedTab: number = -1
   private planetPositionsRequestSequence: number = 0
@@ -95,7 +75,7 @@ export class AstroCalcController {
     this.hooks = hooks
   }
 
-  // —— 宿主读取的控制器状态（§10.2：astroRequestedTab / astroTransitionId 随控制器） ——
+  // —— 宿主读取的控制器状态：astroRequestedTab / astroTransitionId 随控制器 ——
   requestedAstroTab(): number {
     return this.astroRequestedTab
   }
@@ -116,14 +96,14 @@ export class AstroCalcController {
     return this.ephemerisTargetPickerActive
   }
 
-  // 搜索面板回跳后清除三个目标选择器标志（原宿主仅在命中分支内置单标志，实测同一时刻至多一真）。
+  // 搜索面板回跳后清除三个目标选择器标志（同一时刻至多一真）。
   clearTargetPickerFlags(): void {
     this.graphTargetPickerActive = false
     this.rtsTargetPickerActive = false
     this.ephemerisTargetPickerActive = false
   }
 
-  // 原宿主 jumpToRts()：RTS 事件跳转到对应 JD。
+  // RTS 事件跳转到对应 JD。
   jumpToRts(key: string): void {
     const jd = this.astroStore.rtsData.get(key) ?? '0'
     if (parseFloat(jd) <= 0) {
@@ -135,7 +115,7 @@ export class AstroCalcController {
     })
   }
 
-  // 原宿主 jumpToRtsCalendar()：RTS 日历行跳转（取 transit/rise/set 中首个有效 JD）。
+  // RTS 日历行跳转（取 transit/rise/set 中首个有效 JD）。
   jumpToRtsCalendar(day: RtsCalendarDay): void {
     const jd = day.transitJD ?? day.riseJD ?? day.setJD ?? 0
     if (jd <= 0) return
@@ -144,7 +124,7 @@ export class AstroCalcController {
     })
   }
 
-  // 原宿主 chooseRtsCalendarStartDate()：RTS 日历「指定日期」DatePickerDialog。
+  // RTS 日历「指定日期」DatePickerDialog。
   chooseRtsCalendarStartDate(): void {
     this.hooks.showDatePicker(
       new Date(this.astroStore.rtsCalendarStartYear, this.astroStore.rtsCalendarStartMonth - 1, this.astroStore.rtsCalendarStartDay),
@@ -157,7 +137,7 @@ export class AstroCalcController {
       })
   }
 
-  // 原宿主 chooseEphemerisStartDate()：星历「指定日期」DatePickerDialog。
+  // 星历「指定日期」DatePickerDialog。
   chooseEphemerisStartDate(): void {
     this.hooks.showDatePicker(
       new Date(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth - 1, this.ephemerisStore.ephemerisStartDay),
@@ -170,7 +150,7 @@ export class AstroCalcController {
       })
   }
 
-  // 原宿主 jumpToEphemerisRow()：星历行跳转并重载星历。
+  // 星历行跳转并重载星历。
   jumpToEphemerisRow(row: EphemerisRow): void {
     if (row.jd === undefined || row.jd <= 0) return
     this.port.requestInteractive('setJD', String(row.jd), (r: StellariumBridgeResponse) => {
@@ -181,7 +161,7 @@ export class AstroCalcController {
     })
   }
 
-  // 原宿主 chooseGraphStartDate()：高度曲线「指定日期」DatePickerDialog。
+  // 高度曲线「指定日期」DatePickerDialog。
   chooseGraphStartDate(): void {
     this.hooks.showDatePicker(
       new Date(this.astroStore.graphStartYear, this.astroStore.graphStartMonth - 1, this.astroStore.graphStartDay),
@@ -194,7 +174,7 @@ export class AstroCalcController {
       })
   }
 
-  // 原宿主 reloadCurrentGraph()：按当前图形模式重载对应曲线。
+  // 按当前图形模式重载对应曲线。
   reloadCurrentGraph(): void {
     if (this.astroStore.graphMode === 2) this.astroStore.loadAnnualElevation()
     else if (this.astroStore.graphMode === 3) this.astroStore.loadObservabilityCalendar()
@@ -203,7 +183,7 @@ export class AstroCalcController {
     else this.astroStore.loadAltAzCurve()
   }
 
-  // 原宿主 openGraphTargetPicker()：进入搜索面板选择高度曲线目标。
+  // 进入搜索面板选择高度曲线目标。
   openGraphTargetPicker(): void {
     this.graphTargetPickerActive = true
     this.searchStore.searchText = ''
@@ -212,7 +192,7 @@ export class AstroCalcController {
     this.hooks.setPanel('search')
   }
 
-  // 原宿主 openRtsTargetPicker()：进入搜索面板选择 RTS 目标。
+  // 进入搜索面板选择 RTS 目标。
   openRtsTargetPicker(): void {
     this.rtsTargetPickerActive = true
     this.searchStore.searchText = ''
@@ -221,7 +201,7 @@ export class AstroCalcController {
     this.hooks.setPanel('search')
   }
 
-  // 原宿主 openEphemerisTargetPicker()：进入搜索面板选择星历目标。
+  // 进入搜索面板选择星历目标。
   openEphemerisTargetPicker(): void {
     this.ephemerisTargetPickerActive = true
     this.searchStore.searchText = ''
@@ -230,7 +210,7 @@ export class AstroCalcController {
     this.hooks.setPanel('search')
   }
 
-  // 原宿主 jumpToObservabilityDay()：可观测日历最佳日跳转。
+  // 可观测日历最佳日跳转。
   jumpToObservabilityDay(day: ObservabilityDay): void {
     if (day.bestJD === undefined || day.bestJD <= 0) return
     this.port.requestInteractive('setJD', String(day.bestJD), (r: StellariumBridgeResponse) => {
@@ -238,7 +218,7 @@ export class AstroCalcController {
     })
   }
 
-  // 原宿主 chooseEclipseStartDate()：食相「指定日期」DatePickerDialog。
+  // 食相「指定日期」DatePickerDialog。
   chooseEclipseStartDate(): void {
     this.hooks.showDatePicker(
       new Date(this.astroStore.eclipseStartYear, this.astroStore.eclipseStartMonth - 1, this.astroStore.eclipseStartDay),
@@ -251,7 +231,7 @@ export class AstroCalcController {
       })
   }
 
-  // 原宿主 jumpToPhenomenon()：天象行跳转。
+  // 天象行跳转。
   jumpToPhenomenon(item: PhenomenonItem): void {
     if (item.jd === undefined || item.jd <= 0) return
     this.port.requestInteractive('setJD', String(item.jd), (r: StellariumBridgeResponse) => {
@@ -259,7 +239,7 @@ export class AstroCalcController {
     })
   }
 
-  // 原宿主 jumpToWutTarget()：今晚观测目标行跳转 + 选中并居中。
+  // 今晚观测目标行跳转 + 选中并居中。
   jumpToWutTarget(target: WutTarget): void {
     if (target.jd === undefined || target.jd <= 0 || target.englishName === undefined) return
     const targetName = target.englishName
@@ -277,7 +257,7 @@ export class AstroCalcController {
     })
   }
 
-  // 原宿主 applyAtmosphere()：大气参数写回（回包交给保留宿主实现 applyAtmosphereResponse）。
+  // 大气参数写回（回包交给保留宿主实现 applyAtmosphereResponse）。
   applyAtmosphere(pressure: number, temperature: number, extinction: number): void {
     this.hooks.applyAtmosphereResponse(this.port.request('setAtmosphereParams',
       JSON.stringify({ pressure: pressure, temperature: temperature, extinction: extinction })))
@@ -304,7 +284,7 @@ export class AstroCalcController {
     return v.toFixed(digits) + suffix
   }
 
-  // 原宿主 selectAstroFilter()：今晚观测目标筛选写回 + 重新加载 + CLI 发布。
+  // 今晚观测目标筛选写回 + 重新加载 + CLI 发布。
   selectAstroFilter(key: string, value: string): void {
     if (key === 'period' && ['evening', 'midnight', 'morning', 'night'].includes(value)) {
       if (this.wutStore.wutPeriod === value) return
@@ -323,7 +303,7 @@ export class AstroCalcController {
     this.wutStore.loadWutTargets()
   }
 
-  // 原宿主 selectAstroGroup()：一级分组切换（转对应默认标签）。
+  // 一级分组切换（转对应默认标签）。
   selectAstroGroup(group: number): void {
     if (group < 0 || group > 2) return
     const tabs = astroTabItemsForGroup(group)
@@ -331,7 +311,7 @@ export class AstroCalcController {
     this.selectAstroTab(currentTab !== undefined ? currentTab.id : tabs[0].id)
   }
 
-  // 原宿主 selectAstroTab()：子标签切换（两段 animateTo 时序逐字保留；动画本体归宿主）。
+  // 子标签切换（两段 animateTo 时序保留；动画本体归宿主）。
   selectAstroTab(tab: number): void {
     if (!Number.isInteger(tab) || tab < 0 || tab > 9 || tab === this.astroRequestedTab) return
     if (tab === this.astroStore.astroTab && this.astroRequestedTab < 0) return
@@ -370,7 +350,7 @@ export class AstroCalcController {
     })
   }
 
-  // 原宿主 openAstroTargetPicker()：按当前标签分派到对应目标选择器。
+  // 按当前标签分派到对应目标选择器。
   openAstroTargetPicker(): void {
     if (this.astroStore.astroTab === 2) {
       this.openRtsTargetPicker()
@@ -381,13 +361,13 @@ export class AstroCalcController {
     }
   }
 
-  // 原宿主 jumpToMoonPhase()：月相行跳转。
+  // 月相行跳转。
   jumpToMoonPhase(item: MoonPhaseItem): void {
     if (item.jd === undefined || item.jd <= 0) return
     this.port.requestInteractive('setJD', String(item.jd), () => { this.hooks.refreshState() })
   }
 
-  // 原宿主 jumpToAlmanacSeason()：季节节点行跳转。
+  // 季节节点行跳转。
   jumpToAlmanacSeason(event: SeasonEvent): void {
     if (event.jd === undefined || event.jd <= 0) return
     this.port.requestInteractive('setJD', String(event.jd), (r: StellariumBridgeResponse) => {
@@ -395,12 +375,12 @@ export class AstroCalcController {
     })
   }
 
-  // 原宿主 shouldRefreshAstroCalcContext()：天文面板前台且可见。
+  // 天文面板前台且可见。
   private shouldRefreshAstroCalcContext(): boolean {
     return this.hooks.astroPanelContextActive()
   }
 
-  // 原宿主 stopAstroCalcContextTimer()：停上下文轮询并取消在途请求。
+  // 停上下文轮询并取消在途请求。
   stopAstroCalcContextTimer(): void {
     if (this.astroContextTimer !== 0) {
       clearInterval(this.astroContextTimer)
@@ -409,7 +389,7 @@ export class AstroCalcController {
     this.astroStore.cancelAstroCalcContext()
   }
 
-  // 原宿主 syncAstroCalcContextTimer()：按面板可见性启停 1s 上下文轮询（定时器自持）。
+  // 按面板可见性启停 1s 上下文轮询（定时器自持）。
   syncAstroCalcContextTimer(): void {
     if (!this.shouldRefreshAstroCalcContext()) {
       this.stopAstroCalcContextTimer()
@@ -420,7 +400,7 @@ export class AstroCalcController {
     this.astroContextTimer = setInterval(() => { this.astroStore.loadAstroCalcContext() }, 1000)
   }
 
-  // 原宿主 loadPlanetPositions()：行星位置刷新（请求序号防止旧回包覆盖）。
+  // 行星位置刷新（请求序号防止旧回包覆盖）。
   loadPlanetPositions(): void {
     this.astroStore.updateAstroCalcSnapshot()
     const requestId = ++this.planetPositionsRequestSequence
@@ -455,7 +435,7 @@ export class AstroCalcController {
     })
   }
 
-  // 原宿主 exportCurrentAstroCsv()：当前页 CSV 导出（picker/fileIo 经 MediaPort.saveTextFileAs）。
+  // 当前页 CSV 导出（picker/fileIo 经 MediaPort.saveTextFileAs）。
   async exportCurrentAstroCsv(): Promise<void> {
     this.astroStore.updateAstroCalcSnapshot()
     const exportData = this.astroStore.astroCsvExport(this.wutStore.wutTargets, this.wutStore.wutObservationTime)

@@ -4,12 +4,10 @@ import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { ObjectMediaStore } from '../../state/ObjectMediaStore'
 
-// 天体检查器媒体区的分支组件。
+// 天体检查器媒体区的分支组件：图像卡、提示行、模型块、进度行与示意图。
 //
-// 原为宿主里 179 行的 `tabletInspectorMedia()` **零参 @Builder**，内部是一条八分支 if/else。
-// 分支的**判定条件**留在宿主（读的是 ObjectMediaStore 与少量宿主派生值），
-// 每个分支的**界面**下沉为下面的独立组件：组件用 @ObjectLink 直接观察媒体状态，
-// 少量派生值（图像高度、模型尺寸、文案）由宿主以 @Prop 传入，交互则用回调注入。
+// 判定条件由宿主（`TabletInspectorMediaGroup`）给出，每个分支用 `@ObjectLink`
+// 直接观察 `ObjectMediaStore`；少量派生值由 `@Prop` 传入，交互用回调注入。
 
 // 分支一：已解码出图像（image / constellation）。
 @Component

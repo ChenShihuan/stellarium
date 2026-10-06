@@ -1,32 +1,9 @@
-// 图层 / 视图标签行为控制器（STATE-REVIEW §10.2 D2，PLAN §15 D 轨道 D2；E2 并入显示 / 图层设置行为）。
-//
-// D2 原宿主 10 个方法逐字下沉：
-//   setLayer / applyLayerSwitch / layerTabItems / markingLayerStates / layerPresetStates /
-//   applyLayerStates / clearMarkingLayers / applyLayerPreset / selectViewTab / selectConfigTab。
-// 私有字段 viewTabTransitionId / configTabTransitionId 随控制器（标签切换去重序号，不入 @Observed store）。
-//
-// E2（显示 / 图层设置，16 法）逐字并入本控制器（职责同属「图层 / 显示」域，故不新建控制器）：
-//   setSkyDisplaySetting / setBridgeFlag（二者原为 D2 遗留的 hooks 回注宿主，本片把实现迁入并**移除 hooks**）、
-//   applyStarMagLimit / applyMilkyWayBright / applyTrailColor / setOrbitDisplayFlag /
-//   setOrbitDisplayThickness / setOrbitColorStyle / setTrailDisplayFlag / setTrailDisplayNumber /
-//   setLandscapeFadeWithZoom / changeLandscapeTransparency / selectLandscape / importLandscapeFile /
-//   setScenery3dEnabled / setScenery3dScene（另随 setBridgeFlag 并入 private syncBridgeFlagState）。
-//
-// 职责划分（§15.7 规则 2）：
-//   - LayerViewStore 的地景加载器（loadLandscapeList）与 ScriptStore/PluginStore 的标签页数据加载
-//     直接调用（本体是 store 的自持加载器）；
-//   - 图层开关布尔值仍在 LayerStore、由宿主 refreshState 从引擎回填，控制器不写（故不注入 LayerStore / OverlayStore）；
-//   - viewTab / configTab 与两组过渡量（内容透明度 / 水平偏移）是宿主 @State、组件经 @Prop 消费，
-//     留宿主、经 hooks get/set；
-//   - 标签切换动画（宿主 getUIContext().animateTo）归宿主，经 animateTabIn / animateTabOut 回注。
-//   - E2：星空显示 / 开关设置写 LayerStore（布尔）与 LayerViewStore（数值），地景导入 picker/fileIo 经
-//     MediaPort.importLandscapeDocument；地景详情浮层宿主 @State 经 hooks 回注。
-//   - E4：`setViewLockState` / `toggleViewLock` 自宿主并入（同属图层 / 视图域，写 viewSettingsStore），
-//     并**移除 E2 的 setViewLockState hook**（原 `setBridgeFlag` 的 setViewLock 分支改为控制器内部直调）；
-//     成功回读的 `trackingText`（宿主 @State）经新增 hook `setTrackingText` 回注。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；picker/fileIo 经 MediaPort；跨域回调经
-// LayerHostHooks 具名回注（§13.1 规则 6）。
+// 图层 / 视图标签行为控制器：负责图层开关写回与预设、视图/设置标签切换动画、
+// 星空显示与图层设置写回、地景包导入与详情、三维地景场景切换、视图锁定。
+// 依赖 CommandPort、MediaPort（地景导入）、LayerViewStore / LayerStore / SceneryStore /
+// ObjectDetailStore / ViewSettingsStore / ScriptStore / PluginStore。
+// 图层开关布尔值由宿主 refreshState 从引擎回填，控制器不写；viewTab / configTab 与两组过渡量
+// 是宿主 @State（组件 @Prop 消费），经 hooks get/set；标签切换动画归宿主经 animateTabIn/Out 回注。
 import hilog from '@ohos.hilog'
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse, TabItem } from '../pages/StellariumTypes'
@@ -42,18 +19,18 @@ import { ScriptStore } from '../state/ScriptStore'
 import { PluginStore } from '../state/PluginStore'
 import { BehaviorHostHooks } from './ControllerHooks'
 
-// 宿主 → 控制器回注（§13.1 规则 6）：图层开关分派、持久化、标签切换动画与宿主 @State 读写。
+// 宿主 → 控制器回注：图层开关分派、持久化、标签切换动画与宿主 @State 读写。
 export interface LayerHostHooks extends BehaviorHostHooks {
-  // 视图锁定回读的跟踪状态文案（宿主 @State trackingText，组件 @Prop 消费，E4 下沉 setViewLockState 时回注）。
+  // 视图锁定回读的跟踪状态文案（宿主 @State trackingText，组件 @Prop 消费）。
   setTrackingText(value: string): void
-  // 地景详情浮层宿主 @State（selectLandscape 关闭浮层；组件 @Prop 消费，§15.7 规则 2）。
+  // 地景详情浮层宿主 @State（selectLandscape 关闭浮层；组件 @Prop 消费）。
   setLandscapeDetailOpen(value: boolean): void
-  // 持久化（跨 store / AppStorage：赤道仪开关归 TelescopeStore；夜视归 NightModeStore 的 D16 方法）。
+  // 持久化（跨 store / AppStorage：赤道仪开关归 TelescopeStore；夜视归 NightModeStore）。
   persistEquatorialMount(): void
   persistNightMode(): void
   // 星空文化「时间跟随」定时器收口（宿主保留）。
   syncSkyCultureTimeFollowTimer(): void
-  // 视图标签页宿主 @State（组件 @Prop 消费，控制器经 hooks 读写，§15.7 规则 2）。
+  // 视图标签页宿主 @State（组件 @Prop 消费，控制器经 hooks 读写）。
   viewTab(): number
   setViewTab(value: number): void
   viewTabContentOpacity(): number
@@ -83,7 +60,7 @@ export class LayerController {
   private scriptStore: ScriptStore
   private pluginStore: PluginStore
   private hooks: LayerHostHooks
-  // 标签切换去重序号：草稿字段随控制器走（§15.7 规则 2，不入 @Observed store）。
+  // 标签切换去重序号：草稿字段随控制器走，不入 @Observed store。
   private viewTabTransitionId: number = 0
   private configTabTransitionId: number = 0
 
@@ -111,7 +88,7 @@ export class LayerController {
     this.hooks = hooks
   }
 
-  // 原宿主 setLayer()：桥写单个 action 勾选态，回包后刷新状态；夜视 / 赤道仪开关立即持久化。
+  // 桥写单个 action 勾选态，回包后刷新状态；夜视 / 赤道仪开关立即持久化。
   private setLayer(actionId: string, enabled: boolean): void {
     hilog.info(0x0000, 'StellariumArkUI', 'setLayer send %{public}s|%{public}s', actionId, enabled ? '1' : '0')
     this.port.requestInteractive('setActionChecked', actionId + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
@@ -123,7 +100,7 @@ export class LayerController {
     })
   }
 
-  // 原宿主 applyLayerSwitch()：图层开关的统一写回（与原 @Builder switchRow 的 onChange 分派逐字等价）。
+  // 图层开关的统一写回。
   applyLayerSwitch(actionId: string, cmd: string, value: boolean): void {
     if (cmd.length > 0) {
       if (cmd.indexOf('setSkyDisplay') === 0) {
@@ -137,7 +114,7 @@ export class LayerController {
     this.hooks.flashHint(I18n.t(value ? 'msg_shown' : 'msg_hidden'))
   }
 
-  // 原宿主 layerTabItems()：视图标签页清单（离线 AppGallery 构建隐藏第 7 页）。
+  // 视图标签页清单（离线 AppGallery 构建隐藏第 7 页）。
   layerTabItems(): TabItem[] {
     const tabs: TabItem[] = [
       { label: I18n.t('v0000'), id: 0 },
@@ -180,12 +157,12 @@ export class LayerController {
     })
   }
 
-  // 原宿主 clearMarkingLayers()：清空全部坐标与标记图层。
+  // 清空全部坐标与标记图层。
   clearMarkingLayers(): void {
     this.applyLayerStates(this.markingLayerStates(false), '已清除全部坐标与标记。')
   }
 
-  // 原宿主 applyLayerPreset()：三种预设（纯净 / 观测 / 摄影）的图层组合。
+  // 三种预设（纯净 / 观测 / 摄影）的图层组合。
   applyLayerPreset(preset: string): void {
     let states: Array<LayerPresetState> = this.layerPresetStates(false)
     if (preset === 'clean') {
@@ -226,7 +203,7 @@ export class LayerController {
     this.applyLayerStates(states, preset === 'clean' ? '已应用纯净星空图层。' : (preset === 'observe' ? '已应用观测辅助图层。' : '已应用摄影构图图层。'))
   }
 
-  // 原宿主 selectViewTab()：视图标签切换（两段 animateTo 时序逐字保留；动画本体归宿主）。
+  // 视图标签切换（两段 animateTo 时序保留；动画本体归宿主）。
   selectViewTab(tabId: number): void {
     if (tabId === this.hooks.viewTab()) return
     const direction = tabId > this.hooks.viewTab() ? 1 : -1
@@ -251,7 +228,7 @@ export class LayerController {
     })
   }
 
-  // 原宿主 selectConfigTab()：设置标签切换（同上；第 6/7 页触发脚本 / 插件数据加载）。
+  // 设置标签切换（同上；第 6/7 页触发脚本 / 插件数据加载）。
   selectConfigTab(tabId: number): void {
     if (tabId === this.hooks.configTab()) return
     const direction = tabId > this.hooks.configTab() ? 1 : -1
@@ -282,9 +259,9 @@ export class LayerController {
     })
   }
 
-  // ===== E2：显示 / 图层设置行为（原宿主 16 法逐字下沉）=====
+  // ===== 显示 / 图层设置行为 =====
 
-  // 原宿主 setSkyDisplaySetting()：星空显示设置写回（布尔项写 LayerStore，数值项写 LayerViewStore）。
+  // 星空显示设置写回（布尔项写 LayerStore，数值项写 LayerViewStore）。
   setSkyDisplaySetting(setting: string, value: boolean | number): void {
     if (setting === 'luminanceAdaptation') this.layerStore.luminanceAdaptation = value as boolean
     else if (setting === 'starTwinkle') this.layerStore.starTwinkle = value as boolean
@@ -306,7 +283,7 @@ export class LayerController {
     })
   }
 
-  // 原宿主 setBridgeFlag()：命名桥命令的通用写回（本地 @State 同步 + viewLock 分支）。
+  // 命名桥命令的通用写回（本地 @State 同步 + viewLock 分支）。
   setBridgeFlag(cmd: string, enabled: boolean): void {
     hilog.info(0x0000, 'StellariumArkUI', 'setBridgeFlag send %{public}s|%{public}s', cmd, enabled ? '1' : '0')
     if (cmd === 'setViewLock') {
@@ -321,7 +298,7 @@ export class LayerController {
     })
   }
 
-  // 原宿主 syncBridgeFlagState()：把 cmd 型开关的最新值写回对应的本地 store（随 setBridgeFlag 下沉）。
+  // 把 cmd 型开关的最新值写回对应的本地 store。
   private syncBridgeFlagState(cmd: string, enabled: boolean): void {
     if (cmd === 'setViewLock') { this.viewSettingsStore.viewLock = enabled }
     else if (cmd === 'setVerticalClamp') { this.viewSettingsStore.verticalClamp = enabled }
@@ -331,7 +308,7 @@ export class LayerController {
     else if (cmd === 'setAutoZoomResets') { this.viewSettingsStore.autoZoomResets = enabled }
   }
 
-  // 原宿主 setViewLockState()（E4 并入）：视图锁定（选中判定 + 桥写 + 成功回读 trackingText）。
+  // 视图锁定（选中判定 + 桥写 + 成功回读 trackingText）。
   setViewLockState(enabled: boolean): void {
     if (enabled && !this.objectDetailStore.hasSelectedObject()) {
       this.viewSettingsStore.viewLock = false
@@ -355,24 +332,23 @@ export class LayerController {
     })
   }
 
-  // 原宿主 toggleViewLock()（E4 并入）。
   toggleViewLock(): void {
     this.setViewLockState(!this.viewSettingsStore.viewLock)
   }
 
-  // 原宿主 applyStarMagLimit()：极限星等写 store 并写桥。
+  // 极限星等写 store 并写桥。
   applyStarMagLimit(value: number): void {
     this.layerViewStore.starMagLimit = value
     this.port.requestInteractive('setLimitMagnitude', value.toFixed(1), () => {})
   }
 
-  // 原宿主 applyMilkyWayBright()：银河亮度写 store 并写桥。
+  // 银河亮度写 store 并写桥。
   applyMilkyWayBright(value: number): void {
     this.layerViewStore.milkyWayBright = value
     this.port.requestInteractive('setMilkyWayIntensity', (value / 3).toFixed(2), () => {})
   }
 
-  // 原宿主 setOrbitDisplayFlag()：轨道显示开关写回（回包成功后写 LayerViewStore）。
+  // 轨道显示开关写回（回包成功后写 LayerViewStore）。
   setOrbitDisplayFlag(setting: string, enabled: boolean): void {
     this.port.requestInteractive('setOrbitDisplaySetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
@@ -384,7 +360,7 @@ export class LayerController {
     })
   }
 
-  // 原宿主 setOrbitDisplayThickness()：轨道线宽写回。
+  // 轨道线宽写回。
   setOrbitDisplayThickness(value: number): void {
     const thickness = Math.round(value)
     this.port.requestInteractive('setOrbitDisplaySetting', 'thickness|' + thickness.toString(), (r: StellariumBridgeResponse) => {
@@ -392,7 +368,7 @@ export class LayerController {
     })
   }
 
-  // 原宿主 setOrbitColorStyle()：轨道配色方案写回。
+  // 轨道配色方案写回。
   setOrbitColorStyle(index: number): void {
     const values: string[] = ['one_color', 'groups', 'major_planets', 'major_planets_minor_types']
     const style = values[index] ?? 'one_color'
@@ -401,14 +377,14 @@ export class LayerController {
     })
   }
 
-  // 原宿主 setTrailDisplayFlag()：轨迹显示开关写回。
+  // 轨迹显示开关写回。
   setTrailDisplayFlag(setting: string, enabled: boolean): void {
     this.port.requestInteractive('setTrailDisplaySetting', setting + '|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (r.ok === true && setting === 'isolated') this.layerViewStore.trailIsolated = enabled
     })
   }
 
-  // 原宿主 setTrailDisplayNumber()：轨迹数量 / 年数 / 线宽写回。
+  // 轨迹数量 / 年数 / 线宽写回。
   setTrailDisplayNumber(setting: string, value: number): void {
     const number = Math.round(value)
     this.port.requestInteractive('setTrailDisplaySetting', setting + '|' + number.toString(), (r: StellariumBridgeResponse) => {
@@ -419,7 +395,7 @@ export class LayerController {
     })
   }
 
-  // 原宿主 applyTrailColor()：校验 #RRGGBB 后写桥并回写 store。
+  // 校验 #RRGGBB 后写桥并回写 store。
   applyTrailColor(): void {
     const normalized = this.layerViewStore.trailColorInput.trim().toUpperCase()
     if (!/^#[0-9A-F]{6}$/.test(normalized)) {
@@ -433,7 +409,7 @@ export class LayerController {
     })
   }
 
-  // 原宿主 selectLandscape()：应用地景包（成功写当前地景 / 关闭详情浮层 / 刷新状态）。
+  // 应用地景包（成功写当前地景 / 关闭详情浮层 / 刷新状态）。
   selectLandscape(id: string, name: string): void {
     this.port.requestInteractive('setLandscape', id, (response: StellariumBridgeResponse) => {
       if (response.ok !== true) {
@@ -447,13 +423,13 @@ export class LayerController {
     })
   }
 
-  // 原宿主 setLandscapeFadeWithZoom()：随缩放淡出地景开关写回。
+  // 随缩放淡出地景开关写回。
   setLandscapeFadeWithZoom(isOn: boolean): void {
     this.layerViewStore.landscapeFadeWithZoom = isOn
     this.port.requestInteractive('setLandscapeFadeWithZoom', isOn ? '1' : '0', () => {})
   }
 
-  // 原宿主 changeLandscapeTransparency()：手动透明度接管地景显示。
+  // 手动透明度接管地景显示。
   changeLandscapeTransparency(val: number): void {
     const v = (val / 100).toFixed(2)
     // 手动透明度接管地景显示；不要再调用 setLandscapeFadeWithZoom(0)，
@@ -463,7 +439,7 @@ export class LayerController {
     this.port.requestInteractive('setLandscapeTransparency', v, () => {})
   }
 
-  // 原宿主 importLandscapeFile()：picker 选 ZIP → 复制到应用导入目录 → 桥导入（picker/fileIo 经 MediaPort）。
+  // picker 选 ZIP → 复制到应用导入目录 → 桥导入（picker/fileIo 经 MediaPort）。
   async importLandscapeFile(): Promise<void> {
     if (this.layerViewStore.landscapeImporting) return
     this.layerViewStore.landscapeImporting = true
@@ -494,7 +470,7 @@ export class LayerController {
     }
   }
 
-  // 原宿主 setScenery3dScene()：三维地景场景切换。
+  // 三维地景场景切换。
   setScenery3dScene(id: string): void {
     this.sceneryStore.scenery3dLoadingId = id
     this.port.requestInteractive('setScenery3dScene', id, (r: StellariumBridgeResponse) => {
@@ -507,7 +483,7 @@ export class LayerController {
     }, () => { this.sceneryStore.scenery3dLoadingId = '' })
   }
 
-  // 原宿主 setScenery3dEnabled()：三维地景总开关（失败回滚 store 布尔）。
+  // 三维地景总开关（失败回滚 store 布尔）。
   setScenery3dEnabled(enabled: boolean): void {
     this.sceneryStore.scenery3dEnabled = enabled
     this.port.requestInteractive('setScenery3dEnabled', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {

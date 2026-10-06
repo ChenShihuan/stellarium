@@ -3,16 +3,14 @@ import { CommandCatalogEntry } from '../../pages/MainWindowModels'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { CommandStore } from '../../state/CommandStore'
 
-// 统一命令控制面板（原宿主 panelContent() 的 `commands` 分支，分支体原样下沉）。
+// 统一命令控制面板，对应 `activePanel === 'commands'`。
 //
-// 判定条件 `activePanel === 'commands'` 留在宿主；命令目录 / 搜索框 / 名与 payload /
-// 结果 / 待确认 / 执行中全部由宿主 @State 字段以 @Prop 传入（宿主仍是写方），
-// 输入与执行动作回注宿主；筛选助手 filteredCommandCatalog 随 UI 下沉（纯计算）。
-// 成员名避开 CustomComponent 属性方法（输入底色用 inputColor，不用 background）。
+// 命令目录 / 搜索框 / 名与 payload / 结果 / 待确认 / 执行中来自 CommandStore（@ObjectLink）；
+// 输入与执行动作回调注入宿主；筛选助手 filteredCommandCatalog 为组件内纯计算。
+// 输入底色用 inputColor：成员名须避开 CustomComponent 基类的 background 属性方法。
 
 @Component
 export struct CommandsPanel {
-  // 状态经 @ObjectLink 订阅（review §2.7 第三批小簇批处理）。动作仍为宿主注入的回调。
   @ObjectLink commandStore: CommandStore
   @Prop textColor: string
   @Prop subColor: string

@@ -3,9 +3,9 @@ import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 import { wutCategoryOptions, wutCategoryKey } from '../common/derive/catalog'
 import { celestialTitle, planetZh, zhNameOf } from '../common/derive/labels'
-// 今晚观测目标（WUT）面板状态（原宿主 @State 的 wut* 簇）。
-// 这是 astro 域切片的前置半步：后续把面板内的列表/筛选 UI 抽成组件时，组件直接观察本 store。
-// §14 B2A：本域加载器 loadWutTargets 与标题助手 wutCategoryTitle 随桥注入下沉本 store。
+// 今晚观测目标（WUT）面板状态：持有 wut* 字段（目标列表、加载/进度、筛选条件与提示）。
+// 消费方（WUT 面板及后续抽出的列表/筛选组件）以 @ObjectLink 观察本 store。
+// 自持 CommandPort 与请求序号 wutRequestSequence；loadWutTargets 为长任务加载器。
 @Observed
 export class WutStore {
   wutTargets: Array<WutTarget> = []
@@ -25,7 +25,7 @@ export class WutStore {
   wutHint: string = ''
   wutHasResult: boolean = false
 
-  // —— 桥注入（§14 B2A） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
   private onChanged: (() => void) | null = null
   private wutRequestSequence: number = 0
@@ -45,7 +45,7 @@ export class WutStore {
     }
   }
 
-  // Wut 分类按钮的当前标题（原宿主 wutCategoryTitle；读本 store 的 wutCategory + 纯函数模块）。
+  // Wut 分类按钮的当前标题（读本 store 的 wutCategory + 纯函数模块）。
   wutCategoryTitle(): string {
     const options = wutCategoryOptions()
     for (const option of options) {
@@ -54,19 +54,14 @@ export class WutStore {
     return '天体'
   }
 
-  // 观测目标的显示名（原宿主 observingDisplayName，A2-6）：只在 wutTargets 命中时用
-  // 标题，否则回退 planetZh/zhNameOf 纯函数。函数体逐字搬入，this.wutTargetTitle 内联为
-  // celestialTitle（同源纯函数），this.wutStore.wutTargets → this.wutTargets。
+  // 观测目标的显示名：只在 wutTargets 命中时用天体标题，否则回退 planetZh / zhNameOf 纯函数。
   observingDisplayName(englishName: string): string {
     const target = this.wutTargets.find((item: WutTarget) => item.englishName === englishName)
     if (target !== undefined) return celestialTitle(target.name ?? '', target.englishName ?? '')
     return planetZh(englishName) !== englishName ? planetZh(englishName) : zhNameOf(englishName)
   }
 
-  // 今晚观测目标：原宿主 loadWutTargets，函数体逐字搬入；仅
-  // this.callNativeFire → port.fire、this.callLongRunningInteractive → port.requestLongRunning、
-  // this.wutStore.<f> → this.<f>、this.publishAstroPanelState() → this.notifyChanged()、
-  // this.wutCategoryTitle() → this.wutCategoryTitle()。长任务取消槽 900ms 逐字保留。
+  // 今晚观测目标加载：长任务取消槽 900ms；进度与回包均按 wutRequestSequence 作废在途请求。
   loadWutTargets(): void {
     const port = this.ensurePort()
     if (port === null) {

@@ -1,6 +1,7 @@
 import { I18n } from '../pages/I18n'
-// 传感器/陀螺仪状态（原宿主 @State 的 gyro*/gyroscope* 簇）。
-// 这些字段本就由宿主 @State 承载并随传感器事件更新，迁入 @Observed 后宿主与组件的刷新语义不变（§13.1 规则 4）。
+// 传感器 / 陀螺仪域状态 store：持有导览姿态（gyroGuide*）、开关与状态（gyroscopeEnabled /
+// gyroscopeStatus / gyroscopeSensitivityText）、罗盘读数（gyroCompass*）与校准面板 / 校准偏移。
+// 消费方以 @ObjectLink 订阅；字段随传感器事件更新，宿主与组件的刷新语义不变。
 @Observed
 export class GyroStore {
   gyroGuideVisible: boolean = false

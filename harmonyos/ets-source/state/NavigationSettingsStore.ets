@@ -1,26 +1,16 @@
-// 「视图导航」设置页（设置 > 视图导航，configTab 7）的状态簇（review §2.7）。
+// 「视图导航」设置页（设置 > 视图导航，configTab 7）的状态簇。
 //
-// 本域 9 个字段全部下沉（原宿主 @State）：鼠标导航 / 鼠标缩放 / 键盘导航 / 键盘缩放 /
-// 重力标签，以及启动视场（FOV）、启动朝向（方位角 / 高度角）与最大视场角。均为持久化设置；
-// 读写在 loadConfigurationSettings() / setNavigationBoolean() / setNavigationMaxFov()
-// 与 SettingsPanel 之间。消费面板只有 SettingsPanel（9 个 @Prop → 1 个 @ObjectLink）。
+// 持有鼠标/键盘导航与缩放开关、重力标签，以及启动视场、启动朝向与最大视场角；均为持久化设置，
+// 被 SettingsPanel 以 @ObjectLink 观察。setNavigationBoolean / setNavigationMaxFov 两个桥动作
+// 在本 store：桥经 CommandPort，autoZoomResets 分支写 ViewSettingsStore、UI 提示经
+// NavigationSettingsHostHooks 具名回注（store 不 import 他 store / UI）。
 //
-// 刻意留在宿主（非本 store 状态）：
-//   - `maxFovDraft`（最大视场角滑块草稿）是 SettingsPanel 的本地 @State，随面板存在，不下沉；
-//   - `saveCurrentViewAsStartup()` / `saveAllCoreSettings()` / `restoreCoreDefaults()` 等动作
-//     与桥调用留在宿主，按 §13.1 规则 6 回注。
-//
-// 约束：均为标量，只做整体赋值，无原地变更（改造前已普查 `this.<field>.push|splice|...` 为 0）。
-//
-// 2026-10-05（解散 capability/SettingsController.ets）：导航开关 / 最大 FOV 两个桥动作按「写本域
-// store 字段 → 并入该 store 方法」下沉（原 SettingsController.setNavigationBoolean / setNavigationMaxFov）。
-// 桥经 CommandPort；autoZoomResets 分支写 ViewSettingsStore、UI 提示经 NavigationSettingsHostHooks
-// 具名回注宿主（store 不 import 他 store / UI）。
+// 字段均为标量、只做整体赋值，无原地变更。
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → NavigationSettingsStore 回注（§13.1 规则 6 / §15.7 规则 4）。
+// 宿主 → NavigationSettingsStore 回注。
 export interface NavigationSettingsHostHooks {
   flashHint(text: ResourceStr): void
   // ViewSettingsStore.autoZoomResets（setNavigationBoolean 的 autoZoomResets 分支）。
@@ -39,7 +29,7 @@ export class NavigationSettingsStore {
   navigationStartupAltitude: number = 45
   navigationMaxFov: number = 180
 
-  // —— 桥 / 宿主回注（§14.1 AB-0；2026-10-05 随导航设置动作并入） ——
+  // —— 桥 / 宿主回注 ——
   private port: CommandPort | null = null
   private hooks: NavigationSettingsHostHooks | null = null
 
@@ -56,9 +46,7 @@ export class NavigationSettingsStore {
     return this.port
   }
 
-  // 导航布尔设置写回（原 SettingsController.setNavigationBoolean，函数体逐字搬入；差异仅
-  // this.navigationStore.<f> → this.<f>、this.viewSettingsStore.autoZoomResets → hooks.setAutoZoomResets、
-  // 提示经 hooks.flashHint、桥经 port）。
+  // 导航布尔设置写回（autoZoomResets 经 hooks 写 ViewSettingsStore，提示经 hooks.flashHint，桥经 port）。
   setNavigationBoolean(setting: string, enabled: boolean): void {
     const port = this.ensurePort()
     const hooks = this.hooks
@@ -79,7 +67,7 @@ export class NavigationSettingsStore {
     })
   }
 
-  // 最大视场角（原 SettingsController.setNavigationMaxFov，函数体逐字搬入）。
+  // 最大视场角（钳制到 1..360 后写回）。
   setNavigationMaxFov(value: number): void {
     const port = this.ensurePort()
     const hooks = this.hooks

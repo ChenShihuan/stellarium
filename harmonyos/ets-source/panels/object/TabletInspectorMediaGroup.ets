@@ -5,11 +5,11 @@ import { ObjectMediaStore } from '../../state/ObjectMediaStore'
 import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { TabletInspectorMediaCard, TabletInspectorNoticeRow, TabletInspectorModelBlock, TabletInspectorProgressRow, TabletInspectorFallbackVisual } from './TabletInspectorMedia'
 
-// 天体检查器媒体区（原宿主的无参 ``@Builder tabletInspectorMedia()``）。
+// 天体检查器媒体区：按媒体状态分派图像卡、提示行、模型块与示意图，并处理加载 / 解码等中间态。
 //
-// 之所以改写成组件：把宿主 builder 经 ``@BuilderParam`` 交给子组件，真机上会让渲染该页的应用直接退出（§13.1 规则 9，2026-10-01 实测）。
-// 分支判定随组件走，媒体状态以 ``@ObjectLink`` 观察；派生值（图像高度、模型尺寸、文案、示意图种类）与四个交互
-// （打开预览 / 重试 / 展开模型 / 模型手势）全部由宿主注入。
+// 媒体状态以 `@ObjectLink` 观察 `ObjectMediaStore`；派生值（图像高度、模型尺寸、文案、示意图种类）
+// 与交互（打开预览 / 重试 / 展开模型 / 模型手势）由宿主注入。
+// 分派条件不能经 `@BuilderParam` 交由子组件渲染——真机上宿主 builder 传入子组件会让应用在渲染时退出。
 
 @Component
 export struct TabletInspectorMediaGroup {

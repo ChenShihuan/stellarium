@@ -3,12 +3,10 @@ import { NavStarsStore } from '../../state/NavStarsStore'
 import { NavStarsToggleRow } from '../settings/SettingsRows'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 航海星面板（原宿主 panelContent() 的 `navStars` 分支，分支体原样下沉）。
+// 航海星面板，对应 `activePanel === 'navStars'`。
 //
-// 判定条件 `activePanel === 'navStars'` 留在宿主；加载/开关/星表簇状态已下沉
-// state/NavStarsStore.ets（review §2.7：Prop 风格 → Store 风格），本组件以 @ObjectLink 订阅。
-// 设置动作仍回注宿主（setNavStarsSetting）；星表名翻译助手 navStarsSetLabel 随 UI 一并下沉
-// （纯函数，不依赖宿主实例）。
+// 加载/开关/星表簇状态来自 NavStarsStore（@ObjectLink）；设置动作回调注入宿主。
+// 星表名翻译助手 navStarsSetLabel 为组件内纯函数，不依赖宿主实例。
 
 @Component
 export struct NavStarsPanel {

@@ -3,12 +3,10 @@ import { SavedLocation } from '../../pages/StellariumTypes'
 import { LocationStore } from '../../state/LocationStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 位置面板的「已保存位置」行 + 中国城市 / 世界城市快捷 chip 行。
+// 本组件职责：位置面板的「已保存位置」行 + 中国城市 / 世界城市快捷 chip 行。
 //
-// 原为宿主 @Builder `cityChipsRow()`（读 this.savedLocations，调 saveCurrentLocation /
-// setLocation / deleteSavedLocation / handleChip 四个宿主方法）。现改为组件：
-// 已保存位置列表走 @ObjectLink store 实时刷新；四个宿主方法以回调注入（handleChip 是
-// 全局快捷键分发，setLocation 走原生桥，均留在宿主）。
+// 已保存位置列表走 @ObjectLink store 实时刷新；四个宿主方法以回调注入
+// （handleChip 是全局快捷键分发，setLocation 走原生桥，均由宿主提供）。
 @Component
 export struct CityChipsRow {
   @ObjectLink store: LocationStore

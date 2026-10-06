@@ -1,39 +1,9 @@
-// 星空文化行为控制器（STATE-REVIEW §10.2 D3 子域 1「选择/标签/视觉」+ 子域 2「Art 预览」；
-// PLAN §15 D 轨道 D3 与 §15.12 的「先普查 → 判定搬或登记」纪律）。
-//
-// 原宿主 MainWindowNativeNode 的 D3 行为层逐字下沉：
-//   选择/标签/视觉：selectSkyCulture / setSkyCulture(name) / captureSkyCultureAnchor /
-//     armSkyCultureAnchor / clearSkyCultureAnchor / handleSkyCultureRowArea /
-//     setSkyCultureStyleOption / setSkyCulture{Screen,Info,Zodiac,Lunar}LabelMode /
-//     setSkyCultureLabelModeForTarget / selectSkyCultureLabelMode / setSkyCultureLabelMode /
-//     setSkyCultureShortLabels / setSkyCultureCommonNames / setSkyCultureConstellationIsolation /
-//     setSkyCultureConstellationSinglePick / applySkyCultureConstellationSelection /
-//     setSkyCultureVisualSetting / setSkyCultureVisualColor / setCurrentSkyCultureAsDefault；
-//   时间跟随：stopSkyCultureTimeFollowTimer / syncSkyCultureTimeFollowTimer /
-//     refreshSkyCultureSimulationYear；
-//   Art 预览：skyCultureArtFilePath / skyCultureArtUri / setSkyCultureArtStatus /
-//     clearSkyCultureArtThumbnails / decodeSkyCultureArtThumbnail / prepareSkyCultureArtResources /
-//     openSkyCultureArtPreview / resolveSkyCultureArtPreview / closeSkyCultureArtPreview /
-//     onSkyCultureArtLoaded / decodeSkyCultureArtPreview / onSkyCultureArtError /
-//     retrySkyCultureArtPreview。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；fileIo/image/picker 经 MediaPort 与
-// common/media/ImageDecoder；UI 上下文派生量（filesDir / pathToUri / resolveDetailMediaAsset）、
-// 标签下拉动画（getUIContext().animateTo）、锚点校正滚动（宿主 Scroller / 展开布局）经具名 hooks 回注。
-//
-// 保留（§15.6，未搬）：
-//   - `loadSkyCultureDetails`（§15.6-3 永久登记宿主；写 §2.7.1 L 渐进字段 `skyCultureArtStates`）
-//     经 hooks.loadSkyCultureDetails() 回注调用；
-//   - `skyCultureDetailsRequestId` 共享请求序号（与留宿主的 loadSkyCultureDetails 共用，
-//     §14.8 规则 3 单一持有者 = 宿主）——本控制器经 hooks 读写；
-//   - §2.7.1 L 高频渐进字段 `skyCultureArtStates` / `skyCultureArtThumbnailPixelMaps`
-//     （LayersPanel 以宿主 @State→@Prop 消费）**字段本体留宿主**，本控制器经
-//     hooks 读写（§15.6-1 与 §15.7-2 双重约束：既不搬字段、又不让控制器持有可观测渐进数据）；
-//   - `skyCultureColorOptions` / `skyCultureActiveColorTarget`（§15.6-2 A2 登记宿主控制器）
-//     经 hooks.skyCultureActiveColorTarget() 回读；
-//   - `shouldFollowSkyCultureSimulationTime`（宿主前后台/面板路由谓词，先例 B3-4 的
-//     shouldRefreshTelescopePosition）经 hooks 注入；
-//   - `drawSkyCultureTerritoryMap`（持宿主 CanvasRenderingContext2D + 画布尺寸，UI 类型，§15.7-1）。
+// 星空文化行为控制器：负责当前星空文化的切换、详情请求与标签/视觉设置、模拟年时间跟随，
+// 以及 Art 预览资源的探测、缩略图解码与预览解码。
+// 依赖 CommandPort（文化/标签桥命令）、ImagePort（文件存在性、图片解码）、
+// SkyCultureViewStore / SkyCultureSettingsStore（视图与设置状态）。
+// 宿主 UI 上下文派生量（filesDir / pathToUri / 资源解析、标签下拉动画、锚点校正滚动）
+// 与仍留宿主的详情加载器、共享请求序号、Art 渐进字段，均经 SkyCultureHostHooks 具名回注。
 import hilog from '@ohos.hilog'
 import { image } from '@kit.ImageKit'
 import { I18n } from '../pages/I18n'
@@ -48,13 +18,13 @@ import { SkyCultureSettingsStore } from '../state/SkyCultureSettingsStore'
 import { BehaviorHostHooks } from './ControllerHooks'
 
 export interface SkyCultureHostHooks extends BehaviorHostHooks {
-  // §15.6-3：宿主保留的详情加载器（永久登记）与共享请求序号（§14.8 规则 3，单一持有者 = 宿主）。
+  // 宿主保留的详情加载器与共享请求序号；序号单一持有者在宿主，控制器经此读写。
   loadSkyCultureDetails(): void
   skyCultureDetailsRequestId(): number
   nextSkyCultureDetailsRequestId(): number
-  // §15.6-2：A2 登记宿主控制器（读 layerStore 图层开关 + hasZodiac/hasLunarSystem）。
+  // 宿主控制器持有：读图层开关 + hasZodiac/hasLunarSystem。
   skyCultureActiveColorTarget(): string
-  // §2.7.1 L：高频渐进字段本体留宿主（@State，LayersPanel @Prop 消费），控制器经 hooks 读写。
+  // 高频渐进字段本体留宿主（@State，LayersPanel @Prop 消费），控制器经 hooks 读写。
   skyCultureArtStates(): Record<string, string>
   setSkyCultureArtStates(next: Record<string, string>): void
   skyCultureArtThumbnailPixelMaps(): Record<string, image.PixelMap>
@@ -78,7 +48,7 @@ export class SkyCultureController {
   private settingsStore: SkyCultureSettingsStore
   private hooks: SkyCultureHostHooks
 
-  // —— 私有字段（原宿主，随行为下沉；高频/瞬态字段留控制器，§15.7 规则 2）——
+  // —— 私有字段：高频/瞬态字段留控制器，不入被观察 store ——
   // 锚点校正（列表行测量 + 跨面板切换保持可见行）。
   private skyCultureRowY: Record<string, number> = {}
   private skyCultureAnchorId: string = ''
@@ -109,9 +79,9 @@ export class SkyCultureController {
     this.hooks = hooks
   }
 
-  // ───────────────────────── 子域 1：选择 / 标签 / 视觉 / 时间跟随 ─────────────────────────
+  // ===== 选择 / 标签 / 视觉 / 时间跟随 =====
 
-  // 原宿主 selectSkyCulture(id)：切换文化 → 桥 → 成功清空详情/艺术态并重载详情。
+  // 切换文化 → 桥 → 成功清空详情/艺术态并重载详情。
   selectSkyCulture(id: string): void {
     if (id === this.viewStore.currentSkyCultureId || id === this.viewStore.pendingId) return
     this.captureSkyCultureAnchor(id)
@@ -152,7 +122,7 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 setSkyCulture(name)：按名称设置当前文化（搜索/快捷入口）。
+  // 按名称设置当前文化（搜索/快捷入口）。
   setSkyCulture(name: string): void {
     this.port.requestInteractive('setSkyCulture', name, (r: StellariumBridgeResponse) => {
       if (r.ok !== true) {
@@ -165,7 +135,7 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 captureSkyCultureAnchor(id)：记录切换前可见行 y，供切换后校正滚动。
+  // 记录切换前可见行 y，供切换后校正滚动。
   captureSkyCultureAnchor(id: string): void {
     const y = this.skyCultureRowY[id]
     if (y === undefined || !Number.isFinite(y)) {
@@ -181,14 +151,13 @@ export class SkyCultureController {
       '[sky-culture-anchor] captured id=%{public}s y=%{public}s', id, y.toFixed(1))
   }
 
-  // 原宿主 armSkyCultureAnchor(id, requestId)：详情回包后武装锚点（等下一次行测量）。
+  // 详情回包后武装锚点（等下一次行测量）。
   armSkyCultureAnchor(id: string, requestId: number): void {
     if (this.skyCultureAnchorId !== id) return
     this.skyCultureAnchorRequestId = requestId
     this.skyCultureAnchorArmed = true
   }
 
-  // 原宿主 clearSkyCultureAnchor()。
   clearSkyCultureAnchor(): void {
     this.skyCultureAnchorId = ''
     this.skyCultureAnchorY = 0
@@ -196,7 +165,7 @@ export class SkyCultureController {
     this.skyCultureAnchorArmed = false
   }
 
-  // 原宿主 handleSkyCultureRowArea(id, area)：行测量回调；命中武装锚点时校正滚动。
+  // 行测量回调；命中武装锚点时校正滚动。
   // 滚动本体（宿主 Scroller / 展开布局）经 hooks.correctSkyCultureRowScroll 回注。
   handleSkyCultureRowArea(id: string, area: Area): void {
     const y = Number.parseFloat(String(area.globalPosition.y))
@@ -214,7 +183,7 @@ export class SkyCultureController {
     this.hooks.correctSkyCultureRowScroll(id, delta)
   }
 
-  // 原宿主 setSkyCultureStyleOption(target, optionIndex, enabled)：名称组合位掩码开关。
+  // 名称组合位掩码开关。
   setSkyCultureStyleOption(target: string, optionIndex: number, enabled: boolean): void {
     const oldMask = target === 'screen' ? this.settingsStore.skyCultureScreenStyleMask : this.settingsStore.skyCultureInfoStyleMask
     const bit = 1 << optionIndex
@@ -233,27 +202,22 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 setSkyCultureScreenLabelMode(mode)。
   setSkyCultureScreenLabelMode(mode: number): void {
     this.setSkyCultureLabelMode('screen', mode, (value: number) => { this.settingsStore.skyCultureScreenLabelMode = value })
   }
 
-  // 原宿主 setSkyCultureInfoLabelMode(mode)。
   setSkyCultureInfoLabelMode(mode: number): void {
     this.setSkyCultureLabelMode('info', mode, (value: number) => { this.settingsStore.skyCultureInfoLabelMode = value })
   }
 
-  // 原宿主 setSkyCultureZodiacLabelMode(mode)。
   setSkyCultureZodiacLabelMode(mode: number): void {
     this.setSkyCultureLabelMode('zodiac', mode, (value: number) => { this.settingsStore.skyCultureZodiacLabelMode = value })
   }
 
-  // 原宿主 setSkyCultureLunarLabelMode(mode)。
   setSkyCultureLunarLabelMode(mode: number): void {
     this.setSkyCultureLabelMode('lunar', mode, (value: number) => { this.settingsStore.skyCultureLunarLabelMode = value })
   }
 
-  // 原宿主 setSkyCultureLabelModeForTarget(target, mode)。
   setSkyCultureLabelModeForTarget(target: string, mode: number): void {
     if (target === 'screen') {
       this.setSkyCultureScreenLabelMode(mode)
@@ -266,7 +230,7 @@ export class SkyCultureController {
     }
   }
 
-  // 原宿主 selectSkyCultureLabelMode(target, index)：选档 + 收起下拉（动画经 hooks）。
+  // 选档 + 收起下拉（动画经 hooks）。
   selectSkyCultureLabelMode(target: string, index: number): void {
     this.setSkyCultureLabelModeForTarget(target, index)
     this.hooks.animatePickerCollapse(() => {
@@ -274,7 +238,7 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 setSkyCultureLabelMode(target, mode, apply)：桥写标签风格并回读实际档位。
+  // 桥写标签风格并回读实际档位。
   setSkyCultureLabelMode(target: string, mode: number, apply: (value: number) => void): void {
     const styles: string[] = ['Translated', 'Native', 'Pronounce', 'Translit', 'Modern']
     if (mode < 0 || mode >= styles.length) return
@@ -289,21 +253,18 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 setSkyCultureShortLabels(enabled)。
   setSkyCultureShortLabels(enabled: boolean): void {
     this.port.requestInteractive('setSkyCultureShortLabels', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.settingsStore.skyCultureShortLabels = r.abbreviatedNames === true
     })
   }
 
-  // 原宿主 setSkyCultureCommonNames(enabled)。
   setSkyCultureCommonNames(enabled: boolean): void {
     this.port.requestInteractive('setSkyCultureCommonNames', enabled ? '1' : '0', (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.settingsStore.skyCultureOverrideCommonNames = r.overrideCommonNames === true
     })
   }
 
-  // 原宿主 setSkyCultureConstellationIsolation(enabled)。
   setSkyCultureConstellationIsolation(enabled: boolean): void {
     this.port.requestInteractive('setConstellationFlag', 'isolateSelected|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
       if (r.ok !== true) return
@@ -314,7 +275,6 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 setSkyCultureConstellationSinglePick(enabled)。
   setSkyCultureConstellationSinglePick(enabled: boolean): void {
     if (enabled && !this.settingsStore.skyCultureIsolateSelected) return
     this.port.requestInteractive('setConstellationFlag', 'constellationPick|' + (enabled ? '1' : '0'), (r: StellariumBridgeResponse) => {
@@ -322,22 +282,20 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 applySkyCultureConstellationSelection(actionId, hint)。
   applySkyCultureConstellationSelection(actionId: string, hint: string): void {
     this.port.requestInteractive('triggerAction', actionId, (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.hooks.flashHint(hint)
     })
   }
 
-  // 原宿主 setSkyCultureVisualSetting(setting, value)。
   setSkyCultureVisualSetting(setting: string, value: number): void {
     this.port.requestInteractive('setSkyCultureVisualSetting', setting + '|' + value.toFixed(2), (r: StellariumBridgeResponse) => {
       if (r.ok === true) this.settingsStore.applySkyCultureVisualSetting(setting, value)
     })
   }
 
-  // 原宿主 setSkyCultureVisualColor(setting, color)：校验 #RRGGBB → 桥 → 写配色。
-  // skyCultureActiveColorTarget（§15.6-2 宿主控制器）经 hooks 回读。
+  // 校验 #RRGGBB → 桥 → 写配色。
+  // skyCultureActiveColorTarget（宿主控制器）经 hooks 回读。
   setSkyCultureVisualColor(setting: string, color: string): void {
     const normalized = color.trim().toUpperCase()
     if (!/^#[0-9A-F]{6}$/.test(normalized)) {
@@ -364,7 +322,6 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 setCurrentSkyCultureAsDefault()。
   setCurrentSkyCultureAsDefault(): void {
     if (this.viewStore.currentSkyCultureId.length === 0 || this.settingsStore.skyCultureDefaultId === this.viewStore.currentSkyCultureId) return
     this.port.requestInteractive('setSkyCultureDefault', this.viewStore.currentSkyCultureId, (r: StellariumBridgeResponse) => {
@@ -375,9 +332,8 @@ export class SkyCultureController {
     })
   }
 
-  // ───────────────────────── 时间跟随模拟年（500ms 轮询） ─────────────────────────
+  // ===== 时间跟随模拟年（500ms 轮询） =====
 
-  // 原宿主 stopSkyCultureTimeFollowTimer()。
   stopSkyCultureTimeFollowTimer(): void {
     if (this.skyCultureTimeFollowTimer !== 0) {
       clearInterval(this.skyCultureTimeFollowTimer)
@@ -386,7 +342,6 @@ export class SkyCultureController {
     this.skyCultureTimeFollowRequestPending = false
   }
 
-  // 原宿主 syncSkyCultureTimeFollowTimer()。
   syncSkyCultureTimeFollowTimer(): void {
     if (!this.hooks.shouldFollowSkyCultureSimulationTime()) {
       this.stopSkyCultureTimeFollowTimer()
@@ -399,7 +354,6 @@ export class SkyCultureController {
     }, 500)
   }
 
-  // 原宿主 refreshSkyCultureSimulationYear(force)。
   refreshSkyCultureSimulationYear(force: boolean = false): void {
     if ((!force && !this.hooks.shouldFollowSkyCultureSimulationTime()) || this.skyCultureTimeFollowRequestPending) return
     this.skyCultureTimeFollowRequestPending = true
@@ -415,27 +369,26 @@ export class SkyCultureController {
     })
   }
 
-  // ───────────────────────── 子域 2：Art 预览 ─────────────────────────
+  // ===== Art 预览 =====
 
-  // 原宿主 skyCultureArtFilePath(rawPath)：安全校验 + 应用目录拼接 + 存在性判定。
+  // 安全校验 + 应用目录拼接 + 存在性判定。
   skyCultureArtFilePath(rawPath: string): string {
     if (!isSafeSkyCultureArtPath(rawPath)) return ''
     const path = this.hooks.stellariumFilesDir() + '/stellarium/' + rawPath
     return this.mediaPort.fileExists(path) ? path : ''
   }
 
-  // 原宿主 skyCultureArtUri(rawPath)。
   skyCultureArtUri(rawPath: string): string {
     const path = this.skyCultureArtFilePath(rawPath)
     return path.length > 0 ? this.hooks.pathToUri(path) : ''
   }
 
-  // 原宿主 aboutToDisappear 的 `this.skyCultureArtDecodeGeneration++`：作废在途预览解码。
+  // 作废在途预览解码（宿主 aboutToDisappear 时调用）。
   invalidateSkyCultureArtDecode(): void {
     this.skyCultureArtDecodeGeneration++
   }
 
-  // 原宿主 setSkyCultureArtStatus(rawPath, status)：48ms 合批渐进写入宿主 L 字段。
+  // 48ms 合批渐进写入宿主渐进字段。
   setSkyCultureArtStatus(rawPath: string, status: string): void {
     if (this.hooks.skyCultureArtStates()[rawPath] === status && this.skyCultureArtPendingStatuses[rawPath] === undefined) return
     if (this.skyCultureArtPendingStatuses[rawPath] === status) return
@@ -453,7 +406,7 @@ export class SkyCultureController {
     }, 48) as number
   }
 
-  // 原宿主 clearSkyCultureArtThumbnails()：作废代际 + 释放缩略图 + 清宿主 L 字段。
+  // 作废代际 + 释放缩略图 + 清宿主渐进字段。
   clearSkyCultureArtThumbnails(): void {
     this.skyCultureArtThumbnailGeneration++
     if (this.skyCultureArtDecodeTimer !== 0) {
@@ -472,7 +425,6 @@ export class SkyCultureController {
     }
   }
 
-  // 原宿主 decodeSkyCultureArtThumbnail(rawPath, requestId, resolvedPath)。
   decodeSkyCultureArtThumbnail(rawPath: string, requestId: number, resolvedPath: string = rawPath): void {
     if (this.hooks.skyCultureArtThumbnailPixelMaps()[rawPath] !== undefined) {
       return
@@ -508,7 +460,7 @@ export class SkyCultureController {
     }, { width: 320, height: 320 })
   }
 
-  // 原宿主 prepareSkyCultureArtResources(items, requestId)：分块解码可见缩略图 + 逐张补解缺失。
+  // 分块解码可见缩略图 + 逐张补解缺失。
   prepareSkyCultureArtResources(items: Array<SkyCultureArtItem>, requestId: number): void {
     const initial: Record<string, string> = {}
     const missing: Array<string> = []
@@ -581,7 +533,6 @@ export class SkyCultureController {
     copyNext()
   }
 
-  // 原宿主 openSkyCultureArtPreview(art)。
   openSkyCultureArtPreview(art: SkyCultureArtItem): void {
     this.viewStore.artPreviewOpen = true
     this.skyCultureArtDecodeGeneration++
@@ -596,7 +547,6 @@ export class SkyCultureController {
     this.resolveSkyCultureArtPreview(art.rawPath)
   }
 
-  // 原宿主 resolveSkyCultureArtPreview(rawPath)。
   resolveSkyCultureArtPreview(rawPath: string): void {
     const current = this.skyCultureArtFilePath(rawPath)
     if (current.length > 0) {
@@ -626,7 +576,6 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 closeSkyCultureArtPreview()。
   closeSkyCultureArtPreview(): void {
     this.viewStore.artPreviewOpen = false
     this.skyCultureArtDecodeGeneration++
@@ -640,7 +589,6 @@ export class SkyCultureController {
     this.viewStore.artPreviewFailed = false
   }
 
-  // 原宿主 onSkyCultureArtLoaded()。
   onSkyCultureArtLoaded(): void {
     if (!this.viewStore.artPreviewOpen) return
     this.viewStore.artPreviewLoading = false
@@ -649,7 +597,6 @@ export class SkyCultureController {
     hilog.info(0x0000, 'StellariumArkUI', '[sky-culture-art] preview loaded path=%{public}s', this.viewStore.artPreviewRawPath)
   }
 
-  // 原宿主 decodeSkyCultureArtPreview(filePath, rawPath)。
   decodeSkyCultureArtPreview(filePath: string, rawPath: string): void {
     const generation = ++this.skyCultureArtDecodeGeneration
     decodeLocalImage(this.mediaPort, filePath, 'sky-culture-art', (pixelMap: image.PixelMap) => {
@@ -678,7 +625,6 @@ export class SkyCultureController {
     })
   }
 
-  // 原宿主 onSkyCultureArtError()。
   onSkyCultureArtError(): void {
     if (!this.viewStore.artPreviewOpen) return
     this.viewStore.artPreviewLoading = false
@@ -687,7 +633,6 @@ export class SkyCultureController {
     hilog.error(0x0000, 'StellariumArkUI', '[sky-culture-art] preview decode failed path=%{public}s', this.viewStore.artPreviewRawPath)
   }
 
-  // 原宿主 retrySkyCultureArtPreview()。
   retrySkyCultureArtPreview(): void {
     this.viewStore.artPreviewFailed = false
     this.viewStore.artPreviewLoading = true

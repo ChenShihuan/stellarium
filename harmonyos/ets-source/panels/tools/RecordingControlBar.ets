@@ -3,14 +3,14 @@ import { UI_RADIUS_CONTROL, UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 import { I18n } from '../../pages/I18n'
 import { ToolsStore } from '../../state/ToolsStore'
 
-// 录制控制条（原宿主 @Builder `recordingControlBar()`，55 行；调用点在 harmonyShell 顶层条件块内）。
+// 录制控制条。
 //
 // @ObjectLink 取"录制中 / 已暂停 / 控制区展开"三态；`recordCount` 是**高频进度**字段（每记一条可录制
-// 命令都写一次），按协议刻意不入被观察 store，以 @Prop 传入。skyWidth 与安全区顶部
+// 命令都写一次），刻意不入被观察 store，以 @Prop 传入。skyWidth 与安全区顶部
 // `scriptControlSafeTop()` 都是纯布局量，也以 @Prop 传入，使组件不依赖任何宿主方法。
 // 暂停/继续、停止、展开控制由宿主注入（副作用：写录制缓冲、走桥、flashHint）。
 //
-// 视觉逐字保留：Row space 6、圆点 8×8、标题 12 号 Medium；宽 Math.min(560, Math.max(260, skyWidth-24))、高 54、
+// 视觉：Row space 6、圆点 8×8、标题 12 号 Medium；宽 Math.min(560, Math.max(260, skyWidth-24))、高 54、
 // padding left12/right10、0.84 玻璃底 + backdropBlur 28 + 1px rgba(255,94,94,0.24) 描边、UI_RADIUS_PANEL、
 // 阴影 radius18 offsetY8、zIndex 130、入场 OPACITY(160ms) + translateY(-10)(220ms springMotion 0.52/0.88)。
 @Component

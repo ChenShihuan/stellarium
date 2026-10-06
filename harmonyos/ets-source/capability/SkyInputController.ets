@@ -1,24 +1,18 @@
-// 天空输入控制器（PLAN §15.10 / §15.11 M3「天空输入」，M3-1 骨架 + M3-2 主路径）。
+// 天空输入控制器。
 //
-// 原宿主 MainWindowNativeNode 的天空输入路径整体下沉：M3-1 搬鼠标/键盘/滚轮轴/点按序列/
-// 惯性 8 法；M3-2 搬触屏主路径 dragFollowAlpha / emitFluidDrag / handleSkyTouch。
-// 共 11 个方法。
+// 统一处理天空区域的鼠标 / 键盘 / 滚轮轴 / 点按序列 / 惯性，以及触屏主路径
+// （dragFollowAlpha / emitFluidDrag / handleSkyTouch）。
 //
-// 职责划分（§15.7 规则 2）：可观测状态（触摸反馈点 skyTouchFeedback / skyTouchX/Y 等）与
-// 跨 handler 共用的手势归属标志（touchStartedOnUi / skyTouchActive / skyDragging /
-// dockTouchActive）仍是宿主裸 @State / 私有字段，由 build() 与 handleOverlayTouch /
-// handleDockTouch / 详情定时器消费、控制器只经 hooks 读写；控制器内保留纯逐帧/草稿字段
-// （触摸采样 / 捏合 / 滤波），不入被观察 store。
+// 可观测状态（触摸反馈点 skyTouchFeedback / skyTouchX/Y 等）与跨 handler 共用的手势归属标志
+// （touchStartedOnUi / skyTouchActive / skyDragging / dockTouchActive）仍是宿主裸 @State / 私有字段，
+// 由 build() 与 handleOverlayTouch / handleDockTouch / 详情定时器消费、控制器只经 hooks 读写；
+// 控制器内保留纯逐帧/草稿字段（触摸采样 / 捏合 / 滤波），不入被观察 store。
 //
-// 依赖注入（§15.7 规则 1 / §13.1 规则 6）：控制器不 import NAPI/UI（仅 ArkUI 事件类型与
-// 纯几何/数学 derive 模块）。
-//   - 桥 fire（dragView / zoomBy / panBy / beginSkyGesture / endPinch / startPanInertia /
-//     stopPanInertia / setNightMode）经 CommandPort；
-//   - §15.6 登记的 A2 热路径 isUiPoint / skyZoomButtonAt / dockActionAt 与全部宿主保留动作
-//     （路由 setPanel/closePanel、zoomStep / moveToSelectedObject / 选中入口 / 详情刷新
-//     收放 / Dock 动作 / 陀螺退出 / 音乐开关 / 面板拖动落盘等）一律经 SkyInputHostHooks
-//     具名回注，宿主保留实现，不搬；
-//   - NightModeStore 以实例引用持有一处（键盘 N 键切换夜间模式）。
+// 不 import NAPI/UI（仅 ArkUI 事件类型与纯几何/数学 derive 模块）：桥 fire（dragView / zoomBy /
+// panBy / beginSkyGesture / endPinch / startPanInertia / stopPanInertia / setNightMode）经 CommandPort；
+// 热路径 isUiPoint / skyZoomButtonAt / dockActionAt 与全部宿主保留动作（路由 setPanel/closePanel、
+// zoomStep / moveToSelectedObject / 选中入口 / 详情刷新收放 / Dock 动作 / 陀螺退出 / 音乐开关 /
+// 面板拖动落盘等）一律经 SkyInputHostHooks 具名回注；NightModeStore 以实例引用持有（键盘 N 键切换）。
 import hilog from '@ohos.hilog'
 import { KeyCode } from '@kit.InputKit'
 import { CommandPort } from '../bridge/CommandPort'
@@ -27,7 +21,7 @@ import { ShellAction } from '../pages/StellariumTypes'
 import { clamp, distance } from '../common/derive/astro'
 import { touchWindowX, touchWindowY, panelTop, panelLeft, panelRight, isDockPoint, compactTopQuickY } from '../common/derive/geometry'
 
-// 宿主 → 控制器回注（§13.1 规则 6）。第一项 isUiPoint 属 §15.6 A2 登记热路径，宿主保留实现。
+// 宿主 → 控制器回注。第一项 isUiPoint 属热路径，宿主保留实现。
 export interface SkyInputHostHooks {
   isUiPoint(x: number, y: number): boolean
   flashHint(text: string): void
@@ -47,7 +41,7 @@ export interface SkyInputHostHooks {
   persistNightMode(): void
   modelImmersive(): boolean
   setModelImmersive(value: boolean): void
-  // ── M3-2：触屏主路径（handleSkyTouch / emitFluidDrag）依赖的宿主状态与动作 ──
+  // ── 触屏主路径（handleSkyTouch / emitFluidDrag）依赖的宿主状态与动作 ──
   // 布局 / 面板几何（宿主 @State，控制器只读）
   isExpandedLayout(): boolean
   isFoldHoverLayout(): boolean
@@ -73,7 +67,7 @@ export interface SkyInputHostHooks {
   setSkyDragging(value: boolean): void
   dockTouchActive(): boolean
   setDockTouchActive(value: boolean): void
-  // 触摸反馈点（§2.7.1 保留 @State，宿主 build() 消费，控制器只写）
+  // 触摸反馈点（保留 @State，宿主 build() 消费，控制器只写）
   skyTouchFeedback(): boolean
   setSkyTouchFeedback(value: boolean): void
   setSkyTouchPoint(x: number, y: number): void
@@ -100,7 +94,7 @@ export interface SkyInputHostHooks {
   requestFieldOfView(onResult: (fov: number) => void): void
 }
 
-// 手势归属（Phase 2）：Down 时由几何一次判定，Up/Cancel 时复位。取代会跨手势残留的
+// 手势归属：Down 时由几何一次判定，Up/Cancel 时复位。取代会跨手势残留的
 // touchStartedOnUi 全局标志与 `!skyTouchActive` 网关——归属不再依赖“上一手势是否漏清理”。
 enum SkyGestureOwner { None, Sky, Ui, PanelDrag }
 
@@ -109,22 +103,22 @@ export class SkyInputController {
   private nightModeStore: NightModeStore
   private hooks: SkyInputHostHooks
 
-  // ── 逐帧/草稿字段（留控制器，不入被观察 store；§15.7 规则 2）──
+  // ── 逐帧/草稿字段（留控制器，不入被观察 store）──
   private skyInertiaTimer: number = 0
   private lastSkyTapAt: number = 0
   private lastSkyTapX: number = 0
   private lastSkyTapY: number = 0
 
-  // ── M3-2：触屏主路径（handleSkyTouch / emitFluidDrag）的草稿/逐帧字段（§15.7 规则 2）──
-  // M3-1 暂转移所有权的 5 个共享字段（宿主原经 this.skyInputCtl().<f> 访问）在 M3-2 收归私有。
+  // ── 触屏主路径（handleSkyTouch / emitFluidDrag）的草稿/逐帧字段 ──
+  // 5 个共享字段已收归本类私有。
   private nativeSkyInertiaActive: boolean = false
   private dragVelocityX: number = 0
   private dragVelocityY: number = 0
   private dragVelocitySampleValid: boolean = false
   private pinchActive: boolean = false
-  // 本次手势归属（Phase 2）：Down 时一次判定，Up/Cancel 复位。
+  // 本次手势归属：Down 时一次判定，Up/Cancel 复位。
   private gestureOwner: SkyGestureOwner = SkyGestureOwner.None
-  // 触摸/拖拽/捏合草稿（宿主引用数为 0，可整块迁移）
+  // 触摸/拖拽/捏合草稿。
   private touchStartX: number = 0
   private touchStartY: number = 0
   private touchLastX: number = 0
@@ -168,7 +162,7 @@ export class SkyInputController {
     this.hooks = hooks
   }
 
-  // ── 宿主生命周期收口（§15.7 规则 3）──
+  // ── 宿主生命周期收口 ──
   // 唯一的定时器句柄 skyInertiaTimer 仅在 stopSkyInertia() 内被 clearInterval；
   // stop() 为生命周期钩子（面板/后台/ aboutToDisappear 等价于 stopSkyInertia()）。
   stop(): void {
@@ -348,9 +342,8 @@ export class SkyInputController {
       this.dragVelocityX.toFixed(4) + '|' + this.dragVelocityY.toFixed(4))
   }
 
-  // ── M3-2：触屏主路径（原宿主 dragFollowAlpha / emitFluidDrag / handleSkyTouch，逐字等价迁移）──
-  // 唯一的改写是"取值参数化"——宿主布局/几何/store 读数经 hooks 取，宿主保留动作经 hooks 调；
-  // 比较边界、分支顺序、取整、事件类型判定一律未动。
+  // ── 触屏主路径（dragFollowAlpha / emitFluidDrag / handleSkyTouch）──
+  // 宿主布局/几何/store 读数经 hooks 取，宿主保留动作经 hooks 调。
 
   private dragFollowAlpha(dtMs: number): number {
     // Keep only a light stabilizer. The previous low-pass values made the

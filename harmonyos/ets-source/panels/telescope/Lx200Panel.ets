@@ -3,17 +3,17 @@ import { LX200_DEVICE_MODELS, TelescopeProfile } from '../../pages/MainWindowMod
 import { TelescopeStore } from '../../state/TelescopeStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PANEL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 「望远镜控制」面板主体（原宿主 @Builder `lx200Panel()`，约 214 行）。
+// 「望远镜控制」面板主体。
 //
 // 组件只收一个 store 与一批回调：
 //   - 全部 lx200* 展示与编辑状态（设备预设、协议、主机/端口、等分点、命令延迟、视场圆、
 //     目标来源、忙/新增标志、连接状态、实时位置）走 @ObjectLink store（TelescopeStore），实时刷新；
-//   - 文本/档位/滑块的写回直接落到 store 字段（与 LocationPickerPanel 同法）；
+//   - 文本/档位/滑块的写回直接落到 store 字段；
 //   - 原生桥与轮询（保存/删除/测试连接、GoTo/同步/中止、读取位置、实时位置开关、编辑器校验）
-//     留在宿主，以回调注入（§13.1 规则 6）；
+//     留在宿主，以回调注入；
 //   - 夜视三色由宿主以 @Prop 传入（text/sub/accent/panel/input/line/inputLine）。
 //
-// 视觉逐字保留：设备预设横向 Scroll 高 38、协议/等分点/目标来源分段按钮高 32、
+// 视觉：设备预设横向 Scroll 高 38、协议/等分点/目标来源分段按钮高 32、
 // 命令延迟 Slider 0–2000 步长 50、视场圆输入框高 38、保存/删除/测试按钮高 34、
 // 位置按钮高 34、实时位置开关行与状态卡、忙时 LoadingProgress 16×16。
 @Component

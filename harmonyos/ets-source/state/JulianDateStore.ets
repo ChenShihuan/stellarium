@@ -1,19 +1,19 @@
-// 儒略日输入域状态：面板组件以 @ObjectLink 订阅。
+// 儒略日输入域状态 store：持有输入文本与校验态（julianDayInput / modifiedJulianDayInput /
+// julianDateEditing / julianDateError / julianCalendarSystem），并自持 julianDateApplyInFlight
+// 请求在途标志；面板组件以 @ObjectLink 订阅。
 //
-// D16（PLAN §15 D 轨道 / STATE-REVIEW §10.2）：儒略日行为并入本 store（P2，不新建控制器）。
-// 原宿主三法 syncJulianDateFields / applyJulianDateInput / adjustJulianDate 与草稿字段
-// julianDateApplyInFlight 逐字迁入；桥（callInteractive → CommandPort.requestInteractive）经
-// attachPort 注入；跨域/UI 两个动作（时间转轴 syncFromSimulation、轻量时间读数刷新）经
-// JulianDateHostHooks 具名回注（§13.1 规则 6 / §15.7 规则 1：store 不 import UI）。
+// 行为：syncJulianDateFields / applyJulianDateInput / adjustJulianDate 在本 store；桥经
+// CommandPort（attachPort 注入）；跨域/UI 两个动作（时间转轴同步、轻量时间读数刷新）经
+// JulianDateHostHooks 具名回注（store 不 import UI / 控制器）。
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
 // 宿主 → store 回注：时间转轴同步与时间读数刷新（二者都触碰 UI/控制器，归宿主）。
 export interface JulianDateHostHooks {
-  // 对应宿主 this.wheel().syncFromSimulation(jd)。
+  // 时间转轴按给定 jd 同步。
   syncWheelFromSimulation(jd: number): void
-  // 对应宿主 refreshSimTimeLight()。
+  // 刷新轻量时间读数。
   refreshSimTimeLight(): void
 }
 
@@ -25,7 +25,7 @@ export class JulianDateStore {
   julianDateError: string = ''
   julianCalendarSystem: string = 'gregorian'
 
-  // 原宿主私有草稿字段（请求在途标志）随行为迁入，不入可观测语义。
+  // 请求在途标志：私有，不入可观测语义（防重复提交）。
   private julianDateApplyInFlight: boolean = false
   private port: CommandPort | null = null
   private hooks: JulianDateHostHooks | null = null
@@ -38,7 +38,7 @@ export class JulianDateStore {
     this.hooks = hooks
   }
 
-  // 原宿主 syncJulianDateFields 逐字迁入（this.julianStore.<f> → this.<f>）。
+  // 按桥回包同步输入字段：编辑中不覆盖用户输入。
   syncJulianDateFields(response: StellariumBridgeResponse, jd: number): void {
     const mjd = response.mjd !== undefined ? Number(response.mjd) : jd - 2400000.5
     this.julianCalendarSystem = response.calendarSystem === 'julian' ? 'julian' : 'gregorian'
@@ -48,8 +48,7 @@ export class JulianDateStore {
     }
   }
 
-  // 原宿主 applyJulianDateInput 逐字迁入；差异仅 this.callInteractive → port.requestInteractive、
-  // wheel()/refreshSimTimeLight() → hooks（store 不触碰控制器/UI）。
+  // 提交输入：校验有限性后经桥写入，失败回填错误；成功同步转轴与时间读数。
   applyJulianDateInput(scale: string): void {
     if (this.julianDateApplyInFlight) { return }
     const port = this.port
@@ -81,7 +80,7 @@ export class JulianDateStore {
     })
   }
 
-  // 原宿主 adjustJulianDate 逐字迁入（翻档后复用 applyJulianDateInput）。
+  // 翻档：按方向步进 0.00001 后复用 applyJulianDateInput。
   adjustJulianDate(scale: string, direction: number): void {
     const text = scale === 'mjd' ? this.modifiedJulianDayInput : this.julianDayInput
     const value = Number(text)

@@ -4,32 +4,20 @@ import { SkyCultureMakerArtworkAnchor, SkyCultureMakerConstellation, SkyCultureM
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → SkyCultureMakerStore 的加载助手（§14.5 B2R-3「额外注入」）。
-// 三者均为宿主内**被多个动作方法共用**的实现（applySkyCultureMakerDraft 亦被保存/校验/重置/撤销等
+// 宿主 → SkyCultureMakerStore 的加载助手。
+// 三者均为宿主内被多个动作方法共用的实现（applySkyCultureMakerDraft 亦被保存/校验/重置/撤销等
 // 回包消费，skyCultureMakerDraftFromResponse 亦然，ensurePluginLoaded 为宿主通用插件加载器），
-// 故保留宿主、经具名 hooks 回注（store 不 import 桥/插件管理层）。
+// 故留宿主并经具名 hooks 回注（store 不 import 桥/插件管理层）。
 export interface SkyCultureMakerHostHooks {
   applySkyCultureMakerDraft(draft: SkyCultureMakerDraft): void
   ensurePluginLoaded(pluginName: string, callback: () => void, failureCallback?: () => void): void
   skyCultureMakerDraftFromResponse(response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined
 }
 
-// 星文化制作器（activePanel === 'skyCultureMaker'）的向导状态簇。
-//
-// 本片边界（Phase 3am）：原宿主的 29 个 `@State private skyCultureMaker*` 字段逐条搬到这里，
-// 保留原类型与默认值。宿主以 `@State private skyCultureMakerStore: SkyCultureMakerStore = new SkyCultureMakerStore()`
-// 持有；向导 UI 已下沉为 `panels/skyculture/` 下的组件（`@ObjectLink store` + 回调注入）。
-//
-// 不搬的宿主职责（跨域/桥/定时器依赖，§13.1 规则 6）：
-//   - native 桥（getSkyCultureMakerDraft / saveSkyCultureMakerDraft / validateSkyCultureMakerDraft /
-//     resetSkyCultureMakerDraft / undoSkyCultureMakerEdit / import/exportSkyCultureMaker /
-//     addSkyCultureMakerSelectedStar / import/removeSkyCultureMakerArtwork / setSkyCultureMakerArtworkAnchor）、
-//     ensurePluginLoaded、以及主题色与 panelWidth；
-//   - 自动保存定时器（skyCultureMakerSaveTimer + scheduleSkyCultureMakerSave）；
-//   - 图片解码与释放（decodeLocalImage / releaseDecodedImage / skyCultureMakerArtworkDecodeGeneration）
-//     与 `skyCultureMakerArtworkTouchStartX/Y`、`skyCultureMakerArtworkTouchMoved` 这类手势瞬态。
-//
-// 只放数据与纯计算，不 import UI / NAPI（image 仅用于 PixelMap 类型）。
+// 星文化制作器（activePanel === 'skyCultureMaker'）向导 store：持有向导骨架、元数据、星座编辑、
+// 校验/导出与配图角点状态，由 panels/skyculture/ 下组件经 @ObjectLink 观察；桥经 attachPort
+// 注入 CommandPort，本 store 自持 loadSkyCultureMakerDraft。native 桥动作、自动保存定时器、
+// 图片解码与手势瞬态仍留宿主（只放数据与纯计算，不 import UI / NAPI，image 仅用于 PixelMap 类型）。
 @Observed
 export class SkyCultureMakerStore {
   // —— 向导骨架与反馈 ——
@@ -71,9 +59,9 @@ export class SkyCultureMakerStore {
   artworkPixelMap: image.PixelMap | undefined = undefined
   artworkPreviewState: string = 'empty'
 
-  // —— 桥 / 宿主助手注入（§14.1 AB-0；§14 B2R-3 自持 loadSkyCultureMakerDraft）——
+  // —— 桥 / 宿主助手注入 ——
   private port: CommandPort | null = null
-  // 本加载器使用启动期重试（0/100/150），无并发抑制序号；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器无并发抑制序号；使用启动期重试 0/100/150。seq 预留未用。
   private seq: number = 0
   private onChanged: (() => void) | null = null
   private hooks: SkyCultureMakerHostHooks | null = null
@@ -153,10 +141,7 @@ export class SkyCultureMakerStore {
     return localized === key ? fallback : localized
   }
 
-  // 星文化制作器：桥读草稿并落状态（原宿主 loadSkyCultureMakerDraft，函数体逐字搬入；仅
-  // this.callNativeWhenReady → this.port.requestWhenReady、this.skyCultureMakerStore.<f> → this.<f>、
-  // this.skyCultureMakerDraftFromResponse / this.applySkyCultureMakerDraft / this.ensurePluginLoaded →
-  // hooks.*；重试档 0/100/150 逐字保留）。
+  // 星文化制作器：桥读草稿并落状态；草稿解析 / 应用 / 插件加载经 hooks，重试档 0/100/150。
   loadSkyCultureMakerDraft(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -187,9 +172,7 @@ export class SkyCultureMakerStore {
     }, 0, 100, 150)
   }
 
-  // 由当前 store 字段装配草稿（plan §14.3 A2-2）。原先读宿主 skyCultureMakerStore.* 的
-  // 函数体逐字迁入本 store，改为零宿主引用；宿主保存 / 校验调用点改为
-  // this.skyCultureMakerStore.currentSkyCultureMakerDraft()。
+  // 由当前 store 字段装配草稿。
   currentSkyCultureMakerDraft(): SkyCultureMakerDraft {
     let beginTime = Number(this.beginTime)
     let endTime = Number(this.endTime)

@@ -4,16 +4,14 @@ import { MeteorShowerItem } from '../../pages/MainWindowModels'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { MeteorStore } from '../../state/MeteorStore'
 
-// 流星雨面板（原宿主 panelContent() 的 `meteorshowers` 分支，分支体原样下沉）。
+// 流星雨面板，对应 `activePanel === 'meteorshowers'`。
 //
-// 判定条件 `activePanel === 'meteorshowers'` 留在宿主。四个开关位与目录来源、
-// 活跃流星雨列表都来自宿主 @State，以 @Prop 传入；开关动作与“点条目搜索天体”
-// 回注宿主。随 UI 下沉的纯助手 fmtIso 一并迁入本组件。
-// 成员名避开 CustomComponent 属性方法（开关字段用 msXxx，不用 enabled）。
+// 四个开关位、目录来源与活跃流星雨列表来自 MeteorStore（@ObjectLink）；
+// 开关动作与“点条目搜索天体”回调注入宿主。开关字段用 msXxx：成员名须避开
+// CustomComponent 基类的 enabled 属性方法。
 
 @Component
 export struct MeteorShowersPanel {
-  // 状态经 @ObjectLink 订阅（review §2.7 第三批小簇批处理）。动作仍为宿主注入的回调。
   @ObjectLink meteorStore: MeteorStore
   @Prop panelColor: string
   onSetFlag: (flag: string, value: boolean) => void = () => {}
@@ -28,7 +26,6 @@ export struct MeteorShowersPanel {
   }
 
   build() {
-    // 流星雨：插件总开关 + 标签/仅活跃/标记开关 + 活跃流星雨列表
     Scroll() {
       Column({ space: 10 }) {
         Row() {
@@ -59,7 +56,6 @@ export struct MeteorShowersPanel {
         }
         Text(I18n.t('meteor_radiant_desc'))
           .fontSize(11).fontColor('#99FFFFFF').width('100%').padding({ left: 4, right: 4 }).margin({ top: 4 })
-        // 活跃流星雨列表
         Text(I18n.t('meteor_active_showers'))
           .fontSize(13).fontColor('#FFE9B0').width('100%').margin({ top: 8, bottom: 2 })
         if (this.meteorStore.msShowerList.length > 0) {

@@ -1,30 +1,13 @@
-// 「设置」面板（原宿主 panelContent() 的 `settings` 分支，分支体原样下沉，Phase 4j）。
+// 「设置」面板，对应 `activePanel === 'settings'`：设备与隐私 / 主设置 / 信息 / 天空 /
+// 时间 / 数据 / 插件管理 / 视图导航 8 个子标签页。
 //
-// 判定条件 `activePanel === 'settings'` 留在宿主；8 个子标签页（设备与隐私 / 主设置 /
-// 信息 / 天空 / 时间 / 数据 / 插件管理 / 视图导航）的原内联 UI 一字未改。
-//
-// 状态体系（§13.1 规则 1/5/6）：
-//   - 实时刷新的八个 @Observed store 走 @ObjectLink（gyroStore / overlayStore /
-//     deltaTStore / timeSettingsStore / ephemerisStore / pluginStore /
-//     navigationStore / viewSettingsStore），宿主源均为 @State 实例。
-//     ephemerisStore 承载 DE430/431/440/441 的可用/启用标志（Phase 4m，原 8 个 @Prop）；
-//     pluginStore 承载插件列表与加载态（Phase 4m，原 2 个 @Prop）；
-//     navigationStore 承载视图导航设置（9 字段，原 9 个 @Prop）；
-//     viewSettingsStore 承载视图交互偏好（useMetricUnits / viewLock / autoZoomResets，原 3 个 @Prop）。
-//   - 其余标量/字符串状态走 @Prop；主题色由宿主算好后传入（避免组件名与
-//     CustomComponent 基类属性方法冲突，边框色命名为 lineColor）。
-//   - 标签/文案纯函数（sensZh / pluginZh / pluginDesc / pluginFeatureRoute /
-//     resourceText / scriptZh / scriptDesc）已随 §14.2 A1-3 直连 common/derive/labels；
-//     其余宿主私有助手（informationMaskHas / pluginMetaLine /
-//     pluginFeatureDestination / pluginFeatureIsActionable / pluginFeatureActionLabel /
-//     scriptMetaLine / scriptSourceLine）与全部动作按规则 6 回注，组件内不改宿主 @State。
-//     `viewTab = 0; openSubPanel('layers')` 与 `openSubPanel('tools')` 合并为
-//     onOpenLayersSky / onOpenTools 两个动作回调。
-//   - 原 `Slider` 直接写宿主导航设置字段；组件改为本地 @State 草稿
-//     `maxFovDraft`（aboutToAppear 与 store 同步），点“应用”经 setNavigationMaxFov
-//     回注宿主 —— 与原“拖动改值、应用才下发生效”的行为一致。
-//   - 列表 Scroller（scriptListScroller）以普通成员传入（宿主仍持同一实例）。
-// 本文件不含 @BuilderParam，不含参数化 @Builder（规则 3/9）。
+// 实时状态集中在八个 @Observed store（gyro / overlay / deltaT / timeSettings / ephemeris /
+// plugin / navigation / viewSettings，均 @ObjectLink），其余标量与主题色走 @Prop；
+// 标签/文案纯函数多数直连 common/derive/labels，宿主私有助手与全部动作经回调注入。
+// 边框色命名为 lineColor：成员名须避开 CustomComponent 基类的属性方法。
+// 最大视场用本地草稿 maxFovDraft（aboutToAppear 与 store 同步）：拖动只改草稿，
+// 点“应用”才经 setNavigationMaxFov 下发生效。
+// Scroller（scriptListScroller）以普通成员传入：宿主仍持同一实例。
 
 import { curves } from '@kit.ArkUI'
 import { I18n, PROJECTION_KEYS } from '../../pages/I18n'
@@ -170,7 +153,6 @@ export struct SettingsPanel {
             onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) }
           })
           } else if (this.configTab === 0) {
-            // Main
             LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
             Text('行星历表').fontSize(12).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 4 })
             Text('用于行星位置计算的 JPL 数值星历。仅显示设备中已安装的文件。').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 5 })
@@ -204,7 +186,6 @@ export struct SettingsPanel {
               .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 12, right: 12 }).margin({ top: 6, left: 8 })
               .onClick(() => { this.saveAppSettings(); this.flashHint('设置已保存') })
           } else if (this.configTab === 1) {
-            // Information
             Row() {
               Text(I18n.t('i0120')).fontSize(12).fontColor(this.subColor).width(72)
             }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
@@ -324,7 +305,6 @@ export struct SettingsPanel {
               .borderRadius(UI_RADIUS_CONTROL).height(34).width('100%').onClick(() => { this.onOpenTools() })
             Text(I18n.t('tools_single_entry_hint')).fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 8, right: 8 }).margin({ top: 8 })
           } else if (this.configTab === 5) {
-            // Scripts
             Row() {
               Text(I18n.t('i0122')).fontSize(12).fontColor(this.subColor).width(72)
               Button(I18n.t('i0252')).fontSize(11).fontColor(this.textColor).backgroundColor(this.panelColor)
@@ -344,14 +324,12 @@ export struct SettingsPanel {
               Column({ space: 2 }) {
                 ForEach(this.scriptList, (s: string) => {
                   Column({ space: 0 }) {
-                    // 第一行：中文名
                     Row() {
                       Text(scriptZh(s)).fontSize(11).fontColor(this.textColor)
                         .fontWeight(FontWeight.Medium).layoutWeight(1)
                       Text('▶').fontSize(9).fontColor('#7FD0FF')
                     }
                     .height(28).width('100%').padding({ left: 10, right: 10 })
-                    // 第二行：简短描述
                     if (scriptDesc(s)) {
                       Text(scriptDesc(s))
                         .fontSize(8).fontColor('#77FFFFFF').width('100%')

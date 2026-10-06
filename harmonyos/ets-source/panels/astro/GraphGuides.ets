@@ -1,10 +1,9 @@
 import { UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 星图/图表区域的三个小引导块（原宿主 graphLoadingRow / rtsSelectionGuide / graphSelectionGuide）。
+// 星图/图表区域的三个小引导块。
 //
 // 都是纯展示 + 一个"打开目标选择器"回调：加载行收夜视两色，两个引导收夜视三色与回调。
-// 迁移原因：参数化 @Builder 的简单类型参数按值捕获、首帧后冻结；改组件后错误文案/进度文案
-// 变化由 @Prop 驱动实时刷新（原实现要重开面板才更新）。
+// 错误文案/进度文案由 @Prop 驱动实时刷新。
 
 // 计算中：转圈 + 进度文案。
 @Component

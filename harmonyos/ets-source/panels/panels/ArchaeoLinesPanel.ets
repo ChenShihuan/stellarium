@@ -4,13 +4,11 @@ import { ArchaeoStore } from '../../state/ArchaeoStore'
 import { ArchaeoToggleRow } from '../settings/SettingsRows'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 考古学线条面板（原宿主 panelContent() 的 `archaeoLines` 分支，分支体原样下沉）。
+// 考古学线条面板，对应 `activePanel === 'archaeoLines'`。
 //
-// 判定条件 `activePanel === 'archaeoLines'` 留在宿主；加载态与 15 个开关/线宽状态已下沉
-// state/ArchaeoStore.ets（review §2.7：Prop 风格 → Store 风格），本组件以 @ObjectLink 订阅。
-// 设置动作仍回注宿主（setArchaeoLineSetting）；线条宽度由本组件就地取整后回注
-// （Math.round 只影响提交值，不影响展示）。
-// 成员名避开 CustomComponent 属性方法（描边走 borderTint，不用 borderColor）。
+// 加载态与各开关/线宽来自 ArchaeoStore（@ObjectLink）；设置动作回调注入宿主。
+// 线宽由本组件就地取整后回注（Math.round 只影响提交值，不影响展示）。
+// 描边用 borderTint：成员名须避开 CustomComponent 基类的 borderColor 属性方法。
 
 @Component
 export struct ArchaeoLinesPanel {

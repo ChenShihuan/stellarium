@@ -3,13 +3,10 @@ import { NebulaTextureItem } from '../../pages/MainWindowModels'
 import { NebulaTextureStore } from '../../state/NebulaTextureStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 星云贴图面板（原宿主 panelContent() 的 `nebulaTextures` 分支，分支体原样下沉）。
+// 星云贴图面板，对应 `activePanel === 'nebulaTextures'`。
 //
-// 判定条件 `activePanel === 'nebulaTextures'` 留在宿主。状态改为 @Observed store + 本组件
-// @ObjectLink（review §2.7 Prop 风格 → Store 风格）：panel 就地读 nebulaTextureStatus
-// 与加载/导入态，状态变更只重绘本面板，不再是宿主级 @Prop 快照。
-// 刷新/导入/可见性/冲突规避/定位/删除等动作仍回注宿主。随 UI 下沉的纯助手
-// nebulaTextureStatusLabel 保留在本组件。
+// 贴图状态与加载/导入态来自 NebulaTextureStore（@ObjectLink），状态变更只重绘本面板；
+// 刷新/导入/可见性/冲突规避/定位/删除等动作回调注入宿主；nebulaTextureStatusLabel 为组件内纯函数。
 
 @Component
 export struct NebulaTexturesPanel {

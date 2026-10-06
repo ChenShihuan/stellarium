@@ -2,14 +2,11 @@ import { MeteorShowerItem, MeteorShowersResponse } from '../pages/MainWindowMode
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 流星雨（meteor showers）域的面板状态（原宿主 8 个 @State）。
+// 流星雨（meteor showers）域的面板状态。
 //
-// review §2.7 第三批（小簇批处理）之一。本簇面板入参与宿主字段**同名**，因此机械替换即可。
-// 已确认本域数组（msShowerList）无原地变更 ⇒ @ObjectLink 语义等价。
-//
-// §14 B3-1：加载器 loadMeteorShowers 与其配对写方 setMeteorShowersFlag 同片搬入本 store，
-// 请求序号 meteorShowersLoadRequestId 随之入 store 的 `seq`（**单一持有者**，宿主零副本、
-// 零双写，§14.8 规则 3）。setMeteorShowersFlag 自增 seq 以作废在途载入，语义逐字保留。
+// 持有面板开关、活跃流星雨列表与星表元信息，被流星雨面板以 @ObjectLink 观察。
+// 加载器 loadMeteorShowers 与写方 setMeteorShowersFlag 自持 CommandPort 与请求序号，
+// 写方自增 seq 以作废在途载入。无 hooks。
 @Observed
 export class MeteorStore {
   msEnabled: boolean = false
@@ -21,9 +18,9 @@ export class MeteorStore {
   msCatalogName: string = ''
   msCatalogSource: string = ''
 
-  // —— 桥注入（§14.1 AB-0 / §14 B3-1） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 原宿主请求序号 meteorShowersLoadRequestId 搬入 store（§14.8 规则 3）。
+  // 请求序号：作废在途载入（loadMeteorShowers 与 setMeteorShowersFlag 共用）。
   private seq: number = 0
   private onChanged: (() => void) | null = null
 
@@ -44,9 +41,7 @@ export class MeteorStore {
     }
   }
 
-  // 流星雨面板：桥查询当前设置与本月活跃流星雨（原宿主 loadMeteorShowers，§14 B3-1 搬入；函数体逐字）。
-  // 差异仅：this.callNativeWhenReady → port.requestWhenReady、this.meteorStore.<f> → this.<f>、
-  // this.meteorShowersLoadRequestId → this.seq（与 setMeteorShowersFlag 共用同一序号）。
+  // 流星雨面板：桥查询当前设置与本月活跃流星雨。
   loadMeteorShowers(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -85,10 +80,7 @@ export class MeteorStore {
     })
   }
 
-  // 写流星雨开关（原宿主 setMeteorShowersFlag，§14 B3-1 与加载器同片搬入；函数体逐字）。
-  // 差异仅：this.meteorShowersLoadRequestId → this.seq、this.meteorStore.<f> → this.<f>、
-  // this.callNativeWhenReady → port.requestWhenReady（重试档 0/100/15 逐字保留）、
-  // this.loadMeteorShowers → 同 store 方法。
+  // 写流星雨开关（自增 seq 作废在途载入；重试档 0/100/15；失败回退重新加载）。
   setMeteorShowersFlag(name: string, v: boolean): void {
     const port = this.ensurePort()
     if (port === null) {

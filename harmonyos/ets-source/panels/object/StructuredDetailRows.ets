@@ -2,12 +2,10 @@ import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { ObjectDetailField } from '../../pages/StellariumTypes'
 import { StructuredDetailRow, DetailSectionTitle } from './DetailRows'
 
-// 结构化资料区（原宿主 `structuredObjectDetails(tablet)` 及其五个段落助手）。
+// 结构化资料区：按段落分组展示 `ObjectDetailStore.selectedDetailFields`。
 //
-// 段落助手原先只被这一个界面使用，且只依赖 `ObjectDetailStore`，因此随界面一起搬出宿主，
-// 并改成接收 store 的**文件作用域函数**（ArkTS 规则：辅助逻辑用文件作用域函数，不用嵌套函数）。
-// 组件本身以 `@ObjectLink` 观察 store，`tablet` 由宿主以 `@Prop` 传入；
-// 原来 `DetailSectionTitle` 的 if/else 双分支（参数化 @Builder 时代的按值捕获遗留）合并为单次调用。
+// 以 `@ObjectLink` 观察 store，`tablet` 由宿主以 `@Prop` 传入；段落与字段的整理逻辑
+// 用文件作用域函数实现（ArkTS 规则：辅助逻辑不用嵌套函数）。
 
 function detailSectionIds(): string[] {
   return ['identity', 'observation', 'coordinates', 'physical', 'stellar', 'orbit', 'surface', 'lunar', 'comet', 'satellite', 'plugin']

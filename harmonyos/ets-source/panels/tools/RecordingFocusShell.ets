@@ -1,9 +1,9 @@
-// 录制聚焦态的全屏触摸承接层（原宿主 @Builder `recordingFocusShell()`，7 行）。
+// 录制聚焦态的全屏触摸承接层。
 //
 // 本身无状态：只把天空触摸事件下发给宿主 `handleSkyTouch`（选中 / 平移 / 缩放），
-// 与 recordingControlBar 一起构成录制中"收起控制条"的聚焦壳。回调注入，不持有 store。
+// 与录制控制条一起构成录制中"收起控制条"的聚焦壳。回调注入，不持有 store。
 //
-// 视觉逐字保留：撑满父容器、HitTestMode.Default。
+// 视觉：撑满父容器、HitTestMode.Default。
 @Component
 export struct RecordingFocusShell {
   onSkyTouch: (event: TouchEvent) => void = () => {}
