@@ -1,24 +1,26 @@
+import { I18n } from '../../pages/I18n'
 import { TimeStore } from '../../state/TimeStore'
 import { TimeWheelStore } from '../../state/TimeWheelStore'
 import { EquationOfTimeStore } from '../../state/EquationOfTimeStore'
 import { JulianDateStore } from '../../state/JulianDateStore'
 import { NightModeStore } from '../../state/NightModeStore'
-import { AtmosphereStore } from '../../state/AtmosphereStore'
-import { NightModeToggleRow } from '../../common/ui/NightModeToggleRow'
 import { QuickChipRow } from '../../common/ui/QuickChipRow'
+import { LayerSwitchRow } from '../layers/LayerSwitchRow'
 import { TimeWheelScrubber } from '../time/TimeWheelScrubber'
 import { TimeSpeedChips } from '../time/TimeSpeedChips'
 import { SiderealTimeRow } from '../time/SiderealTimeRow'
 import { EquationOfTimeBlock } from '../time/EquationOfTimeBlock'
 import { JulianDateControls } from '../time/JulianDateControls'
-import { ObservationAidBlock } from '../time/ObservationAidBlock'
 import { ManualTimeBlock } from '../time/ManualTimeBlock'
 
 // 观测时间面板，对应 `activePanel === 'time'`：时间转轴 + 速率档位 + 快捷跳转 + 恒星时 +
-// 均时差 + 儒略日 + 夜视模式 + 大气折射 + 手动指定时间。
+// 均时差 + 儒略日 + 手动指定时间 + 夜间模式（末行）。
 //
-// 六个 store（timeWheel / time / equationOfTime / julian / nightMode / atmosphere）走 @ObjectLink；
+// 五个 store（timeWheel / time / equationOfTime / julian / nightMode）走 @ObjectLink；
 // 其余数值/颜色走 @Prop；时间轮控制器与手动时间的读写属宿主私有状态，经回调注入。
+//
+// 大气折射（气压 / 气温 / 消光）原属本面板，现移入「图层 → 天空 → 观测条件」节；
+// 夜间模式复用图层面板的 LayerSwitchRow 行样式并置于面板最末。
 
 @Component
 export struct TimePanel {
@@ -27,7 +29,6 @@ export struct TimePanel {
   @ObjectLink equationOfTimeStore: EquationOfTimeStore
   @ObjectLink julianStore: JulianDateStore
   @ObjectLink nightModeStore: NightModeStore
-  @ObjectLink atmosphereStore: AtmosphereStore
   @Prop manualYear: number
   @Prop manualMonth: number
   @Prop manualDay: number
@@ -46,7 +47,6 @@ export struct TimePanel {
   onAdjustJulian: (scale: string, direction: number) => void = () => {}
   onApplyJulian: (scale: string) => void = () => {}
   onNightMode: (enabled: boolean) => void = () => {}
-  onAtmosphere: (pressure: number, temperature: number, extinction: number) => void = () => {}
   onPickDate: (year: number, monthIndex: number, day: number) => void = () => {}
   onPickTime: (hour: number, minute: number) => void = () => {}
   onApplyManual: () => void = () => {}
@@ -86,23 +86,6 @@ export struct TimePanel {
         onAdjust: (scale: string, direction: number) => { this.onAdjustJulian(scale, direction) },
         onApply: (scale: string) => { this.onApplyJulian(scale) }
       })
-      // 夜视模式与主界面按钮共用同一 nightModeStore
-      NightModeToggleRow({
-        store: this.nightModeStore,
-        textColor: this.textColor,
-        subColor: this.subColor,
-        onToggle: (enabled: boolean) => { this.onNightMode(enabled) }
-      })
-      ObservationAidBlock({
-        refractionOn: this.atmosphereStore.refractionOn,
-        atmoPressure: this.atmosphereStore.atmoPressure,
-        atmoTemperature: this.atmosphereStore.atmoTemperature,
-        atmoExtinction: this.atmosphereStore.atmoExtinction,
-        textColor: this.textColor,
-        subColor: this.subColor,
-        borderColorValue: this.borderTint,
-        onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.onAtmosphere(pressure, temperature, extinction) }
-      })
       ManualTimeBlock({
         manualYear: this.manualYear,
         manualMonth: this.manualMonth,
@@ -119,6 +102,14 @@ export struct TimePanel {
         onApply: () => { this.onApplyManual() },
         onReset: () => { this.onResetManual() }
       })
+      // 夜间模式置于末行，行样式与图层面板一致（共用 LayerSwitchRow）；上间距与上方各行统一为 8px
+      Column() {
+        LayerSwitchRow({
+          label: I18n.t('s0300'),
+          isOn: this.nightModeStore.nightMode,
+          onToggle: (value: boolean) => { this.onNightMode(value) }
+        })
+      }.width('100%').margin({ top: 4 })
     }.width('100%')
   }
 }

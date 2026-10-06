@@ -4,22 +4,28 @@ import { LayerStore } from '../../state/LayerStore'
 import { LayerViewStore } from '../../state/LayerViewStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { LayerSwitchRow } from './LayerSwitchRow'
+import { ObservationAidBlock } from './ObservationAidBlock'
 
-// 本组件文件：「图层」面板六个视图标签页（天空与恒星 / 太阳系天体 / 深空天体 /
+// 本组件文件：「图层」面板六个视图标签页（天空 / 太阳系天体 / 深空天体 /
 // 标记与网格 / 地景 / 巡天）。
 //
+// 「天空」页按 恒星 / 天空 / 观测条件 三节排布，观测条件节内嵌大气折射块（ObservationAidBlock）。
 // 纯展示值经 @ObjectLink 实时读，一切 native 桥动作经回调回注宿主：
 // 开关布尔值走 LayerStore，数值 / 展开态走 LayerViewStore。
 // 本文件不含 `@BuilderParam`，也不含参数化 `@Builder`（组件若承载宿主 `@Builder`，会渲染即退出）。
 //
 // 第七个标签页「天文化」由独立组件另行承载。
 
-// 天空与恒星。
+// 天空：恒星 / 天空 / 观测条件三节。
 @Component
 export struct LayerSkyTab {
   @ObjectLink layerStore: LayerStore
   @ObjectLink layerViewStore: LayerViewStore
   @Prop nightModeOn: boolean
+  @Prop refractionOn: boolean
+  @Prop atmoPressure: number
+  @Prop atmoTemperature: number
+  @Prop atmoExtinction: number
   @Prop textColor: string
   @Prop subColor: string
   @Prop accentColor: string
@@ -29,6 +35,7 @@ export struct LayerSkyTab {
   onSetSkyDisplay: (setting: string, value: boolean | number) => void = () => {}
   onStarMagLimit: (value: number) => void = () => {}
   onMilkyWayBright: (value: number) => void = () => {}
+  onAtmosphere: (pressure: number, temperature: number, extinction: number) => void = () => {}
 
   private meteorZhrSliderPosition(): number {
     const value = Math.max(0, Math.min(this.layerViewStore.meteorZhrMax, this.layerViewStore.meteorZhr))
@@ -46,10 +53,9 @@ export struct LayerSkyTab {
 
   build() {
     Column({ space: 0 }) {
-      Text('天空与恒星').fontSize(11).fontColor(this.subColor).width('100%').margin({ top: 2, bottom: 6 }).padding({ left: 2 })
+      // ── 恒星：恒星本体与其渲染特征 ──
+      Text('恒星').fontSize(11).fontColor(this.subColor).width('100%').margin({ top: 2, bottom: 6 }).padding({ left: 2 })
       LayerSwitchRow({ label: I18n.t('s0530'), isOn: this.layerStore.stars, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Stars', '', value) } })
-      LayerSwitchRow({ label: I18n.t('s0531'), isOn: this.layerStore.milkyWay, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_MilkyWay', '', value) } })
-      LayerSwitchRow({ label: I18n.t('s0532'), isOn: this.layerStore.starLabels, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Stars_Labels', '', value) } })
       // 星等限制
       Row() {
         Text(I18n.t('i0300')).fontSize(12).fontColor(this.subColor).width(72)
@@ -72,36 +78,16 @@ export struct LayerSkyTab {
           })
         Text(this.layerViewStore.starMagLimit.toFixed(1)).fontSize(12).fontColor(this.textColor).width(28).textAlign(TextAlign.End)
       }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-      LayerSwitchRow({ label: I18n.t('s0305'), isOn: this.layerStore.atmosphere, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Atmosphere', '', value) } })
-      LayerSwitchRow({ label: I18n.t('s0306'), isOn: this.layerStore.ground, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Ground', '', value) } })
-      LayerSwitchRow({ label: I18n.t('s0307'), isOn: this.layerStore.fogEffect, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Fog', '', value) } })
-      Row().width('100%').height(0.5).backgroundColor(this.cardBorder).margin({ top: 5, bottom: 8 })
-      Text('观测条件').fontSize(11).fontColor(this.subColor).width('100%').margin({ bottom: 6 }).padding({ left: 2 })
-      Row() {
-        Text('光污染等级').fontSize(12).fontColor(this.subColor).width(76)
-        Slider({ value: this.layerViewStore.bortleScale, min: 1, max: 9, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-          .layoutWeight(1).blockColor(this.accentColor).trackColor(this.panelColor).selectedColor(this.accentColor).showSteps(false)
-          .onChange((value: number) => { this.onSetSkyDisplay('bortleScale', Math.round(value)) })
-        Text('Bortle ' + this.layerViewStore.bortleScale).fontSize(11).fontColor(this.textColor).width(58).textAlign(TextAlign.End)
-      }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-      LayerSwitchRow({ label: '人眼动态视觉调适', isOn: this.layerStore.luminanceAdaptation, onToggle: (value: boolean) => { this.onToggleLayer('luminanceAdaptation', 'setSkyDisplayLuminanceAdaptation', value) } })
+      LayerSwitchRow({ label: '亮星光晕', isOn: this.layerStore.bigStarHalo, onToggle: (value: boolean) => { this.onToggleLayer('bigStarHalo', 'setSkyDisplayBigStarHalo', value) } })
+      LayerSwitchRow({ label: '星芒效果', isOn: this.layerStore.starSpiky, onToggle: (value: boolean) => { this.onToggleLayer('starSpiky', 'setSkyDisplayStarSpiky', value) } })
       LayerSwitchRow({ label: '星星闪烁', isOn: this.layerStore.starTwinkle, onToggle: (value: boolean) => { this.onToggleLayer('starTwinkle', 'setSkyDisplayStarTwinkle', value) } })
       if (this.layerStore.starTwinkle) {
         LayerSwitchRow({ label: '无大气时保持闪烁', isOn: this.layerStore.forcedStarTwinkle, onToggle: (value: boolean) => { this.onToggleLayer('forcedStarTwinkle', 'setSkyDisplayForcedTwinkle', value) } })
       }
-      LayerSwitchRow({ label: '亮星光晕', isOn: this.layerStore.bigStarHalo, onToggle: (value: boolean) => { this.onToggleLayer('bigStarHalo', 'setSkyDisplayBigStarHalo', value) } })
-      LayerSwitchRow({ label: '星芒效果', isOn: this.layerStore.starSpiky, onToggle: (value: boolean) => { this.onToggleLayer('starSpiky', 'setSkyDisplayStarSpiky', value) } })
-      LayerSwitchRow({ label: '黄道光', isOn: this.layerStore.zodiacalLight, onToggle: (value: boolean) => { this.onToggleLayer('zodiacalLight', 'setSkyDisplayZodiacalLight', value) } })
-      if (this.layerStore.zodiacalLight) {
-        Row() {
-          Text('黄道光亮度').fontSize(12).fontColor(this.subColor).width(76)
-          Slider({ value: this.layerViewStore.zodiacalIntensity, min: 0, max: 5, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
-            .layoutWeight(1).blockColor(this.accentColor).trackColor(this.panelColor).selectedColor(this.accentColor).showSteps(false)
-            .onChange((value: number) => { this.onSetSkyDisplay('zodiacalIntensity', Math.round(value * 10) / 10) })
-          Text(this.layerViewStore.zodiacalIntensity.toFixed(1)).fontSize(11).fontColor(this.textColor).width(34).textAlign(TextAlign.End)
-        }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
-      }
-      LayerSwitchRow({ label: I18n.t('s0308'), isOn: this.layerStore.meteors, onToggle: (value: boolean) => { this.onToggleLayer('setMeteors', 'setMeteors', value) } })
+      // ── 天空：天空背景与天象 ──
+      Row().width('100%').height(0.5).backgroundColor(this.cardBorder).margin({ top: 5, bottom: 8 })
+      Text('天空').fontSize(11).fontColor(this.subColor).width('100%').margin({ bottom: 6 }).padding({ left: 2 })
+      LayerSwitchRow({ label: I18n.t('s0531'), isOn: this.layerStore.milkyWay, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_MilkyWay', '', value) } })
       // 银河亮度
       Row() {
         Text(I18n.t('i0212')).fontSize(12).fontColor(this.subColor).width(72)
@@ -125,6 +111,8 @@ export struct LayerSkyTab {
             })
         }
       }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
+      LayerSwitchRow({ label: I18n.t('s0532'), isOn: this.layerStore.starLabels, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Stars_Labels', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0308'), isOn: this.layerStore.meteors, onToggle: (value: boolean) => { this.onToggleLayer('setMeteors', 'setMeteors', value) } })
       if (this.layerStore.meteors) {
         Row() {
           Text('理论流星率').fontSize(12).fontColor(this.subColor).width(76)
@@ -136,9 +124,44 @@ export struct LayerSkyTab {
         Text('实际可见数量还会受夜间、地景亮度和地平高度影响')
           .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 86, right: 10 }).margin({ bottom: 4 })
       }
+      LayerSwitchRow({ label: '黄道光', isOn: this.layerStore.zodiacalLight, onToggle: (value: boolean) => { this.onToggleLayer('zodiacalLight', 'setSkyDisplayZodiacalLight', value) } })
+      if (this.layerStore.zodiacalLight) {
+        Row() {
+          Text('黄道光亮度').fontSize(12).fontColor(this.subColor).width(76)
+          Slider({ value: this.layerViewStore.zodiacalIntensity, min: 0, max: 5, step: 0.1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+            .layoutWeight(1).blockColor(this.accentColor).trackColor(this.panelColor).selectedColor(this.accentColor).showSteps(false)
+            .onChange((value: number) => { this.onSetSkyDisplay('zodiacalIntensity', Math.round(value * 10) / 10) })
+          Text(this.layerViewStore.zodiacalIntensity.toFixed(1)).fontSize(11).fontColor(this.textColor).width(34).textAlign(TextAlign.End)
+        }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
+      }
       LayerSwitchRow({ label: I18n.t('s0300'), isOn: this.nightModeOn, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Night_Mode', '', value) } })
       LayerSwitchRow({ label: I18n.t('s0309'), isOn: this.layerStore.flipHoriz, onToggle: (value: boolean) => { this.onToggleLayer('actionHorizontal_Flip', '', value) } })
       LayerSwitchRow({ label: I18n.t('s0310'), isOn: this.layerStore.flipVert, onToggle: (value: boolean) => { this.onToggleLayer('actionVertical_Flip', '', value) } })
+      // ── 观测条件：大气、地景与观测几何 ──
+      Row().width('100%').height(0.5).backgroundColor(this.cardBorder).margin({ top: 5, bottom: 8 })
+      Text('观测条件').fontSize(11).fontColor(this.subColor).width('100%').margin({ bottom: 6 }).padding({ left: 2 })
+      LayerSwitchRow({ label: I18n.t('s0305'), isOn: this.layerStore.atmosphere, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Atmosphere', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0306'), isOn: this.layerStore.ground, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Ground', '', value) } })
+      LayerSwitchRow({ label: I18n.t('s0307'), isOn: this.layerStore.fogEffect, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Fog', '', value) } })
+      Row() {
+        Text('光污染等级').fontSize(12).fontColor(this.subColor).width(76)
+        Slider({ value: this.layerViewStore.bortleScale, min: 1, max: 9, step: 1, style: SliderStyle.OutSet }).sliderInteractionMode(SliderInteraction.SLIDE_ONLY).minResponsiveDistance(8)
+          .layoutWeight(1).blockColor(this.accentColor).trackColor(this.panelColor).selectedColor(this.accentColor).showSteps(false)
+          .onChange((value: number) => { this.onSetSkyDisplay('bortleScale', Math.round(value)) })
+        Text('Bortle ' + this.layerViewStore.bortleScale).fontSize(11).fontColor(this.textColor).width(58).textAlign(TextAlign.End)
+      }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
+      LayerSwitchRow({ label: '人眼动态视觉调适', isOn: this.layerStore.luminanceAdaptation, onToggle: (value: boolean) => { this.onToggleLayer('luminanceAdaptation', 'setSkyDisplayLuminanceAdaptation', value) } })
+      // 大气折射（气压 / 气温 / 消光）自时间面板迁入
+      ObservationAidBlock({
+        refractionOn: this.refractionOn,
+        atmoPressure: this.atmoPressure,
+        atmoTemperature: this.atmoTemperature,
+        atmoExtinction: this.atmoExtinction,
+        textColor: this.textColor,
+        subColor: this.subColor,
+        borderColorValue: this.cardBorder,
+        onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.onAtmosphere(pressure, temperature, extinction) }
+      })
     }.width('100%')
   }
 }

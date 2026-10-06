@@ -70,11 +70,11 @@ export struct ManualTimeBlock {
       .backgroundColor('rgba(255,255,255,0.045)').borderRadius(UI_RADIUS_CONTROL).margin({ top: 4, bottom: 4 })
       Button(I18n.t('i0046'))
         .fontSize(14).fontColor('#FFFFFFFF').backgroundColor('#5B93BF')
-        .borderRadius(UI_RADIUS_CONTROL).height(40).width('100%').margin({ top: 4 })
+        .borderRadius(UI_RADIUS_CONTROL).height(40).width('100%').margin({ top: 4, bottom: 4 })
         .onClick(() => { this.onApply() })
       Button(I18n.t('i0047'))
         .fontSize(13).fontColor('#99FFFFFF').backgroundColor(this.borderColorValue)
-        .borderRadius(UI_RADIUS_CONTROL).height(36).width('100%').margin({ top: 2 })
+        .borderRadius(UI_RADIUS_CONTROL).height(36).width('100%').margin({ top: 4, bottom: 4 })
         .onClick(() => { this.onReset() })
     }.width('100%')
   }

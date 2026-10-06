@@ -1,6 +1,7 @@
 import { image } from '@kit.ImageKit'
 import { SkyCultureArtItem, TabItem } from '../../pages/StellariumTypes'
 import { ConfigurationOption, OFFLINE_APPGALLERY_BUILD } from '../../pages/MainWindowModels'
+import { AtmosphereStore } from '../../state/AtmosphereStore'
 import { LayerStore } from '../../state/LayerStore'
 import { LayerViewStore } from '../../state/LayerViewStore'
 import { SkyCultureSettingsStore } from '../../state/SkyCultureSettingsStore'
@@ -13,7 +14,9 @@ import { SkyCultureViewTab } from '../skyculture/SkyCultureViewTab'
 // 「图层」面板，对应 `activePanel === 'layers'`：组装图层预设条 + 视图标签页选择器 +
 // 六个图层页签（Sky/Sso/Dso/Markings/Landscape/Surveys）+ 星空文化页签 SkyCultureViewTab。
 //
-// 四个 store（layer / layerView / skyCultureView / skyCultureSettings）走 @ObjectLink；
+// 「天空」页分 恒星 / 天空 / 观测条件 三节；大气折射块（ObservationAidBlock）挂在观测条件节内。
+//
+// 五个 store（layer / layerView / skyCultureView / skyCultureSettings / atmosphere）走 @ObjectLink；
 // 主题色、当前页签、标签数据、解码结果 / canvas 上下文等走 @Prop 或普通成员；
 // native 桥 / 定时器 / 解码 / canvas 绘制 / 快捷键分发动作用回调注入宿主。
 @Component
@@ -22,6 +25,7 @@ export struct LayersPanel {
   @ObjectLink layerViewStore: LayerViewStore
   @ObjectLink skyCultureViewStore: SkyCultureViewStore
   @ObjectLink skyCultureSettingsStore: SkyCultureSettingsStore
+  @ObjectLink atmosphereStore: AtmosphereStore
   @Prop nightModeOn: boolean
   @Prop viewTab: number
   @Prop expandedLayout: boolean
@@ -52,6 +56,7 @@ export struct LayersPanel {
   onSetSkyDisplay: (setting: string, value: boolean | number) => void = () => {}
   onStarMagLimit: (value: number) => void = () => {}
   onMilkyWayBright: (value: number) => void = () => {}
+  onAtmosphere: (pressure: number, temperature: number, extinction: number) => void = () => {}
   onSetOrbitFlag: (setting: string, enabled: boolean) => void = () => {}
   onSetOrbitThickness: (value: number) => void = () => {}
   onSetOrbitColorStyle: (index: number) => void = () => {}
@@ -100,6 +105,10 @@ export struct LayersPanel {
               layerStore: this.layerStore,
               layerViewStore: this.layerViewStore,
               nightModeOn: this.nightModeOn,
+              refractionOn: this.atmosphereStore.refractionOn,
+              atmoPressure: this.atmosphereStore.atmoPressure,
+              atmoTemperature: this.atmosphereStore.atmoTemperature,
+              atmoExtinction: this.atmosphereStore.atmoExtinction,
               textColor: this.textColor,
               subColor: this.subColor,
               accentColor: this.accentColor,
@@ -108,7 +117,8 @@ export struct LayersPanel {
               onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.onToggleLayer(actionId, cmd, value) },
               onSetSkyDisplay: (setting: string, value: boolean | number) => { this.onSetSkyDisplay(setting, value) },
               onStarMagLimit: (value: number) => { this.onStarMagLimit(value) },
-              onMilkyWayBright: (value: number) => { this.onMilkyWayBright(value) }
+              onMilkyWayBright: (value: number) => { this.onMilkyWayBright(value) },
+              onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.onAtmosphere(pressure, temperature, extinction) }
             })
           } else if (this.viewTab === 1) {
             LayerSsoTab({
@@ -218,6 +228,10 @@ export struct LayersPanel {
               layerStore: this.layerStore,
               layerViewStore: this.layerViewStore,
               nightModeOn: this.nightModeOn,
+              refractionOn: this.atmosphereStore.refractionOn,
+              atmoPressure: this.atmosphereStore.atmoPressure,
+              atmoTemperature: this.atmosphereStore.atmoTemperature,
+              atmoExtinction: this.atmosphereStore.atmoExtinction,
               textColor: this.textColor,
               subColor: this.subColor,
               accentColor: this.accentColor,
@@ -226,7 +240,8 @@ export struct LayersPanel {
               onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.onToggleLayer(actionId, cmd, value) },
               onSetSkyDisplay: (setting: string, value: boolean | number) => { this.onSetSkyDisplay(setting, value) },
               onStarMagLimit: (value: number) => { this.onStarMagLimit(value) },
-              onMilkyWayBright: (value: number) => { this.onMilkyWayBright(value) }
+              onMilkyWayBright: (value: number) => { this.onMilkyWayBright(value) },
+              onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.onAtmosphere(pressure, temperature, extinction) }
             })
           }
         }
