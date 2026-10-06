@@ -1,3 +1,14 @@
+## [2026-10-06] DevEco Code - 图层面板：清除按钮入标题栏 + 预设/页签分隔线；观测辅助预设打开网格总闸
+
+- **依据**：用户要求 —— ①「关闭全部标线」按钮移入标题栏；② 图层预设 tag 与子面板标签 tag 之间加横向分隔线；③ 观测辅助预设把赤道网格打开。
+- **修改文件（6 改 1 再生）**：`panels/shell/PanelHeader.ets`、`panels/layers/LayerPresetBar.ets`、`panels/panels/LayersPanel.ets`、`pages/MainWindowNativeNode.ets`、`capability/LayerController.ets`、`scripts/check-ohos-ui-contract.mjs`；再生 `docs/harmonyos/json/ui-contract-baseline.json`。
+- **① 清除按钮上移标题栏**：`PanelHeader` 新增可选动作位 `@Prop headerActionLabel: string = ''`（空串不渲染）+ `onHeaderAction`，渲染为标题与 ✕ 之间的胶囊按钮，并新增跨会话静态 id 锚点 `panel-header-action`；宿主在两处 `PanelHeader`（`floatingPanel` / `compactPanel`）按 `this.activePanel === 'layers'` 传「清除坐标与标记」，动作仍是 `layerCtl().clearMarkingLayers()`。`LayerPresetBar` 删除该按钮与 `onClear` 属性，`LayersPanel` 与宿主同步去掉 `onClear` 接线。
+- **② 预设条与页签之间加横向分隔线**：`LayersPanel` 在 `LayerPresetBar` 与 `LayerTabs` 之间插入 `Row().width('100%').height(0.5).backgroundColor(this.cardBorder).margin({ top: 2, bottom: 2 })`，与面板内其它分隔线同款。
+- **③ 观测辅助预设的赤道网格此前是空开关（根因）**：`observe` 分支早已有 `actionShow_Equatorial_Grid: true`（连同黄道线 / 子午线 / 地平线），但 `actionShow_Gridlines` 属 `MARKING_LAYER_ACTION_IDS`，被预设基础表 `layerPresetStates(false)` 置为 `false`；而它是 `GridLinesMgr` 的**总闸** —— `src/core/modules/GridLinesMgr.hpp:1256` 注释即 "master switch to switch off all grids/lines"，`GridLinesMgr.cpp:2160` 里 `if (!gridlinesDisplayed)` 直接返回、不绘制任何网格与线。于是那四个开关全部失效。修法：在网格 / 线之前补 `{ id: 'actionShow_Gridlines', enabled: true }`，并加 why 注释说明总闸语义，避免再被基础表覆盖。
+- **UI 契约**：新增 1 个静态 id 锚点 → 契约基线由 44 锚点 / 24 静态 id 再生为 **45 / 25**；按基线头部说明「锚点有意新增时才 `--update`」执行再生，`scannedFiles` 一并刷新（该列表长期停在 D/E/M 轨道之前的旧文件表：仍列 `pages/DetailModel*.ets`、`pages/StellariumAudio.ets`、`panels/common/HierColumn.ets`，且缺全部 `capability/*` 与多数 `state/*`）。
+- **顺带修复**：`check-ohos-ui-contract.mjs` 写基线用裸 LF，而 `.gitattributes` 把 `docs/harmonyos/**` 钉为 `eol=crlf` —— 改为写 CRLF，避免每次再生成都产生整文件 eol 噪声。
+- **验证**：`arkts_check` 0 error；`BUILD SUCCESSFUL`（2 次）；契约 `intact`（45 锚点 / 25 静态 id / 33 面板）；`ui layout --id panel-header-action` 命中 Button 且 `clickable`，与 `panel-close` 同一 y 带；截图确认按钮落在标题栏、分隔线出现在预设条与页签之间。真机（192.168.50.108:36717）`getState` 实测 `actionShow_Gridlines` 与 `actionShow_Equatorial_Grid` 互相独立，`setActionChecked actionShow_Equatorial_Grid|1`（回包 `{"checkable":true,"checked":true,"ok":true}`）后回读两者皆 `true` —— 即修好后预设应落到的那组状态，赤道网格实际绘制。
+- **备注**：验证过程中已在真机打开上述两个标志（等于已应用观测辅助应有的网格状态），未改动其它持久化设置。
 ## [2026-10-06] DevEco Code - 图层面板「天空」页三节重组 + 大气设置迁入 + 时间面板夜间模式行统一
 
 - **依据**：用户要求 —— ① 图层面板按「恒星 / 天空 / 观测条件」分节，把大气与观测设置从时间面板迁入观测条件节；② 时间面板夜间模式改用图层同款行样式并置于面板最末，末尾各行间距统一。

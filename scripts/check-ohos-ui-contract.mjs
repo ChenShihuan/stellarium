@@ -66,7 +66,9 @@ const contract = {
 
 if (process.argv.includes('--update')) {
   mkdirSync(baselinePath.replace(/[^/]+$/, ''), { recursive: true });
-  writeFileSync(baselinePath, JSON.stringify(contract, null, 2) + '\n');
+  // .gitattributes pins docs/harmonyos/** to eol=crlf, so write CRLF; a bare-LF
+  // rewrite would otherwise show up as whole-file eol churn on every regeneration.
+  writeFileSync(baselinePath, JSON.stringify(contract, null, 2).replace(/\n/g, '\r\n') + '\r\n');
   console.log(`UI contract baseline written: ${contract.count.panels} panels, ` +
     `${contract.count.staticIds} static ids, ${contract.count.dynamicIdPrefixes} dynamic prefixes, ` +
     `${contract.count.totalIdAnchors} id anchors, over ${files.length} files.`);

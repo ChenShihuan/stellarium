@@ -6890,8 +6890,10 @@ export struct WindowNativeNode {
       PanelHeader({
         title: panelTitleFor(this.activePanel, this.configTab, this.isExpandedLayout, this.timeStore.timePanelClockText()), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
         routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
+        headerActionLabel: this.activePanel === 'layers' ? '清除坐标与标记' : '',
         onBack: () => { this.handlePanelBackTap() },
-        onClose: () => { this.closePanel(true); this.resetPanelIdle() }
+        onClose: () => { this.closePanel(true); this.resetPanelIdle() },
+        onHeaderAction: () => { this.layerCtl().clearMarkingLayers() }
       })
       Scroll(this.widePanelScroller) {
         Column() {
@@ -6945,8 +6947,10 @@ export struct WindowNativeNode {
       PanelHeader({
         title: panelTitleFor(this.activePanel, this.configTab, this.isExpandedLayout, this.timeStore.timePanelClockText()), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
         routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
+        headerActionLabel: this.activePanel === 'layers' ? '清除坐标与标记' : '',
         onBack: () => { this.handlePanelBackTap() },
-        onClose: () => { this.closePanel(true); this.resetPanelIdle() }
+        onClose: () => { this.closePanel(true); this.resetPanelIdle() },
+        onHeaderAction: () => { this.layerCtl().clearMarkingLayers() }
       })
       Scroll(this.compactPanelScroller) {
         Column() {
@@ -7170,7 +7174,6 @@ export struct WindowNativeNode {
         pickerSelected: this.nightModeStore.nmPickerSelected(),
         pickerOption: this.nightModeStore.nmPickerOption(),
         onPreset: (preset: string) => { this.layerCtl().applyLayerPreset(preset) },
-        onClear: () => { this.layerCtl().clearMarkingLayers() },
         onSelectTab: (id: number) => { this.switchViewTab(id) },
         onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
         onSetSkyDisplay: (setting: string, value: boolean | number) => { this.layerCtl().setSkyDisplaySetting(setting, value) },

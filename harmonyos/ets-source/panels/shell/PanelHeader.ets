@@ -8,7 +8,9 @@ import { getIcon } from '../../common/ui/ShellIcons'
 // 返回与关闭动作以回调注入。
 // 长按/点按后的实时刷新仍由宿主状态驱动（``panelTitle()`` 会随 ``observationTimeText`` /
 // ``timeStore.timeRateText`` 变化重新求值，再经 ``@Prop`` 刷新本组件）。
-// ``panel-back`` / ``panel-close`` 为跨会话静态 id 锚点。
+// 可选的标题栏动作按钮由 ``headerActionLabel`` 驱动（空串即不渲染），目前供「图层」面板
+// 放置「清除坐标与标记」；动作用 ``onHeaderAction`` 注入。
+// ``panel-back`` / ``panel-close`` / ``panel-header-action`` 为跨会话静态 id 锚点。
 
 @Component
 export struct PanelHeader {
@@ -17,8 +19,10 @@ export struct PanelHeader {
   @Prop canGoBack: boolean
   @Prop routeOpacity: number
   @Prop routeOffsetX: number
+  @Prop headerActionLabel: string = ''
   onBack: () => void = () => {}
   onClose: () => void = () => {}
+  onHeaderAction: () => void = () => {}
 
   build() {
     Row() {
@@ -62,6 +66,20 @@ export struct PanelHeader {
         .opacity(this.routeOpacity)
         .translate({ x: this.routeOffsetX, y: 0 })
       Blank()
+      if (this.headerActionLabel.length > 0) {
+        Button(this.headerActionLabel)
+          .id('panel-header-action')
+          .fontSize(11)
+          .fontColor('#E5FFFFFF')
+          .backgroundColor('rgba(255, 255, 255, 0.06)')
+          .borderRadius(UI_RADIUS_PILL)
+          .height(28)
+          .padding({ left: 10, right: 10 })
+          .zIndex(10)
+          .clickEffect({ level: ClickEffectLevel.LIGHT })
+          .onClick(() => { this.onHeaderAction() })
+          .margin({ right: 8 })
+      }
       Button() {
         Image($r('app.media.ic_close'))
           .width(18)

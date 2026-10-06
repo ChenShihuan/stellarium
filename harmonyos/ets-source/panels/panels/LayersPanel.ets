@@ -12,7 +12,8 @@ import { LayerSkyTab, LayerSsoTab, LayerDsoTab, LayerMarkingsTab, LayerLandscape
 import { SkyCultureViewTab } from '../skyculture/SkyCultureViewTab'
 
 // 「图层」面板，对应 `activePanel === 'layers'`：组装图层预设条 + 视图标签页选择器 +
-// 六个图层页签（Sky/Sso/Dso/Markings/Landscape/Surveys）+ 星空文化页签 SkyCultureViewTab。
+// 六个图层页签（Sky/Sso/Dso/Markings/Landscape/Surveys）+ 星空文化页签 SkyCultureViewTab；
+// 预设条与页签选择器之间有一条横向分隔线，「清除坐标与标记」已上移到面板标题栏。
 //
 // 「天空」页分 恒星 / 天空 / 观测条件 三节；大气折射块（ObservationAidBlock）挂在观测条件节内。
 //
@@ -50,7 +51,6 @@ export struct LayersPanel {
   mapContextSettings: RenderingContextSettings = new RenderingContextSettings(true)
   mapContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.mapContextSettings)
   onPreset: (preset: string) => void = () => {}
-  onClear: () => void = () => {}
   onSelectTab: (id: number) => void = () => {}
   onToggleLayer: (actionId: string, cmd: string, value: boolean) => void = () => {}
   onSetSkyDisplay: (setting: string, value: boolean | number) => void = () => {}
@@ -97,7 +97,9 @@ export struct LayersPanel {
 
   build() {
       Column() {
-        LayerPresetBar({ subColor: this.subColor, textColor: this.textColor, panelColor: this.panelColor, onPreset: (preset: string) => { this.onPreset(preset) }, onClear: () => { this.onClear() } })
+        LayerPresetBar({ subColor: this.subColor, textColor: this.textColor, panelColor: this.panelColor, onPreset: (preset: string) => { this.onPreset(preset) } })
+        // 图层预设 tag 与子面板标签 tag 之间的横向分隔线
+        Row().width('100%').height(0.5).backgroundColor(this.cardBorder).margin({ top: 2, bottom: 2 })
         LayerTabs({ tabs: this.layerTabs, activeTab: this.viewTab, foldTablet: this.foldTablet, textColor: this.textColor, subColor: this.subColor, accentColor: this.accentColor, panelColor: this.panelColor, onSelectTab: (id: number) => { this.onSelectTab(id) } })
         Column({ space: 0 }) {
           if (this.viewTab === 0) {
