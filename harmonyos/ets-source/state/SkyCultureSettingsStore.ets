@@ -3,43 +3,24 @@ import { StellariumBridgeResponse, SkyCultureItem, SkyCultureTerritoryEntry, Sky
 import { ConfigurationOption, SkyCultureVisualColors } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → SkyCultureSettingsStore 的加载助手（§14.5 B2R-3「额外注入」）。
+// 宿主 → SkyCultureSettingsStore 的加载助手。
 export interface SkyCultureSettingsHostHooks {
   // 当前有效的配色目标（读 layerStore 图层开关 + 本 store 的 hasZodiac/hasLunarSystem）。
   skyCultureActiveColorTarget(): string
   // Canvas 领地地图重绘（持有 skyCultureMapContext / skyCultureMapRenderWidth|Height，属 UI/NAPI）。
   drawSkyCultureTerritoryMap(): void
-  // 当前选中的星空文化 id（属 SkyCultureViewStore，跨 store 读取经注入，§14.8 规则 4）。
-  // 领地地图加载器开头 `currentSkyCultureId.length === 0` 门禁所用（§14.5 表未列，普查补出）。
+  // 当前选中的星空文化 id（属 SkyCultureViewStore，跨 store 读取经注入）。
+  // 领地地图加载器开头以 currentSkyCultureId 是否为空作门禁。
   skyCultureCurrentId(): string
 }
 
-// 「星空文化」面板（`activePanel === 'layers'` 的第 7 个视图标签页 `viewSkyCultureTab`）的
-// **设置字段簇 + 纯计算**。
+// 「星空文化」面板（layers 面板的 viewSkyCultureTab）设置 store：持有视觉设置、标签模式、
+// 目录筛选、领地地图与详情元信息字段及其纯计算，由面板组件经 @ObjectLink 观察；桥经 attachPort
+// 注入 CommandPort，本 store 自持三类加载器，配色目标 / 地图重绘 / 当前文化 id 经 hooks 回注。
 //
-// 本片边界（Phase 4g）：
-//   - 迁移原宿主 82 个 builder 专用 `skyCulture*` @State 字段（视觉 24、标签模式/组合名称 12、
-//     目录筛选 15、领地地图 11、详情元信息 14、默认文化 1 等），逐条保留原类型与默认值；
-//     宿主以 `@State private skyCultureSettingsStore: SkyCultureSettingsStore = new SkyCultureSettingsStore()`
-//     持有，组件经 @ObjectLink 实时读，宿主自身也读它（规则 4 安全）。
-//   - 迁移只读/纯计算助手（标签模式名、配色、地区/分类文案、年代筛选、领地档案筛选、
-//     年份格式化、`filteredSkyCultureList(list)`、`applySkyCultureVisualSetting` 等）。
-//
-// 明确**不**属于本 store（留在宿主，理由见协议 §13.1 规则 5/6）：
-//   - 文化列表与当前选择 `skyCultureList` / `skyCultureListLoading` / `skyCultures` /
-//     `currentSkyCulture` / `currentSkyCultureId` —— 跨域共享，以 @Prop 传入组件；
-//   - 进度驱动的解码结果 `skyCultureArtStates` / `skyCultureArtThumbnailPixelMaps` —— 逐张图片解码渐进
-//     写入，按"高频写入不入被观察 store"留在宿主，以 @Prop 传入组件；
-//     （Phase 5c 例外：单张大图 `artPreviewPixelMap` 已收进 `SkyCultureViewStore`，供预览叠层以
-//     @ObjectLink 引用语义渲染 —— @Prop 会拷贝 PixelMap 导致 Image.onError。）
-//   - Canvas 绘图上下文与画布尺寸 `skyCultureMapContext*` / `skyCultureMapRender*` ——
-//     由宿主 `drawSkyCultureTerritoryMap()` 持有并回注；
-//   - 定时器 / 请求序号 / 锚点校正字段；
-//   - native 桥动作（setSkyCultureVisualSetting / setSkyCultureLabelStyle / setConstellationFlag /
-//     triggerAction / setSkyCultureDefault / getSkyCultureTerritoryGeometry / setSkyCulture / …）
-//     仍留宿主，由组件回调触发。
-//
-// 只放数据与纯计算；不 import ArkUI / NAPI。
+// 只放数据与纯计算，不 import ArkUI / NAPI。进度驱动的分张解码结果（skyCultureArtStates /
+// skyCultureArtThumbnailPixelMaps）因高频渐进写入不入被观察 store，留宿主以 @Prop 传入。
+// 文化列表与当前选择跨域共享，亦留宿主。
 @Observed
 export class SkyCultureSettingsStore {
   // —— 领地区域档案 ——
@@ -136,9 +117,9 @@ export class SkyCultureSettingsStore {
   skyCultureSimulationYear: number = new Date().getFullYear()
   skyCultureTimeFollowSimulation: boolean = false
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadSkyCultureConstellationSelectionFlags） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器无并发抑制需求，seq 预留未用。
   private seq: number = 0
   private onChanged: (() => void) | null = null
   private hooks: SkyCultureSettingsHostHooks | null = null
@@ -164,9 +145,7 @@ export class SkyCultureSettingsStore {
     }
   }
 
-  // 星空文化面板：桥读星座选择标志（隔离选中 / 单选）（原宿主
-  // loadSkyCultureConstellationSelectionFlags，函数体逐字搬入；仅
-  // this.callInteractive → this.port.requestInteractive、this.skyCultureSettingsStore.<f> → this.<f>）。
+  // 星空文化面板：桥读星座选择标志（隔离选中 / 单选）。
   loadSkyCultureConstellationSelectionFlags(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -181,10 +160,7 @@ export class SkyCultureSettingsStore {
     })
   }
 
-  // 星空文化视觉设置：桥读字号/粗细/亮度/过渡时长与配色（原宿主 loadSkyCultureVisualSettings，
-  // 函数体逐字搬入；仅 this.callInteractive → this.port.requestInteractive、
-  // this.skyCultureSettingsStore.<f> → this.<f>、this.skyCultureActiveColorTarget() →
-  // hooks.skyCultureActiveColorTarget()）。
+  // 星空文化视觉设置：桥读字号/粗细/亮度/过渡时长与配色。
   loadSkyCultureVisualSettings(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -234,10 +210,7 @@ export class SkyCultureSettingsStore {
     })
   }
 
-  // 星空文化领地地图：桥读指定年份的区域几何并触发重绘（原宿主 loadSkyCultureTerritoryMap，
-  // 函数体逐字搬入；仅 this.callInteractive → this.port.requestInteractive、
-  // this.skyCultureSettingsStore.<f> → this.<f>、this.skyCultureViewStore.currentSkyCultureId →
-  // hooks.skyCultureCurrentId()、this.drawSkyCultureTerritoryMap() → hooks.drawSkyCultureTerritoryMap()）。
+  // 星空文化领地地图：桥读指定年份的区域几何并触发重绘。
   loadSkyCultureTerritoryMap(): void {
     const port = this.ensurePort()
     if (port === null) {

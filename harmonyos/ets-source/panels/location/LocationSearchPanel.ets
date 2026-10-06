@@ -3,14 +3,13 @@ import { LocSearchItem } from '../../pages/StellariumTypes'
 import { LocationStore } from '../../state/LocationStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 位置面板的离线地点搜索框 + 结果列表。
+// 本组件职责：位置面板的离线地点搜索框 + 结果列表。
 //
-// 原为宿主 @Builder `locationSearchPanel()`。现改为组件：
 //   - 搜索簇字段（locSearchQuery / locSearchResults / locSearching / locSearchDebounce）
 //     与 formatDegrees 随 @ObjectLink store 实时刷新；
-//   - 分块扫描（searchLocations）、选中落地（selectSearchLocation）走原生桥，留在宿主；
+//   - 分块扫描（searchLocations）、选中落地（selectSearchLocation）走原生桥，由宿主完成；
 //   - 结果行的「省·国」上下文串依赖宿主的翻译缓存，以 contextOf 回调注入；
-//   - 输入框会把草稿名同步给位置选择器（宿主字段 locationPickerName），以 onNameDraft 回注。
+//   - 输入框会把草稿名同步给位置选择器，以 onNameDraft 回注。
 @Component
 export struct LocationSearchPanel {
   @ObjectLink store: LocationStore

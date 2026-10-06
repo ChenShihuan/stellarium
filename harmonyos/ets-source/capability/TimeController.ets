@@ -1,22 +1,8 @@
-// 时间操作控制器（PLAN §15.12 D4，STATE-REVIEW §10.2 D4）。
-//
-// 原宿主 MainWindowNativeNode 的时间域行为整体下沉，共 21 个方法 + 3 个私有字段：
-//   - 换挡/速率：setTimeRate / applySpeedStep / syncTimeRateState / speedUp / speedDown / togglePause；
-//   - 时间轮暂停：stopTimeWheelSpeed；
-//   - 时间跳转/推进：advanceTime / jumpToTimeMark / applyManualTime / syncManualTimeFromState；
-//   - 刷新：refreshTimeNow / refreshSimTimeLight；
-//   - 时间面板定时器：startPanelTimers / stopPanelTimers / hasPanelTimer（自持，§15.7 规则 3）；
-//   - 时间设置：applyTimeSettings / saveTimePreference / setStartupTimeSetting / setConfigurationTimeFormat；
-//   - chip 分发：handleChip（时间分支为内部调用，跨域分支经 hooks 回注）。
-//
-// §10.3 的 `refreshState` 阻塞已由 D0 的 BehaviorHostHooks 解锁：本控制器接口 `extends BehaviorHostHooks`。
-//
-// 依赖注入（§15.7 规则 3/4、§13.1 规则 6）：
-//   - CommandPort：时间桥命令（setTimeRate / advanceTime / setJD / getAlmanac / getState / getSimulationTime /
-//     setTimeSetting / setDateFormat / setTimeFormat）；
-//   - TimeStore / TimeSettingsStore / DeltaTStore：以实例引用持有；
-//   - TimeHostHooks：refreshState/flashHint（基类）、面板/生命周期外的时间轮与儒略日同步、utcOffsetHours、
-//     timeSettingsPending 待定门控、UI 动画、以及 chip 的跨域动作（选中/居中/视图锁/方向/搜索/定位）。
+// 时间操作控制器：负责时间速率档位与暂停/恢复、时间轮暂停、时间跳转与手动设时、
+// 时间/星等刷新、时间设置持久化与时间面板定时器，以及 chip 命令分发。
+// 依赖 CommandPort（时间桥命令）、TimeStore / TimeSettingsStore / DeltaTStore。
+// 时间面板定时器由控制器自持；时间轮重基准、儒略日字段同步、utcOffsetHours、时间设置待定门控、
+// UI 动画以及 chip 的跨域动作（选中/居中/视图锁/方向/搜索/定位）经 TimeHostHooks 回注。
 import hilog from '@ohos.hilog'
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
@@ -29,11 +15,11 @@ import { formatRate } from '../common/derive/skycult'
 import { getCityPreset } from '../common/derive/actions'
 import { BehaviorHostHooks } from './ControllerHooks'
 
-// 宿主 → 控制器回注（§13.1 规则 6 / §15.7 规则 4）。
+// 宿主 → 控制器回注。
 export interface TimeHostHooks extends BehaviorHostHooks {
-  // D6 保留字段（§15.6-1）：观测地 UTC 偏移（dock 时钟 / 时间格式化共用）。
+  // 观测地 UTC 偏移（dock 时钟 / 时间格式化共用）。
   utcOffsetHours(): number
-  // 时间设置待定门控（§15.6-1 保留 @State，SettingsPanel 消费）。
+  // 时间设置待定门控（保留 @State，SettingsPanel 消费）。
   timeSettingsPending(): boolean
   setTimeSettingsPending(value: boolean): void
   // 设置回包动画（applyTimeSettings 的 getUIContext().animateTo）。
@@ -41,7 +27,7 @@ export interface TimeHostHooks extends BehaviorHostHooks {
   // 时间轮重基准与儒略日字段同步（宿主 TimeWheelController / JulianDateStore）。
   syncWheelFromSimulation(jd: number): void
   syncJulianDateFields(response: StellariumBridgeResponse, jd: number): void
-  // chip 的跨域分支（§15.6-4 保留：选中/居中/视图锁/方向/搜索/定位）。
+  // chip 的跨域分支（保留：选中/居中/视图锁/方向/搜索/定位）。
   refreshSelectedObject(): void
   moveToSelectedObject(): void
   setViewLockState(locked: boolean): void
@@ -83,7 +69,7 @@ export class TimeController {
   private port: CommandPort
   private hooks: TimeHostHooks
 
-  // ── 草稿/定时器字段（留控制器，不入被观察 store；§15.7 规则 2/3）──
+  // ── 草稿/定时器字段（留控制器，不入被观察 store）──
   private timePanelTimer: number = 0
   private timePanelFullTimer: number = 0
   private timeMarkLoading: boolean = false
@@ -102,7 +88,7 @@ export class TimeController {
     this.hooks = hooks
   }
 
-  // ── 时间面板定时器（自持 start/stop，宿主面板路由/生命周期调用；§15.7 规则 3）──
+  // ── 时间面板定时器（自持 start/stop，宿主面板路由/生命周期调用）──
   startPanelTimers(): void {
     this.stopPanelTimers()
     this.timePanelTimer = setInterval(() => { this.refreshSimTimeLight() }, 125) as number
@@ -133,7 +119,7 @@ export class TimeController {
     this.port.fire('setTimeRate', rate.toString())
   }
 
-  // 时间轮按下即暂停（原 setTimeWheelStopped 的速度域部分，跨域写收在宿主）。
+  // 时间轮按下即暂停（跨域写收在宿主）。
   stopTimeWheelSpeed(): void {
     this.timeStore.timeSpeedIndex = TIME_SPEED_IDX_STOP
     this.timeStore.beginRateChange(0, 500)
@@ -152,7 +138,7 @@ export class TimeController {
 
   /** 将原生返回的速率映射回时间档位，保证面板重建后按钮状态不会丢失。 */
   syncTimeRateState(rate: number): void {
-    // 陈旧/重复回报由 store 统一判定（待定窗口 + 去重），宿主只负责按结果落库。
+    // 陈旧/重复回报由 store 统一判定（待定窗口 + 去重），本控制器只负责按结果落库。
     if (this.timeStore.shouldIgnoreEngineRate(rate)) { return }
 
     this.timeStore.lastSyncedTimeRate = rate

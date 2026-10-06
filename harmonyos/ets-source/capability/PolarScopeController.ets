@@ -1,19 +1,15 @@
-// 极轴镜（PolarScope）行为控制器（STATE-REVIEW §10.2 D5，PLAN §15 D 轨道 D5）。
+// 极轴镜（PolarScope）行为控制器。
 //
-// 原宿主 MainWindowNativeNode 的 9 个方法逐字下沉：
-//   enterPolarScope / closePolarScope / syncNativePolarScopeOverlay / recenterPolarScope
-//   / setPolarScopeHorizontalFlip / setPolarScopeVerticalFlip / syncPolarScopeTimer
-//   / stopPolarScopeTimer / shouldRefreshPolarScope。
+// 负责极轴镜叠层的开合、定时刷新、翻转切换与回中，并保存 / 恢复进入前的会话状态快照。
+// 控制器不 import NAPI/UI：桥命令经 CommandPort 发出，极轴镜状态写入 PolarScopeStore
+//（叠层经 @ObjectLink 消费）；面板路由（activePanel / panelVisible）、refreshState / flashHint 经
+// BehaviorHostHooks 回调宿主；叠层几何（topInset / footerHeight / skyHeight / safeTopPixels）与
+// 桥回包 flags 的 `as Record<...>` 抽取经 PolarScopeHostHooks 回注宿主（控制器禁用 `as`，
+// 宿主侧 getUIContext().px2vp 亦收口于几何 hook）。
 //
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort（requestWhenReady / requestInteractive）；
-// 极轴镜状态整体写 PolarScopeStore（叠层经 @ObjectLink 消费）；面板路由（activePanel / panelVisible）
-// 与 refreshState / flashHint 经 BehaviorHostHooks；叠层几何（topInset / footerHeight / skyHeight /
-// safeTopPixels）与桥回包 flags 的 `as Record<...>` 抽取经 PolarScopeHostHooks 回注宿主
-//（控制器禁 as，§15.7 规则 4；宿主侧 getUIContext().px2vp 亦收口于几何 hook）。
-//
-// 定时器 polarScopeTimer 由控制器自持（§15.7 规则 3）：stopPolarScopeTimer / syncPolarScopeTimer
-// 即 stop()/start()，宿主生命周期（aboutToDisappear / 面板收口）与面板开合改调这两个入口；
-// 极轴镜数据加载器 loadPolarScopeData 仍在 PolarScopeStore（其「是否应刷新」谓词经 hooks 回指本控制器）。
+// 定时器 polarScopeTimer 由控制器自持：stopPolarScopeTimer / syncPolarScopeTimer 即 stop()/start()，
+// 宿主生命周期（aboutToDisappear / 面板收口）与面板开合改调这两个入口；极轴镜数据加载器
+// loadPolarScopeData 仍在 PolarScopeStore（其「是否应刷新」谓词经 hooks 回指本控制器）。
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse, SessionSnapshot } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
@@ -41,7 +37,7 @@ export class PolarScopeController {
   private port: CommandPort
   private polarScopeStore: PolarScopeStore
   private hooks: PolarScopeHostHooks
-  // 引擎/定时器草稿字段（§15.7 规则 2）：不入 @Observed store。
+  // 引擎/定时器草稿字段：不入 @Observed store。
   private polarScopeRestoreState: string = ''
   private polarScopeTransitionPending: boolean = false
   private polarScopeTransitionId: number = 0
@@ -53,12 +49,12 @@ export class PolarScopeController {
     this.hooks = hooks
   }
 
-  // 原宿主 shouldRefreshPolarScope()。
+  // 是否应刷新极轴镜：仅前台且叠层可见时为真。
   shouldRefreshPolarScope(): boolean {
     return this.hooks.applicationInForeground() && this.polarScopeStore.polarScopeVisible
   }
 
-  // 原宿主 stopPolarScopeTimer()：清定时器 + 作废在途请求（store 语义逐字保留）。
+  // 停止轮询：清定时器并作废在途请求（store 语义）。
   stopPolarScopeTimer(): void {
     if (this.polarScopeTimer !== 0) {
       clearInterval(this.polarScopeTimer)
@@ -67,7 +63,7 @@ export class PolarScopeController {
     this.polarScopeStore.cancelPolarScopeRequest()
   }
 
-  // 原宿主 syncPolarScopeTimer()：启动 1s 轮询。
+  // 同步轮询：可见且前台时启动 1s 轮询，否则停止。
   syncPolarScopeTimer(): void {
     if (!this.shouldRefreshPolarScope()) {
       this.stopPolarScopeTimer()
@@ -79,7 +75,7 @@ export class PolarScopeController {
     }
   }
 
-  // 原宿主 enterPolarScope()：打开极轴镜叠层（会话快照 → centerPolarScope → setFOV 4）。
+  // 打开极轴镜叠层：会话快照 → centerPolarScope → setFOV 4；重复调用则关闭。
   enterPolarScope(): void {
     if (this.polarScopeStore.polarScopeVisible) {
       this.closePolarScope()
@@ -142,7 +138,7 @@ export class PolarScopeController {
     }, 0, 120, 20)
   }
 
-  // 原宿主 closePolarScope()：关闭叠层并恢复会话快照（refreshState 经 hooks）。
+  // 关闭叠层并恢复会话快照（refreshState 经 hooks）。
   closePolarScope(): void {
     if (!this.polarScopeStore.polarScopeVisible && !this.polarScopeTransitionPending) return
     ++this.polarScopeTransitionId
@@ -167,7 +163,7 @@ export class PolarScopeController {
     }, 0, 120, 20)
   }
 
-  // 原宿主 syncNativePolarScopeOverlay()：把激活态 + 翻转 + 安全区比例下发引擎叠层。
+  // 把激活态 + 翻转 + 安全区比例下发引擎叠层。
   syncNativePolarScopeOverlay(active: boolean): void {
     const height = Math.max(1, this.hooks.skyHeight())
     const safeTopRatio = (this.hooks.polarScopeTopInset() + 68) / height
@@ -178,7 +174,7 @@ export class PolarScopeController {
     this.port.requestWhenReady('setPolarScopeOverlay', payload, () => {})
   }
 
-  // 原宿主 recenterPolarScope()：回中 + 复位 FOV。
+  // 回中 + 复位 FOV，随后刷新极轴镜数据。
   recenterPolarScope(): void {
     if (this.polarScopeTransitionPending) return
     this.port.requestInteractive('centerPolarScope', '', () => {
@@ -186,7 +182,7 @@ export class PolarScopeController {
     })
   }
 
-  // 原宿主 setPolarScopeHorizontalFlip()：乐观写 + 失败回滚。
+  // 水平翻转：乐观写并下发叠层，失败回滚。
   setPolarScopeHorizontalFlip(value: boolean): void {
     if (value === this.polarScopeStore.polarScopeHorizontalFlip) return
     this.polarScopeStore.polarScopeHorizontalFlip = value
@@ -198,7 +194,7 @@ export class PolarScopeController {
     })
   }
 
-  // 原宿主 setPolarScopeVerticalFlip()：乐观写 + 失败回滚。
+  // 垂直翻转：乐观写并下发叠层，失败回滚。
   setPolarScopeVerticalFlip(value: boolean): void {
     if (value === this.polarScopeStore.polarScopeVerticalFlip) return
     this.polarScopeStore.polarScopeVerticalFlip = value

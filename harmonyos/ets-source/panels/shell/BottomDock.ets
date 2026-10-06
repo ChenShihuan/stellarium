@@ -4,17 +4,16 @@ import { ShellAction } from '../../pages/StellariumTypes'
 import { DockButton } from './DockButton'
 import { DockStore } from '../../state/DockStore'
 
-// 主界面底部 Dock 栏（原宿主无参 @Builder bottomDock）。
+// 主界面底部 Dock 栏。
 //
 // 入口集合、展开/紧凑两档的尺寸、玻璃态与透明度由宿主以 @Prop 传入；
-// 触摸、点按与面板触摸回注宿主（§13.1 规则 6）。
-// 视觉与几何逐字保留（含原有两处 onTouch 叠加，后者生效、并已内含 notePanelTouch）。
+// 触摸、点按与面板触摸回注宿主。
 //
-// 激活态为什么经 @ObjectLink 而不是 @Prop（Phase 3at / 7202 / 2026-10-02 修复）：
+// 激活态为什么经 @ObjectLink 而不是 @Prop：
 //  - ForEach 对**键值未变**的数组项不会重新执行 itemGenerator，把 active 作为 @Prop
-//    直接传入会在复用后冻结（Phase 3at 回归：高亮不跟随）。
-//  - 把激活态并入 ForEach 键值虽能让高亮跟随，却让激活项**销毁重建**（7202 回归：
-//    开/关面板时入口元素重建、过渡不流畅）。
+//    直接传入会在复用后冻结（高亮不跟随）。
+//  - 把激活态并入 ForEach 键值虽能让高亮跟随，却让激活项**销毁重建**
+//    （开/关面板时入口元素重建、过渡不流畅）。
 //  - 正解：键值保持稳定（item.panel + languageRevision），激活态放进 @Observed 的
 //    DockStore、以 @ObjectLink 注入每个入口；宿主经 @Prop 传入的 activePanel /
 //    panelVisible 用 @Watch 同步进 store，入口只重渲染、不重建（V1 深观察）。

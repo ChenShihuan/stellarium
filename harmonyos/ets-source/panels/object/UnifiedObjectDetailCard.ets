@@ -5,15 +5,12 @@ import { ObjectDetailCardHeader, ObjectDetailCardTabs } from './ObjectDetailCard
 import { ObjectDetailObserveTab, ObjectDetailCoordinateTab, ObjectDetailDataTab } from './ObjectDetailTabs'
 import { ObjectDetailActionsTab } from './ObjectDetailActionsTab'
 
-// 天体详情主卡片的整体外壳（原宿主 ``unifiedObjectDetailCard()`` 的剩余部分）。
+// 天体详情主卡片的整体外壳：页头 + 页签栏 + 分隔线 + `Scroll` 内四个页组件。
 //
-// 卡片外框 = 页头 + 页签栏 + 分隔线 + ``Scroll(objectDetailScroller)`` 内四个页组件。
-// 宿主侧派生值（图标/距离摘要/资料页媒体参数/卡片尺寸）按 `@Prop` 传入；动态查值
-// （`selectedDisplayValue` / 名称本地化）以回调注入；``Scroller`` 与宿主共享同一实例，
-// 以普通成员传入（同 ``resolve`` 回调的注入方式）。滚动位置上报与媒体视口高度回写
-// 留在组件内，因为它们只依赖本组件的 scroller 与 ``mediaStore``。
-// 刻意不迁 ``@BuilderParam``：真机实测经 ``@BuilderParam`` 传入宿主 ``@Builder`` 会让
-// 应用在渲染该页时退出（见重构计划 §13.1 规则 9）。
+// 宿主侧派生值（图标 / 距离摘要 / 资料页媒体参数 / 卡片尺寸）以 `@Prop` 传入，动态查值与名称本地化
+// 以回调注入，`Scroller` 与宿主共享同一实例。滚动位置上报与媒体视口高度回写留在组件内，
+// 因为它们只依赖本组件的 scroller 与 `mediaStore`。
+// 不用 `@BuilderParam` 承接宿主 `@Builder`——真机上会让应用在渲染该页时退出。
 
 @Component
 export struct UnifiedObjectDetailCard {
@@ -68,8 +65,8 @@ export struct UnifiedObjectDetailCard {
     Column() {
       ObjectDetailCardHeader({
         store: this.store, iconName: this.iconName, liveInfoVisible: this.liveInfoVisible,
-        // 距离摘要的可见性/回退仍由宿主决定（``distanceSummaryText``）；两个实参在页头内直接读
-        // ``@ObjectLink store``，仅用于建立元素级依赖，使切换天体时该摘要会重算。
+        // 距离摘要的可见性/回退由宿主决定（`distanceSummaryText`）；两个实参在页头内直接读
+        // `@ObjectLink store`，仅用于建立元素级依赖，使切换天体时该摘要会重算。
         distanceSummary: (_distance: string, _compact: string) => this.distanceSummaryText,
         nameOf: this.nameOf, typeOf: this.typeOf,
         onDragTouch: (event: TouchEvent) => { this.onDragTouch(event) }, onDismiss: () => { this.onDismiss() }

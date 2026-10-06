@@ -7,7 +7,7 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 // 搜索候选列表：结果计数 + 候选行（名称 + 副标题）。
 //
 // 候选数据经 SearchStore（@ObjectLink）订阅。副标题格式化方法 `celestialSubtitle` 被
-// 搜索/浏览/今晚天象三处共用，故仍留在宿主，以 `subtitleFor` 回调注入，避免复制实现。
+// 搜索/浏览/今晚天象三处共用，故由宿主提供，以 `subtitleFor` 回调注入，避免复制实现。
 @Component
 export struct SearchSuggestions {
   @ObjectLink store: SearchStore

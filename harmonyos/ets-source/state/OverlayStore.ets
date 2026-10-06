@@ -3,31 +3,13 @@ import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { PointerCoordinatesResponse } from '../pages/MainWindowModels'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 「视图中心坐标」叠层、「指针坐标」插件面板与「天体详情指向线」开关的状态簇。
+// 「视图中心坐标」叠层、「指针坐标」插件面板与「天体详情指向线」开关的状态簇：持有开关与
+// 档位（字符串枚举选项）等设置类字段。宿主持有实例，相关面板 / 叠层以 @ObjectLink 观察。
 //
-// 本片边界（Phase 3an）：只搬**设置类**字段 —— 开关、档位（字符串枚举选项）。
-//   - 视图坐标叠层：viewCoordinatesVisible / viewCoordinateFamily / viewEquatorialEpoch（3 个，随 saveAppSettings 持久化）；
-//   - 指针坐标插件：pointerCoordinatesEnabled / Startup / Button / Constellation / CrossedLines / Elongation /
-//     System / Place（8 个持久化设置）+ Loading / Status（2 个瞬时请求态，只被该面板读取）；
-//   - 天体详情指向线：objectDetailConnectorVisible（1 个持久化开关）。
-//   合计 14 个字段；宿主原有 70 处 `this.<field>` 直接引用，其中 42 处改写为 `this.overlayStore.<field>`，
-//   余 28 处随被删的 4 个 @Builder 与 6 个纯查表方法一并消失。
-//
-// 刻意**不入 store**（§13.1 规则 4 / 叠层实时位置字段不入被观察 store）：
-//   - viewCoordinatePrimaryText / viewCoordinateSecondaryText —— 由 50ms 定时器（syncViewCoordinateTimer）
-//     从 native `getViewCenterCoordinates` 回填，属逐帧级读数，放进被观察 store 会造成重渲染风暴；
-//   - viewCoordinateOffsetX / Y 与拖拽瞬时量（viewCoordinateDragging / DragStartX / DragStartY /
-//     DragStartOffsetX / DragStartOffsetY / Snapshot / Timer / RequestPending）—— 触摸移动时每帧写；
-//   - objectDetailConnectorX / Y / Length / Angle / EndX / EndY / TargetX / TargetY / TargetOnScreen /
-//     AnimateGeometry，以及 objectDetailConnectorTimer / AnimationTimer / LastPanelVisible /
-//     LastActivePanel / LastClippedByUi —— 指向线几何由 refreshObjectDetailConnector 按动画帧节流写入。
-//   以上一律留在宿主，由组件以 @Prop 接收。
-//
-// 同域但**未搬**：objectInspectorModelOverlay() 与 objectInspectorModel* 字段簇 —— 属渲染管线（逐帧写回
-// 纹理与像素），按既有取舍留在宿主（§13.5 第 3 项备注 2）。
-// 本仓不存在 `coordinateGrid*` 字段（网格开关早已在 Phase 3ak 归入 LayerStore）。
-//
-// 只放数据与纯查表/纯计算，不 import UI / NAPI。
+// 刻意不入本 store：视图中心坐标的实时读数与拖拽瞬时量、天体详情指向线的几何量等逐帧/
+// 触摸级字段（放进被观察 store 会造成重渲染风暴），一律留在宿主由组件以 @Prop 接收；
+// 天体检查器的模型叠层字段属渲染管线，同样留在宿主。
+// store 只放数据与纯查表/纯计算，不 import UI / NAPI。
 @Observed
 export class OverlayStore {
   // —— 视图中心坐标叠层（设置） ——
@@ -50,9 +32,9 @@ export class OverlayStore {
   // —— 天体详情指向线（设置） ——
   objectDetailConnectorVisible: boolean = true
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadPointerCoordinates） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（无并发抑制需求）；保留字段以统一各 store 的加载器约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
 
@@ -73,7 +55,7 @@ export class OverlayStore {
     }
   }
 
-  // 叠层标题：赤道坐标会带历元后缀（原宿主私有方法，逐字搬运）。
+  // 叠层标题：赤道坐标会带历元后缀。
   viewCoordinateTitle(): string {
     if (this.viewCoordinateFamily === 'horizontal') { return I18n.t('view_coord_horizontal') }
     if (this.viewCoordinateFamily === 'galactic') { return I18n.t('view_coord_galactic') }
@@ -124,9 +106,8 @@ export class OverlayStore {
     }
   }
 
-  // 指针坐标插件：桥读全部设置项与请求态（原宿主 loadPointerCoordinates，函数体逐字搬入；
-  // 仅 this.callNativeWhenReady → this.port.requestWhenReady、this.overlayStore.<f> → this.<f>；
-  // 启动期重试档 0/100/15 逐字保留）。本域无 publish* 发布点，onChanged 为等价空实现。
+  // 指针坐标插件：桥读全部设置项与请求态（启动期重试档 0/100/15 保留）。
+  // 本域无 publish* 发布点，onChanged 为空实现。
   loadPointerCoordinates(): void {
     const port = this.ensurePort()
     if (port === null) {

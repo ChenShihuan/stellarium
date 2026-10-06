@@ -3,18 +3,12 @@ import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 相机拼接视场（mosaicCamera）面板状态（review §2.7："Prop 风格 → Store 风格"）。
+// 相机拼接视场（mosaicCamera）面板状态。
 //
-// 本域原为 10 个宿主 @State（mosaicCamera* 簇），以 10 个 @Prop 快照传入
-// MosaicCameraPanel；改为 @Observed store + 面板 @ObjectLink 后，刷新粒度
-// 收缩到订阅该 store 的面板。
+// 持有拼接相机开关、星表、当前相机与指向、加载/待处理/状态等字段，被 MosaicCameraPanel
+// 以 @ObjectLink 观察。加载器 loadMosaicCamera 自持 CommandPort；写回动作仍在宿主，面板只读 + 回调。
 //
-// 字段沿用宿主原名（保留 mosaicCamera 前缀），与既有调用点机械对应。
-// 加载器 loadMosaicCamera（§14 B1-4）已随桥注入搬入本 store；写回动作 setMosaicCamera 仍在宿主，
-// 面板只读 + 回调注入。
-//
-// 普查确认：10 个字段全部是"字段整体赋值"（`= data.enabled`、`= data.names ?? []` …），
-// 无数组原地 push/splice、无对象原地改属性，故可安全放进被观察 store。
+// 字段均为整体赋值（无数组原地 push/splice、无对象原地改属性），适配被观察 store。
 @Observed
 export class MosaicStore {
   mosaicCameraEnabled: boolean = false
@@ -28,9 +22,9 @@ export class MosaicStore {
   mosaicCameraPending: boolean = false
   mosaicCameraStatus: string = ''
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-4 起本 store 自持 loadMosaicCamera） ——
+  // —— 桥注入：本 store 自持 loadMosaicCamera ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（无并发抑制需求），预留保持统一约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
 
@@ -51,9 +45,7 @@ export class MosaicStore {
     }
   }
 
-  // 相机拼接面板：桥查询拼接相机配置（原宿主 loadMosaicCamera，函数体逐字搬入；
-  // 仅 this.callNativeWhenReady → this.port.requestWhenReady、this.mosaicStore.<f> → this.<f>；
-  // 原重试档 0 / 100 / 15 与 onFailure 回调逐字保留，仅按端口签名把 onFailure 前移）。
+  // 相机拼接面板：桥查询拼接相机配置（重试档 0/100/15，onFailure 按端口签名前移）。
   loadMosaicCamera(initial: boolean = true): void {
     const port = this.ensurePort()
     if (port === null) {

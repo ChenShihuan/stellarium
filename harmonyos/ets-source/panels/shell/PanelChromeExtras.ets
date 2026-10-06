@@ -5,11 +5,9 @@ import {
   chromeZoomLayerTop
 } from '../../common/ui/ChromeGeometry'
 
-// 面板/Dock 壳层的四个小组件（原宿主的 dockClockChip / dockClockLayer / padPanelHandle / panelHandle）。
+// 面板/Dock 壳层的四个小组件。
 //
-// 都是无状态外观件：时钟文本、几何参数与拖拽回调由宿主以 @Prop / 回调解入（§13.1 规则 6）。
-// 参数化 @Builder 的 `padExploreCard`（27 行）同批经零引用扫描确认死亡后删除，不在此列。
-// 视觉与几何逐字保留。
+// 都是无状态外观件：时钟文本、几何参数与拖拽回调由宿主以 @Prop / 回调解入。
 
 // 主界面 Dock 右上常驻时钟（HH:mm）：点按直接打开时间面板。
 @Component

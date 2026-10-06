@@ -3,11 +3,10 @@ import { I18n } from '../../pages/I18n'
 import { SkyCultureMakerStore } from '../../state/SkyCultureMakerStore'
 import { SkyCultureMakerField, SkyCultureMakerLongField } from './SkyCultureMakerFields'
 
-// 星文化制作器「概览」页（原宿主无参 `@Builder skyCultureMakerOverview`）。
+// 星文化制作器「概览」页。
 //
-// 末尾的自动保存（scheduleSkyCultureMakerSave）经 onEdited 回调交回宿主；字段的写回仍由宿主回调
-// 完成（与原来一致：宿主在 onChange 里只赋值，由字段组件补充一次排程）。
-// 视觉逐字保留：Column space 10、下拉高 38、双列 Row space 8。
+// 字段的写回由宿主回调完成；自动保存经 onEdited 回调交回宿主排程。
+// Column space 10，下拉高 38，双列 Row space 8。
 @Component
 export struct SkyCultureMakerOverview {
   @ObjectLink store: SkyCultureMakerStore

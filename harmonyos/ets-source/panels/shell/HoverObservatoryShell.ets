@@ -7,17 +7,16 @@ import { ObjectMediaStore } from '../../state/ObjectMediaStore'
 import { OverlayStore } from '../../state/OverlayStore'
 import { UI_RADIUS_PILL, UI_RADIUS_SHEET } from '../../common/ui/UiTokens'
 
-// 折叠展开（hover）观测壳（原宿主无参 @Builder `hoverObservatoryShell()`，142 行）。
+// 折叠展开（hover）观测壳。
 //
 // 结构：全屏星空触摸承接层 + 顶部观测时间/FOV 胶囊 + 分隔线 + 观测台玻璃底板
 // （Column 纯装饰）+ 底部 Dock + 天体详情指向线与详情卡。
 //
-// 原壳中段 `if (panelVisible) { Stack { this.compactPanel() } … }` 上移到宿主调用点：
-// `compactPanel()` 是 Phase 4h 定论保留的宿主薄 @Builder（体内即 `panelContent()` 的
-// `activePanel` 分发链），组件无法跨边界调用宿主 @Builder（§13.1 规则 9，真机退出实证），
-// 故面板仍由宿主在同一过渡包裹内渲染，本组件不含面板。
+// 面板由宿主调用点在过渡包裹内渲染，本组件不含面板：`compactPanel()` 是宿主薄 @Builder
+// （体内即 `panelContent()` 的 `activePanel` 分发链），组件无法跨边界调用宿主 @Builder
+// （会触发真机退出），故面板仍由宿主渲染。
 //
-// 所有状态以 @Prop / @ObjectLink 注入，动作回注宿主；视觉、几何、zIndex、命中语义逐字保留。
+// 所有状态以 @Prop / @ObjectLink 注入，动作回注宿主。
 
 @Component
 export struct HoverObservatoryShell {

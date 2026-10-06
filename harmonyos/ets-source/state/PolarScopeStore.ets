@@ -2,31 +2,17 @@ import { PolarScopeData, StellariumBridgeResponse } from '../pages/StellariumTyp
 import { CommandPort } from '../bridge/CommandPort'
 import { I18n } from '../pages/I18n'
 
-// 极轴镜（polarScope）屏幕叠层的状态。
+// 极轴镜（polarScope）屏幕叠层域状态：持有可见性 polarScopeVisible、请求态
+// polarScopeLoading / polarScopeError、数据 polarScopeData 与翻转开关
+// polarScopeHorizontalFlip / polarScopeVerticalFlip（随 saveAppSettings 持久化）。
+// 叠层以 @ObjectLink 观察，读数由组件就地读 polarScopeData 派生。
 //
-// review §2.7：本域原为 "Prop 风格" —— 6 个 @State 留宿主、以 @Prop 快照传入
-// PolarScopeOverlay（loading / errorText / horizontalFlip / verticalFlip 直接传，
-// isSouthHemisphere / hourAngleText / viewAngleText 由宿主从 polarScopeData 取好后传）。
-// 现改为 @Observed store + 叠层 @ObjectLink；读数由组件就地读 store 的 polarScopeData 派生。
+// 自持 CommandPort、极轴镜数据加载器 loadPolarScopeData 与在途请求态
+//（polarScopeRequestPending / 请求序号）；「是否应刷新」谓词
+//（applicationInForeground && polarScopeVisible）归宿主，经具名 hooks 注入。
+// 极轴镜几何与引擎/定时器字段不入 store，由宿主算好后以 @Prop 传入。
 //
-// 本域 6 个字段全部下沉：
-//   - 可见性 polarScopeVisible（宿主多处判定 + 三个壳层以 @Prop 消费，随宿主 store 读取）；
-//   - 请求态 polarScopeLoading / polarScopeError；
-//   - 数据 polarScopeData；
-//   - 翻转开关 polarScopeHorizontalFlip / polarScopeVerticalFlip（随 saveAppSettings 持久化）。
-//
-// §14 B3-2：极轴镜数据加载器 loadPolarScopeData 连其在途请求态（原宿主裸字段
-// polarScopeRequestPending / polarScopeDataRequestId）一并搬入本 store；宿主每 1s 计时器
-// 与面板开合只负责调用 loadPolarScopeData / cancelPolarScopeRequest，不再持有请求态。
-// 「是否应刷新」谓词（applicationInForeground && polarScopeVisible）仍归宿主，经
-// PolarScopeHostHooks 具名注入（store 不 import UI）。
-//
-// 刻意留在宿主（非本 store 状态）：极轴镜几何（polarScopeTopInset / ControlWidth / FooterHeight
-// 由宿主算好后以 @Prop 传入）、引擎/定时器字段 polarScopeRestoreState / TransitionPending /
-// TransitionId / Timer 与 recenterPolarScope 等动作。
-//
-// 约束：所有更新必须是"字段整体赋值"。polarScopeData 只被整体赋值（`= response.polarScope`
-// 或 `= undefined`），改造前已普查确认无 `this.polarScopeData.<prop> =` 之类的原地变更。
+// 约束：所有更新必须是"字段整体赋值"（polarScopeData 只被整体赋值，无原地变更）。
 export interface PolarScopeHostHooks {
   shouldRefreshPolarScope(): boolean
 }
@@ -40,7 +26,7 @@ export class PolarScopeStore {
   polarScopeHorizontalFlip: boolean = false
   polarScopeVerticalFlip: boolean = false
 
-  // —— 桥注入（§14 B3-2） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
   private hooks: PolarScopeHostHooks | null = null
   private polarScopeRequestPending: boolean = false
@@ -63,15 +49,13 @@ export class PolarScopeStore {
     return hooks !== null && hooks.shouldRefreshPolarScope()
   }
 
-  // 宿主 stopPolarScopeTimer：作废在途请求并清 pending（原语义逐字保留）。
+  // 作废在途请求并清 pending（宿主停止计时器时调用）。
   cancelPolarScopeRequest(): void {
     this.polarScopeRequestPending = false
     ++this.polarScopeDataRequestSequence
   }
 
-  // 极轴镜数据加载器（原宿主 loadPolarScopeData，函数体逐字搬入；仅
-  // this.callNativeWhenReady → port.requestWhenReady、this.shouldRefreshPolarScope() → this.shouldRefresh()、
-  // this.polarScopeStore.<f> → this.<f>、请求态改本 store 私有字段）。
+  // 极轴镜数据加载器：仅在允许刷新且无在途请求时发起；请求序号用于丢弃过期回包。
   loadPolarScopeData(showLoading: boolean = true): void {
     if (!this.shouldRefresh() || this.polarScopeRequestPending) return
     const port = this.ensurePort()

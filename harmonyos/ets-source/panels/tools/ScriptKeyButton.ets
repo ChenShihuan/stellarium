@@ -1,7 +1,7 @@
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 脚本回放的功能键（原宿主参数化 `@Builder scriptKeyButton(label, key)`，6 个调用点）。
-// 宽度随脚本控制条尺寸变化，因此以 @Prop 传入（参数化 @Builder 的简单类型参数会按值冻结）。
+// 脚本回放的功能键。
+// 宽度随脚本控制条尺寸变化，因此以 @Prop 传入。
 @Component
 export struct ScriptKeyButton {
   @Prop label: string

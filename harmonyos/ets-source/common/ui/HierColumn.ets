@@ -1,18 +1,11 @@
 import { curves } from '@kit.ArkUI'
-import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
+import { UI_RADIUS_CONTROL } from './UiTokens'
 
-// 层级列（原宿主参数化 `@Builder hierColumn(kind, onSelect)`，§13.1 规则 3 要求改成组件）。
+// 层级列：一列的标题、列表、选中态与点击回调，不含任何位置业务。
 //
-// 位置面板的「大洲 / 国家 / 地区 / 城市」四列与图层面板的层级列共用本组件：组件只负责
-// 一列的标题、列表、选中态与点击回调，**不含任何位置业务** ——
-//   - items / selected / title 由调用方（面板组件）从 LocationPickerStore 计算后传入；
-//   - 行标签由 labelOf 注入（位置域用 store.hierarchyItemLabel）；
-//   - Scroller 以普通成员传入（按协议：Scroller 之类对象不做装饰器传递），由调用方自持，
-//     四列各有独立滚动位；
-//   - onSelect 注入点击回调。
-//
-// 与原 @Builder 的唯一可见差异：选中态判定由调用方算好（selected 字符串），组件内不再
-// 调用 hierarchySelectionFor(kind)；布局、颜色、圆角、动效逐字保留。
+// 位置面板的「大洲 / 国家 / 地区 / 城市」四列与图层面板的层级列共用本组件：
+// items / selected / title 由调用方从 `LocationPickerStore` 计算后传入，行标签经 `labelOf` 注入；
+// `Scroller` 以普通成员传入（按协议，Scroller 之类对象不做装饰器传递），由调用方自持，各列独立滚动。
 @Component
 export struct HierColumn {
   @Prop title: string
@@ -24,7 +17,6 @@ export struct HierColumn {
 
   build() {
     Column() {
-      // Column header with localized title and icon
       Row({ space: 4 }) {
         Text(this.title)
           .fontSize(11)

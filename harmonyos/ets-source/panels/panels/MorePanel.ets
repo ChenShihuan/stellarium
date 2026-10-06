@@ -3,12 +3,10 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { ShellAction } from '../../pages/StellariumTypes'
 
-// “更多”主菜单面板（原宿主 panelContent() 的 `more` 分支，分支体原样下沉）。
+// “更多”主菜单面板，对应 `activePanel === 'more'`。
 //
-// 判定条件 `activePanel === 'more'` 留在宿主。入口集合 moreActions() 由宿主算好后
-// 以 @Prop actions 传入；是否为新分节的判定 moreActionStartsSection() 依赖宿主状态，
-// 按 §13.1 规则 6 以回调回注。键生成里的 languageRevision 仍需宿主传入，
-// 以便切语言后重建 ForEach。
+// 入口集合 moreActions() 由宿主算好后以 @Prop 传入；是否为新分节依赖宿主状态，经回调判定。
+// ForEach 键里的 languageRevision 由宿主传入，以便切语言后重建列表。
 
 @Component
 export struct MorePanel {

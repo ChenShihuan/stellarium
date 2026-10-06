@@ -2,10 +2,9 @@ import { ToolsStore } from '../../state/ToolsStore'
 import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 角度测量面板（原宿主 panelContent() 的 `angleMeasure` 分支，分支体原样下沉）。
+// 角度测量面板，对应 `activePanel === 'angleMeasure'`。
 //
-// 判定条件 `activePanel === 'angleMeasure'` 留在宿主；状态全部来自既有的
-// ToolsStore（@ObjectLink），开/关与重置回注宿主（toggleAngleMeasure / resetAngleMeasure）。
+// 角度起止点与结果文本来自 ToolsStore（@ObjectLink）；开/关与重置动作回调注入宿主。
 
 @Component
 export struct AngleMeasurePanel {

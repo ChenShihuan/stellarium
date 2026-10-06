@@ -9,16 +9,10 @@ import hilog from '@ohos.hilog'
 
 // 位置域（「位置」面板）状态：离线地点搜索簇 + 已保存位置簇。
 //
-// 本片边界（Phase 3ai）：只搬 cityChipsRow / locationSearchPanel 直接读写的两簇字段 ——
-//   locSearchQuery / locSearchResults / locSearching / locSearchDebounce / savedLocations。
-// picker 簇（locationPickerName / locationPickerLatitude / locationPickerLongitude /
-// locationPickerAltitude / locationPickerStatus / locationPickMode / hier* / mapRender* /
-// observerTimeZone）在 LocationPickerStore，随 locationPickerPanel 的组件化迁移。
-//
-// §15.12 增量：离线搜索三法与保存点三法随行为下沉搬入本 store。跨域读（LocationPickerStore 的
-// 名称/坐标/层级过滤助手、SessionToolStore 的 observerPlanet）与跨 store 动作（selectSearchLocation
-// 的 setLocation、pickerMode 写）经 LocationStoreHostHooks 具名回注（§13.1 规则 6，store 不 import 他 store）；
-// 分块扫描草稿字段随 store 走（§15.7 规则 2）。
+// 持有搜索框字段（locSearchQuery/Results/Searching/Debounce）与 savedLocations，以及离线分块
+// 搜索的私有草稿；被位置面板的 cityChipsRow / locationSearchPanel 以 @ObjectLink 观察。
+// 加载器 loadSavedLocations 与搜索/保存点为 store 方法，跨域读与跨 store 动作经
+// LocationStoreHostHooks 具名回注（store 不 import 他 store）。
 //
 // 只放数据与纯计算，不 import UI / NAPI。
 @Observed
@@ -29,7 +23,7 @@ export class LocationStore {
   locSearchDebounce: number = 0
   savedLocations: SavedLocation[] = []
 
-  // —— 离线分块搜索草稿（§15.12 随行为下沉；不对 UI 直接暴露）——
+  // —— 离线分块搜索草稿（不对 UI 直接暴露）——
   private locSearchRequestId: number = 0
   private locationSearchScanContinents: Array<string> = []
   private locationSearchScanRegions: Array<string> = []
@@ -42,19 +36,19 @@ export class LocationStore {
   private locationSearchScanTimer: number = -1
   private locationSearchLastPublishMs: number = 0
 
-  // 经纬度格式化为「绝对值°方向」（N/S、E/W）。原宿主私有方法，位置域共用。
+  // 经纬度格式化为「绝对值°方向」（N/S、E/W），位置域共用。
   formatDegrees(value: number, positive: string, negative: string): string {
     const direction = value >= 0 ? positive : negative
     return Math.abs(value).toFixed(2) + '°' + direction
   }
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadSavedLocations） ——
-  // 注意：本加载器读 AppStorage 持久化（`stellariumPrefs`）而非桥，故当前不调用 port；
-  // port/seq/onChanged 按统一约定预留，供本域后续 B2/B3 加载器复用。
+  // —— 桥注入 ——
+  // 本 store 的加载器读 AppStorage 持久化（`stellariumPrefs`）而非桥，故当前不调用 port；
+  // port/seq/onChanged 按统一约定预留，供本域后续加载器复用。
   private port: CommandPort | null = null
   private seq: number = 0
   private onChanged: (() => void) | null = null
-  // §15.12：离线搜索 / 保存点三法的跨域读写回注。
+  // 离线搜索 / 保存点的跨域读写回注。
   private hooks: LocationStoreHostHooks | null = null
 
   attachPort(port: CommandPort, onChanged: () => void): void {
@@ -72,8 +66,7 @@ export class LocationStore {
     }
   }
 
-  // 已保存位置（持久化在 AppStorage 的 `stellariumPrefs` 键）：把原始条目规整为 SavedLocation[]
-  // （原宿主 loadSavedLocations，函数体逐字搬入；仅 this.locationStore.savedLocations → this.savedLocations）。
+  // 已保存位置（持久化在 AppStorage 的 `stellariumPrefs` 键）：把原始条目规整为 SavedLocation[]。
   loadSavedLocations(): void {
     try {
       const prefs = AppStorage.get<Record<string, Object>>('stellariumPrefs')
@@ -96,7 +89,7 @@ export class LocationStore {
     }
   }
 
-  // 离线搜索入口（原宿主 searchLocations，§15.12 逐字搬入；跨域助手经 hooks）。
+  // 离线搜索入口；跨域助手经 hooks。
   searchLocations(query: string): void {
     const hooks = this.hooks
     if (hooks === null) return
@@ -131,7 +124,7 @@ export class LocationStore {
     this.locationSearchScanTimer = setTimeout(() => { this.scanLocationSearchChunk(requestId) }, 0)
   }
 
-  // 离线搜索分块扫描（原宿主 scanLocationSearchChunk，§15.12 逐字搬入；跨域助手经 hooks）。
+  // 离线搜索分块扫描；跨域助手经 hooks。
   scanLocationSearchChunk(requestId: number): void {
     const hooks = this.hooks
     if (hooks === null) return
@@ -209,7 +202,7 @@ export class LocationStore {
     this.locationSearchScanTimer = setTimeout(() => { this.scanLocationSearchChunk(requestId) }, 16)
   }
 
-  // 搜索选中落地（原宿主 selectSearchLocation，§15.12 逐字搬入；setLocation / pickerMode 经 hooks）。
+  // 搜索选中落地；setLocation / pickerMode 经 hooks。
   selectSearchLocation(item: LocSearchItem): void {
     const hooks = this.hooks
     if (hooks === null) return
@@ -219,7 +212,7 @@ export class LocationStore {
     hooks.setPickerMode('map')
   }
 
-  // 保存当前 picker 位置（原宿主 saveCurrentLocation，§15.12 逐字搬入；picker 草稿与 flashHint 经 hooks）。
+  // 保存当前 picker 位置；picker 草稿与 flashHint 经 hooks。
   saveCurrentLocation(): void {
     const hooks = this.hooks
     if (hooks === null) return
@@ -243,13 +236,13 @@ export class LocationStore {
     hooks.flashHint(I18n.t('loc_saved_success'))
   }
 
-  // 删除已保存位置（原宿主 deleteSavedLocation，§15.12 逐字搬入）。
+  // 删除已保存位置。
   deleteSavedLocation(name: string): void {
     this.savedLocations = this.savedLocations.filter((s: SavedLocation) => s.name !== name)
     this.persistSavedLocations()
   }
 
-  // 持久化已保存位置（原宿主 persistSavedLocations，§15.12 逐字搬入；**存储方式保持 AppStorage 原样**）。
+  // 持久化已保存位置（存储方式保持 AppStorage 原样）。
   persistSavedLocations(): void {
     try {
       let prefs = AppStorage.get<Record<string, Object>>('stellariumPrefs')
@@ -264,9 +257,9 @@ export class LocationStore {
   }
 }
 
-// 宿主 → LocationStore 的回注（§15.12）。离线搜索 / 保存点的跨域读（LocationPickerStore 的
+// 宿主 → LocationStore 的回注。离线搜索 / 保存点的跨域读（LocationPickerStore 的
 // 名称/坐标/层级过滤助手、SessionToolStore 的 observerPlanet）与跨 store 动作经此具名注入，
-// store 不 import 他 store（§13.1 规则 6）。
+// store 不 import 他 store。
 export interface LocationDraft {
   name: string
   latitude: number

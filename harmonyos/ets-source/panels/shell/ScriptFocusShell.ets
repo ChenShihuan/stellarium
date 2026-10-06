@@ -5,18 +5,17 @@ import { getIcon } from '../../common/ui/ShellIcons'
 import { ScriptKeyButton } from '../tools/ScriptKeyButton'
 import { ScriptStore } from '../../state/ScriptStore'
 
-// 脚本焦点播放壳（原宿主无参 @Builder `scriptFocusShell()` 的播放分支，212 行）。
+// 脚本焦点播放壳（脚本 / 回放进行中的播放分支）。
 //
 // 脚本 / 回放进行中覆盖主界面的整屏壳：全屏触摸承接层 + 底部控制条（状态圆点、
 // 标题与文件名、字幕 / 等待提示、速率微调与停止、功能键）。相邻的导览分发
-// （`if (this.guideState.active) this.interactiveGuideShell()`）留在宿主：
-// Phase 6d 已将导览壳抽成 `InteractiveGuideShell` 组件，宿主在此按 guideState.active
-// 二选一渲染；本组件只承载播放分支。
+// （`if (this.guideState.active) this.interactiveGuideShell()`）留在宿主，
+// 宿主按 guideState.active 二选一渲染；本组件只承载播放分支。
 //
 // 播放/回放四态（scriptWaiting / scriptRunning / replaying / replayPaused）经 @ObjectLink
-// 直接订阅 state/ScriptStore（Phase 4 residual）；文案与尺寸由宿主算好后以 @Prop 下发
+// 直接订阅 state/ScriptStore；文案与尺寸由宿主算好后以 @Prop 下发
 // （scriptZh / visibleScriptCaptionText / scriptWaitDisplayText / scriptControl*）；
-// 动作与触摸由宿主回注。视觉 / 命中语义逐字保留。
+// 动作与触摸由宿主回注。
 @Component
 export struct ScriptFocusShell {
   @ObjectLink scriptStore: ScriptStore

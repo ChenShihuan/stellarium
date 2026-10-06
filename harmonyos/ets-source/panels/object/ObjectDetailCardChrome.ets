@@ -5,15 +5,14 @@ import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { ObjectCompactMetric, ObjectDetailTab } from './DetailTiles'
 import { SelectedLiveInfoRows } from './DetailLiveRows'
 
-// 详情卡外壳的页头与页签栏（原 ``unifiedObjectDetailCard()`` 的前半部分）。
+// 详情卡外壳的页头与页签栏。
 //
-// 页头 = 拖拽柄 + 标题行（图标/名/类型/关闭）+ 紧凑指标 + 实时高度方位行 + 时角行；
-// 页签栏 = 四个 ``ObjectDetailTab``。动态查值与名称本地化仍留在宿主，以回调注入。
-// 外层 ``Column()`` 与卡片根容器一致（无间距），保持原布局。
+// 页头 = 拖拽柄 + 标题行 + 紧凑指标 + 实时高度方位行 + 时角行；页签栏 = 四个 `ObjectDetailTab`。
+// 动态查值与名称本地化由宿主以回调注入。
 //
-// 三枚摘要（星等/星座/距离）必须**直接读 ``@ObjectLink store``**：ArkUI 的局部刷新按元素
-// 记录依赖，若取值只经普通成员回调（``resolve``/``distanceSummary``）而不触碰被观察对象，
-// 切换天体时该元素不会被标脏，会一直显示上一颗天体的旧值（Phase 3ad 引入的回归）。
+// 页头三枚摘要（星等 / 星座 / 距离）必须**直接读 `@ObjectLink store`**：ArkUI 的局部刷新按元素
+// 记录依赖，若取值只经普通成员回调（`resolve` / `distanceSummary`）而不触碰被观察对象，
+// 切换天体时该元素不会被标脏，会一直显示上一颗天体的旧值。
 
 @Component
 export struct ObjectDetailCardHeader {
@@ -61,8 +60,8 @@ export struct ObjectDetailCardHeader {
         .width('100%').padding({ left: 16, right: 16, top: 3, bottom: 7 })
 
       Row() {
-        // 标签不再固定 72 宽（原宽度让 9 字标签自身被截断）；并移除冗余的"已定位/等待定位"标签
-        //（数值本身已含方位/高度，该标签只挤占宽度导致数值被省略号截断）。
+        // 标签不固定宽度（固定 72 会让 9 字标签自身被截断）；数值已含方位/高度，
+        // 无需额外的"已定位/等待定位"标签——它只挤占宽度导致数值被省略号截断。
         Text('实时高度 / 方位').fontSize(10).fontColor('#8FBBD6')
         Text(this.store.selectedCoordAlt.length > 0 ? this.store.selectedCoordAlt : '--')
           .fontSize(11).fontColor('#E2F5FF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })

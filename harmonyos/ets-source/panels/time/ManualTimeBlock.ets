@@ -3,9 +3,8 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
 // 手动指定时间块：滚动选择日期 / 时间 + 应用与重置。
 //
-// 日期/时间的**权威状态仍在宿主持有**（`applyManualTime()` / `syncManualTimeFromState()` 与其它面板都要读），
-// 本组件以 @Prop 接收 5 个字段、经回调交回修改；日期/时间选择对话框的 `selected` 临时值
-// 由组件自己按 props 构造（原实现借用宿主的 pickedDate/pickedTime，这里不再共用）。
+// 日期/时间的权威状态由宿主持有（`applyManualTime()` / `syncManualTimeFromState()` 与其它面板都要读），
+// 本组件以 @Prop 接收 5 个字段、经回调交回修改；选择对话框的 `selected` 临时值由组件按 props 自身构造。
 @Component
 export struct ManualTimeBlock {
   @Prop manualYear: number

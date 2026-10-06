@@ -2,11 +2,11 @@ import { I18n } from '../../pages/I18n'
 import { SettingsChoiceButton } from '../../common/ui/SettingsChoiceButton'
 import { UI_RADIUS_CONTROL, UI_OPTION_ANIMATION_MS } from '../../common/ui/UiTokens'
 
-// 设置面板（"更多 > 设置"）里的各类行/按钮（原宿主参数化 @Builder 的替代）。
+// 本组件文件：设置面板（"更多 > 设置"）里的各类行 / 按钮。
 //
 // 这些行都读宿主状态（信息模式、掩码、导航开关、导航星设置、考古线设置、镶嵌相机角度），
-// 因此把"当前值/是否可点/夜视三色"由宿主算好后以 @Prop 传入、把写回动作以回调注入；
-// 原参数化 @Builder 的简单类型参数按值捕获、首帧后冻结，改组件后点按即可实时刷新。
+// 因此把"当前值/是否可点/夜视三色"由宿主算好后以 @Prop 传入、把写回动作以回调注入，
+// 点按即可实时刷新。
 // 命名说明：`EphemerisRow` 已是 `pages/StellariumTypes` 里的数据接口名，故组件取名 `EphemerisToggleRow`。
 
 // 行星历表一行（标签 + 已安装状态 + 启用开关）。
@@ -63,8 +63,8 @@ export struct InformationModeButton {
   }
 }
 
-// 自定义信息字段开关行。`inCustomMode` 用于背景高亮（原 `informationMode === 'custom'`），
-// `canToggle` 追加了 !informationSettingPending。
+// 自定义信息字段开关行。`inCustomMode` 用于背景高亮，
+// `canToggle` 额外要求 !informationSettingPending。
 @Component
 export struct InformationSwitchRow {
   @Prop label: string

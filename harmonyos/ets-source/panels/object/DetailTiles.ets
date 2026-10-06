@@ -1,12 +1,9 @@
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 详情主卡片的"贴片族"组件。
+// 详情主卡片的"贴片族"组件：数据贴片、指标、日程贴片、页签与紧凑指标。
 //
-// 原为五个**参数化 UI 函数**（`objectDataTile` / `objectMetric` / `objectScheduleTile` /
-// `objectDetailTab` / `objectCompactMetric`）：简单类型参数按值捕获，子树首帧后冻结，
-// 因此像"实时高度 / 方位"这类随天体变化的数值不会刷新（§13.1 规则 3）。
-// 改为组件后由父方把**已解析的值**以 @Prop 传入：`selectedDisplayValue(key)` /
-// `objectDistanceSummary()` / `bottomCardIndex` 等动态查值仍留在宿主（多处共用），
+// 标签与数值由父方以 `@Prop` 传入（普通类型参数按值捕获后子树首帧即冻结，
+// 实时数值必须由能感知状态变化的父组件重新传入）。
 // 组件只负责显示规则（空值显示 `--`）与交互回调。
 
 @Component

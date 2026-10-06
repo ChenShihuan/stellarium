@@ -2,12 +2,11 @@ import { I18n } from '../../pages/I18n'
 import { TelescopeStore } from '../../state/TelescopeStore'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 天体详情卡里的 LX200 快捷控制条（原宿主 @Builder `lx200ObjectControls()`，约 60 行）。
+// 天体详情卡里的 LX200 快捷控制条。
 //
-// 无参数 builder，本可保留；但它只服务望远镜域，按协议（§13.2 步 3：面板内的 builder 一并下沉）
-// 随本片收进 panels/telescope。三个命令（GoTo / 同步 / 中止）经原生桥，留在宿主，以回调注入。
+// 三个命令（GoTo / 同步 / 中止）经原生桥，留在宿主，以回调注入。
 //
-// 视觉逐字保留：标题 12 号 #8EA0BD / 按钮高 32 / GoTo #5B93BF、同步 rgba(107,163,214,0.20)、
+// 视觉：标题 12 号 #8EA0BD / 按钮高 32 / GoTo #5B93BF、同步 rgba(107,163,214,0.20)、
 // 中止 rgba(255,121,121,0.14) / 状态 11 号 #99FFFFFF 高 2 行 / 外框 rgba(107,163,214,0.12)。
 @Component
 export struct Lx200ObjectControls {

@@ -4,54 +4,41 @@ import { I18n } from '../pages/I18n'
 import { catalogIconForModule, catalogIconForObjectType } from '../common/derive/catalog'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → CatalogStore 的检索域助手 / 跨 store setter（§13.1 规则 6 / §14.8 规则 2）。
-// `loadObjectCatalogCategories` 写本 store 的 objectCatalogCategories，同时读/写 SearchStore
-//（pendingPluginCatalogId / searchCategory / categoryModuleId）、复用宿主搜索域动作
-//（loadCategoryObjects，B3 未下沉）与 CLI 发布点（publishSearchBrowserState），并读宿主的
-// 语言刷新代际 languageRefreshSerial；这些跨 store / 宿主动作按 §14.5「主要归属 store +
-// 其余经 hooks setter」具名注入，store 不 import 他 store 或发布点。
+// 宿主 → CatalogStore 的检索域助手 / 跨 store setter。
+// `loadObjectCatalogCategories` 写本 store 的 objectCatalogCategories，同时读 / 写 SearchStore
+//（pendingPluginCatalogId / searchCategory / categoryModuleId），并复用宿主搜索域动作
+//（loadCategoryObjects）与 CLI 发布点（publishSearchBrowserState）、读取宿主语言刷新代际。
+// 这些跨 store / 宿主动作经 hooks 具名注入，store 不 import 他 store 或发布点。
 export interface CatalogHostHooks {
-  // 宿主 languageRefreshSerial：回包返回时比对，丢弃过期请求（§14.8 规则 3 单序号）。
+  // 宿主语言刷新代际：回包返回时比对，丢弃过期请求。
   languageSerial(): number
-  // D15：下载启动/轮询的 UI 提示经此回注（store 不触碰 UI；先例 ToolsHostHooks.flashHint）。
+  // 下载启动 / 轮询的 UI 提示经此回注（store 不触碰 UI）。
   flashHint(text: ResourceStr): void
   // SearchStore 的待定插件目录 id（读 + 清）。
   pendingPluginCatalogId(): string
   clearPendingPluginCatalogId(): void
   searchCategory(): string
   categoryModuleId(): string
-  // 搜索域动作（§14 B3-3 起 loadCategoryObjects 已下沉 SearchStore，宿主适配器转发；
-  // CLI 发布点 publishSearchBrowserState 仍留宿主）。
+  // 搜索域动作：loadCategoryObjects 由 SearchStore 承担（经宿主适配器转发），CLI 发布点留宿主。
   loadCategoryObjects(category: string, moduleIdOverride: string): void
   publishSearchBrowserState(): void
-  // §14 B3-5：目录健康加载器 loadCatalogHealth 下沉后，两条 §2.7.1 保留的「跨域共用」标志
-  //（catalogHealthLoaded / catalogManifestPresent，宿主保留字段，供 SettingsQuickLegacyPanel /
-  // SatellitesPanel 经宿主闭包 catalogHealthText/catalogHealthColor 读取）经此 setter 回注；
-  // satelliteCatalogHealth 归属 SatelliteStore，同样经 setter 回注（store 不 import/持有他 store）。
+  // 目录健康相关的「跨域共用」标志（catalogHealthLoaded / catalogManifestPresent，
+  // 供 SettingsQuickLegacyPanel / SatellitesPanel 经宿主闭包读取）与归属 SatelliteStore 的
+  // satelliteCatalogHealth，均经此 setter 回注（store 不 import / 持有他 store）。
   setCatalogHealthLoaded(loaded: boolean): void
   setCatalogManifestPresent(present: boolean): void
   setSatelliteCatalogHealth(health: CatalogHealthEntry): void
 }
 
-// 星表下载域中"面板可见"的状态（原宿主 5 个 @State）。
+// 星表下载域中"面板可见"的状态：面板别名 loading←catalogLoading、items←catalogList、
+// busy←catalogBusy、downloadingId←catalogDownloadingId、msg←catalogMsg，store 沿用宿主字段名。
+// 消费方为星表 / 设置面板（@ObjectLink）。`catalogHealthLoaded` / `catalogManifestPresent` 与
+// `satelliteCatalogHealth` 属跨域共用字段，留宿主并经 CatalogHostHooks setter 回注；
+// `starCatalogHealth`（设置快照面板）与 `objectCatalogCategories`（SearchPanel）由本 store 持有。
 //
-// review §2.7 第三批（小簇批处理）之一。面板别名对应：
-// `loading←catalogLoading`、`items←catalogList`、`busy←catalogBusy`、
-// `downloadingId←catalogDownloadingId`、`msg←catalogMsg`；store 沿用宿主字段名。
-//
-// `catalogHealthLoaded` / `catalogManifestPresent` **不搬**：它们与卫星面板（"卫星目录健康"
-// 文案）及恒星表共用，不是本面板的入参 —— 与卫星片里保留这两个字段的判断一致。
-// §14 B3-5：`loadCatalogHealth` 由本 store 自持（宿主不再持有同名方法）；上述两个保留字段与
-// 他域的 `satelliteCatalogHealth` 经 CatalogHostHooks setter 回注，宿主字段本身不变。
-// 后续（review §2.7 续作）并入：`starCatalogHealth`（SettingsQuickLegacyPanel 以 @Prop 消费）与
-// `objectCatalogCategories`（经宿主 searchAllCategoryOptions() 进 SearchPanel @Prop categories）。
-//
-// —— 桥注入约定（§14.1，AB-0 起） ——
-// `loadStarCatalogs`（§14 B1-3）由 store 自持，宿主不再持有同名方法：宿主在 aboutToAppear
-// 调用 attachPort(port, onChanged) 注入 CommandPort，store 侧用 ensurePort() 守卫。
-// 请求序号 seq 随加载器搬入 store（§14.8 规则 3），本加载器暂未用到，供后续 B 片复用。
-// 本域无 publish* 发布点、消费方均为 @ObjectLink（字段赋值即刷新），故宿主注入的 onChanged
-// 为等价空实现，notifyChanged() 为无副作用调用。
+// —— 桥注入约定 ——
+// 宿主在 aboutToAppear 调用 attachPort(port, onChanged) 注入 CommandPort，store 侧用 ensurePort() 守卫。
+// 本域无 publish* 发布点、消费方均为 @ObjectLink（字段赋值即刷新），故 onChanged 为等价空实现。
 @Observed
 export class CatalogStore {
   catalogList: StarCatalogItem[] = []
@@ -62,12 +49,12 @@ export class CatalogStore {
   starCatalogHealth: CatalogHealthEntry = {}
   objectCatalogCategories: CatOption[] = []
 
-  // —— 桥注入（§14.1 AB-0） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 原宿主的请求序号搬入 store（§14.8 规则 3）；本加载器暂未用到，供后续 B 片复用。
+  // 请求序号；本加载器暂未用到，预留以保持统一约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
-  // 宿主助手 / 跨 store setter（§14 B2R-4 loadObjectCatalogCategories）。
+  // 宿主助手 / 跨 store setter。
   private hooks: CatalogHostHooks | null = null
 
   // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
@@ -92,8 +79,7 @@ export class CatalogStore {
     }
   }
 
-  // 星表下载面板：桥查询可用星表列表（原宿主 loadStarCatalogs，函数体逐字搬入；
-  // 仅 this.callNativeWhenReady → this.port.requestWhenReady、this.catalogStore.<f> → this.<f>）。
+  // 星表下载面板：桥查询可用星表列表。
   loadStarCatalogs(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -118,9 +104,7 @@ export class CatalogStore {
     })
   }
 
-  // D15：星表下载启动（原宿主 startCatalogDownload，函数体逐字搬入）。
-  // 差异仅：this.flashHint → hooks.flashHint、this.callNative → port.request、
-  // this.catalogStore.<f> → this.<f>、this.pollCatalogStatus → this.pollCatalogStatus。
+  // 星表下载启动：忙时提示，否则下发下载命令并轮询状态。
   startCatalogDownload(id: string): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -146,8 +130,7 @@ export class CatalogStore {
     this.pollCatalogStatus(id)
   }
 
-  // D15：星表下载状态轮询（原宿主 pollCatalogStatus，函数体逐字搬入）。
-  // 差异同上；600ms setInterval 自我收口（done/error/回包失败即 clearInterval），非持续定时器。
+  // 星表下载状态轮询：600ms setInterval 自我收口（done/error/回包失败即 clearInterval），非持续定时器。
   private pollCatalogStatus(id: string): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -186,12 +169,8 @@ export class CatalogStore {
     }, 600)
   }
 
-  // 对象目录分类 chips（原宿主 loadObjectCatalogCategories，函数体逐字搬入）。
-  // 差异仅：this.callNativeWhenReady → port.requestWhenReady、this.catalogStore.<f> → this.<f>；
-  // this.languageRefreshSerial → hooks.languageSerial()（宿主单序号，§14.8 规则 3）；
-  // this.publishSearchBrowserState / this.loadCategoryObjects → hooks.*；
-  // SearchStore 的 pendingPluginCatalogId / searchCategory / categoryModuleId 经 hooks 读写；
-  // catalogIconForModule 由本 store 直接 import（A1 纯函数）。宿主调用点显式传入当次 languageSerial。
+  // 对象目录分类 chips：桥查询分类目录，回包后更新本 store 分类并经 hooks 提交 SearchStore。
+  // 回包比对 languageSerial 丢弃过期请求；catalogIconForModule 由本 store 直接 import（纯函数）。
   loadObjectCatalogCategories(languageSerial: number): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -230,11 +209,7 @@ export class CatalogStore {
     })
   }
 
-  // 目录健康（原宿主 loadCatalogHealth，函数体逐字搬入）。
-  // 差异仅：this.callNativeWhenReady → port.requestWhenReady、this.catalogStore.<f> → this.<f>、
-  // this.catalogHealthLoaded/this.catalogManifestPresent → hooks.setCatalogHealthLoaded/
-  // setCatalogManifestPresent（§2.7.1 保留的跨域共用字段仍留宿主）、
-  // this.satelliteStore.satelliteCatalogHealth → hooks.setSatelliteCatalogHealth（他域 store 经 setter）。
+  // 目录健康：桥查询目录健康，跨域共用字段经 hooks setter 回注宿主 / 他 store。
   loadCatalogHealth(): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -250,14 +225,12 @@ export class CatalogStore {
     })
   }
 
-  // ==== 搜索域分类 chips 的「取值/选项」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  // ==== 搜索域分类 chips 的「取值 / 选项」助手 ====
   //
-  // 这些方法读本 store 的 `objectCatalogCategories`（搜索分类目录），按 §14.3「读本域 store
-  // 字段 → 并入该 store 方法」下沉；`searchCategoryLabel` / `categoryObjectIcon` 另需搜索域的
-  // 当前分类，按 §14.8 规则 6 改为显式入参（调用点传 searchStore.searchCategory），
-  // 避免 store 相互 import。函数体逐字保留，仅去掉宿主前缀。
+  // 读本 store 的 `objectCatalogCategories`；`searchCategoryLabel` / `categoryObjectIcon`
+  // 另需搜索域当前分类，经显式入参传入，避免 store 相互 import。
 
-  // 目录 moduleId → 本地化标签；查不到回退 fallback（原宿主 catalogLabelForModule）。
+  // 目录 moduleId → 本地化标签；查不到回退 fallback。
   private catalogLabelForModule(moduleId: string, fallback: ResourceStr): ResourceStr {
     for (const option of this.objectCatalogCategories) {
       if (option.moduleId === moduleId) return option.label
@@ -265,7 +238,7 @@ export class CatalogStore {
     return fallback
   }
 
-  // 搜索面板内置分类表（原宿主 searchCategoryOptions）。
+  // 搜索面板内置分类表。
   searchCategoryOptions(): Array<CatOption> {
     const core: CatOption[] = [
       { code: 'planet', label: this.catalogLabelForModule('SolarSystem:planet', I18n.t('i0103')), moduleId: 'SolarSystem:planet', iconKey: 'catalog_planet' },
@@ -285,7 +258,7 @@ export class CatalogStore {
     return core
   }
 
-  // 插件目录动态追加的分类（原宿主 searchDynamicCategoryOptions）。
+  // 插件目录动态追加的分类。
   searchDynamicCategoryOptions(): Array<CatOption> {
     const core = this.searchCategoryOptions()
     const knownModules: Record<string, boolean> = {}
@@ -298,7 +271,7 @@ export class CatalogStore {
     return dynamic
   }
 
-  // 内置 + 动态分类去重合并（原宿主 searchAllCategoryOptions）。
+  // 内置 + 动态分类去重合并。
   searchAllCategoryOptions(): Array<CatOption> {
     const result: CatOption[] = []
     const modules: Record<string, boolean> = {}
@@ -312,7 +285,7 @@ export class CatalogStore {
     return result
   }
 
-  // 分类 code → 图标键（原宿主 searchCategoryIcon）。
+  // 分类 code → 图标键。
   searchCategoryIcon(category: string): string {
     for (const option of this.searchCategoryOptions()) {
       if (option.code === category) return option.iconKey ?? 'catalog_plugin'
@@ -323,7 +296,7 @@ export class CatalogStore {
     return 'catalog_plugin'
   }
 
-  // 分类 code → 目录 moduleId（原宿主 categoryModuleIdFor）。
+  // 分类 code → 目录 moduleId。
   categoryModuleIdFor(category: string): string {
     for (const option of this.searchCategoryOptions()) {
       if (option.code === category) return option.moduleId ?? ''
@@ -334,7 +307,7 @@ export class CatalogStore {
     return ''
   }
 
-  // 当前分类的显示标签（原宿主 searchCategoryLabel；当前分类经显式入参传入）。
+  // 当前分类的显示标签（当前分类经显式入参传入）。
   searchCategoryLabel(category: string): string {
     for (const option of this.searchCategoryOptions()) {
       if (option.code === category) return String(option.label)
@@ -345,7 +318,7 @@ export class CatalogStore {
     return I18n.t('search_browse_categories')
   }
 
-  // 分类浏览条目的图标（原宿主 categoryObjectIcon；当前分类经显式入参传入）。
+  // 分类浏览条目的图标（当前分类经显式入参传入）。
   categoryObjectIcon(item: NameItem, category: string): string {
     return catalogIconForObjectType(item.type ?? '', this.searchCategoryIcon(category))
   }

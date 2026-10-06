@@ -3,15 +3,13 @@ import { OFFLINE_APPGALLERY_BUILD, StarCatalogItem } from '../../pages/MainWindo
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { CatalogStore } from '../../state/CatalogStore'
 
-// 星表下载面板（原宿主 panelContent() 的 `catalogs` 分支，分支体原样下沉）。
+// 星表下载面板，对应 `activePanel === 'catalogs'`。
 //
-// 判定条件 `activePanel === 'catalogs'` 留在宿主。列表/加载/下载态来自宿主的
-// @State 字段、以 @Prop 传入；下载动作回注 startCatalogDownload。
-// 成员名避开 CustomComponent 属性方法（卡片描边用 cardBorderColor，不用 borderColor）。
+// 列表/加载/下载态来自 CatalogStore（@ObjectLink）；下载动作回调注入宿主。
+// 卡片描边用 cardBorderColor：成员名须避开 CustomComponent 基类的 borderColor 属性方法。
 
 @Component
 export struct CatalogsPanel {
-  // 状态经 @ObjectLink 订阅（review §2.7 第三批小簇批处理）。动作仍为宿主注入的回调。
   @ObjectLink catalogStore: CatalogStore
   @Prop cardBorderColor: string
   onDownload: (id: string) => void = () => {}

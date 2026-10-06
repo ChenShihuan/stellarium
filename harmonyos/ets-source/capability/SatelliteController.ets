@@ -1,17 +1,10 @@
-// 卫星（Satellites）行为控制器（STATE-REVIEW §10.2 D13，PLAN §15 D 轨道 D13）。
+// 卫星（Satellites）行为控制器：负责分组切换、更新设置、来源增删、TLE 导入、
+// 目录刷新、显示开关与卫星取景。
 //
-// 原宿主 MainWindowNativeNode 的 8 个行为方法逐字下沉：
-//   selectSatelliteGroup / setSatelliteUpdateSetting / addSatelliteSource / deleteSatelliteSource
-//   / importSatelliteTleFile / refreshSatelliteCatalog / setSatelliteFlag / frameSatellite。
-//
-// STATE-REVIEW 记「11 法」；工作区实测卫星域共 9 个 private 方法（1 publish* + 8 行为）：
-//   - `publishSatellitePanelState` 写 AppStorage，属 §15.6-4 的 `publish*` 保留项 —— 只迁调用方，
-//     本体留宿主，经 SatelliteHostHooks 回注；
-//   - `requestSatellitePasses` 归选中/详情管线（M3-3 登记），不属本片。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；状态整体写 SatelliteStore
-//（SatellitesPanel 经 @ObjectLink 消费）；`selectSatelliteGroup` 的 180ms 分组过渡动画
-//（getUIContext().animateTo）与 CLI 发布点经 SatelliteHostHooks 回注。
+// `requestSatellitePasses` 归选中/详情管线，不在本类。
+// 不 import NAPI/UI：桥经 CommandPort；状态整体写 SatelliteStore
+//（SatellitesPanel 经 @ObjectLink 消费）；`publishSatellitePanelState`（写 AppStorage）与
+// `selectSatelliteGroup` 的 180ms 分组过渡动画经 SatelliteHostHooks 回注。
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { SatelliteSourceInput } from '../pages/MainWindowModels'
@@ -19,7 +12,7 @@ import { CommandPort } from '../bridge/CommandPort'
 import { SatelliteStore } from '../state/SatelliteStore'
 
 export interface SatelliteHostHooks {
-  // §15.6-4 保留的 CLI 发布点（宿主 publishSatellitePanelState，写 AppStorage）。
+  // CLI 发布点（宿主 publishSatellitePanelState，写 AppStorage）。
   publishSatellitePanelState(error: string): void
   // 分组切换的 180ms EaseOut 过渡（宿主 getUIContext().animateTo，控制器不 import UI）。
   animateSatelliteGroupChange(action: () => void): void
@@ -36,7 +29,7 @@ export class SatelliteController {
     this.hooks = hooks
   }
 
-  // 原宿主 selectSatelliteGroup()：校验分组 → 过渡动画切换 → 重载。
+  // 校验分组 → 过渡动画切换 → 重载。
   selectSatelliteGroup(group: string): void {
     if (group.length > 0 && !this.satelliteStore.satGroups.includes(group)) {
       this.hooks.publishSatellitePanelState('unknown satellite group')
@@ -52,7 +45,7 @@ export class SatelliteController {
     this.satelliteStore.loadSatellites()
   }
 
-  // 原宿主 setSatelliteUpdateSetting()：单个更新设置写回 → 重载来源。
+  // 单个更新设置写回 → 重载来源。
   setSatelliteUpdateSetting(key: string, value: boolean | number): void {
     const payload: Record<string, boolean | number> = {}
     payload[key] = value
@@ -61,7 +54,7 @@ export class SatelliteController {
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
 
-  // 原宿主 addSatelliteSource()：把输入框 URL 追加为来源写回。
+  // 把输入框 URL 追加为来源写回。
   addSatelliteSource(): void {
     const url = this.satelliteStore.satSourceInput.trim()
     if (url.length === 0) { this.satelliteStore.satSourceStatus = I18n.t('sat_source_empty'); return }
@@ -77,7 +70,7 @@ export class SatelliteController {
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
 
-  // 原宿主 deleteSatelliteSource()：按索引剔除来源后写回。
+  // 按索引剔除来源后写回。
   deleteSatelliteSource(index: number): void {
     const sources: SatelliteSourceInput[] = []
     for (let sourceIndex = 0; sourceIndex < this.satelliteStore.satSources.length; sourceIndex++) {
@@ -94,7 +87,7 @@ export class SatelliteController {
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
 
-  // 原宿主 importSatelliteTleFile()：把输入框路径导入为 TLE 来源。
+  // 把输入框路径导入为 TLE 来源。
   importSatelliteTleFile(): void {
     const path = this.satelliteStore.satTleFileInput.trim()
     if (path.length === 0) { this.satelliteStore.satSourceStatus = I18n.t('sat_tle_path_empty'); return }
@@ -107,7 +100,7 @@ export class SatelliteController {
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_tle_import_failed') })
   }
 
-  // 原宿主 refreshSatelliteCatalog()：刷新目录（离线构建回退提示）。
+  // 刷新目录（离线构建回退提示）。
   refreshSatelliteCatalog(): void {
     this.port.requestInteractive('refreshSatelliteCatalog', '', (r: StellariumBridgeResponse) => {
       this.satelliteStore.satSourceStatus = r.ok === true ? I18n.t('sat_refresh_started') : (r.error ?? I18n.t('sat_refresh_offline'))
@@ -115,7 +108,7 @@ export class SatelliteController {
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_refresh_offline') })
   }
 
-  // 原宿主 setSatelliteFlag()：显示开关写回（同值短路 + mutationId 代际回滚）。
+  // 显示开关写回（同值短路 + mutationId 代际回滚）。
   setSatelliteFlag(name: string, v: boolean): void {
     if ((name === 'labels' && this.satelliteStore.satLabels === v) ||
       (name === 'orbitLines' && this.satelliteStore.satOrbitLines === v) ||
@@ -139,7 +132,7 @@ export class SatelliteController {
     }, 0, 100, 15)
   }
 
-  // 原宿主 frameSatellite()：跳转后若视角过窄，拉远到 16° 以便框入月球(卫星)。
+  // 跳转后若视角过窄，拉远到 16° 以便框入月球(卫星)。
   frameSatellite(): void {
     this.port.requestWhenReady('getSessionState', '', (r: StellariumBridgeResponse) => {
       const fov = (r.fovDeg ?? 0)

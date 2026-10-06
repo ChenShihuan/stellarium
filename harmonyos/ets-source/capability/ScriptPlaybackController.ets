@@ -1,23 +1,10 @@
-// 脚本录制回放 UI 控制器（PLAN §15.12 D10，STATE-REVIEW §10.2 D10）。
+// 脚本录制回放 UI 控制器：录制控制条的显隐与拖动落位、脚本状态/字幕轮询、
+// 速率调整与脚本文件导入。
 //
-// 原宿主 MainWindowNativeNode 的脚本控制条 UI 行为整体下沉，共 9 个方法 + 8 个私有字段：
-//   - 录制 UI 开关：toggleRecordingUi；
-//   - 控制条拖动：handleScriptControlDragTouch；
-//   - 状态/字幕轮询：start/stopScriptStatusPolling、refreshScriptStatus、refreshScriptCaptions；
-//   - 速率调整：changeScriptRate；
-//   - 脚本导入：importScriptFile（picker/fileIo 经 MediaPort，脚本名清洗收在宿主具名适配器）。
-//
-// 职责边界（§15.7 规则 1/2/3）：
-//   - 脚本播放/回放/视频状态已在 state/ScriptStore.ets（M1-A），本控制器只搬**行为与定时器**；
-//   - 逐帧/草稿字段（拖动采样、轮询在途标志）留控制器普通字段；
-//   - 状态轮询定时器由本控制器自持 start/stop，宿主生命周期/面板路由调用收口（§15.7 规则 3）。
-//
-// 依赖注入（§15.7 规则 3/4、§13.1 规则 6）：
-//   - CommandPort：getScriptStatus / getScriptCaptions / setScriptRate（interactive）；
-//   - ScriptStore / ToolsStore：以实例引用持有；
-//   - MediaPort：脚本文件导入（picker + fileIo，宿主具名适配器承载）；
-//   - ScriptPlaybackHostHooks：宿主 refreshState/flashHint、控制条几何与拖动落位所需宿主量、
-//     UI 动画上下文（animateTo）经具名回注。
+// 依赖 ScriptStore / ToolsStore（状态）、CommandPort（getScriptStatus / getScriptCaptions /
+// setScriptRate）与 DocumentImportPort（脚本导入）；ScriptPlaybackHostHooks 回注宿主几何量、
+// 叠层关闭、跨域重载与 UI 动画（animateTo）；控制器不 import UI 上下文。
+// 状态轮询定时器自持 startScriptStatusPolling()/stopScriptStatusPolling()，宿主生命周期调用收口。
 import hilog from '@ohos.hilog'
 import { I18n } from '../pages/I18n'
 import { ScriptStatusResponse, ScriptCaptionsResponse } from '../pages/MainWindowModels'
@@ -29,7 +16,7 @@ import { ToolsStore } from '../state/ToolsStore'
 import { BehaviorHostHooks } from './ControllerHooks'
 import { touchScreenX, touchScreenY, scriptControlX, scriptControlY, guideCardX, guideCardY, guideCardHeight } from '../common/derive/geometry'
 
-// 宿主 → 控制器回注（§13.1 规则 6 / §15.7 规则 4）：
+// 宿主 → 控制器回注：
 //   - scriptControlSafeTop / isExpandedLayout / skyWidth / skyHeight / guideCardWidth：控制条拖动落位的
 //     宿主几何量与 UI 上下文派生量；
 //   - stopSkyInertia：拖动开始即停下星图惯性（skyInputCtl）；

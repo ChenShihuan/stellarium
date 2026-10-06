@@ -2,12 +2,11 @@ import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { AudioStore } from '../../state/AudioStore'
 
-// 音频控制面板（原宿主 panelContent() 的 `audio` 分支，分支体原样下沉）。
+// 音频控制面板，对应 `activePanel === 'audio'`。
 //
-// 判定条件 `activePanel === 'audio'` 留在宿主。播放/静音/音量状态由 state/AudioStore.ets
-// 承载，面板以 @ObjectLink 实时订阅。AudioEngine 是原生桥，按 §13.1 规则 6 用回调注入：
-// 组件内不 import StellariumAudio，播放/静音/音量与提示都由宿主侧的 onToggleMusic /
-// onVolumeChange 处理。
+// 播放/静音/音量状态来自 AudioStore（@ObjectLink）。AudioEngine 是原生桥，经回调注入：
+// 组件内不 import StellariumAudio，播放/静音/音量与提示都由宿主侧的
+// onToggleMusic / onVolumeChange 处理。
 
 @Component
 export struct AudioPanel {

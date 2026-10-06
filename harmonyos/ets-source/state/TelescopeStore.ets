@@ -4,39 +4,19 @@ import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { telescopeUpdateTime, telescopeErrorText } from '../common/derive/actions'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → TelescopeStore 的只读谓词注入（§13.1 规则 6 / §14.8 规则 2：store 不触碰 UI 生命周期）。
-// 「是否应刷新实时位置」读宿主 applicationInForeground / panelVisible / activePanel 三个生命周期
-// 与 UI 状态字段，宿主保留该谓词，经具名 hooks 注入；store 侧只在 schedule / sync 时调用。
+// 宿主 → TelescopeStore 的只读谓词注入：store 不触碰 UI 生命周期。
+// 「是否应刷新实时位置」需读 applicationInForeground / panelVisible / activePanel 等
+// 生命周期与 UI 状态字段，这些字段留在宿主；store 只在 schedule / sync 时经 hooks 调用。
 export interface TelescopeHostHooks {
   shouldRefreshTelescopePosition(): boolean
 }
 
-// 「望远镜控制」/「目镜（Oculars）」两面板的状态簇。
-//
-// 本片边界（Phase 3al）：原宿主的
-//   - 目镜插件簇（ocularMode / telradOn / crosshairsOn / ccdOn / ocular|telescope|lens|ccd 的
-//     Names/Index/Items / ocularLoading / ocularStatusMessage / ocularReady / ocularCcdReady /
-//     以及全部 ocular<Setting> 布尔与数值）共 59 个 @State；
-//   - LX200 望远镜控制簇（lx200Host/Port/Profiles/SelectedSlot/Name/Protocol/DeviceModel/Equinox/
-//     CommandDelayMs/Circles/TargetSource/Busy/EditingNew/Status/Scope/Transport/ConnectionState/
-//     Position/LivePositionEnabled/PositionUpdatedAt/PositionUpdateState）共 21 个 @State；
-//   - 「赤道仪」开关 equatorialMount（同一 mount 语义，设置持久化与图层面板共用）
-// 逐条搬到此处，保留原类型与默认值（含 ResourceStr 的三个本地化默认串）。
-//
-// 只放数据与纯计算，不 import UI / NAPI。
-//
-// 不搬的宿主职责（跨域 / native 桥 / 定时器，§13.1 规则 6）：
-//   - 原生桥与加载（callNativeWhenReady / getOculars / setOcularMode / setOcularSetting /
-//     selectOcularInstrument / rotateOcularReticle / resetOcularInstrument / setTelrad /
-//     setCrosshairs / setCCD / getTelescopeProfiles / setTelescopeProfile / testTelescope /
-//     readTelescopePosition …）以及全部 LX200 命令方法；
-//   - LX200 轮询状态（lx200LivePositionTimer / lx200LivePositionRequestPending /
-//     lx200LivePositionRequestId）——它们不是渲染状态；ocularLoadRequestId 已在 §14 B1-1 作为 seq 迁入本 store。
-//   - 编辑器校验 validateTelescopeEditorStatus()：它读 store 字段写回 lx200Status/Scope/Transport，
-//     由宿主在输入回调里执行，不放进 store（避免 store 内做副作用）。
-//
-// 三个选择器助手（ocularInstrumentItems / ocularInstrumentIndex / ocularInstrumentSummary /
-// ocularSelInfo）是纯查表计算，随字段一起下沉，供 OcularSelector 组件直接调用。
+// 「望远镜控制」/「目镜（Oculars）」两面板的状态簇：持有目镜插件配置簇、
+// LX200 望远镜控制簇、「赤道仪」开关 equatorialMount，以及 live-position 定时器簇。
+// 消费方（望远镜控制面板 / 目镜面板 / OcularSelector 等）以 @ObjectLink 观察，
+// 字段赋值即刷新。自持 CommandPort、请求序号 seq 与 live-position 定时器；
+// 宿主经 TelescopeHostHooks 注入「是否应刷新实时位置」谓词（store 不触碰 UI 生命周期）。
+// 只放数据与纯查表计算，不 import UI / NAPI。
 @Observed
 export class TelescopeStore {
   // —— 目镜（Oculars）——
@@ -123,8 +103,7 @@ export class TelescopeStore {
   lx200PositionUpdatedAt: string = ''
   lx200PositionUpdateState: string = 'idle'
 
-  // —— §14 B3-4：live-position 定时器簇（原宿主裸字段 lx200LivePositionTimer /
-  // lx200LivePositionRequestPending / lx200LivePositionRequestId，随定时器整体迁入本 store）。
+  // —— live-position 定时器簇 ——
   // 仅本 store 的 schedule / refresh / sync / stop 读写；reqId 用于作废在途回包。
   private lx200LivePositionTimer: number = 0
   private lx200LivePositionRequestPending: boolean = false
@@ -133,8 +112,7 @@ export class TelescopeStore {
   // —— 赤道仪开关 ——
   equatorialMount: boolean = false
 
-  // —— 目镜选择器的纯查表计算 ——
-  // 原宿主四个 private 助手方法逐字搬迁（只读本 store 字段）。
+  // —— 目镜选择器的纯查表计算（只读本 store 字段） ——
   ocularInstrumentItems(kind: string): OcularInstrumentItem[] {
     if (kind === 'Ocular') return this.ocularItems
     if (kind === 'Telescope') return this.telescopeItems
@@ -173,9 +151,9 @@ export class TelescopeStore {
     return info
   }
 
-  // —— 桥注入（§14.1 AB-0 约定；§14 B1-1 起本域加载器自持） ——
-  // 宿主在 aboutToAppear 用同一个 HostCommandPort 实例调用 attachPort(port, onChanged) 注入；
-  // 请求序号 seq 随加载器搬入 store（§14.8 规则 3，宿主不再持有 ocularLoadRequestId）。
+  // —— 桥注入 ——
+  // 宿主在 aboutToAppear 以同一个 CommandPort 实例调用 attachPort(port, onChanged) 注入；
+  // 请求序号 seq 由本 store 自持，用于作废在途回包。
   // 本域无 publish* 发布点、消费方均为 @ObjectLink（字段赋值即刷新），故 onChanged 为空实现。
   private port: CommandPort | null = null
   private seq: number = 0
@@ -187,7 +165,7 @@ export class TelescopeStore {
     this.onChanged = onChanged
   }
 
-  // §14 B3-4：宿主注入「是否应刷新实时位置」谓词（读 applicationInForeground / panelVisible /
+  // 宿主注入「是否应刷新实时位置」谓词（读 applicationInForeground / panelVisible /
   // activePanel === 'telescope' / lx200EditingNew 等，宿主保留该谓词）。
   attachHooks(hooks: TelescopeHostHooks): void {
     this.hooks = hooks
@@ -203,8 +181,7 @@ export class TelescopeStore {
     }
   }
 
-  // 目镜插件加载（原宿主 loadOculars，函数体逐字搬入；仅 this.callNativeWhenReady → this.port.requestWhenReady，
-  // this.telescopeStore.<f> → this.<f>，this.ocularLoadRequestId → this.seq）。
+  // 目镜插件加载：拉取目镜 / 望远镜 / 镜头 / CCD 配置与当前选择；回包按 seq 作废在途请求。
   loadOculars(showLoading: boolean = true): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -286,15 +263,12 @@ export class TelescopeStore {
     }, 0, 100, 15)
   }
 
-  // ===== §14 B3-4：LX200 实时位置（live-position）定时器簇整体下沉 =====
-  // 原宿主 shouldRefreshTelescopePosition / stopTelescopeLivePosition / scheduleTelescopeLivePosition /
-  // refreshTelescopeLivePosition / syncTelescopeLivePosition / setTelescopeLivePosition / lx200Payload /
-  // applyTelescopeProfile / applyTelescopeProfiles / applyTelescopeEndpointStatus /
-  // loadTelescopeControlStatus 逐字搬入。宿主只保留生命周期谓词 shouldRefreshTelescopePosition
-  // 经 hooks 注入；面板开合 / 前后台 / 动作站点改调本 store 方法（§14.6 B3-4）。
+  // ===== LX200 实时位置（live-position）定时器簇 =====
+  // 宿主只保留生命周期谓词 shouldRefreshTelescopePosition 并经 hooks 注入；
+  // 面板开合 / 前后台切换经本 store 的 set / sync / stop / schedule 收口。
 
-  // 原宿主 shouldRefreshTelescopePosition 的语义（读宿主生命周期字段的部分）经 hooks 注入；
-  // store 侧读自身 lx200LivePositionEnabled / lx200EditingNew 由宿主谓词一并计算。
+  // 读宿主生命周期字段的部分经 hooks 注入；lx200LivePositionEnabled /
+  // lx200EditingNew 由宿主谓词一并计算。
   private shouldRefreshLivePosition(): boolean {
     return this.hooks !== null && this.hooks.shouldRefreshTelescopePosition()
   }
@@ -454,9 +428,7 @@ export class TelescopeStore {
     })
   }
 
-  // 从 lx200Circles 解析出赤道仪刻度环取值（plan §14.3 A2-2）。原先读宿主
-  // telescopeStore.lx200Circles 的函数体逐字迁入本 store，改为零宿主引用；宿主保存档位
-  // 调用点改为 this.telescopeStore.telescopeCircleValues()。
+  // 从 lx200Circles 解析出赤道仪刻度环取值：仅取 1..180 的正数，去重、至多 10 个并升序。
   telescopeCircleValues(): number[] {
     const values: number[] = []
     const parts = this.lx200Circles.split(',')
@@ -471,9 +443,8 @@ export class TelescopeStore {
     return values
   }
 
-  // D16（PLAN §15 D 轨道 / STATE-REVIEW §10.2 第 7 法）：赤道仪开关持久化并入本 store
-  //（equatorialMount 字段即在本 store；原宿主 persistEquatorialMount 逐字迁入，
-  //  AppStorage 读写不属 NAPI，store 内直接完成）。
+  // 赤道仪开关持久化：equatorialMount 即本 store 字段；AppStorage 读写不属 NAPI，
+  // store 内直接完成。
   persistEquatorialMount(): void {
     let obj: Record<string, boolean | string> = {}
     const cur = AppStorage.get<string>('stellariumSettings')

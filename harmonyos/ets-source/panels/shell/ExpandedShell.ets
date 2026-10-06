@@ -10,18 +10,17 @@ import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { ObjectMediaStore } from '../../state/ObjectMediaStore'
 import { OverlayStore } from '../../state/OverlayStore'
 
-// 平板/折叠展开壳（原宿主无参 @Builder `expandedShell()`，128 行）。
+// 平板/折叠展开壳。
 //
 // 结构：全屏星空触摸承接层 + 底部 Dock（仅在 expandedUiAllowed 时显示）+ Dock 时钟层
 // + 陀螺仪校准浮层 + 天体详情指向线与详情卡。
 //
-// 原壳中段 `if (panelVisible) { Stack { this.floatingPanel() } … }` 上移到宿主调用点：
-// `floatingPanel()` 是 Phase 4h 定论保留的宿主薄 @Builder（体内即 `panelContent()` 的
-// `activePanel` 分发链），组件无法跨边界调用宿主 @Builder（§13.1 规则 9，真机退出实证），
-// 故面板仍由宿主在同一过渡包裹内渲染，本组件不含面板。
+// 面板由宿主调用点在过渡包裹内渲染，本组件不含面板：`floatingPanel()` 是宿主薄 @Builder
+// （体内即 `panelContent()` 的 `activePanel` 分发链），组件无法跨边界调用宿主 @Builder
+// （会触发真机退出），故面板仍由宿主渲染。
 //
 // `expandedUiAllowed()` 的判定结果由宿主算好后以 @Prop 传入（组件内不重复阈值判定）。
-// 所有状态以 @Prop / @ObjectLink 注入，动作回注宿主；视觉、几何、zIndex、命中语义逐字保留。
+// 所有状态以 @Prop / @ObjectLink 注入，动作回注宿主。
 
 @Component
 export struct ExpandedShell {

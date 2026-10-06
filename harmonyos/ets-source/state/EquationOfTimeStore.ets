@@ -2,9 +2,9 @@ import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 时间方程（均时差）域状态：宿主负责与引擎同步与乐观回滚，面板组件以 @ObjectLink 订阅。
-// §14 B1-5：加载器 loadEquationOfTime 已随桥注入搬入本 store（宿主不再持有同名方法）；
-// 写回动作 setEquationOfTime（含 equationOfTimeMutationId 乐观回滚）仍在宿主。
+// 时间方程（均时差）域状态 store：面板组件以 @ObjectLink 订阅。
+// 本 store 自持 CommandPort 与加载器 loadEquationOfTime；写回动作 setEquationOfTime
+// （含 equationOfTimeMutationId 乐观回滚）仍在宿主，由宿主负责与引擎同步。
 @Observed
 export class EquationOfTimeStore {
   equationOfTimeEnabled: boolean = false
@@ -15,9 +15,9 @@ export class EquationOfTimeStore {
   equationOfTimeLoading: boolean = false
   equationOfTimeStatus: string = ''
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-5 起本 store 自持 loadEquationOfTime） ——
+  // —— 桥注入（本 store 自持 loadEquationOfTime） ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（无并发抑制需求）；预留以统一加载器约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
 
@@ -38,9 +38,7 @@ export class EquationOfTimeStore {
     }
   }
 
-  // 均时差面板：桥查询当前开关与显示值（原宿主 loadEquationOfTime，函数体逐字搬入；
-  // 仅 this.callNativeWhenReady → this.port.requestWhenReady、this.equationOfTimeStore.<f> → this.<f>；
-  // 原重试档 0 / 100 / 15 与 onFailure 回调逐字保留，仅按端口签名把 onFailure 前移）。
+  // 均时差面板：桥查询当前开关与显示值，按重试档 0 / 100 / 15 调用并处理 onFailure。
   loadEquationOfTime(): void {
     const port = this.ensurePort()
     if (port === null) {

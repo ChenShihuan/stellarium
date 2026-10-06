@@ -10,20 +10,15 @@ import { SelectedCoordinateRows } from '../object/DetailLiveRows'
 import { TabletInspectorMediaGroup } from '../object/TabletInspectorMediaGroup'
 import { SatellitePassDetails } from '../object/SatellitePassDetails'
 import { Lx200ObjectControls } from '../telescope/Lx200ObjectControls'
-import { QuickChipRow } from '../QuickChipRow'
+import { QuickChipRow } from '../../common/ui/QuickChipRow'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 天体详情面板（原宿主 panelContent() 的 `object` 分支，分支体原样下沉）。
+// 天体详情面板，对应 `activePanel === 'object'`。
 //
-// 判定条件 `activePanel === 'object'` 留在宿主。详情/媒体/望远镜/观测列表四个 store 走
-// @ObjectLink 实时刷新；`viewLock`/`speechStatus` 与渲染管线逐帧写入的
-// `objectInspectorModelRendering`/`objectInspectorModelTexturePixels` 仍由宿主持有，
-// 以 @Prop 传入（逐帧字段不入被观察 store，见协议踩坑表）。所有原生桥动作、观测列表
-// 增删、语音与重选动作、媒体/预览开合都回注宿主。文案助手（zhNameOf/zhType/
-// selectedStatusZh/selectedDisplayValue）读宿主状态，也以回调返回。
-// 原分支根是 `if (...) {...} else {...}`（多根并列），故包一层 Column()（与原调用点
-// `Column() { this.panelContent() }` 的无 space 间距一致）。末尾的 Lx200ObjectControls
-// 仍受 OFFLINE_APPGALLERY_BUILD 控制。
+// 详情/媒体/望远镜/观测列表四个 store 走 @ObjectLink；`viewLock`/`speechStatus` 与渲染管线
+// 逐帧写入的 modelRendering/modelTexturePixels 仍由宿主持有并以 @Prop 传入
+// （逐帧字段不入被观察 store）。原生桥动作与文案助手读宿主状态，均以回调返回。
+// 分支根为并列多根，故包一层 Column()（无 space，保持原间距）。
 
 @Component
 export struct ObjectPanel {
@@ -76,13 +71,11 @@ export struct ObjectPanel {
           Text(I18n.t('i0110')).fontSize(12).fontColor('#CC8FB6FF').margin({ top: 6 })
         }.width('100%').height(100).justifyContent(FlexAlign.Center)
       } else {
-        // 天体名称突出显示
         Row() {
           Text(this.nameOf(this.objectDetailStore.selectedName))
             .fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFFFFFFF').layoutWeight(1)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.width('100%').padding({ left: 4, right: 4, top: 2, bottom: 4 }).margin({ bottom: 2 })
-        // 类型标签
         Row() {
           Text(this.typeOf(this.objectDetailStore.selectedType))
             .fontSize(11).fontColor('#7FB3DC')
@@ -93,7 +86,7 @@ export struct ObjectPanel {
             .fontSize(11).fontColor('#99FFFFFF')
         }.width('100%').padding({ left: 4, right: 4 }).height(20).margin({ bottom: 8 })
 
-        // 直接绑定 @State（不要经 infoRow 的 @Builder 参数，参数按值捕获会导致不刷新，详见上方注释）
+        // 直接绑定 store 字段：经 @Builder 参数传递会按值捕获，导致不刷新
         if (this.objectDetailStore.selectedMagnitude.length > 0) {
           Row() {
             Text(I18n.t('i0007')).fontSize(12).fontColor('#99FFFFFF').width(72)

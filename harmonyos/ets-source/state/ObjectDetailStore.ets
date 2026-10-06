@@ -4,15 +4,14 @@ import { catalogIconForObjectType } from '../common/derive/catalog'
 import { modelIdentity, modelMultiply } from '../common/derive/DetailModelGeometry'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → ObjectDetailStore 的卫星过境助手注入（§13.1 规则 6 / §14.8 规则 2）。
-// loadSelectedSatellitePasses 复用未随本片下沉的宿主助手 requestSatellitePasses（走交互桥）；
-// selectedObjectIsArtificialSatellite 已于 §14 A2-3 下沉为本 store 方法，不再是 hook。
+// 宿主注入的卫星过境助手：loadSelectedSatellitePasses 复用宿主 requestSatellitePasses
+//（走交互桥）；selectedObjectIsArtificialSatellite 为本 store 方法，不属 hook。
 export interface ObjectDetailHostHooks {
   requestSatellitePasses(expectedName: string): void
 }
 
-// 选中天体的详情数据（原宿主 @State 的 selected*/objectInfo 簇）。
-// 详情卡片、信息行与平板检查器都读这份数据，故独立成一个 store。
+// 选中天体的详情数据（selected*/objectInfo 字段簇）：详情卡片、信息行与平板检查器
+// 均读这份数据，故独立成一个 store。
 @Observed
 export class ObjectDetailStore {
   selectedName: string = ''
@@ -72,17 +71,16 @@ export class ObjectDetailStore {
   selectedDetailRequestPending: boolean = false
   selectedUiLayoutTimer: number = 0
 
-  // 详情主卡片当前页索引（0/1/2/3；2 = 资料页）。2026-10-04 review §2.7 残留并入：
-  // 原宿主 @State，被三个壳层以 `@Prop activeIndex` 消费（宿主读 store 后下发）；
-  // 与 `InfoWindowStore` 刻意不搬的同类宿主控制量区分 —— 本字段语义属详情卡页签。
+  // 详情主卡片当前页索引（0/1/2/3；2 = 资料页）。被三个壳层以 @Prop activeIndex 消费
+  //（宿主读 store 后下发）。
   bottomCardIndex: number = 0
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-6 起本 store 自持 loadObjectInfo） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（无并发抑制需求）；保留字段以统一各 store 的加载器约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
-  // 宿主卫星过境助手注入（§14 B2R-4 loadSelectedSatellitePasses）。
+  // 宿主卫星过境助手注入（供 loadSelectedSatellitePasses 使用）。
   private hooks: ObjectDetailHostHooks | null = null
 
   // 宿主在 aboutToAppear 注入端口与发布回调；重复注入会覆盖旧值（幂等）。
@@ -106,9 +104,8 @@ export class ObjectDetailStore {
     }
   }
 
-  // 选中天体资料（`getObjectInfo`）：桥回包解析为 name/坐标/星等字段映射（原宿主 loadObjectInfo，
-  // 函数体逐字搬入；仅 this.callInteractive → this.port.requestInteractive、
-  // this.objectDetailStore.<f> → this.<f>）。本域无 publish* 发布点，onChanged 为等价空实现。
+  // 选中天体资料（getObjectInfo）：桥回包解析为 name/坐标/星等字段映射。
+  // 本域无 publish* 发布点，onChanged 为空实现。
   loadObjectInfo(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -133,10 +130,7 @@ export class ObjectDetailStore {
     })
   }
 
-  // 选中天体为人工卫星且尚未请求过时触发过境查询（原宿主 loadSelectedSatellitePasses，函数体逐字搬入）。
-  // 差异仅：this.selectedObjectIsArtificialSatellite() → this.selectedObjectIsArtificialSatellite()
-  //（§14 A2-3 起为本 store 方法）、this.objectDetailStore.<f> → this.<f>、
-  // this.requestSatellitePasses → hooks.requestSatellitePasses。
+  // 选中天体为人工卫星且尚未请求过时触发过境查询；否则跳过。
   loadSelectedSatellitePasses(): void {
     const hooks = this.hooks
     if (hooks === null) {
@@ -147,10 +141,8 @@ export class ObjectDetailStore {
     hooks.requestSatellitePasses(this.selectedName)
   }
 
-  // 自定义信息模式下按位掩码清空明细字段（原 SettingsController.applyCustomInformationMask，2026-10-05
-  // 解散 SettingsController 时按「字段所在处即归宿」并入本 store —— 被清的 30 个字段全在本 store；
-  // 信息模式 / 掩码判定由调用方以谓词传入，避免 store 相互 import 与新增 hooks）。函数体逐字搬入，
-  // 仅 this.objectDetailStore.<f> → this.<f>、this.infoWindowStore.informationMaskHas(k) → informationMaskHas(k)。
+  // 自定义信息模式下按位掩码清空明细字段：被清的字段全在本 store；信息模式 / 掩码
+  // 判定由调用方以谓词传入，避免 store 相互 import 与新增 hooks。
   applyCustomInformationMask(informationMode: string, informationMaskHas: (key: string) => boolean): void {
     if (informationMode !== 'custom') return
     if (!informationMaskHas('magnitude')) {
@@ -200,27 +192,25 @@ export class ObjectDetailStore {
       informationMaskHas(groups.get(field.key) ?? 'extra'))
   }
 
-  // ==== 选中天体的「取值/标签」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  // ==== 选中天体的「取值/标签」助手 ====
   //
-  // 均读本 store 的 selected* 字段（含 selectedSatellitePasses 等），按 §14.3「读本域 store 字段
-  // → 并入该 store 方法（零入参）」下沉；objectDistanceSummary / objectDistanceNoticeText 另需
-  // InfoWindowStore 的距离显示开关，按 §14.8 规则 6 改为显式入参 distanceVisible（调用点传
-  // infoWindowStore.distanceInformationVisible()），避免 store 相互 import。函数体逐字保留。
+  // 均读本 store 的 selected* 字段；objectDistanceSummary / objectDistanceNoticeText 另需
+  // InfoWindowStore 的距离显示开关，故以显式入参 distanceVisible 传入，避免 store 相互 import。
 
-  // 大气观测摘要（原宿主 expandedAtmosphereSummary）。
+  // 大气观测摘要。
   expandedAtmosphereSummary(): string {
     const apparent = this.selectedApparentMagnitude.length > 0 ? '大气后 ' + this.selectedApparentMagnitude + ' 等' : ''
     const airmass = this.selectedAirmass.length > 0 ? '气团 ' + this.selectedAirmass : ''
     return (apparent + '  ' + airmass).trim()
   }
 
-  // 距离摘要（原宿主 objectDistanceSummary）。
+  // 距离摘要。
   objectDistanceSummary(distanceVisible: boolean): string {
     if (!distanceVisible) return '--'
     return this.selectedDistance.length > 0 ? (this.selectedDistanceCompact || this.selectedDistance) : I18n.t('distance_missing')
   }
 
-  // 距离提示条文案（原宿主 objectDistanceNoticeText）。
+  // 距离提示条文案。
   objectDistanceNoticeText(distanceVisible: boolean): string {
     if (!distanceVisible) return ''
     const status = this.selectedDistanceStatus
@@ -232,13 +222,13 @@ export class ObjectDetailStore {
     return I18n.t('distance_' + key)
   }
 
-  // 选中天体是否为星座（原宿主 selectedObjectIsConstellation）。
+  // 选中天体是否为星座。
   selectedObjectIsConstellation(): boolean {
     const type = (this.selectedType + ' ' + this.selectedObjectType).toLowerCase()
     return type.indexOf('constellation') >= 0 || type.indexOf('星座') >= 0
   }
 
-  // 选中天体是否为人工卫星（原宿主 selectedObjectIsArtificialSatellite，§14 B2R-4 曾以 hook 注入）。
+  // 选中天体是否为人工卫星。
   selectedObjectIsArtificialSatellite(): boolean {
     if (this.selectedSatellitePassesLoaded) return true
     for (let index = 0; index < this.selectedDetailFields.length; index++) {
@@ -248,36 +238,35 @@ export class ObjectDetailStore {
     return type.indexOf('artificial satellite') >= 0 || type.indexOf('人造卫星') >= 0
   }
 
-  // 首个过境数据的 TLE 历元（原宿主 selectedSatelliteTleEpoch）。
+  // 首个过境数据的 TLE 历元。
   selectedSatelliteTleEpoch(): string {
     if (this.selectedSatellitePasses.length === 0) return ''
     return this.selectedSatellitePasses[0].tleEpoch ?? ''
   }
 
-  // 详情卡图标（原宿主 objectInspectorIcon）。
+  // 详情卡图标。
   objectInspectorIcon(): string {
     return catalogIconForObjectType(this.selectedType + ' ' + this.selectedObjectType, 'catalog_star')
   }
 
-  // 详情卡模型检索文本（原宿主 objectInspectorSearchText）。
+  // 详情卡模型检索文本。
   objectInspectorSearchText(): string {
     return (this.selectedCatalogId + ' ' + this.selectedEnglishName + ' ' + this.selectedName).toLowerCase()
   }
 
-  // 是否已选中天体且状态为 Selected（原宿主 hasSelectedObject）。
+  // 是否已选中天体且状态为 Selected。
   hasSelectedObject(): boolean {
     return this.selectedStatus === 'Selected' && this.selectedName.length > 0
   }
 
-  // 详情卡是否已渲染（原宿主 isObjectDetailCardRendered，A2-6）：读本 store 的 selectedName +
-  // 信息窗可见性，后者跨 store 故以显式入参传入。函数体逐字搬入。
+  // 详情卡是否已渲染：读本 store 的 selectedName + 信息窗可见性，
+  // 后者跨 store 故以显式入参传入。
   isObjectDetailCardRendered(infoWinVisible: boolean): boolean {
     return infoWinVisible && this.selectedName.length > 0
   }
 
-  // 模型视图变换（原宿主 objectInspectorModelTransform，A2-6）：读本 store 的
-  // selectedDetailModel.lighting.viewToBody 与传入的旋转矩阵，纯计算（modelMultiply/modelIdentity
-  // 来自纯几何模块 DetailModelGeometry，非 NAPI/UI）。函数体逐字搬入。
+  // 模型视图变换：读本 store 的 selectedDetailModel.lighting.viewToBody 与传入的旋转矩阵，
+  // 纯计算（modelMultiply/modelIdentity 来自纯几何模块 DetailModelGeometry，非 NAPI/UI）。
   objectInspectorModelTransform(rotation: number[]): number[] {
     return modelMultiply(this.selectedDetailModel?.lighting?.viewToBody ?? modelIdentity(), rotation)
   }

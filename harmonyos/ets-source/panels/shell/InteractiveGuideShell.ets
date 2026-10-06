@@ -3,16 +3,15 @@ import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { GuideButton } from '../guide/GuideButton'
 
-// 交互式导览提示壳（原宿主无参 @Builder `interactiveGuideShell()`，78 行）。
+// 交互式导览提示壳。
 //
 // 结构：全屏星空触摸承接层（仅 exploring 阶段转交宿主 handleSkyTouch）+ 导览卡片
 // （标题/步序/阶段/正文/动作键/来源署名）。卡片可拖动，几何由宿主算好后以 @Prop 传入。
 //
-// 组件内不含宿主 @Builder 调用，故无需上移调用点（§13.1 规则 9 无触发面）：
-// 全部导览按钮已是既有 `GuideButton` 组件，触摸/动作经回调回注宿主。
+// 全部导览按钮是既有 `GuideButton` 组件，触摸/动作经回调回注宿主。
 // 导览阶段文案与步序（guidePhase/index/count/stepTitle/stepText/stepKey）由宿主从
 // `guideState` 与 `currentGuide()/currentGuideStep()` 逐项算好，简单类型 @Prop 按值下发，
-// 宿主改值后重绘即可刷新；视觉、几何、id 锚点与命中语义逐字保留。
+// 宿主改值后重绘即可刷新。
 
 @Component
 export struct InteractiveGuideShell {

@@ -9,7 +9,7 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 // 搜索筛选菜单：返回行 + 四个页面（根 / 分类 / 可视度 / 器材）。
 //
 // 页面与分类状态经 SearchStore（@ObjectLink）订阅；标签文本由宿主计算后以 @Prop 传入
-// （`searchVisibilityLabel()` / `searchInstrumentLabel()` 在筛选 chips 与搜索结果里也用到，故留在宿主）。
+// （`searchVisibilityLabel()` / `searchInstrumentLabel()` 在筛选 chips 与搜索结果里也用到，故由宿主提供）。
 @Component
 export struct SearchFilterMenu {
   @ObjectLink store: SearchStore

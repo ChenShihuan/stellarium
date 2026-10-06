@@ -3,12 +3,10 @@ import { I18n } from '../../pages/I18n'
 import { TonightPlanetRow } from '../../pages/MainWindowModels'
 import { SessionToolStore } from '../../state/SessionToolStore'
 
-// 会话/观测工具区块（原宿主的 observerPlanetSection / pointingTestSection / watchGyroSection /
-// tonightEventsSection / tonightCard 五个 @Builder）。
+// 会话/观测工具区块。
 //
-// 迁移原因：指针笔与今晚天象两块的入参是宿主字段，参数化 @Builder 的简单类型参数按值捕获、
-// 首帧后冻结（§13.1 规则 3）；改组件后滑块/输入/结果文案由 store + @Prop 驱动实时刷新。
-// 引擎与桥依赖仍在宿主，以回调解入（§13.1 规则 6）。视觉与文案逐字保留。
+// 滑块/输入/结果文案由 store + @Prop 驱动实时刷新。
+// 引擎与桥依赖仍在宿主，以回调解入。
 
 // 观测星球：可站立星球标签网格 + 回到地球。
 @Component

@@ -3,15 +3,15 @@ import { PolarScopeStore } from '../../state/PolarScopeStore'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 
-// 「极轴镜」屏幕叠层（原宿主 @Builder `polarScopeOverlay()`，约 126 行）。
+// 「极轴镜」屏幕叠层。
 //
-// 分工（§13.1 规则 4/6 + 叠层几何不入被观察 store）：
+// 分工（叠层几何不入被观察 store）：
 //   - 极轴镜状态（polarScopeData / Loading / Error / HorizontalFlip / VerticalFlip / Visible）
-//     已下沉 state/PolarScopeStore.ets（review §2.7：Prop 风格 → Store 风格），本组件以
-//     @ObjectLink 订阅；可见性判定仍在宿主调用点（`if (this.polarScopeStore.polarScopeVisible)`），
+//     收于 state/PolarScopeStore.ets，本组件以 @ObjectLink 订阅；可见性判定在宿主调用点
+//     （`if (this.polarScopeStore.polarScopeVisible)`），
 //     读数（isSouthHemisphere / hourAngleText / viewAngleText）由本组件就地读 store 的 polarScopeData 派生；
-//   - 几何全部留在宿主：`polarScopeControlWidth()` / `polarScopeTopInset()` / `polarScopeFooterHeight()`
-//     与 `skyWidth` / `skyHeight` 由宿主算好后以 @Prop（controlWidth / topInset / footerHeight /
+//   - 几何全部由宿主给出：`polarScopeControlWidth()` / `polarScopeTopInset()` / `polarScopeFooterHeight()`
+//     与 `skyWidth` / `skyHeight` 以 @Prop（controlWidth / topInset / footerHeight /
 //     skyWidth / skyHeight）传入 —— 手工命中路由（`isUiPoint` / `isDockPoint` / `handleSkyTouch`）与
 //     `syncNativePolarScopeOverlay()` 复用同一批几何，必须保持单一口径；
 //   - 全屏透明层的 `onTouch` 只做转发，注入 `onSkyTouch`（避开 `CustomComponent.onTouch`），
@@ -19,10 +19,9 @@ import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 //   - 翻转开关只回注 `onHorizontalFlipChange` / `onVerticalFlipChange`，由宿主负责
 //     `syncNativePolarScopeOverlay()` 与 `callInteractive('setActionChecked', ...)`。
 //
-// 单容器根（§13.1 规则 7）：原 @Builder 的唯一根是 `if (this.polarScopeVisible) { Stack() … }`，
-// 下沉后把可见性判定留在宿主调用点，组件根即那个全屏 `Stack`（zIndex 101 / BLOCK_HIERARCHY 逐字保留）。
+// 组件根即全屏 `Stack`（zIndex 101 / BLOCK_HIERARCHY）。
 //
-// 稳定 id 原样保留：polar-scope-center / polar-scope-close / polar-scope-flip-horizontal /
+// 稳定 id：polar-scope-center / polar-scope-close / polar-scope-flip-horizontal /
 // polar-scope-flip-vertical。
 @Component
 export struct PolarScopeOverlay {

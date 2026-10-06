@@ -2,22 +2,19 @@ import { ObjectMediaStore } from '../../state/ObjectMediaStore'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { UI_RADIUS_CONTROL, UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 「天体详情·本地大图」全屏叠层（原宿主 @Builder `objectInspectorMediaPreviewOverlay()`，约 66 行）。
+// 「天体详情·本地大图」全屏叠层。
 //
-// 分工（§13.1 规则 4/6）：
+// 分工：
 //   - 可见性判定 `objectInspectorMediaFullscreen` 留在宿主调用点，组件根即那个全屏 `Stack`
-//     （zIndex 1000 / Transparent 逐字保留）；
+//     （zIndex 1000 / Transparent）；
 //   - 标题由宿主 `zhNameOf(objectDetailStore.selectedName)` 算好后以 @Prop `titleText` 传入；
 //   - 顶部安全区 `mediaPreviewTopInset()` 由宿主算好后以 @Prop `topInset` 传入；
 //   - 解码/重试/关闭动作全部回注宿主：`closeObjectInspectorMediaPreview` /
 //     `onObjectInspectorMediaPreviewLoaded` / `onObjectInspectorMediaPreviewError` /
-//     `retryObjectInspectorMediaPreview`（成员名与宿主方法一致，逐字保留既有语义）；
+//     `retryObjectInspectorMediaPreview`；
 //   - 媒体数据（PixelMap / 标签 / Loading / Failed / Path）经 @ObjectLink `objectMediaStore` 读取。
 //
-// 单容器根（§13.1 规则 7）：根为全屏 `Stack`，内含背景拦截层与内容 `Column`（原文并列双根已天然包于 Stack）。
-//
-// 既有语义逐字保留：`Image(...).objectFit(ImageFit.Contain)`、`hitTestBehavior(HitTestMode.Block)`、
-// `UI_RADIUS_PILL` / `UI_RADIUS_CONTROL`（test-ohos-detail-image-layout.mjs 切片断言）。
+// 组件根即全屏 `Stack`，内含背景拦截层与内容 `Column`。
 @Component
 export struct ObjectInspectorMediaPreviewOverlay {
   @ObjectLink objectMediaStore: ObjectMediaStore

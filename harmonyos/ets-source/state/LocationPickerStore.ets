@@ -8,7 +8,7 @@ import { clamp } from '../common/derive/astro'
 import { getCityPreset, matchesLocationSearch, locationSearchMatchScore } from '../common/derive/actions'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → LocationPickerStore 的观测点助手（§14.5 B2R-2「额外注入」）。
+// 宿主 → LocationPickerStore 的观测点助手。
 export interface LocationPickerHostHooks {
   // 观测纬度写 SkyCultureSettingsStore.skyCultureObserverLatitude（领地地图旋转用）。
   setSkyCultureObserverLatitude(value: number): void
@@ -18,21 +18,14 @@ export interface LocationPickerHostHooks {
 
 // 位置选择器（「位置」面板的层级列 + 地图选点）状态与纯计算。
 //
-// 本片边界（Phase 3aj）：Phase 3ai 的 LocationStore 只收纳离线搜索簇（locSearch* / savedLocations）；
-// 本 store 收纳「位置选择器」自身的一簇：
-//   - picker 坐标/名称/状态（locationPickerName/Latitude/Longitude/Altitude/Status）
-//   - 选点方式（locationPickMode）、观测地时区显示（observerTimeZone）
-//   - 地图渲染尺寸（mapRenderWidth/Height）
-//   - 层级选择（hierContinent/Country/Region/City）
-//   - 层级列的名称/翻译/过滤纯计算（hier*() / translate* / locationDisplayName / pickerCoordinateText …）
+// 持有 picker 坐标/名称/状态、选点方式、观测地时区、地图渲染尺寸与层级选择
+// （hierContinent/Country/Region/City）；层级列的名称/翻译/过滤为纯计算，
+// 被位置面板组件与 LocationController 以 @ObjectLink 观察。
 //
-// 需要观测星球参与过滤与翻译（isCurrentObserverPlanet / hierContinents / hierCountries /
-// hierRegions / hierCityList / hierarchyItemLabel / hierarchySelectionSummary / translateCountry）
-// 的方法以**参数**传入 observerPlanet —— observerPlanet 仍是宿主跨域 @State（切换星球 / 设置面板多处共用），
-// 不硬搬；参数化也避免 store 依赖宿主状态。
+// 需要观测星球参与过滤与翻译的方法以**参数**传入 observerPlanet（该值是宿主跨域状态，
+// 切换星球 / 设置面板多处共用）；参数化避免 store 依赖宿主状态。
 //
-// 不搬的宿主职责：native 桥与定时器（useDeviceLocation / applyPickerLocation / setLocation /
-// handleLocationMapTouch）、以及由面板组件自持的 Scroller（见 panels/common/HierColumn.ets）。
+// 持有 CommandPort 与观测点助手 hooks；native 桥与定时器、面板自持的 Scroller 不在本 store。
 //
 // 只放数据与纯计算，不 import UI / NAPI。
 //
@@ -56,9 +49,9 @@ export class LocationPickerStore {
   hierRegion: string = ''
   hierCity: string = ''
 
-  // —— 桥 / 宿主助手注入（§14.1 AB-0 / §14 B2R-2）——
+  // —— 桥 / 宿主助手注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（交互读，无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（交互读，无并发抑制需求），预留保持统一约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
   private hooks: LocationPickerHostHooks | null = null
@@ -84,9 +77,7 @@ export class LocationPickerStore {
     }
   }
 
-  // 观测点信息：读回纬度 / 时区 / 观测星球（原宿主 loadObserverInfo，函数体逐字搬入；
-  // 仅 this.callInteractive → this.port.requestInteractive、this.locationPickerStore.observerTimeZone
-  // → 本 store 字段、时区助手 → derive/labels 模块、两个跨 store 写 → hooks.*）。
+  // 观测点信息：读回纬度 / 时区 / 观测星球（时区助手用 derive/labels，跨域写经 hooks）。
   loadObserverInfo(updateTimeZone: boolean = true): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -113,7 +104,7 @@ export class LocationPickerStore {
     })
   }
 
-  // 原宿主私有 planetZh() 的本域副本：translateCountry('ZZ') 需要「月球表面地点」这类星球名。
+  // 星球显示名：translateCountry('ZZ') 需要「月球表面地点」这类星球名。
   private planetZhName(en: string): string {
     switch (en) {
       case 'Sun': return I18n.t('pl_sun')
@@ -149,7 +140,7 @@ export class LocationPickerStore {
     return (90 - this.locationPickerLatitude) / 180 * this.mapRenderHeight - 9
   }
 
-  // 纯 setter：应用一次选点（原宿主 setPickerLocation(§15.12)，函数体逐字搬入；仅 this.* → 本 store 字段）。
+  // 纯 setter：应用一次选点。
   // 地图点选（LocationPickerPanel 内）与控制器（LocationController 的 GPS / 城市落地）共用本方法。
   setPickerLocation(name: string, latitude: number, longitude: number, altitude: number, status: ResourceStr): void {
     this.locationPickerName = name
@@ -522,9 +513,7 @@ export class LocationPickerStore {
     return this.hierCity
   }
 
-  // 离线快速搜索候选（内置城市名 → 城市预设 + 本地化显示名，plan §14.3 A2-2）。原先读宿主
-  // locationPickerStore.locationDisplayName 的函数体逐字迁入本 store，改为 this 直调；
-  // getCityPreset 已随 §14.2 A1-5 沉入 derive/actions。
+  // 离线快速搜索候选（内置城市名 → 城市预设 + 本地化显示名）。
   quickLocationSearchItems(): Array<LocSearchItem> {
     const names: string[] = [
       'Beijing', 'Shanghai', 'Guangzhou', 'Shenzhen', 'Chengdu', 'Hangzhou', 'Wuhan',
@@ -544,8 +533,7 @@ export class LocationPickerStore {
     return items
   }
 
-  // 位置搜索的国名显示（原宿主 locationSearchCountryName，A2-6）：observerPlanet 属 SessionToolStore
-  // 跨域，以显式入参传入；translateCountry 为本 store 方法。函数体逐字搬入。
+  // 位置搜索的国名显示：observerPlanet 属跨域状态，以显式入参传入；translateCountry 为本 store 方法。
   locationSearchCountryName(countryCode: string, observerPlanet: string): string {
     if (countryCode === 'TW' || countryCode === 'HK' || countryCode === 'MO') {
       return I18n.isChineseLanguage()
@@ -555,8 +543,8 @@ export class LocationPickerStore {
     return this.translateCountry(countryCode, observerPlanet)
   }
 
-  // 位置结果上下文（省 / 国，原宿主 locationResultContext，A2-6）：读本 store 的 translateProvince
-  // 与 locationSearchCountryName；observerPlanet 显式传入。函数体逐字搬入。
+  // 位置结果上下文（省 / 国）：读本 store 的 translateProvince 与 locationSearchCountryName；
+  // observerPlanet 显式传入。
   locationResultContext(item: LocSearchItem, observerPlanet: string): string {
     const parts: Array<string> = []
     const append = (value: string): void => {
@@ -568,9 +556,8 @@ export class LocationPickerStore {
     return parts.join(' · ')
   }
 
-  // 离线快速搜索（原宿主 quickLocationSearch，A2-6）：读本 store 的 quickLocationSearchItems，
-  // 过滤/排序用纯函数 matchesLocationSearch / locationSearchMatchScore（derive/actions）；
-  // observerPlanet 属 SessionToolStore 跨域，以显式入参传入。函数体逐字搬入。
+  // 离线快速搜索：读本 store 的 quickLocationSearchItems，过滤/排序用纯函数
+  // matchesLocationSearch / locationSearchMatchScore；observerPlanet 以显式入参传入。
   quickLocationSearch(query: string, observerPlanet: string): Array<LocSearchItem> {
     if (!query.trim()) return []
     return this.quickLocationSearchItems()

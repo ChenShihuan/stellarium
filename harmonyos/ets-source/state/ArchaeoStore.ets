@@ -2,24 +2,13 @@ import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 古天文辅助线（archaeoLines）域的状态。
+// 古天文辅助线（archaeoLines）域状态：18 个字段（载入态与提示、总开关与线宽、13 个线条
+// 开关、当前行星档位）均为 ArchaeoLinesPanel 的入参，由面板以 @ObjectLink 订阅。
+// 写回动作仍由宿主 setArchaeoLineSetting / applyArchaeoLineSetting 驱动，面板只回注回调；
+// 本 store 自持 loadArchaeoLines 加载器与 archaeoLineSettingValue 取值，并持有 CommandPort 注入。
 //
-// review §2.7：本域原为 "Prop 风格" —— 18 个 @State 全留宿主、以 @Prop 快照传入
-// ArchaeoLinesPanel，任一开关变化都会让宿主整棵重渲染。现改为 @Observed store +
-// 面板 @ObjectLink，刷新粒度收缩到订阅该 store 的组件（与 SatelliteStore / SceneryStore 同法）。
-//
-// 本域 18 个字段全部是面板入参，无字段需要留在宿主：
-//   - 载入态与提示 archaeoLoading / archaeoStatus；
-//   - 总开关 archaeoLinesEnabled 与线宽 archaeoLineWidth；
-//   - 13 个线条开关 + 当前行星档位 archaeoCurrentPlanet。
-//
-// 写回动作仍在宿主（setArchaeoLineSetting / applyArchaeoLineSetting 及 archaeoMutationId），
-// 面板只回注回调；只读取值 archaeoLineSettingValue（§14 A2-2）已并入本 store；加载器
-// loadArchaeoLines（§14 B1-4）已随桥注入搬入本 store（不使用 archaeoMutationId，故与
-// 宿主动作无共享代际依赖）。
-//
-// 约束：所有更新必须是"字段整体赋值"。改造前已普查确认本域无数组/对象字段，不存在
-// 原地 push/splice 或 `this.<f>.<prop> =`（@ObjectLink 观测不到原地变更）。
+// 约束：所有更新必须是"字段整体赋值"。本域无数组/对象字段，不存在原地 push/splice 或
+// `this.<f>.<prop> =` 的写法（@ObjectLink 观测不到原地变更）。
 @Observed
 export class ArchaeoStore {
   archaeoLoading: boolean = false
@@ -41,9 +30,9 @@ export class ArchaeoStore {
   archaeoCurrentPlanet: number = 0
   archaeoLineWidth: number = 1
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-4 起本 store 自持 loadArchaeoLines） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（原宿主 archaeoMutationId 属写回动作，不在此）；预留以统一约定。
+  // 本加载器不使用请求序号（写回动作的 archaeoMutationId 属宿主）；seq 预留以统一约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
 
@@ -64,9 +53,7 @@ export class ArchaeoStore {
     }
   }
 
-  // 古天文辅助线面板：桥查询全部开关与线宽（原宿主 loadArchaeoLines，函数体逐字搬入；
-  // 仅 this.callNativeWhenReady → this.port.requestWhenReady、this.archaeoStore.<f> → this.<f>；
-  // 原重试档 0 / 100 / 15 与 onFailure 回调逐字保留，仅按端口签名把 onFailure 前移）。
+  // 古天文辅助线面板：桥查询全部开关与线宽（重试档 0 / 100 / 15）。
   loadArchaeoLines(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -104,9 +91,7 @@ export class ArchaeoStore {
     }, 0, 100, 15)
   }
 
-  // 逐条读出当前古天文线设置的 CLI 取值（plan §14.3 A2-2）。原先读宿主 archaeoStore.* 的
-  // 分支体逐字迁入本 store，改为零宿主引用；宿主 setArchaeoLineSetting 调用点改为
-  // this.archaeoStore.archaeoLineSettingValue(setting)。
+  // 古天文线设置项 → CLI 取值字符串。
   archaeoLineSettingValue(setting: string): string {
     switch (setting) {
       case 'enabled': return this.archaeoLinesEnabled ? '1' : '0'

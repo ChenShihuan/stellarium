@@ -1,13 +1,9 @@
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 「图层」面板顶部的图层预设条（原宿主 @Builder `layerPresetBar()`）。
+// 本组件职责：「图层」面板顶部的图层预设条。
 //
-// 原 @Builder 无参数，本可保留；但它只服务图层面板，按协议（§13.2 步 3：面板内的 builder
-// 一并下沉为组件）随本片收进 panels/layers。预设的应用逻辑（applyLayerPreset / clearMarkingLayers）
-// 走原生桥与 flashHint，留在宿主，以回调注入。
-//
-// 视觉逐字保留：标题 10 号 subColor、三枚预设按钮（高 28、10 号 textColor、panelColor 底、
-// UI_RADIUS_CONTROL 圆角）、清除按钮（高 27、subColor）。
+// 预设的应用逻辑（applyLayerPreset / clearMarkingLayers）走原生桥与 flashHint，
+// 由宿主提供，以回调注入。
 @Component
 export struct LayerPresetBar {
   @Prop subColor: string

@@ -1,17 +1,12 @@
-// 时间面板域状态。字段名沿用原 @State 名，便于逐片搬迁与对照回滚。
-//
-// 覆盖三块：① 速度/速率（`timeSpeedIndex` + `timeRateText` + 换挡待定窗口）；
+// 时间面板域状态：① 速度/速率（timeSpeedIndex + timeRateText + 换挡待定窗口）；
 // ② 恒星时显示；③ 手工日期时间选择器模型（manualYear..manualMinute）。
-// 时间轮的交互草稿状态在 `TimeWheelStore`，交互行为在 `TimeWheelController`。
-//
-// §14 B2R-2：恒星时 / 夜视 / 大气折射的定时刷新加载器 loadTimeExtras 下沉本 store。
-// 其调用的两个宿主助手（syncNightModeFromEngine 与 pendingNightMode 待定窗口 + applyNightMode
-// 共享；applyAtmosphereResponse 与宿主 applyAtmosphere 共享）按 §14.5「额外注入」保留宿主实现，
-// 经 TimeHostHooks 具名注入（store 不持有他域 store）。
+// 消费方（TimePanel / ManualTimeBlock 等）以 @Prop / @ObjectLink 观察。
+// 自持 CommandPort；loadTimeExtras 的跨域助手（夜视同步、大气回包）经 TimeHostHooks 注入，
+// store 不持有他域 store。时间轮的交互草稿状态在 TimeWheelStore，交互行为在 TimeWheelController。
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → TimeStore 的加载助手（§14.5 B2R-2「额外注入」）。
+// 宿主 → TimeStore 的加载助手注入（store 不持有他域 store）。
 export interface TimeHostHooks {
   // 夜视模式随引擎回报同步（写 NightModeStore + 消费宿主 pendingNightMode 待定窗口）。
   syncNightModeFromEngine(engineNight: boolean): void
@@ -21,21 +16,21 @@ export interface TimeHostHooks {
 
 @Observed
 export class TimeStore {
-  timeSpeedIndex: number = 7  // 7=1x realtime (default, new index)
+  timeSpeedIndex: number = 7  // 7 = 1x 实时（默认档位）
   siderealTimeText: string = '--'
   observationTimeText: string = '--'
 
-  // ==== 速度/速率（原宿主 @State / 普通字段）====
+  // ==== 速度/速率 ====
   timeRateText: string = '1x'
   pendingTimeRate: number = Number.NaN
   pendingTimeRateUntilMs: number = 0
   lastSyncedTimeRate: number = Number.NaN
   lastNonZeroSpeedIndex: number = 7
 
-  // ==== 手工日期时间选择器模型（原宿主 @State，review §2.7）====
+  // ==== 手工日期时间选择器模型 ====
   // 时间面板（TimePanel → ManualTimeBlock）经 @Prop 消费；宿主 applyManualTime /
-  // syncManualTimeFromState 读写本簇。默认值沿用原宿主字面量（启动后由 syncManualTimeFromState
-  // 用当前 JD 覆盖）。
+  // syncManualTimeFromState 读写本簇。默认值为字面量，启动后由 syncManualTimeFromState
+  // 用当前 JD 覆盖。
   manualYear: number = 2026
   manualMonth: number = 7
   manualDay: number = 20
@@ -66,9 +61,9 @@ export class TimeStore {
     return !Number.isNaN(this.lastSyncedTimeRate) && Math.abs(rate - this.lastSyncedTimeRate) < 1e-9
   }
 
-  // —— 桥 / 宿主助手注入（§14.1 AB-0 / §14 B2R-2）——
+  // —— 桥 / 宿主助手注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（同步读取，无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（同步读取，无并发抑制需求）；预留以统一各 store 的桥注入约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
   private hooks: TimeHostHooks | null = null
@@ -94,9 +89,7 @@ export class TimeStore {
     }
   }
 
-  // 恒星时 / 夜视 / 大气折射：时间面板打开与前台恢复时定时刷新（原宿主 loadTimeExtras，
-  // 函数体逐字搬入；仅 this.callNative → this.port.request、this.*Store 字段 → 本 store 字段，
-  // 两个跨域助手 → hooks.*）。
+  // 恒星时 / 夜视 / 大气折射：时间面板打开与前台恢复时定时刷新；跨域助手经 hooks 注入。
   loadTimeExtras(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -115,19 +108,16 @@ export class TimeStore {
     hooks.applyAtmosphereResponse(port.request('getAtmosphereParams', ''))
   }
 
-  // ==== 时间面板标题的「取值/文案」助手（§14 A2-3，原宿主私有方法逐字搬入）====
-  //
-  // 均读本 store 的 observationTimeText / timeRateText，按 §14.3「读本域 store 字段 → 并入该
-  // store 方法（零入参）」下沉；函数体逐字保留。
+  // ==== 时间面板标题的「取值/文案」助手（读本 store 的 observationTimeText / timeRateText）====
 
-  // 面板副标题的时钟部分（原宿主 timePanelClockText）。
+  // 面板副标题的时钟部分。
   timePanelClockText(): string {
     const text = this.observationTimeText
     const idx = text.indexOf(' ')
     return idx > 0 ? text.substring(idx + 1) : text
   }
 
-  // 面板副标题的年月日 + 时间速率（原宿主 timePanelDateText）。
+  // 面板副标题的年月日 + 时间速率。
   timePanelDateText(): string {
     const text = this.observationTimeText
     const idx = text.indexOf(' ')
@@ -135,7 +125,7 @@ export class TimeStore {
     return date.length > 0 ? date + ' · ' + this.timeRateText : this.timeRateText
   }
 
-  // 面板副标题：仅当活动面板为时间面板时返回日期+速率，否则为空（§14 A2-4，原宿主 panelSubtitle）。
+  // 面板副标题：仅当活动面板为时间面板时返回日期+速率，否则为空。
   // activePanel 属宿主路由保留字段，按显式入参传入。
   panelSubtitle(activePanel: string): string {
     if (activePanel === 'time') {

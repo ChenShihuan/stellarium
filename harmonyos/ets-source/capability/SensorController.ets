@@ -1,21 +1,15 @@
-// 传感器 / 陀螺仪控制器（PLAN §15.2 P1-1 / §15.11 M1-B 子组①）。
+// 传感器 / 陀螺仪控制器。
 //
-// 原宿主 MainWindowNativeNode 的 21 个 gyro* 方法与 52 个 gyro*/watch 私有字段逐字下沉
-// （watchLastSend 属 §2.7.1 保留字段，经 hooks 注入读写，见下）。职责划分（§15.7 规则 2）：
-//   - 可观测数据（使能 / 状态 / 罗盘读数 / 目标引导）留在 @Observed GyroStore；
-//   - 手势采样 / 逐帧草稿量（事件计数、姿态四元数、滤波向量、订阅回调、显示旋转快照…）
-//     留在本普通类，避免每帧触发刷新。
+// 把陀螺仪 / 旋转矢量 / 重力 / 磁力订阅折算为引擎 setGyroView 姿态，并驱动目标引导与罗盘读数。
+// 可观测数据（使能 / 状态 / 罗盘读数 / 目标引导）留在 @Observed GyroStore；手势采样 / 逐帧草稿量
+// （事件计数、姿态四元数、滤波向量、订阅回调、显示旋转快照…）留在本普通类，避免每帧触发刷新。
 //
-// 依赖注入（§15.7 规则 1/3/4、§13.1 规则 6）：
-//   - SensorPort：probe / subscribe / unsubscribe（本类不碰 sensor.on/off）；
-//   - CommandPort：callNativeFire → fire；watchGyro 虚拟指星笔 → requestWhenReady
-//     （M1-A 实测：watchGyro* 是桥驱动的虚拟指星笔，走 pointAtSky 桥命令，不走 sensor.*）；
-//   - GyroStore / SessionToolStore：以实例引用持有；
-//   - SensorHostHooks：宿主的隐私/前后台判定、UI 提示、布局快照、显示旋转、native 投影查询、
-//     §2.7.1 保留字段 watchLastSend 的读写。
+// 依赖：SensorPort 提供 probe / subscribe / unsubscribe（本类不碰 sensor.on/off）；CommandPort 提供
+// 桥调用与 requestWhenReady；GyroStore / SessionToolStore 以实例引用持有；SensorHostHooks 回注宿主的
+// 隐私/前后台判定、UI 提示、布局快照、显示旋转、native 投影查询，以及保留字段 watchLastSend 的读写。
 //
-// **不 import NAPI/UI**（§15.7 规则 1）：传感器调用走 SensorPort，桥调用走 CommandPort，
-// 布局/UI/投影动作经 hooks 回注。hilog 与状态查询日志沿用既有 store 先例（如 BookmarkStore）。
+// 不 import NAPI/UI：传感器调用走 SensorPort，桥调用走 CommandPort，布局/UI/投影动作经 hooks 回注。
+// hilog 与状态查询日志沿用既有 store 先例（如 BookmarkStore）。
 import hilog from '@ohos.hilog'
 import { I18n } from '../pages/I18n'
 import { GyroStore } from '../state/GyroStore'
@@ -54,21 +48,21 @@ export interface GyroGuideLayout {
   fovSliderValue: number
 }
 
-// 宿主 → 控制器回注（§13.1 规则 6）：不触碰 UI/宿主私有标志以外的任何 NAPI。
+// 宿主 → 控制器回注：不触碰 UI/宿主私有标志以外的任何 NAPI。
 export interface SensorHostHooks {
-  // 隐私同意 + 前台 + 启动允许三者合一（原宿主 startGyroscope 首行守卫）。
+  // 隐私同意 + 前台 + 启动允许三者合一。
   canUseSensors(): boolean
   // 宿主 UI 提示。
   flashHint(text: ResourceStr): void
   // 当前显示旋转（对应 display.getDefaultDisplaySync().rotation）；不可用返回 -1。
   displayRotation(): number
-  // 当前是否有选中天体（原宿主 objectDetailStore.selectedStatus === 'Selected'）。
+  // 当前是否有选中天体。
   objectSelected(): boolean
   // 目标引导布局快照。
   guideLayout(): GyroGuideLayout
-  // native 投影查询（对应宿主 callNative('getGyroGuidePosition') 强转 GyroGuideProjection）。
+  // native 投影查询（getGyroGuidePosition → GyroGuideProjection）。
   guideProjection(): GyroGuideProjection | undefined
-  // §2.7.1 保留字段 watchLastSend（引擎自用 / 已登记约定）：不搬入本类，经 hooks 读写。
+  // 保留字段 watchLastSend（引擎自用）：经 hooks 读写。
   watchLastSend(): number
   setWatchLastSend(value: number): void
 }
@@ -150,15 +144,15 @@ export class SensorController {
     this.hooks = hooks
   }
 
-  // ── 生命周期收口（§15.7 规则 3：宿主 aboutToDisappear / 后台收口）──
+  // ── 生命周期收口（宿主 aboutToDisappear / 后台收口）──
 
-  // 组件销毁 / 隐私撤销：停订阅并清后台暂停标志（原宿主 aboutToDisappear 的 stopGyroscope(false)）。
+  // 组件销毁 / 隐私撤销：停订阅并清后台暂停标志。
   stop(): void {
     this.gyroPausedForBackground = false
     this.stopGyroscope(false)
   }
 
-  // 应用切后台：若已开启则暂停订阅，前台再恢复（原宿主 handleApplicationLifecycle）。
+  // 应用切后台：若已开启则暂停订阅，前台再恢复。
   pauseForBackground(): void {
     if (this.gyroStore.gyroscopeEnabled) {
       this.gyroPausedForBackground = true
@@ -176,7 +170,7 @@ export class SensorController {
     }
   }
 
-  // 目标引导目标坐标（原宿主 applySelectedObject 写入的 gyroGuideTargetAz/Alt）。
+  // 目标引导目标坐标。
   setGuideTarget(az: number, alt: number): void {
     this.gyroGuideTargetAz = az
     this.gyroGuideTargetAlt = alt
@@ -874,7 +868,7 @@ export class SensorController {
     }
   }
 
-  // 虚拟指星笔 —— 手表当陀螺仪（发射端模拟）。M1-A 实测：这条路径是**桥驱动**，
+  // 虚拟指星笔 —— 手表当陀螺仪（发射端模拟）。这条路径是**桥驱动**，
   // 走 pointAtSky / pointAtSkyStop 桥命令（CommandPort.requestWhenReady），不走 sensor.*。
   watchGyroSend(): void {
     if (!this.sessionToolStore.watchTracking) return

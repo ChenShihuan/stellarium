@@ -3,11 +3,10 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { I18n } from '../../pages/I18n'
 import { SkyCultureMakerStore } from '../../state/SkyCultureMakerStore'
 
-// 星文化制作器的三个标签页（原宿主无参 `@Builder skyCultureMakerTabs`）。
+// 星文化制作器的三个标签页：概览 / 星座 / 校验收尾。
 //
-// 改成组件只为与同域其余子块一致（这里的 tab 本来就是宿主 @State，无参 builder 不会冻结）；
-// 选中态直接改写 store（@ObjectLink 允许）—— 宿主读 store，因此标签切换会实时刷新。
-// 视觉逐字保留：Row space 6 / 文本 11 号 / 高 34 / 下边距 10 / 选中白字 + 强调底色 / 180ms springMotion。
+// 选中态直接改写 store（@ObjectLink 允许），宿主读 store，标签切换实时刷新。
+// Row space 6，文本 11 号，高 34，下边距 10，选中白字 + 强调底色，180ms springMotion。
 @Component
 export struct SkyCultureMakerTabs {
   @ObjectLink store: SkyCultureMakerStore

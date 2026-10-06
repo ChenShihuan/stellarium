@@ -3,39 +3,25 @@ import { SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureItem, SkyCultu
 import { cleanSkyCultureNarration } from '../common/derive/skycult'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → SkyCultureViewStore 的加载助手（§14.5 B2R-3「额外注入」）。
-// 二者均指向宿主内**未随本片下沉**的 B3 加载器 loadSkyCultureDetails（写 §2.7.1 保留的
-// 渐进写入字段 skyCultureArtStates 等，§14.6 已登记 B3）—— 本片只让其作为 hooks 被调用，
-// 保持 B3 的登记不变。
+// 宿主 → SkyCultureViewStore 的加载助手。
+// 二者均指向宿主自持的详情加载器 loadSkyCultureDetails（写留在宿主的渐进解码字段），
+// 本 store 只经 hooks 调用。
 export interface SkyCultureViewHostHooks {
-  // 使宿主内 in-flight 的详情请求失效（原宿主 `++this.skyCultureDetailsRequestId` 的预增，
-  // 该序号与 selectSkyCulture / handleSkyCultureRowArea / 艺术图解码共用，仍归宿主 B3）。
+  // 使宿主内 in-flight 的详情请求失效（该序号与多个宿主动作共用，仍归宿主）。
   invalidateSkyCultureDetails(): void
-  // 触发宿主 B3 详情加载器（本片不搬）。
+  // 触发宿主详情加载器。
   loadSkyCultureDetails(): void
 }
 
-// 「星空文化」面板的**只读详情视图**状态簇（查看器侧）。
+// 「星空文化」面板只读详情视图 store：持有详情加载三态、解说/描述、离线艺术图列表、预览弹层
+// 标记、单张大图解码结果与文化列表/当前选择，由 LayersPanel / SkyCultureViewTab 等经
+// @ObjectLink 观察。桥经 attachPort 注入 CommandPort，本 store 自持 loadSkyCultureList；
+// 详情加载与失效经 hooks 回注。
 //
-// 本片边界（Phase 3am）：原宿主的 17 个只读详情字段（解说/描述段落/离线艺术图列表与预览弹层标记/
-// 详情加载三态/两处展开标记）逐条搬到这里，保留原类型与默认值。宿主以
-// `@State private skyCultureViewStore: SkyCultureViewStore = new SkyCultureViewStore()` 持有。
-//
-// 本片（Phase 4 residual）：文化列表与当前选择（`skyCultures` / `skyCultureList` /
-// `skyCultureListLoading` / `currentSkyCulture` / `currentSkyCultureId`）由宿主并入本 store；
-// 消费方 `LayersPanel` / `SkyCultureViewTab` / `SettingsQuickLegacyPanel` / `ConfigFallbackPanel`
-// 经 @ObjectLink 实时读，宿主自身也改读 store（规则 4）。
-//
-// 明确**不**属于本 store（各自留在宿主）：
-//   - 进度驱动的资源字段：`skyCultureArtStates` / `skyCultureArtThumbnailPixelMaps` —— 由逐张图片解码
-//     回调分块/防抖渐进写入（§13.2 的「高频写入不入 store」），留在宿主以免重渲染风暴；
-//   - 例外（Phase 5c）：`artPreviewPixelMap`（单张大图）虽同为解码结果，但下沉到预览叠层组件后，
-//     组件必须以引用语义（@ObjectLink）拿到 PixelMap 才能渲染 —— @Prop 会拷贝 PixelMap，真机实测
-//     导致 Image.onError「绘图资源无法显示」；每张图解码只写一次，不构成重渲染风暴，故收进本 store。
-//   - 面板设置/筛选/标签模式/领地地图等约 90 个 `skyCulture*` 字段 —— 与 `panelContent`
-//     的设置 UI 同片（Phase 4）。
-//
-// 只放数据与纯计算，不 import UI / NAPI（image 仅用于 PixelMap 类型）。
+// 只放数据与纯计算，不 import UI / NAPI（image 仅用于 PixelMap 类型）。分张解码的
+// skyCultureArtStates / skyCultureArtThumbnailPixelMaps 因高频渐进写入留宿主；
+// 单张大图 artPreviewPixelMap 每张只写一次，且叠层必须以引用语义拿到 PixelMap——
+// @Prop 会拷贝 PixelMap，真机实测导致 Image.onError，故收进本 store。
 @Observed
 export class SkyCultureViewStore {
   // —— 详情加载三态 ——
@@ -65,16 +51,16 @@ export class SkyCultureViewStore {
   // 单张大图解码结果：由解码回调渐进写入（每张只写一次），以 @ObjectLink 引用语义供叠层组件渲染。
   artPreviewPixelMap: image.PixelMap | undefined = undefined
 
-  // —— 文化列表与当前选择（Phase 4 residual）——
+  // —— 文化列表与当前选择 ——
   skyCultures: string[] = []
   skyCultureList: Array<SkyCultureItem> = []
   skyCultureListLoading: boolean = false
   currentSkyCulture: string = ''
   currentSkyCultureId: string = ''
 
-  // —— 桥 / 宿主助手注入（§14.1 AB-0；§14 B2R-3 自持 loadSkyCultureList）——
+  // —— 桥 / 宿主助手注入 ——
   private port: CommandPort | null = null
-  // 列表请求序号（原宿主 skyCultureListRequestId 搬入本 store，§14.8 规则 3）。
+  // 列表请求序号：用于丢弃过期回包。
   private seq: number = 0
   private onChanged: (() => void) | null = null
   private hooks: SkyCultureViewHostHooks | null = null
@@ -100,10 +86,7 @@ export class SkyCultureViewStore {
     }
   }
 
-  // 星空文化列表：桥读文化清单并触发详情加载（原宿主 loadSkyCultureList，函数体逐字搬入；
-  // 仅 this.callInteractive → this.port.requestInteractive、this.skyCultureViewStore.<f> → this.<f>、
-  // this.skyCultureListRequestId → this.seq、this.loadSkyCultureDetails() →
-  // hooks.loadSkyCultureDetails()、`++this.skyCultureDetailsRequestId` → hooks.invalidateSkyCultureDetails()）。
+  // 星空文化列表：桥读文化清单并触发详情加载；回包以请求序号比对丢弃过期结果。
   loadSkyCultureList(): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -155,9 +138,7 @@ export class SkyCultureViewStore {
     })
   }
 
-  // 文化解说段落（原宿主 skyCultureNarrationParagraphs，§14 A2-3 逐字搬入）。
-  // 读本 store 的 narration，按 §14.3「读本域 store 字段 → 并入该 store 方法」；
-  // cleanSkyCultureNarration 直接 import A1 纯函数模块。
+  // 文化解说段落：读本 store 的 narration，经 cleanSkyCultureNarration 清洗拆分。
   skyCultureNarrationParagraphs(): string[] {
     return cleanSkyCultureNarration(this.narration).split(/\n+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0)
   }

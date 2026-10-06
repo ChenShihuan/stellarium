@@ -1,17 +1,8 @@
 // 「图层」面板（activePanel === 'layers'）的开关状态簇。
 //
-// 本片边界（Phase 3ak）：原宿主的 ~94 个 `@State private <name>: boolean` 图层开关
-// （天空/恒星、太阳系、深空、标记与网格、景观、星座与星空文化六组）逐条搬到这里，
-// 保留原类型（boolean）与默认值。宿主以 `@State private layerStore: LayerStore = new LayerStore()`
-// 持有，UI 侧经 @Prop 读到解析后的布尔值，写回由宿主回调完成（§13.1 规则 4）。
-//
-// 不搬的宿主职责：
-//   - native 桥（setLayer / setBridgeFlag / setSkyDisplaySetting / callInteractive / refreshState）、
-//     flashHint 提示、以及图层预设的组装（markingLayerStates / layerPresetStates / applyLayerPreset）；
-//   - 视图标签切换动画所用的过渡量（viewTab / viewTabContentOpacity / viewTabContentOffsetX /
-//     viewTabTransitionId）与 selectViewTab 的 animateTo 时序 —— 它们不是「开关」，留在宿主；
-//   - 渲染管线逐帧写回的两字段（objectInspectorModelRendering / objectInspectorModelTexturePixels）
-//     本就与图层无关，不在此列。
+// 持有六组图层开关布尔值：天空与恒星、太阳系、深空与流星、地平与景观、标记与网格、
+// 星座与星空文化。宿主以 @State 持有，UI 侧经 @Prop / @ObjectLink 读取，写回由宿主回调完成。
+// 不持有端口与 hooks，native 桥与图层预设组装由宿主负责。
 //
 // 只放数据，不 import UI / NAPI。
 @Observed

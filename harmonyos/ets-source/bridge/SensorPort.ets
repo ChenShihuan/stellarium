@@ -1,15 +1,8 @@
-// 传感器能力端口（PLAN §15.1 Enabler，M1-A；M1-B 子组①按控制器需要细化）。
-//
-// 目的：让后续的 SensorController（M1-B）能订阅/退订 `sensor.*` 并接收上报，
-// 而**不 import @ohos.* 设备能力模块本身**（§15.7 规则 1）。先例 bridge/CommandPort.ets。
-//
-// 本文件是**纯接口**：不 import `@ohos.*`。为保持与宿主现有回调（sensor.RotationVectorResponse /
-// OrientationResponse / GravityResponse / MagneticFieldResponse）逐字兼容、便于 M1-B 整块搬迁，
-// 这里引用 @kit.SensorServiceKit 的类型并再导出短别名（与 state/ObjectMediaStore.ets 引用
-// @kit.ImageKit 的 image.PixelMap 同源做法；非 @ohos.* 直接导入）。控制器只从本文件导入类型，
-// 不直接触碰 `sensor.on/off`。
-//
-// 宿主在 aboutToAppear 注入具名适配器（MainWindowNativeNode.ets 顶层 HostSensorPort）。
+// 传感器能力端口：以纯接口提供传感器可用性查询与旋转矢量 / 方向 / 重力 / 磁场的
+// 订阅与退订语义，使 SensorController 无需 import sensor.* 设备能力模块。
+// 上报类型经 @kit.SensorServiceKit 的类型再导出短别名暴露，控制器只从本文件导入类型，
+// 不直接触碰 sensor.on/off。
+// 宿主在 aboutToAppear 注入具名实现 HostSensorPort（MainWindowNativeNode.ets）。
 import { sensor } from '@kit.SensorServiceKit'
 
 // 传感器可用性查询结果（对应 sensor.getSingleSensorSync 的返回信息）。

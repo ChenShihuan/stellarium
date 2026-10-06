@@ -3,18 +3,13 @@ import { OverlayStore } from '../../state/OverlayStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { PointerCoordinateToggle } from './PointerCoordinateToggle'
 
-// 「指针坐标」插件面板主体（原宿主 @Builder `pointerCoordinatesPanel()`，约 54 行）。
+// 本组件职责：「指针坐标」插件面板主体。
 //
-// 组件只收一个 store、五个夜视色与一个写回回调：
+// 组件收一个 store、五个夜视色与一个写回回调：
 //   - 全部 pointerCoordinates* 展示态走 @ObjectLink store（实时刷新）；
-//   - 六个开关行改用 `PointerCoordinateToggle` 组件（替换原参数化 `@Builder pointerCoordinateToggle`，
-//     原形参按值捕获导致开关态冻结）；
+//   - 六个开关行走 `PointerCoordinateToggle` 组件（@Prop isOn 保证开关态实时刷新）；
 //   - 两个单选列表（坐标系 / 显示位置）的选中态直接读 store；
-//   - native 桥 `setPointerCoordinates(setting|value)` 留在宿主，以 `onSetSetting(setting, value)` 注入。
-//
-// 视觉逐字保留：外层 Scroll 撑满面板（layoutWeight 1、滚动条 4px #33FFFFFF）、内容列 space 8、
-// 内边距 left/right 8 top 8 bottom 12、加载行 42 高居中、状态条字号 11 / #FFD59A、说明字号 10、
-// 分节标题字号 11（margin top 3）、单选项行内边距 left 10 right 8 top 7 bottom 7、勾选字 '✓' 15 号宽 24。
+//   - native 桥 `setPointerCoordinates(setting|value)` 由宿主提供，以 `onSetSetting(setting, value)` 注入。
 @Component
 export struct PointerCoordinatesPanel {
   @ObjectLink store: OverlayStore

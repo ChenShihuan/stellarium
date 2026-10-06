@@ -2,11 +2,11 @@ import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { WutTarget } from '../../pages/StellariumTypes'
 
-// 今晚观测目标卡片与它的指标贴片（原宿主 `wutTargetCard(target)` 与参数化 `wutMetric(label, value)`）。
+// 今晚观测目标卡片与它的指标贴片。
 //
 // 卡片只收目标对象本身；标题 / 副标题 / 类型名 / 数值 / 时刻文本都仍由宿主格式化，以回调注入
 // （`fmtNum` / `fmtClock` / `wutTargetTitle` / `wutTargetSubtitle` / `zhType` 留在宿主，多处共用）。
-// 与旧址相比只有一处显示细节不同：类型缺失时不再补一个破折号，而是走 `zhType('')` 的返回值。
+// 类型缺失时走 `zhType('')` 的返回值，不补破折号。
 
 @Component
 export struct WutMetric {

@@ -1,7 +1,7 @@
 import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 天文面板的两个小展示组件（原宿主 astroSelectionGuide() 与参数化 phenomenonRelationMark(type)）。
+// 天文面板的两个小展示组件。
 //
 // 现象关系标记是纯映射（只依赖 type 与资源），故只收一个 @Prop；
 // 选择提示则把夜视三色与"打开目标选择器"的动作交给宿主注入。

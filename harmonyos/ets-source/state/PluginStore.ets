@@ -2,27 +2,18 @@ import { PluginItem, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 插件管理（设置 > 插件管理）列表状态（原宿主 @State，Phase 4m）。
-//
-// review §2.7：本域原为 "Prop 风格" —— pluginList / pluginListLoading 以 @Prop 快照传入
-// SettingsPanel。现改为 @Observed store + 面板 @ObjectLink，列表/加载态变更只重绘插件页。
-//
-// 刻意留在宿主（非本 store 状态）：宿主私有动作 updatePluginLoadedItem /
-// pluginZh / pluginDesc / pluginMetaLine / pluginFeatureRoute / pluginFeatureDestination /
-// pluginFeatureIsActionable / pluginFeatureActionLabel 与 pluginFeatureLoading（瞬时动作串）。
-// loadPluginList（§14 B1-5）已随桥注入搬入本 store。
-//
-// 约束：所有更新必须是"字段整体赋值"。改造前已普查确认 pluginList 只被整体赋值
-// （`= list` 与 `= this.pluginList.map(...)`），改动前无 push/splice 等原地变更；
-// 改造后 `updatePluginLoadedItem` 仍以 `= this.<store>.pluginList.map(...)` 整体赋值。
+// 插件管理（设置 > 插件管理）列表域状态：持有 pluginList 与 pluginListLoading。
+// 宿主持有实例，SettingsPanel 以 @ObjectLink 观察。
+// 自持 CommandPort 与发布回调，并自持加载器 loadPluginList。
+// 约束：所有更新必须是"字段整体赋值"（pluginList 含 map(...) 后整体替换，无 push/splice 等原地变更）。
 @Observed
 export class PluginStore {
   pluginList: Array<PluginItem> = []
   pluginListLoading: boolean = false
 
-  // —— 桥注入（§14.1 AB-0；§14 B1-5 起本 store 自持 loadPluginList） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 本加载器不使用请求序号（无并发抑制需求）；预留以满足 §14.8 规则 3 的统一约定。
+  // 本加载器不使用请求序号（无并发抑制需求）；保留字段以统一各 store 的加载器约定。
   private seq: number = 0
   private onChanged: (() => void) | null = null
 
@@ -43,8 +34,7 @@ export class PluginStore {
     }
   }
 
-  // 插件管理列表：桥查询插件清单（原宿主 loadPluginList，函数体逐字搬入；
-  // 仅 this.callInteractive → this.port.requestInteractive、this.pluginStore.<f> → this.<f>）。
+  // 插件管理列表：桥查询插件清单。
   loadPluginList(): void {
     const port = this.ensurePort()
     if (port === null) {

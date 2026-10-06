@@ -1,17 +1,10 @@
-// 目镜（Oculars）/ 拼接相机 / 均时差 / 古天文线写回行为控制器
-//（STATE-REVIEW §10.2 D9，PLAN §15 D 轨道 D9）。
+// 目镜（Oculars）/ 拼接相机 / 均时差 / 古天文线写回行为控制器。
 //
-// 原宿主 MainWindowNativeNode 的 16 个写回方法逐字下沉（全部为「store 写 → 桥调用 → store.load」
-// 薄包装，无定时器、无跨域依赖）：
-//   setOcularMode / setMosaicCamera / setEquationOfTime / setArchaeoLineSetting（含 applyArchaeoLineSetting）
-//   / setTelrad / setCrosshairs / setCCD / selectOcularInstrument / setOcularSetting
-//   / changeOcularCcdRotation / changeOcularMaskOpacity / changeOcularPrismRotation / changeOcularCropSize
-//   / rotateOcularReticle / resetOcularInstrument。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；状态整体写回
+// 各方法均为「store 写 → 桥调用 → store.load」薄包装，无定时器、无跨域依赖。
+// 不 import NAPI/UI：桥经 CommandPort；状态整体写回
 // TelescopeStore / MosaicStore / EquationOfTimeStore / ArchaeoStore（面板经 @ObjectLink 消费）。
-// 逐帧/草稿字段 equationOfTimeMutationId / archaeoMutationId 随控制器自持（§15.7 规则 2）。
-// 本控制器无 UI 提示（实测 16 法均不调 flashHint），故不注入 BehaviorHostHooks。
+// 逐帧/草稿字段 equationOfTimeMutationId / archaeoMutationId 由控制器自持。
+// 本控制器无 UI 提示（各方法均不调 flashHint），故无 hooks 注入。
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { OcularModeResponse } from '../pages/MainWindowModels'
@@ -27,7 +20,7 @@ export class OcularController {
   private mosaicStore: MosaicStore
   private equationOfTimeStore: EquationOfTimeStore
   private archaeoStore: ArchaeoStore
-  // 乐观回滚代际（原宿主私有字段，随写回动作下沉；§15.7 规则 2：草稿字段留控制器）。
+  // 乐观回滚代际（草稿字段由控制器自持）。
   private equationOfTimeMutationId: number = 0
   private archaeoMutationId: number = 0
 
@@ -40,7 +33,7 @@ export class OcularController {
     this.archaeoStore = archaeoStore
   }
 
-  // 原宿主 setOcularMode()：目镜总开关写回（乐观写 store → 桥 → 以回包 applied 修正 → loadOculars）。
+  // 目镜总开关写回（乐观写 store → 桥 → 以回包 applied 修正 → loadOculars）。
   setOcularMode(v: boolean): void {
     this.telescopeStore.ocularMode = v
     this.port.requestWhenReady('setOcularMode', v ? '1' : '0', (r: StellariumBridgeResponse) => {
@@ -53,7 +46,7 @@ export class OcularController {
     })
   }
 
-  // 原宿主 setMosaicCamera()：拼接相机设置写回（防重入 + 同值短路 + 交互命令，回包后 loadMosaicCamera）。
+  // 拼接相机设置写回（防重入 + 同值短路 + 交互命令，回包后 loadMosaicCamera）。
   setMosaicCamera(setting: string, value: string = ''): void {
     if (this.mosaicStore.mosaicCameraPending || this.mosaicStore.mosaicCameraLoading) return
     if (setting === 'enabled' && (value === '1') === this.mosaicStore.mosaicCameraEnabled) return
@@ -73,7 +66,7 @@ export class OcularController {
     })
   }
 
-  // 原宿主 setEquationOfTime()：均时差开关写回（乐观写 store + mutationId 代际防抖回滚）。
+  // 均时差开关写回（乐观写 store + mutationId 代际防抖回滚）。
   setEquationOfTime(setting: string, enabled: boolean): void {
     const mutationId = ++this.equationOfTimeMutationId
     let previous: boolean | undefined
@@ -94,7 +87,7 @@ export class OcularController {
     })
   }
 
-  // 原宿主 setArchaeoLineSetting()：古天文线设置写回（读旧值 → 立即应用新值 → 失败按代际回滚）。
+  // 古天文线设置写回（读旧值 → 立即应用新值 → 失败按代际回滚）。
   setArchaeoLineSetting(setting: string, value: string): void {
     const mutationId = ++this.archaeoMutationId
     const previous = this.archaeoStore.archaeoLineSettingValue(setting)
@@ -107,7 +100,7 @@ export class OcularController {
     })
   }
 
-  // 原宿主 applyArchaeoLineSetting()：把 CLI 取值写入 ArchaeoStore 对应字段（只被本控制器 setArchaeoLineSetting 调用）。
+  // 把 CLI 取值写入 ArchaeoStore 对应字段（只被本控制器 setArchaeoLineSetting 调用）。
   private applyArchaeoLineSetting(setting: string, value: string): void {
     const enabled = value === '1' || value === 'true'
     switch (setting) {
@@ -130,7 +123,7 @@ export class OcularController {
     }
   }
 
-  // 原宿主 setTelrad/setCrosshairs/setCCD()：三个目镜叠层开关写回（乐观写 store → 桥 → loadOculars）。
+  // 三个目镜叠层开关写回（乐观写 store → 桥 → loadOculars）。
   setTelrad(v: boolean): void {
     this.telescopeStore.telradOn = v
     this.port.requestWhenReady('setTelrad', v ? '1' : '0', () => { this.telescopeStore.loadOculars(false) })
@@ -144,21 +137,21 @@ export class OcularController {
     this.port.requestWhenReady('setCCD', v ? '1' : '0', () => { this.telescopeStore.loadOculars(false) })
   }
 
-  // 原宿主 selectOcularInstrument()：切换目镜/望远镜/镜头/相机档位。
+  // 切换目镜/望远镜/镜头/相机档位。
   selectOcularInstrument(kind: string, index: number): void {
     this.port.requestWhenReady('selectOcularInstrument', kind.toLowerCase() + '|' + index.toString(), () => {
       this.telescopeStore.loadOculars(false)
     })
   }
 
-  // 原宿主 setOcularSetting()：目镜布尔设置写回。
+  // 目镜布尔设置写回。
   setOcularSetting(name: string, enabled: boolean): void {
     this.port.requestWhenReady('setOcularSetting', name + '|' + (enabled ? '1' : '0'), () => {
       this.telescopeStore.loadOculars(false)
     })
   }
 
-  // 原宿主 changeOcular*()：四个滑杆设置（滑动中只写 store，结束/点击时提交桥）。
+  // 四个滑杆设置（滑动中只写 store，结束/点击时提交桥）。
   changeOcularCcdRotation(value: number, mode: SliderChangeMode): void {
     this.telescopeStore.ocularCcdRotation = value
     if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
@@ -190,7 +183,7 @@ export class OcularController {
     }
   }
 
-  // 原宿主 rotateOcularReticle() / resetOcularInstrument()：十字线旋转与档位复位。
+  // 十字线旋转与档位复位。
   rotateOcularReticle(direction: string): void {
     this.port.requestWhenReady('rotateOcularReticle', direction, () => { this.telescopeStore.loadOculars(false) })
   }

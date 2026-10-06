@@ -7,11 +7,11 @@ import { SkyCultureMakerOverview } from './SkyCultureMakerOverview'
 import { SkyCultureMakerConstellationEditor } from './SkyCultureMakerConstellationEditor'
 import { SkyCultureMakerValidationPanel } from './SkyCultureMakerValidationPanel'
 
-// 星文化制作器面板主体（原宿主无参 `@Builder skyCultureMakerPanel`，68 行）。
+// 星文化制作器面板主体。
 //
 // 三步向导的装配：标签页 / 概览 / 星座编辑 / 校验导出 + 底部保存·撤销·重置。
-// 可观测状态与纯计算已在 `SkyCultureMakerStore`（Phase 3am），本片只把装配 UI 下沉为组件；
-// 主题色与 panelWidth 以 @Prop 传入，桥/定时器/图片解码等宿主职责以回调解入（§13.1 规则 6）。
+// 可观测状态与纯计算由 `SkyCultureMakerStore` 提供；主题色与 panelWidth 以 @Prop 传入，
+// 桥 / 定时器 / 图片解码等宿主职责以回调解入。
 @Component
 export struct SkyCultureMakerPanel {
   @ObjectLink store: SkyCultureMakerStore

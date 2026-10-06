@@ -3,11 +3,10 @@ import { MosaicCameraMetric } from '../settings/SettingsRows'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { MosaicStore } from '../../state/MosaicStore'
 
-// 马赛克相机面板（原宿主 panelContent() 的 `mosaicCamera` 分支，分支体原样下沉）。
+// 马赛克相机面板，对应 `activePanel === 'mosaicCamera'`。
 //
-// 判定条件 `activePanel === 'mosaicCamera'` 留在宿主；加载/开关/相机列表/当前相机/
-// RA-DEC-旋转/叠加可见全部由 state/MosaicStore.ets 承载，面板以 @ObjectLink 实时订阅
-// （宿主仍是写方），设置动作回注宿主（setMosaicCamera）；cameraMetricValue 随 UI 下沉（纯计算）。
+// 加载/开关/相机列表/当前相机/RA-DEC-旋转/叠加可见来自 MosaicStore（@ObjectLink）；
+// 设置动作回调注入宿主；cameraMetricValue 为组件内纯计算。
 
 @Component
 export struct MosaicCameraPanel {

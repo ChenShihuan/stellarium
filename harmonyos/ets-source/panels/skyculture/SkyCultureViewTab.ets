@@ -12,16 +12,11 @@ import { GraphLoadingRow } from '../astro/GraphGuides'
 import { SkyCultureDescriptionBlockView } from './SkyCultureDescriptionBlockView'
 import { SkyCultureSectionHeader, SkyCultureMetaItem, SkyCultureLabelSettingCard, SkyCultureFilterPicker } from './SkyCultureViewParts'
 
-// 「星空文化」视图标签页（原宿主 private @Builder viewSkyCultureTab，Phase 4g）。
+// 「星空文化」视图标签页：图层 / 当前文化详情 / 标注 / 可读性等设置。
 //
-// 为什么拆成组件：layers 分支的第七个页签体量 819 行、约 77 个设置字段与约 40 个助手方法，
-// 组件不能调用宿主的 @Builder（规则 9）。字段与纯计算已在同片搬入 state/SkyCultureSettingsStore.ets，
-// 组件经 @ObjectLink 实时读；列表 / 当前选择已并入 state/SkyCultureViewStore.ets（Phase 4 residual），
-// 同样经 @ObjectLink 实时读；解码结果 / canvas 上下文等高频状态以 @Prop 或
-// 普通成员传入（规则 5/6），一切 native 桥、定时器、解码、canvas 绘制经回调回注宿主。
-//
-// 本文件不含 @BuilderParam，不含参数化 @Builder；多根并列处包 Column({ space: 0 })（规则 7）。
-// 视觉逐字保留，未改字号 / 间距 / 圆角 / 动画时长、未改任何文案。
+// 设置字段与纯计算由 SkyCultureSettingsStore、列表与当前选择由 SkyCultureViewStore 经 @ObjectLink 提供；
+// 解码结果 / canvas 上下文等高频状态以 @Prop 或普通成员传入；一切 native 桥、定时器、解码、
+// canvas 绘制经回调回注宿主。本文件不含 @BuilderParam 与参数化 @Builder，多根并列处包 Column({ space: 0 })。
 @Component
 export struct SkyCultureViewTab {
   @ObjectLink settings: SkyCultureSettingsStore

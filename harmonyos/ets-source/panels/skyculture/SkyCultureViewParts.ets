@@ -2,16 +2,13 @@ import { curves } from '@kit.ArkUI'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { I18n } from '../../pages/I18n'
 
-// 「星空文化」查看器面板的五个叶件（原宿主 private @Builder，Phase 4d）。
+// 「星空文化」查看器面板的五个叶件。
 //
-// 全部由**参数化 @Builder** 改为组件（§13.1 规则 3）：原 target/kind/title 等简单类型形参按值捕获，
-// 首帧后子树冻结 —— 切档 / 展开 / 选项高亮都不刷新。改组件后由 @Prop 实时刷新，宿主只注入
-// 「宿主算好的值 + 夜视三色 + 回调」，状态与桥调用仍留在宿主（规则 5）。
-//
-// 本文件不含 @ObjectLink：这五个叶件都只吃 @Prop，不接受 @BuilderParam（规则 9）。
-// 视觉逐字保留，未改任何字号 / 间距 / 圆角 / 动画时长。
+// 宿主只注入「算好的值 + 夜视三色 + 回调」，状态与桥调用留在宿主；
+// 组件不接受参数化 @Builder / @BuilderParam，由 @Prop 实时驱动刷新。
+// 各组件的字号 / 间距 / 圆角 / 动画时长见下。
 
-// 分组小标题（原 `skyCultureSectionHeader(title, subtitle)`）。
+// 分组小标题。
 @Component
 export struct SkyCultureSectionHeader {
   @Prop title: ResourceStr
@@ -32,7 +29,7 @@ export struct SkyCultureSectionHeader {
   }
 }
 
-// 元信息小块（原 `skyCultureMetaItem(label, value, accent)`）。
+// 元信息小块。
 @Component
 export struct SkyCultureMetaItem {
   @Prop label: ResourceStr
@@ -56,11 +53,10 @@ export struct SkyCultureMetaItem {
   }
 }
 
-// 标签模式选择卡片（原 `skyCultureLabelSettingCard` + `skyCultureLabelModePicker` 合并为一个组件）。
+// 标签模式选择卡片（含展开与选项列表）。
 //
-// 合并原因：settingCard 只是给 modePicker 包一层描边，二者调用点一一对应；合并后避免十几条
-// 颜色属性在两组件间再传一遍。展开标记 / 当前档位 / 可选项都由宿主算好后经 @Prop 传入；
-// 切换与选中通过 onToggle / onSelectMode 回注宿主（宿主内仍走原有 animateTo 与桥调用）。
+// 展开标记 / 当前档位 / 可选项都由宿主算好后经 @Prop 传入；展开状态变化由组件用 animateTo 驱动，
+// 切换与选中通过 onToggle / onSelectMode 回注宿主（宿主内走桥调用）。
 @Component
 export struct SkyCultureLabelSettingCard {
   @Prop target: string
@@ -148,11 +144,9 @@ export struct SkyCultureLabelSettingCard {
   }
 }
 
-// 筛选器选项行（原 `skyCultureFilterOption(kind, index, label)`）。
+// 筛选器选项行，供 SkyCultureFilterPicker 在展开列表内使用。
 //
-// 供 SkyCultureFilterPicker 在展开列表内使用；选中态由 selected 传入（原 helper
-// `skyCultureFilterOptionSelected` 已删）。调用方须把 selected 纳入 ForEach 键，否则
-// 同键子项不会重建、@Prop 会冻结（§13.5 BottomDock 的教训）。
+// 选中态由 selected 传入。调用方须把 selected 纳入 ForEach 键，否则同键子项不会重建、@Prop 会冻结。
 @Component
 export struct SkyCultureFilterOption {
   @Prop label: string
@@ -187,7 +181,7 @@ export struct SkyCultureFilterOption {
   }
 }
 
-// 分类 / 地区筛选器（原 `skyCultureFilterPicker(kind)`）。
+// 分类 / 地区筛选器。
 //
 // 选中的下标由宿主演算成 selectedIndex 传入；展开时用选定下标参与 ForEach 键，保证选中高亮实时刷新。
 @Component

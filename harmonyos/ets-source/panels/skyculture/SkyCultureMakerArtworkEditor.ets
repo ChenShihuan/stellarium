@@ -3,12 +3,11 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { I18n } from '../../pages/I18n'
 import { SkyCultureMakerStore } from '../../state/SkyCultureMakerStore'
 
-// 星文化制作器「星座配图（角点绑定）」编辑器（原宿主无参 `@Builder skyCultureMakerArtworkEditor`）。
+// 星文化制作器「星座配图（角点绑定）」编辑器。
 //
-// 角点坐标/预览高度等纯几何计算已移入 store（`artworkAnchor*` / `artworkPreviewHeight`）；
-// 触屏绑定与导入/移除涉及桥与解码，经回调交回宿主。触屏回调刻意命名 onArtworkTouch，
-// 避开 CustomComponent 基类的 `onTouch`（§13.1 规则 2）。
-// 视觉逐字保留：Stack 高由 artworkPreviewHeight 决定、角点 24px 圆、锚点按钮高 30。
+// 角点坐标 / 预览高度等纯几何计算由 store 提供；触屏绑定与导入 / 移除涉及桥与解码，经回调交回宿主。
+// 触屏回调命名为 onArtworkTouch，避开 CustomComponent 基类的 `onTouch`。
+// Stack 高由 artworkPreviewHeight 决定，角点 24px 圆，锚点按钮高 30。
 @Component
 export struct SkyCultureMakerArtworkEditor {
   @ObjectLink store: SkyCultureMakerStore

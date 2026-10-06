@@ -2,12 +2,10 @@ import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES } from '../../pages/I18n'
 import { LangOption } from '../../pages/StellariumTypes'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 设置面板的「语言」「陀螺仪」「设备与隐私」三块（原宿主参数化 @Builder languageRow /
-// gyroscopeRow / deviceAndPrivacySettings 的替代）。
+// 本组件文件：设置面板的「语言」「陀螺仪」「设备与隐私」三块。
 //
-// 原 `gyroscopeRow` 被 `deviceAndPrivacySettings` 内嵌调用，故两块同片迁移：`DevicePrivacySection`
-// 内部直接渲染 `GyroscopeRow`，宿主只注入陀螺仪开关值与写回回调。语言行只用 `selectedLanguage`
-// 与选中回调（其余颜色为内联常量，与原实现逐字一致）。
+// `DevicePrivacySection` 内部直接渲染 `GyroscopeRow`，宿主只注入陀螺仪开关值与写回回调；
+// 语言行只用 `selectedLanguage` 与选中回调（其余颜色为内联常量）。
 
 // 语言选择行（横向可滚动 chip）。
 @Component

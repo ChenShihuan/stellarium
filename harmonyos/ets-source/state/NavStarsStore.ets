@@ -4,24 +4,15 @@ import { CommandPort } from '../bridge/CommandPort'
 
 // 航海星（navStars）域的状态。
 //
-// review §2.7：本域原为 "Prop 风格" —— 14 个 @State 全留宿主、以 @Prop 快照传入
-// NavStarsPanel。现改为 @Observed store + 面板 @ObjectLink，刷新粒度收缩到订阅方
-// （与 SatelliteStore / SceneryStore 同法）。
+// 持有请求态（navStarsLoading / navStarsStatus）、总开关与星表选择、计数与各项显示开关，
+// 被 NavStarsPanel 以 @ObjectLink 观察。加载器 loadNavStars 与写方 setNavStarsSetting
+// （含助手 applyNavStarsSetting）自持 CommandPort 与两个请求序号，无 hooks；
+// 星表名翻译助手 navStarsSetLabel 仍在组件内（纯函数）。
 //
-// 本域 14 个字段全部是面板入参：
-//   - 请求态 navStarsLoading / navStarsStatus；
-//   - 总开关 navStarsEnabled 与星表选择 navStarsSetKey / navStarsSetDescription / navStarsSetKeys；
-//   - 计数 navStarsCount 与 8 个开关 highlight / limitInfo / upperLimb / tabulated /
-//     extraDecimals / useUtc / startup。
+// 两个请求序号语义不同，故不合并：navStarsLoadRequestId 只护 loadNavStars 的并发回包，
+// navStarsMutationId 护「动作 + 其后重新载入」的代际。
 //
-// §14 B3-1：加载器 loadNavStars 与其配对写方 setNavStarsSetting（含助手 applyNavStarsSetting）
-// 同片搬入本 store，两个请求序号 navStarsLoadRequestId / navStarsMutationId 随之入 store
-// 作**单一持有者**（宿主零副本、零双写，§14.8 规则 3）。序号保留原语义名（不并作单一 seq），
-// 因为二者语义不同：前者只护 loadNavStars 的并发回包，后者护"动作 + 其后重新载入"的代际。
-// 面板只回注回调；星表名翻译助手 navStarsSetLabel 仍在组件内（纯函数）。
-//
-// 约束：所有更新必须是"字段整体赋值"。navStarsSetKeys 只被整体赋值（`= r.setKeys ?? []`），
-// 改造前已普查确认无 push/splice 等原地变更。
+// 所有更新均为字段整体赋值（navStarsSetKeys 只整体赋值 `= r.setKeys ?? []`，无原地变更）。
 @Observed
 export class NavStarsStore {
   navStarsLoading: boolean = false
@@ -39,9 +30,9 @@ export class NavStarsStore {
   navStarsUseUtc: boolean = false
   navStarsStartup: boolean = false
 
-  // —— 桥注入（§14.1 AB-0 / §14 B3-1） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 原宿主的两个请求序号搬入 store（§14.8 规则 3：单一持有者，宿主不留副本）。
+  // 两个请求序号见文件头说明。
   private navStarsLoadRequestId: number = 0
   private navStarsMutationId: number = 0
   private onChanged: (() => void) | null = null
@@ -63,9 +54,7 @@ export class NavStarsStore {
     }
   }
 
-  // 航海星面板：桥查询当前设置与星表（原宿主 loadNavStars，§14 B3-1 搬入；函数体逐字）。
-  // 差异仅：this.callNativeWhenReady → port.requestWhenReady（重试档 0/100/15 逐字保留、
-  // onFailure 由第 4 参传入）、this.navStarsStore.<f> → this.<f>。
+  // 航海星面板：桥查询当前设置与星表（重试档 0/100/15，onFailure 由第 4 参传入）。
   loadNavStars(showLoading: boolean = true): void {
     const port = this.ensurePort()
     if (port === null) {
@@ -102,7 +91,7 @@ export class NavStarsStore {
     }, 0, 100, 15)
   }
 
-  // 航海星设置项即时回填（原宿主 applyNavStarsSetting，随写方同片搬入；函数体逐字）。
+  // 航海星设置项即时回填（先落本地字段，再等桥回包）。
   applyNavStarsSetting(setting: string, value: string): void {
     const enabled = value === '1' || value.toLowerCase() === 'true'
     if (setting === 'enabled') this.navStarsEnabled = enabled
@@ -116,9 +105,7 @@ export class NavStarsStore {
     else if (setting === 'enableAtStartup') this.navStarsStartup = enabled
   }
 
-  // 写航海星设置（原宿主 setNavStarsSetting，§14 B3-1 搬入；函数体逐字）。
-  // 差异仅：this.callInteractive → port.requestInteractive、this.applyNavStarsSetting → 同 store 方法、
-  // this.navStarsStore.<f> → this.<f>、this.navStarsMutationId → this.navStarsMutationId（store 序号）。
+  // 写航海星设置（自增 navStarsMutationId 作废旧代际；set 项成功后重载星表，失败回退重载）。
   setNavStarsSetting(setting: string, value: string): void {
     const port = this.ensurePort()
     if (port === null) {

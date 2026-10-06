@@ -11,17 +11,16 @@ import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { ObjectMediaStore } from '../../state/ObjectMediaStore'
 import { OverlayStore } from '../../state/OverlayStore'
 
-// 手机 / 折叠半折的紧凑壳（原宿主无参 @Builder `compactShell()`，165 行）。
+// 手机 / 折叠半折的紧凑壳。
 //
 // 结构：全屏星空触摸承接层（Blank + onTouch）+ 底部 Dock + Dock 时钟层 + 右上角
 // 紧凑快捷区（陀螺仪 / 音频）+ 陀螺仪校准浮层 + 天体详情指向线与详情卡。
 //
-// 原壳中段 `if (panelVisible) { Stack { this.compactPanel() } … }` 上移到宿主调用点：
-// `compactPanel()` 是 Phase 4h 定论保留的宿主薄 @Builder（体内即 `panelContent()` 的
-// `activePanel` 分发链），组件无法跨边界调用宿主 @Builder（§13.1 规则 9，真机退出实证），
-// 故面板仍由宿主在同一过渡包裹内渲染，本组件不含面板。
+// 面板由宿主调用点在过渡包裹内渲染，本组件不含面板：`compactPanel()` 是宿主薄 @Builder
+// （体内即 `panelContent()` 的 `activePanel` 分发链），组件无法跨边界调用宿主 @Builder
+// （会触发真机退出），故面板仍由宿主渲染。
 //
-// 所有状态以 @Prop / @ObjectLink 注入，动作回注宿主；视觉、几何、zIndex、命中语义逐字保留。
+// 所有状态以 @Prop / @ObjectLink 注入，动作回注宿主。
 
 @Component
 export struct CompactShell {
@@ -171,7 +170,7 @@ export struct CompactShell {
         .zIndex(40)
 
       // 三件套（FOV 读数 / 缩放按钮 / 常驻时钟）共用宿主给的锚点：手机·半折两端取同一个 x
-      // （等价于跟随 dock 两端），平板则贴屏幕左右缘，故壳里不再各自推算 dockTop/dockLeft。
+      // （跟随 dock 两端），平板则贴屏幕左右缘。
       if (!this.panelVisible && !this.polarScopeVisible && this.dockClockText.length > 0) {
         DockClockLayer({ clockText: this.dockClockText, layerWidth: this.chromeRowWidth, posX: this.chromeRowPosXRight, posY: this.chromeRowY, onOpenTime: () => { this.onOpenTime() } })
       }

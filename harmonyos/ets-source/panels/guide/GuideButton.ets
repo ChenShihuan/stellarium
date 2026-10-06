@@ -1,11 +1,11 @@
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { I18n } from '../../pages/I18n'
 
-// 交互式导览的底部动作键（原宿主参数化 `@Builder guideButton(label, action)`，12 个调用点）。
+// 交互式导览的底部动作键。
 //
 // 可用性完全由导览阶段/步序与动作名推导，因此以 @Prop phase/index/action 传入；
-// 组件化后按钮禁用态随 guideState 实时刷新（原参数化 @Builder 首帧后冻结，§13.1 规则 3）。
-// 视觉与 id 前缀（`guide-`）逐字保留。
+// 按钮禁用态随 guideState 实时刷新。
+// id 前缀固定为 `guide-`。
 @Component
 export struct GuideButton {
   @Prop label: string

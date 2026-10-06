@@ -1,12 +1,8 @@
-// 位置域控制器（PLAN §15.12 位置域行为下沉）。
+// 位置域控制器：负责设备定位、层级城市选点、观测星球切换与观测点持久化/启动恢复。
 //
-// 原宿主 MainWindowNativeNode 的位置动作逐字下沉：useDeviceLocation / applyPickerLocation /
-// setLocation / setObserverPlanet / saveObserverLocationToStorage / readObserverLocationStorage /
-// restoreObserverLocation。
-//
-// 本类**不 import NAPI/UI**（§15.7 规则 1）：权限 / 定位 / preferences 经 LocationPort；桥命令经
-// CommandPort；跨域 store 写（SessionToolStore 的 observerPlanet、位置头部三 @State）经
-// LocationHostHooks 具名回注（§13.1 规则 6）；观测点草稿/请求中标志留控制器（§15.7 规则 2）。
+// 不 import NAPI/UI：权限 / 定位 / preferences 经 LocationPort；桥命令经 CommandPort；
+// 跨域 store 写（SessionToolStore 的 observerPlanet、位置头部三 @State）经
+// LocationHostHooks 具名回注；观测点草稿与请求中标志由控制器自持。
 import hilog from '@ohos.hilog'
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse, HierCity } from '../pages/StellariumTypes'
@@ -18,7 +14,7 @@ import { LocationPickerStore } from '../state/LocationPickerStore'
 import { LocationStore } from '../state/LocationStore'
 import { SessionToolStore } from '../state/SessionToolStore'
 
-// 宿主生命周期 / UI / 跨域写注入（§13.1 规则 6：控制器不触碰 UI 与宿主私有 @State / 他 store 写）。
+// 宿主生命周期 / UI / 跨域写注入（控制器不触碰 UI 与宿主私有 @State / 他 store 写）。
 export interface LocationHostHooks {
   flashHint(text: ResourceStr): void
   refreshState(): void
@@ -41,7 +37,7 @@ export class LocationController {
   private locationStore: LocationStore
   private sessionToolStore: SessionToolStore
   private hooks: LocationHostHooks
-  // 请求中标志：草稿字段随控制器走（§15.7 规则 2，不入 @Observed store）。
+  // 请求中标志：草稿字段随控制器走（不入 @Observed store）。
   private deviceLocationRequestInProgress: boolean = false
 
   constructor(
@@ -60,7 +56,7 @@ export class LocationController {
     this.hooks = hooks
   }
 
-  // 原宿主 selectContinent()：大洲选择（清空下级层级，纯 store 写）。
+  // 大洲选择（清空下级层级，纯 store 写）。
   selectContinent(c: string): void {
     this.pickerStore.hierContinent = c
     this.pickerStore.hierCountry = ''
@@ -68,20 +64,20 @@ export class LocationController {
     this.pickerStore.hierCity = ''
   }
 
-  // 原宿主 selectCountry()：国家选择（清空下级层级，纯 store 写）。
+  // 国家选择（清空下级层级，纯 store 写）。
   selectCountry(country: string): void {
     this.pickerStore.hierCountry = country
     this.pickerStore.hierRegion = ''
     this.pickerStore.hierCity = ''
   }
 
-  // 原宿主 selectRegion()：地区选择（清空城市，纯 store 写）。
+  // 地区选择（清空城市，纯 store 写）。
   selectRegion(r: string): void {
     this.pickerStore.hierRegion = r
     this.pickerStore.hierCity = ''
   }
 
-  // 原宿主 selectCityByName()：城市选择并立即落地（层级城市经纬度取自 store）。
+  // 城市选择并立即落地（层级城市经纬度取自 store）。
   selectCityByName(name: string): void {
     this.pickerStore.hierCity = name
     const found = this.pickerStore.hierCities(this.sessionToolStore.observerPlanet).find((c: HierCity) => c.n === name)
@@ -91,8 +87,8 @@ export class LocationController {
     }
   }
 
-  // 原宿主 useDeviceLocation()（GPS：隐私门禁 → 权限 → 定位 → setPickerLocation → applyPickerLocation）。
-  // 逐字等价：4 处门禁（初始 + 权限后 + 定位后）改经 hooks；权限/定位经 LocationPort。
+  // 设备定位（GPS：隐私门禁 → 权限 → 定位 → setPickerLocation → applyPickerLocation）。
+  // 4 处门禁（初始 + 权限后 + 定位后）经 hooks；权限/定位经 LocationPort。
   async useDeviceLocation(): Promise<void> {
     if (this.deviceLocationRequestInProgress || !this.hooks.privacyAllowed() ||
       !this.hooks.inForeground() || !this.hooks.hasPrivacyConsent()) return
@@ -126,14 +122,14 @@ export class LocationController {
     }
   }
 
-  // 原宿主 applyPickerLocation()：应用当前 picker 坐标并延迟刷新时区。
+  // 应用当前 picker 坐标并延迟刷新时区。
   applyPickerLocation(): void {
     this.setLocation(this.pickerStore.locationPickerName, this.pickerStore.locationPickerLatitude, this.pickerStore.locationPickerLongitude, this.pickerStore.locationPickerAltitude)
     setTimeout((): void => { this.hooks.loadObserverInfo() }, 500)
   }
 
-  // 原宿主 setLocation()：写 picker/观测星球/持久化/头部三行 + setObserverPlanet 分支 +
-  // setLocation→setLocationCoords→setLocationByName 三步回退。逐字等价（仅 this.* 改写）。
+  // 写 picker/观测星球/持久化/头部三行 + setObserverPlanet 分支 +
+  // setLocation→setLocationCoords→setLocationByName 三步回退。
   setLocation(name: string, latitude: number, longitude: number, altitude: number, planet: string = 'Earth', silent: boolean = false): void {
     const targetPlanet = planet.length > 0 ? planet : 'Earth'
     const currentPlanet = this.sessionToolStore.observerPlanet
@@ -187,7 +183,7 @@ export class LocationController {
     }, undefined, 0, 100, 10)
   }
 
-  // 原宿主 setObserverPlanet()：切换观测星球（本 store 只读 observerPlanet，写经 hooks）。
+  // 切换观测星球（本 store 只读 observerPlanet，写经 hooks）。
   setObserverPlanet(name: string): void {
     this.port.requestInteractive('setObserverPlanet', name, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
@@ -204,7 +200,7 @@ export class LocationController {
     })
   }
 
-  // 原宿主 saveObserverLocationToStorage()：构造记录后经 LocationPort 落盘（preferences 错误处理在适配器）。
+  // 构造记录后经 LocationPort 落盘（preferences 错误处理在适配器）。
   async saveObserverLocationToStorage(): Promise<void> {
     const rec: ObserverLocationRecord = {
       name: this.pickerStore.locationPickerName,
@@ -216,12 +212,12 @@ export class LocationController {
     await this.locationPort.writeObserverLocation(JSON.stringify(rec))
   }
 
-  // 原宿主 readObserverLocationStorage()：经 LocationPort 读持久化 JSON（失败返回 ''）。
+  // 经 LocationPort 读持久化 JSON（失败返回 ''）。
   async readObserverLocationStorage(): Promise<string> {
     return await this.locationPort.readObserverLocation()
   }
 
-  // 原宿主 restoreObserverLocation()：启动恢复持久化观测点并静默重建。
+  // 启动恢复持久化观测点并静默重建。
   async restoreObserverLocation(): Promise<void> {
     const json = await this.readObserverLocationStorage()
     if (json.length === 0) {

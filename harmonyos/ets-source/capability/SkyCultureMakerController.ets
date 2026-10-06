@@ -1,20 +1,8 @@
-// 星空文化制作器行为控制器（STATE-REVIEW §10.2 D3 子域 3「Maker」；PLAN §15 D 轨道 D3）。
-//
-// 原宿主 MainWindowNativeNode 的 Maker 行为层逐字下沉：
-//   skyCultureMakerDraftFromResponse / applySkyCultureMakerDraft / scheduleSkyCultureMakerSave /
-//   saveSkyCultureMakerDraft / validateSkyCultureMaker / resetSkyCultureMaker / undoSkyCultureMaker /
-//   addSkyCultureMakerConstellation / updateSkyCultureMakerConstellation /
-//   removeSelectedSkyCultureMakerConstellation / addSkyCultureMakerHipLine / removeSkyCultureMakerLine /
-//   addSelectedStarToSkyCultureMaker / skyCultureMakerArtworkFilePath /
-//   clearSkyCultureMakerArtworkPreview / refreshSkyCultureMakerArtworkPreview /
-//   selectSkyCultureMakerConstellation / applySkyCultureMakerArtworkResponse /
-//   importSkyCultureMakerArtworkFile / removeSkyCultureMakerArtwork / bindSkyCultureMakerArtworkAnchor /
-//   handleSkyCultureMakerArtworkTouch / exportSkyCultureMaker / importSkyCultureMakerFile。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；picker/fileIo 经 MediaPort
-//（pickDocumentToDirNamed）；image 解码经 common/media/ImageDecoder / MediaPort（image 仅用于 PixelMap 类型）；
-// filesDir 经 hooks 回注。自动保存定时器（650ms 去抖）与画布触摸草稿由本控制器自持
-//（§15.7 规则 2/3）。向导状态整体在 SkyCultureMakerStore（面板 @ObjectLink 消费）。
+// 星空文化制作器行为控制器：负责制作器草稿的加载/保存/校验/重置/撤销、星座与连线的增删、
+// 配图（artwork）的导入/移除/锚点绑定与预览解码，以及制作器工程的导入导出。
+// 依赖 CommandPort（制作器桥命令）、MediaPort（picker/fileIo、图片解码）、
+// SkyCultureMakerStore（向导状态，面板 @ObjectLink 消费）；filesDir 经 hooks 回注。
+// 自动保存定时器（650ms 去抖）与画布触摸草稿为瞬态数据，由本控制器自持。
 import hilog from '@ohos.hilog'
 import { image } from '@kit.ImageKit'
 import { I18n } from '../pages/I18n'
@@ -28,7 +16,7 @@ import { clamp } from '../common/derive/astro'
 import { SkyCultureMakerStore } from '../state/SkyCultureMakerStore'
 import { BehaviorHostHooks } from './ControllerHooks'
 
-// 本控制器的实测最小依赖组合：图像解码/存在性（fileExists / decodeLocalImage / releaseDecodedImage）
+// 本控制器的最小依赖组合：图像解码/存在性（fileExists / decodeLocalImage / releaseDecodedImage）
 // + 文档导入（pickDocumentToDirNamed）。ArkTS 禁交叉类型，故用本地接口显式组合两个子接口。
 interface SkyCultureMakerMediaPort extends ImagePort, DocumentImportPort {}
 
@@ -43,7 +31,7 @@ export class SkyCultureMakerController {
   private store: SkyCultureMakerStore
   private hooks: SkyCultureMakerHostHooks
 
-  // —— 私有字段（原宿主，随行为下沉；瞬态/草稿字段留控制器，§15.7 规则 2）——
+  // —— 私有字段：瞬态/草稿字段留控制器，不入被观察 store ——
   private skyCultureMakerArtworkPreviewPath: string = ''
   private skyCultureMakerArtworkDecodeGeneration: number = 0
   private skyCultureMakerArtworkTouchStartX: number = 0
@@ -64,7 +52,7 @@ export class SkyCultureMakerController {
     this.hooks = hooks
   }
 
-  // 原宿主 skyCultureMakerDraftFromResponse(response)：JSON 桥回包 → 草稿（一次 JSON cast，JSON 例外）。
+  // JSON 桥回包 → 草稿（一次 JSON cast，JSON 例外）。
   skyCultureMakerDraftFromResponse(response: StellariumBridgeResponse): SkyCultureMakerDraft | undefined {
     const values = response as Record<string, Object>
     if (values['draft'] === undefined) return undefined
@@ -76,7 +64,7 @@ export class SkyCultureMakerController {
     }
   }
 
-  // 原宿主 applySkyCultureMakerDraft(draft)：把草稿写回 store 并刷新配图预览。
+  // 把草稿写回 store 并刷新配图预览。
   applySkyCultureMakerDraft(draft: SkyCultureMakerDraft): void {
     this.store.id = draft.id ?? ''
     this.store.name = draft.name ?? ''
@@ -100,7 +88,7 @@ export class SkyCultureMakerController {
     this.refreshSkyCultureMakerArtworkPreview()
   }
 
-  // 原宿主 scheduleSkyCultureMakerSave()：650ms 去抖自动保存。
+  // 650ms 去抖自动保存。
   scheduleSkyCultureMakerSave(): void {
     if (!this.store.draftReady) return
     if (this.skyCultureMakerSaveTimer > 0) clearTimeout(this.skyCultureMakerSaveTimer)
@@ -110,7 +98,7 @@ export class SkyCultureMakerController {
     }, 650) as number
   }
 
-  // 原宿主 aboutToDisappear 的定时器收口：清除在途 650ms 去抖并立即保存。
+  // 定时器收口：清除在途 650ms 去抖并立即保存（宿主 aboutToDisappear 调用）。
   flushSkyCultureMakerSave(): void {
     if (this.skyCultureMakerSaveTimer > 0) {
       clearTimeout(this.skyCultureMakerSaveTimer)
@@ -119,7 +107,6 @@ export class SkyCultureMakerController {
     }
   }
 
-  // 原宿主 saveSkyCultureMakerDraft(silent, onComplete)。
   saveSkyCultureMakerDraft(silent: boolean = false, onComplete?: (success: boolean) => void): void {
     if (!this.store.draftReady) {
       if (!silent) this.store.status = I18n.t('sky_culture_maker_load_failed')
@@ -149,7 +136,6 @@ export class SkyCultureMakerController {
     })
   }
 
-  // 原宿主 validateSkyCultureMaker()。
   validateSkyCultureMaker(): void {
     this.port.requestInteractive('validateSkyCultureMakerDraft', JSON.stringify(this.store.currentSkyCultureMakerDraft()), (response: StellariumBridgeResponse) => {
       this.store.validation = validationFromResponse(response)
@@ -160,7 +146,6 @@ export class SkyCultureMakerController {
     }, () => { this.store.status = I18n.t('sky_culture_maker_validate_failed') })
   }
 
-  // 原宿主 resetSkyCultureMaker()。
   resetSkyCultureMaker(): void {
     this.port.requestInteractive('resetSkyCultureMakerDraft', '', (response: StellariumBridgeResponse) => {
       const draft = this.skyCultureMakerDraftFromResponse(response)
@@ -173,7 +158,6 @@ export class SkyCultureMakerController {
     })
   }
 
-  // 原宿主 undoSkyCultureMaker()。
   undoSkyCultureMaker(): void {
     this.port.requestInteractive('undoSkyCultureMakerEdit', '', (response: StellariumBridgeResponse) => {
       const draft = this.skyCultureMakerDraftFromResponse(response)
@@ -186,7 +170,6 @@ export class SkyCultureMakerController {
     })
   }
 
-  // 原宿主 addSkyCultureMakerConstellation()。
   addSkyCultureMakerConstellation(): void {
     let number = this.store.constellations.length + 1
     let id = 'constellation_' + number.toString()
@@ -210,7 +193,6 @@ export class SkyCultureMakerController {
     this.scheduleSkyCultureMakerSave()
   }
 
-  // 原宿主 updateSkyCultureMakerConstellation(updated)。
   updateSkyCultureMakerConstellation(updated: SkyCultureMakerConstellation): void {
     const index = this.store.selectedConstellation
     if (index < 0 || index >= this.store.constellations.length) return
@@ -220,7 +202,6 @@ export class SkyCultureMakerController {
     this.scheduleSkyCultureMakerSave()
   }
 
-  // 原宿主 removeSelectedSkyCultureMakerConstellation()。
   removeSelectedSkyCultureMakerConstellation(): void {
     const index = this.store.selectedConstellation
     if (index < 0 || index >= this.store.constellations.length) return
@@ -230,7 +211,6 @@ export class SkyCultureMakerController {
     this.scheduleSkyCultureMakerSave()
   }
 
-  // 原宿主 addSkyCultureMakerHipLine()。
   addSkyCultureMakerHipLine(): void {
     const index = this.store.selectedConstellation
     if (index < 0 || index >= this.store.constellations.length) return
@@ -260,7 +240,6 @@ export class SkyCultureMakerController {
     this.store.status = I18n.t('sky_culture_maker_line_added')
   }
 
-  // 原宿主 removeSkyCultureMakerLine(lineIndex)。
   removeSkyCultureMakerLine(lineIndex: number): void {
     const index = this.store.selectedConstellation
     if (index < 0 || index >= this.store.constellations.length) return
@@ -278,7 +257,6 @@ export class SkyCultureMakerController {
     })
   }
 
-  // 原宿主 addSelectedStarToSkyCultureMaker()。
   addSelectedStarToSkyCultureMaker(): void {
     const index = this.store.selectedConstellation
     if (index < 0 || index >= this.store.constellations.length) return
@@ -296,7 +274,6 @@ export class SkyCultureMakerController {
     })
   }
 
-  // 原宿主 skyCultureMakerArtworkFilePath()。
   skyCultureMakerArtworkFilePath(): string {
     const constellation = this.store.selected()
     const assetFile = constellation?.image?.file ?? ''
@@ -305,7 +282,6 @@ export class SkyCultureMakerController {
     return this.mediaPort.fileExists(filePath) ? filePath : ''
   }
 
-  // 原宿主 clearSkyCultureMakerArtworkPreview(label)。
   clearSkyCultureMakerArtworkPreview(label: string = 'sky-culture-maker-artwork'): void {
     this.skyCultureMakerArtworkDecodeGeneration++
     this.skyCultureMakerArtworkPreviewPath = ''
@@ -315,7 +291,6 @@ export class SkyCultureMakerController {
     releaseDecodedImage(this.mediaPort, oldPixelMap, label)
   }
 
-  // 原宿主 refreshSkyCultureMakerArtworkPreview()。
   refreshSkyCultureMakerArtworkPreview(): void {
     const artwork = this.store.selected()?.image
     if (artwork === undefined) {
@@ -362,7 +337,6 @@ export class SkyCultureMakerController {
     }, desiredSize)
   }
 
-  // 原宿主 selectSkyCultureMakerConstellation(index)。
   selectSkyCultureMakerConstellation(index: number): void {
     if (index < 0 || index >= this.store.constellations.length || index === this.store.selectedConstellation) return
     this.store.selectedConstellation = index
@@ -370,7 +344,6 @@ export class SkyCultureMakerController {
     this.refreshSkyCultureMakerArtworkPreview()
   }
 
-  // 原宿主 applySkyCultureMakerArtworkResponse(response, successText)。
   applySkyCultureMakerArtworkResponse(response: StellariumBridgeResponse, successText: string): void {
     const draft = this.skyCultureMakerDraftFromResponse(response)
     if (response.ok === true && draft !== undefined) {
@@ -383,8 +356,7 @@ export class SkyCultureMakerController {
     }
   }
 
-  // 原宿主 importSkyCultureMakerArtworkFile()：picker 选图 → 复制到导入目录 → 桥导入。
-  // picker/fileIo 经 MediaPort.pickDocumentToDirNamed（命名规则与源宿主逐字一致）。
+  // picker 选图 → 复制到导入目录 → 桥导入（picker/fileIo 经 MediaPort.pickDocumentToDirNamed）。
   async importSkyCultureMakerArtworkFile(): Promise<void> {
     const constellation = this.store.selected()
     if (constellation === undefined || this.store.artworkImporting) return
@@ -419,7 +391,6 @@ export class SkyCultureMakerController {
     }
   }
 
-  // 原宿主 removeSkyCultureMakerArtwork()。
   removeSkyCultureMakerArtwork(): void {
     const constellation = this.store.selected()
     if (constellation === undefined) return
@@ -429,7 +400,6 @@ export class SkyCultureMakerController {
     })
   }
 
-  // 原宿主 bindSkyCultureMakerArtworkAnchor(x, y)。
   bindSkyCultureMakerArtworkAnchor(x: number, y: number): void {
     const constellation = this.store.selected()
     const image = constellation?.image
@@ -447,7 +417,6 @@ export class SkyCultureMakerController {
     })
   }
 
-  // 原宿主 handleSkyCultureMakerArtworkTouch(event)。
   handleSkyCultureMakerArtworkTouch(event: TouchEvent): boolean {
     const points = event.touches.length > 0 ? event.touches : event.changedTouches
     if (points.length === 0) return false
@@ -469,7 +438,6 @@ export class SkyCultureMakerController {
     return false
   }
 
-  // 原宿主 exportSkyCultureMaker()。
   exportSkyCultureMaker(): void {
     this.saveSkyCultureMakerDraft(true, (saved: boolean) => {
       if (!saved) return
@@ -486,7 +454,7 @@ export class SkyCultureMakerController {
     })
   }
 
-  // 原宿主 importSkyCultureMakerFile()：picker 选 .zip → 复制到导入目录 → 桥导入。
+  // picker 选 .zip → 复制到导入目录 → 桥导入。
   async importSkyCultureMakerFile(): Promise<void> {
     try {
       const result = await this.mediaPort.pickDocumentToDirNamed(

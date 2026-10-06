@@ -1,11 +1,7 @@
-// 「目镜（Oculars）」面板（原宿主 panelContent() 的 `oculars` 分支，分支体原样下沉，
-// Phase 4i）。
+// 「目镜（Oculars）」面板，对应 `activePanel === 'oculars'`。
 //
-// 判定条件 `activePanel === 'oculars'` 留在宿主；分支体内的 `if (this.store.xxx)` 条件
-// 全部随 UI 下沉。望远镜设备状态走 @ObjectLink store（TelescopeStore，Phase 3al 已抽），
-// 主题色走 @Prop，设备选择 / 开关 / 滑块 / 旋转 / 复位等动作回注宿主（§13.1 规则 6）。
-// 视觉逐字保留：Scroll 撑满（layoutWeight(1)）+ Column({ space: 12 }) + 四周 8 内边距。
-// 本文件不含 @BuilderParam，不含参数化 @Builder（规则 9）。
+// 望远镜设备状态来自 TelescopeStore（@ObjectLink），主题色走 @Prop；
+// 设备选择 / 开关 / 滑块 / 旋转 / 复位等动作回调注入宿主。
 import { I18n } from '../../pages/I18n'
 import { TelescopeStore } from '../../state/TelescopeStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'

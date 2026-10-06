@@ -3,12 +3,11 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { ShellAction } from '../../pages/StellariumTypes'
 
-// "更多"面板的三类入口列表（观测 / 天空数据 / 自动化，原宿主参数化
-// ``@Builder hubActionList(actions, description)``）。
+// "更多"面板的三类入口列表（观测 / 天空数据 / 自动化）。
 //
-// 三类列表结构完全一致，只有入口集合与说明文字不同；下沉为组件后用 ``@Prop actions``
+// 三类列表结构完全一致，只有入口集合与说明文字不同：``@Prop actions``
 // 承载入口数组、``@Prop description`` 承载说明，点按回注 ``openSubPanel``。
-// 键生成里的 ``languageRevision`` 仍需宿主传入，以便切语言后重建 ForEach。
+// 键生成里的 ``languageRevision`` 由宿主传入，以便切语言后重建 ForEach。
 
 @Component
 export struct HubActionList {

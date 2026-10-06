@@ -3,11 +3,10 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { getIcon } from '../../common/ui/ShellIcons'
 import { DockStore } from '../../state/DockStore'
 
-// 底部 Dock 的单个入口按钮（原宿主参数化 ``@Builder dockButton(item)``）。
+// 底部 Dock 的单个入口按钮。
 //
 // 展开/紧凑两档只影响图标尺寸、标签字号与行高，宿主算好后以 ``@Prop`` 传入；
-// 触摸与点按分别回注 ``handleDockTouch`` / ``activateDockAction``。
-// 参数化 @Builder 不能保留（简单类型参数按值捕获，首帧后冻结），故下沉为组件。
+// 触摸与点按经回调回注宿主。
 //
 // 激活态经 @ObjectLink 共享 ``DockStore`` 就地求值：ForEach 复用子项时 @Prop 会被
 // 冻结，而改变键值又会重建入口，故都不能用于高亮（详见 ``BottomDock`` 头注）。

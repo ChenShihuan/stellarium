@@ -1,11 +1,10 @@
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { I18n } from '../../pages/I18n'
 
-// 卫星面板的卫星分组选择器（原宿主 `private @Builder satelliteGroupSelector()`，Phase 4d）。
+// 卫星面板的卫星分组选择器。
 //
-// 由参数化 @Builder 改为组件（§13.1 规则 3）。组名本地化直接调用 I18n.satGroup（原宿主
-// `satGroupZh` 是纯查表、无宿主状态），因此 satGroupZh 一并删除。Scroller 以普通成员传入
-// （同一实例宿主仍持有，`publishSatellitePanelState` 要读它的 currentOffset），不做装饰器传递。
+// 组名本地化直接调用 I18n.satGroup。Scroller 以普通成员传入
+// （宿主仍持有同一实例，`publishSatellitePanelState` 要读它的 currentOffset）。
 // 事件标志读取与桥调用留在宿主，经 onGroupScroll / onSelect 注入。
 @Component
 export struct SatelliteGroupSelector {

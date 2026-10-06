@@ -1,11 +1,10 @@
-// 天文计算面板（原宿主 panelContent() 的 astro 分支，Phase 4l）。
+// 天文计算面板。
 //
-// 分支体原样下沉为独立组件；判定条件 activePanel === 'astro' 留在宿主。
 // 状态：astro 域数据在 AstroStore（@ObjectLink）；objectDetailStore / wutStore 亦 @ObjectLink；
 // 夜视三色由宿主算好以 @Prop 传入；天文面板 Scroller 由宿主以普通成员传入（宿主仍需它做滚动复位与状态上报）。
 // 宿主私有动作（加载器 load*、跳转 jumpTo*、目标选择器 open*Picker、导出、状态上报、以及占位的纯
 // 标签/几何助手）全部通过注入的 AstroPanelHost 回调驱动，避免把桥接依赖搬进组件。
-// 本文件不含 @BuilderParam，不含参数化 @Builder（§13.1 规则 3/9）。
+// 本文件不含 @BuilderParam，不含参数化 @Builder。
 
 import { TonightPlanet, TonightShower, WutTarget, EphemerisRow, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, TabItem, PlanetPosition, HeliocentricPosition, CelestialPosition } from '../../pages/StellariumTypes'
 import { HELIOCENTRIC_PLANET_ORBITS, CELESTIAL_POSITION_CATEGORIES, PHENOMENA_START_OPTIONS, HeliocentricOrbit, CelestialPositionCategory, PhenomenaStartOption } from '../../pages/MainWindowModels'

@@ -9,13 +9,10 @@ import { LocationPickerPanel } from '../location/LocationPickerPanel'
 import { ContinuationSection } from '../astro/ContinuationSection'
 import { ObserverPlanetSection, PointingTestSection, WatchGyroSection, TonightEventsSection } from '../astro/SessionToolSections'
 
-// 位置面板（原宿主 panelContent() 的 `place` 分支，分支体原样下沉）。
+// 位置面板，对应 `activePanel === 'place'`：三个顶部信息行 + 位置选择器 + 已保存城市行 +
+// 观测星球 +（非 appgallery 构建下的）指星笔 / 手表陀螺仪 / 会话延续 / 今晚天象。
 //
-// 判定条件 `activePanel === 'place'` 留在宿主。该分支本就是把已有组件组装起来：
-// 三个顶部信息行 + 位置选择器 + 已保存城市行 + 观测星球 +（非 appgallery 构建下的）
-// 指星笔 / 手表陀螺仪 / 会话延续 / 今晚天象。三个 store 走 @ObjectLink 实时刷新，
-// 文本与颜色走 @Prop，native 桥 / 定时器 / 快捷键分发动作用回调回注宿主。
-// 顶层用 Column()（无 space）：与原调用点 `Column() { this.panelContent() }` 的间距一致。
+// 三个 store 走 @ObjectLink，文本与颜色走 @Prop，native 桥/定时器/快捷键动作回调注入宿主。
 
 @Component
 export struct PlacePanel {
@@ -25,7 +22,7 @@ export struct PlacePanel {
   @Prop locationText: string
   @Prop coordinateText: string
   @Prop altitudeText: string
-  // §15.12：地图几何随 LocationPickerPanel 自算，这里只传它依赖的布局态。
+  // 地图几何由 LocationPickerPanel 自算，这里只传它依赖的布局态
   @Prop expandedLayout: boolean
   @Prop skyWidth: number
   @Prop textColor: string

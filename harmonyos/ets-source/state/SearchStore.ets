@@ -6,54 +6,44 @@ import { messierNumberOf, minorPlanetNumberOf } from '../common/derive/astro'
 import { celestialTitle } from '../common/derive/labels'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 宿主 → SearchStore 的跨域只读 / 助手 / 存储注入（§13.1 规则 6 / §14.8 规则 2）。
-// loadConstellationNavigation 需在回包返回时比对语言刷新代际 languageRefreshSerial 以丢弃
-// 过期请求；该代际的单一持有者是 LanguageStore（§14 B3-1），本 store 只经 hooks 只读获取，
-// 不 import 他 store、不另存副本。
-//
-// §14 B3-3：分类浏览（loadCategoryObjects / loadMoreCategoryObjects）自宿主搬入，其调用的
-// 宿主助手 / CLI 发布点 / 插件加载器经下列 hooks 具名回注；搜索历史 Preferences 读写同理
-// （store 不 import NAPI/UI 上下文，§14.8 规则 2）。
+// 宿主 → SearchStore 的跨域只读 / 助手 / 存储注入（store 不 import 他 store / NAPI / UI）。
+// loadConstellationNavigation 需在回包时比对语言刷新代际以丢弃过期请求；该代际的单一持有者
+// 是 LanguageStore，本 store 只经 hooks 只读获取，不另存副本。
+// 分类浏览调用的宿主助手 / CLI 发布点 / 插件加载器，以及搜索历史 Preferences 读写，
+// 同样经下列 hooks 具名回注。
 export interface SearchHostHooks {
   languageSerial(): number
-  // CLI 发布点（沿用 CatalogHostHooks 同名注入）。
+  // CLI 发布点。
   publishSearchBrowserState(): void
-  // 分类 code → 目录 moduleId（读宿主 searchCategoryOptions / CatalogStore）。
+  // 分类 code → 目录 moduleId。
   categoryModuleIdFor(category: string): string
   // 确保插件已加载（loadCategoryObjects 的 Satellites 分支）。
   ensurePluginLoaded(pluginName: string, callback: () => void, failureCallback?: () => void): void
-  // 天体标题（loadMoreCategoryObjects 生成 NameItem）；副标题已随 §14 A2-3 下沉本 store 方法，
-  // 故不再是 hook。
+  // 天体标题（生成 NameItem 用）；副标题由本 store 方法提供，故不再是 hook。
   celestialTitle(nativeName: string, englishName: string): string
   // 搜索历史 Preferences 原始读写（宿主用 @ohos.data.preferences 实现）。
   readSearchHistoryStorage(): Promise<string>
   writeSearchHistoryStorage(json: string): Promise<void>
 }
 
-// 搜索域状态：输入文本与候选建议、分类浏览、搜索历史。
+// 搜索域 store：持有输入文本与候选建议、分类浏览（列表 / 分页游标 / 加载态）、搜索历史、
+// 星座快捷导航与 RA/Dec 坐标输入，面板经 @ObjectLink 观察。桥经 attachPort 注入 CommandPort，
+// 本 store 自持 loadConstellationNavigation / loadCategoryObjects / loadMoreCategoryObjects 等；
+// 语言代际、CLI 发布、插件加载与 Preferences 读写经 SearchHostHooks 回注。
 //
-// §14 B3-3：`searchHistory` 由宿主普通字段搬入本 store（单一持有者）。原宿主中的读取方只有
-// `searchObject()`（写历史 + 持久化），非渲染读取，故直接写 `this.searchStore.searchHistory`；
-// Preferences 读写经 SearchHostHooks.readSearchHistoryStorage / writeSearchHistoryStorage 回注。
-//
-// §14 B3-1：加载器 loadConstellationNavigation 自宿主搬入（星座快捷导航列表），宿主调用点
-// 显式传入当次 languageSerial；回包过期判定经 SearchHostHooks.languageSerial() 读 LanguageStore。
-//
-// §14 B3-3：loadCategoryObjects / loadMoreCategoryObjects 自宿主搬入（分类浏览分页），
-// 跨页游标 categoryOffset 与代际计数 categoryRequestSerial、跨域标志 satelliteCatalogReady
-// 随加载器一并入 store（单一持有者 + 无第二份副本）。
+// searchHistory 为单一持有者，仅 searchObject() 写入并持久化，不参与渲染读取。
 @Observed
 export class SearchStore {
   searchText: string = ''
   searchSuggestions: SearchSug[] = []
 
-  // ==== 筛选器（原宿主 @State）====
+  // ==== 筛选器 ====
   searchFilterPage: string = ''
   searchCategory: string = 'planet'
   searchVisibilityFilter: string = 'all'
   searchInstrumentFilter: string = 'all'
 
-  // ==== 分类浏览（原宿主 @State）====
+  // ==== 分类浏览 ====
   categoryObjects: NameItem[] = []
   categoryObjectCount: number = 0
   categoryLoadedCount: number = 0
@@ -66,22 +56,22 @@ export class SearchStore {
   categoryCatalogMessage: string = ''
   categoryModuleId: string = ''
   pendingPluginCatalogId: string = ''
-  // §14 B3-3：跨页游标 / 代际计数 / 卫星目录就绪标志随分类浏览加载器搬入（原宿主裸字段）。
+  // 跨页游标 / 代际计数 / 卫星目录就绪标志。
   categoryOffset: number = 0
   categoryRequestSerial: number = 0
   satelliteCatalogReady: boolean = false
-  // §14 B3-3：搜索历史（原宿主普通字段；单一持有者，Preferences 读写经 hooks）。
+  // 搜索历史（单一持有者，持久化经 hooks）。
   searchHistory: string[] = []
-  // §14 B3-3：分类浏览分页大小（原宿主 readonly 常量，随加载器搬入）。
+  // 分类浏览分页大小。
   private readonly CATEGORY_PAGE_SIZE: number = 60
   // ==== 星座快捷导航与 RA/Dec 坐标输入 ====
   constellationNavigationItems: ConstellationNavigationItem[] = []
   coordInputRA: string = ''
   coordInputDec: string = ''
 
-  // —— 桥注入（§14.1 AB-0 / §14 B3-1） ——
+  // —— 桥注入 ——
   private port: CommandPort | null = null
-  // 通用预留序号（本 store 的分类加载器使用具名 categoryRequestSerial，见上）。
+  // 通用预留序号（分类加载器使用具名的 categoryRequestSerial）。
   private seq: number = 0
   private onChanged: (() => void) | null = null
   private hooks: SearchHostHooks | null = null
@@ -107,10 +97,8 @@ export class SearchStore {
     }
   }
 
-  // 星座快捷导航：桥拉取星座名并按当前语言本地化（原宿主 loadConstellationNavigation，§14 B3-1 搬入；
-  // 函数体逐字）。差异仅：this.callNativeWhenReady → port.requestWhenReady、
-  // this.languageRefreshSerial → hooks.languageSerial()、this.searchStore.<f> → this.<f>；
-  // 宿主调用点显式传入当次 languageSerial（默认参数依赖 this.languageRefreshSerial，已随字段入 store）。
+  // 星座快捷导航：桥拉取星座名并按当前语言本地化；调用方显式传入当次 languageSerial，
+  // 回包经 hooks.languageSerial() 比对以丢弃过期请求。
   loadConstellationNavigation(languageSerial: number): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -144,11 +132,7 @@ export class SearchStore {
     })
   }
 
-  // 分类浏览首页：重置游标与列表状态后发起首屏加载（原宿主 loadCategoryObjects，§14 B3-3 搬入；
-  // 函数体逐字）。差异仅：this.searchStore.<f> → this.<f>、this.categoryOffset/categoryRequestSerial/
-  // satelliteCatalogReady → this.<f>、this.categoryModuleIdFor → hooks.categoryModuleIdFor、
-  // this.publishSearchBrowserState → hooks.publishSearchBrowserState、this.ensurePluginLoaded →
-  // hooks.ensurePluginLoaded、this.loadMoreCategoryObjects → this.loadMoreCategoryObjects（同 store）。
+  // 分类浏览首页：重置游标与列表状态后发起首屏加载。
   loadCategoryObjects(category: string, moduleIdOverride: string = ''): void {
     const hooks = this.hooks
     if (hooks === null) {
@@ -189,11 +173,7 @@ export class SearchStore {
     this.loadMoreCategoryObjects()
   }
 
-  // 分类浏览翻页：请求下一页并追加（原宿主 loadMoreCategoryObjects，§14 B3-3 搬入；函数体逐字）。
-  // 差异仅：this.searchStore.<f> → this.<f>、this.categoryOffset/categoryRequestSerial → this.<f>、
-  // this.CATEGORY_PAGE_SIZE → this.CATEGORY_PAGE_SIZE（同 store 常量）、
-  // this.callNativeWhenReady → port.requestWhenReady（重试档 0/100/60 逐字保留、onFailure 由第 4 参传入）、
-  // this.celestialTitle → hooks.celestialTitle（副标题经 §14 A2-3 下沉本 store 方法）。
+  // 分类浏览翻页：请求下一页并追加；回包以 categoryRequestSerial 比对丢弃过期结果，重试档 0/100/60。
   loadMoreCategoryObjects(): void {
     const hooks = this.hooks
     const port = this.ensurePort()
@@ -251,9 +231,7 @@ export class SearchStore {
     }, 0, 100, 60)
   }
 
-  // 首次启动从 Preferences 载入搜索历史（原宿主 loadSearchHistoryFromStorage，§14 B3-3 搬入；
-  // 函数体逐字）。差异仅：getUIContext + preferences → hooks.readSearchHistoryStorage
-  //（store 不 import NAPI/UI）；this.searchHistory → this.searchHistory（本 store 字段）。
+  // 首次启动从 Preferences 载入搜索历史（写入本 store 的 searchHistory）。
   async loadSearchHistoryFromStorage(): Promise<void> {
     const hooks = this.hooks
     try {
@@ -267,8 +245,7 @@ export class SearchStore {
     }
   }
 
-  // 持久化搜索历史（原宿主 saveSearchHistoryToStorage，§14 B3-3 同片搬入；随 searchHistory 单一
-  // 持有者）。差异仅：getUIContext + preferences → hooks.writeSearchHistoryStorage。
+  // 持久化搜索历史。
   async saveSearchHistoryToStorage(): Promise<void> {
     const hooks = this.hooks
     if (hooks === null) {
@@ -281,20 +258,19 @@ export class SearchStore {
     }
   }
 
-  // ==== 搜索域「取值/标签」助手（§14 A2-3，原宿主私有方法逐字搬入）====
+  // ==== 搜索域「取值/标签」助手 ====
   //
   // 均读本 store 的搜索筛选/当前分类字段（searchVisibilityFilter / searchInstrumentFilter /
-  // searchCategory），按 §14.3「读本域 store 字段 → 并入该 store 方法（零入参）」下沉；
-  // 函数体逐字保留，仅去掉宿主前缀。
+  // searchCategory）。
 
-  // 可见性筛选的当前标签（原宿主 searchVisibilityLabel）。
+  // 可见性筛选的当前标签。
   searchVisibilityLabel(): string {
     if (this.searchVisibilityFilter === 'above') return I18n.t('search_above_horizon')
     if (this.searchVisibilityFilter === 'good') return I18n.t('search_good_observing')
     return ''
   }
 
-  // 观测设备筛选的当前标签（原宿主 searchInstrumentLabel）。
+  // 观测设备筛选的当前标签。
   searchInstrumentLabel(): string {
     if (this.searchInstrumentFilter === 'naked') return I18n.t('search_naked_eye')
     if (this.searchInstrumentFilter === 'binocular') return I18n.t('search_binoculars')
@@ -302,7 +278,7 @@ export class SearchStore {
     return ''
   }
 
-  // 天体副标题（目录号 / 小行星永久编号；原宿主 celestialSubtitle）。
+  // 天体副标题（目录号 / 小行星永久编号）。
   celestialSubtitle(title: string, englishName: string): string {
     const parts: string[] = []
     if (englishName.length > 0 && title.trim().toLowerCase() !== englishName.trim().toLowerCase()) {
@@ -317,13 +293,12 @@ export class SearchStore {
     return parts.join(' · ')
   }
 
-  // WUT 目标副标题（原宿主 wutTargetSubtitle，A2-6）：标题经同源纯函数 celestialTitle 求得，
-  // 再走本 store 的 celestialSubtitle。函数体逐字等价（this.wutTargetTitle/target → 内联标题）。
+  // WUT 目标副标题：标题经纯函数 celestialTitle 求得，再走本 store 的 celestialSubtitle。
   wutTargetSubtitle(target: WutTarget): string {
     return this.celestialSubtitle(celestialTitle(target.name ?? '', target.englishName ?? ''), target.englishName ?? '')
   }
 
-  // 分类浏览条目的副标题（原宿主 categoryObservationSubtitle）。
+  // 分类浏览条目的副标题。
   categoryObservationSubtitle(item: NameItem): string {
     const parts: string[] = []
     const catalogText = this.celestialSubtitle(String(item.zh ?? item.name), item.name)

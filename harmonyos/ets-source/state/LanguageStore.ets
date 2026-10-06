@@ -1,30 +1,20 @@
 import { I18n } from '../pages/I18n'
 
-// 「界面语言」域状态簇（review §2.7，2026-10-04）。
+// 「界面语言」域状态 store：持有当前界面语言 selectedLanguage（Stellarium 语言码，默认取系统语言）、
+// 语言刷新锚点 languageRevision 与语言刷新代际 languageRefreshSerial。
 //
-// 本片边界：原宿主 2 个 `@State private` 字段搬入，保留类型与默认值。宿主以
-// `@State private languageStore: LanguageStore = new LanguageStore()` 持有，
-// 全部引用改写为 `this.languageStore.<字段>`。
-//
-// 字段：
-//   - selectedLanguage —— 当前界面语言（Stellarium 语言码，默认取系统语言）；
-//   - languageRevision —— 语言刷新锚点：setLanguage 里 `languageStore.languageRevision++`，
-//     以 ForEach 键后缀强制语言相关列表/文案重建。**该字段的刷新语义不得改动。**
-//   - languageRefreshSerial —— 语言刷新代际（§14 B3-1 搬入）：`setLanguage` 里 `++`，
-//     回包返回时比对以丢弃过期请求。它被搜索域（fetchSuggestions / loadConstellationNavigation）
-//     与目录域（CatalogStore.loadObjectCatalogCategories 经 CatalogHostHooks.languageSerial）
-//     只读使用 —— 属"语言刷新"语义，故移入本 store 作**单一持有者**（§14.8 规则 3：宿主不留副本）。
-//     跨域读者一律经宿主注入的只读 hooks / 显式传参获取，store 不互相持有。
-//
-// 消费方仍以 @Prop 快照接收、宿主在下发点读 store（`this.languageStore.X`）：
-//   - selectedLanguage：SettingsPanel / SettingsQuickLegacyPanel / ConfigFallbackPanel
-//     以及 LanguageRow（经面板下发）；
+// 消费方以 @Prop 快照接收、宿主在下发点读 store：
+//   - selectedLanguage：SettingsPanel / SettingsQuickLegacyPanel / ConfigFallbackPanel 及 LanguageRow；
 //   - languageRevision：MorePanel / SearchPanel / SearchCategoryBrowse / SearchConstellationChips /
 //     SearchFilterMenu / 三个壳层 / BottomDock / HubActionList。
-//   languageRevision 经多层组件以 @Prop 串接（14 个文件），保持既有链路
-//   「宿主自增 → 宿主重渲染 → @Prop 下发 → ForEach 重建」逐字不变，故不改 @ObjectLink。
+// languageRevision 经多层组件 @Prop 串接，保持「宿主自增 → 宿主重渲染 → @Prop 下发 → ForEach 重建」
+// 链路；setLanguage 中 `languageRevision++` 以 ForEach 键后缀强制语言相关列表/文案重建，该刷新语义不得改动。
 //
-// 约束：均为标量整体赋值；languageRevision 的 `++` 亦为整体赋值，可被 @State 宿主观测。
+// languageRefreshSerial 是语言刷新代际：setLanguage 中自增，回包返回时比对以丢弃过期请求；被搜索域
+// （fetchSuggestions / loadConstellationNavigation）与目录域（CatalogHostHooks.languageSerial）只读使用。
+// 属"语言刷新"语义，故由本 store 单一持有；跨域读者经宿主注入的只读 hooks / 显式传参获取，store 之间不互相持有。
+//
+// 约束：均为标量整体赋值（含 `++`），可被 @State 宿主观测。
 @Observed
 export class LanguageStore {
   selectedLanguage: string = I18n.systemLanguage()

@@ -2,12 +2,10 @@ import { I18n } from '../../pages/I18n'
 import { ToolsStore } from '../../state/ToolsStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 帮助面板（原宿主 panelContent() 的 `help` 分支，分支体原样下沉）。
+// 帮助面板，对应 `activePanel === 'help'`：静态说明文字 + 手势/快捷操作图例。
 //
-// 判定条件 `activePanel === 'help'` 留在宿主。整屏是静态说明文字 + 手势/快捷操作
-// 图例；“关于”一节的版本信息读 ToolsStore（@ObjectLink，实时刷新），
-// “数据与工具”按钮回注宿主的 openSubPanel('tools')。
-// 成员名避开 CustomComponent 属性方法（分隔线颜色用 lineColor，不用 borderColor）。
+// “关于”一节的版本信息读 ToolsStore（@ObjectLink）；“数据与工具”按钮经回调打开工具面板。
+// 分隔线颜色用 lineColor：成员名须避开 CustomComponent 基类的 borderColor 属性方法。
 
 @Component
 export struct HelpPanel {

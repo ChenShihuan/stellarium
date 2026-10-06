@@ -6,22 +6,18 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { GuideLibrary } from '../guide/GuideLibrary'
 import { scriptZh, scriptDesc } from '../../common/derive/labels'
 
-// 脚本面板（原宿主 panelContent() 的 `scripts` 分支，分支体原样下沉）。
+// 脚本面板，对应 `activePanel === 'scripts'`：脚本列表 / 回放 / 录制 / 屏幕 MP4 / 帧序列导出。
 //
-// 判定条件 `activePanel === 'scripts'` 留在宿主。脚本列表 / 回放 / 录制 / 屏幕
-// MP4 / 帧序列导出的全部状态由宿主 @State 以 @Prop 传入（宿主仍是写方），
-// 所有动作回注宿主；录制开关读 ToolsStore（@ObjectLink，实时刷新）。
-// scriptZh / scriptDesc 已直连 common/derive/labels（§14.2 A1-3）；scriptMetaLine /
-// scriptSourceLine 因读 scriptStore 元数据仍留宿主，以函数成员回注。
-// 成员名避开 CustomComponent 属性方法（分隔线颜色用 lineColor，不用 borderColor）。
+// 脚本与录制状态来自 ScriptStore（@ObjectLink），录制开关读 ToolsStore（@ObjectLink）；
+// guideSessionActive 由宿主派生后传入。所有动作回调注入宿主；scriptZh/scriptDesc 直连
+// common/derive/labels，scriptMetaLine/scriptSourceLine 读 scriptStore 元数据，故由宿主回注。
+// 分隔线颜色用 lineColor：成员名须避开 CustomComponent 基类的 borderColor 属性方法。
 
 @Component
 export struct ScriptsPanel {
   @ObjectLink tools: ToolsStore
   @Prop guideSessionActive: boolean
-  // 脚本 / 录制 / 视频导出状态经 @ObjectLink 订阅（review §2.7 第二片：Prop → Store）。
-  // guideSessionActive 属导览会话域（宿主由 scriptSessionActive() 派生），仍为 @Prop；
-  // 录屏开关走既有的 ToolsStore；全部动作仍是宿主注入的回调。
+  // guideSessionActive 属导览会话域，由宿主 scriptSessionActive() 派生，故为 @Prop。
   @ObjectLink scriptStore: ScriptStore
   @Prop textColor: string
   @Prop subColor: string
@@ -85,14 +81,12 @@ export struct ScriptsPanel {
         Column({ space: 2 }) {
             ForEach(this.scriptStore.scriptList, (s: string) => {
               Column({ space: 0 }) {
-                // 第一行：中文名 + 播放图标
                 Row() {
                   Text(scriptZh(s)).fontSize(11).fontColor(this.textColor)
                     .fontWeight(FontWeight.Medium).layoutWeight(1)
                   Text('▶').fontSize(9).fontColor('#7FD0FF')
                 }
                 .height(28).width('100%').padding({ left: 10, right: 10 })
-                // 第二行：简短描述
                 if (scriptDesc(s)) {
                   Text(scriptDesc(s))
                     .fontSize(8).fontColor('#77FFFFFF').width('100%')

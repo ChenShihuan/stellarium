@@ -1,7 +1,7 @@
 import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 会话延续块（原宿主 @Builder continuationSection）。
+// 会话延续块。
 //
 // 提示文本与会话 JSON 由宿主以 @Prop 传入（两者都来自宿主的会话状态），
 // 导出 / 应用 / 开始延续三个动作仍由宿主执行，以回调注入。

@@ -4,15 +4,13 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { SceneryStore } from '../../state/SceneryStore'
 import { resourceText } from '../../common/derive/labels'
 
-// 三维地景面板（原宿主 panelContent() 的 `scenery3d` 分支，分支体原样下沉）。
+// 三维地景面板，对应 `activePanel === 'scenery3d'`。
 //
-// 判定条件 `activePanel === 'scenery3d'` 留在宿主。列表/加载态来自宿主的
-// @State 字段、以 @Prop 传入（宿主仍是写方）；`resourceText` 已直连
-// common/derive/labels（§14.2 A1-3）；启用开关与选中场景回注宿主。
+// 列表/加载态来自 SceneryStore（@ObjectLink）；启用开关与选中场景回调注入宿主；
+// resourceText 直连 common/derive/labels。
 
 @Component
 export struct Scenery3dPanel {
-  // 状态经 @ObjectLink 订阅（review §2.7 第三批小簇批处理）。动作仍为宿主注入的回调。
   @ObjectLink sceneryStore: SceneryStore
   @Prop textColor: string
   @Prop subColor: string

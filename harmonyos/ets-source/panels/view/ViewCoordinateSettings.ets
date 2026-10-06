@@ -2,17 +2,12 @@ import { I18n } from '../../pages/I18n'
 import { OverlayStore } from '../../state/OverlayStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
-// 「视图中心坐标」设置区（原宿主 @Builder `viewCoordinateSettings()`，约 59 行）。
+// 本组件职责：「视图中心坐标」设置区。
 //
-// 组件只收一个 store、五个夜视色与三个写回回调：
+// 组件收一个 store、五个夜视色与三个写回回调：
 //   - 开关与档位的当前值读 @ObjectLink store（`I18n` 文案经 store 的两个纯查表方法）；
-//   - `setViewCoordinatesVisible` / `setViewCoordinateFamily` / `setViewEquatorialEpoch` 留在宿主
-//     （它们要同步定时器与 saveAppSettings），以回调注入（§13.1 规则 6）。
-//
-// 视觉逐字保留：外层 Column space 7、margin bottom 8、标题 13 号、开关行内边距 left 10 right 8 top 7 bottom 7、
-// Toggle 46×28、开态底色 rgba(107, 163, 214, 0.12)、边框 rgba(107, 163, 214, 0.18)、
-// 「坐标系」标题 10 号、三档按钮高 30（padding top 6、字号 11、选中底色 accent 白字）、
-// 历元两档按钮同规格、圆角 UI_RADIUS_CONTROL、180ms EaseOut。
+//   - `setViewCoordinatesVisible` / `setViewCoordinateFamily` / `setViewEquatorialEpoch` 由宿主提供
+//     （它们要同步定时器与 saveAppSettings），以回调注入。
 @Component
 export struct ViewCoordinateSettings {
   @ObjectLink store: OverlayStore

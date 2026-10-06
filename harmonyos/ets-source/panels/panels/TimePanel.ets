@@ -5,7 +5,7 @@ import { JulianDateStore } from '../../state/JulianDateStore'
 import { NightModeStore } from '../../state/NightModeStore'
 import { AtmosphereStore } from '../../state/AtmosphereStore'
 import { NightModeToggleRow } from '../../common/ui/NightModeToggleRow'
-import { QuickChipRow } from '../QuickChipRow'
+import { QuickChipRow } from '../../common/ui/QuickChipRow'
 import { TimeWheelScrubber } from '../time/TimeWheelScrubber'
 import { TimeSpeedChips } from '../time/TimeSpeedChips'
 import { SiderealTimeRow } from '../time/SiderealTimeRow'
@@ -14,16 +14,11 @@ import { JulianDateControls } from '../time/JulianDateControls'
 import { ObservationAidBlock } from '../time/ObservationAidBlock'
 import { ManualTimeBlock } from '../time/ManualTimeBlock'
 
-// 观测时间面板（原宿主 panelContent() 的 `time` 分支，分支体原样下沉）。
+// 观测时间面板，对应 `activePanel === 'time'`：时间转轴 + 速率档位 + 快捷跳转 + 恒星时 +
+// 均时差 + 儒略日 + 夜视模式 + 大气折射 + 手动指定时间。
 //
-// 判定条件 `activePanel === 'time'` 留在宿主。该分支本就是把已有组件组装起来：
-// 时间转轴 + 速率档位 + 快捷跳转 + 恒星时 + 均时差 + 儒略日 + 夜视模式 +
-// 大气折射 + 手动指定时间。六个 store 走 @ObjectLink 实时刷新（新增 atmosphereStore，
-// 承载 refractionOn / atmoPressure / atmoTemperature / atmoExtinction，原 4 个 @Prop），
-// 其余数值/颜色走
-// @Prop；时间轮控制器（this.wheel()）与手动时间的读写属宿主私有状态，
-// 按 §13.1 规则 6 用回调回注。顶层用 Column()（无 space）与原调用点
-// `Column() { this.panelContent() }` 的间距一致。
+// 六个 store（timeWheel / time / equationOfTime / julian / nightMode / atmosphere）走 @ObjectLink；
+// 其余数值/颜色走 @Prop；时间轮控制器与手动时间的读写属宿主私有状态，经回调注入。
 
 @Component
 export struct TimePanel {
@@ -65,7 +60,6 @@ export struct TimePanel {
         onSelectUnit: (unit: string) => { this.onSelectUnit(unit) },
         onWheelTouch: (event: TouchEvent) => { this.onWheelTouch(event) }
       })
-      // 时间控制按钮：[倒带][现在][停止][实时][快进][超快]
       TimeSpeedChips({ store: this.timeStore, onChip: (id: string) => { this.onChip(id) } })
       QuickChipRow({ items: [
         { id: '-12h', label: '-12h' }, { id: '+12h', label: '+12h' },
@@ -92,7 +86,7 @@ export struct TimePanel {
         onAdjust: (scale: string, direction: number) => { this.onAdjustJulian(scale, direction) },
         onApply: (scale: string) => { this.onApplyJulian(scale) }
       })
-      // 观测辅助：夜视模式（独立模块，后续主界面按钮共用同一 store）/ 大气折射
+      // 夜视模式与主界面按钮共用同一 nightModeStore
       NightModeToggleRow({
         store: this.nightModeStore,
         textColor: this.textColor,
@@ -109,7 +103,6 @@ export struct TimePanel {
         borderColorValue: this.borderTint,
         onAtmosphere: (pressure: number, temperature: number, extinction: number) => { this.onAtmosphere(pressure, temperature, extinction) }
       })
-      // 手动指定时间
       ManualTimeBlock({
         manualYear: this.manualYear,
         manualMonth: this.manualMonth,

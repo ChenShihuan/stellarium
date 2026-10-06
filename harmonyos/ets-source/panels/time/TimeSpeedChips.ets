@@ -3,13 +3,11 @@ import { I18n } from '../../pages/I18n'
 import { TimeStore } from '../../state/TimeStore'
 import { UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 时间速度控制按钮 — 参考 Sky Guide 的交互范式
-// 布局：[倒带] [现在] [停止] [实时] [快进] [超快]
-// 当前档位高亮，点击立即更新速度显示
+// 时间速度控制按钮：倒带 / 停止·继续 / 实时 / 减速 / 快进。
+// 当前档位高亮，点击后速度显示立即更新。
 //
-// 实验版：chip 内容全部内联、直接读 store，故意不再走带参数的 @Builder
-// （原实现的 speedChip(id, label, icon, active) 参数按值捕获，首帧后即冻结，
-//   导致点击「快进」后标签/高亮要重开面板才更新 —— 真机实测确认的既有问题）。
+// chip 内容全部内联、直接读 store，不走带参数的 @Builder ——
+// 参数化 @Builder 的简单类型参数按值捕获、首帧后即冻结，会导致标签 / 高亮要重开面板才更新。
 @Component
 export struct TimeSpeedChips {
   @ObjectLink store: TimeStore

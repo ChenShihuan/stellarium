@@ -1,16 +1,13 @@
-// 自检行为控制器（PLAN §15.12 E 轨道 E4，2026-10-05）。
+// 自检行为控制器。
 //
-// 原宿主 MainWindowNativeNode 的 selfTestAllActions 与私有常量 SELFTEST_ACTION_IDS 一并下沉。
 // 自检是一组 action 开关的整体翻转，用于启动期验证 C++ 动作目录与桥通道。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort（宿主 callNativeWhenReady 的
-// requestWhenReady，含录制记录）；重试窗口 0ms × 100 × 120 = 12s 逐字保留（撑过 StelApp 初始化）。
-// 日志经 hilog（与 TimeController 等控制器先例一致）。
+// 控制器不 import NAPI/UI：桥经 CommandPort 发出（含录制记录）；重试窗口 0ms × 100 × 120 = 12s
+// 撑过 StelApp 初始化，确保命令真正跑到 C++ 自检。日志经 hilog（与 TimeController 等控制器一致）。
 import hilog from '@ohos.hilog'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
-// 原宿主私有常量（逐字迁移）。
+// 自检动作 ID 全表。
 export const SELFTEST_ACTION_IDS: string[] = [
   "actionHorizontal_Flip",
   "actionShow_Antisolar_Point",
@@ -104,7 +101,7 @@ export class SelfTestController {
     this.port = port
   }
 
-  // 原宿主 selfTestAllActions()：整包下发自检 action id 并打回包。
+  // 整包下发自检 action id 并打印回包。
   selfTestAllActions(): void {
     hilog.info(0x0000, 'StellariumArkUI', 'selftest send %{public}d ids', SELFTEST_ACTION_IDS.length)
     // 引擎核心(StelApp)在启动早期尚未就绪，命令会先返回 pending 不入队；

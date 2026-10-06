@@ -1,36 +1,23 @@
-// 详情连接线 / 详情刷新定时器控制器（STATE-REVIEW §10.2 D1，PLAN §15 D 轨道 D1）。
+// 详情连接线与详情自动刷新定时器控制器：驱动详情卡数据刷新，以及详情卡指向投影目标的
+// 连接线几何（遮挡避让 / 屏幕边界裁剪 / 过渡动画）。
 //
-// 原宿主 MainWindowNativeNode 的 12 个方法逐字下沉：
-//   startDetailAutoRefresh / stopDetailAutoRefresh / pauseDetailRefreshForSkyDrag /
-//   resumeDetailRefreshAfterSkyDrag / startObjectDetailConnectorRefresh /
-//   stopObjectDetailConnectorRefresh / armObjectDetailConnectorTransition /
-//   refreshObjectDetailConnector / clearObjectDetailConnector /
-//   rayRectIntersection / segmentRectEntryFraction / objectDetailCardY。
-//
-// 职责划分（§15.7 规则 2）：
-//   - 可观测数据仍在 @Observed store（ObjectDetailStore / InfoWindowStore），控制器只读；
-//   - 指向线几何 9 个 @State 与内容淡入淡出 2 个 @State 留在宿主，控制器经 hooks setter 逐帧写入；
-//   - 定时器句柄 / 防重入标志 / 上一帧避让状态等草稿字段留控制器（不入 @Observed store）。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：native 投影查询（宿主 callNative('getGyroGuidePosition')
-// 强转 GyroGuideProjection）经 hooks.gyroGuideProjection() 回注；面板/星图状态、几何派生、宿主保留
-// 控制器（objectDetailConnectorObstacles / refreshSelectedObject / scheduleSkyTextureStatusCheck）
-// 经 DetailConnectorHostHooks 具名回注（§13.1 规则 6）。CommandPort 未注入：D1 唯一桥调用是
-// getGyroGuidePosition，其回包需强转 GyroGuideProjection 而控制器禁 `as`，故按 SensorController
-// 的 guideProjection 先例由宿主完成强转后经 hook 下发。
+// 依赖 ObjectDetailStore / InfoWindowStore（只读），宿主几何、面板/星图状态、OverlayStore
+// 可见性、native 投影与指向线 @State 均经 DetailConnectorHostHooks 回注；控制器不 import
+// NAPI/UI，getGyroGuidePosition 的 GyroGuideProjection 强转由宿主完成后经 hook 下发。
+// 定时器自持：startDetailAutoRefresh()/startObjectDetailConnectorRefresh() 启动，stop() 收口。
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { InfoWindowStore } from '../state/InfoWindowStore'
 import { GyroGuideProjection, SkyUiObstacle } from '../pages/MainWindowModels'
 import { pointInsideRect } from '../common/derive/geometry'
 import { BehaviorHostHooks } from './ControllerHooks'
 
-// 宿主 → 控制器回注（§13.1 规则 6）：不触碰 UI/宿主私有标志以外的任何 NAPI。
+// 宿主 → 控制器回注：不触碰 UI/宿主私有标志以外的任何 NAPI。
 export interface DetailConnectorHostHooks extends BehaviorHostHooks {
   // 面板 / 星图状态读取。
   activePanel(): string
   panelVisible(): boolean
   skyDragging(): boolean
-  // 几何派生（宿主保留 §10.5「几何推导」）。
+  // 几何派生（宿主保留）。
   skyWidth(): number
   skyHeight(): number
   isFoldHoverLayout(): boolean
@@ -40,7 +27,7 @@ export interface DetailConnectorHostHooks extends BehaviorHostHooks {
   detailCardY(): number
   detailCardWidth(): number
   detailCardHeight(): number
-  // 宿主保留控制器（A2-5 登记）与收口点。
+  // 宿主保留的控制器与收口点。
   objectDetailConnectorObstacles(): SkyUiObstacle[]
   refreshSelectedObject(): void
   scheduleSkyTextureStatusCheck(): void
@@ -48,7 +35,7 @@ export interface DetailConnectorHostHooks extends BehaviorHostHooks {
   gyroGuideProjection(): GyroGuideProjection
   // OverlayStore.objectDetailConnectorVisible 读取（控制器不持该 store）。
   connectorVisible(): boolean
-  // 指向线几何 9 个 @State（宿主持有，控制器逐帧 set/get，§15.7 规则 2）。
+  // 指向线几何 9 个 @State（宿主持有，控制器逐帧 set/get）。
   connectorX(): number
   setConnectorX(value: number): void
   connectorY(): number
@@ -132,9 +119,8 @@ export class DetailConnectorController {
     this.detailRefreshing = false
   }
 
-  // 以下三法供宿主保留方法 refreshSelectedObject（§15.6-6 SelectionService，永久保留宿主）与控制器
-  // 交互：detailRefreshing / detailRefreshGuard 的所有权随 D1 移交本控制器（原 §15.6-6 登记项随之修订，
-  // 见 STATE-REVIEW §10.2 的 M3-3 后续路径「拆 refreshSelectedObject 的 detailRefreshGuard 为独立控制器」）。
+  // 以下三法供宿主保留方法 refreshSelectedObject（SelectionService 侧）与控制器交互：
+  // detailRefreshing / detailRefreshGuard 的所有权在本控制器。
   isDetailRefreshing(): boolean {
     return this.detailRefreshing
   }
@@ -155,7 +141,7 @@ export class DetailConnectorController {
     return this.detailTimer !== 0
   }
 
-  // 宿主选中/展开详情卡时置位；连接线刷新时消费一次（原 objectCardPlacementPending）。
+  // 宿主选中/展开详情卡时置位；连接线刷新时消费一次。
   markObjectCardPlacementPending(): void {
     this.objectCardPlacementPending = true
   }

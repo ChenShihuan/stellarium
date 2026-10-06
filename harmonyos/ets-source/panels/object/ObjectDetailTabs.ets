@@ -9,12 +9,10 @@ import { StructuredDetailRows } from './StructuredDetailRows'
 import { TabletInspectorMediaGroup } from './TabletInspectorMediaGroup'
 import { ObjectMediaStore } from '../../state/ObjectMediaStore'
 
-// 详情主卡片的"观测"与"坐标"两页（原 ``unifiedObjectDetailCard()`` 里 ``bottomCardIndex`` 0/1 的分支）。
+// 详情主卡片的"观测""坐标""资料"三页。
 //
-// 贴片与坐标行由子组件自行观察 store；动态查值 ``selectedDisplayValue(key)`` 仍留在宿主（多处共用），
-// 以 ``resolve`` 回调注入。「资料」页暂仍留在宿主：它需要把宿主的**无参** ``@Builder tabletInspectorMedia()``
-// 插到页面中部，``@BuilderParam`` 传递在真机上会让应用在渲染该页时退出（2026-10-01 实测，已回退），
-// 待把媒体区改成 ``TabletInspectorMediaGroup`` 组件后再搬。「操作」页在同目录 ``ObjectDetailActionsTab``。
+// 三页均以 `@ObjectLink` 观察 `ObjectDetailStore`；动态查值 `selectedDisplayValue(key)` 由宿主的
+// `resolve` 回调注入（该逻辑被多处共用）。资料页内嵌媒体组、过境段、星座文化段与结构化资料子组件。
 
 @Component
 export struct ObjectDetailObserveTab {

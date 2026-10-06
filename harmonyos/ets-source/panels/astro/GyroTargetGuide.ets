@@ -1,7 +1,7 @@
 import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 import { GyroStore } from '../../state/GyroStore'
 
-// 陀螺仪目标指引箭头（原宿主无参 `@Builder gyroTargetGuide`）。
+// 陀螺仪目标指引箭头。
 // 只读 gyroStore.gyroGuideAngle：宿主随传感器事件写 store，组件以 @ObjectLink 实时跟转。
 @Component
 export struct GyroTargetGuide {

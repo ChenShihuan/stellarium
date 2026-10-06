@@ -1,15 +1,9 @@
-// LX200 望远镜编辑器 / 控制命令行为控制器（STATE-REVIEW §10.2 D9，PLAN §15 D 轨道 D9）。
+// LX200 望远镜编辑器 / 控制命令行为控制器：负责档位编辑、协议与端点配置、
+// 连接测试、Goto/Sync/Abort 与指向读取。
 //
-// 原宿主 MainWindowNativeNode 的 12 个望远镜编辑器/控制方法逐字下沉：
-//   validateTelescopeEditorStatus / selectTelescopeProfile / beginNewTelescopeProfile /
-//   selectTelescopeProtocol / saveTelescopeProfile / deleteTelescopeProfile / testTelescopeConnection /
-//   applyLx200Result（私有助手）/ lx200GotoSelected / lx200SyncSelected / lx200Abort /
-//   readTelescopePosition。
-//
-// **不 import NAPI/UI**（§15.7 规则 1）：桥经 CommandPort；状态整体写回 TelescopeStore
-//（面板经 @ObjectLink 消费）。live-position 定时器簇早已在 TelescopeStore 自持（§14 B3-4），
-// 本控制器只调用其 start/stop/schedule，不自持定时器。实测 12 法均不调 flashHint / refreshState，
-// 故不注入 BehaviorHostHooks。
+// 不 import NAPI/UI：桥经 CommandPort；状态整体写回 TelescopeStore
+//（面板经 @ObjectLink 消费）。live-position 定时器簇由 TelescopeStore 自持，
+// 本控制器只调用其 start/stop/schedule。各方法均不调 flashHint / refreshState，故无 hooks 注入。
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import {
@@ -28,7 +22,7 @@ export class TelescopeController {
     this.telescopeStore = telescopeStore
   }
 
-  // 原宿主 validateTelescopeEditorStatus()：模拟器直接给本地状态；其余协议向桥查询端点。
+  // 模拟器直接给本地状态；其余协议向桥查询端点。
   validateTelescopeEditorStatus(): void {
     if (this.telescopeStore.lx200Protocol === 'simulated') {
       this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_simulated')
@@ -41,7 +35,7 @@ export class TelescopeController {
     })
   }
 
-  // 原宿主 selectTelescopeProfile()：选择档位并回读配置。
+  // 选择档位并回读配置。
   selectTelescopeProfile(slot: number): void {
     if (slot === this.telescopeStore.lx200SelectedSlot && !this.telescopeStore.lx200EditingNew) return
     this.port.requestInteractive('selectTelescopeProfile', slot.toString(), (result: TelescopeProfilesResponse) => {
@@ -54,7 +48,7 @@ export class TelescopeController {
     })
   }
 
-  // 原宿主 beginNewTelescopeProfile()：寻找空档位并初始化「新建」编辑器草稿。
+  // 寻找空档位并初始化「新建」编辑器草稿。
   beginNewTelescopeProfile(): void {
     this.telescopeStore.stopTelescopeLivePosition(false)
     const used = new Set<number>(this.telescopeStore.lx200Profiles.map((profile: TelescopeProfile) => profile.slot))
@@ -81,7 +75,7 @@ export class TelescopeController {
     this.validateTelescopeEditorStatus()
   }
 
-  // 原宿主 selectTelescopeProtocol()：切换协议并重置端点草稿。
+  // 切换协议并重置端点草稿。
   selectTelescopeProtocol(protocol: string): void {
     if (protocol === this.telescopeStore.lx200Protocol) return
     this.telescopeStore.stopTelescopeLivePosition(false)
@@ -105,7 +99,7 @@ export class TelescopeController {
     this.validateTelescopeEditorStatus()
   }
 
-  // 原宿主 saveTelescopeProfile()：校验并保存档位。
+  // 校验并保存档位。
   saveTelescopeProfile(): void {
     const port = Number(this.telescopeStore.lx200Port.trim())
     const invalidEndpoint = this.telescopeStore.lx200Protocol === 'lx200_tcp' &&
@@ -138,7 +132,7 @@ export class TelescopeController {
     }, () => { this.telescopeStore.lx200Busy = false })
   }
 
-  // 原宿主 deleteTelescopeProfile()：删除当前档位（新建草稿则改为回读）。
+  // 删除当前档位（新建草稿则改为回读）。
   deleteTelescopeProfile(): void {
     if (this.telescopeStore.lx200EditingNew) {
       this.telescopeStore.loadTelescopeControlStatus()
@@ -155,7 +149,7 @@ export class TelescopeController {
     })
   }
 
-  // 原宿主 testTelescopeConnection()：测试连接并安排 live-position 轮询。
+  // 测试连接并安排 live-position 轮询。
   testTelescopeConnection(): void {
     if (this.telescopeStore.lx200EditingNew) {
       this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_test')
@@ -181,7 +175,7 @@ export class TelescopeController {
     })
   }
 
-  // 原宿主 applyLx200Result()：Goto/Sync 回包统一处理（私有助手）。
+  // Goto/Sync 回包统一处理（私有助手）。
   private applyLx200Result(result: StellariumBridgeResponse): void {
     const response = result as TelescopeControlResponse
     this.telescopeStore.lx200Busy = false
@@ -199,7 +193,7 @@ export class TelescopeController {
     this.telescopeStore.scheduleTelescopeLivePosition()
   }
 
-  // 原宿主 lx200GotoSelected/lx200SyncSelected/lx200Abort()：指向/同步/中止当前选中天体。
+  // 指向/同步/中止当前选中天体。
   lx200GotoSelected(): void {
     if (this.telescopeStore.lx200EditingNew) {
       this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
@@ -249,7 +243,7 @@ export class TelescopeController {
     })
   }
 
-  // 原宿主 readTelescopePosition()：读取望远镜指向（center=true 时居中屏幕）。
+  // 读取望远镜指向（center=true 时居中屏幕）。
   readTelescopePosition(center: boolean = false): void {
     if (this.telescopeStore.lx200EditingNew) {
       this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')

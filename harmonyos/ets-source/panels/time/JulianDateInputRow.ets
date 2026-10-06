@@ -4,7 +4,7 @@ import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 // 单行儒略日输入：标签 + 「-」/「+」微调 + 输入框。
 //
 // 独立成组件而不是参数化 @Builder：参数化 @Builder 的简单类型参数按值捕获，
-// 其子树首帧后即冻结，儒略日数值不会随时间刷新（真机实测确认的既有问题）。
+// 其子树首帧后即冻结，儒略日数值不会随时间刷新。
 // 输入框直接读 store，值随引擎同步实时更新。
 @Component
 export struct JulianDateInputRow {
