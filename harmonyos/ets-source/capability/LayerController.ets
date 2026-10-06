@@ -185,7 +185,11 @@ export class LayerController {
         { id: 'actionShow_Constellation_Labels', enabled: true }, { id: 'actionShow_Constellation_Boundaries', enabled: false },
         { id: 'actionShow_Constellation_Art', enabled: false }, { id: 'actionShow_Atmosphere', enabled: false },
         { id: 'actionShow_Ground', enabled: false }, { id: 'actionShow_Fog', enabled: false },
-        { id: 'actionShow_Cardinal_Points', enabled: true }, { id: 'actionShow_Equatorial_Grid', enabled: true },
+        // actionShow_Gridlines 对应 GridLinesMgr::gridlinesDisplayed，是网格与线的**总闸**
+        // （引擎 draw() 里 `if (!gridlinesDisplayed)` 直接返回，单个网格开关全部失效）。
+        // 预设基础表把它置 false，所以这里必须先打开总闸，下面几个网格/线开关才有效。
+        { id: 'actionShow_Cardinal_Points', enabled: true }, { id: 'actionShow_Gridlines', enabled: true },
+        { id: 'actionShow_Equatorial_Grid', enabled: true },
         { id: 'actionShow_Ecliptic_Line', enabled: true }, { id: 'actionShow_Meridian_Line', enabled: true },
         { id: 'actionShow_Horizon_Line', enabled: true }, { id: 'actionShow_FOV_Center_Marker', enabled: true }
       )
