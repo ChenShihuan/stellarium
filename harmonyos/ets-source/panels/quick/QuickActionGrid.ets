@@ -18,8 +18,8 @@ export struct QuickActionGrid {
   }
 
   build() {
-    Column({ space: 10 }) {
-      Row({ space: 8 }) {
+    Column({ space: 6 }) {
+      Row({ space: 4 }) {
         ForEach(this.items.slice(0, QUICK_ACTION_COLUMNS), (item: QuickActionItem) => {
           QuickActionCell({
             item: item,
@@ -31,7 +31,7 @@ export struct QuickActionGrid {
       }
         .width('100%')
         .alignItems(VerticalAlign.Top)
-      Row({ space: 8 }) {
+      Row({ space: 4 }) {
         ForEach(this.items.slice(QUICK_ACTION_COLUMNS, QUICK_ACTION_COLUMNS * 2), (item: QuickActionItem) => {
           QuickActionCell({
             item: item,

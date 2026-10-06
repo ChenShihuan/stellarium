@@ -4376,11 +4376,12 @@ export struct WindowNativeNode {
     const inner = this.isExpandedLayout
       ? this.panelWidth - 36
       : (this.isFoldHoverLayout ? this.skyWidth * 0.64 : this.skyWidth * 0.94) - this.compactPanelHorizontalPadding() * 2
-    return Math.max((inner - 40) / 6, 40)
+    // 分子扣掉 5 个格间隙（QuickActionGrid 的 Row space = 4）。
+    return Math.max((inner - 20) / 6, 40)
   }
 
   private quickPanelContentHeight(): number {
-    const grid = this.quickPanelGridCellSize() * 2 + 10
+    const grid = this.quickPanelGridCellSize() * 2 + 6
     const header = this.timeStore.panelSubtitle(this.activePanel).length > 0 ? 56 : 44
     if (this.isExpandedLayout) {
       // PadPanelHandle 高 17（5 + margin 2 + 10），floatingPanel 内边距 18。

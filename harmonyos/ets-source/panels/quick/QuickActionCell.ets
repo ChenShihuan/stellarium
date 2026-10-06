@@ -41,14 +41,14 @@ export struct QuickActionCell {
       Column() {
         if (this.item.kind === 'raster') {
           Image(getIcon(this.item.icon, false))
-            .width(30)
-            .height(30)
+            .width(38)
+            .height(38)
             .objectFit(ImageFit.Contain)
             .colorFilter(this.isOn ? TINT_ON : TINT_OFF)
         } else {
           Image(getIcon(this.item.icon, false))
-            .width(26)
-            .height(26)
+            .width(34)
+            .height(34)
             .objectFit(ImageFit.Contain)
             .fillColor(this.isOn ? '#EAF7FF' : '#7E8896')
         }
