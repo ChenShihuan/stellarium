@@ -8,7 +8,7 @@ import { I18n } from '../../pages/I18n'
 // CLI 允许的面板名白名单（openUiPanel 命令用）。
 export function isCliPanelName(panel: string): boolean {
   return [
-    'search', 'time', 'place', 'layers', 'more', 'observeHub', 'dataHub', 'automationHub',
+    'search', 'time', 'quick', 'place', 'layers', 'more', 'observeHub', 'dataHub', 'automationHub',
     'observing', 'bookmarks', 'oculars', 'angleMeasure', 'navStars', 'polarScope', 'telescope',
     'astro', 'satellites', 'meteorshowers', 'scenery3d', 'catalogs', 'settings', 'tools',
     'scripts', 'commands', 'audio', 'skyCultureMaker', 'mosaicCamera', 'nebulaTextures', 'help',

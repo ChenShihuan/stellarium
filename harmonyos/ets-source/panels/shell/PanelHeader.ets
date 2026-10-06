@@ -12,6 +12,10 @@ import { getIcon } from '../../common/ui/ShellIcons'
 // 放置「清除坐标与标记」；动作用 ``onHeaderAction`` 注入。
 // ``panel-back`` / ``panel-close`` / ``panel-header-action`` 为跨会话静态 id 锚点。
 
+// ``titleAsButton`` 为真时标题本身渲染为按钮（快捷操作面板用它显示当前位置并跳「位置」面板），
+// 动作经 ``onTitleTap`` 注入。
+// ``panel-back`` / ``panel-close`` / ``panel-header-action`` / ``panel-title-action`` 为跨会话静态 id 锚点。
+
 @Component
 export struct PanelHeader {
   @Prop title: ResourceStr
@@ -20,9 +24,11 @@ export struct PanelHeader {
   @Prop routeOpacity: number
   @Prop routeOffsetX: number
   @Prop headerActionLabel: string = ''
+  @Prop titleAsButton: boolean = false
   onBack: () => void = () => {}
   onClose: () => void = () => {}
   onHeaderAction: () => void = () => {}
+  onTitleTap: () => void = () => {}
 
   build() {
     Row() {
@@ -48,10 +54,37 @@ export struct PanelHeader {
           .margin({ right: 8 })
       }
       Column() {
-        Text(this.title)
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#E5FFFFFF')
+        if (this.titleAsButton) {
+          Button() {
+            Row({ space: 4 }) {
+              Text(this.title)
+                .fontSize(15)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#E5FFFFFF')
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+              Image(getIcon('chevron_right', false))
+                .width(15)
+                .height(15)
+                .fillColor('rgba(184, 228, 255, 0.72)')
+            }
+              .alignItems(VerticalAlign.Center)
+          }
+            .id('panel-title-action')
+            .height(32)
+            .padding({ left: 12, right: 8 })
+            .backgroundColor('rgba(255, 255, 255, 0.06)')
+            .borderRadius(UI_RADIUS_PILL)
+            .zIndex(3)
+            .clickEffect({ level: ClickEffectLevel.LIGHT })
+            .stateStyles({ pressed: { .opacity(0.62) } })
+            .onClick(() => { this.onTitleTap() })
+        } else {
+          Text(this.title)
+            .fontSize(18)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#E5FFFFFF')
+        }
         if (this.subtitle.length > 0) {
           Text(this.subtitle)
             .fontSize(14)

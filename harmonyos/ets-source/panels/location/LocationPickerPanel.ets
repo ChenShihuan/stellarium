@@ -95,6 +95,7 @@ export struct LocationPickerPanel {
     const latitude = 90 - clamp(y, 0, height) / height * 180
     const longitude = clamp(x, 0, width) / width * 360 - 180
     this.pickerStore.setPickerLocation(I18n.t('custom_location'), latitude, longitude, this.pickerStore.locationPickerAltitude, I18n.t('m_map_selected'))
+    this.pickerStore.locationSource = 'map'
     this.locationStore.locSearchQuery = ''
   }
 

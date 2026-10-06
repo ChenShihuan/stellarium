@@ -40,6 +40,9 @@ export class LocationPickerStore {
   locationPickerLongitude: number = 116.4074
   locationPickerAltitude: number = 44
   locationPickerStatus: ResourceStr = I18n.t('m_drag_map_hint')
+  // 位置来源：'gps' 设备定位 / 'map' 地图点选 / 'named' 城市·搜索·预设。快捷操作面板标题按它取值，
+  // 并随 ObserverLocationRecord.source 持久化（见 capability/LocationController.ets）。
+  locationSource: string = 'named'
   locationPickMode: string = 'map'
   observerTimeZone: string = ''
   mapRenderWidth: number = 280
@@ -332,8 +335,32 @@ export class LocationPickerStore {
       name === I18n.t('m_current_location') || name.startsWith('Custom ')) {
       return I18n.t('custom_location')
     }
+    const surface = this.surfaceLocationName(name)
+    if (surface.length > 0) {
+      return surface
+    }
     const translated = this.translateRegion(name)
     return translated === '未收录地点' ? name : translated
+  }
+
+  // 引擎对非地球观测点给 "Mars surface" 这类英文默认名；折到本地化：
+  // 有既有 land_* 键的用键（火星表面 / 月球表面 / 木星表面），其余按星球名加「表面」。
+  private surfaceLocationName(name: string): string {
+    const suffix = ' surface'
+    if (!name.endsWith(suffix)) {
+      return ''
+    }
+    const planet = name.substring(0, name.length - suffix.length)
+    if (planet === 'Mars') {
+      return I18n.t('land_mars')
+    }
+    if (planet === 'Moon') {
+      return I18n.t('land_moon')
+    }
+    if (planet === 'Jupiter') {
+      return I18n.t('land_jupiter')
+    }
+    return ''
   }
 
   locationColumnTitle(kind: string): string {

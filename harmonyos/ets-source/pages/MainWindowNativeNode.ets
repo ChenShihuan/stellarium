@@ -34,9 +34,10 @@ import {
 } from '../common/ui/ChromeGeometry'
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot, gyroMagneticHeadingFromDeviceVectors } from '../common/derive/gyro'
 import { dateToJD, jdToLocalTimeText, graphModeLabel, graphStartOptionLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointColor, hecLayoutPositions, hecPointLeft, hecPointTop, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
-import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle } from '../common/derive/labels'
+import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle, quickLocationLabel } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
+import { quickActionItems } from '../common/derive/quickActions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
 import { objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
@@ -205,6 +206,7 @@ import { NavStarsPanel } from '../panels/panels/NavStarsPanel'
 import { ArchaeoLinesPanel } from '../panels/panels/ArchaeoLinesPanel'
 import { MosaicCameraPanel } from '../panels/panels/MosaicCameraPanel'
 import { MorePanel } from '../panels/panels/MorePanel'
+import { QuickPanel } from '../panels/panels/QuickPanel'
 import { TimePanel } from '../panels/panels/TimePanel'
 import { HelpPanel } from '../panels/panels/HelpPanel'
 import { MeteorShowersPanel } from '../panels/panels/MeteorShowersPanel'
@@ -4335,7 +4337,31 @@ export struct WindowNativeNode {
     return Math.max(this.hoverConsoleTop() + 12, this.skyHeight - 90 - this.compactPanelHeight())
   }
 
+  // 快捷面板高度按内容算（标题栏 + 两行图标），只用于该面板（见 QUICK-ACTIONS-PANEL-PLAN §6）。
+  // 单元格宽由面板内宽均分（QuickActionCell 是 layoutWeight(1) + aspectRatio(1)），所以高度可预知；
+  // 容器高度与内容一致时 Scroll 不会把内容垂直居中，图标就贴着标题栏。
+  private quickPanelGridCellSize(): number {
+    const inner = this.isExpandedLayout
+      ? this.panelWidth - 36
+      : (this.isFoldHoverLayout ? this.skyWidth * 0.64 : this.skyWidth * 0.94) - this.compactPanelHorizontalPadding() * 2
+    return Math.max((inner - 40) / 6, 40)
+  }
+
+  private quickPanelContentHeight(): number {
+    const grid = this.quickPanelGridCellSize() * 2 + 10
+    const header = this.timeStore.panelSubtitle(this.activePanel).length > 0 ? 56 : 44
+    if (this.isExpandedLayout) {
+      // PadPanelHandle 高 17（5 + margin 2 + 10），floatingPanel 内边距 18。
+      return 18 + 17 + header + 14 + grid + 18
+    }
+    // PanelHandle 高 30（28 + margin 2），compactPanel 内边距 top 12 / bottom 16。
+    return 12 + 30 + header + 14 + grid + 16
+  }
+
   private compactPanelHeight(): number {
+    if (this.activePanel === 'quick') {
+      return this.quickPanelContentHeight()
+    }
     const usable = this.compactPanelUsableHeight()
     const minH = usable * 0.6
     const maxH = usable * 0.9
@@ -4363,6 +4389,54 @@ export struct WindowNativeNode {
     // Do not apply a second, stricter size threshold here: the physical Pad
     // reports a 673vp short side in landscape and otherwise loses its rail.
     return this.isExpandedLayout
+  }
+
+  // 快捷面板标题栏文案 = 位置面板「位置」行的同一字符串（引擎轮询在 handleEngineState 里
+  // 按「来源 + 观测星球」持续刷新 locationText），两处显示必须完全一致。
+  private quickPanelLocationLabel(): string {
+    return this.locationText
+  }
+
+  // 快捷操作面板的 12 项当前值（一律读既有 store，与图标表的 id 一一对应）。
+  private quickActionValues(): Record<string, boolean> {
+    return {
+      'constellation_lines': this.layerStore.constellationLines,
+      'constellation_labels': this.layerStore.constellationLabels,
+      'constellation_art': this.layerStore.constellationArt,
+      'equatorial_grid': this.layerStore.equatorialGrid,
+      'azimuthal_grid': this.layerStore.azimuthGrid,
+      'ground': this.layerStore.ground,
+      'atmosphere': this.layerStore.atmosphere,
+      'cardinal_points': this.layerStore.cardinalPoints,
+      'nebulae': this.layerStore.nebulae,
+      'satellites': this.satelliteStore.satHints,
+      'gyroscope': this.gyroStore.gyroscopeEnabled,
+      'night_mode': this.nightModeStore.nightMode
+    }
+  }
+
+  // 快捷操作面板的动作分发：图层 9 项走既有 setLayer，其余三项各走本域既有入口。
+  private quickToggle(id: string, value: boolean): void {
+    if (id === 'satellites') {
+      this.satelliteCtl().setSatelliteFlag('hints', value)
+      return
+    }
+    if (id === 'gyroscope') {
+      this.gyroCtl().toggleGyroscope(value)
+      return
+    }
+    if (id === 'night_mode') {
+      this.nightModeStore.applyNightMode(value, true)
+      return
+    }
+    const items = quickActionItems()
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].id === id) {
+        // 走公开入口 applyLayerSwitch（与图层面板同一路径，附带 已显示/已隐藏 提示）。
+        if (items[i].actionId.length > 0) { this.layerCtl().applyLayerSwitch(items[i].actionId, '', value) }
+        return
+      }
+    }
   }
 
   private canonicalDockActions(): ShellAction[] {
@@ -6067,7 +6141,10 @@ export struct WindowNativeNode {
       this.coordinateText = this.locationStore.formatDegrees(result.latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(result.longitude, 'E', 'W')
       if (result.locationName !== undefined && result.locationName.length > 0) {
         const planetName = result.planetName && result.planetName.length > 0 ? result.planetName : 'Earth'
-        this.locationText = this.locationPickerStore.locationDisplayName(result.locationName) + ' · ' + planetZh(planetName)
+        // 位置名按来源 + 观测星球取值（GPS / 自定义位置 / 名称），与快捷面板标题栏同一规则；
+        // 否则引擎回读的「自定义位置」会把自动定位结果冲掉。
+        this.locationText = quickLocationLabel(this.locationPickerStore.locationSource,
+          this.locationPickerStore.locationDisplayName(result.locationName), planetName) + ' · ' + planetZh(planetName)
       }
       if (result.altitude !== undefined) {
         this.altitudeText = result.altitude.toFixed(0) + ' m'
@@ -6888,12 +6965,14 @@ export struct WindowNativeNode {
         PadPanelHandle()
       }
       PanelHeader({
-        title: panelTitleFor(this.activePanel, this.configTab, this.isExpandedLayout, this.timeStore.timePanelClockText()), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
+        title: panelTitleFor(this.activePanel, this.configTab, this.isExpandedLayout, this.timeStore.timePanelClockText(), this.quickPanelLocationLabel()), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
         routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
         headerActionLabel: this.activePanel === 'layers' ? '清除坐标与标记' : '',
+        titleAsButton: this.activePanel === 'quick',
         onBack: () => { this.handlePanelBackTap() },
         onClose: () => { this.closePanel(true); this.resetPanelIdle() },
-        onHeaderAction: () => { this.layerCtl().clearMarkingLayers() }
+        onHeaderAction: () => { this.layerCtl().clearMarkingLayers() },
+        onTitleTap: () => { this.openSubPanel('place') }
       })
       Scroll(this.widePanelScroller) {
         Column() {
@@ -6918,8 +6997,8 @@ export struct WindowNativeNode {
         .onAppear(() => { this.resetPanelScroll(this.widePanelScroller) })
     }
       .width(this.panelWidth)
-      .height(this.panelMaxHeight)
-      .constraintSize({ maxHeight: this.panelMaxHeight })
+      .height(this.activePanel === 'quick' ? this.quickPanelContentHeight() : this.panelMaxHeight)
+      .constraintSize({ maxHeight: this.activePanel === 'quick' ? this.quickPanelContentHeight() : this.panelMaxHeight })
       .padding({ top: 18, left: 18, right: 18, bottom: 18 })
       .backgroundColor(this.panelIdleGlass ? 'rgba(10, 14, 26, 0.55)' : 'rgba(18, 22, 36, 0.82)')
       .backdropBlur(this.panelIdleGlass ? 45 : 30)
@@ -6945,12 +7024,14 @@ export struct WindowNativeNode {
     Column() {
       PanelHandle({ onDrag: (offsetY: number) => { this.updateCompactPanelDrag(offsetY) }, onDragFinish: () => { this.settleCompactPanelDrag() } })
       PanelHeader({
-        title: panelTitleFor(this.activePanel, this.configTab, this.isExpandedLayout, this.timeStore.timePanelClockText()), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
+        title: panelTitleFor(this.activePanel, this.configTab, this.isExpandedLayout, this.timeStore.timePanelClockText(), this.quickPanelLocationLabel()), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
         routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
         headerActionLabel: this.activePanel === 'layers' ? '清除坐标与标记' : '',
+        titleAsButton: this.activePanel === 'quick',
         onBack: () => { this.handlePanelBackTap() },
         onClose: () => { this.closePanel(true); this.resetPanelIdle() },
-        onHeaderAction: () => { this.layerCtl().clearMarkingLayers() }
+        onHeaderAction: () => { this.layerCtl().clearMarkingLayers() },
+        onTitleTap: () => { this.openSubPanel('place') }
       })
       Scroll(this.compactPanelScroller) {
         Column() {
@@ -6962,7 +7043,7 @@ export struct WindowNativeNode {
             .translate({ x: this.panelRouteOffsetX, y: 0 })
         }
           .width('100%')
-          .padding({ bottom: 34 })
+          .padding({ bottom: this.activePanel === 'quick' ? 0 : 34 })
           .id('panel-content-' + this.i18nLang)
       }
         .width('100%')
@@ -7217,6 +7298,13 @@ export struct WindowNativeNode {
         onLoadObserverInfo: (force: boolean) => { this.locationPickerStore.loadObserverInfo(force) },
         onArtDecodeError: (rawPath: string) => { this.skyCultureCtl().setSkyCultureArtStatus(rawPath, 'decodeFailed') },
         onOpenArtPreview: (art: SkyCultureArtItem) => { this.skyCultureCtl().openSkyCultureArtPreview(art) }
+      })
+    } else if (this.activePanel === 'quick') {
+      QuickPanel({
+        items: quickActionItems(),
+        values: this.quickActionValues(),
+        onToggle: (id: string, value: boolean) => { this.quickToggle(id, value) },
+        onHint: (text: string) => { this.flashHint(text) }
       })
     } else if (this.activePanel === 'pointerCoordinates') {
       PointerCoordinatesPanel({

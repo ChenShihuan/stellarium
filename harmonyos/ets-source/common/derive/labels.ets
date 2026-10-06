@@ -331,10 +331,23 @@ export function timezoneDisplayName(ianaTz: string): string {
   return ianaTz
 }
 
+// 快捷操作面板标题栏的观测点文案（按来源取值，见 QUICK-ACTIONS-PANEL-PLAN.md §11.3）：
+// gps → `GPS`；map → 「自定义位置」；其余 → 名称本身。
+// 不能复用宿主的 locationText —— 它由引擎轮询覆写，会把 `GPS` 冲掉。
+export function quickLocationLabel(source: string, displayName: string, planetName: string = 'Earth'): string {
+  if (source === 'gps' && planetName === 'Earth') {
+    return I18n.t('loc_source_gps')
+  }
+  if (source === 'map') {
+    return I18n.t('custom_location')
+  }
+  return displayName.length > 0 ? displayName : I18n.t('custom_location')
+}
+
 // 面板标题文本（计划 §14.3 A2-5；原宿主 private panelTitle 逐字迁出）。
 // 读宿主控制器状态（activePanel / configTab / isExpandedLayout）与时间面板实时钟文本，
 // 按 §14.8 规则 6 改为显式入参，其余逐字不变。
-export function panelTitleFor(activePanel: string, configTab: number, isExpandedLayout: boolean, timeText: string): ResourceStr {
+export function panelTitleFor(activePanel: string, configTab: number, isExpandedLayout: boolean, timeText: string, locationLabel: string = ''): ResourceStr {
   if (activePanel === 'more') {
     return I18n.t('c_more_functions')
   }
@@ -361,6 +374,10 @@ export function panelTitleFor(activePanel: string, configTab: number, isExpanded
   }
   if (activePanel === 'layers') {
     return I18n.t('i0100')
+  }
+  // 快捷操作面板：标题栏直接显示当前位置（该标题本身是按钮），文案由宿主按来源算好后传入。
+  if (activePanel === 'quick') {
+    return locationLabel.length > 0 ? locationLabel : I18n.t('dock_quick')
   }
   if (activePanel === 'config') {
     return I18n.t('i0273')

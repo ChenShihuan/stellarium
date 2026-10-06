@@ -51,6 +51,7 @@
     "common/derive/gyro.ets",
     "common/derive/labels.ets",
     "common/derive/media.ets",
+    "common/derive/quickActions.ets",
     "common/derive/skycult.ets",
     "common/media/ImageDecoder.ets",
     "common/platform/Clipboard.ets",
@@ -129,6 +130,7 @@
     "panels/panels/ObservingPanel.ets",
     "panels/panels/OcularsPanel.ets",
     "panels/panels/PlacePanel.ets",
+    "panels/panels/QuickPanel.ets",
     "panels/panels/SatellitesPanel.ets",
     "panels/panels/Scenery3dPanel.ets",
     "panels/panels/ScriptsPanel.ets",
@@ -137,6 +139,8 @@
     "panels/panels/SettingsQuickLegacyPanel.ets",
     "panels/panels/TelescopePanel.ets",
     "panels/panels/TimePanel.ets",
+    "panels/quick/QuickActionCell.ets",
+    "panels/quick/QuickActionGrid.ets",
     "panels/satellite/SatelliteGroupSelector.ets",
     "panels/search/CatalogFilterRow.ets",
     "panels/search/SearchBar.ets",
@@ -277,6 +281,7 @@
     "oculars",
     "place",
     "pointerCoordinates",
+    "quick",
     "satellites",
     "scenery3d",
     "scripts",
@@ -301,6 +306,7 @@
     "panel-back",
     "panel-close",
     "panel-header-action",
+    "panel-title-action",
     "polar-scope-center",
     "polar-scope-close",
     "polar-scope-flip-horizontal",
@@ -331,14 +337,15 @@
     "panel-content-",
     "panel-scroll-",
     "plugin-feature-",
+    "quick-action-",
     "recording-share-",
     "search-category-"
   ],
-  "totalIdAnchors": 45,
+  "totalIdAnchors": 47,
   "count": {
-    "panels": 33,
-    "staticIds": 25,
-    "dynamicIdPrefixes": 17,
-    "totalIdAnchors": 45
+    "panels": 34,
+    "staticIds": 26,
+    "dynamicIdPrefixes": 18,
+    "totalIdAnchors": 47
   }
 }

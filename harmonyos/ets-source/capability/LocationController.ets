@@ -7,7 +7,7 @@ import hilog from '@ohos.hilog'
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse, HierCity } from '../pages/StellariumTypes'
 import { ObserverLocationRecord } from '../pages/MainWindowModels'
-import { approximateTimeZoneDisplay, planetZh } from '../common/derive/labels'
+import { approximateTimeZoneDisplay, planetZh, quickLocationLabel } from '../common/derive/labels'
 import { CommandPort } from '../bridge/CommandPort'
 import { LocationPort } from '../bridge/LocationPort'
 import { LocationPickerStore } from '../state/LocationPickerStore'
@@ -107,6 +107,7 @@ export class LocationController {
       if (!this.hooks.privacyAllowed() || !this.hooks.inForeground() || !this.hooks.hasPrivacyConsent()) return
       const altitude = Number.isFinite(current.altitude) ? current.altitude : 0
       this.pickerStore.setPickerLocation(I18n.t('m_current_location'), current.latitude, current.longitude, altitude, I18n.t('m_device_loc_synced'))
+      this.pickerStore.locationSource = 'gps'
       this.applyPickerLocation()
       this.pickerStore.locationPickMode = 'map'
       this.pickerStore.hierContinent = ''
@@ -124,22 +125,24 @@ export class LocationController {
 
   // 应用当前 picker 坐标并延迟刷新时区。
   applyPickerLocation(): void {
-    this.setLocation(this.pickerStore.locationPickerName, this.pickerStore.locationPickerLatitude, this.pickerStore.locationPickerLongitude, this.pickerStore.locationPickerAltitude)
+    // 来源沿用 picker 暂存值（GPS / 地图点选各自设过）；其余经本路径应用的场景默认 named。
+    this.setLocation(this.pickerStore.locationPickerName, this.pickerStore.locationPickerLatitude, this.pickerStore.locationPickerLongitude, this.pickerStore.locationPickerAltitude, 'Earth', false, this.pickerStore.locationSource)
     setTimeout((): void => { this.hooks.loadObserverInfo() }, 500)
   }
 
   // 写 picker/观测星球/持久化/头部三行 + setObserverPlanet 分支 +
   // setLocation→setLocationCoords→setLocationByName 三步回退。
-  setLocation(name: string, latitude: number, longitude: number, altitude: number, planet: string = 'Earth', silent: boolean = false): void {
+  setLocation(name: string, latitude: number, longitude: number, altitude: number, planet: string = 'Earth', silent: boolean = false, source: string = 'named'): void {
     const targetPlanet = planet.length > 0 ? planet : 'Earth'
     const currentPlanet = this.sessionToolStore.observerPlanet
     // Update picker UI immediately (non-blocking, gives instant feedback)
     this.pickerStore.setPickerLocation(name, latitude, longitude, altitude, I18n.t('m_synced_to_sky'))
+    this.pickerStore.locationSource = source
     this.hooks.setObserverPlanetCrossStore(targetPlanet)
     // 持久化观测点：GPS / 选点后的位置跨重启保留（否则重启回退引擎默认北京）。
     this.saveObserverLocationToStorage()
-    this.hooks.setLocationTexts(
-      this.pickerStore.locationDisplayName(name) + ' · ' + planetZh(targetPlanet),
+      this.hooks.setLocationTexts(
+        quickLocationLabel(source, this.pickerStore.locationDisplayName(name), targetPlanet) + ' · ' + planetZh(targetPlanet),
       this.locationStore.formatDegrees(latitude, 'N', 'S') + ' / ' + this.locationStore.formatDegrees(longitude, 'E', 'W'),
       altitude.toFixed(0) + ' m')
     this.pickerStore.observerTimeZone = targetPlanet === 'Earth' ? approximateTimeZoneDisplay(longitude) : I18n.t('tz_system')
@@ -207,7 +210,8 @@ export class LocationController {
       latitude: this.pickerStore.locationPickerLatitude,
       longitude: this.pickerStore.locationPickerLongitude,
       altitude: this.pickerStore.locationPickerAltitude,
-      planet: this.sessionToolStore.observerPlanet
+      planet: this.sessionToolStore.observerPlanet,
+      source: this.pickerStore.locationSource
     }
     await this.locationPort.writeObserverLocation(JSON.stringify(rec))
   }
@@ -235,7 +239,9 @@ export class LocationController {
     const planet = typeof rec.planet === 'string' && rec.planet.length > 0 ? rec.planet : 'Earth'
     const name = typeof rec.name === 'string' && rec.name.length > 0 ? rec.name : I18n.t('m_current_location')
     const altitude = Number.isFinite(rec.altitude) ? rec.altitude : 0
+    // 来源随观测点持久化；旧记录没有该字段时回落 named（按名称显示）。
+    const source = typeof rec.source === 'string' && rec.source.length > 0 ? rec.source : 'named'
     hilog.info(0x0000, 'StellariumArkUI', '[location] restoring persisted observer location')
-    this.setLocation(name, rec.latitude, rec.longitude, altitude, planet, true)
+    this.setLocation(name, rec.latitude, rec.longitude, altitude, planet, true, source)
   }
 }
