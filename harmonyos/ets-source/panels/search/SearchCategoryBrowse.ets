@@ -120,6 +120,8 @@ export struct SearchCategoryBrowse {
           }
         }.width('100%').padding({ left: 2, right: 6 })
       }.width('100%').height(222).scrollable(ScrollDirection.Vertical).scrollBar(BarState.Auto)
+        // 同 SearchSuggestions：设高后内容少时默认居中，固定顶部对齐。
+        .align(Alignment.TopStart)
         .onReachEnd(() => { this.onLoadMore() })
     }.width('100%')
   }

@@ -53,6 +53,9 @@ export struct SearchSuggestions {
         }.width('100%')
       }.width('100%').height(this.store.searchSuggestions.length > 0 ? 216 : 48)
         .scrollable(ScrollDirection.Vertical).scrollBar(BarState.Auto)
+        // Scroll 设了高度后，子内容小于可视高度时默认居中（结果少时标题与首行之间出现大空档）；
+        // 固定顶部对齐（同 SearchPanel 外层 Scroll 的做法）。
+        .align(Alignment.TopStart)
     }
       .width('100%').padding(8).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
   }
