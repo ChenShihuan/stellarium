@@ -7,19 +7,16 @@ import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES, PROJECTION_KEYS } from '..
 import { CatalogHealthEntry } from '../../pages/MainWindowModels'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { GyroStore } from '../../state/GyroStore'
-import { OverlayStore } from '../../state/OverlayStore'
 import { NightModeStore } from '../../state/NightModeStore'
 import { TelescopeStore } from '../../state/TelescopeStore'
 import { SkyCultureViewStore } from '../../state/SkyCultureViewStore'
 import { ViewSettingsStore } from '../../state/ViewSettingsStore'
 import { DevicePrivacySection } from '../settings/DeviceAndLanguageRows'
-import { ViewCoordinateSettings } from '../view/ViewCoordinateSettings'
 import { LayerSwitchRow } from '../layers/LayerSwitchRow'
 
 @Component
 export struct SettingsQuickLegacyPanel {
   @ObjectLink gyroStore: GyroStore
-  @ObjectLink overlayStore: OverlayStore
   @ObjectLink nightModeStore: NightModeStore
   @ObjectLink telescopeStore: TelescopeStore
   @ObjectLink skyCultureViewStore: SkyCultureViewStore
@@ -38,9 +35,6 @@ export struct SettingsQuickLegacyPanel {
   @Prop lineColor: string
   onToggleGyroscope: (v: boolean) => void = () => {}
   onRevoke: () => void = () => {}
-  onToggleVisible: (visible: boolean) => void = () => {}
-  onSelectFamily: (family: string) => void = () => {}
-  onSelectEpoch: (epoch: string) => void = () => {}
   onApplyLayerSwitch: (actionId: string, cmd: string, value: boolean) => void = () => {}
   onSpeedDown: () => void = () => {}
   onTogglePause: () => void = () => {}
@@ -61,21 +55,6 @@ export struct SettingsQuickLegacyPanel {
             .width('100%').height(0.5)
             .backgroundColor(this.lineColor)
             .margin({ top: 6, bottom: 8 })
-            ViewCoordinateSettings({
-              store: this.overlayStore,
-              textColor: this.textColor,
-              subColor: this.subColor,
-              accentColor: this.accentColor,
-              panelColor: this.panelColor,
-              lineColor: this.lineColor,
-              onToggleVisible: (visible: boolean) => { this.onToggleVisible(visible) },
-              onSelectFamily: (family: string) => { this.onSelectFamily(family) },
-              onSelectEpoch: (epoch: string) => { this.onSelectEpoch(epoch) }
-            })
-          Row()
-            .width('100%').height(0.5)
-            .backgroundColor(this.lineColor)
-            .margin({ top: 2, bottom: 8 })
           Text('内置数据目录').fontSize(13).fontColor(this.textColor).width('100%').margin({ top: 4, bottom: 8 })
           Column({ space: 4 }) {
             Text(this.catalogHealthTextOf('卫星目录', this.satelliteCatalogHealth)).fontSize(12).fontColor(this.catalogHealthColorOf(this.satelliteCatalogHealth)).maxLines(2)

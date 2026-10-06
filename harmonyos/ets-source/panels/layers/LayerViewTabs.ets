@@ -2,9 +2,11 @@ import { LandscapeItem } from '../../pages/StellariumTypes'
 import { I18n } from '../../pages/I18n'
 import { LayerStore } from '../../state/LayerStore'
 import { LayerViewStore } from '../../state/LayerViewStore'
+import { OverlayStore } from '../../state/OverlayStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { LayerSwitchRow } from './LayerSwitchRow'
 import { ObservationAidBlock } from './ObservationAidBlock'
+import { ViewCoordinateSettings } from '../view/ViewCoordinateSettings'
 
 // 本组件文件：「图层」面板六个视图标签页（天空 / 太阳系天体 / 深空天体 /
 // 标记与网格 / 地景 / 巡天）。
@@ -376,6 +378,7 @@ export struct LayerDsoTab {
 export struct LayerMarkingsTab {
   @ObjectLink layerStore: LayerStore
   @ObjectLink layerViewStore: LayerViewStore
+  @ObjectLink overlayStore: OverlayStore
   @Prop textColor: string
   @Prop subColor: string
   @Prop accentColor: string
@@ -383,6 +386,9 @@ export struct LayerMarkingsTab {
   @Prop cardBorder: string
   onToggleLayer: (actionId: string, cmd: string, value: boolean) => void = () => {}
   onSetFovMarker: (setting: string, value: number) => void = () => {}
+  onToggleViewCoordinates: (visible: boolean) => void = () => {}
+  onSelectViewCoordinateFamily: (family: string) => void = () => {}
+  onSelectViewEquatorialEpoch: (epoch: string) => void = () => {}
 
   build() {
     Column({ space: 0 }) {
@@ -528,6 +534,22 @@ export struct LayerMarkingsTab {
       LayerSwitchRow({ label: I18n.t('s0517'), isOn: this.layerStore.umbraCenter, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Umbra_Center_Point', '', value) } })
       LayerSwitchRow({ label: I18n.t('s0518'), isOn: this.layerStore.longitudeLine, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Longitude_Line', '', value) } })
       LayerSwitchRow({ label: I18n.t('s0519'), isOn: this.layerStore.quadratureLine, onToggle: (value: boolean) => { this.onToggleLayer('actionShow_Quadrature_Line', '', value) } })
+      // 视场中心坐标（自「设置 > 设备」迁入，自带标题）。
+      Row()
+        .width('100%').height(0.5)
+        .backgroundColor(this.cardBorder)
+        .margin({ top: 6, bottom: 4 })
+      ViewCoordinateSettings({
+        store: this.overlayStore,
+        textColor: this.textColor,
+        subColor: this.subColor,
+        accentColor: this.accentColor,
+        panelColor: this.panelColor,
+        lineColor: this.cardBorder,
+        onToggleVisible: (visible: boolean) => { this.onToggleViewCoordinates(visible) },
+        onSelectFamily: (family: string) => { this.onSelectViewCoordinateFamily(family) },
+        onSelectEpoch: (epoch: string) => { this.onSelectViewEquatorialEpoch(epoch) }
+      })
     }.width('100%')
   }
 }
