@@ -1,3 +1,21 @@
+## [2026-10-06] DevEco Code - 四个真机验收缺陷修复（返回两次确认 / 选取去掉重复对勾 / 绘画叠层穿透与返回 / 网格总闸联动）
+
+- **依据（用户真机走查报告）**：① 主界面单次返回即退出，夜间误触会打断暗视觉适应，改为两次确认退出；② 观测位置「按地区选」的 大洲-国家/地区-地区-城市 列表里，选中行已高亮却又多出一个对勾；③ 图层面板 → 文化 →「文化星座绘图」的离线绘图预览叠层：点右上关闭按钮会穿透到底层陀螺仪按钮（手机端），且按返回键直接回到桌面而非只关闭叠层；④「全部网格标记」总闸关闭时，重新打开任一单项标记看似无效。
+- **修改文件（6 改，全 CRLF）**：`pages/MainWindowNativeNode.ets`、`capability/LayerController.ets`、`common/ui/HierColumn.ets`、`panels/overlay/SkyCultureArtPreviewOverlay.ets`、`panels/overlay/ObjectInspectorMediaPreviewOverlay.ets`、`capability/I18n.ets`。
+- **① 返回两次确认**：新增常量 `HOME_BACK_CONFIRM_MS = 2500` 与宿主字段 `lastHomeBackAt`；`onRequestBack` 重写为**由外到内的叠层链** —— 全屏媒体预览 → 模型沉浸 → 星座绘画预览 → 信息窗 → 极轴镜 → 面板（`handlePanelBackTap`）→ 主界面；主界面分支进入新增 `handleHomeBackConfirm`：距上次返回 2500ms 内再按则 `terminateSelf()`，否则 `flashHint(I18n.t('back_again_to_exit'))`。`publishBackConsumable` 改为恒 `true`，使主界面也接管返回键。
+- **② 去掉重复对勾**：`HierColumn`（位置面板四列 + 图层面板层级列共用）删除选中行行尾的 `✓` Text 块 —— 整行高亮已表达选中态。
+- **③ 绘画叠层**：两个全屏叠层根容器的 `hitTestBehavior` 由 `HitTestMode.Transparent` 改为 `HitTestMode.Default`。`Transparent` 表示「自身及子节点响应、但**不阻塞兄弟节点**」，故点叠层内的关闭按钮仍会命中下层宿主按钮（手机端即右上角陀螺仪按钮）；`Default` 只阻塞兄弟节点、子节点照常响应。返回键方面，绘画预览的关闭已并入 ① 的叠层链（`closeSkyCultureArtPreview`），单次返回只关叠层、应用与面板保留。
+- **④ 网格总闸联动**：`actionShow_Gridlines` 是 `GridLinesMgr` 的总闸（引擎 `draw()` 内 `if (!gridlinesDisplayed) return;`），总闸关闭时单项标记即使置 true 也不绘制。`LayerController` 新增常量 `GRIDLINES_MASTER_ACTION = 'actionShow_Gridlines'`，`applyLayerSwitch` 在「设为开 + 目标本身不是总闸 + 目标属 `MARKING_LAYER_ACTION_IDS`」时先联动 `setLayer(GRIDLINES_MASTER_ACTION, true)`。
+- **新增文案**：`capability/I18n.ets` 增 `back_again_to_exit`（10 语言）；其余零新增 key。
+- **验证**：`arkts_check` 6 文件 0 error；`BUILD SUCCESSFUL in 23s`（改动后两次构建均成功）；契约 `intact`（47 锚点 / 34 面板 / 26 静态 id / 18 动态前缀 / 255+ 文件）。
+- **真机（192.168.3.95:36717）**：
+  - ①：主界面连续单次返回后应用进程仍在（PID 64928，`aa dump -l` mission 在列）；2500ms 内双击返回 → 进程消失（`GONE`）。提示经既有 `flashHint` 通道（定义 :6290）。
+  - ②：位置 →「按地区选」→ 大洲/国家地区/地区/城市 列表现身，点「亚洲」行 → 行高亮，`ui layout` 全树 **0 个 ✓ 节点**。
+  - ③：图层面板 → 文化 → 点「天鹰座」卡片 → 绘画叠层（标题「天鹰座」+「离线文化绘图」+ 右上 ✕）打开；单次返回 → 叠层关闭、图层面板仍在、应用存活（= 只关叠层）；重开叠层后点右上 ✕（1089,210）→ 叠层关闭、应用存活、右上陀螺仪按钮外观与基线一致（未穿透）。
+  - ④：基线置 `actionShow_Gridlines=false`、`actionShow_Equatorial_Grid=false`；点快捷面板 `quick-action-equatorial_grid` 格 → `getState` 回读单项 `true` **且总闸 `actionShow_Gridlines` 自动变 `true`**。
+  - 测试期间改动的两个网格标志已复原为 `false`；期间还点开过星座绘画预览与位置列表，未改其它持久化设置。
+- **备注**：本条为四个修复点的汇总记录；四个修复按点分四次提交（返回链路 / 层级列表对勾 / 全屏叠层穿透 / 网格总闸联动）。
+
 ## [2026-10-06] DevEco Code - 快捷操作面板（Dock 中间入口）+ 位置入口迁入更多功能
 
 - **依据（用户要求）**：① Dock 中间按钮由「位置」改为 **2×6 = 12 个图标开关**的「快捷操作」面板；② 图标用 Stellarium **官方** `data/gui/bt*-off.png`，ON 态按移动端做法 = **用「灭」图标着色高亮**（不用官方 `-on`）；③ 「位置」入口迁到更多功能的**工作区组**（观测工作区与天体数据与扩展之间）；④ 面板标题栏显示当前位置，**该显示框本身是按钮**，点按跳位置设置；文案按来源取值（GPS → `GPS`，地图点选 → 「自定义位置」，其余 → 名称）。设计与切片记录：`docs/harmonyos/research/QUICK-ACTIONS-PANEL-PLAN.md`（含 §12 实施结果）。
