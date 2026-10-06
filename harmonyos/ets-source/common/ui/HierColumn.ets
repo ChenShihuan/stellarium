@@ -45,16 +45,6 @@ export struct HierColumn {
                   .textOverflow({ overflow: TextOverflow.Clip })
                   .textAlign(TextAlign.Center)
                   .lineHeight(15)
-                if (this.selected === item) {
-                  Text('✓')
-                    .fontSize(10)
-                    .fontColor('#FFFFFF')
-                    .fontWeight(FontWeight.Bold)
-                    .width(16)
-                    .height(16)
-                    .textAlign(TextAlign.Center)
-                    .align(Alignment.End)
-                }
               }
                 .width('100%')
                 .height(42)
