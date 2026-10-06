@@ -1,3 +1,12 @@
+## [2026-10-06] DevEco Code - 「视场中心坐标」自 设置>设备 迁入 图层>标记
+
+- **依据（用户要求）**：把「更多 > 设置 > 设备」里的「视场中心坐标」区块改放到「图层 > 标记」。
+- **修改文件（5 改）**：`panels/layers/LayerViewTabs.ets`、`panels/panels/LayersPanel.ets`、`panels/panels/SettingsPanel.ets`、`panels/panels/SettingsQuickLegacyPanel.ets`、`pages/MainWindowNativeNode.ets`。
+- **迁入点**：`LayerViewTabs.ets` 的 `LayerMarkingsTab` 末尾追加一条分隔线 + `ViewCoordinateSettings`（该组件自带「视场中心坐标」标题、屏幕显示开关、三档坐标系与两档历元），并新增 `@ObjectLink overlayStore` 与 `onToggleViewCoordinates` / `onSelectViewCoordinateFamily` / `onSelectViewEquatorialEpoch` 三个回调；`LayersPanel` 同步加 `overlayStore` + 三回调并透传。
+- **迁出点**：`SettingsPanel.ets` 的 `configTab === -1`（设备与隐私）删掉分隔线与 `ViewCoordinateSettings`，连同只服务它的三个 props 与 import；`SettingsQuickLegacyPanel.ets`（快捷设置 · 旧版）同样删掉该区块，并把只服务它的 `@ObjectLink overlayStore` 与 `OverlayStore` import 一并移除。宿主两处（`SettingsPanel` / `SettingsQuickLegacyPanel`）的 `setViewCoordinatesVisible/Family/Epoch` 与 `onToggleVisible/onSelectFamily/onSelectEpoch` 接线删除，改接到 `LayersPanel`。
+- **行为不变**：仍走 `ViewCoordinateController` 的三个入口（要同步定时器与 `saveAppSettings`），`ViewCoordinateSettings` 组件本身未改一字。
+- **验证**：`arkts_check` 5 文件 0 error；`BUILD SUCCESSFUL in 32s`；契约 `intact`（47 锚点 / 34 面板 / 26 静态 id / 18 动态前缀，无增删）；真机（192.168.3.95:36717）用户走查通过。
+
 ## [2026-10-06] DevEco Code - 快捷面板图标与「开」态选框放大、格间空隙收紧
 
 - **依据（用户要求）**：快捷操作面板的图标与「开」态选框再放大一些，格与格之间的空隙留少一些。

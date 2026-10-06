@@ -27,7 +27,6 @@ import { EphemerisToggleRow, InformationModeButton, InformationSwitchRow, Naviga
 import { LanguageRow, DevicePrivacySection } from '../settings/DeviceAndLanguageRows'
 import { TimeSettingsSection } from '../settings/TimeSettingsSection'
 import { DeltaTSettingsBlock } from '../time/DeltaTSettingsBlock'
-import { ViewCoordinateSettings } from '../view/ViewCoordinateSettings'
 import { sensZh, pluginZh, pluginDesc, pluginFeatureRoute, resourceText, scriptZh, scriptDesc } from '../../common/derive/labels'
 import { configDitheringLabel } from '../../common/derive/skycult'
 
@@ -74,9 +73,6 @@ export struct SettingsPanel {
   scriptSourceLine: (filename: string) => string = () => ''
   hasSelectedObject: () => boolean = () => false
   selectConfigTab: (tabId: number) => void = () => {}
-  setViewCoordinatesVisible: (visible: boolean) => void = () => {}
-  setViewCoordinateFamily: (family: string) => void = () => {}
-  setViewEquatorialEpoch: (epoch: string) => void = () => {}
   setLanguage: (lang: string) => void = () => {}
   setEphemerisEnabled: (key: string, available: boolean, enabled: boolean) => void = () => {}
   setDistanceUnit: (useMetric: boolean) => void = () => {}
@@ -140,18 +136,6 @@ export struct SettingsPanel {
         Column({ space: 0 }) {
           if (this.configTab === -1) {
             DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.textColor, subColor: this.subColor, onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
-            Row().width('100%').height(0.5).backgroundColor(this.lineColor).margin({ top: 10, bottom: 10 })
-          ViewCoordinateSettings({
-            store: this.overlayStore,
-            textColor: this.textColor,
-            subColor: this.subColor,
-            accentColor: this.accentColor,
-            panelColor: this.panelColor,
-            lineColor: this.lineColor,
-            onToggleVisible: (visible: boolean) => { this.setViewCoordinatesVisible(visible) },
-            onSelectFamily: (family: string) => { this.setViewCoordinateFamily(family) },
-            onSelectEpoch: (epoch: string) => { this.setViewEquatorialEpoch(epoch) }
-          })
           } else if (this.configTab === 0) {
             LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
             Text('行星历表').fontSize(12).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 4 })

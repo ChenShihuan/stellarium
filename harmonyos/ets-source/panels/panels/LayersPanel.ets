@@ -4,6 +4,7 @@ import { ConfigurationOption, OFFLINE_APPGALLERY_BUILD } from '../../pages/MainW
 import { AtmosphereStore } from '../../state/AtmosphereStore'
 import { LayerStore } from '../../state/LayerStore'
 import { LayerViewStore } from '../../state/LayerViewStore'
+import { OverlayStore } from '../../state/OverlayStore'
 import { SkyCultureSettingsStore } from '../../state/SkyCultureSettingsStore'
 import { SkyCultureViewStore } from '../../state/SkyCultureViewStore'
 import { LayerPresetBar } from '../layers/LayerPresetBar'
@@ -24,6 +25,7 @@ import { SkyCultureViewTab } from '../skyculture/SkyCultureViewTab'
 export struct LayersPanel {
   @ObjectLink layerStore: LayerStore
   @ObjectLink layerViewStore: LayerViewStore
+  @ObjectLink overlayStore: OverlayStore
   @ObjectLink skyCultureViewStore: SkyCultureViewStore
   @ObjectLink skyCultureSettingsStore: SkyCultureSettingsStore
   @ObjectLink atmosphereStore: AtmosphereStore
@@ -67,6 +69,9 @@ export struct LayersPanel {
   onApplyTrailColor: () => void = () => {}
   onTriggerAction: (actionId: string) => void = () => {}
   onSetFovMarker: (setting: string, value: number) => void = () => {}
+  onToggleViewCoordinates: (visible: boolean) => void = () => {}
+  onSelectViewCoordinateFamily: (family: string) => void = () => {}
+  onSelectViewEquatorialEpoch: (epoch: string) => void = () => {}
   onSetLandscapeFadeWithZoom: (isOn: boolean) => void = () => {}
   onImportLandscape: () => void = () => {}
   onSelectLandscape: (id: string, name: string) => void = () => {}
@@ -152,13 +157,17 @@ export struct LayersPanel {
             LayerMarkingsTab({
               layerStore: this.layerStore,
               layerViewStore: this.layerViewStore,
+              overlayStore: this.overlayStore,
               textColor: this.textColor,
               subColor: this.subColor,
               accentColor: this.accentColor,
               panelColor: this.panelColor,
               cardBorder: this.cardBorder,
               onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.onToggleLayer(actionId, cmd, value) },
-              onSetFovMarker: (setting: string, value: number) => { this.onSetFovMarker(setting, value) }
+              onSetFovMarker: (setting: string, value: number) => { this.onSetFovMarker(setting, value) },
+              onToggleViewCoordinates: (visible: boolean) => { this.onToggleViewCoordinates(visible) },
+              onSelectViewCoordinateFamily: (family: string) => { this.onSelectViewCoordinateFamily(family) },
+              onSelectViewEquatorialEpoch: (epoch: string) => { this.onSelectViewEquatorialEpoch(epoch) }
             })
           } else if (this.viewTab === 4) {
             LayerLandscapeTab({
