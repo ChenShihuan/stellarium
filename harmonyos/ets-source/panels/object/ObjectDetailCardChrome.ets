@@ -61,11 +61,12 @@ export struct ObjectDetailCardHeader {
         .width('100%').padding({ left: 16, right: 16, top: 3, bottom: 7 })
 
       Row() {
-        Text('实时高度 / 方位').fontSize(10).fontColor('#8FBBD6').width(72)
+        // 标签不再固定 72 宽（原宽度让 9 字标签自身被截断）；并移除冗余的"已定位/等待定位"标签
+        //（数值本身已含方位/高度，该标签只挤占宽度导致数值被省略号截断）。
+        Text('实时高度 / 方位').fontSize(10).fontColor('#8FBBD6')
         Text(this.store.selectedCoordAlt.length > 0 ? this.store.selectedCoordAlt : '--')
           .fontSize(11).fontColor('#E2F5FF').layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.store.selectedCoordAlt.length > 0 ? '已定位' : '等待定位')
-          .fontSize(10).fontColor('#BDE8FF').margin({ left: 8 })
+          .margin({ left: 6 })
       }
         .height(24).width('100%').padding({ left: 16, right: 16, bottom: 4 })
 
