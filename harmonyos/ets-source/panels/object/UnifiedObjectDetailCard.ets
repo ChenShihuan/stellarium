@@ -26,6 +26,8 @@ export struct UnifiedObjectDetailCard {
   @Prop speechStatus: string
   @Prop inObservingList: boolean
   @Prop iconName: string
+  @Prop detailDisplayMode: string
+  @Prop observeExpanded: boolean
   @Prop distanceText: string
   @Prop distanceSummaryText: string
   @Prop imageHeight: number
@@ -48,6 +50,9 @@ export struct UnifiedObjectDetailCard {
   typeOf: (type: string) => string = () => ''
   onDragTouch: (event: TouchEvent) => void = () => {}
   onDismiss: () => void = () => {}
+  onCenterObject: () => void = () => {}
+  onExpandObserve: () => void = () => {}
+  onCollapseObserve: () => void = () => {}
   onSelectTab: (index: number) => void = () => {}
   onLoadPasses: () => void = () => {}
   onMediaOpen: () => void = () => {}
@@ -61,72 +66,83 @@ export struct UnifiedObjectDetailCard {
   onReselect: () => void = () => {}
   onSpeak: () => void = () => {}
 
+  // 观测极简形态：只有页头会渲染（页签栏 + 分隔线 + 滚动区整体不渲染）。
+  private observeCompact(): boolean {
+    return this.detailDisplayMode === 'observe' && !this.observeExpanded
+  }
+
   build() {
     Column() {
       ObjectDetailCardHeader({
         store: this.store, iconName: this.iconName, liveInfoVisible: this.liveInfoVisible,
+        detailDisplayMode: this.detailDisplayMode, observeExpanded: this.observeExpanded,
         // 距离摘要的可见性/回退由宿主决定（`distanceSummaryText`）；两个实参在页头内直接读
         // `@ObjectLink store`，仅用于建立元素级依赖，使切换天体时该摘要会重算。
         distanceSummary: (_distance: string, _compact: string) => this.distanceSummaryText,
         nameOf: this.nameOf, typeOf: this.typeOf,
-        onDragTouch: (event: TouchEvent) => { this.onDragTouch(event) }, onDismiss: () => { this.onDismiss() }
+        onDragTouch: (event: TouchEvent) => { this.onDragTouch(event) }, onDismiss: () => { this.onDismiss() },
+        onCenterObject: () => { this.onCenterObject() },
+        onExpandObserve: () => { this.onExpandObserve() },
+        onCollapseObserve: () => { this.onCollapseObserve() }
       })
 
-      ObjectDetailCardTabs({ activeIndex: this.activeIndex, onSelect: (index: number) => { this.onSelectTab(index) } })
+      if (!this.observeCompact()) {
+        ObjectDetailCardTabs({ activeIndex: this.activeIndex, onSelect: (index: number) => { this.onSelectTab(index) } })
 
-      Divider().color('rgba(91,147,191,0.16)').margin({ left: 16, right: 16 })
+        Divider().color('rgba(91,147,191,0.16)').margin({ left: 16, right: 16 })
 
-      Scroll(this.scroller) {
-        Column({ space: 8 }) {
-          if (this.activeIndex === 0) {
-            ObjectDetailObserveTab({ store: this.store, distanceText: this.distanceText, resolve: this.resolve })
-          } else if (this.activeIndex === 1) {
-            ObjectDetailCoordinateTab({ store: this.store, distanceText: this.distanceText, resolve: this.resolve })
-          } else if (this.activeIndex === 2) {
-            ObjectDetailDataTab({
-              store: this.store, mediaStore: this.mediaStore, tablet: false, distanceText: this.distanceText,
-              iconName: this.iconName, imageHeight: this.imageHeight, inlineModelSize: this.inlineModelSize,
-              modelReady: this.modelReady, modelRendering: this.modelRendering, hasModelTexture: this.hasModelTexture,
-              modelNotice: this.modelNotice, warmupText: this.warmupText, fallbackKind: this.fallbackKind, starColor: this.starColor,
-              satelliteVisible: this.satelliteVisible, tleEpoch: this.tleEpoch, accent: this.accent,
-              cultureVisible: this.cultureVisible, textColor: this.textColor,
-              resolve: this.resolve,
-              onLoadPasses: () => { this.onLoadPasses() }, onMediaOpen: () => { this.onMediaOpen() },
-              onMediaRetry: () => { this.onMediaRetry() }, onModelExpand: () => { this.onModelExpand() },
-              onModelTouch: (event: TouchEvent) => { this.onModelTouch(event) }
-            })
-          } else {
-            ObjectDetailActionsTab({
-              viewLock: this.viewLock,
-              speechStatus: this.speechStatus,
-              inObservingList: this.inObservingList,
-              onCenter: () => { this.onCenter() },
-              onToggleLock: () => { this.onToggleLock() },
-              onToggleObserving: () => { this.onToggleObserving() },
-              onRefresh: () => { this.onRefresh() },
-              onReselect: () => { this.onReselect() },
-              onSpeak: () => { this.onSpeak() }
-            })
+        Scroll(this.scroller) {
+          Column({ space: 8 }) {
+            if (this.activeIndex === 0) {
+              ObjectDetailObserveTab({ store: this.store, distanceText: this.distanceText, resolve: this.resolve })
+            } else if (this.activeIndex === 1) {
+              ObjectDetailCoordinateTab({ store: this.store, distanceText: this.distanceText, resolve: this.resolve })
+            } else if (this.activeIndex === 2) {
+              ObjectDetailDataTab({
+                store: this.store, mediaStore: this.mediaStore, tablet: false, distanceText: this.distanceText,
+                iconName: this.iconName, imageHeight: this.imageHeight, inlineModelSize: this.inlineModelSize,
+                modelReady: this.modelReady, modelRendering: this.modelRendering, hasModelTexture: this.hasModelTexture,
+                modelNotice: this.modelNotice, warmupText: this.warmupText, fallbackKind: this.fallbackKind, starColor: this.starColor,
+                satelliteVisible: this.satelliteVisible, tleEpoch: this.tleEpoch, accent: this.accent,
+                cultureVisible: this.cultureVisible, textColor: this.textColor,
+                resolve: this.resolve,
+                onLoadPasses: () => { this.onLoadPasses() }, onMediaOpen: () => { this.onMediaOpen() },
+                onMediaRetry: () => { this.onMediaRetry() }, onModelExpand: () => { this.onModelExpand() },
+                onModelTouch: (event: TouchEvent) => { this.onModelTouch(event) }
+              })
+            } else {
+              ObjectDetailActionsTab({
+                viewLock: this.viewLock,
+                speechStatus: this.speechStatus,
+                inObservingList: this.inObservingList,
+                onCenter: () => { this.onCenter() },
+                onToggleLock: () => { this.onToggleLock() },
+                onToggleObserving: () => { this.onToggleObserving() },
+                onRefresh: () => { this.onRefresh() },
+                onReselect: () => { this.onReselect() },
+                onSpeak: () => { this.onSpeak() }
+              })
+            }
           }
+            .width('100%').padding({ left: 16, right: 16, top: 10, bottom: 10 })
         }
-          .width('100%').padding({ left: 16, right: 16, top: 10, bottom: 10 })
+          .scrollable(ScrollDirection.Vertical)
+          .scrollBar(BarState.Auto)
+          .width('100%')
+          .layoutWeight(1)
+          .opacity(this.contentOpacity)
+          .translate({ x: this.contentTranslateX, y: 0 })
+          .id('object-detail-content-scroll')
+          .onScroll(() => {
+            AppStorage.setOrCreate('stellariumObjectDetailScrollY', this.scroller.currentOffset()?.yOffset ?? 0)
+          })
+          .onAreaChange((_oldArea: Area, newArea: Area) => {
+            const height = Number(newArea.height)
+            if (Number.isFinite(height) && height > 0 && Math.abs(height - this.mediaStore.objectInspectorMediaViewportHeight) > 1) {
+              this.mediaStore.objectInspectorMediaViewportHeight = height
+            }
+          })
       }
-        .scrollable(ScrollDirection.Vertical)
-        .scrollBar(BarState.Auto)
-        .width('100%')
-        .layoutWeight(1)
-        .opacity(this.contentOpacity)
-        .translate({ x: this.contentTranslateX, y: 0 })
-        .id('object-detail-content-scroll')
-        .onScroll(() => {
-          AppStorage.setOrCreate('stellariumObjectDetailScrollY', this.scroller.currentOffset()?.yOffset ?? 0)
-        })
-        .onAreaChange((_oldArea: Area, newArea: Area) => {
-          const height = Number(newArea.height)
-          if (Number.isFinite(height) && height > 0 && Math.abs(height - this.mediaStore.objectInspectorMediaViewportHeight) > 1) {
-            this.mediaStore.objectInspectorMediaViewportHeight = height
-          }
-        })
 
     }
       .width(this.cardWidth)

@@ -67,6 +67,8 @@ export struct CompactShell {
   @Prop speechStatus: string
   @Prop inObservingList: boolean
   @Prop iconName: string
+  @Prop detailDisplayMode: string
+  @Prop observeExpanded: boolean
   @Prop distanceText: string
   @Prop distanceSummaryText: string
   @Prop imageHeight: number
@@ -126,6 +128,9 @@ export struct CompactShell {
   onModelExpand: () => void = () => {}
   onModelTouch: (event: TouchEvent) => void = () => {}
   onCenter: () => void = () => {}
+  onCenterObject: () => void = () => {}
+  onExpandObserve: () => void = () => {}
+  onCollapseObserve: () => void = () => {}
   onToggleLock: () => void = () => {}
   onToggleObserving: () => void = () => {}
   onRefresh: () => void = () => {}
@@ -259,6 +264,7 @@ export struct CompactShell {
             viewLock: this.viewLock, speechStatus: this.speechStatus,
             inObservingList: this.inObservingList,
             iconName: this.iconName, distanceText: this.distanceText,
+            detailDisplayMode: this.detailDisplayMode, observeExpanded: this.observeExpanded,
             distanceSummaryText: this.distanceSummaryText,
             imageHeight: this.imageHeight, inlineModelSize: this.inlineModelSize,
             modelReady: this.modelReady, modelRendering: this.modelRendering,
@@ -271,6 +277,9 @@ export struct CompactShell {
             nameOf: (name: string) => this.nameOf(name), typeOf: (type: string) => this.typeOf(type),
             onDragTouch: (event: TouchEvent) => { this.onDragTouch(event) },
             onDismiss: () => { this.onDismiss() },
+            onCenterObject: () => { this.onCenterObject() },
+            onExpandObserve: () => { this.onExpandObserve() },
+            onCollapseObserve: () => { this.onCollapseObserve() },
             onSelectTab: (index: number) => { this.onSelectTab(index) },
             onLoadPasses: () => { this.onLoadPasses() },
             onMediaOpen: () => { this.onMediaOpen() },

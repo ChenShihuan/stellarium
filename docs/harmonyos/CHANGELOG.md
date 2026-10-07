@@ -1,3 +1,22 @@
+## [2026-10-07] DevEco Code - 天体详情卡「观测模式」（极简读数卡 + 展开全量）
+
+- **依据（用户要求）**：按 `docs/harmonyos/specs/OBJECT-DETAIL-OBSERVE-MODE.md`（第 3 版设计稿）实现。用户说明：二期留的 `minimal_hud`（极简信息面板）占位**就是**这份设计描述的能力，不再单独做「极简 HUD」。
+- **修改文件（15 改 / 1 资源改名 / 2 文档）**：`state/InfoWindowStore.ets`、`state/ObjectDetailStore.ets`、`state/OverlayStore.ets`、`panels/object/ObjectDetailCardChrome.ets`、`panels/object/UnifiedObjectDetailCard.ets`、`panels/shell/{CompactShell,ExpandedShell,HoverObservatoryShell}.ets`、`pages/MainWindowNativeNode.ets`、`common/derive/quickActions.ets`、`common/ui/ShellIcons.ets`、`common/types/MainWindowModels.ets`、`capability/I18n.ets`、`panels/panels/SettingsPanel.ets`；`bt_minimal_hud.png` → `bt_observe_mode.png`（`git mv` 改名复用）；
+- **核心决策：极简与信息级别是两条正交轴。** `informationMode`（`all/default/short/none/custom`，C++ 持久化、走桥）是**数据轴**，决定回包字段与全量内容；新增 `detailDisplayMode`（`planetarium` / `observe`，ArkTS preferences 持久化）是**呈现轴**，只决定这张卡默认怎么呈现。观测模式**始终携带全量数据**，所以「展开」能立刻拿到全量 —— 若把极简做成第六个信息级别，回包字段会被裁掉，展开就无内容可显示。
+- **观测极简卡**：页头（名称 / 类型 / ✕）+ 三个 tag（星等 / 星座 / 距离）+ 一行紧凑按钮；实时高度方位行、`SelectedLiveInfoRows`、页签栏、滚动区全部**不渲染**。卡片高度按内容给（26 拖拽柄 + 42 标题行 + 56 三 tag 行 + 28 按钮行 = 152vp），与实测渲染一致。
+- **星等 tag（规格 §4.3）**：标签 `星等(大气消光)`、数值**横向一行** `0.03(0.22)`（括号外 `vmag`、括号内消光后 `vmage`）。拼接助手 `ObjectDetailStore.observeMagnitudeValue()/observeMagnitudeLabel()`；`ObjectCompactMetric` 零改动（label/value 都是它既有 `@Prop`）。消光后星等不可用时回退 `星等` + 单值。
+- **按钮行**：左「◎ 居中」（复用既有 `moveToSelectedObject()` → `moveToSelected` 桥命令，零新增桥）、右「展开 ⤢」；行高 28、无背景色、仅文字+图标。
+- **展开 / 收起**：`observeExpanded` 是**会话内瞬态**（不落盘）。展开后内容与天文馆模式一致，页头 ✕ 左侧多「收起」。切换选中目标（`targetChanged`）、关卡片（`dismissOnObjectInspector`）、切换呈现轴时一律复位 —— 下次选星仍以极简形态出现。
+- **快捷面板入口**：默认网格第 10 格由「卫星提示」换成「观测模式」（规格 §5）。卫星项**未删除**，随三期已有的自定义面板下移到池尾 —— 默认网格不含它，用户可在编辑态拖回；`quickToggle` 里的卫星分支保留（图层面板仍可操作）。池仍 17 项、候选带仍 1 行。
+- **卫星项迁移的副作用（已知）**：**手动提交过**自定义顺序的旧安装会保留自己的顺序（含卫星格），需自行把「观测模式」拖入；全新安装与从未提交过的用户直接得到新默认网格。
+- **设置入口**：`更多 > 设置 > 信息` 的信息级别五按钮**下方**加「极简观测模式」开关行 + 说明文案「详情卡仅显示星等、星座、距离；展开后的全量内容按上方信息级别显示」。与快捷面板格子**同一 store 字段**，两入口实时同步；切换此开关不改动信息级别按钮的选中态（两轴正交）。
+- **持久化**：新增 store 常量 `INFO_WINDOW_STORE = 'stellarium_info_window'`，key `detailDisplayMode`，缺省 / 读失败回落 `'planetarium'`。切换呈现轴**不调用任何桥**（实测 `hilog` 中 `setInformationSetting` 计数为 0，`infoMode` 不变）。
+- **`minimal_hud` 占位清理**：并入本特性后删除 `OverlayStore.minimalHud`、I18n 键 `quick_minimal_hud` 与池项 `minimal_hud`（避免留下一个没有消费方的死开关）。
+- **新增 3 个 `.id()` 锚点**：`object-detail-observe-center` / `-expand` / `-collapse`（规格 §8.3 建议项，供 CLI / uitest 定位）。契约基线已 `--update`：**34 面板 / 29 静态 id（+3）/ 18 动态前缀 / 50 锚点（+3）**，既有锚点零改名零删除。
+- **I18n 新增 9 键**（`detail_mode_observe` / `detail_observe_magnitude` / `_center` / `_expand` / `_collapse` / `_toggle` / `_hint` / `detail_switched_observe` / `detail_switched_planetarium`），10 语言全补齐。
+- **规格 §9 边界 4 的前提已修正**：`vmage` 是否存在只取决于「目标有星等 + 有气团质量」，与天体类型无关 —— 实测 M31 也返回 `apparentMagnitude`（带括号）。真正回退单值的是 `short` / `none` 级别、custom 掩码关掉星等、以及星座等无星等目标。
+- **验证**：`arkts_check` 0 error；`BUILD SUCCESSFUL`；契约 intact（50/34/29/18）；`check-ohos-i18n.mjs` 0 error；命令目录 358 一致；`test-ohos-information-policy` / `test-ohos-detail-live-values` / `test-ohos-distance-ui` / `verify-ohos-object-details` / `test-ohos-satellite-panel` 全过；资源覆盖审计通过。真机（HUAWEI Mate 80 Pro）：全新安装默认网格第 10 格即 `quick-action-observe_mode`；选织女一（vmag 0.03 / vmage 0.22 / 消光 0.19）显示 `星等(大气消光)` `0.03(0.22)`；展开回归四个页签 + 实时行 + 「收起」；展开后切到天狼星自动回极简；快捷面板切回天文馆卡片立即变全量且**无桥调用**；天文馆模式页头仍为 `星等` / `0.03` 单值（与改造前逐字一致）；设置页开关与快捷面板同步；`short` 级别回退 `星等` / `0.03` 且距离 `--`；杀进程重启仍是观测模式。
+
 ## [2026-10-07] DevEco Code - 快捷操作面板二期（12 格可自定义 · 拖动-替换 · 5 个新按钮）
 
 - **依据（用户要求）**：一期 12 格固定不可改。二期要求「格子数不变、位置不动但可自定义」，并把 5 个已有能力做成按钮放进候选池：赤道仪模式、左右镜像、观测列表、目镜、极简信息面板。同日追加：自定义入口用**铅笔**图标、完成用**勾**图标，均**不出文字**。

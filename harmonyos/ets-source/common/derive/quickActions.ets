@@ -5,7 +5,9 @@
 // polarScope / overlay），故本模块零 store、零桥、零 IO。
 // 动作分发在宿主：QuickPanel.onToggle → 宿主 quickToggle(id, value)。
 //
-// 文案一律复用既有键（与图层面板同词）；二期新增 5 项的键见 docs/harmonyos/research/QUICK-ACTIONS-PANEL-PLAN.md §13.9。
+// 文案一律复用既有键（与图层面板同词）；二期新增项的键见
+// docs/harmonyos/research/QUICK-ACTIONS-PANEL-PLAN.md §13.9，三期观测模式的键见
+// docs/harmonyos/specs/OBJECT-DETAIL-OBSERVE-MODE.md §8.2。
 
 export interface QuickActionItem {
   id: string
@@ -25,11 +27,16 @@ export interface QuickActionItem {
 export const QUICK_ACTION_COLUMNS: number = 6
 export const QUICK_ACTION_SLOTS: number = QUICK_ACTION_COLUMNS * 2
 
-// 全量候选池（17 项 = 一期 12 + 二期 5）。顺序即默认网格顺序：
-// **前 12 项必须与一期逐项一致**，升级后既有观感与肌肉记忆不变。
+// 全量候选池（17 项）。顺序即默认网格顺序：**前 12 项即默认网格**。
+//
+// 三期变更：默认网格第 10 格由「卫星提示」换成「观测模式」开关
+// （specs/OBJECT-DETAIL-OBSERVE-MODE.md §5：模式切换要在快捷面板有一格）。
+// 卫星项**未从代码删除**，只是移出默认 12 项、留在池尾：它仍是图层开关
+// （也可在图层面板操作），且三期已有自定义面板，用户可自行把它拖回网格。
+// 其余 11 项与一期逐项、逐序一致。
 export function quickActionPool(): QuickActionItem[] {
   return [
-    // —— 一期 12 项（顺序不可动）——
+    // —— 一期 12 项（第 10 格已按三期替换为观测模式）——
     { id: 'constellation_lines', labelKey: 's0522', icon: 'bt_constellation_lines', kind: 'raster', type: 'toggle', actionId: 'actionShow_Constellation_Lines', openPanel: '' },
     { id: 'constellation_labels', labelKey: 's0523', icon: 'bt_constellation_labels', kind: 'raster', type: 'toggle', actionId: 'actionShow_Constellation_Labels', openPanel: '' },
     { id: 'constellation_art', labelKey: 's0525', icon: 'bt_constellation_art', kind: 'raster', type: 'toggle', actionId: 'actionShow_Constellation_Art', openPanel: '' },
@@ -39,15 +46,16 @@ export function quickActionPool(): QuickActionItem[] {
     { id: 'atmosphere', labelKey: 's0305', icon: 'bt_atmosphere', kind: 'raster', type: 'toggle', actionId: 'actionShow_Atmosphere', openPanel: '' },
     { id: 'cardinal_points', labelKey: 's0533', icon: 'bt_cardinal_points', kind: 'raster', type: 'toggle', actionId: 'actionShow_Cardinal_Points', openPanel: '' },
     { id: 'nebulae', labelKey: 's0320', icon: 'bt_nebula', kind: 'raster', type: 'toggle', actionId: 'actionShow_Nebulas', openPanel: '' },
-    { id: 'satellites', labelKey: 'plugin_satellites', icon: 'satellite', kind: 'vector', type: 'toggle', actionId: '', openPanel: '' },
+    { id: 'observe_mode', labelKey: 'detail_mode_observe', icon: 'observe_mode', kind: 'raster', type: 'toggle', actionId: '', openPanel: '' },
     { id: 'gyroscope', labelKey: 'i0060', icon: 'gyro', kind: 'vector', type: 'toggle', actionId: '', openPanel: '' },
     { id: 'night_mode', labelKey: 's0300', icon: 'bt_night_view', kind: 'raster', type: 'toggle', actionId: '', openPanel: '' },
-    // —— 二期新增 5 项 ——
+    // —— 二期新增 4 项（默认网格外的候选）——
     { id: 'equatorial_mount', labelKey: 'quick_mount_mode', icon: 'bt_equatorial_mount', kind: 'raster', type: 'toggle', actionId: 'actionSwitch_Equatorial_Mount', openPanel: '' },
     { id: 'flip_horizontal', labelKey: 'quick_flip_horizontal', icon: 'bt_flip_horizontal', kind: 'raster', type: 'toggle', actionId: 'actionHorizontal_Flip', openPanel: '' },
     { id: 'observing_list', labelKey: 'more_observe_list', icon: 'bt_obs_list', kind: 'raster', type: 'entry', actionId: '', openPanel: 'observing' },
     { id: 'oculars', labelKey: 'panel_oculars', icon: 'oculars', kind: 'vector', type: 'entry', actionId: '', openPanel: 'oculars' },
-    { id: 'minimal_hud', labelKey: 'quick_minimal_hud', icon: 'bt_minimal_hud', kind: 'raster', type: 'toggle', actionId: '', openPanel: '' }
+    // —— 三期：卫星提示移出默认网格（保留在池中，用户可在自定义面板里拖回）——
+    { id: 'satellites', labelKey: 'plugin_satellites', icon: 'satellite', kind: 'vector', type: 'toggle', actionId: '', openPanel: '' }
   ]
 }
 
