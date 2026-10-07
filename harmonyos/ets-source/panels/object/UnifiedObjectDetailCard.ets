@@ -1,3 +1,4 @@
+import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
 import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { ObjectMediaStore } from '../../state/ObjectMediaStore'
@@ -67,23 +68,27 @@ export struct UnifiedObjectDetailCard {
   onSpeak: () => void = () => {}
 
   // 观测极简形态：只有页头会渲染（页签栏 + 分隔线 + 滚动区整体不渲染）。
+  // 观测极简形态：页头之后只剩卡片下沿的展开箭头（页签栏 / 实时行 / 滚动区都不渲染）。
   private observeCompact(): boolean {
     return this.detailDisplayMode === 'observe' && !this.observeExpanded
+  }
+
+  // 观测模式（含展开态）：卡片下沿中央渲染一个箭头 —— 收起态向下（展开）、展开态向上（收起）。
+  private observeMode(): boolean {
+    return this.detailDisplayMode === 'observe'
   }
 
   build() {
     Column() {
       ObjectDetailCardHeader({
         store: this.store, iconName: this.iconName, liveInfoVisible: this.liveInfoVisible,
-        detailDisplayMode: this.detailDisplayMode, observeExpanded: this.observeExpanded,
+        detailDisplayMode: this.detailDisplayMode,
         // 距离摘要的可见性/回退由宿主决定（`distanceSummaryText`）；两个实参在页头内直接读
         // `@ObjectLink store`，仅用于建立元素级依赖，使切换天体时该摘要会重算。
         distanceSummary: (_distance: string, _compact: string) => this.distanceSummaryText,
         nameOf: this.nameOf, typeOf: this.typeOf,
         onDragTouch: (event: TouchEvent) => { this.onDragTouch(event) }, onDismiss: () => { this.onDismiss() },
-        onCenterObject: () => { this.onCenterObject() },
-        onExpandObserve: () => { this.onExpandObserve() },
-        onCollapseObserve: () => { this.onCollapseObserve() }
+        onCenterObject: () => { this.onCenterObject() }
       })
 
       if (!this.observeCompact()) {
@@ -142,6 +147,35 @@ export struct UnifiedObjectDetailCard {
               this.mediaStore.objectInspectorMediaViewportHeight = height
             }
           })
+      }
+
+      if (this.observeMode()) {
+        // 展开 / 收起的唯一入口：卡片下沿正中一个大箭头。收起态向下（展开全量），展开态向上（收回极简）。
+        // 放在下沿而非常规按钮行，是因为这两个动作作用于「这张卡的整体形态」，位置固定在下沿最容易被摸到；
+        // 行宽占满卡片，故箭头本身可以画得小，触控区仍然很大。
+        if (this.observeExpanded) {
+          Row() {
+            Text('▲').fontSize(16).fontColor('#8FBBD6')
+          }
+            .width('100%').height(28)
+            .justifyContent(FlexAlign.Center)
+            .id('object-detail-observe-collapse')
+            .accessibilityText(I18n.t('detail_observe_collapse'))
+            .onClick(() => {
+              this.onCollapseObserve()
+            })
+        } else {
+          Row() {
+            Text('▼').fontSize(16).fontColor('#8FBBD6')
+          }
+            .width('100%').height(28)
+            .justifyContent(FlexAlign.Center)
+            .id('object-detail-observe-expand')
+            .accessibilityText(I18n.t('detail_observe_expand'))
+            .onClick(() => {
+              this.onExpandObserve()
+            })
+        }
       }
 
     }
