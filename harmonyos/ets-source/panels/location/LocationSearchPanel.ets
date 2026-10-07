@@ -20,6 +20,12 @@ export struct LocationSearchPanel {
   contextOf: (item: LocSearchItem) => string = () => ''
   onPickItem: (item: LocSearchItem) => void = () => {}
 
+  // 面板打开即预热归一化索引（分块构建）：用户打完字时通常已经建好，
+  // 首次搜索不必再等一遍全表归一化。
+  aboutToAppear(): void {
+    this.store.warmLocationSearchIndex()
+  }
+
   build() {
     Column({ space: 4 }) {
       Row({ space: 6 }) {

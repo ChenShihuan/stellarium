@@ -1,3 +1,14 @@
+## [2026-10-07] DevEco Code - 位置搜索卡顿修复（预归一化索引 + 分块占空比）
+
+- **依据（用户反馈）**：地图选点搜索框输入「临高」要等好几十秒才出结果。
+- **根因（三条叠乘）**：① `locationSearchMatchScore` 对每个候选做 **8 次 `normalizeLocationSearchText`**（7 个主名 + 1 个拼接兜底串），其中 `String.prototype.normalize('NFD')` 加两条正则对全表 8,116 条逐次执行；② `scanLocationSearchChunk` 的调度是「工作 5ms / 睡 16ms」，占空比仅 24%，把总墙钟时间放大约 4 倍；③ 每输入一个字符都从头重扫，无任何缓存。Node 上以真实数据复现：单次全扫 30–40ms（桌面），三点叠乘后即是几十秒。
+- **修改文件（3 改）**：`common/derive/actions.ets`、`state/LocationStore.ets`、`panels/location/LocationSearchPanel.ets`。
+- **① 归一化提速**：`normalizeLocationSearchText` 只在字符串确实含拉丁变音符号或组合记号（`[\u00c0-\u024f\u0300-\u036f]`）时才做 `NFD` 分解 —— CJK 与 ASCII 占绝大多数，跳过后省掉一次整串遍历。新增 `locationSearchScoreNormalized(normalizedQuery, normalizedNames, normalizedText)` 接受已归一化入参；`locationSearchMatchScore` 改为其薄封装，语义逐字不变。
+- **② 预归一化索引**：`LocationStore` 新增 `LocationSearchEntry[]` 索引（每「星球 + 界面语言」一份，键变即失效），把每个地点的 7 个主名与拼接串**只归一化一次**；扫描时每个候选只做 `includes` 比较。建索引复用同一分块预算，不阻塞 UI 线程。
+- **③ 预热**：`LocationSearchPanel.aboutToAppear` 调 `store.warmLocationSearchIndex()` —— 面板一打开就分块建索引，配合输入框 260ms 防抖，用户打完字时通常已建好，首次搜索即命中缓存。
+- **④ 占空比**：分块预算由「5ms 工作 / 16ms 歇」改为「**12ms / 4ms**」（24% → 75%），并抽为 `LOCATION_SEARCH_CHUNK_MS` / `LOCATION_SEARCH_CHUNK_DELAY_MS` / `LOCATION_SEARCH_PUBLISH_MS`。
+- **验证**：`arkts_check` 3 文件 0 error；`BUILD SUCCESSFUL in 33 s`；契约 `intact`（47 锚点 / 34 面板 / 26 静态 id / 18 动态前缀）；`verify-ohos-location-search.mjs` 两条断言全过（8,116 条均有中文名、12 条本地化搜索）。真机（192.168.3.95:36717）用户确认「临高」卡顿已修复。
+
 ## [2026-10-07] DevEco Code - 离线地点表补齐中国市/县（地级行政区全覆盖）
 
 - **依据（用户要求）**：观测位置「按地区选」里中国城市不全（湛江等地级市缺失）。用户定调：**不必到乡镇，到市/县两级即可；地级市（含自治州/地区/盟）必须全含；县级上游列出多少就跟多少**。
