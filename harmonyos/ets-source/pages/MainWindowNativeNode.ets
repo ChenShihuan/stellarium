@@ -3983,8 +3983,11 @@ export struct WindowNativeNode {
       }
       hilog.info(0x0000, 'StellariumArkUI', 'selectAt result: ' + JSON.stringify(result))
       this.applySelectedObject(result, false, '', true)
-      // 「已选中 XX」是纯状态播报，观测时反复点选会刷屏（用户要求去掉）；点了空处仍提示一次。
-      if (result.found !== true) {
+      if (result.found === true) {
+        // 轻量回包只有名称/类型；星等 / 方位 / 距离等动态值立刻单独补一次（见方法注释）。
+        this.refreshSelectedDynamicValues()
+      } else {
+        // 「已选中 XX」是纯状态播报，观测时反复点选会刷屏（用户要求去掉）；点了空处仍提示一次。
         this.flashHint(I18n.t('i0075'))
       }
     })
@@ -4729,6 +4732,34 @@ export struct WindowNativeNode {
   private objectDetailMarkerSize(): number {
     const fov = clamp(this.fovSliderValue > 0 ? this.fovSliderValue : 60, 4, 180)
     return clamp(32 * Math.pow(60 / fov, 0.35), 24, 58)
+  }
+
+  // 只补「动态值」的即时刷新（星等 / 大气消光后星等 / 方位 / 距离 …）。
+  //
+  // 触摸点选的 `selectAt` 回包是**刻意轻量**的：C++ 侧走 `selectedObjectJson(core, false, false)`，
+  // 即 `includeDynamic = false`（卫星的 getInfoMap 会在渲染线程同步算遥测，带上它会拖慢选中绘制），
+  // 所以它只有名称 / 类型 / 媒体字段 —— 星等一类全都不在回包里。
+  //
+  // 原先这些动态值只由 `requestSelectedDetails` 的 550ms 定时器发出，而那条请求带 `details`
+  // （要等结构化字段全量收集完）→ 星等于是排在「550ms + 全量收集」之后才出现，比名称慢一大截。
+  // 这里在选中回包落地后立刻用**同一条命令但不带 details**补一次：动态值随即可用，
+  // 全量结构化字段仍走原来的 550ms 那条路（两者互不覆盖：不带 details 的回包没有 detailFields 键）。
+  private refreshSelectedDynamicValues(): void {
+    // 刻意**不**做 `isDetailRefreshing()` 短路：每次选中都会换 `skySelectionRequestSerial`，上一轮
+    // 180ms 轮询的在途回包本就会被丢弃，不必等它收尾；若等，点选恰好落在轮询在途窗口（约占一次
+    // 180ms 周期的 100ms）时这次补拉会被挡掉，星等又退回 550ms 之后。直接发起并重置守卫即可。
+    const expectedName = this.objectDetailStore.selectedName
+    const selectionSerial = this.skySelectionRequestSerial
+    this.detailConnectorCtl().beginDetailRefresh()
+    this.callInteractive('getSelectedObjectInfo', '', (r) => {
+      this.detailConnectorCtl().endDetailRefresh()
+      if (selectionSerial !== this.skySelectionRequestSerial || expectedName !== this.objectDetailStore.selectedName) {
+        return
+      }
+      this.applySelectedObject(r, true)
+    }, () => {
+      this.detailConnectorCtl().endDetailRefresh()
+    })
   }
 
   private requestSelectedDetails(expectedName: string): void {
