@@ -1,3 +1,16 @@
+## [2026-10-07] DevEco Code - 修性能：选中天体后星等不再比名称晚一族拉
+
+- **依据（用户反馈）**：点星选中后，名称立刻出现，星等 / 距离要等一大截才填上。
+- **根因（两层叠加，都不是「定时器写着玩」）**：
+  1. **桥是入队 + 轮询，天生 ≥1 帧 + 最多 100ms**：ArkUI/JS 线程与 OHOS 渲染泵同线程，off-thread 分支绝不能阻塞（阻塞 → drain 轮不到 → 命令永久超时且整屏冻结），所以交互命令一律「入队 → 返回 `pending` → 下一帧执行 → ArkUI 轮询取回」（consume-on-read）。轮询参数是 `BridgeClient.requestInteractive()` 的 **100ms × 15**（源码注释里的 50ms×40 是过期值）。
+  2. **`selectAt` 回包刻意轻量**：`selectedObjectJson(core, false, false)`（`includeDynamic = false`），因为 `StelObject::getInfoMap()`（尤其卫星 TLE 传播 / 升落 / 遥测）是**渲染线程同步**算的，塞进点选回包会拖慢「选中」本身 —— 所以点选回包**只有名称 / 类型 / 媒体**。
+  3. **合起来的坑**：唯一取动态值的请求是 `requestSelectedDetails()` 的 **550ms 定时器**，且它带 `details`（等结构化字段全量收集，给详情卡四页签用，重得多）；而 180ms 的实时值轮询在这条请求在途时被**显式关掉**（`if (!selectedDetailLoaded && selectedDetailTimer !== 0) return`）。于是星等被排在「550ms + 全量收集 + ≤100ms 轮询」之后。
+  4. **搜索为何不慢**：`searchObject` 走 `selectedObjectJson(core, false)`，`includeDynamic` 默认 **true**，名称与星等在**同一回包**到达 —— 只有点星这条路是轻量回包。
+- **修法**：新增 `refreshSelectedDynamicValues()` —— 选中回包落地后**立刻**补一次不带 `details` 的 `getSelectedObjectInfo`，动态值随即可用；全量结构化字段仍走原来那条 550ms 的路。两者不互相覆盖（不带 `details` 的回包**没有** `detailFields` 键）。刻意**不**做 `isDetailRefreshing()` 短路：每次选中都换 `skySelectionRequestSerial`，上一轮轮询的在途回包本就会被丢弃；若等它收尾，点选恰好落在轮询在途窗口（约占 180ms 周期的 100ms）时补拉会被挡掉。**零 C++ 改动、零新增桥命令**。
+- **文档**：`docs/harmonyos/DEBUGGING-GUIDE.md` 新增 §4.10，把「桥的入队+轮询模型」（含同线程死锁约束与 consume-on-read 的由来）与「回包分级」讲清楚，避免下次再误判成「定时器问题」。
+- **验证**：`arkts_check` 0 error；`BUILD SUCCESSFUL`；契约 intact（50/34/29/18）。真机：点星后读数为 `星等 5.58 / 大气消光后星等 5.95 / 星座 天鹤座`；点到人造卫星（QZS-1R）时动态值（含昂贵的 TLE 传播）同样正常落地。**说明**：未做帧级计时埋点，延迟改善来自去掉 550ms 依赖这一确定性事实，而非实测毫秒数。
+- **顺带记录（未修）**：人造卫星的 `vmag`/`vmage` 引擎回 0，故观测与天文馆两种模式都会显示 `0.00` 而不是 `--`；这是改造前既有行为，不在本次范围。
+
 ## [2026-10-07] DevEco Code - 观测模式：展开态同样不画连接线
 
 - **依据（用户要求）**：上一轮只在极简态关掉了详情卡指向线，展开观察时仍会画出来；观测模式**两种形态都不需要**。
