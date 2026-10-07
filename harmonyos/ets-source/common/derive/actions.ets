@@ -122,11 +122,17 @@ export function validationFromResponse(response: StellariumBridgeResponse): SkyC
   }
 }
 
+// Decomposing is only needed to strip Latin diacritics. Most location names are
+// CJK or plain ASCII, where NFD is a no-op that still costs a full string pass,
+// and this runs once per name per location on the search hot path.
+const LOCATION_DECOMPOSE_RE = /[\u00c0-\u024f\u0300-\u036f]/
+
 export function normalizeLocationSearchText(value: string): string {
-  return value.toLocaleLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\s._'’`-]+/g, '')
+  const lowered = value.toLocaleLowerCase()
+  const plain = LOCATION_DECOMPOSE_RE.test(lowered)
+    ? lowered.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    : lowered
+  return plain.replace(/[\s._'’`-]+/g, '')
 }
 
 export function officialLocationAliases(countryCode: string): string {
@@ -190,17 +196,23 @@ export function matchesLocationSearch(text: string, query: string): boolean {
     normalizeLocationSearchText(rawText).includes(normalizeLocationSearchText(rawQuery))
 }
 
-export function locationSearchMatchScore(query: string, primaryNames: Array<string>, text: string): number {
-  const normalizedQuery = normalizeLocationSearchText(query)
+// Scoring over text that is already normalised, so a caller that keeps a
+// prepared index does no per-candidate string work at all.
+export function locationSearchScoreNormalized(normalizedQuery: string, normalizedNames: Array<string>,
+  normalizedText: string): number {
   if (!normalizedQuery) return 0
   let best = 0
-  for (const primaryName of primaryNames) {
-    const normalizedName = normalizeLocationSearchText(primaryName)
+  for (const normalizedName of normalizedNames) {
     if (!normalizedName) continue
     if (normalizedName === normalizedQuery) best = Math.max(best, 100)
     else if (normalizedName.startsWith(normalizedQuery)) best = Math.max(best, 85)
     else if (normalizedName.includes(normalizedQuery)) best = Math.max(best, 70)
   }
   if (best > 0) return best
-  return normalizeLocationSearchText(text).includes(normalizedQuery) ? 40 : 0
+  return normalizedText.includes(normalizedQuery) ? 40 : 0
+}
+
+export function locationSearchMatchScore(query: string, primaryNames: Array<string>, text: string): number {
+  const names: Array<string> = primaryNames.map((name: string) => normalizeLocationSearchText(name))
+  return locationSearchScoreNormalized(normalizeLocationSearchText(query), names, normalizeLocationSearchText(text))
 }
