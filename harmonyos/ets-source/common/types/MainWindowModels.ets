@@ -424,6 +424,9 @@ export const SEARCH_HISTORY_STORE: string = 'stellarium_search_history'
 export const OBSERVING_STORE: string = 'stellarium_observing_list'
 export const LOCATION_STORE: string = 'stellarium_observer_location'
 export const QUICK_PANEL_STORE: string = 'stellarium_quick_panel'
+// 详情卡「呈现轴」持久化（key `detailDisplayMode` = 'planetarium' / 'observe'）：
+// 与信息级别（数据轴，C++ 配置）正交，见 specs/OBJECT-DETAIL-OBSERVE-MODE.md §7。
+export const INFO_WINDOW_STORE: string = 'stellarium_info_window'
 export const OFFLINE_APPGALLERY_BUILD: boolean = true
 
 

@@ -233,7 +233,7 @@ import {
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
   HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS,
   GyroGuideProjection, SkyUiObstacle, BookmarkItem,
-  BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, QUICK_PANEL_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
+  BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, QUICK_PANEL_STORE, INFO_WINDOW_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
@@ -1503,7 +1503,8 @@ export struct WindowNativeNode {
       flashHint: (text: ResourceStr): void => { this.flashHint(text) },
       applySelectedInfoMode: (mode: string): void => { this.applySelectedInfoMode(mode) },
       refreshSelectedObject: (): void => { this.refreshSelectedObject() },
-      clearSelectedDetailLoaded: (): void => { this.objectDetailStore.selectedDetailLoaded = false }
+      clearSelectedDetailLoaded: (): void => { this.objectDetailStore.selectedDetailLoaded = false },
+      persistDetailDisplayMode: (mode: string): void => { this.writeDetailModeStorage(mode) }
     })
     this.navigationStore.attachPort(hostPort)
     this.navigationStore.attachHooks({
@@ -2155,6 +2156,43 @@ export struct WindowNativeNode {
       hint: (text: string) => { this.flashHint(text) }
     })
     this.loadQuickActionOrderFromStorage()
+    this.loadDetailModeFromStorage()
+  }
+
+  // ── 详情卡「呈现轴」持久化（观测模式）──
+  // store `stellarium_info_window` / key `detailDisplayMode`。切换**不触碰桥**：
+  // 信息级别（数据轴）与详情卡形态（呈现轴）正交，见 specs/OBJECT-DETAIL-OBSERVE-MODE.md §3/§4.6。
+  private async writeDetailModeStorage(mode: string): Promise<void> {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const store = await preferences.getPreferences(ctx, INFO_WINDOW_STORE)
+      await store.put('detailDisplayMode', mode)
+      await store.flush()
+    } catch (e) {
+      hilog.warn(0xD002, 'Stellarium', 'save detail display mode failed: %{public}s', String(e))
+    }
+  }
+
+  // 读失败 / 缺省一律回落天文馆模式（等价于升级前的观感）。
+  private async loadDetailModeFromStorage(): Promise<void> {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const store = await preferences.getPreferences(ctx, INFO_WINDOW_STORE)
+      const raw = await store.get('detailDisplayMode', 'planetarium')
+      this.infoWindowStore.restoreDetailDisplayMode(typeof raw === 'string' ? raw : 'planetarium')
+    } catch (e) {
+      hilog.warn(0xD002, 'Stellarium', 'load detail display mode failed: %{public}s', String(e))
+    }
+  }
+
+  // 观测模式开关（快捷面板格子与设置页 Toggle 的同一入口）：只切呈现轴，并给一次提示。
+  private applyObserveMode(enabled: boolean): void {
+    const target = enabled ? 'observe' : 'planetarium'
+    const changed = this.infoWindowStore.detailDisplayMode !== target
+    this.infoWindowStore.setDetailDisplayMode(target)
+    if (changed) {
+      this.flashHint(I18n.t(enabled ? 'detail_switched_observe' : 'detail_switched_planetarium'))
+    }
   }
 
   // 快捷面板 12 格顺序的持久化（store `stellarium_quick_panel` / key `order`，与书签 / 观测列表同套）。
@@ -4333,9 +4371,19 @@ export struct WindowNativeNode {
   }
 
   private bottomCardHeight(): number {
+    // 观测极简卡：内容只有页头 + 三 tag + 按钮行（见 ObjectDetailCardHeader 的取值），
+    // 高度必须与内容一致，否则卡内会留大片空底（展开 / 天文馆模式仍走下面的全量高度）。
+    if (this.infoWindowStore.observeCompact()) {
+      return this.observeCompactCardHeight()
+    }
     if (this.isExpandedLayout) { return Math.min(440, Math.max(360, this.skyHeight - 176)) }
     if (this.isFoldHoverLayout) { return Math.min(380, Math.max(320, this.skyHeight - this.hoverConsoleTop() - 104)) }
     return clamp(this.skyHeight * 0.56, 320, 420)
+  }
+
+  // 观测极简卡高度 = 拖拽柄 26 + 标题行 (10+26+6) + 三 tag 行 (3+46+7) + 按钮行 28。
+  private observeCompactCardHeight(): number {
+    return 26 + 42 + 56 + 28
   }
 
   private expandedDetailSummaryX(): number {
@@ -4536,7 +4584,7 @@ export struct WindowNativeNode {
       'night_mode': this.nightModeStore.nightMode,
       'equatorial_mount': this.telescopeStore.equatorialMount,
       'flip_horizontal': this.polarScopeStore.polarScopeHorizontalFlip,
-      'minimal_hud': this.overlayStore.minimalHud
+      'observe_mode': this.infoWindowStore.observeModeEnabled()
     }
   }
 
@@ -4574,11 +4622,9 @@ export struct WindowNativeNode {
       this.polarScopeCtl().setPolarScopeHorizontalFlip(value)
       return
     }
-    if (id === 'minimal_hud') {
-      // 本轮**只落开关接口**：写入标志位，界面尚无任何消费方（极简 HUD 的隐藏行为另行实现）。
-      // 故此处刻意不落盘、也不做「已显示/已隐藏」以外的任何副作用 —— 没有消费方时持久化只会造成误导。
-      this.overlayStore.minimalHud = value
-      this.flashHint(I18n.t(value ? 'msg_shown' : 'msg_hidden'))
+    if (id === 'observe_mode') {
+      // 只切详情卡的**呈现轴**：不调 setInformationSetting、不刷新选中详情（数据本来就在 store 里）。
+      this.applyObserveMode(value)
       return
     }
     // 其余图层类：走公开入口 applyLayerSwitch（与图层面板同一路径，附带「已显示/已隐藏」提示）。
@@ -5125,6 +5171,8 @@ export struct WindowNativeNode {
         this.dismissedObjectName = ''
         this.objectDetailConnectorLength = 0
         this.objectDetailStore.selectedConstellationCultureDescriptionExpanded = false
+        // 换了目标就回到极简形态：观测模式下的「展开」只对当前这颗天体有效。
+        this.infoWindowStore.resetObserveExpand()
       }
       // 再次点选同一目标：清除“已关闭”记录并恢复展开态，让详情页重新弹出。
       if (reopenDismissedDetail) {
@@ -5276,6 +5324,8 @@ export struct WindowNativeNode {
     this.infoWindowStore.infoWinExpanded = false
     this.objectMediaStore.objectInspectorMoreOpen = false
     this.dismissedObjectName = this.objectDetailStore.selectedName
+    // 关卡片即结束本次「临时展开」，下次选星仍以极简形态出现。
+    this.infoWindowStore.resetObserveExpand()
     this.lastInfoWinCloseMs = Date.now()
     this.skyTouchActive = false
     this.skyTouchFeedback = false
@@ -6593,6 +6643,8 @@ export struct WindowNativeNode {
                 speechStatus: this.guideStore.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectDetailStore.objectInspectorIcon(),
+                detailDisplayMode: this.infoWindowStore.detailDisplayMode,
+                observeExpanded: this.infoWindowStore.observeExpanded,
                 distanceText: this.objectDetailStore.objectDistanceNoticeText(this.infoWindowStore.distanceInformationVisible()),
                 distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
                 imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
@@ -6642,6 +6694,9 @@ export struct WindowNativeNode {
                 onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
                 onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
+                onCenterObject: () => { this.moveToSelectedObject() },
+                onExpandObserve: () => { this.infoWindowStore.setObserveExpanded(true) },
+                onCollapseObserve: () => { this.infoWindowStore.setObserveExpanded(false) },
                 onToggleLock: () => { this.layerCtl().toggleViewLock() },
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
                 onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
@@ -6698,6 +6753,8 @@ export struct WindowNativeNode {
                 speechStatus: this.guideStore.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectDetailStore.objectInspectorIcon(),
+                detailDisplayMode: this.infoWindowStore.detailDisplayMode,
+                observeExpanded: this.infoWindowStore.observeExpanded,
                 distanceText: this.objectDetailStore.objectDistanceNoticeText(this.infoWindowStore.distanceInformationVisible()),
                 distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
                 imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
@@ -6759,6 +6816,9 @@ export struct WindowNativeNode {
                 onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
                 onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
+                onCenterObject: () => { this.moveToSelectedObject() },
+                onExpandObserve: () => { this.infoWindowStore.setObserveExpanded(true) },
+                onCollapseObserve: () => { this.infoWindowStore.setObserveExpanded(false) },
                 onToggleLock: () => { this.layerCtl().toggleViewLock() },
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
                 onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
@@ -6820,6 +6880,8 @@ export struct WindowNativeNode {
                 speechStatus: this.guideStore.speechStatus,
                 inObservingList: this.obsListStore.observingList.includes(this.objectDetailStore.selectedName),
                 iconName: this.objectDetailStore.objectInspectorIcon(),
+                detailDisplayMode: this.infoWindowStore.detailDisplayMode,
+                observeExpanded: this.infoWindowStore.observeExpanded,
                 distanceText: this.objectDetailStore.objectDistanceNoticeText(this.infoWindowStore.distanceInformationVisible()),
                 distanceSummaryText: this.objectDetailStore.objectDistanceSummary(this.infoWindowStore.distanceInformationVisible()),
                 imageHeight: this.objectMediaStore.objectInspectorImageHeight(),
@@ -6893,6 +6955,9 @@ export struct WindowNativeNode {
                 onModelExpand: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(true) },
                 onModelTouch: (event: TouchEvent) => { this.objectModelRendererCtl().handleObjectInspectorModelTouch(event) },
                 onCenter: () => { this.moveToSelectedObject() },
+                onCenterObject: () => { this.moveToSelectedObject() },
+                onExpandObserve: () => { this.infoWindowStore.setObserveExpanded(true) },
+                onCollapseObserve: () => { this.infoWindowStore.setObserveExpanded(false) },
                 onToggleLock: () => { this.layerCtl().toggleViewLock() },
                 onToggleObserving: () => { this.toggleSelectedObservingList() },
                 onRefresh: () => { this.refreshSelectedObject(); this.refreshState() },
@@ -7588,6 +7653,8 @@ export struct WindowNativeNode {
         isExpandedLayout: this.isExpandedLayout,
         informationMode: this.infoWindowStore.informationMode,
         informationSettingPending: this.infoWindowStore.informationSettingPending,
+        observeMode: this.infoWindowStore.observeModeEnabled(),
+        onToggleObserveMode: (enabled: boolean) => { this.applyObserveMode(enabled) },
         currentProjection: this.currentProjection,
         configDitheringMode: this.viewSettingsStore.configDitheringMode,
         timeSettingsPending: this.timeSettingsPending,

@@ -298,6 +298,9 @@
     "guide-content",
     "guide-stop",
     "object-detail-content-scroll",
+    "object-detail-observe-center",
+    "object-detail-observe-collapse",
+    "object-detail-observe-expand",
     "object-detail-satellite-icon",
     "object-model-close",
     "object-model-expand",
@@ -341,11 +344,11 @@
     "recording-share-",
     "search-category-"
   ],
-  "totalIdAnchors": 47,
+  "totalIdAnchors": 50,
   "count": {
     "panels": 34,
-    "staticIds": 26,
+    "staticIds": 29,
     "dynamicIdPrefixes": 18,
-    "totalIdAnchors": 47
+    "totalIdAnchors": 50
   }
 }

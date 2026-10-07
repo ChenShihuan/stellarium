@@ -210,6 +210,30 @@ export class ObjectDetailStore {
     return this.selectedDistance.length > 0 ? (this.selectedDistanceCompact || this.selectedDistance) : I18n.t('distance_missing')
   }
 
+  // ==== 观测模式（极简详情卡）的星等 tag ====
+  //
+  // 规格 specs/OBJECT-DETAIL-OBSERVE-MODE.md §4.3：两个星等在**同一数值行内横向拼接**，
+  // 括号外 = 未消光视星等（vmag），括号内 = **大气消光后星等**（vmage）：
+  //
+  //     星等(大气消光)
+  //     0.03(0.19)
+  //
+  // 消光后星等不可用时（short 级别、卫星/星座等无 vmage 的目标、custom 掩码关掉星等）
+  // 只用主星等，标签回退「星等」。字段可用性门控沿用宿主的现有规则（观测模式不另行放宽）。
+  // 仅观测模式使用；天文馆模式页头星等 tag 维持单值现状。
+
+  observeMagnitudeValue(): string {
+    if (this.selectedMagnitude.length === 0) return ''
+    if (this.selectedApparentMagnitude.length === 0) return this.selectedMagnitude
+    return this.selectedMagnitude + '(' + this.selectedApparentMagnitude + ')'
+  }
+
+  observeMagnitudeLabel(): string {
+    return this.selectedMagnitude.length > 0 && this.selectedApparentMagnitude.length > 0
+      ? I18n.t('detail_observe_magnitude')
+      : I18n.t('i0007')
+  }
+
   // 距离提示条文案。
   objectDistanceNoticeText(distanceVisible: boolean): string {
     if (!distanceVisible) return ''

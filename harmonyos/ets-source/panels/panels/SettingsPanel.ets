@@ -48,6 +48,8 @@ export struct SettingsPanel {
   @Prop isExpandedLayout: boolean
   @Prop informationMode: string
   @Prop informationSettingPending: boolean
+  // 呈现轴（与上面的信息级别正交）：详情卡默认形态开关，见 OBJECT-DETAIL-OBSERVE-MODE.md §6。
+  @Prop observeMode: boolean
   @Prop currentProjection: string
   @Prop configDitheringMode: string
   @Prop timeSettingsPending: boolean
@@ -89,6 +91,7 @@ export struct SettingsPanel {
   selectSettingsChoice: (group: string, value: string) => void = () => {}
   setStartupTimeSetting: (key: string, value: string) => void = () => {}
   setInformationField: (key: string, enabled: boolean) => void = () => {}
+  onToggleObserveMode: (enabled: boolean) => void = () => {}
   setObjectDetailConnector: (enabled: boolean) => void = () => {}
   toggleGyroscope: (enabled: boolean) => void = () => {}
   confirmPrivacyRevocation: () => void = () => {}
@@ -180,6 +183,15 @@ export struct SettingsPanel {
               InformationModeButton({ labelKey: 'i0250', active: this.informationMode === 'none', canPick: !this.informationSettingPending, textColor: this.textColor, subColor: this.subColor, activeColor: this.accentColor, panelColor: this.panelColor, onPick: () => { this.selectSettingsChoice('information', 'none') } })
               InformationModeButton({ labelKey: 'information_custom_mode', active: this.informationMode === 'custom', canPick: !this.informationSettingPending, textColor: this.textColor, subColor: this.subColor, activeColor: this.accentColor, panelColor: this.panelColor, onPick: () => { this.selectSettingsChoice('information', 'custom') } })
             }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 4 })
+            Row() {
+              Column() {
+                Text(I18n.t('detail_observe_toggle')).fontSize(12).fontColor(this.textColor).width('100%')
+                Text(I18n.t('detail_observe_hint')).fontSize(10).fontColor(this.subColor).width('100%')
+              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              Toggle({ type: ToggleType.Switch, isOn: this.observeMode })
+                .width(42).height(24).selectedColor(this.accentColor)
+                .onChange((value: boolean) => { this.onToggleObserveMode(value) })
+            }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
             Row() {
               Column() {
                 Text('详情卡指向线').fontSize(12).fontColor(this.textColor).width('100%')
