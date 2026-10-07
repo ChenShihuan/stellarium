@@ -4381,9 +4381,9 @@ export struct WindowNativeNode {
     return clamp(this.skyHeight * 0.56, 320, 420)
   }
 
-  // 观测极简卡高度 = 拖拽柄 26 + 标题行 (10+26+6) + 三 tag 行 (3+46+7) + 按钮行 28。
+  // 观测极简卡高度 = 拖拽柄 26 + 标题行 (16 内边距 + 36 聚焦圈) + 三 tag 行 (3+46+7) + 下沿箭头条 28。
   private observeCompactCardHeight(): number {
-    return 26 + 42 + 56 + 28
+    return 26 + 52 + 56 + 28
   }
 
   private expandedDetailSummaryX(): number {
@@ -6661,7 +6661,7 @@ export struct WindowNativeNode {
                 accent: this.nightModeStore.nmAccent(),
                 cultureVisible: this.objectDetailStore.selectedObjectIsConstellation(),
                 textColor: this.nightModeStore.nmText(),
-                connectorVisible: this.overlayStore.objectDetailConnectorVisible,
+                connectorVisible: this.overlayStore.objectDetailConnectorVisible && !this.infoWindowStore.observeCompact(),
                 connectorLength: this.objectDetailConnectorLength,
                 connectorX: this.objectDetailConnectorX,
                 connectorY: this.objectDetailConnectorY,
@@ -6771,7 +6771,7 @@ export struct WindowNativeNode {
                 accent: this.nightModeStore.nmAccent(),
                 cultureVisible: this.objectDetailStore.selectedObjectIsConstellation(),
                 textColor: this.nightModeStore.nmText(),
-                connectorVisible: this.overlayStore.objectDetailConnectorVisible,
+                connectorVisible: this.overlayStore.objectDetailConnectorVisible && !this.infoWindowStore.observeCompact(),
                 connectorLength: this.objectDetailConnectorLength,
                 connectorX: this.objectDetailConnectorX,
                 connectorY: this.objectDetailConnectorY,
@@ -6898,7 +6898,7 @@ export struct WindowNativeNode {
                 accent: this.nightModeStore.nmAccent(),
                 cultureVisible: this.objectDetailStore.selectedObjectIsConstellation(),
                 textColor: this.nightModeStore.nmText(),
-                connectorVisible: this.overlayStore.objectDetailConnectorVisible,
+                connectorVisible: this.overlayStore.objectDetailConnectorVisible && !this.infoWindowStore.observeCompact(),
                 connectorLength: this.objectDetailConnectorLength,
                 connectorX: this.objectDetailConnectorX,
                 connectorY: this.objectDetailConnectorY,
