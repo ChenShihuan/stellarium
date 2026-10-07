@@ -1,3 +1,17 @@
+## [2026-10-07] DevEco Code - 离线地点表补齐中国市/县（地级行政区全覆盖）
+
+- **依据（用户要求）**：观测位置「按地区选」里中国城市不全（湛江等地级市缺失）。用户定调：**不必到乡镇，到市/县两级即可；地级市（含自治州/地区/盟）必须全含；县级上游列出多少就跟多少**。
+- **根因**：`scripts/generate-ohos-location-hierarchy.mjs` 按 IANA 时区桶只保留人口最多的约 40 个地点。中国跨 `Asia/Shanghai`（上游 1,942 行）与 `Asia/Urumqi`（106 行）两桶，故全国仅留 80 个；湛江人口秩 109/1942 被截断，广东 100 → 7。
+- **新增数据**：`scripts/data/ohos-china-locations.json`（786 条，CRLF）。由民政部全国行政区划库（`dmfw.mca.gov.cn/9095/xzqh/getList`，级别 1–3）与 `data/base_locations.txt` 匹配得出：地级 337 + 县级 449。
+- **匹配算法（关键修正）**：单纯按拼音键匹配会**跨省误配**（云南 `Jinhua` 匹到浙江「金华市」、青海 `Yushu` 匹到吉林「榆树市」，共 308 条）。最终算法：① 手工别名表优先；② 只在「上游 state ↔ 官方省份」一致时接受；③ 其余行用坐标对已确认样本做**最近邻加权投票**定省后再匹配；④ 仍配不上即丢弃（1,303 条，绝大多数是乡镇行，符合「不做到乡镇」）。另设 4 个直辖市包络盒，纠正上游个别松散的 state 标注。
+- **非拼音罗马化手工桥接（74 条别名）**：
+  - **地级市 17**：`Lueliang` 吕梁 / `Harbin` 哈尔滨 / `Qiqihar` 齐齐哈尔 / `Hohhot` 呼和浩特 / `Ordos` 鄂尔多斯 / `Hulunbuir` 呼伦贝尔 / `Ulanqab` 乌兰察布 / `Bayan Nur` 巴彦淖尔 / `Turpan` 吐鲁番 / `Karamay` 克拉玛依 / `UEruemqi` 乌鲁木齐 / `Lhasa` 拉萨 / `Qamdo` 昌都 / `Nyingchi` 林芝 / `Lhoka` 山南 / `Nagqu` 那曲 / `Simao` 普洱。
+  - **州府/县级 57**：`Korla` 库尔勒市、`Kashgar` 喀什市、`Aqsu` 阿克苏市、`Artux` 阿图什市、`Ghulja` 伊宁市、`Tumxuk` 图木舒克市、`Burqin` 布尔津县、`Hoxtolgay` 和布克赛尔蒙古自治县、`Ulanhot` 乌兰浩特市、`Xilinhot` 锡林浩特市、`Bayan Hot` 阿拉善左旗、`Hailar` 海拉尔区、`Jalai Nur` 扎赉诺尔区、`Oroqen Zizhiqi` 鄂伦春自治旗、`Erenhot` 二连浩特市、`Dalain Hob` 额济纳旗、`Jiagedaqi` 加格达奇区、`Muling` 穆棱市、`Suiling` 绥棱县、`Dorbod` 杜尔伯特蒙古族自治县、`Hunchun` 珲春市、`Huangpi` 黄陂区、`Puqi` 赤壁市、`Pingwu County` 平武县、`Duyun` 都匀市、`Weining` 威宁彝族回族苗族自治县、`Wenshan City` 文山市、`Longling County` 龙陵县、`Shangri-La` 香格里拉市、`Liuku` 泸水市、`Shilin` 石林彝族自治县、`Ning'er` 宁洱哈尼族彝族自治县、`Tengyue` 腾冲市、`Maqin County` 玛沁县、`Lushar` 湟中区、`Qabqa` 共和县、`Haomen` 门源回族自治县、`Gar` 噶尔县、`Doilungdeqen` 堆龙德庆区、`Lhuenzhub` 林周县、`Maizhokunggar` 墨竹工卡县、`Damxung` 当雄县、`Quxu` 曲水县、`Dagze` 达孜区、`Nyemo` 尼木县、`Gangu Chengguanzhen` 甘谷县、`Chengxian Chengguanzhen` 成县、`Wenxian Chengguanzhen` 文县、`Tanchang Chengguanzhen` 宕昌县、`Zhouqu Chengguanzhen` 舟曲县、`Lintan Chengguanzhen` 临潭县、`Huixian Chengguanzhen` 徽县、`Zhangjiachuan` 张家川回族自治县、`Linxia Chengguanzhen` 临夏市、`Wayaobu` 子长市、`Lueeyang Chengguanzhen` 略阳县、`Hanyin Chengguanzhen` 汉阴县、`Ziyang Chengguanzhen` 紫阳县、`Langao Chengguanzhen` 岚皋县、`Basuo` 东方市。
+  - **地级行政区 39**（自治州 30 / 地区 7 / 盟 3；塔城地区已在表内）：坐标取州府/行署驻地，如锡林郭勒盟←锡林浩特、巴音郭楞州←库尔勒、伊犁州←伊宁、黔南州←都匀、迪庆州←香格里拉。5 个驻地在上游无行或不可靠的（阿坝州/黄南州/海西州/和田地区/阿勒泰地区）用 OpenStreetMap 坐标；上游完全没有行的 11 个地级市（朔州/盘锦/辽源/益阳/三沙/儋州/巴中/榆林/海东/吴忠/中卫）同样用 OSM 坐标。
+- **新增脚本**：`scripts/import-ohos-china-locations.mjs`（CRLF）—— 幂等合并：将尚不存在的地点按其 IANA 时区桶并入 `hierarchy.ts` 并**按人口降序**重排该桶；同名地点沿用上游 Stellarium 的 ` (省)` 消歧约定（43 条）；`names_zh.ts` 一律改挂官方简体名（顺带修正旧机器译名：`Shenyang` 沉阳→沈阳、`Lueliang` 略良→吕梁）。
+- **规模**：离线地点 7,387 → **8,116**；中国 80 → **809**（广东 7 → 37，含湛江）；**地级行政区 333/333**（地级市 293、自治州 30、地区 7、盟 3）全部在列；县级 449 条（上游有行且省份可确认者）。
+- **验证**：`BUILD SUCCESSFUL in 28 s`；契约 `intact`（47 锚点 / 34 面板 / 26 静态 id / 18 动态前缀）；`verify-ohos-location-search.mjs` 两条断言全过（8,116 条均有中文名、12 条本地化搜索）。真机（192.168.3.95:36717）：亚洲 > 中国 > 广东省 → 城市列出现「湛江 / 茂名 / 阳江」，选中「湛江」后坐标行显示 `21.23°N / 110.39°E / 16 m`，与上游 `Zhanjiang` 行一致；海南省下已含「临高县」等县级项；桥接项「玉树」（青海省）经用户走查通过。
+
 ## [2026-10-06] DevEco Code - 「视场中心坐标」自 设置>设备 迁入 图层>标记
 
 - **依据（用户要求）**：把「更多 > 设置 > 设备」里的「视场中心坐标」区块改放到「图层 > 标记」。

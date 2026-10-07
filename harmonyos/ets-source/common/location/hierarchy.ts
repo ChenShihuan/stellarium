@@ -1,4 +1,6 @@
-// Auto-generated from Stellarium base_locations.txt (continent -> country -> region -> cities)
+// Auto-generated from Stellarium base_locations.txt (continent -> country -> region -> cities).
+// The mainland-China buckets are augmented from scripts/data/ohos-china-locations.json;
+// re-run scripts/import-ohos-china-locations.mjs after changing that file.
 export const LOCATION_HIERARCHY: Record<string, Record<string, Array<{n:string;la:number;lo:number;al:number;p:number;country:string;province?:string;planet?:string}>>> =
 {
  "亚洲": {
@@ -2120,6 +2122,6946 @@ export const LOCATION_HIERARCHY: Record<string, Record<string, Array<{n:string;l
   ],
   "Shanghai": [
    {
+    "n": "Guiyang",
+    "la": 26.5833,
+    "lo": 106.7167,
+    "al": 1087,
+    "p": 3037159,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lanzhou",
+    "la": 36.057,
+    "lo": 103.8399,
+    "al": 1521,
+    "p": 3000000,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huizhou",
+    "la": 23.1115,
+    "lo": 114.4152,
+    "al": 25,
+    "p": 2900113,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Haikou",
+    "la": 20.0342,
+    "lo": 110.3465,
+    "al": 9,
+    "p": 2873358,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linyi",
+    "la": 35.0631,
+    "lo": 118.3428,
+    "al": 69,
+    "p": 2743843,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baoding",
+    "la": 38.8729,
+    "lo": 115.4625,
+    "al": 15,
+    "p": 2739887,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wenzhou",
+    "la": 27.9994,
+    "lo": 120.6668,
+    "al": 10,
+    "p": 2650000,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yunfu",
+    "la": 22.9279,
+    "lo": 112.0381,
+    "al": 67,
+    "p": 2612800,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huai'an",
+    "la": 33.5886,
+    "lo": 119.0192,
+    "al": 14,
+    "p": 2494013,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nanchang",
+    "la": 28.684,
+    "lo": 115.8531,
+    "al": 20,
+    "p": 2357839,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hohhot",
+    "la": 40.8106,
+    "lo": 111.6522,
+    "al": 1051,
+    "p": 2350000,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shaoxing",
+    "la": 30.0024,
+    "lo": 120.5786,
+    "al": 21,
+    "p": 2300000,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nantong",
+    "la": 32.0303,
+    "lo": 120.8747,
+    "al": 6,
+    "p": 2273326,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yantai",
+    "la": 37.4765,
+    "lo": 121.4408,
+    "al": 22,
+    "p": 2227733,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhuhai",
+    "la": 22.2769,
+    "lo": 113.5678,
+    "al": 35,
+    "p": 2207090,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baotou",
+    "la": 40.6516,
+    "lo": 109.8439,
+    "al": 1064,
+    "p": 2150000,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qingyang",
+    "la": 35.7098,
+    "lo": 107.6445,
+    "al": 1427,
+    "p": 2125400,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Kunshan",
+    "la": 31.3776,
+    "lo": 120.9543,
+    "al": 10,
+    "p": 2092496,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Weifang",
+    "la": 36.71,
+    "lo": 119.1019,
+    "al": 30,
+    "p": 2044028,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zunyi",
+    "la": 27.6867,
+    "lo": 106.9072,
+    "al": 867,
+    "p": 2037775,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lianyungang",
+    "la": 34.5984,
+    "lo": 119.2156,
+    "al": 1,
+    "p": 2001009,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ganzhou",
+    "la": 25.8466,
+    "lo": 114.9326,
+    "al": 117,
+    "p": 1977253,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ordos",
+    "la": 39.6086,
+    "lo": 109.7816,
+    "al": 1310,
+    "p": 1940653,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jieyang",
+    "la": 23.5418,
+    "lo": 116.3658,
+    "al": 7,
+    "p": 1899394,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jilin",
+    "la": 43.8465,
+    "lo": 126.5608,
+    "al": 188,
+    "p": 1895865,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nanchong",
+    "la": 30.7951,
+    "lo": 106.0847,
+    "al": 287,
+    "p": 1858875,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Datong (Shanxi)",
+    "la": 40.0936,
+    "lo": 113.2914,
+    "al": 1054,
+    "p": 1850000,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nanyang",
+    "la": 32.9947,
+    "lo": 112.5328,
+    "al": 131,
+    "p": 1811812,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiangmen",
+    "la": 22.5833,
+    "lo": 113.0833,
+    "al": 11,
+    "p": 1795459,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiangyin",
+    "la": 31.911,
+    "lo": 120.263,
+    "al": 7,
+    "p": 1779515,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuyang (Anhui)",
+    "la": 32.9,
+    "lo": 115.8167,
+    "al": 31,
+    "p": 1768947,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bayan Nur",
+    "la": 40.7414,
+    "lo": 107.386,
+    "al": 1041,
+    "p": 1760000,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chaozhou",
+    "la": 23.654,
+    "lo": 116.6226,
+    "al": 23,
+    "p": 1750945,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qingyuan",
+    "la": 23.7,
+    "lo": 113.0333,
+    "al": 11,
+    "p": 1738424,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tai'an",
+    "la": 36.1853,
+    "lo": 117.12,
+    "al": 143,
+    "p": 1735425,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xining",
+    "la": 36.6255,
+    "lo": 101.7574,
+    "al": 2275,
+    "p": 1677177,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changshu",
+    "la": 31.6461,
+    "lo": 120.7422,
+    "al": 9,
+    "p": 1677050,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huainan",
+    "la": 32.6264,
+    "lo": 116.9969,
+    "al": 47,
+    "p": 1666826,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Suzhou (Anhui)",
+    "la": 33.6361,
+    "lo": 116.9789,
+    "al": 34,
+    "p": 1647642,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lu'an",
+    "la": 31.7356,
+    "lo": 116.5169,
+    "al": 81,
+    "p": 1644344,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yancheng",
+    "la": 33.3575,
+    "lo": 120.1573,
+    "al": 3,
+    "p": 1615717,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Taizhou (Jiangsu)",
+    "la": 32.4907,
+    "lo": 119.9081,
+    "al": 10,
+    "p": 1607108,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Daqing",
+    "la": 46.5833,
+    "lo": 125,
+    "al": 146,
+    "p": 1604027,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuhu",
+    "la": 31.3526,
+    "lo": 118.4295,
+    "al": 9,
+    "p": 1598165,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dazhou",
+    "la": 31.2106,
+    "lo": 107.4631,
+    "al": 292,
+    "p": 1589435,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yangzhou",
+    "la": 32.3972,
+    "lo": 119.4358,
+    "al": 14,
+    "p": 1584237,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Guilin",
+    "la": 25.2802,
+    "lo": 110.2964,
+    "al": 141,
+    "p": 1572300,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhaoqing",
+    "la": 23.0489,
+    "lo": 112.4609,
+    "al": 16,
+    "p": 1553109,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mianyang",
+    "la": 31.4678,
+    "lo": 104.6817,
+    "al": 471,
+    "p": 1550000,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wanzhou",
+    "la": 30.7645,
+    "lo": 108.3959,
+    "al": 205,
+    "p": 1545900,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Putian",
+    "la": 25.4394,
+    "lo": 119.0103,
+    "al": 23,
+    "p": 1539389,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shangqiu",
+    "la": 34.45,
+    "lo": 115.65,
+    "al": 51,
+    "p": 1536392,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yinchuan",
+    "la": 38.4681,
+    "lo": 106.2731,
+    "al": 1117,
+    "p": 1487579,
+    "country": "CN",
+    "province": "Ningxia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Taizhou (Zhejiang)",
+    "la": 28.6627,
+    "lo": 121.4331,
+    "al": 15,
+    "p": 1485502,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yiwu",
+    "la": 29.3151,
+    "lo": 120.0768,
+    "al": 84,
+    "p": 1481384,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Quanzhou",
+    "la": 24.9139,
+    "lo": 118.5858,
+    "al": 14,
+    "p": 1469157,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jinhua",
+    "la": 29.1068,
+    "lo": 119.6442,
+    "al": 55,
+    "p": 1463990,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Cixi",
+    "la": 30.1764,
+    "lo": 121.2457,
+    "al": 11,
+    "p": 1457510,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changde",
+    "la": 29.0321,
+    "lo": 111.6984,
+    "al": 38,
+    "p": 1457419,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Kaifeng",
+    "la": 34.7986,
+    "lo": 114.3074,
+    "al": 76,
+    "p": 1451741,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Anshan",
+    "la": 41.1236,
+    "lo": 122.99,
+    "al": 55,
+    "p": 1450000,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baoji",
+    "la": 34.3678,
+    "lo": 107.237,
+    "al": 567,
+    "p": 1437802,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Suqian",
+    "la": 33.9492,
+    "lo": 118.2958,
+    "al": 23,
+    "p": 1437685,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liuzhou",
+    "la": 24.324,
+    "lo": 109.407,
+    "al": 102,
+    "p": 1436599,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhangjiagang",
+    "la": 31.865,
+    "lo": 120.5389,
+    "al": 13,
+    "p": 1432044,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jinjiang",
+    "la": 24.8198,
+    "lo": 118.5742,
+    "al": 33,
+    "p": 1416151,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bozhou",
+    "la": 33.8772,
+    "lo": 115.7703,
+    "al": 40,
+    "p": 1409436,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qujing",
+    "la": 25.4833,
+    "lo": 103.7833,
+    "al": 1887,
+    "p": 1408500,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhanjiang",
+    "la": 21.2339,
+    "lo": 110.3875,
+    "al": 16,
+    "p": 1400709,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fushun",
+    "la": 41.8867,
+    "lo": 123.9436,
+    "al": 85,
+    "p": 1400646,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Luoyang",
+    "la": 34.6735,
+    "lo": 112.4368,
+    "al": 128,
+    "p": 1390581,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Handan",
+    "la": 36.61,
+    "lo": 114.4876,
+    "al": 61,
+    "p": 1358318,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yichang",
+    "la": 30.7144,
+    "lo": 111.2847,
+    "al": 63,
+    "p": 1350150,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Heze",
+    "la": 35.2393,
+    "lo": 115.4736,
+    "al": 53,
+    "p": 1346717,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liupanshui",
+    "la": 26.5944,
+    "lo": 104.8333,
+    "al": 1799,
+    "p": 1320825,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Maoming",
+    "la": 21.6663,
+    "lo": 110.9136,
+    "al": 31,
+    "p": 1307802,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qinzhou",
+    "la": 21.9825,
+    "lo": 108.6506,
+    "al": 12,
+    "p": 1296300,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Luohe",
+    "la": 33.5639,
+    "lo": 114.0427,
+    "al": 62,
+    "p": 1294974,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xiangyang",
+    "la": 32.0422,
+    "lo": 112.1448,
+    "al": 71,
+    "p": 1294733,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yangjiang",
+    "la": 21.8556,
+    "lo": 111.9627,
+    "al": 15,
+    "p": 1292987,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yixing",
+    "la": 31.3606,
+    "lo": 119.8202,
+    "al": 8,
+    "p": 1285785,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xuchang",
+    "la": 34.0319,
+    "lo": 113.863,
+    "al": 71,
+    "p": 1265536,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zigong",
+    "la": 29.3416,
+    "lo": 104.7769,
+    "al": 306,
+    "p": 1262064,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xuzhou",
+    "la": 34.2044,
+    "lo": 117.2839,
+    "al": 35,
+    "p": 1253991,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Neijiang",
+    "la": 29.5835,
+    "lo": 105.0622,
+    "al": 349,
+    "p": 1251095,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Heshan",
+    "la": 28.5694,
+    "lo": 112.3473,
+    "al": 73,
+    "p": 1249807,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jining (Shandong)",
+    "la": 35.405,
+    "lo": 116.5814,
+    "al": 43,
+    "p": 1241012,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinyang",
+    "la": 32.1228,
+    "lo": 114.0656,
+    "al": 89,
+    "p": 1230042,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liaocheng",
+    "la": 36.4506,
+    "lo": 116.0025,
+    "al": 32,
+    "p": 1229768,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jinzhong",
+    "la": 37.684,
+    "lo": 112.7547,
+    "al": 821,
+    "p": 1226617,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changzhi",
+    "la": 36.1839,
+    "lo": 113.1053,
+    "al": 937,
+    "p": 1214940,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tianshui",
+    "la": 34.5795,
+    "lo": 105.7424,
+    "al": 1153,
+    "p": 1212791,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Weinan",
+    "la": 34.5035,
+    "lo": 109.5089,
+    "al": 354,
+    "p": 1199290,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiaxing",
+    "la": 30.7522,
+    "lo": 120.75,
+    "al": 8,
+    "p": 1180000,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiujiang",
+    "la": 29.7048,
+    "lo": 116.0021,
+    "al": 41,
+    "p": 1164268,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Anyang",
+    "la": 36.096,
+    "lo": 114.3828,
+    "al": 70,
+    "p": 1146839,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bijie",
+    "la": 27.3019,
+    "lo": 105.2863,
+    "al": 1471,
+    "p": 1137383,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhuzhou",
+    "la": 27.8333,
+    "lo": 113.15,
+    "al": 54,
+    "p": 1129687,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shangrao",
+    "la": 28.4518,
+    "lo": 117.9429,
+    "al": 84,
+    "p": 1116486,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huaibei",
+    "la": 33.9744,
+    "lo": 116.7917,
+    "al": 51,
+    "p": 1113321,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Meishan",
+    "la": 30.0439,
+    "lo": 103.837,
+    "al": 423,
+    "p": 1107742,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuzhou (Jiangxi)",
+    "la": 27.96,
+    "lo": 116.3333,
+    "al": 53,
+    "p": 1089888,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Guigang",
+    "la": 23.116,
+    "lo": 109.5947,
+    "al": 40,
+    "p": 1086327,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hengyang",
+    "la": 26.8895,
+    "lo": 112.6189,
+    "al": 66,
+    "p": 1075516,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yulin (Guangxi)",
+    "la": 22.6305,
+    "lo": 110.1469,
+    "al": 87,
+    "p": 1056743,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jingzhou",
+    "la": 30.3503,
+    "lo": 112.1903,
+    "al": 39,
+    "p": 1052282,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinxiang",
+    "la": 35.1903,
+    "lo": 113.8015,
+    "al": 82,
+    "p": 1047088,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yichun (Jiangxi)",
+    "la": 27.8333,
+    "lo": 114.4,
+    "al": 99,
+    "p": 1045952,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xianyang",
+    "la": 34.3378,
+    "lo": 108.7026,
+    "al": 387,
+    "p": 1034081,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Sanya",
+    "la": 18.2543,
+    "lo": 109.5095,
+    "al": 1,
+    "p": 1031396,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shaoguan",
+    "la": 24.8,
+    "lo": 113.5833,
+    "al": 69,
+    "p": 1028460,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Longyan",
+    "la": 25.0749,
+    "lo": 117.0178,
+    "al": 318,
+    "p": 1025087,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yongzhou",
+    "la": 26.4239,
+    "lo": 111.6131,
+    "al": 101,
+    "p": 1020715,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huzhou",
+    "la": 30.8703,
+    "lo": 120.0933,
+    "al": 6,
+    "p": 1015937,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuwei",
+    "la": 37.9267,
+    "lo": 102.632,
+    "al": 1542,
+    "p": 1010295,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hanzhong",
+    "la": 33.0751,
+    "lo": 107.0221,
+    "al": 517,
+    "p": 1006557,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hezhou",
+    "la": 24.4036,
+    "lo": 111.5667,
+    "al": 106,
+    "p": 1005490,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dongying",
+    "la": 37.4627,
+    "lo": 118.4917,
+    "al": 6,
+    "p": 998968,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Luzhou",
+    "la": 28.8903,
+    "lo": 105.4257,
+    "al": 256,
+    "p": 998900,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Meizhou",
+    "la": 24.2886,
+    "lo": 116.1177,
+    "al": 84,
+    "p": 992351,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yueyang",
+    "la": 29.3745,
+    "lo": 113.0948,
+    "al": 43,
+    "p": 991465,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Laiwu",
+    "la": 36.1928,
+    "lo": 117.6569,
+    "al": 182,
+    "p": 989535,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Benxi",
+    "la": 41.2886,
+    "lo": 123.765,
+    "al": 212,
+    "p": 987717,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingdingshan",
+    "la": 33.7309,
+    "lo": 113.3155,
+    "al": 82,
+    "p": 979130,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bengbu",
+    "la": 32.9408,
+    "lo": 117.3608,
+    "al": 31,
+    "p": 972784,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Sanhe",
+    "la": 39.9805,
+    "lo": 117.0689,
+    "al": 24,
+    "p": 965075,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xiangtan",
+    "la": 27.85,
+    "lo": 112.9,
+    "al": 31,
+    "p": 959303,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linfen",
+    "la": 36.0889,
+    "lo": 111.5189,
+    "al": 451,
+    "p": 959198,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhenjiang",
+    "la": 32.2109,
+    "lo": 119.4551,
+    "al": 26,
+    "p": 950516,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huludao",
+    "la": 40.7524,
+    "lo": 120.8355,
+    "al": 17,
+    "p": 944495,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baoshan (Yunnan)",
+    "la": 25.1163,
+    "lo": 99.1637,
+    "al": 1680,
+    "p": 935618,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Rui'an",
+    "la": 27.7761,
+    "lo": 120.6586,
+    "al": 4,
+    "p": 927383,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Laibin",
+    "la": 23.7474,
+    "lo": 109.2222,
+    "al": 72,
+    "p": 910282,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xiaogan",
+    "la": 30.9269,
+    "lo": 113.9222,
+    "al": 35,
+    "p": 908266,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ziyang",
+    "la": 30.1211,
+    "lo": 104.6481,
+    "al": 365,
+    "p": 905729,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Quzhou",
+    "la": 28.9594,
+    "lo": 118.8686,
+    "al": 77,
+    "p": 902767,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zaozhuang",
+    "la": 34.8647,
+    "lo": 117.5542,
+    "al": 79,
+    "p": 899753,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingxiang (Jiangxi)",
+    "la": 27.6167,
+    "lo": 113.8535,
+    "al": 167,
+    "p": 893550,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhoushan",
+    "la": 29.9887,
+    "lo": 122.2049,
+    "al": 2,
+    "p": 882932,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qiqihar",
+    "la": 47.3392,
+    "lo": 123.9615,
+    "al": 146,
+    "p": 882364,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Puning",
+    "la": 23.3107,
+    "lo": 116.1687,
+    "al": 12,
+    "p": 874954,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ankang",
+    "la": 32.68,
+    "lo": 109.0172,
+    "al": 273,
+    "p": 870126,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Langfang",
+    "la": 39.5208,
+    "lo": 116.7147,
+    "al": 19,
+    "p": 868066,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiaozuo",
+    "la": 35.2392,
+    "lo": 113.2391,
+    "al": 90,
+    "p": 865413,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Guang'an",
+    "la": 30.4741,
+    "lo": 106.637,
+    "al": 244,
+    "p": 858159,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Weihai",
+    "la": 37.5091,
+    "lo": 122.1136,
+    "al": 14,
+    "p": 844310,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinyu",
+    "la": 27.8043,
+    "lo": 114.9334,
+    "al": 68,
+    "p": 839488,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yibin",
+    "la": 28.7593,
+    "lo": 104.6399,
+    "al": 323,
+    "p": 836340,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Taicang",
+    "la": 31.4478,
+    "lo": 121.0939,
+    "al": 4,
+    "p": 831113,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chenzhou",
+    "la": 25.8,
+    "lo": 113.0333,
+    "al": 180,
+    "p": 822534,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Anqing",
+    "la": 30.5136,
+    "lo": 117.0472,
+    "al": 19,
+    "p": 804493,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xingtai",
+    "la": 37.0622,
+    "lo": 114.4927,
+    "al": 71,
+    "p": 798770,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhaotong",
+    "la": 27.3167,
+    "lo": 103.7167,
+    "al": 1974,
+    "p": 787845,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Panzhihua",
+    "la": 26.5851,
+    "lo": 101.7128,
+    "al": 1101,
+    "p": 787177,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chuzhou",
+    "la": 32.3219,
+    "lo": 118.2978,
+    "al": 24,
+    "p": 782671,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xuancheng",
+    "la": 30.9525,
+    "lo": 118.7553,
+    "al": 25,
+    "p": 774332,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shangyu",
+    "la": 30.0156,
+    "lo": 120.8711,
+    "al": 13,
+    "p": 770000,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Anshun",
+    "la": 26.25,
+    "lo": 105.9333,
+    "al": 1374,
+    "p": 765313,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuzhou",
+    "la": 23.4805,
+    "lo": 111.2885,
+    "al": 51,
+    "p": 761948,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qinhuangdao",
+    "la": 39.941,
+    "lo": 119.5894,
+    "al": 2,
+    "p": 759718,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shaoyang",
+    "la": 27.2382,
+    "lo": 111.4621,
+    "al": 243,
+    "p": 753194,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hegang",
+    "la": 47.3473,
+    "lo": 130.2903,
+    "al": 190,
+    "p": 743307,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ma'anshan",
+    "la": 31.6858,
+    "lo": 118.5101,
+    "al": 24,
+    "p": 741531,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shizuishan",
+    "la": 38.9808,
+    "lo": 106.3892,
+    "al": 1112,
+    "p": 739400,
+    "country": "CN",
+    "province": "Ningxia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Deyang",
+    "la": 31.1302,
+    "lo": 104.382,
+    "al": 501,
+    "p": 735070,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yangquan",
+    "la": 37.8575,
+    "lo": 113.5633,
+    "al": 722,
+    "p": 731228,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhumadian",
+    "la": 32.9794,
+    "lo": 114.0294,
+    "al": 89,
+    "p": 721670,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhangjiakou",
+    "la": 40.7834,
+    "lo": 114.8714,
+    "al": 744,
+    "p": 692602,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuxin",
+    "la": 42.0156,
+    "lo": 121.6589,
+    "al": 142,
+    "p": 689050,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huangshi",
+    "la": 30.2471,
+    "lo": 115.0481,
+    "al": 22,
+    "p": 688090,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liaoyang",
+    "la": 41.2719,
+    "lo": 123.1731,
+    "al": 33,
+    "p": 687890,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baise",
+    "la": 23.8901,
+    "lo": 106.6268,
+    "al": 144,
+    "p": 686078,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Binzhou",
+    "la": 37.3667,
+    "lo": 118.0167,
+    "al": 14,
+    "p": 682717,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yuncheng",
+    "la": 35.0231,
+    "lo": 110.9928,
+    "al": 361,
+    "p": 680036,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dezhou",
+    "la": 37.4466,
+    "lo": 116.3671,
+    "al": 25,
+    "p": 679535,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Sanmenxia",
+    "la": 34.7808,
+    "lo": 111.1929,
+    "al": 385,
+    "p": 669307,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "E'zhou",
+    "la": 30.3961,
+    "lo": 114.8865,
+    "al": 29,
+    "p": 668727,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mudanjiang",
+    "la": 44.548,
+    "lo": 129.6259,
+    "al": 254,
+    "p": 665915,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Leshan",
+    "la": 29.5623,
+    "lo": 103.7639,
+    "al": 375,
+    "p": 662814,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Rizhao",
+    "la": 35.4141,
+    "lo": 119.5291,
+    "al": 25,
+    "p": 661943,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Suining",
+    "la": 30.508,
+    "lo": 105.5733,
+    "al": 291,
+    "p": 656760,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Puyang (Henan)",
+    "la": 35.7564,
+    "lo": 115.0436,
+    "al": 60,
+    "p": 655674,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hebi",
+    "la": 35.7323,
+    "lo": 114.2862,
+    "al": 84,
+    "p": 634721,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jingmen",
+    "la": 31.0336,
+    "lo": 112.2047,
+    "al": 94,
+    "p": 632954,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dandong",
+    "la": 40.1292,
+    "lo": 124.3947,
+    "al": 10,
+    "p": 631973,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Panshan",
+    "la": 41.1881,
+    "lo": 122.0494,
+    "al": 9,
+    "p": 625040,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiaozhou",
+    "la": 36.2839,
+    "lo": 120.0033,
+    "al": 10,
+    "p": 619266,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Suizhou",
+    "la": 31.7111,
+    "lo": 113.3631,
+    "al": 67,
+    "p": 618582,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chizhou",
+    "la": 30.6613,
+    "lo": 117.4778,
+    "al": 21,
+    "p": 615274,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ya'an",
+    "la": 29.9852,
+    "lo": 102.999,
+    "al": 591,
+    "p": 612056,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jinzhou",
+    "la": 41.1078,
+    "lo": 121.1417,
+    "al": 26,
+    "p": 604269,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Sanming",
+    "la": 26.2486,
+    "lo": 117.6186,
+    "al": 126,
+    "p": 602166,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shuangyashan",
+    "la": 46.6769,
+    "lo": 131.1327,
+    "al": 153,
+    "p": 600000,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Luancheng",
+    "la": 37.8845,
+    "lo": 114.6463,
+    "al": 53,
+    "p": 597130,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mengzi",
+    "la": 23.3678,
+    "lo": 103.3821,
+    "al": 1306,
+    "p": 595100,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Honghe Hani",
+    "la": 23.3678,
+    "lo": 103.3821,
+    "al": 1306,
+    "p": 595100,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yingkou",
+    "la": 40.6647,
+    "lo": 122.2318,
+    "al": 4,
+    "p": 591159,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhangzhou",
+    "la": 24.5133,
+    "lo": 117.6556,
+    "al": 14,
+    "p": 589831,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wenchang",
+    "la": 19.5516,
+    "lo": 110.8028,
+    "al": 17,
+    "p": 560894,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Siping",
+    "la": 43.1614,
+    "lo": 124.3778,
+    "al": 176,
+    "p": 555609,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chuxiong",
+    "la": 25.0364,
+    "lo": 101.5456,
+    "al": 1784,
+    "p": 555081,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chuxiong Yi",
+    "la": 25.0364,
+    "lo": 101.5456,
+    "al": 1784,
+    "p": 555081,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huaihua",
+    "la": 27.5634,
+    "lo": 110.004,
+    "al": 236,
+    "p": 552622,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ulanqab",
+    "la": 40.993,
+    "lo": 113.133,
+    "al": 1375,
+    "p": 550231,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiamusi",
+    "la": 46.7971,
+    "lo": 130.3112,
+    "al": 66,
+    "p": 549549,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wanning",
+    "la": 18.7993,
+    "lo": 110.3841,
+    "al": 15,
+    "p": 545992,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinzhou (Shanxi)",
+    "la": 38.4092,
+    "lo": 112.7333,
+    "al": 794,
+    "p": 544683,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingdu",
+    "la": 36.7844,
+    "lo": 119.9464,
+    "al": 59,
+    "p": 542234,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ji'an",
+    "la": 27.1172,
+    "lo": 114.9793,
+    "al": 72,
+    "p": 538699,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shangluo",
+    "la": 33.8667,
+    "lo": 109.9306,
+    "al": 702,
+    "p": 531696,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qionghai",
+    "la": 19.2425,
+    "lo": 110.4642,
+    "al": 24,
+    "p": 528238,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Cangzhou",
+    "la": 38.3112,
+    "lo": 116.8533,
+    "al": 15,
+    "p": 527681,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Beihai",
+    "la": 21.4835,
+    "lo": 109.1155,
+    "al": -9999,
+    "p": 525329,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hengshui",
+    "la": 37.7391,
+    "lo": 115.6835,
+    "al": 22,
+    "p": 522147,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Guangyuan",
+    "la": 32.442,
+    "lo": 105.823,
+    "al": 525,
+    "p": 516424,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xianning",
+    "la": 29.8435,
+    "lo": 114.322,
+    "al": 30,
+    "p": 512517,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tonghua",
+    "la": 41.7197,
+    "lo": 125.9264,
+    "al": 375,
+    "p": 510000,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Banan",
+    "la": 29.3786,
+    "lo": 106.54,
+    "al": 216,
+    "p": 508703,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhangye",
+    "la": 38.9342,
+    "lo": 100.4517,
+    "al": 1481,
+    "p": 507433,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhoukou",
+    "la": 33.6333,
+    "lo": 114.6333,
+    "al": 54,
+    "p": 505171,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingliang",
+    "la": 35.5392,
+    "lo": 106.6861,
+    "al": 1354,
+    "p": 504848,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhucheng",
+    "la": 35.9947,
+    "lo": 119.3975,
+    "al": 64,
+    "p": 499285,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Loudi",
+    "la": 27.7344,
+    "lo": 111.9944,
+    "al": 135,
+    "p": 497171,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shanwei",
+    "la": 22.782,
+    "lo": 115.3475,
+    "al": 9,
+    "p": 491766,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jianshui",
+    "la": 24.2774,
+    "lo": 101.224,
+    "al": 1939,
+    "p": 490000,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xichang",
+    "la": 27.8964,
+    "lo": 102.2634,
+    "al": 1558,
+    "p": 481796,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liangshan Yi",
+    "la": 27.8964,
+    "lo": 102.2634,
+    "al": 1558,
+    "p": 481796,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chengguan Qu",
+    "la": 29.6384,
+    "lo": 91.0444,
+    "al": 3657,
+    "p": 478275,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jincheng",
+    "la": 35.5022,
+    "lo": 112.8328,
+    "al": 711,
+    "p": 476945,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yan'an",
+    "la": 36.5989,
+    "lo": 109.4917,
+    "al": 960,
+    "p": 475234,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shouguang",
+    "la": 36.88,
+    "lo": 118.7375,
+    "al": 26,
+    "p": 473620,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jingdezhen",
+    "la": 29.2947,
+    "lo": 117.2079,
+    "al": 48,
+    "p": 473561,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiaojiang",
+    "la": 28.6984,
+    "lo": 121.4733,
+    "al": 10,
+    "p": 470804,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nanping",
+    "la": 26.645,
+    "lo": 118.1736,
+    "al": 102,
+    "p": 467875,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Longshan",
+    "la": 42.8854,
+    "lo": 125.1367,
+    "al": 259,
+    "p": 465249,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Heyuan",
+    "la": 23.7333,
+    "lo": 114.6833,
+    "al": 31,
+    "p": 463907,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huangshan",
+    "la": 29.7114,
+    "lo": 118.3125,
+    "al": 134,
+    "p": 460786,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lishui",
+    "la": 28.4604,
+    "lo": 119.9103,
+    "al": 72,
+    "p": 451418,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wenshan City",
+    "la": 23.3631,
+    "lo": 104.2505,
+    "al": 1257,
+    "p": 450000,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wenshan Zhuang",
+    "la": 23.3631,
+    "lo": 104.2505,
+    "al": 1257,
+    "p": 450000,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chengde",
+    "la": 40.9519,
+    "lo": 117.9588,
+    "al": 318,
+    "p": 449325,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Basuo",
+    "la": 19.1027,
+    "lo": 108.6656,
+    "al": 17,
+    "p": 444458,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhangjiajie",
+    "la": 29.1294,
+    "lo": 110.4783,
+    "al": 174,
+    "p": 441804,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bei'an",
+    "la": 48.2667,
+    "lo": 126.6,
+    "al": 273,
+    "p": 436444,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ningde",
+    "la": 26.6617,
+    "lo": 119.5228,
+    "al": 20,
+    "p": 429260,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiuquan",
+    "la": 39.7432,
+    "lo": 98.5174,
+    "al": 1464,
+    "p": 428346,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dingxi",
+    "la": 35.5709,
+    "lo": 104.623,
+    "al": 1908,
+    "p": 420614,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tongchuan (Shaanxi)",
+    "la": 34.8988,
+    "lo": 108.9506,
+    "al": 711,
+    "p": 417740,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Guyuan",
+    "la": 36.0067,
+    "lo": 106.2808,
+    "al": 1740,
+    "p": 411854,
+    "country": "CN",
+    "province": "Ningxia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chaoyang (Liaoning)",
+    "la": 41.5703,
+    "lo": 120.4586,
+    "al": 162,
+    "p": 410005,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jixi",
+    "la": 45.2932,
+    "lo": 130.9622,
+    "al": 222,
+    "p": 403759,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tongling",
+    "la": 30.95,
+    "lo": 117.7833,
+    "al": 7,
+    "p": 402062,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gaomi",
+    "la": 36.3833,
+    "lo": 119.7528,
+    "al": 24,
+    "p": 391986,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chongzuo",
+    "la": 22.3816,
+    "lo": 107.3683,
+    "al": 128,
+    "p": 384905,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hechuan",
+    "la": 29.9923,
+    "lo": 106.2646,
+    "al": 222,
+    "p": 377213,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xuanhua",
+    "la": 40.6121,
+    "lo": 115.0646,
+    "al": 607,
+    "p": 373422,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fenghuang",
+    "la": 27.9356,
+    "lo": 109.5996,
+    "al": 449,
+    "p": 370000,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huanggang",
+    "la": 30.4514,
+    "lo": 114.8704,
+    "al": 46,
+    "p": 366769,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Anqiu",
+    "la": 36.4342,
+    "lo": 119.1925,
+    "al": 58,
+    "p": 364208,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jizhou",
+    "la": 37.5505,
+    "lo": 115.5687,
+    "al": 22,
+    "p": 362013,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lhoka",
+    "la": 29.243,
+    "lo": 91.7724,
+    "al": 3560,
+    "p": 353700,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pengze",
+    "la": 29.8988,
+    "lo": 116.5457,
+    "al": 51,
+    "p": 350000,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xilinhot",
+    "la": 43.9389,
+    "lo": 116.0702,
+    "al": 988,
+    "p": 349953,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xilingol League",
+    "la": 43.9389,
+    "lo": 116.0702,
+    "al": 988,
+    "p": 349953,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hulunbuir",
+    "la": 49.2114,
+    "lo": 119.7558,
+    "al": 611,
+    "p": 349400,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Daye",
+    "la": 30.0833,
+    "lo": 114.95,
+    "al": 25,
+    "p": 347406,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chifeng",
+    "la": 42.2683,
+    "lo": 118.9636,
+    "al": 570,
+    "p": 346654,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yunlong",
+    "la": 34.2528,
+    "lo": 117.2517,
+    "al": 30,
+    "p": 345393,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qitaihe",
+    "la": 45.768,
+    "lo": 130.9953,
+    "al": 212,
+    "p": 345033,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pizhou",
+    "la": 34.3114,
+    "lo": 117.9503,
+    "al": 25,
+    "p": 343421,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Laixi",
+    "la": 36.8592,
+    "lo": 120.5269,
+    "al": 54,
+    "p": 341470,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tieling",
+    "la": 42.2931,
+    "lo": 123.8414,
+    "al": 64,
+    "p": 333907,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hechi",
+    "la": 24.6928,
+    "lo": 108.0838,
+    "al": 222,
+    "p": 330131,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tongshan",
+    "la": 34.1805,
+    "lo": 117.1571,
+    "al": 37,
+    "p": 329661,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yanji",
+    "la": 42.8882,
+    "lo": 129.5024,
+    "al": 183,
+    "p": 326957,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yanbian Korean",
+    "la": 42.8882,
+    "lo": 129.5024,
+    "al": 183,
+    "p": 326957,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lincang",
+    "la": 23.8797,
+    "lo": 100.0945,
+    "al": 1483,
+    "p": 323708,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xingyi",
+    "la": 25.0962,
+    "lo": 104.9064,
+    "al": 1192,
+    "p": 322890,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qianxinan Buyei",
+    "la": 25.0962,
+    "lo": 104.9064,
+    "al": 1192,
+    "p": 322890,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baicheng",
+    "la": 45.6175,
+    "lo": 122.833,
+    "al": 150,
+    "p": 316970,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lianshan",
+    "la": 40.7643,
+    "lo": 120.8533,
+    "al": 17,
+    "p": 313247,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changyi",
+    "la": 36.8536,
+    "lo": 119.3908,
+    "al": 12,
+    "p": 302072,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinyi (Jiangsu)",
+    "la": 34.3842,
+    "lo": 118.3462,
+    "al": 31,
+    "p": 300511,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yangshuo",
+    "la": 24.7808,
+    "lo": 110.4897,
+    "al": 116,
+    "p": 300000,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linqu",
+    "la": 36.5156,
+    "lo": 118.5397,
+    "al": 97,
+    "p": 299646,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Simao",
+    "la": 22.7886,
+    "lo": 100.9748,
+    "al": 1331,
+    "p": 296565,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baiyin",
+    "la": 36.547,
+    "lo": 104.1702,
+    "al": 1723,
+    "p": 294400,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gaozhou",
+    "la": 21.9197,
+    "lo": 110.8568,
+    "al": 28,
+    "p": 292164,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xiuying",
+    "la": 20.0007,
+    "lo": 110.2936,
+    "al": 16,
+    "p": 290000,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dengzhou",
+    "la": 32.6822,
+    "lo": 112.0819,
+    "al": 119,
+    "p": 285032,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Enshi",
+    "la": 30.3,
+    "lo": 109.4833,
+    "al": 451,
+    "p": 279185,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Enshi Tujia",
+    "la": 30.3,
+    "lo": 109.4833,
+    "al": 451,
+    "p": 279185,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zoucheng",
+    "la": 35.4006,
+    "lo": 116.9656,
+    "al": 76,
+    "p": 277400,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fangchenggang",
+    "la": 21.7694,
+    "lo": 108.3566,
+    "al": 13,
+    "p": 276315,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Kaili",
+    "la": 26.5858,
+    "lo": 107.9797,
+    "al": 701,
+    "p": 275745,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qiandongnan Miao",
+    "la": 26.5858,
+    "lo": 107.9797,
+    "al": 701,
+    "p": 275745,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xingning",
+    "la": 24.1483,
+    "lo": 115.7227,
+    "al": 122,
+    "p": 274499,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linxia Chengguanzhen",
+    "la": 35.6003,
+    "lo": 103.2064,
+    "al": 1893,
+    "p": 274466,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linxia Hui",
+    "la": 35.6003,
+    "lo": 103.2064,
+    "al": 1893,
+    "p": 274466,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Longling County",
+    "la": 24.5866,
+    "lo": 98.6893,
+    "al": 1572,
+    "p": 270000,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuling",
+    "la": 29.71,
+    "lo": 107.3939,
+    "al": 232,
+    "p": 268658,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dongtai",
+    "la": 32.8523,
+    "lo": 120.3095,
+    "al": 7,
+    "p": 262873,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tongliao",
+    "la": 43.6125,
+    "lo": 122.2653,
+    "al": 182,
+    "p": 261110,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changle",
+    "la": 36.7058,
+    "lo": 118.8275,
+    "al": 62,
+    "p": 259161,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jining (Inner Mongolia)",
+    "la": 41.0275,
+    "lo": 113.1058,
+    "al": 1409,
+    "p": 258757,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Rugao",
+    "la": 32.3704,
+    "lo": 120.5765,
+    "al": 6,
+    "p": 257400,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yanzhou",
+    "la": 35.5528,
+    "lo": 116.8286,
+    "al": 54,
+    "p": 254788,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Laohekou",
+    "la": 32.3858,
+    "lo": 111.6678,
+    "al": 93,
+    "p": 253112,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Suihua",
+    "la": 46.6481,
+    "lo": 126.9666,
+    "al": 179,
+    "p": 252245,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wafangdian",
+    "la": 39.6183,
+    "lo": 122.0081,
+    "al": 103,
+    "p": 250591,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Beibei",
+    "la": 29.8274,
+    "lo": 106.4364,
+    "al": 237,
+    "p": 247702,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huayin",
+    "la": 34.5653,
+    "lo": 110.0664,
+    "al": 348,
+    "p": 242488,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiyuan",
+    "la": 35.0891,
+    "lo": 112.5881,
+    "al": 158,
+    "p": 242143,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xiantao",
+    "la": 30.3708,
+    "lo": 113.4429,
+    "al": 36,
+    "p": 239406,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qingzhou",
+    "la": 36.6967,
+    "lo": 118.4797,
+    "al": 98,
+    "p": 236406,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yuci",
+    "la": 37.6803,
+    "lo": 112.7319,
+    "al": 798,
+    "p": 235929,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bole",
+    "la": 44.8933,
+    "lo": 82.0699,
+    "al": 509,
+    "p": 235585,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bortala Mongol",
+    "la": 44.8933,
+    "lo": 82.0699,
+    "al": 509,
+    "p": 235585,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dali",
+    "la": 25.5847,
+    "lo": 100.2123,
+    "al": 1977,
+    "p": 235305,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dali Bai",
+    "la": 25.5847,
+    "lo": 100.2123,
+    "al": 1977,
+    "p": 235305,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiayuguan",
+    "la": 39.8112,
+    "lo": 98.2862,
+    "al": 1635,
+    "p": 231853,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jinchang",
+    "la": 38.5006,
+    "lo": 102.1938,
+    "al": 1553,
+    "p": 228561,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Heihe",
+    "la": 50.2441,
+    "lo": 127.4902,
+    "al": 139,
+    "p": 223832,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tongchuanshi",
+    "la": 35.0747,
+    "lo": 109.085,
+    "al": 834,
+    "p": 223603,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xintai",
+    "la": 35.9006,
+    "lo": 117.7519,
+    "al": 197,
+    "p": 222459,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuxue",
+    "la": 29.8506,
+    "lo": 115.5525,
+    "al": 23,
+    "p": 220661,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuhai",
+    "la": 39.6844,
+    "lo": 106.8158,
+    "al": 1096,
+    "p": 218427,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yintai",
+    "la": 35.1152,
+    "lo": 109.097,
+    "al": 856,
+    "p": 217509,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Longgang",
+    "la": 22.7229,
+    "lo": 114.2633,
+    "al": 34,
+    "p": 215273,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yingtan",
+    "la": 28.2333,
+    "lo": 117,
+    "al": 34,
+    "p": 214229,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Luojiang",
+    "la": 31.305,
+    "lo": 104.5048,
+    "al": 509,
+    "p": 212186,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lijiang",
+    "la": 26.8688,
+    "lo": 100.2207,
+    "al": 2397,
+    "p": 211151,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hailar",
+    "la": 49.2,
+    "lo": 119.7,
+    "al": 624,
+    "p": 211066,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jinghong",
+    "la": 22.0026,
+    "lo": 100.7697,
+    "al": 547,
+    "p": 205523,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xishuangbanna Dai",
+    "la": 22.0026,
+    "lo": 100.7697,
+    "al": 547,
+    "p": 205523,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nanchuan",
+    "la": 29.152,
+    "lo": 107.1034,
+    "al": 538,
+    "p": 204775,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bishan",
+    "la": 29.5949,
+    "lo": 106.2248,
+    "al": 283,
+    "p": 204702,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gaoping",
+    "la": 30.7758,
+    "lo": 106.1029,
+    "al": 283,
+    "p": 204368,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nyingchi",
+    "la": 29.6488,
+    "lo": 94.3551,
+    "al": 2970,
+    "p": 200000,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Beiliu",
+    "la": 22.7072,
+    "lo": 110.3492,
+    "al": 102,
+    "p": 199769,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Duyun",
+    "la": 26.2667,
+    "lo": 107.5167,
+    "al": 815,
+    "p": 198516,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qiannan Buyei",
+    "la": 26.2667,
+    "lo": 107.5167,
+    "al": 815,
+    "p": 198516,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Kaiyuan (Yunnan)",
+    "la": 23.6977,
+    "lo": 103.3037,
+    "al": 1259,
+    "p": 198423,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mentougou",
+    "la": 39.9382,
+    "lo": 116.0931,
+    "al": 111,
+    "p": 197772,
+    "country": "CN",
+    "province": "Beijing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lushui",
+    "la": 25.8232,
+    "lo": 98.8585,
+    "al": 819,
+    "p": 197000,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ezhou",
+    "la": 30.4,
+    "lo": 114.8333,
+    "al": 25,
+    "p": 193652,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhengding",
+    "la": 38.145,
+    "lo": 114.5656,
+    "al": 64,
+    "p": 193524,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yongchuan",
+    "la": 29.3538,
+    "lo": 105.8939,
+    "al": 326,
+    "p": 192954,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hepu",
+    "la": 21.6592,
+    "lo": 109.2001,
+    "al": 12,
+    "p": 192813,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Aihui",
+    "la": 49.9795,
+    "lo": 127.4812,
+    "al": 128,
+    "p": 192764,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuding",
+    "la": 27.3273,
+    "lo": 120.214,
+    "al": 13,
+    "p": 192352,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Haicheng",
+    "la": 40.8516,
+    "lo": 122.7475,
+    "al": 33,
+    "p": 191651,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Laizhou",
+    "la": 37.1807,
+    "lo": 119.9422,
+    "al": 43,
+    "p": 188000,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shangri-La",
+    "la": 27.8251,
+    "lo": 99.7078,
+    "al": 3283,
+    "p": 186400,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Diqing Tibetan",
+    "la": 27.8251,
+    "lo": 99.7078,
+    "al": 3283,
+    "p": 186400,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dunhuang",
+    "la": 40.1667,
+    "lo": 94.6833,
+    "al": 1131,
+    "p": 186027,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zaoyang",
+    "la": 32.1272,
+    "lo": 112.7542,
+    "al": 113,
+    "p": 184509,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baishan",
+    "la": 41.9385,
+    "lo": 126.4197,
+    "al": 471,
+    "p": 183880,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Anda",
+    "la": 46.4487,
+    "lo": 125.3016,
+    "al": 143,
+    "p": 181271,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingwu County",
+    "la": 32.4073,
+    "lo": 104.5274,
+    "al": 877,
+    "p": 180000,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qianjiang (Hubei)",
+    "la": 30.421,
+    "lo": 112.8919,
+    "al": 36,
+    "p": 179079,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiutai",
+    "la": 44.1525,
+    "lo": 125.8328,
+    "al": 180,
+    "p": 175115,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Laiyang",
+    "la": 36.9758,
+    "lo": 120.7136,
+    "al": 40,
+    "p": 169594,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ulanhot",
+    "la": 46.0833,
+    "lo": 122.0833,
+    "al": 303,
+    "p": 165846,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hinggan League",
+    "la": 46.0833,
+    "lo": 122.0833,
+    "al": 303,
+    "p": 165846,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hengshan",
+    "la": 45.2084,
+    "lo": 130.8981,
+    "al": 260,
+    "p": 164844,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tongzhou",
+    "la": 39.904,
+    "lo": 116.6618,
+    "al": 33,
+    "p": 163326,
+    "country": "CN",
+    "province": "Beijing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ning'er",
+    "la": 23.0405,
+    "lo": 101.0368,
+    "al": 1380,
+    "p": 162711,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nanpiao",
+    "la": 41.0982,
+    "lo": 120.7479,
+    "al": 98,
+    "p": 157044,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yizhou",
+    "la": 24.5,
+    "lo": 108.6667,
+    "al": 136,
+    "p": 155872,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yichun (Heilongjiang)",
+    "la": 47.7214,
+    "lo": 128.8753,
+    "al": 225,
+    "p": 155762,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Beipiao",
+    "la": 41.7919,
+    "lo": 120.7792,
+    "al": 266,
+    "p": 154999,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Guangshui",
+    "la": 31.6199,
+    "lo": 113.9978,
+    "al": 83,
+    "p": 154771,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fu'an",
+    "la": 27.0913,
+    "lo": 119.6445,
+    "al": 20,
+    "p": 154439,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhaodong",
+    "la": 46.0522,
+    "lo": 125.9552,
+    "al": 143,
+    "p": 154406,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Sanshui",
+    "la": 23.1549,
+    "lo": 112.8916,
+    "al": 12,
+    "p": 153714,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Boshan",
+    "la": 36.4833,
+    "lo": 117.8333,
+    "al": 368,
+    "p": 153596,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yangchun",
+    "la": 22.1667,
+    "lo": 111.7833,
+    "al": 22,
+    "p": 153547,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dingzhou",
+    "la": 38.5147,
+    "lo": 114.9868,
+    "al": 54,
+    "p": 152934,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Longfeng",
+    "la": 46.5317,
+    "lo": 125.1038,
+    "al": 147,
+    "p": 152074,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dunhua",
+    "la": 43.3695,
+    "lo": 128.2286,
+    "al": 509,
+    "p": 148844,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Sujiatun",
+    "la": 41.6592,
+    "lo": 123.3392,
+    "al": 40,
+    "p": 148113,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Honggang",
+    "la": 46.3974,
+    "lo": 124.8845,
+    "al": 123,
+    "p": 147977,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinji",
+    "la": 37.926,
+    "lo": 115.2191,
+    "al": 33,
+    "p": 145911,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Taishan",
+    "la": 22.2513,
+    "lo": 112.7799,
+    "al": 3,
+    "p": 145440,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Acheng",
+    "la": 45.5456,
+    "lo": 126.9519,
+    "al": 149,
+    "p": 144665,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hailin",
+    "la": 44.5715,
+    "lo": 129.3854,
+    "al": 255,
+    "p": 144443,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qianjiang (Chongqing)",
+    "la": 29.5328,
+    "lo": 108.7748,
+    "al": 582,
+    "p": 143727,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jieshou",
+    "la": 33.2634,
+    "lo": 115.3611,
+    "al": 42,
+    "p": 141993,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yushu (Qinghai)",
+    "la": 33.0012,
+    "lo": 97.0089,
+    "al": 3688,
+    "p": 141308,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yushu Tibetan",
+    "la": 33.0012,
+    "lo": 97.0089,
+    "al": 3688,
+    "p": 141308,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gongzhuling",
+    "la": 43.5007,
+    "lo": 124.8198,
+    "al": 211,
+    "p": 140909,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shanhaiguan",
+    "la": 40.0012,
+    "lo": 119.754,
+    "al": 4,
+    "p": 140000,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huadian",
+    "la": 42.9721,
+    "lo": 126.7411,
+    "al": 264,
+    "p": 139047,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liuzhi",
+    "la": 26.2342,
+    "lo": 105.426,
+    "al": 1399,
+    "p": 138826,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuyu (Jilin)",
+    "la": 45.1833,
+    "lo": 124.8167,
+    "al": 141,
+    "p": 138704,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chaohu",
+    "la": 31.6,
+    "lo": 117.8667,
+    "al": 11,
+    "p": 138463,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liangping",
+    "la": 30.6611,
+    "lo": 107.7661,
+    "al": 467,
+    "p": 137620,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Doilungdeqen",
+    "la": 29.655,
+    "lo": 90.9918,
+    "al": 3664,
+    "p": 137451,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hejiang",
+    "la": 28.8116,
+    "lo": 105.8336,
+    "al": 236,
+    "p": 137437,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuyishan",
+    "la": 27.7599,
+    "lo": 118.0307,
+    "al": 224,
+    "p": 137133,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiashan",
+    "la": 30.8492,
+    "lo": 120.9258,
+    "al": 7,
+    "p": 137112,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huinong",
+    "la": 39.2333,
+    "lo": 106.7694,
+    "al": 1103,
+    "p": 136570,
+    "country": "CN",
+    "province": "Ningxia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gejiu",
+    "la": 23.3608,
+    "lo": 103.1537,
+    "al": 1708,
+    "p": 136135,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Daxinganling",
+    "la": 50.4167,
+    "lo": 124.1167,
+    "al": 381,
+    "p": 135760,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiawang",
+    "la": 34.4328,
+    "lo": 117.4419,
+    "al": 31,
+    "p": 133861,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Puqi",
+    "la": 29.7167,
+    "lo": 113.8833,
+    "al": 40,
+    "p": 132891,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wugang",
+    "la": 26.7279,
+    "lo": 110.632,
+    "al": 319,
+    "p": 132457,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhalantun",
+    "la": 48.0095,
+    "lo": 122.7365,
+    "al": 320,
+    "p": 132224,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dawukou",
+    "la": 39.0419,
+    "lo": 106.3958,
+    "al": 1119,
+    "p": 131880,
+    "country": "CN",
+    "province": "Ningxia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shangzhi",
+    "la": 45.2056,
+    "lo": 128.0024,
+    "al": 174,
+    "p": 131006,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shuangcheng",
+    "la": 45.3798,
+    "lo": 126.3071,
+    "al": 164,
+    "p": 130710,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dongyang",
+    "la": 29.2678,
+    "lo": 120.2253,
+    "al": 97,
+    "p": 130387,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Songjiang",
+    "la": 31.0344,
+    "lo": 121.2233,
+    "al": 3,
+    "p": 130218,
+    "country": "CN",
+    "province": "Shanghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuda",
+    "la": 39.4994,
+    "lo": 106.7117,
+    "al": 1129,
+    "p": 129922,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingxiang (Guangxi)",
+    "la": 22.0969,
+    "lo": 106.7567,
+    "al": 359,
+    "p": 129843,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Leiyang",
+    "la": 26.4024,
+    "lo": 112.8591,
+    "al": 69,
+    "p": 129116,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiangyou",
+    "la": 31.7667,
+    "lo": 104.7167,
+    "al": 527,
+    "p": 127225,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tengyue",
+    "la": 24.9949,
+    "lo": 98.5128,
+    "al": 1639,
+    "p": 127133,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Macheng",
+    "la": 31.1801,
+    "lo": 115.0221,
+    "al": 57,
+    "p": 126366,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huicheng",
+    "la": 23.0385,
+    "lo": 116.2899,
+    "al": 10,
+    "p": 125919,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yushu (Jilin)",
+    "la": 44.8275,
+    "lo": 126.5406,
+    "al": 196,
+    "p": 124736,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baoshan (Heilongjiang)",
+    "la": 46.5747,
+    "lo": 131.3932,
+    "al": 192,
+    "p": 123791,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiaohe",
+    "la": 43.7213,
+    "lo": 127.3347,
+    "al": 279,
+    "p": 123018,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huangzhou",
+    "la": 30.45,
+    "lo": 114.8,
+    "al": 19,
+    "p": 122563,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhoucun",
+    "la": 36.8167,
+    "lo": 117.8167,
+    "al": 53,
+    "p": 122402,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lichuan",
+    "la": 30.3,
+    "lo": 108.85,
+    "al": 1255,
+    "p": 120587,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fengcheng",
+    "la": 40.4536,
+    "lo": 124.0717,
+    "al": 65,
+    "p": 120514,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhaoyuan (Shandong)",
+    "la": 37.365,
+    "lo": 120.41,
+    "al": 74,
+    "p": 120000,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lhasa",
+    "la": 29.65,
+    "lo": 91.1,
+    "al": 3651,
+    "p": 118721,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shaoshan",
+    "la": 27.9167,
+    "lo": 112.5167,
+    "al": 116,
+    "p": 118000,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wushan (Chongqing)",
+    "la": 31.0775,
+    "lo": 109.8764,
+    "al": 291,
+    "p": 117873,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shunyi",
+    "la": 40.1217,
+    "lo": 116.6478,
+    "al": 45,
+    "p": 117623,
+    "country": "CN",
+    "province": "Beijing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Longjing",
+    "la": 42.7713,
+    "lo": 129.4231,
+    "al": 245,
+    "p": 117185,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gulin",
+    "la": 28.0422,
+    "lo": 105.8104,
+    "al": 506,
+    "p": 116527,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chenggu",
+    "la": 33.1492,
+    "lo": 107.3258,
+    "al": 485,
+    "p": 116375,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yakeshi",
+    "la": 49.2833,
+    "lo": 120.7333,
+    "al": 661,
+    "p": 116284,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lengshuijiang",
+    "la": 27.6881,
+    "lo": 111.4294,
+    "al": 194,
+    "p": 115399,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yuyao",
+    "la": 30.05,
+    "lo": 121.1494,
+    "al": 59,
+    "p": 114177,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhaozhou",
+    "la": 45.706,
+    "lo": 125.2661,
+    "al": 154,
+    "p": 114009,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wayaobu",
+    "la": 37.1361,
+    "lo": 109.6597,
+    "al": 1110,
+    "p": 113698,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingshan",
+    "la": 22.9938,
+    "lo": 114.7131,
+    "al": 22,
+    "p": 113631,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Songyuan",
+    "la": 45.129,
+    "lo": 124.8277,
+    "al": 134,
+    "p": 113611,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Taonan",
+    "la": 45.3332,
+    "lo": 122.7846,
+    "al": 148,
+    "p": 112819,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shaowu",
+    "la": 27.3409,
+    "lo": 117.4831,
+    "al": 196,
+    "p": 112585,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Kaiyuan (Liaoning)",
+    "la": 42.5331,
+    "lo": 124.0403,
+    "al": 91,
+    "p": 112462,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuzhishan",
+    "la": 18.7823,
+    "lo": 109.5013,
+    "al": 305,
+    "p": 112269,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhuji",
+    "la": 29.7188,
+    "lo": 120.2423,
+    "al": 23,
+    "p": 110721,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hailun",
+    "la": 47.4466,
+    "lo": 126.9248,
+    "al": 230,
+    "p": 109881,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Didao",
+    "la": 45.3473,
+    "lo": 130.8369,
+    "al": 198,
+    "p": 109561,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hulan",
+    "la": 45.8933,
+    "lo": 126.5784,
+    "al": 132,
+    "p": 109104,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhongxiang",
+    "la": 31.1661,
+    "lo": 112.5831,
+    "al": 50,
+    "p": 108883,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dehui",
+    "la": 44.5367,
+    "lo": 125.6943,
+    "al": 174,
+    "p": 108818,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xuyong",
+    "la": 28.1699,
+    "lo": 105.4345,
+    "al": 367,
+    "p": 108352,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nehe",
+    "la": 48.4793,
+    "lo": 124.8702,
+    "al": 206,
+    "p": 108253,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jalai Nur",
+    "la": 49.45,
+    "lo": 117.7,
+    "al": 566,
+    "p": 107828,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tieli",
+    "la": 46.9754,
+    "lo": 128.048,
+    "al": 209,
+    "p": 107621,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Anning",
+    "la": 24.9227,
+    "lo": 102.485,
+    "al": 1836,
+    "p": 106795,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Longjiang",
+    "la": 47.336,
+    "lo": 123.196,
+    "al": 182,
+    "p": 106384,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinghua",
+    "la": 32.9392,
+    "lo": 119.8342,
+    "al": 8,
+    "p": 105918,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Daxing",
+    "la": 39.7403,
+    "lo": 116.3269,
+    "al": 42,
+    "p": 104904,
+    "country": "CN",
+    "province": "Beijing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pulandian",
+    "la": 39.3953,
+    "lo": 121.9669,
+    "al": 14,
+    "p": 104277,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuchuan",
+    "la": 21.4571,
+    "lo": 110.7659,
+    "al": 7,
+    "p": 104168,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yuxi",
+    "la": 24.355,
+    "lo": 102.5422,
+    "al": 1638,
+    "p": 103829,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tongren (Qinghai)",
+    "la": 35.5148,
+    "lo": 102.016,
+    "al": 2506,
+    "p": 103700,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gangu Chengguanzhen",
+    "la": 34.7356,
+    "lo": 105.3263,
+    "al": 1287,
+    "p": 103589,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jishou",
+    "la": 28.3193,
+    "lo": 109.7335,
+    "al": 201,
+    "p": 102332,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xiangxi Tujia",
+    "la": 28.3193,
+    "lo": 109.7335,
+    "al": 201,
+    "p": 102332,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shuifu",
+    "la": 28.6321,
+    "lo": 104.4078,
+    "al": 276,
+    "p": 102143,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lianjiang",
+    "la": 21.6467,
+    "lo": 110.2817,
+    "al": 46,
+    "p": 100341,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linxi",
+    "la": 39.7118,
+    "lo": 118.4495,
+    "al": 46,
+    "p": 100316,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Kangding",
+    "la": 30.0022,
+    "lo": 101.9569,
+    "al": 2826,
+    "p": 100000,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Garze Tibetan",
+    "la": 30.0022,
+    "lo": 101.9569,
+    "al": 2826,
+    "p": 100000,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xixiang",
+    "la": 32.987,
+    "lo": 107.764,
+    "al": 440,
+    "p": 99867,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dongsheng",
+    "la": 39.8161,
+    "lo": 109.9776,
+    "al": 1439,
+    "p": 99809,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wangkui",
+    "la": 46.8321,
+    "lo": 126.4766,
+    "al": 178,
+    "p": 99617,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Meihekou",
+    "la": 42.5287,
+    "lo": 125.6788,
+    "al": 319,
+    "p": 99419,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinle",
+    "la": 38.349,
+    "lo": 114.6853,
+    "al": 60,
+    "p": 99347,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xingcheng",
+    "la": 40.6167,
+    "lo": 120.7167,
+    "al": 10,
+    "p": 98968,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Renqiu",
+    "la": 38.7094,
+    "lo": 116.1009,
+    "al": 17,
+    "p": 98569,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Suifenhe",
+    "la": 44.3998,
+    "lo": 131.1478,
+    "al": 441,
+    "p": 98561,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinyi (Guangdong)",
+    "la": 22.373,
+    "lo": 110.9475,
+    "al": 89,
+    "p": 98259,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chengzihe",
+    "la": 45.3361,
+    "lo": 131.0049,
+    "al": 199,
+    "p": 98188,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fangshan",
+    "la": 39.687,
+    "lo": 115.9966,
+    "al": 42,
+    "p": 97026,
+    "country": "CN",
+    "province": "Beijing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nanxi",
+    "la": 28.8421,
+    "lo": 104.9796,
+    "al": 274,
+    "p": 96061,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Boli",
+    "la": 45.7529,
+    "lo": 130.5845,
+    "al": 216,
+    "p": 95260,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xiaoshan",
+    "la": 30.1675,
+    "lo": 120.2588,
+    "al": 14,
+    "p": 95234,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuchang",
+    "la": 44.9275,
+    "lo": 127.1604,
+    "al": 190,
+    "p": 94786,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bayan Hot",
+    "la": 38.8386,
+    "lo": 105.6686,
+    "al": 1529,
+    "p": 94445,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Alxa League",
+    "la": 38.8386,
+    "lo": 105.6686,
+    "al": 1529,
+    "p": 94445,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yishui",
+    "la": 35.7847,
+    "lo": 118.6281,
+    "al": 156,
+    "p": 94115,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shuangliao",
+    "la": 43.5107,
+    "lo": 123.5007,
+    "al": 115,
+    "p": 93666,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhaoyuan (Heilongjiang)",
+    "la": 45.5197,
+    "lo": 125.0763,
+    "al": 129,
+    "p": 93505,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changping",
+    "la": 40.2161,
+    "lo": 116.2347,
+    "al": 68,
+    "p": 93174,
+    "country": "CN",
+    "province": "Beijing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lianzhou",
+    "la": 24.7819,
+    "lo": 112.3712,
+    "al": 99,
+    "p": 92827,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Danjiangkou",
+    "la": 32.5428,
+    "lo": 111.5086,
+    "al": 108,
+    "p": 92008,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huazhou",
+    "la": 21.6333,
+    "lo": 110.5833,
+    "al": 35,
+    "p": 91701,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xingren",
+    "la": 25.4333,
+    "lo": 105.2333,
+    "al": 1445,
+    "p": 91579,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lingyuan",
+    "la": 41.24,
+    "lo": 119.4011,
+    "al": 394,
+    "p": 91418,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gaoyou",
+    "la": 32.7893,
+    "lo": 119.4418,
+    "al": 6,
+    "p": 90911,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yulinshi",
+    "la": 38.2918,
+    "lo": 109.7375,
+    "al": 1056,
+    "p": 90870,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hanting",
+    "la": 36.7708,
+    "lo": 119.2108,
+    "al": 18,
+    "p": 90637,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tongren (Guizhou)",
+    "la": 27.7172,
+    "lo": 109.1853,
+    "al": 263,
+    "p": 90593,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Sishui",
+    "la": 35.6489,
+    "lo": 117.2758,
+    "al": 112,
+    "p": 90175,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fujin",
+    "la": 47.2472,
+    "lo": 132.0296,
+    "al": 60,
+    "p": 89442,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lengshuitan",
+    "la": 26.4111,
+    "lo": 111.5956,
+    "al": 101,
+    "p": 88935,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wangqing",
+    "la": 43.3108,
+    "lo": 129.7633,
+    "al": 252,
+    "p": 88732,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dongxing",
+    "la": 21.55,
+    "lo": 107.9667,
+    "al": 16,
+    "p": 88607,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hanchuan",
+    "la": 30.65,
+    "lo": 113.7667,
+    "al": 25,
+    "p": 87737,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qiongshan",
+    "la": 20.0086,
+    "lo": 110.3538,
+    "al": 20,
+    "p": 87657,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xiangxiang",
+    "la": 27.7333,
+    "lo": 112.5333,
+    "al": 46,
+    "p": 87592,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Deqing",
+    "la": 30.5449,
+    "lo": 119.9599,
+    "al": 9,
+    "p": 87576,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mishan",
+    "la": 45.55,
+    "lo": 131.8833,
+    "al": 134,
+    "p": 87257,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nenjiang",
+    "la": 49.1741,
+    "lo": 125.2197,
+    "al": 228,
+    "p": 87236,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Anlong",
+    "la": 25.1,
+    "lo": 105.5167,
+    "al": 1479,
+    "p": 86416,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qamdo",
+    "la": 31.1304,
+    "lo": 97.1798,
+    "al": 3235,
+    "p": 86280,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Longnan",
+    "la": 33.3979,
+    "lo": 104.917,
+    "al": 1009,
+    "p": 85826,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Helong",
+    "la": 42.5397,
+    "lo": 128.9972,
+    "al": 447,
+    "p": 85756,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qufu",
+    "la": 35.5967,
+    "lo": 116.9911,
+    "al": 69,
+    "p": 85144,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lingdong",
+    "la": 46.5543,
+    "lo": 131.1449,
+    "al": 165,
+    "p": 83636,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ningyang",
+    "la": 35.7642,
+    "lo": 116.7914,
+    "al": 65,
+    "p": 82994,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jinshi",
+    "la": 29.6049,
+    "lo": 111.8701,
+    "al": 65,
+    "p": 82906,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yuanping",
+    "la": 38.7153,
+    "lo": 112.7575,
+    "al": 797,
+    "p": 82883,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liping",
+    "la": 26.2311,
+    "lo": 109.1314,
+    "al": 563,
+    "p": 82710,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changqing",
+    "la": 36.5575,
+    "lo": 116.7272,
+    "al": 39,
+    "p": 82598,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yima",
+    "la": 34.7381,
+    "lo": 111.8839,
+    "al": 484,
+    "p": 82509,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nangong",
+    "la": 37.3546,
+    "lo": 115.3888,
+    "al": 32,
+    "p": 82386,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changning",
+    "la": 28.5777,
+    "lo": 104.9209,
+    "al": 264,
+    "p": 81248,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Feicheng",
+    "la": 35.2606,
+    "lo": 117.9675,
+    "al": 114,
+    "p": 80929,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shanting",
+    "la": 35.0753,
+    "lo": 117.4578,
+    "al": 146,
+    "p": 80843,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yingjiang",
+    "la": 24.7102,
+    "lo": 97.9367,
+    "al": 826,
+    "p": 80481,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhuanghe",
+    "la": 39.7008,
+    "lo": 122.9911,
+    "al": 5,
+    "p": 80384,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baoying",
+    "la": 33.2292,
+    "lo": 119.3092,
+    "al": 4,
+    "p": 80292,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dashiqiao",
+    "la": 40.6373,
+    "lo": 122.5025,
+    "al": 16,
+    "p": 80223,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Panshi",
+    "la": 42.9372,
+    "lo": 126.0574,
+    "al": 307,
+    "p": 80200,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dushan",
+    "la": 25.8333,
+    "lo": 107.5333,
+    "al": 992,
+    "p": 80045,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Rikaze",
+    "la": 29.25,
+    "lo": 88.8833,
+    "al": 3847,
+    "p": 80000,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Taixing",
+    "la": 32.1667,
+    "lo": 120.0136,
+    "al": 9,
+    "p": 79655,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinzhou (Hubei)",
+    "la": 30.8667,
+    "lo": 114.8,
+    "al": 29,
+    "p": 78767,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tumen",
+    "la": 42.9656,
+    "lo": 129.842,
+    "al": 98,
+    "p": 78719,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Youhao",
+    "la": 47.8531,
+    "lo": 128.8356,
+    "al": 238,
+    "p": 78402,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingyi",
+    "la": 35.5006,
+    "lo": 117.6308,
+    "al": 154,
+    "p": 78254,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wulong",
+    "la": 29.3243,
+    "lo": 107.7606,
+    "al": 217,
+    "p": 78225,
+    "country": "CN",
+    "province": "Chongqing",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linping",
+    "la": 30.4225,
+    "lo": 120.2972,
+    "al": 15,
+    "p": 78180,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linkou",
+    "la": 45.2762,
+    "lo": 130.2733,
+    "al": 286,
+    "p": 77754,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huangmei",
+    "la": 30.1924,
+    "lo": 116.025,
+    "al": 48,
+    "p": 77633,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shulan",
+    "la": 44.4113,
+    "lo": 126.9483,
+    "al": 239,
+    "p": 77420,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiexiu",
+    "la": 37.0244,
+    "lo": 111.9125,
+    "al": 756,
+    "p": 77178,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hunchun",
+    "la": 42.8674,
+    "lo": 130.3569,
+    "al": 42,
+    "p": 77028,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fenghua",
+    "la": 29.6563,
+    "lo": 121.4064,
+    "al": 17,
+    "p": 76653,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lintong",
+    "la": 34.378,
+    "lo": 109.2089,
+    "al": 425,
+    "p": 75882,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chaoyang (Jilin)",
+    "la": 42.6622,
+    "lo": 126.0263,
+    "al": 297,
+    "p": 75347,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuyu (Heilongjiang)",
+    "la": 47.7949,
+    "lo": 124.4577,
+    "al": 146,
+    "p": 75147,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yanggu",
+    "la": 36.1106,
+    "lo": 115.7753,
+    "al": 42,
+    "p": 74725,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Suixi",
+    "la": 33.8907,
+    "lo": 116.7747,
+    "al": 34,
+    "p": 74172,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xinmin",
+    "la": 41.9908,
+    "lo": 122.8253,
+    "al": 34,
+    "p": 74139,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lanxi (Zhejiang)",
+    "la": 29.2159,
+    "lo": 119.4716,
+    "al": 38,
+    "p": 73706,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Genhe",
+    "la": 50.7833,
+    "lo": 121.5167,
+    "al": 713,
+    "p": 73631,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shixing",
+    "la": 24.9482,
+    "lo": 114.0657,
+    "al": 106,
+    "p": 72996,
+    "country": "CN",
+    "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lanxi (Heilongjiang)",
+    "la": 46.2577,
+    "lo": 126.2806,
+    "al": 152,
+    "p": 72528,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Caidian",
+    "la": 30.5833,
+    "lo": 114.0333,
+    "al": 24,
+    "p": 71891,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shangsi",
+    "la": 22.1563,
+    "lo": 107.9795,
+    "al": 188,
+    "p": 71468,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changtu",
+    "la": 42.7788,
+    "lo": 124.0954,
+    "al": 135,
+    "p": 71284,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Anlu",
+    "la": 31.2575,
+    "lo": 113.6783,
+    "al": 49,
+    "p": 71198,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yilan",
+    "la": 46.3223,
+    "lo": 129.5608,
+    "al": 92,
+    "p": 71180,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Guiping",
+    "la": 23.3948,
+    "lo": 110.0743,
+    "al": 50,
+    "p": 71066,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Poyang",
+    "la": 28.9924,
+    "lo": 116.6675,
+    "al": 23,
+    "p": 70787,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gongchangling",
+    "la": 41.1167,
+    "lo": 123.45,
+    "al": 214,
+    "p": 70761,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jimo",
+    "la": 36.3897,
+    "lo": 120.4622,
+    "al": 25,
+    "p": 70733,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baiquan",
+    "la": 47.6066,
+    "lo": 126.0823,
+    "al": 226,
+    "p": 70472,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiangyan",
+    "la": 32.5061,
+    "lo": 120.1428,
+    "al": 9,
+    "p": 70375,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shiguai",
+    "la": 40.7058,
+    "lo": 110.2856,
+    "al": 1337,
+    "p": 70357,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuyang (Zhejiang)",
+    "la": 30.0533,
+    "lo": 119.9519,
+    "al": 22,
+    "p": 70183,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Haining",
+    "la": 30.5363,
+    "lo": 120.6864,
+    "al": 7,
+    "p": 70171,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chengxian Chengguanzhen",
+    "la": 33.7478,
+    "lo": 105.7329,
+    "al": 964,
+    "p": 69427,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linjiang",
+    "la": 41.8069,
+    "lo": 126.9078,
+    "al": 339,
+    "p": 69149,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wushan (Gansu)",
+    "la": 34.7208,
+    "lo": 104.8858,
+    "al": 1496,
+    "p": 68643,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Heishan",
+    "la": 41.6892,
+    "lo": 122.1128,
+    "al": 26,
+    "p": 68603,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wenjiang",
+    "la": 28.3881,
+    "lo": 104.5634,
+    "al": 522,
+    "p": 68433,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mingguang",
+    "la": 32.7802,
+    "lo": 117.9638,
+    "al": 16,
+    "p": 68351,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ninghai",
+    "la": 29.2892,
+    "lo": 121.4247,
+    "al": 38,
+    "p": 68330,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xunyang",
+    "la": 32.8239,
+    "lo": 109.3653,
+    "al": 453,
+    "p": 67929,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dongfeng",
+    "la": 42.6739,
+    "lo": 125.5289,
+    "al": 330,
+    "p": 67820,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jiang'an",
+    "la": 28.7334,
+    "lo": 105.0683,
+    "al": 282,
+    "p": 67776,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhenlai",
+    "la": 45.8496,
+    "lo": 123.1979,
+    "al": 139,
+    "p": 67760,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lueeyang Chengguanzhen",
+    "la": 33.3321,
+    "lo": 106.155,
+    "al": 745,
+    "p": 67496,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wenling",
+    "la": 28.3752,
+    "lo": 121.3842,
+    "al": 6,
+    "p": 67433,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuqing",
+    "la": 25.7294,
+    "lo": 119.3747,
+    "al": 17,
+    "p": 67397,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lushar",
+    "la": 36.4842,
+    "lo": 101.5633,
+    "al": 2738,
+    "p": 67153,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liuhe",
+    "la": 42.2847,
+    "lo": 125.7454,
+    "al": 355,
+    "p": 66975,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hanyin Chengguanzhen",
+    "la": 32.8914,
+    "lo": 108.5047,
+    "al": 361,
+    "p": 66926,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tailai",
+    "la": 46.39,
+    "lo": 123.4085,
+    "al": 141,
+    "p": 66623,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chengyang",
+    "la": 35.5794,
+    "lo": 118.8328,
+    "al": 112,
+    "p": 66588,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lianyuan",
+    "la": 27.6883,
+    "lo": 111.6642,
+    "al": 151,
+    "p": 66501,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huinan",
+    "la": 42.6225,
+    "lo": 126.2614,
+    "al": 315,
+    "p": 66315,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Muling",
+    "la": 44.9165,
+    "lo": 130.5171,
+    "al": 259,
+    "p": 66170,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huanan",
+    "la": 46.2362,
+    "lo": 130.5464,
+    "al": 153,
+    "p": 66087,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mengyin",
+    "la": 35.7069,
+    "lo": 117.9264,
+    "al": 182,
+    "p": 65889,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Babu",
+    "la": 24.4167,
+    "lo": 111.5167,
+    "al": 109,
+    "p": 65603,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fengrun",
+    "la": 39.8266,
+    "lo": 118.1382,
+    "al": 25,
+    "p": 65150,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lingao",
+    "la": 19.9087,
+    "lo": 109.6872,
+    "al": 33,
+    "p": 64874,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changli",
+    "la": 39.7065,
+    "lo": 119.1603,
+    "al": 13,
+    "p": 64476,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qinggang",
+    "la": 46.6983,
+    "lo": 126.0921,
+    "al": 209,
+    "p": 64182,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Botou",
+    "la": 38.0737,
+    "lo": 116.5667,
+    "al": 21,
+    "p": 63045,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liuku",
+    "la": 25.8505,
+    "lo": 98.8557,
+    "al": 829,
+    "p": 63013,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nujiang Lisu",
+    "la": 25.8505,
+    "lo": 98.8557,
+    "al": 829,
+    "p": 63013,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Baoqing",
+    "la": 46.3245,
+    "lo": 132.1897,
+    "al": 94,
+    "p": 62991,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhangjiachuan",
+    "la": 34.9876,
+    "lo": 106.209,
+    "al": 1671,
+    "p": 62497,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingnan",
+    "la": 23.5418,
+    "lo": 110.3893,
+    "al": 39,
+    "p": 62483,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yucheng",
+    "la": 34.9289,
+    "lo": 116.4653,
+    "al": 37,
+    "p": 62365,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shuangyang",
+    "la": 43.5226,
+    "lo": 125.6595,
+    "al": 210,
+    "p": 62137,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nianzishan",
+    "la": 47.5134,
+    "lo": 122.8879,
+    "al": 231,
+    "p": 62131,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingyin",
+    "la": 36.2831,
+    "lo": 116.4453,
+    "al": 43,
+    "p": 62050,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bin Xian",
+    "la": 45.7427,
+    "lo": 127.4605,
+    "al": 191,
+    "p": 62017,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yongning",
+    "la": 22.761,
+    "lo": 108.4836,
+    "al": 82,
+    "p": 61690,
+    "country": "CN",
+    "province": "Guangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lishu",
+    "la": 43.3073,
+    "lo": 124.3337,
+    "al": 165,
+    "p": 61584,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Oroqen Zizhiqi",
+    "la": 50.5667,
+    "lo": 123.7167,
+    "al": 419,
+    "p": 61582,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xianju",
+    "la": 28.8547,
+    "lo": 120.7317,
+    "al": 60,
+    "p": 61532,
+    "country": "CN",
+    "province": "Zhejiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dongning",
+    "la": 44.0844,
+    "lo": 131.1184,
+    "al": 149,
+    "p": 61440,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Xifeng",
+    "la": 42.7372,
+    "lo": 124.7222,
+    "al": 197,
+    "p": 61087,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Datong (Anhui)",
+    "la": 32.6208,
+    "lo": 117.0632,
+    "al": 39,
+    "p": 61085,
+    "country": "CN",
+    "province": "Anhui",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yicheng",
+    "la": 31.7047,
+    "lo": 112.2561,
+    "al": 63,
+    "p": 61027,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yanliang",
+    "la": 34.6592,
+    "lo": 109.2292,
+    "al": 395,
+    "p": 60891,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tahe",
+    "la": 52.3215,
+    "lo": 124.6976,
+    "al": 353,
+    "p": 60874,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Erdaojiang",
+    "la": 41.7764,
+    "lo": 126.0319,
+    "al": 407,
+    "p": 60831,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Langzhong",
+    "la": 31.5504,
+    "lo": 105.9938,
+    "al": 362,
+    "p": 60542,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liancheng",
+    "la": 25.7183,
+    "lo": 116.7489,
+    "al": 379,
+    "p": 60504,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhijiang",
+    "la": 30.4214,
+    "lo": 111.7533,
+    "al": 46,
+    "p": 60169,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Maqin County",
+    "la": 34.4744,
+    "lo": 100.245,
+    "al": 3727,
+    "p": 59900,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Golog Tibetan",
+    "la": 34.4744,
+    "lo": 100.245,
+    "al": 3727,
+    "p": 59900,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pucheng",
+    "la": 27.9233,
+    "lo": 118.5333,
+    "al": 235,
+    "p": 59832,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wenshang",
+    "la": 35.7275,
+    "lo": 116.4961,
+    "al": 44,
+    "p": 59455,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mingshui",
+    "la": 47.1794,
+    "lo": 125.9028,
+    "al": 241,
+    "p": 59369,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gannan",
+    "la": 47.9204,
+    "lo": 123.5005,
+    "al": 179,
+    "p": 59239,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hongjiang",
+    "la": 27.11,
+    "lo": 109.9956,
+    "al": 197,
+    "p": 59199,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jian'ou",
+    "la": 27.0415,
+    "lo": 118.319,
+    "al": 116,
+    "p": 59187,
+    "country": "CN",
+    "province": "Fujian",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jixian",
+    "la": 46.7259,
+    "lo": 131.1331,
+    "al": 105,
+    "p": 59160,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hezuo",
+    "la": 34.9856,
+    "lo": 102.9094,
+    "al": 2898,
+    "p": 59148,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gannan Tibetan",
+    "la": 34.9856,
+    "lo": 102.9094,
+    "al": 2898,
+    "p": 59148,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Haizhou",
+    "la": 34.5817,
+    "lo": 119.1289,
+    "al": 6,
+    "p": 59098,
+    "country": "CN",
+    "province": "Jiangsu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Antu",
+    "la": 43.1025,
+    "lo": 128.9085,
+    "al": 347,
+    "p": 58872,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Jidong",
+    "la": 45.256,
+    "lo": 131.1164,
+    "al": 251,
+    "p": 58520,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fenyi",
+    "la": 27.8112,
+    "lo": 114.668,
+    "al": 84,
+    "p": 58478,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tongchuan (Sichuan)",
+    "la": 31.0941,
+    "lo": 105.0873,
+    "al": 386,
+    "p": 58346,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lixian",
+    "la": 34.19,
+    "lo": 105.1725,
+    "al": 1418,
+    "p": 58300,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dingtao",
+    "la": 35.0744,
+    "lo": 115.5658,
+    "al": 53,
+    "p": 58206,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Juye",
+    "la": 35.3874,
+    "lo": 116.0717,
+    "al": 36,
+    "p": 58107,
+    "country": "CN",
+    "province": "Shandong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hancheng",
+    "la": 35.4603,
+    "lo": 110.4292,
+    "al": 383,
+    "p": 58049,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huangpi",
+    "la": 30.8845,
+    "lo": 114.3779,
+    "al": 29,
+    "p": 57554,
+    "country": "CN",
+    "province": "Hubei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Suiling",
+    "la": 47.2349,
+    "lo": 127.1077,
+    "al": 164,
+    "p": 57124,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Weining",
+    "la": 26.85,
+    "lo": 104.2333,
+    "al": 2169,
+    "p": 56744,
+    "country": "CN",
+    "province": "Guizhou",
+    "planet": "Earth"
+   },
+   {
+    "n": "Linghai",
+    "la": 41.1653,
+    "lo": 121.3667,
+    "al": 27,
+    "p": 56176,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gongyi",
+    "la": 34.7553,
+    "lo": 113.0114,
+    "al": 223,
+    "p": 56033,
+    "country": "CN",
+    "province": "Henan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changling",
+    "la": 44.273,
+    "lo": 123.9756,
+    "al": 191,
+    "p": 55841,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dorbod",
+    "la": 46.8614,
+    "lo": 124.442,
+    "al": 146,
+    "p": 55316,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bayan",
+    "la": 46.0762,
+    "lo": 127.3937,
+    "al": 125,
+    "p": 55186,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shilin",
+    "la": 24.8188,
+    "lo": 103.3324,
+    "al": 1786,
+    "p": 55000,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Manzhouli",
+    "la": 49.6,
+    "lo": 117.4333,
+    "al": 651,
+    "p": 54808,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liaozhong",
+    "la": 41.5061,
+    "lo": 122.7242,
+    "al": 16,
+    "p": 54691,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shiquan",
+    "la": 33.0408,
+    "lo": 108.2364,
+    "al": 362,
+    "p": 53422,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lingwu",
+    "la": 38.1019,
+    "lo": 106.3402,
+    "al": 1127,
+    "p": 52863,
+    "country": "CN",
+    "province": "Ningxia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wulingyuan",
+    "la": 29.3494,
+    "lo": 110.5441,
+    "al": 327,
+    "p": 52712,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lhuenzhub",
+    "la": 29.8931,
+    "lo": 91.2617,
+    "al": 3775,
+    "p": 50596,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hanyuan",
+    "la": 32.834,
+    "lo": 106.2503,
+    "al": 797,
+    "p": 50440,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Naxi",
+    "la": 28.7742,
+    "lo": 105.3649,
+    "al": 253,
+    "p": 50020,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Maizhokunggar",
+    "la": 29.8377,
+    "lo": 91.7289,
+    "al": 3818,
+    "p": 49511,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Damxung",
+    "la": 30.478,
+    "lo": 91.1055,
+    "al": 4286,
+    "p": 47900,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gongqingcheng",
+    "la": 29.2492,
+    "lo": 115.8095,
+    "al": 30,
+    "p": 47284,
+    "country": "CN",
+    "province": "Jiangxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qabqa",
+    "la": 36.2814,
+    "lo": 100.6131,
+    "al": 2839,
+    "p": 46907,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hainan Tibetan",
+    "la": 36.2814,
+    "lo": 100.6131,
+    "al": 2839,
+    "p": 46907,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mangshi",
+    "la": 24.4533,
+    "lo": 98.5704,
+    "al": 885,
+    "p": 46353,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dehong Dai",
+    "la": 24.4533,
+    "lo": 98.5704,
+    "al": 885,
+    "p": 46353,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Pingli",
+    "la": 32.3847,
+    "lo": 109.3456,
+    "al": 488,
+    "p": 45493,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "E'erguna",
+    "la": 50.2236,
+    "lo": 120.1709,
+    "al": 576,
+    "p": 42435,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Luobei",
+    "la": 47.576,
+    "lo": 130.8131,
+    "al": 85,
+    "p": 42109,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Quxu",
+    "la": 29.3554,
+    "lo": 90.7321,
+    "al": 3599,
+    "p": 41851,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Guye",
+    "la": 39.7408,
+    "lo": 118.4507,
+    "al": 47,
+    "p": 41484,
+    "country": "CN",
+    "province": "Hebei",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huixian Chengguanzhen",
+    "la": 33.7683,
+    "lo": 106.0808,
+    "al": 911,
+    "p": 39643,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Haomen",
+    "la": 37.3757,
+    "lo": 101.622,
+    "al": 2865,
+    "p": 36515,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Haibei Tibetan",
+    "la": 37.3757,
+    "lo": 101.622,
+    "al": 2865,
+    "p": 36515,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ziyang Chengguanzhen",
+    "la": 32.5192,
+    "lo": 108.5323,
+    "al": 324,
+    "p": 35496,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Langao Chengguanzhen",
+    "la": 32.3003,
+    "lo": 108.8931,
+    "al": 823,
+    "p": 35348,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Dagze",
+    "la": 29.6733,
+    "lo": 91.3453,
+    "al": 3693,
+    "p": 32318,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Tanchang Chengguanzhen",
+    "la": 34.0446,
+    "lo": 104.3946,
+    "al": 1722,
+    "p": 31861,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wenxian Chengguanzhen",
+    "la": 32.9471,
+    "lo": 104.6814,
+    "al": 1000,
+    "p": 31339,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Daocheng",
+    "la": 29.0379,
+    "lo": 100.2974,
+    "al": 3756,
+    "p": 31113,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Mengla",
+    "la": 21.4623,
+    "lo": 101.5637,
+    "al": 770,
+    "p": 30296,
+    "country": "CN",
+    "province": "Yunnan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nagqu",
+    "la": 31.4768,
+    "lo": 92.0573,
+    "al": 4512,
+    "p": 30000,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuyuan",
+    "la": 48.3635,
+    "lo": 134.2984,
+    "al": 51,
+    "p": 30000,
+    "country": "CN",
+    "province": "Heilongjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Nyemo",
+    "la": 29.4374,
+    "lo": 90.1485,
+    "al": 3837,
+    "p": 29989,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Chaotian",
+    "la": 32.6446,
+    "lo": 105.885,
+    "al": 513,
+    "p": 29424,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qilian",
+    "la": 38.1806,
+    "lo": 100.2403,
+    "al": 2758,
+    "p": 25603,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Gar",
+    "la": 32.5012,
+    "lo": 80.0976,
+    "al": 4278,
+    "p": 24910,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ngari",
+    "la": 32.5012,
+    "lo": 80.0976,
+    "al": 4278,
+    "p": 24910,
+    "country": "CN",
+    "province": "Tibet",
+    "planet": "Earth"
+   },
+   {
     "n": "Shanghai",
     "la": 31.2222,
     "lo": 121.4581,
@@ -2127,6 +9069,46 @@ export const LOCATION_HIERARCHY: Record<string, Record<string, Array<{n:string;l
     "p": 24874,
     "country": "CN",
     "province": "Shanghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Shandan",
+    "la": 34.7511,
+    "lo": 104.8313,
+    "al": 1511,
+    "p": 24235,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Lintan Chengguanzhen",
+    "la": 34.6889,
+    "lo": 103.3524,
+    "al": 2762,
+    "p": 23035,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhouqu Chengguanzhen",
+    "la": 33.7842,
+    "lo": 104.3628,
+    "al": 1326,
+    "p": 21967,
+    "country": "CN",
+    "province": "Gansu",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bayi",
+    "la": 29.6581,
+    "lo": 94.3589,
+    "al": 2995,
+    "p": 21400,
+    "country": "CN",
+    "province": "Tibet",
     "planet": "Earth"
    },
    {
@@ -2150,6 +9132,26 @@ export const LOCATION_HIERARCHY: Record<string, Record<string, Array<{n:string;l
     "planet": "Earth"
    },
    {
+    "n": "Dalain Hob",
+    "la": 41.9653,
+    "lo": 101.0639,
+    "al": 938,
+    "p": 16927,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Erenhot",
+    "la": 43.6475,
+    "lo": 111.9767,
+    "al": 965,
+    "p": 16427,
+    "country": "CN",
+    "province": "Inner Mongolia",
+    "planet": "Earth"
+   },
+   {
     "n": "Guangzhou",
     "la": 23.1167,
     "lo": 113.25,
@@ -2157,6 +9159,16 @@ export const LOCATION_HIERARCHY: Record<string, Record<string, Array<{n:string;l
     "p": 16096,
     "country": "CN",
     "province": "Guangdong",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yumen",
+    "la": 40.2914,
+    "lo": 97.0454,
+    "al": 1494,
+    "p": 15612,
+    "country": "CN",
+    "province": "Gansu",
     "planet": "Earth"
    },
    {
@@ -2518,9 +9530,259 @@ export const LOCATION_HIERARCHY: Record<string, Record<string, Array<{n:string;l
     "country": "CN",
     "province": "Hunan",
     "planet": "Earth"
+   },
+   {
+    "n": "Shuozhou",
+    "la": 39.5927,
+    "lo": 112.5413,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Shanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Panjin",
+    "la": 41.1169,
+    "lo": 122.0655,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Liaoning",
+    "planet": "Earth"
+   },
+   {
+    "n": "Liaoyuan",
+    "la": 42.8864,
+    "lo": 125.1375,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Jilin",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yiyang",
+    "la": 28.4387,
+    "lo": 112.0567,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Hunan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Sansha",
+    "la": 16.8323,
+    "lo": 112.3338,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Danzhou",
+    "la": 19.5689,
+    "lo": 109.4044,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Hainan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Bazhong",
+    "la": 32.0402,
+    "lo": 107.0623,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Yulin (Shaanxi)",
+    "la": 38.2851,
+    "lo": 109.729,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Shaanxi",
+    "planet": "Earth"
+   },
+   {
+    "n": "Haidong",
+    "la": 36.3099,
+    "lo": 102.3565,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Wuzhong",
+    "la": 37.4923,
+    "lo": 106.5152,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Ningxia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Zhongwei",
+    "la": 36.9851,
+    "lo": 105.4966,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Ningxia",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ngawa Tibetan",
+    "la": 32.1017,
+    "lo": 102.0091,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Sichuan",
+    "planet": "Earth"
+   },
+   {
+    "n": "Huangnan Tibetan",
+    "la": 35.5162,
+    "lo": 102.0169,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
+   },
+   {
+    "n": "Haixi Mongol",
+    "la": 37.3691,
+    "lo": 97.3601,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Qinghai",
+    "planet": "Earth"
    }
   ],
   "Urumqi": [
+   {
+    "n": "Bayingolin Mongol",
+    "la": 41.7606,
+    "lo": 86.1523,
+    "al": 945,
+    "p": 549324,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Aksu Prefecture",
+    "la": 41.1842,
+    "lo": 80.2792,
+    "al": 1119,
+    "p": 535657,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Kashgar Prefecture",
+    "la": 39.4672,
+    "lo": 75.9868,
+    "al": 1284,
+    "p": 506640,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Kizilsu Kirghiz",
+    "la": 39.7084,
+    "lo": 76.1797,
+    "al": 1286,
+    "p": 285000,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Ili Kazakh",
+    "la": 43.9151,
+    "lo": 81.3215,
+    "al": 639,
+    "p": 269158,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Changji Hui",
+    "la": 44.0078,
+    "lo": 87.3046,
+    "al": 581,
+    "p": 198776,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Awati",
+    "la": 38.6084,
+    "lo": 77.3964,
+    "al": 1184,
+    "p": 25119,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hoxtolgay",
+    "la": 46.5187,
+    "lo": 86.0021,
+    "al": 804,
+    "p": 22000,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Burqin",
+    "la": 47.7028,
+    "lo": 86.8637,
+    "al": 471,
+    "p": 20205,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Fuyun",
+    "la": 46.9919,
+    "lo": 89.5212,
+    "al": 800,
+    "p": 19772,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Qiemo",
+    "la": 38.1339,
+    "lo": 85.5299,
+    "al": 1252,
+    "p": 18893,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
    {
     "n": "UEruemqi",
     "la": 43.801,
@@ -2917,6 +10179,36 @@ export const LOCATION_HIERARCHY: Record<string, Record<string, Array<{n:string;l
     "lo": 79.7053,
     "al": 1324,
     "p": 35,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Altay City",
+    "la": 47.8258,
+    "lo": 88.1292,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Hotan Prefecture",
+    "la": 37.111,
+    "lo": 79.9209,
+    "al": 0,
+    "p": 0,
+    "country": "CN",
+    "province": "Xinjiang",
+    "planet": "Earth"
+   },
+   {
+    "n": "Altay Prefecture",
+    "la": 47.8258,
+    "lo": 88.1292,
+    "al": 0,
+    "p": 0,
     "country": "CN",
     "province": "Xinjiang",
     "planet": "Earth"
