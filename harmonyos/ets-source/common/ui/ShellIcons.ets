@@ -21,7 +21,8 @@ export function getIcon(icon: string, isActive: boolean): Resource {
     'help': $r('app.media.ic_help'),
     'grid': $r('app.media.ic_grid'),
     'more': $r('app.media.ic_more'),
-    'close': $r('app.media.ic_close'),
+    'check': $r('app.media.ic_check'),
+  'close': $r('app.media.ic_close'),
     'back': $r('app.media.ic_back'),
     'gyro': $r('app.media.ic_gyro'),
     'zoom_in': $r('app.media.ic_zoom_in'),
@@ -47,7 +48,7 @@ export function getIcon(icon: string, isActive: boolean): Resource {
     'polar_scope': $r('app.media.ic_polar_scope'),
     'scenery3d': $r('app.media.ic_globe'),
     'tools': $r('app.media.ic_tune'),
-    // 快捷操作面板：Dock 中间入口 + 10 枚 Stellarium 官方「灭」态图标（亮态由 colorFilter 着色，不用官方 -on）。
+    // 快捷操作面板：Dock 中间入口 + 13 枚 Stellarium 官方「灭」态图标（亮态由 colorFilter 着色，不用官方 -on）。
     'quick_actions': $r('app.media.ic_quick_actions'),
     'bt_constellation_lines': $r('app.media.bt_constellation_lines'),
     'bt_constellation_labels': $r('app.media.bt_constellation_labels'),
@@ -59,6 +60,12 @@ export function getIcon(icon: string, isActive: boolean): Resource {
     'bt_cardinal_points': $r('app.media.bt_cardinal_points'),
     'bt_nebula': $r('app.media.bt_nebula'),
     'bt_night_view': $r('app.media.bt_night_view'),
+    // 二期新增：4 枚官方图标（赤道仪 / 左右镜像 / 观测列表 / 极简信息面板）+ 1 枚自研 SVG（自定义入口）。
+    'bt_equatorial_mount': $r('app.media.bt_equatorial_mount'),
+    'bt_flip_horizontal': $r('app.media.bt_flip_horizontal'),
+    'bt_obs_list': $r('app.media.bt_obs_list'),
+    'bt_minimal_hud': $r('app.media.bt_minimal_hud'),
+    'edit': $r('app.media.ic_edit'),
   }
   return map[icon] || $r('app.media.ic_search')
 }

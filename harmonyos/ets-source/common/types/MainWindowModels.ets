@@ -423,6 +423,7 @@ export const BOOKMARK_STORE: string = 'stellarium_bookmarks'
 export const SEARCH_HISTORY_STORE: string = 'stellarium_search_history'
 export const OBSERVING_STORE: string = 'stellarium_observing_list'
 export const LOCATION_STORE: string = 'stellarium_observer_location'
+export const QUICK_PANEL_STORE: string = 'stellarium_quick_panel'
 export const OFFLINE_APPGALLERY_BUILD: boolean = true
 
 

@@ -1,3 +1,19 @@
+## [2026-10-07] DevEco Code - 快捷操作面板二期（12 格可自定义 · 拖动-替换 · 5 个新按钮）
+
+- **依据（用户要求）**：一期 12 格固定不可改。二期要求「格子数不变、位置不动但可自定义」，并把 5 个已有能力做成按钮放进候选池：赤道仪模式、左右镜像、观测列表、目镜、极简信息面板。同日追加：自定义入口用**铅笔**图标、完成用**勾**图标，均**不出文字**。
+- **交互（用户确认）**：自定义 = **拖动-替换** —— 编辑态面板加高露出候选带，长按候选图标拖到某格松手，两者互换（被换下项回到候选带）；拖到空白处松手不生效；返回键 / 点面板外 = **丢弃**，「完成」才提交并落盘。
+- **修改文件（11 改 / 6 新增资源）**：`common/derive/quickActions.ets`、`common/ui/ShellIcons.ets`、`common/types/MainWindowModels.ets`、`capability/I18n.ets`、`state/OverlayStore.ets`、`pages/MainWindowNativeNode.ets`、`panels/panels/QuickPanel.ets`、`panels/quick/QuickActionCell.ets`、`panels/quick/QuickActionGrid.ets`、`panels/shell/PanelHeader.ets`、`docs/harmonyos/research/QUICK-ACTIONS-PANEL-PLAN.md`；新增媒体 `bt_equatorial_mount.png` / `bt_flip_horizontal.png` / `bt_obs_list.png` / `bt_minimal_hud.png` / `ic_edit.svg` / `ic_check.svg`。
+- **条目模型与池**：`QuickActionItem` 增 `type`（`toggle` / `entry`）与 `openPanel`；`quickActionPool()` 17 项（前 12 = 一期原序）、`quickActionDefaultOrder()` / `quickActionItems()` / `quickActionCandidatesFor()` / `isValidQuickActionOrder()`；`QUICK_ACTION_SLOTS = 12`。
+- **入口类不入值表**：`observing_list` / `oculars` 经 `openSubPanel()` 跳面板，`quickActionValues()` 刻意不列它们 —— 查不到即恒 `false`，格子永远不会「永久点亮」。
+- **赤道仪 / 镜像的状态源**：赤道仪乐观写 `TelescopeStore.equatorialMount` 后走既有 `applyLayerSwitch('actionSwitch_Equatorial_Mount')`（引擎不回读该位，与「更多 > 设置 > 配置」同一套写法）；镜像**复用极轴镜那一份单一真值**（`setPolarScopeHorizontalFlip`，含乐观写与失败回滚），不新增第二个布尔。
+- **极简信息面板**：本轮**只落开关接口** —— 写入 `OverlayStore.minimalHud` 并提示，界面尚无消费方，故刻意不落盘、不做任何别的副作用；三个 shell 与 HEAD 逐字节一致。
+- **落盘**：改走 `@ohos.data.preferences`（store `stellarium_quick_panel` / key `order`）。全仓没有 `PersistentStorage`，`AppStorage` 是内存态 —— 首版写进 `stellariumSettings` 实测杀进程即回默认。
+- **编辑逻辑收进面板内（封装）**：顺序、编辑态、拖动-替换、提交 / 丢弃 / 恢复默认原先散在宿主十几个 `quickXxx` 私有方法里；现整体收进 `QuickPanelStore`（`@Observed`，与面板同文件 `panels/panels/QuickPanel.ets`）。宿主只剩「持有 1 个 `@State` 实例 + 注入 `saveOrder`/`hint` hooks + 传值」，**净删 63 行**；store 不 import NAPI，落盘经 hooks 注入（与 `state/*Store.ets` 同规矩）。
+- **标题栏动作按钮**：自定义 = 铅笔（`ic_edit.svg`）、完成 = 勾（新增 `ic_check.svg`），**不出文字**（文案仅作 `accessibilityText`）；尺寸与右侧关闭按钮一致（36×36 / 18px 图标），真机 `ui layout` 复核两键均为 126×126 px。
+- **行尾统一 CRLF**：本片改动到的 12 个文件（含原为 LF 的 4 个 `.ets` 与计划文档）全部统一为 CRLF。
+- **真机才暴露的四个问题**（详见计划 §13.10.1）：① 新组件误放到 `panels/quick/` 而宿主 import 的是 `panels/panels/`，构建期报 props 不可赋值；② 格子内 `Image` 被系统选成拖拽源（AceDrag 日志 `frameNode draggable is 0` → `Drag gesture has been canceled`，松手退化成点击）；③ 编辑态 `LongPressGesture` 600ms 赢下手势竞技场，掐掉系统拖拽的长按起手（表现为「按住能按、松手不替换」）；④ 应用内拖放**不能**加 `allowDrop`/`setData`（ArkUI 官方 FAQ `faqs-arkui-1173` 只用 `.draggable(true)` + `onDragStart` + `onDrop`），加了反而被判 `target data is not allowed to fall into`。
+- **验证**：`arkts_check` 0 error；`BUILD SUCCESSFUL`；契约 **intact 且零新增**（47 锚点 / 34 面板 / 26 静态 id / 18 动态前缀 —— 候选格与槽位格互斥复用 `quick-action-` 前缀，动作按钮复用 `panel-header-action`，故无需 `--update`）；`audit-ohos-resource-coverage.mjs` 通过（顶层目录 9 / 三维地景 135=135 / 插件资源 132）。真机（192.168.3.95:36717）：默认 12 项与一期逐项一致；进入自定义后面板加高、候选带 5 项、12 格位置不动；拖 `equatorial_mount` → 槽位 `night_mode` 互换成功、被换下项回到候选带；「完成」后**杀进程重启顺序保持**；「恢复默认」回一期 12 项；点观测列表格进入 `observing` 面板且格子不亮；标题栏编辑态为铅笔、完成态为勾（无文字）；`ui layout` 复核编辑态图标首行顶边偏移 0。
+
 ## [2026-10-07] DevEco Code - 位置搜索卡顿修复（预归一化索引 + 分块占空比）
 
 - **依据（用户反馈）**：地图选点搜索框输入「临高」要等好几十秒才出结果。

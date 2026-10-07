@@ -37,7 +37,7 @@ import { dateToJD, jdToLocalTimeText, graphModeLabel, graphStartOptionLabel, pla
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle, quickLocationLabel } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
-import { quickActionItems } from '../common/derive/quickActions'
+import { quickActionById, quickCandidateRowsFor } from '../common/derive/quickActions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
 import { objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
@@ -206,7 +206,7 @@ import { NavStarsPanel } from '../panels/panels/NavStarsPanel'
 import { ArchaeoLinesPanel } from '../panels/panels/ArchaeoLinesPanel'
 import { MosaicCameraPanel } from '../panels/panels/MosaicCameraPanel'
 import { MorePanel } from '../panels/panels/MorePanel'
-import { QuickPanel } from '../panels/panels/QuickPanel'
+import { QuickPanel, QuickPanelStore } from '../panels/panels/QuickPanel'
 import { TimePanel } from '../panels/panels/TimePanel'
 import { HelpPanel } from '../panels/panels/HelpPanel'
 import { MeteorShowersPanel } from '../panels/panels/MeteorShowersPanel'
@@ -233,7 +233,7 @@ import {
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
   HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS,
   GyroGuideProjection, SkyUiObstacle, BookmarkItem,
-  BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
+  BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, QUICK_PANEL_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
@@ -2149,6 +2149,46 @@ export struct WindowNativeNode {
     this.registerFoldListeners()
     this.subscribeApplicationLifecycle()
     this.startupBridge().startupBridgeSync()
+    // 快捷面板编辑态的落盘 / 提示经 hooks 注入面板自己的 store（面板不 import NAPI）。
+    this.quickPanelStore.configure({
+      saveOrder: (json: string) => { this.saveQuickActionOrder(json) },
+      hint: (text: string) => { this.flashHint(text) }
+    })
+    this.loadQuickActionOrderFromStorage()
+  }
+
+  // 快捷面板 12 格顺序的持久化（store `stellarium_quick_panel` / key `order`，与书签 / 观测列表同套）。
+  // 校验与回落默认在 store 内（它拿到的串一定是合法的），此处只负责读写盘。
+  private saveQuickActionOrder(json: string): void {
+    if (json.length === 0) return
+    this.writeQuickActionOrder(json)
+  }
+
+  private async writeQuickActionOrder(json: string): Promise<void> {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const store = await preferences.getPreferences(ctx, QUICK_PANEL_STORE)
+      await store.put('order', json)
+      await store.flush()
+    } catch (e) {
+      hilog.warn(0xD002, 'Stellarium', 'save quick panel order failed: %{public}s', String(e))
+    }
+  }
+
+  // 从 preferences 恢复顺序；缺省 / 损坏时 store 自行回落默认（见 QuickPanelStore.restoreOrder）。
+  private async loadQuickActionOrderFromStorage(): Promise<void> {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const store = await preferences.getPreferences(ctx, QUICK_PANEL_STORE)
+      const raw = await store.get('order', '')
+      if (typeof raw !== 'string' || raw.length === 0) return
+      const parsed = JSON.parse(raw) as Object[]
+      const order: string[] = []
+      for (const entry of parsed) order.push(String(entry))
+      this.quickPanelStore.restoreOrder(order)
+    } catch (e) {
+      hilog.warn(0xD002, 'Stellarium', 'load quick panel order failed: %{public}s', String(e))
+    }
   }
 
   // 启动期自动定位（只触发一次）。GPS 可用时更新为真实位置，不可用时回退到已保存/默认位置。
@@ -3548,6 +3588,12 @@ export struct WindowNativeNode {
     const now = Date.now()
     if (now - this.lastPanelBackAt < 240) return
     this.lastPanelBackAt = now
+    // 快捷面板处于自定义编辑态时，返回键先「丢弃编辑」而不关面板：编辑态需要一条明确的取消路径，
+    // 否则误拖无处撤回（见计划 §13.5）。
+    if (this.activePanel === 'quick' && this.quickPanelStore.editable) {
+      this.quickPanelStore.discardEdit()
+      return
+    }
     hilog.info(0x0000, 'StellariumArkUI', '[panel-back] panel=%{public}s stack=%{public}d parent=%{public}s',
       this.activePanel, this.panelNavigationStack.length, panelRouteParent(this.activePanel))
     this.goBackPanel()
@@ -3599,6 +3645,8 @@ export struct WindowNativeNode {
       this.polarScopeCtl().closePolarScope()
       return
     }
+    // 关面板即丢弃未提交的快捷面板自定义（点面板外 / 关按钮 / 切路由都会走到这里）。
+    this.quickPanelStore.discardEdit()
     // 关面板时停掉时间面板定时器，避免后台空转
     this.timeCtl().stopPanelTimers()
     this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
@@ -4369,7 +4417,37 @@ export struct WindowNativeNode {
     return Math.max(this.hoverConsoleTop() + 12, this.skyHeight - 90 - this.compactPanelHeight())
   }
 
-  // 快捷面板高度按内容算（标题栏 + 两行图标），只用于该面板（见 QUICK-ACTIONS-PANEL-PLAN §6）。
+  // ── 快捷面板二期：自定义（拖动-替换）──
+  // 12 格顺序（条目 id 序列，长度恒 12）。编辑态只在内存里改，「完成」才落盘；返回 / 点面板外即丢弃。
+  // 顺序与编辑态全部收在面板自己的 store（QuickPanelStore，定义在 panels/panels/QuickPanel.ets）：
+  // 进入 / 提交 / 丢弃 / 恢复默认 / 拖动-替换都是 store 的方法，宿主只持有实例并注入落盘与提示 hooks。
+  @State private quickPanelStore: QuickPanelStore = new QuickPanelStore()
+
+  // 标题栏动作按钮的标签：图层面板 = 清除坐标与标记；快捷面板 = 进入 / 退出自定义（编辑态）。
+  // 空串即不渲染该按钮（PanelHeader 既有约定）。
+  private panelHeaderActionLabel(): string {
+    if (this.activePanel === 'layers') return '清除坐标与标记'
+    if (this.activePanel === 'quick') {
+      return I18n.t(this.quickPanelStore.editable ? 'quick_customize_done' : 'quick_customize')
+    }
+    return ''
+  }
+
+  // 快捷面板要求动作按钮「只出图标不出文字」：自定义=铅笔、完成=勾。其余面板返回空串走文字路径。
+  private panelHeaderActionIcon(): string {
+    if (this.activePanel !== 'quick') return ''
+    return this.quickPanelStore.editable ? 'check' : 'edit'
+  }
+
+  private handlePanelHeaderAction(): void {
+    if (this.activePanel === 'quick') {
+      this.quickPanelStore.toggleEdit()
+      return
+    }
+    if (this.activePanel === 'layers') { this.layerCtl().clearMarkingLayers() }
+  }
+
+  // 快捷面板高度按内容算（标题栏 + 两行图标；编辑态再加候选带与操作条），只用于该面板（见 QUICK-ACTIONS-PANEL-PLAN §6/§13.5）。
   // 单元格宽由面板内宽均分（QuickActionCell 是 layoutWeight(1) + aspectRatio(1)），所以高度可预知；
   // 容器高度与内容一致时 Scroll 不会把内容垂直居中，图标就贴着标题栏。
   private quickPanelGridCellSize(): number {
@@ -4381,7 +4459,17 @@ export struct WindowNativeNode {
   }
 
   private quickPanelContentHeight(): number {
-    const grid = this.quickPanelGridCellSize() * 2 + 6
+    const cell = this.quickPanelGridCellSize()
+    // 槽位固定两行（行宽 6）。
+    const slots = cell * 2 + 6
+    // 编辑态追加：分隔线（上距 10 + 高 1）、候选带（首行上距 12，行内径 6）、操作条（上距 8 + 高 28）。
+    // 候选带行数必须与 QuickPanel 的行渲染同源，否则高度对不上会被 Scroll 垂直居中。
+    const candidateRows = this.quickPanelStore.editable ? quickCandidateRowsFor(this.quickPanelStore.order) : 0
+    const candidates = this.quickPanelStore.editable
+      ? (candidateRows * cell + (candidateRows - 1) * 6)
+      : 0
+    const editableExtra = this.quickPanelStore.editable ? (10 + 1 + 12 + 8 + 28) : 0
+    const grid = slots + candidates + editableExtra
     const header = this.timeStore.panelSubtitle(this.activePanel).length > 0 ? 56 : 44
     if (this.isExpandedLayout) {
       // PadPanelHandle 高 17（5 + margin 2 + 10），floatingPanel 内边距 18。
@@ -4430,7 +4518,8 @@ export struct WindowNativeNode {
     return this.locationText
   }
 
-  // 快捷操作面板的 12 项当前值（一律读既有 store，与图标表的 id 一一对应）。
+  // 快捷操作面板各项当前值（一律读既有 store，与池中 id 一一对应）。
+  // 入口类（type === 'entry'）**刻意不入表**：查不到即恒为 false，格子永远不会显示成「永久点亮」。
   private quickActionValues(): Record<string, boolean> {
     return {
       'constellation_lines': this.layerStore.constellationLines,
@@ -4444,12 +4533,22 @@ export struct WindowNativeNode {
       'nebulae': this.layerStore.nebulae,
       'satellites': this.satelliteStore.satHints,
       'gyroscope': this.gyroStore.gyroscopeEnabled,
-      'night_mode': this.nightModeStore.nightMode
+      'night_mode': this.nightModeStore.nightMode,
+      'equatorial_mount': this.telescopeStore.equatorialMount,
+      'flip_horizontal': this.polarScopeStore.polarScopeHorizontalFlip,
+      'minimal_hud': this.overlayStore.minimalHud
     }
   }
 
-  // 快捷操作面板的动作分发：图层 9 项走既有 setLayer，其余三项各走本域既有入口。
+  // 快捷操作面板的动作分发：入口类跳面板，开关类各走本域既有入口，图层类走 applyLayerSwitch。
   private quickToggle(id: string, value: boolean): void {
+    const item = quickActionById(id)
+    if (item === undefined) return
+    if (item.type === 'entry') {
+      // 入口类不切换开关态，只跳面板（格子恒不高亮，见 quickActionValues 注释）。
+      this.openSubPanel(item.openPanel)
+      return
+    }
     if (id === 'satellites') {
       this.satelliteCtl().setSatelliteFlag('hints', value)
       return
@@ -4462,14 +4561,28 @@ export struct WindowNativeNode {
       this.nightModeStore.applyNightMode(value, true)
       return
     }
-    const items = quickActionItems()
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].id === id) {
-        // 走公开入口 applyLayerSwitch（与图层面板同一路径，附带 已显示/已隐藏 提示）。
-        if (items[i].actionId.length > 0) { this.layerCtl().applyLayerSwitch(items[i].actionId, '', value) }
-        return
-      }
+    if (id === 'equatorial_mount') {
+      // 引擎侧不回读该位（getState 无对应字段），故与「更多 > 设置 > 配置」的同一开关同法：
+      // 先乐观写 store 再下发；setLayer 回包后 persistEquatorialMount() 落盘、refreshState() 刷新宿主。
+      this.telescopeStore.equatorialMount = value
+      this.layerCtl().applyLayerSwitch('actionSwitch_Equatorial_Mount', '', value)
+      return
     }
+    if (id === 'flip_horizontal') {
+      // 引擎那一位是**全局**镜像，应用内唯一真值就是极轴镜那一份（由会话 flags.flipHorz 回读），
+      // 故复用其写入入口：含乐观写与失败回滚，快捷面板与极轴镜叠层天然同步（见计划 §13.6）。
+      this.polarScopeCtl().setPolarScopeHorizontalFlip(value)
+      return
+    }
+    if (id === 'minimal_hud') {
+      // 本轮**只落开关接口**：写入标志位，界面尚无任何消费方（极简 HUD 的隐藏行为另行实现）。
+      // 故此处刻意不落盘、也不做「已显示/已隐藏」以外的任何副作用 —— 没有消费方时持久化只会造成误导。
+      this.overlayStore.minimalHud = value
+      this.flashHint(I18n.t(value ? 'msg_shown' : 'msg_hidden'))
+      return
+    }
+    // 其余图层类：走公开入口 applyLayerSwitch（与图层面板同一路径，附带「已显示/已隐藏」提示）。
+    if (item.actionId.length > 0) { this.layerCtl().applyLayerSwitch(item.actionId, '', value) }
   }
 
   private canonicalDockActions(): ShellAction[] {
@@ -7000,11 +7113,12 @@ export struct WindowNativeNode {
       PanelHeader({
         title: panelTitleFor(this.activePanel, this.configTab, this.isExpandedLayout, this.timeStore.timePanelClockText(), this.quickPanelLocationLabel()), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
         routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
-        headerActionLabel: this.activePanel === 'layers' ? '清除坐标与标记' : '',
+        headerActionLabel: this.panelHeaderActionLabel(),
+        headerActionIcon: this.panelHeaderActionIcon(),
         titleAsButton: this.activePanel === 'quick',
         onBack: () => { this.handlePanelBackTap() },
         onClose: () => { this.closePanel(true); this.resetPanelIdle() },
-        onHeaderAction: () => { this.layerCtl().clearMarkingLayers() },
+        onHeaderAction: () => { this.handlePanelHeaderAction() },
         onTitleTap: () => { this.openSubPanel('place') }
       })
       Scroll(this.widePanelScroller) {
@@ -7059,11 +7173,12 @@ export struct WindowNativeNode {
       PanelHeader({
         title: panelTitleFor(this.activePanel, this.configTab, this.isExpandedLayout, this.timeStore.timePanelClockText(), this.quickPanelLocationLabel()), subtitle: this.timeStore.panelSubtitle(this.activePanel), canGoBack: this.canGoBackPanel(),
         routeOpacity: this.panelRouteOpacity, routeOffsetX: this.panelRouteOffsetX,
-        headerActionLabel: this.activePanel === 'layers' ? '清除坐标与标记' : '',
+        headerActionLabel: this.panelHeaderActionLabel(),
+        headerActionIcon: this.panelHeaderActionIcon(),
         titleAsButton: this.activePanel === 'quick',
         onBack: () => { this.handlePanelBackTap() },
         onClose: () => { this.closePanel(true); this.resetPanelIdle() },
-        onHeaderAction: () => { this.layerCtl().clearMarkingLayers() },
+        onHeaderAction: () => { this.handlePanelHeaderAction() },
         onTitleTap: () => { this.openSubPanel('place') }
       })
       Scroll(this.compactPanelScroller) {
@@ -7338,7 +7453,7 @@ export struct WindowNativeNode {
       })
     } else if (this.activePanel === 'quick') {
       QuickPanel({
-        items: quickActionItems(),
+        store: this.quickPanelStore,
         values: this.quickActionValues(),
         onToggle: (id: string, value: boolean) => { this.quickToggle(id, value) },
         onHint: (text: string) => { this.flashHint(text) }

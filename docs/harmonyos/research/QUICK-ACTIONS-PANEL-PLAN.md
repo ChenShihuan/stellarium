@@ -1,6 +1,6 @@
 # 快捷操作面板（Dock 中间入口）设计与实施计划
 
-状态：已按 §8 切片实施完毕，真机验收通过（实施结果见 §12，含验收追加修订 §12.6）。
+状态：一期（§1–§12）已按 §8 切片实施完毕、真机验收通过；**二期（§13：12 格可自定义 + 5 个新按钮）设计完成、待实施**。
 适用工程：`harmonyos/`（ArkTS 侧）；不改引擎 C++。
 
 ## 0. 目标
@@ -296,6 +296,276 @@ OFF:  Image(bt_xxx.png).colorFilter(TINT_OFF)   // 压成暗灰 #7E8896（不再
 方位基点显示星形罗盘。
 说明：最终构建上「火星」分支未再复验（设备当时已切回地球 + 广州），该分支由「同一函数 +
 实测确认的引擎串 `Mars surface` + 既有键 `land_mars` = 火星表面」推得。
+
+## 13. 二期：12 格可自定义 + 5 个新按钮（设计，待实施）
+
+### 13.1 需求与已定决策
+
+1. 网格**仍固定 2×6 = 12 格**（用户确认）——自定义**不改变格子数量与格子位置**（位置固定＝肌肉记忆）。
+2. 「自定义模式」的语义是**拖动-替换**（用户确认）：进入编辑态后**面板加高、下方露出「当前未列入」的候选图标**，
+   把候选**拖动**到某一格上松手即完成替换（被换下的那一项回到候选带）；不增删格子、不改格子位置。
+3. 新增 5 个候选按钮：**赤道仪/经纬仪切换**、**左右镜像**、**观测列表入口**、**目镜设置入口**、**极简信息面板模式开关**。
+4. 一期体验约束全部沿用：面板内不显示逐项文字（长按 `flashHint`）、ON 态用「灭」图标着色、官方 PNG 走 `colorFilter`、
+   自研 SVG 走 `fillColor`、格子 `layoutWeight(1)` + `aspectRatio(1)`。
+
+### 13.2 事实勘查（先于设计，逐条有据）
+
+| # | 事实 | 依据 |
+| --- | --- | --- |
+| 1 | 「赤道仪/经纬仪」引擎动作 = `actionSwitch_Equatorial_Mount`（bool 性属性 `equatorialMount`） | `src/core/StelMovementMgr.cpp:193` |
+| 2 | 「左右/上下镜像」引擎动作 = `actionHorizontal_Flip`（`flipHorz`）/ `actionVertical_Flip`（`flipVert`） | `src/core/StelCore.cpp:402-403` |
+| 3 | 桌面版「观测列表」是 `actionShow_ObsList_Window_Global`（Qt 窗口 `ObsListDialog`） | `src/gui/StelGui.cpp:272` |
+| 4 | 移动端不跑 Qt GUI，故该 action **不注册**；但应用**已有自己的观测列表面板** `activePanel === 'observing'` | `panels/panels/ObservingPanel.ets`；`common/derive/actions.ets:35`（`more_observe_list` → `observing`） |
+| 5 | 目镜面板**已存在** `activePanel === 'oculars'`，`OcularController.setOcularMode` 已接桥 | `panels/panels/OcularsPanel.ets`、`capability/OcularController.ets` |
+| 6 | 赤道仪开关**已实现且已持久化**：`TelescopeStore.equatorialMount` ← 启动回写；`LayerController.setLayer` 命中该 action 后 `hooks.persistEquatorialMount()`；现有 UI 在「设置 > 配置」回落面板 | `state/TelescopeStore.ets`、`capability/StartupBridge.ets:172-174`、`capability/LayerController.ets:102`、`panels/panels/ConfigFallbackPanel.ets:154` |
+| 7 | 镜像**已接引擎但状态挂在极轴镜**：写入走 `PolarScopeController.setPolarScopeHorizontalFlip/VerticalFlip`（同一个 `setActionChecked`），状态源 `PolarScopeStore.polarScopeHorizontalFlip`，并由引擎 `sessionFlags.horizontalFlip` 回读同步 | `capability/PolarScopeController.ets:105,186-207` |
+| 8 | 「极简信息面板模式」**不存在**：全仓无 minimal / hud 类开关；常驻星空 HUD 只有三处，且现仅按「面板打开 / 极轴镜可见」隐藏 | `panels/shell/CompactShell.ets:174,180`、`ExpandedShell.ets:168,172`、`HoverObservatoryShell.ets:27-28,127,133` |
+| 9 | 官方 `data/gui` **有** `btEquatorialMount` / `btFlipHorizontal` / `btFlipVertical` / `btObsList` 的 `-off/-on` 对；**没有**目镜与「极简 UI」图标 | `data/gui` 清单（34 组 `bt*-off.png`） |
+| 10 | 目镜图标仓库已有：`ShellIcons` 注册 `'oculars'` → `ic_oculars` | `common/ui/ShellIcons.ets:12` |
+| 11 | 官方图标池还空着 13 组可用项（`btCompass` / `btEclipticGrid` / `btGalacticGrid` / `btEquatorialJ2000Grid` / `btConstellationBoundaries` / `btAsterismLines` / `btAsterismLabels` / `btPlanets` / `btDSS` / `btHIPS` / `btNebulaeBackground` / `btGotoSelectedObject` / `btFullScreen`）——列为「三期候选」，本次**不进池** | `data/gui` 清单 |
+| 12 | 设置持久化通道 = AppStorage `stellariumPrefs`：`StartupBridge` 逐字段回读（已有 `equatorialMount` / `viewCoordinatesVisible` 等 bool 先例），写盘走 `saveAppSettings` | `capability/StartupBridge.ets:168-193` |
+
+### 13.3 结论：5 项里 3 项已存在、1 项需解绑、1 项要新写
+
+| 新增项 | 性质 | 本次工作量 |
+| --- | --- | --- |
+| N1 赤道仪/经纬仪 | **功能已实现**（状态 + 持久化 + 现有 UI 全在） | 仅**接入**：读 `telescopeStore.equatorialMount`，写 `applyLayerSwitch('actionSwitch_Equatorial_Mount','',v)` |
+| N2 左右镜像 | 引擎动作**已接**，但状态被极轴镜语义占用；引擎动作本身是全局的 | **解绑**：状态源提升为全局项（见 §13.6 前注） |
+| N3 观测列表 | **面板已存在**（`observing`） | 仅**接入**：`openSubPanel('observing')` |
+| N4 目镜设置 | **面板已存在**（`oculars`） | 仅**接入**：`openSubPanel('oculars')` |
+| N5 极简信息面板 | **不存在** | **新功能**（§13.7） |
+
+二期的主要风险不是「造功能」，而是**接入点的状态回读一致性**与**自定义项的持久化校验**。
+
+### 13.4 条目模型扩展
+
+```ts
+export interface QuickActionItem {
+  id: string
+  labelKey: string
+  icon: string
+  kind: string        // 'raster' | 'vector'（一期）
+  type: string        // 'toggle' | 'entry'（二期新增）
+  actionId: string    // type==='toggle' 且属图层类时使用（一期字段）
+  openPanel: string   // type==='entry' 时的目标面板 id（二期新增）
+}
+```
+
+- `quickActionPool()`（新）= **17 项**候选 = 一期 12 项 + 本次 5 项（N1–N5）。
+- `quickActionDefaults()`（新）= 池中前 12 项 = **一期现状**，保证升级后观感与肌肉记忆不变。
+- 5 项新增条目的描述（`type` / 动作 / 状态源 / 图标）：
+
+| id | labelKey | icon | kind | type | 动作 / 入口 | 状态源 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `equatorial_mount` | `quick_mount_mode`（新） | `bt_equatorial_mount` | raster | toggle | `actionSwitch_Equatorial_Mount` | `telescopeStore.equatorialMount` |
+| `flip_horizontal` | `quick_flip_horizontal`（新） | `bt_flip_horizontal` | raster | toggle | `actionHorizontal_Flip` | 全局镜像状态（见 §13.6 前注） |
+| `observing_list` | `more_observe_list`（复用） | `bt_obs_list` | raster | entry | `openSubPanel('observing')` | —（无开关态） |
+| `oculars` | `panel_oculars`（复用） | `oculars` | vector | entry | `openSubPanel('oculars')` | —（无开关态） |
+| `minimal_hud` | `quick_minimal_hud`（新） | `bt_minimal_hud` | raster | toggle | 无引擎动作（纯前端） | `overlayStore.minimalHud`（新） |
+
+**`entry` 类的交互约定**：点按 = 跳面板（不切换开关态、不显示 ON 底色）；长按仍出 `flashHint(名称)`。
+`QuickActionGrid` 的 `isOn(id)` 对 `entry` 恒返回 false，避免出现「永久点亮」的假开关。
+
+### 13.5 自定义：拖动-替换（用户确认的交互）与持久化
+
+**入口**：`activePanel === 'quick'` 时，标题栏右侧新增一枚「自定义」图标按钮（`ic_edit`）。
+标题本身仍是「位置」跳转按钮（一期 §11.4 行为不变）；两者左右并列，互不干扰。
+
+**编辑态布局：面板加高，露出未列入的图标**
+
+- 上面那 2×6 = 12 格**位置完全不动**（用户视线无需重建）；
+- **下方新增一条候选带**，把池中「当前未列入」的项铺成 1 行：本次 17 − 12 = **5 项**，故 5 格 + 1 空格（同一套单元格尺寸，`layoutWeight(1)` + `aspectRatio(1)`）；
+- 再下面是一行操作条：「恢复默认」+「完成」。
+- 高度按内容重算：编辑态 `quickPanelContentHeight()` = 一期高度 + 分隔线 + 候选带（1 行单元格 + 行距）+ 操作条。
+  **一期结论照旧适用**（§12.6 第 4 条）：容器高度必须等于内容高度，否则 `Scroll` 会把比视口短的内容垂直居中。
+  宿主 `compactPanelHeight()` 的 `activePanel === 'quick'` 分支须按 `quickPanelEditable` 再分两档，面板定位、返回热区、拖拽夹取才会一致。
+
+**拖动-替换（核心交互）**
+
+1. 在候选带里**长按一枚候选并拖动**。门槛是 ArkUI 统一拖拽的固定门槛：长按 ≥500ms + 移动 ≥10vp（系统规定，不可调）。
+2. 拖动过程中，手指所在网格格触发 `onDragEnter` → `setResult(DragResult.DROP_ENABLED)` 并加高亮描边，给出「可以放这里」的反馈；移出则 `onDragLeave` 撤掉。
+3. 在某一格松手 → `onDrop`：该格换为被拖的候选，**被换下的那一项回到候选带**（等价于两者互换）——语义正好是「未列入的替换已列入的」。
+4. 在空白处松手 → `onDragEnd` 无改动，面板保持原样。
+5. 可连续换多格，无需退出编辑态。
+
+**机制选择（为什么用统一拖拽，而不是 `PanGesture`）**
+
+- 面板内容在 `Scroll` 里，`PanGesture` 会与面板滚动抢手势；统一拖拽由长按门槛起手，与滚动天然不冲突。
+- 拖拽背板系统默认截取组件本身（也可以 `DragItemInfo.pixelMap` 或 `dragPreview` 自定义），无需自绘浮层与手工命中测试。
+- 数据传递：`onDragStart` 里以 `unifiedDataChannel.PlainText` 装入条目 `id`，目标格声明 `allowDrop([PLAIN_TEXT])`，`onDrop` 用 `event.getData()` 取回；宿主另留一个 `dragSourceId` 兜底字段。
+- 实施时须确认：`.draggable(true)` + `onDragStart` 与目标格 `allowDrop` + `onDrop` 成对到位，否则长按只会走旧的长按提示路径。
+
+**与一期长按提示的冲突（必须处理）**
+
+一期「长按 = `flashHint(名称)`」与拖拽起手是同一个长按。因此：**编辑态内长按让位给拖拽、不再出提示**；非编辑态行为完全不变。
+（`QuickActionCell` 增一个 `editable` 入参，长按分支据此二选一。）
+
+**提交与丢弃**
+
+- 进入编辑态时留一份 `quickActionOrder` 快照；编辑中的替换先在内存生效。
+  - 「完成」= 提交（写盘一次并退出）；「恢复默认」= 重置为 `quickActionDefaultOrder()`，**只改内存**，仍需「完成」提交。
+    - 刻意不做「恢复默认即写盘」：编辑态里返回 / 点面板外是「丢弃」，若恢复默认已经落盘，丢弃就会半途生效，语义自相矛盾。恢复默认只是把待提交内容改成默认序。
+- 返回键 / 点面板外 = **丢弃**并复原快照（编辑态需要一个明确的取消路径，避免误改无法挽回）。
+- 编辑中途不逐次写盘，减少写盘次数也让「取消」语义干净。
+
+**持久化**
+
+- 键：`stellariumPrefs.quickActionOrder`，类型 `string[]`，**长度恒为 12**，元素为条目 `id`。
+  - 写：仅「完成」一处（`quickPersistOrder()` → `saveQuickActionOrderToStorage()`）；「恢复默认」不写（见上）。
+  - 落盘通道是 `@ohos.data.preferences`（store `stellarium_quick_panel`，key `order`，JSON 数组），与书签 / 观测列表同套：
+    AppStorage 全仓没有 `PersistentStorage` 兜底，是**内存态**，写进 `stellariumSettings` 杀进程即丢（实测重启回默认）。
+- 读：`StartupBridge` 回读时**整体校验** —— 长度必须为 12、元素必须都在 `quickActionPool()` 内、且无重复；
+  任一不满足则**整串回落 `quickActionDefaults()`**（不做逐项修补，避免出现半新半旧的网格）。
+- 旧版本无该键时天然回落默认，无需迁移。
+
+### 13.6 左右镜像的状态源（先解决 N2 的解绑问题）
+
+- 引擎侧 `actionHorizontal_Flip` 是**全局**开关，但应用当前唯一的布尔镜像只存在于极轴镜语境
+  （`PolarScopeStore.polarScopeHorizontalFlip`，由引擎 `sessionFlags.horizontalFlip` 回读）。
+- **设计决定**：不新增第二份布尔，而是**把 `polarScopeStore.polarScopeHorizontalFlip` 提升为全局镜像状态**
+  （它就是引擎那一位的镜像），快捷面板读它、经 `PolarScopeController.setPolarScopeHorizontalFlip()` 写它。
+  这样永远只有一份真值，快捷面板与极轴镜叠层的开关天然同步。
+- 命名债记录在此：字段名带 `polarScope` 前缀但语义已是全局；若后续有第三个消费方，再统一改名
+  （`OverlayStore.horizontalFlip`），本次不动，避免一期已验收的极轴镜路径回归。
+- **实施前须确认**：`sessionFlags` 的回读目前挂在 `loadPolarScopeData()` 上。若该请求只在极轴镜可见时发出，
+  则需要在常规状态轮询里补一次该字段（或在切换回包后直接以乐观值落地 + 失败回滚，照 `setPolarScopeHorizontalFlip` 现有写法）。
+
+### 13.7 极简信息面板模式（设计；**本轮只落开关接口，隐藏行为延后**）
+
+**本轮范围（用户确认）**：只落**开关接口** —— 候选项 `minimal_hud`、`OverlayStore.minimalHud` 标志位、
+`quickActionValues()` 的 ON/OFF 取值、`quickToggle()` 的写入分支（含 `msg_shown` / `msg_hidden` 提示）。
+**界面不得有任何消费方**：三个 shell 的 HUD 隐藏条件本轮**一行都不改**（已用 `git diff` 复核三文件与 HEAD 逐字节一致），
+也**不落盘**（没有消费方时持久化只会误导；`quickToggle` 的 `minimal_hud` 分支刻意不调 `saveAppSettings()`）。
+下面「语义 / 隐藏对象 / 实现 / 状态与持久化」四段是**设计**，留待后续实现。
+
+**语义（待实现）**：ON = 隐藏常驻星空 HUD，只留星空 + Dock；OFF（默认）= 一期现状。
+
+**隐藏对象（三处，全部是既有实现，逐条有据）**：
+
+| # | 元素 | 现条件 | 依据 |
+| --- | --- | --- | --- |
+| 1 | 时钟层 `DockClockLayer` | `!panelVisible && !polarScopeVisible && clockText.length > 0` | `CompactShell.ets:174`、`ExpandedShell.ets:168` |
+| 2 | 视场角层（`fovText`） | `!panelVisible && !polarScopeVisible && fovText.indexOf('°') >= 0` | `CompactShell.ets:180`、`ExpandedShell.ets:172` |
+| 3 | 悬停观测台读数 | 常驻渲染 | `HoverObservatoryShell.ets:127,133`（`observationTimeText` / `currentFovText`） |
+
+**实现（待做）**：三处条件各追加 `&& !this.minimalHud`；`HoverObservatoryShell` 增 `@Prop minimalHud: boolean`。
+宿主 3 个 shell 调用点各透传一次 `this.overlayStore.minimalHud`（宿主已在这三处传 `fovText` 等，接线是同一批）。
+
+**状态与持久化（本轮已做一半）**：`state/OverlayStore.ets` 增 `minimalHud: boolean = false` ✅ 已落
+（与 `viewCoordinatesVisible` 同类设置字段）；`StartupBridge` 回读 + `saveAppSettings` 写盘 ⏳ **待实现**
+（须与上面的消费方同批做，否则「开关能存住但毫无作用」是更差的语义）。
+
+**明确不影响**（避免误伤一期的成果）：
+
+- 面板打开时的 HUD（`panelVisible` 分支照旧）；
+- 极轴镜叠层与其自身的翻转开关；
+- 「视场中心坐标」叠层（它有自己的 `viewCoordinatesVisible`，与本开关互不牵连）；
+- Dock 与快捷面板本身；时钟层消失后仍可从 Dock「时间」进时间面板（该层只是快捷入口，不是唯一入口）。
+
+**命名**：面板内不显示文字，长按提示用新增键 `quick_minimal_hud`（zh_CN「极简信息面板」）。
+
+### 13.8 图标清单
+
+| 用途 | 资源 | 来源 | 路径 |
+| --- | --- | --- | --- |
+| 赤道仪/经纬仪 | `bt_equatorial_mount.png` | 拷官方 `data/gui/btEquatorialMount-off.png` | raster + `colorFilter` |
+| 左右镜像 | `bt_flip_horizontal.png` | 拷官方 `data/gui/btFlipHorizontal-off.png` | raster + `colorFilter` |
+| 观测列表 | `bt_obs_list.png` | 拷官方 `data/gui/btObsList-off.png` | raster + `colorFilter` |
+| 目镜设置 | `oculars`（既有键） | `ShellIcons` 已注册 → `ic_oculars` | vector + `fillColor` |
+| 极简信息面板 | `bt_minimal_hud` | 拷官方 **`data/gui/tabPC.png`**（= 指针坐标页签的**未选中**态，用户指定） | raster + `colorFilter` |
+| 自定义入口 | `edit` | **新增自研** `ic_edit.svg` —— Material **`edit`**（铅笔）；仓库既有 `ic_*.svg` 里没有铅笔类图标可复用 | vector + `fillColor` |
+
+- **极简信息面板的图标换过一次**（用户两次反馈）：初版自研 `visibility_off`（眼睛带斜杠）与**夜间模式**撞脸 —— 官方 `bt_night_view` 本身就是眼睛造型；用户随后指定官方 `tabPC` 未选中态。取 `tabPC.png` 而非 `tabPC-selected.png`，与一期「取暗态、由 `colorFilter` 着色」同一约定。
+- **遗留提醒**：`tabPC` 是「指针坐标」页签的图标，本仓库该插件面板（`OverlayStore.pointerCoordinates*`）已在应用内。若将来把「指针坐标」也放进候选项池，两者图标会撞脸，届时需给其中之一另选图标。
+- 4 枚官方 PNG 合计约 44 KB（单个 2–12 KB），走一期同一条 `colorFilter` 路径，`TINT_ON` / `TINT_OFF` 常量不变。
+
+### 13.9 文案键清单
+
+| 用途 | 键 | 处理 |
+| --- | --- | --- |
+| 赤道仪/经纬仪（长按名称） | `quick_mount_mode` | **新增**（zh_CN「赤道仪 / 经纬仪」）。状态提示可复用既有 `i0008` 赤道坐标 / `i0009` 地平坐标 |
+| 左右镜像 | `quick_flip_horizontal` | **新增**（zh_CN「左右镜像」）。**不复用** `polar_scope_flip_horizontal`——那是极轴镜限定措辞 |
+| 观测列表 | `more_observe_list` | 复用（zh_CN「观测列表」） |
+| 目镜设置 | `panel_oculars` | 复用（zh_CN「目镜模拟」） |
+| 极简信息面板 | `quick_minimal_hud` | **新增**（zh_CN「极简信息面板」） |
+| 自定义模式 | `quick_customize` / `quick_customize_hint` / `quick_customize_default` / `quick_customize_done` | **新增 4 键**（进入编辑 / 「长按候选拖到格子上替换」提示 / 恢复默认 / 完成） |
+
+新增键一律按仓库既有 10 语言格式补全（`en` / `zh_CN` / `zh_HK` / `zh_TW` / `ja` / `ko` / `fr` / `de` / `es` / `ru`）。
+
+### 13.10 切片清单（实施）
+
+- **QA7 图标与注册**：拷 3 枚官方 PNG → `resources/base/media/bt_*.png`；新增 `ic_minimal_hud.svg`（与 `ic_edit.svg`，若仓库无铅笔图标）；`ShellIcons` 注册 `minimal_hud` / `edit`；跑 `audit-ohos-resource-coverage`。
+- **QA8 池与文案**：`common/derive/quickActions.ets` 增 `type` / `openPanel` 字段、`quickActionPool()`（17 项）、`quickActionDefaults()`（12 项）；补 §13.9 新增 7 个文案键。
+- **QA9 宿主分发**：`quickActionValues()` 增 `equatorial_mount` / `flip_horizontal` / `minimal_hud` 三个取值分支；`quickToggle()` 增对应分支 + `type === 'entry'` 分支走 `openSubPanel(item.openPanel)`；`QuickActionGrid.isOn()` 对 `entry` 恒 false。
+- **QA10 自定义模式（拖动-替换）**：候选带 = `quickActionPool()` 的「未列入」子集；`QuickActionCell` 增 `editable` / `candidate`；候选格 `.draggable(true)` + `onDragStart`，槽位格 `onDragEnter/Leave`（内置高亮底框）+ `onDrop`（互换并把被换下项回填候选带）；
+  被拖条目 id 用宿主字段 `quickDragSourceId` 传递（**不用** `setData`/`allowDrop`，理由见 §13.10.1）；`QuickPanel` 增编辑态布局与操作条；宿主增 `quickActionOrder` @State + 快照 / 提交 / 丢弃；
+  `quickPanelContentHeight()` / `compactPanelHeight()` 按 `quickPanelEditable` 分两档。
+- **QA11 极简模式（本轮只落开关接口）**：`OverlayStore.minimalHud`（已落）、候选项 `minimal_hud`、`quickActionValues()` 取值、`quickToggle('minimal_hud')` 写入分支（已落）。
+  **不做**：三个 shell 的隐藏条件与 `@Prop`、宿主 3 处透传、`StartupBridge` 回读 + 写盘 —— 全部留待后续「消费方」那一批一起做。
+- **QA12 验证与提交**：`arkts_check` → 构建 → `check-ohos-ui-contract`（新增锚点/静态 id 须 `--update`）→ 资源审计 → 真机走查（§13.11）→ CHANGELOG → commit。
+
+**UI 锚点（实施结果：零新增，未动契约）**：编辑入口复用 `PanelHeader` 既有的 `panel-header-action`（只把内容换成图标），候选格复用 `quick-action-<id>`（候选与槽位互斥，不会重名），操作条不挂锚点。
+实际仍是 **34 面板 / 26 静态 id / 18 动态前缀 / 47 锚点**，无需 `--update`。
+> 一次踩坑记录：把 `.id('quick-action-' + this.item.id)` 写成三元表达式后契约脚本直接报「dynamic prefix removed」——该脚本按**字面量**扫描 `.id('前缀' +`，锚点写法不能变换形态，否则语义没丢也会被拦。
+
+### 13.10.1 实施结果（QA7–QA12）与真机才暴露的三个拖拽坑
+
+QA7–QA12 全部完成。其中三个问题是**只有真机才暴露**的（`arkts_check` 与构建全绿，自动化拖拽也复现不出），逐条记下来免得重踩：
+
+1. **组件文件放错目录**：新 `QuickPanel` 写到了 `panels/quick/QuickPanel.ets`，而宿主导入的是 `panels/panels/QuickPanel.ets`
+   → 构建报「props 不可赋值」（解析到老组件）。教训：改组件前先确认宿主 import 的实际路径。
+2. **拖拽源被格子内的 `Image` 抢走**：`Image` 属 ArkUI 默认可拖组件，触摸命中它（且它自身 `draggable=false`）时系统判
+   `frameNode draggable is 0` → `Drag gesture has been canceled`，松手退化成点击（日志里能看到误触发了别的开关）。
+   修法：内层容器 `.hitTestBehavior(HitTestMode.None)` + 两路图标都 `.draggable(false)`，把拖拽权交回 `Button`。
+3. **编辑态的长按手势掐掉系统拖拽**：系统统一拖拽在触摸场景靠「长按约 500ms」起手，而格子上注册的
+   `LongPressGesture` 会在 600ms 赢下手势竞技场 —— 表现就是「按住能按、松手不替换」。
+   修法：编辑态把该手势 `duration` 拉到 600000（永不触发），让出竞技场。
+4. **应用内拖放不要加 `allowDrop`/`setData`**：按 ArkUI 官方 FAQ（`faqs-arkui-1173`「图标垃圾桶」）的写法
+   「拖出方 `.draggable(true)` + `.onDragStart`，接收方 `.onDrop`」即可；加了 `allowDrop([PLAIN_TEXT])` 后系统反而判
+   `target data is not allowed to fall into` 而拒收（AceDrag 日志）。被拖 id 用宿主字段传递最简单。
+5. **落盘必须走 `@ohos.data.preferences`**：全仓没有 `PersistentStorage`，`AppStorage` 是内存态，
+   写进 `stellariumSettings` 杀进程即丢（实测重启回默认）。已改用 store `stellarium_quick_panel` / key `order`。
+6. **标题栏动作按钮的语义与尺寸**（用户追加要求）：自定义 = 铅笔图标（`ic_edit.svg`），完成 = 勾图标（新增 `ic_check.svg`），
+   **不出文字**；`PanelHeader` 增 `headerActionIcon`（非空即渲染图标），文案仅留作 `accessibilityText`。
+   尺寸与右侧关闭按钮**一致**（36×36 / 18px 图标），两个圆形按钮视觉齐平。
+7. **编辑逻辑的归属**（用户追加要求）：顺序、编辑态、拖动-替换、提交 / 丢弃 / 恢复默认原本散在宿主的十来个 `quickXxx` 私有方法里，
+   不符合封装原则；已整体收进 **`QuickPanelStore`**（`@Observed`，与面板同文件 `panels/panels/QuickPanel.ets`）。
+   宿主只剩三件事：持有实例（1 个 `@State` 字段）、注入 `saveOrder` / `hint` hooks、传值 —— 净删 63 行编辑逻辑。
+   与 `state/*Store.ets` 同规矩：store 不 import NAPI / UI，落盘与提示一律经 hooks 注入。
+8. **行尾统一 CRLF**（用户追加要求）：仓库行尾原本混用（本片改动的 4 个 `.ets` 与计划文档原为 LF，其余为 CRLF），
+   本轮把改动到的 12 个文件全部统一为 CRLF（`lone LF = 0`）。
+
+### 13.11 验证口径
+
+1. 静态：`arkts_check` 0 error；`devecocli build` SUCCESSFUL。
+2. 契约：`check-ohos-ui-contract.mjs` intact（新增锚点须 `--update` 并说明）。
+3. 资源：`audit-ohos-resource-coverage.mjs` 通过（新增 3 枚 media 计入）。
+4. 真机（`--bundle com.cnchensh.stellarium`，勿用默认发布包名）：
+   - **默认网格不变**：升级后首次打开仍是 `quickActionDefaults()` 的 12 项，顺序与一期逐项一致；
+   - **N1**：点赤道仪格 → `getState` 回读 `actionSwitch_Equatorial_Mount` 翻转；杀进程重启后保持；
+   - **N2**：点镜像格 → 星空左右镜像；打开极轴镜叠层，其「水平翻转」开关与快捷面板**同步为同一状态**；
+   - **N3/N4**：点观测列表格 / 目镜格 → 分别进入 `observing` / `oculars` 面板，且格子**不点亮**；
+   - **N5（本轮口径：只验开关接口）**：点极简信息面板格 → 图标 ON/OFF 切换、出「已显示 / 已隐藏」提示；**星空 HUD 必须毫无变化**（时钟层与视场角层照常显示），重启后**回落 OFF**（本轮刻意不落盘）；待隐藏行为那一批落地后，本项再改为验「三处常驻 HUD 隐藏 / 恢复 + 重启保持」；
+   - **自定义（拖动-替换）**：点「自定义」→ 面板加高、候选带露出 5 项、**12 格位置不动**；长按候选拖到某格 → 拖拽中被悬停格高亮，松手完成互换、被换下项出现在候选带；拖到空白处松手 → 面板无变化；编辑态长按**不再**出 `flashHint`；
+     「完成」后重启保持；返回键退出 → 改动丢弃并复原；「恢复默认」回到一期 12 项；手工把 `quickActionOrder` 改成非法串（长度错 / 含未知 id / 有重复，三种各测一次），重启均回落默认且不崩；
+   - **编辑态高度**：`ui layout` 复核图标第一行顶边与视口顶边偏移为 0（编辑态同样不能被 `Scroll` 居中）；
+   - 逐项长按出 `flashHint` 且文案正确。
+5. `eol`：新增 `.ets` 与文档一律 CRLF；`write` 工具产物须归一回 CRLF。
+
+### 13.12 风险与对策
+
+| 风险 | 对策 |
+| --- | --- |
+| N2 的镜像状态回读挂在 `loadPolarScopeData()`，极轴镜不可见时可能不回读 | 实施时优先确认该路径；必要时切换回包后乐观落地 + 失败回滚（照现有写法），或把该字段并入常规轮询 |
+| `TelescopeStore.equatorialMount` 是「设置 > 配置」既有 UI 的状态，快捷面板再写一份可能两处不一致 | 单一真值：快捷面板只读 store、只经 `applyLayerSwitch` 写；`setLayer` 回包后已 `refreshState()`，两处自然同步 |
+| 自定义后用户把「夜间模式」等一期项换掉，导致一期验收口径失效 | 这是用户意图内的行为；「恢复默认」随时可回，且默认值即一期 12 项 |
+| `quickActionOrder` 长度/内容非法导致网格半空或崩溃 | 回读整体校验 + 整串回落默认（§13.5），不做逐项修补 |
+| 极简模式下时钟层消失，用户找不到时间面板 | Dock「时间」入口不受影响；此为「极简」的预期语义，无回归 |
+| 「观测列表 / 目镜」用官方 `btObsList` ，而目镜用自研 SVG，观感可能不齐 | 目镜无需官方图标（官方也没有）；沿用一期「卫星 / 陀螺仪用自研 SVG」的既有先例，两路着色的观感已在一期验收过 |
+| 统一拖拽的手势门槛固定为长按 ≥500ms，编辑态「按住候选」到「拖起」有半秒延迟，用户可能误以为没反应 | 操作条常驻 `quick_customize_hint`（「长按候选图标拖到格子上替换」）；候选格可加轻微呼吸描边示意可拖 |
+| 拖拽与面板 `Scroll` 抢手势 | 用统一拖拽（长按起手）而非 `PanGesture`；QA10 真机专项走查面板滚动仍正常 |
+| 编辑态高度算错 → `Scroll` 把内容垂直居中（一期 §12.6 第 4 条已踩过） | 按 §13.5 公式重算，`compactPanelHeight()` 按 `quickPanelEditable` 分档；真机 `ui layout` 复核顶边偏移为 0 |
+| `draggable` 未置真或目标格未声明 `allowDrop` → 长按仍走一期提示、根本拖不起来 | QA10 完成后先做「拖不起来」专项走查（§13.11 自定义项第一条），再往下验收 |
 
 
 
