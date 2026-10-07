@@ -402,6 +402,21 @@ ObjectCompactMetric（现有组件，零改动）
 - 天文馆模式页头三格**零变化**（星等 / 星座 / 距离），§4.3 末尾「天文馆维持单值现状」仍然成立。
 - 真机复核：卡片顶边上提到 ~44–58vp；三格读数为 `0.03 / 0.18 / 天琴座`；点星与点 Dock 均无状态提示条。
 
+### 12.7 连接线在观测模式下彻底关闭（同日再按用户要求修订 §4.2 / 边界 8）
+
+§12.5 只在**极简态**关掉了指向线；用户随后要求**展开态也一样不画**。故下发三壳层的 `connectorVisible`
+改为 `overlayStore.objectDetailConnectorVisible && !infoWindowStore.observeModeEnabled()`：
+
+| 形态 | 指向线 |
+| ---- | ---- |
+| 观测模式 · 极简 | 不画 |
+| 观测模式 · 展开 | **不画**（本次修订） |
+| 天文馆模式 | 照旧，仍由「设置 > 信息 > 详情卡指向线」开关控制 |
+
+仍然只拦渲染不拦计算（`detailConnectorCtl().objectDetailCardY()` 继续负责卡片纵向位置）；
+`getObjectDetailConnector` 报的仍是**设置值**，不受呈现轴影响。§4.2 的「按钮行」与边界 8 的
+「几何锚点随卡片高度变化自然适配」只在天文馆模式下适用。
+
 ### 12.4 护栏
 
 `arkts_check` 0 error；`devecocli build` SUCCESSFUL；`check-ohos-ui-contract.mjs` intact；
