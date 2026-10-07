@@ -32,6 +32,11 @@ export class OverlayStore {
   // —— 天体详情指向线（设置） ——
   objectDetailConnectorVisible: boolean = true
 
+  // —— 极简信息面板模式（二期，快捷面板开关） ——
+  // **本轮只落开关接口**：这里只存标志位，界面尚无任何消费方。
+  // 设计语义（隐藏三处常驻星空 HUD：时钟层 / 视场角层 / 悬停观测台读数）见计划 §13.7，实现延后。
+  minimalHud: boolean = false
+
   // —— 桥注入 ——
   private port: CommandPort | null = null
   // 本加载器不使用请求序号（无并发抑制需求）；保留字段以统一各 store 的加载器约定。

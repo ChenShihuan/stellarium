@@ -24,6 +24,9 @@ export struct PanelHeader {
   @Prop routeOpacity: number
   @Prop routeOffsetX: number
   @Prop headerActionLabel: string = ''
+  // 非空时动作按钮渲染为图标（走 getIcon 名称注册表），此时 ``headerActionLabel`` 只作无障碍文案。
+  // 快捷操作面板要求「自定义=铅笔 / 完成=勾」不出现文字；图层面板仍用文字。
+  @Prop headerActionIcon: string = ''
   @Prop titleAsButton: boolean = false
   onBack: () => void = () => {}
   onClose: () => void = () => {}
@@ -100,16 +103,25 @@ export struct PanelHeader {
         .translate({ x: this.routeOffsetX, y: 0 })
       Blank()
       if (this.headerActionLabel.length > 0) {
-        Button(this.headerActionLabel)
+        // 单一 Button + 条件子节点：``panel-header-action`` 锚点只出现一次（契约按出现次数校验）。
+        Button() {
+          if (this.headerActionIcon.length > 0) {
+            // 图标态与右侧关闭按钮同尺寸（36×36 / 18px 图标），两个圆形按钮视觉齐平。
+            Image(getIcon(this.headerActionIcon, false)).width(18).height(18).fillColor('#E5FFFFFF')
+          } else {
+            Text(this.headerActionLabel).fontSize(11).fontColor('#E5FFFFFF')
+          }
+        }
           .id('panel-header-action')
-          .fontSize(11)
-          .fontColor('#E5FFFFFF')
+          .constraintSize({ minWidth: 36 })
+          .height(36)
+          .padding(this.headerActionIcon.length > 0 ? 0 : { left: 10, right: 10 })
           .backgroundColor('rgba(255, 255, 255, 0.06)')
           .borderRadius(UI_RADIUS_PILL)
-          .height(28)
-          .padding({ left: 10, right: 10 })
           .zIndex(10)
           .clickEffect({ level: ClickEffectLevel.LIGHT })
+          .accessibilityText(this.headerActionLabel)
+          .stateStyles({ pressed: { .opacity(0.62) } })
           .onClick(() => { this.onHeaderAction() })
           .margin({ right: 8 })
       }
