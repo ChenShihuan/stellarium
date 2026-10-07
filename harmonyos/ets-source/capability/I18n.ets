@@ -1773,7 +1773,7 @@ const UI_STRINGS: Record<string, Record<string, string>> = {
   'quick_customize_done': { 'en': 'Done', 'zh_CN': '完成', 'ja': '完了', 'ko': '완료', 'fr': 'Terminé', 'de': 'Fertig', 'es': 'Listo', 'ru': 'Готово', 'zh_HK': '完成', 'zh_TW': '完成' },
   // —— 三期：详情卡观测模式（呈现轴，见 OBJECT-DETAIL-OBSERVE-MODE.md §8.2）——
   'detail_mode_observe': { 'en': 'Observing', 'zh_CN': '观测模式', 'ja': '観測モード', 'ko': '관측 모드', 'fr': 'Observation', 'de': 'Beobachtung', 'es': 'Observación', 'ru': 'Наблюдение', 'zh_HK': '觀測模式', 'zh_TW': '觀測模式' },
-  'detail_observe_magnitude': { 'en': 'Mag (ext.)', 'zh_CN': '星等(大气消光)', 'ja': '等級(大気減光)', 'ko': '등급(대기 소광)', 'fr': 'Mag (ext.)', 'de': 'Helligk. (ext.)', 'es': 'Mag (ext.)', 'ru': 'Зв. вел. (атм.)', 'zh_HK': '星等(大氣消光)', 'zh_TW': '星等(大氣消光)' },
+  'detail_observe_extinction_magnitude': { 'en': 'Mag after ext.', 'zh_CN': '大气消光后星等', 'ja': '大気減光後の等級', 'ko': '대기 소광 후 등급', 'fr': 'Mag après ext.', 'de': 'Helligk. nach Ext.', 'es': 'Mag tras ext.', 'ru': 'Зв. вел. после атм.', 'zh_HK': '大氣消光後星等', 'zh_TW': '大氣消光後星等' },
   'detail_observe_center': { 'en': 'Center', 'zh_CN': '居中', 'ja': '中央', 'ko': '가운데', 'fr': 'Centrer', 'de': 'Zentrieren', 'es': 'Centrar', 'ru': 'Центр', 'zh_HK': '居中', 'zh_TW': '居中' },
   'detail_observe_expand': { 'en': 'Expand', 'zh_CN': '展开', 'ja': '展開', 'ko': '펼치기', 'fr': 'Développer', 'de': 'Erweitern', 'es': 'Expandir', 'ru': 'Развернуть', 'zh_HK': '展開', 'zh_TW': '展開' },
   'detail_observe_collapse': { 'en': 'Collapse', 'zh_CN': '收起', 'ja': '折りたたむ', 'ko': '접기', 'fr': 'Réduire', 'de': 'Einklappen', 'es': 'Contraer', 'ru': 'Свернуть', 'zh_HK': '收起', 'zh_TW': '收起' },

@@ -158,9 +158,13 @@ export function baseBottomCardX(isExpandedLayout: boolean, isFoldHoverLayout: bo
 }
 
 // 底部详情卡基础 Y（原宿主 baseBottomCardY）。
+// 手机 / 半折：**贴在安全区顶部** —— 详情卡是浮在星图上的读数卡，顶部留白只会挤掉天空，
+// 故不再保留旧的 86–126vp 下限（用户要求「整体浮窗继续往上提」）。
+// 平板（展开态）：让开左侧轨道（`edgeMargin + 76`，下限 92），同时不高于安全区。
 export function baseBottomCardY(isExpandedLayout: boolean, skyHeight: number,
-  edgeMargin: number): number {
-  return isExpandedLayout ? Math.max(edgeMargin + 76, 92) : Math.max(86, Math.min(126, skyHeight * 0.12))
+  edgeMargin: number, safeTop: number): number {
+  if (isExpandedLayout) { return Math.max(edgeMargin + 76, 92, safeTop) }
+  return Math.max(0, Math.min(safeTop, skyHeight - 120))
 }
 
 // 展开态 Dock 左占用（原宿主 expandedDockOccupiedLeft）。

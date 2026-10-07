@@ -51,25 +51,27 @@ export struct ObjectDetailCardHeader {
         .onTouch((event: TouchEvent) => { this.onDragTouch(event) })
       Row() {
         if (this.observeMode()) {
-          // 「居中」不再占一行按钮：把天体类型图标做成**取景器式聚焦圈** —— 一个圆环，四个斜向
-          // （左上 / 右上 / 左下 / 右下）各一条短线，点它即把视角移到该天体。
-          // 短线用与拖拽柄同一套画法（`Row` + `backgroundColor` + `rotate`）：
-          // 36×36 框、圆心 (18,18)、圆环外径 26（r=13）；短线 r 13.5→17.5，故中心 r=15.5、
-          // 45° 投影 0.7071×15.5≈10.96 → 中心 (28.96, 7.04)，未旋转左上角 = 中心 −(2, 0.8)。
+          // 「居中」不再占一行按钮：把天体类型图标做成**准星式聚焦圈** —— 一个圆环，四条斜向短线
+          // **横穿**圆环（左上 / 右上 / 左下 / 右下），点它即把视角移到该天体。
+          //
+          // 短线用与拖拽柄同一套画法（`Row` + `backgroundColor` + `rotate`）。几何（36×36 框、圆心 (18,18)）：
+          // 圆环 26×26 → 外径 r=13、描边 1.5 画在框内 → 环带 r 11.5–13；短线长 6、中心 r=14.5
+          // → 两端 r 11.5 与 17.5，正好**穿过**环带。短线必须**沿半径**方向（即垂直于该处圆周），
+          // 否则两端半径相同就成了与圆环平行的「虚线弧」：NE 用 −45°、NW 用 +45°（`rotate` 顺时针为正）。
           Stack() {
             Image(getIcon(this.iconName, false))
               .width(20).height(20).fillColor('#73C8FF')
             Row()
               .width(26).height(26).borderRadius(13)
               .border({ width: 1.5, color: OBSERVE_RING_COLOR })
-            Row().width(4).height(1.6).borderRadius(0.8).backgroundColor(OBSERVE_RING_COLOR)
-              .position({ x: 26.9, y: 6.2 }).rotate({ angle: 45 })
-            Row().width(4).height(1.6).borderRadius(0.8).backgroundColor(OBSERVE_RING_COLOR)
-              .position({ x: 5.0, y: 6.2 }).rotate({ angle: -45 })
-            Row().width(4).height(1.6).borderRadius(0.8).backgroundColor(OBSERVE_RING_COLOR)
-              .position({ x: 5.0, y: 28.2 }).rotate({ angle: 45 })
-            Row().width(4).height(1.6).borderRadius(0.8).backgroundColor(OBSERVE_RING_COLOR)
-              .position({ x: 26.9, y: 28.2 }).rotate({ angle: -45 })
+            Row().width(6).height(1.5).borderRadius(0.75).backgroundColor(OBSERVE_RING_COLOR)
+              .position({ x: 25.3, y: 7.0 }).rotate({ angle: -45 })
+            Row().width(6).height(1.5).borderRadius(0.75).backgroundColor(OBSERVE_RING_COLOR)
+              .position({ x: 4.7, y: 7.0 }).rotate({ angle: 45 })
+            Row().width(6).height(1.5).borderRadius(0.75).backgroundColor(OBSERVE_RING_COLOR)
+              .position({ x: 4.7, y: 27.5 }).rotate({ angle: -45 })
+            Row().width(6).height(1.5).borderRadius(0.75).backgroundColor(OBSERVE_RING_COLOR)
+              .position({ x: 25.3, y: 27.5 }).rotate({ angle: 45 })
           }
             .width(36).height(36)
             .margin({ right: 6 })
@@ -99,12 +101,16 @@ export struct ObjectDetailCardHeader {
 
       Row({ space: 4 }) {
         if (this.observeMode()) {
-          ObjectCompactMetric({ label: this.store.observeMagnitudeLabel(), value: this.store.observeMagnitudeValue() })
+          // 观测模式的三个读数：视星等 / 大气消光后星等 / 星座。
+          // 不再显示距离（用户要求），消光后星等从「括号拼在一格里」升为独立一格。
+          ObjectCompactMetric({ label: I18n.t('i0007'), value: this.store.selectedMagnitude })
+          ObjectCompactMetric({ label: I18n.t('detail_observe_extinction_magnitude'), value: this.store.selectedApparentMagnitude })
+          ObjectCompactMetric({ label: I18n.t('i0010'), value: this.nameOf(this.store.selectedConstellation) })
         } else {
           ObjectCompactMetric({ label: I18n.t('i0007'), value: this.store.selectedMagnitude })
+          ObjectCompactMetric({ label: I18n.t('i0010'), value: this.nameOf(this.store.selectedConstellation) })
+          ObjectCompactMetric({ label: I18n.t('i0011'), value: this.distanceSummary(this.store.selectedDistance, this.store.selectedDistanceCompact) })
         }
-        ObjectCompactMetric({ label: I18n.t('i0010'), value: this.nameOf(this.store.selectedConstellation) })
-        ObjectCompactMetric({ label: I18n.t('i0011'), value: this.distanceSummary(this.store.selectedDistance, this.store.selectedDistanceCompact) })
       }
         .width('100%').padding({ left: 16, right: 16, top: 3, bottom: 7 })
 
