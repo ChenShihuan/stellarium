@@ -3983,9 +3983,10 @@ export struct WindowNativeNode {
       }
       hilog.info(0x0000, 'StellariumArkUI', 'selectAt result: ' + JSON.stringify(result))
       this.applySelectedObject(result, false, '', true)
-      this.flashHint(result.found === true
-        ? I18n.t('i0074').replace('%s', zhNameOf(this.objectDetailStore.selectedName))
-        : I18n.t('i0075'))
+      // 「已选中 XX」是纯状态播报，观测时反复点选会刷屏（用户要求去掉）；点了空处仍提示一次。
+      if (result.found !== true) {
+        this.flashHint(I18n.t('i0075'))
+      }
     })
   }
 
@@ -3996,7 +3997,6 @@ export struct WindowNativeNode {
     this.applySelectedObject({ ok: true, found: false } as StellariumBridgeResponse)
     hilog.info(0x0000, 'StellariumArkUI', 'double tap cleared sky selection at ' +
       Math.round(x).toString() + ',' + Math.round(y).toString())
-    this.flashHint(I18n.t('m_session_unselected'))
     this.callInteractive('clearSelection', '', (result) => {
       if (requestSerial !== this.skySelectionRequestSerial) { return }
       this.applySelectedObject(result)
@@ -4167,7 +4167,7 @@ export struct WindowNativeNode {
     if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.objectCardDragging = false
       const baseX = baseBottomCardX(this.isExpandedLayout, this.isFoldHoverLayout, this.skyWidth, this.EDGE_MARGIN, this.bottomCardWidth())
-      const baseY = this.isFoldHoverLayout ? this.baseHoverBottomCardY() : baseBottomCardY(this.isExpandedLayout, this.skyHeight, this.EDGE_MARGIN)
+      const baseY = this.isFoldHoverLayout ? this.baseHoverBottomCardY() : baseBottomCardY(this.isExpandedLayout, this.skyHeight, this.EDGE_MARGIN, this.scriptControlSafeTop())
       const width = this.detailCardWidth()
       const height = this.detailCardHeight()
       this.cardOffsetX = this.clampedObjectCardOffsetX(baseX, width)
@@ -4213,7 +4213,6 @@ export struct WindowNativeNode {
       return
     }
     this.setPanel(item.panel)
-    this.flashHint(I18n.t('msg_panel_opened'))
   }
 
   private handleDockTouch(event: TouchEvent): void {
@@ -4334,7 +4333,7 @@ export struct WindowNativeNode {
   }
 
   private bottomCardY(): number {
-    const base = baseBottomCardY(this.isExpandedLayout, this.skyHeight, this.EDGE_MARGIN)
+    const base = baseBottomCardY(this.isExpandedLayout, this.skyHeight, this.EDGE_MARGIN, this.scriptControlSafeTop())
     return base + this.clampedObjectCardOffsetY(base, this.bottomCardHeight())
   }
 

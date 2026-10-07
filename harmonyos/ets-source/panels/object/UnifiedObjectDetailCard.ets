@@ -1,5 +1,6 @@
 import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_PANEL } from '../../common/ui/UiTokens'
+import { getIcon } from '../../common/ui/ShellIcons'
 import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { ObjectMediaStore } from '../../state/ObjectMediaStore'
 import { ObjectDetailCardHeader, ObjectDetailCardTabs } from './ObjectDetailCardChrome'
@@ -150,32 +151,41 @@ export struct UnifiedObjectDetailCard {
       }
 
       if (this.observeMode()) {
-        // 展开 / 收起的唯一入口：卡片下沿正中一个大箭头。收起态向下（展开全量），展开态向上（收回极简）。
-        // 放在下沿而非常规按钮行，是因为这两个动作作用于「这张卡的整体形态」，位置固定在下沿最容易被摸到；
-        // 行宽占满卡片，故箭头本身可以画得小，触控区仍然很大。
-        if (this.observeExpanded) {
-          Row() {
-            Text('▲').fontSize(16).fontColor('#8FBBD6')
+        // 展开 / 收起的唯一入口：卡片下沿正中一个箭头 —— 收起态向下（展开全量），展开态向上（收回极简）。
+        // 样式与面板返回按钮完全一致（无底 Button + `ic_back` 17vp 描边箭头 + 按压 opacity 0.62），
+        // 只是把同一个左向箭头旋转 90°：−90° = 向下，+90° = 向上。动作作用于「这张卡的整体形态」，
+        // 位置固定在下沿最容易被摸到。
+        Row() {
+          if (this.observeExpanded) {
+            Button() {
+              Image(getIcon('back', false)).width(17).height(17).fillColor('#D9F1FF').rotate({ angle: 90 })
+            }
+              .id('object-detail-observe-collapse')
+              .width(28).height(28).padding(0).borderRadius(0)
+              .backgroundColor(Color.Transparent)
+              .clickEffect({ level: ClickEffectLevel.LIGHT })
+              .stateStyles({ pressed: { .opacity(0.62) } })
+              .accessibilityText(I18n.t('detail_observe_collapse'))
+              .onClick(() => {
+                this.onCollapseObserve()
+              })
+          } else {
+            Button() {
+              Image(getIcon('back', false)).width(17).height(17).fillColor('#D9F1FF').rotate({ angle: -90 })
+            }
+              .id('object-detail-observe-expand')
+              .width(28).height(28).padding(0).borderRadius(0)
+              .backgroundColor(Color.Transparent)
+              .clickEffect({ level: ClickEffectLevel.LIGHT })
+              .stateStyles({ pressed: { .opacity(0.62) } })
+              .accessibilityText(I18n.t('detail_observe_expand'))
+              .onClick(() => {
+                this.onExpandObserve()
+              })
           }
-            .width('100%').height(28)
-            .justifyContent(FlexAlign.Center)
-            .id('object-detail-observe-collapse')
-            .accessibilityText(I18n.t('detail_observe_collapse'))
-            .onClick(() => {
-              this.onCollapseObserve()
-            })
-        } else {
-          Row() {
-            Text('▼').fontSize(16).fontColor('#8FBBD6')
-          }
-            .width('100%').height(28)
-            .justifyContent(FlexAlign.Center)
-            .id('object-detail-observe-expand')
-            .accessibilityText(I18n.t('detail_observe_expand'))
-            .onClick(() => {
-              this.onExpandObserve()
-            })
         }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
       }
 
     }
