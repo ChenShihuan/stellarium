@@ -143,7 +143,10 @@ test('UI and CLI share semantic player, scrollable text and actual result', () =
   assert.match(guideShell, /GuideButton\(\{ label: 'btn_resume', action: 'resume'/);
   assert.match(guideShell, /minHeight: 52.*HitTestMode\.Default/);
   assert.match(guideShell, /guidePhase === 'exploring'/);
-  assert.match(page, /lastRequestId: this\.guideStore\.guideLastRequest/);
+  // §9 P0 S6：导览引擎/请求序号/定时器迁入 capability/GuideController；
+  // CLI 结果读取随之改经控制器 getter（宿主 publishGuideState）。
+  assert.match(page, /lastRequestId: this\.guideCtl\(\)\.lastRequestId\(\)/);
+  assert.match(page, /result: this\.guideCtl\(\)\.lastResult\(\)/);
   assert.match(page, /guideState\.active/);
   const core = readFileSync(new URL('../src/scripting/StelScriptMgr.cpp', import.meta.url), 'utf8');
   assert.match(core, /restoreSessionState\(false\)/);
