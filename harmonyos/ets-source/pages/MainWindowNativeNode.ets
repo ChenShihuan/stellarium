@@ -33,7 +33,7 @@ import {
   chromeZoomButtonTop
 } from '../common/ui/ChromeGeometry'
 import { gyroRotateAboutAxis, gyroMultiplyQuaternions, gyroFilterDeviceVector, gyroCross, gyroRotateAboutVertical, gyroScreenAxisForDisplay, shortestGyroAzimuthDelta, wrapGyroAzimuth, gyroNormalizeVector, gyroNormalizeQuaternion, gyroConjugateQuaternion, gyroDot, gyroMagneticHeadingFromDeviceVectors } from '../common/derive/gyro'
-import { dateToJD, jdToLocalTimeText, graphModeLabel, graphStartOptionLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointColor, hecLayoutPositions, hecPointLeft, hecPointTop, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
+import { jdToLocalTimeText, graphModeLabel, graphStartOptionLabel, planetMetricUnit, planetPairBodyName, phenomenonCaption, hecPointColor, hecLayoutPositions, hecPointLeft, hecPointTop, messierNumberOf, minorPlanetNumberOf, fmtDegMin, clamp, distance } from '../common/derive/astro'
 import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, scriptZh, scriptDesc, pluginZh, pluginDesc, pluginHostName, pluginFeatureRoute, approximateTimeZoneDisplay, panelTitleFor, celestialTitle, quickLocationLabel } from '../common/derive/labels'
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
@@ -1725,17 +1725,14 @@ export struct WindowNativeNode {
       applyLocation: (name: string, lat: number, lon: number, alt: number, planet: string): void => { this.locationCtl().setLocation(name, lat, lon, alt, planet) },
       setPickerMode: (mode: string): void => { this.locationPickerStore.locationPickMode = mode }
     })
-    this.astroStore.attachPort(hostPort, () => { this.publishAstroPanelState() })
+    // astro 域桥加载 / 请求序号已移交 astroCalcCtl()（§9 P0）；store 只保留数据与纯派生，
+    // 故不再 attachPort，只注入纯跨度读取 / 格式化 hooks。
     this.astroStore.attachHooks({
       hasSelectedObject: () => this.objectDetailStore.hasSelectedObject(),
       selectedObjectName: () => this.objectDetailStore.selectedName,
       wutCategory: () => this.wutStore.wutCategory,
       wutObservationTime: () => this.wutStore.wutObservationTime,
-      loadWutTargets: () => { this.wutStore.loadWutTargets() },
-      ephemerisCustomStartJD: () => dateToJD(this.ephemerisStore.ephemerisStartYear, this.ephemerisStore.ephemerisStartMonth, this.ephemerisStore.ephemerisStartDay, 0, 0),
-      fmtDateTime: (s: string | undefined) => this.astroCalcCtl().fmtDateTime(s),
-      hecLayoutPositions: (positions: Array<HeliocentricPosition>) => hecLayoutPositions(positions),
-      loadPlanetPositions: () => { this.astroCalcCtl().loadPlanetPositions() }
+      fmtDateTime: (s: string | undefined) => this.astroCalcCtl().fmtDateTime(s)
     })
     // 经具名 hooks 回指控制器；每 1s 计时器与面板开合只调用 store 的 loadPolarScopeData /
     // cancelPolarScopeRequest。
@@ -2987,7 +2984,10 @@ export struct WindowNativeNode {
           this.applySelectedObject(result, fromRefresh, placement, userReselect)
         },
         setPanel: (panel: string): void => { this.setPanel(panel) },
-        applyAtmosphereResponse: (result: StellariumBridgeResponse): void => { this.atmosphereStore.applyAtmosphereResponse(result) }
+        applyAtmosphereResponse: (result: StellariumBridgeResponse): void => { this.atmosphereStore.applyAtmosphereResponse(result) },
+        hasSelectedObject: (): boolean => this.objectDetailStore.hasSelectedObject(),
+        selectedObjectName: (): string => this.objectDetailStore.selectedName,
+        hecLayoutPositions: (positions: Array<HeliocentricPosition>): Array<HeliocentricPosition> => hecLayoutPositions(positions)
       }
       this.astroCalcControllerImpl = new AstroCalcController(
         this.commandPort(), this.hostMediaPort, this.astroStore, this.ephemerisStore, this.wutStore, this.searchStore, hooks)
@@ -3446,7 +3446,7 @@ export struct WindowNativeNode {
       }
       if (panel === 'astro') {
         this.publishAstroPanelState()
-        this.astroStore.loadAstroTab(this.astroStore.astroTab)
+        this.astroCalcCtl().loadAstroTab(this.astroStore.astroTab)
       } else if (panel === 'layers') {
         this.refreshState()
         if (this.viewTab === 4) this.layerViewStore.loadLandscapeList()
@@ -5313,7 +5313,7 @@ export struct WindowNativeNode {
       this.objectMediaStore.objectInspectorMediaPreviewFailed = false
       this.infoWindowStore.infoWinVisible = false
       this.objectDetailStore.selectedInfo = '当前位置没有可选天体，请放大或使用搜索'
-      this.astroStore.clearRtsSelectionResults()
+      this.astroCalcCtl().clearRtsSelectionResults()
     }
   }
 
@@ -5563,7 +5563,7 @@ export struct WindowNativeNode {
           this.astroCalcCtl().clearTargetPickerFlags()
           this.astroStore.astroTab = 1
           this.setPanel('astro')
-          this.astroStore.loadEphemeris()
+          this.astroCalcCtl().loadEphemeris()
         }
         // Search navigation and safe-area placement already own the camera.
         // Enabling tracking here would call moveToObject() a second time after
@@ -7791,31 +7791,31 @@ export struct WindowNativeNode {
           jumpToRts: (key: string) => { this.astroCalcCtl().jumpToRts(key) },
           jumpToRtsCalendar: (day: RtsCalendarDay) => { this.astroCalcCtl().jumpToRtsCalendar(day) },
           jumpToWutTarget: (target: WutTarget) => { this.astroCalcCtl().jumpToWutTarget(target) },
-          loadAlmanac: () => { this.astroStore.loadAlmanac() },
-          loadAltAzCurve: () => { this.astroStore.loadAltAzCurve() },
-          loadAnnualElevation: () => { this.astroStore.loadAnnualElevation() },
-          loadCelestialPositions: () => { this.astroStore.loadCelestialPositions() },
-          loadEclipses: () => { this.astroStore.loadEclipses() },
-          loadEphemeris: () => { this.astroStore.loadEphemeris() },
-          loadHeliocentricPositions: () => { this.astroStore.loadHeliocentricPositions() },
-          loadLunarElongation: () => { this.astroStore.loadLunarElongation() },
-          loadMoonPhases: () => { this.astroStore.loadMoonPhases() },
-          loadObservabilityCalendar: () => { this.astroStore.loadObservabilityCalendar() },
-          loadPhenomena: () => { this.astroStore.loadPhenomena() },
-          loadPlanetCalc: () => { this.astroStore.loadPlanetCalc() },
-          loadPlanetPairDistance: () => { this.astroStore.loadPlanetPairDistance() },
+          loadAlmanac: () => { this.astroCalcCtl().loadAlmanac() },
+          loadAltAzCurve: () => { this.astroCalcCtl().loadAltAzCurve() },
+          loadAnnualElevation: () => { this.astroCalcCtl().loadAnnualElevation() },
+          loadCelestialPositions: () => { this.astroCalcCtl().loadCelestialPositions() },
+          loadEclipses: () => { this.astroCalcCtl().loadEclipses() },
+          loadEphemeris: () => { this.astroCalcCtl().loadEphemeris() },
+          loadHeliocentricPositions: () => { this.astroCalcCtl().loadHeliocentricPositions() },
+          loadLunarElongation: () => { this.astroCalcCtl().loadLunarElongation() },
+          loadMoonPhases: () => { this.astroCalcCtl().loadMoonPhases() },
+          loadObservabilityCalendar: () => { this.astroCalcCtl().loadObservabilityCalendar() },
+          loadPhenomena: () => { this.astroCalcCtl().loadPhenomena() },
+          loadPlanetCalc: () => { this.astroCalcCtl().loadPlanetCalc() },
+          loadPlanetPairDistance: () => { this.astroCalcCtl().loadPlanetPairDistance() },
           loadPlanetPositions: () => { this.astroCalcCtl().loadPlanetPositions() },
-          loadPlanetTimeSeries: () => { this.astroStore.loadPlanetTimeSeries() },
-          loadPlanetaryTransits: () => { this.astroStore.loadPlanetaryTransits() },
-          loadRTS: () => { this.astroStore.loadRTS() },
-          loadRtsCalendar: () => { this.astroStore.loadRtsCalendar() },
-          loadTonightAstro: () => { this.astroStore.loadTonightAstro() },
+          loadPlanetTimeSeries: () => { this.astroCalcCtl().loadPlanetTimeSeries() },
+          loadPlanetaryTransits: () => { this.astroCalcCtl().loadPlanetaryTransits() },
+          loadRTS: () => { this.astroCalcCtl().loadRTS() },
+          loadRtsCalendar: () => { this.astroCalcCtl().loadRtsCalendar() },
+          loadTonightAstro: () => { this.astroCalcCtl().loadTonightAstro() },
           loadWutTargets: () => { this.wutStore.loadWutTargets() },
           lunarElongationBarWidth: () => this.astroStore.lunarElongationBarWidth(),
           lunarElongationClosestLabel: () => this.astroStore.lunarElongationClosestLabel(),
           lunarElongationLineTop: () => this.astroStore.lunarElongationLineTop(),
           lunarElongationNowLabel: () => this.astroStore.lunarElongationNowLabel(),
-          markRtsCalendarForRegeneration: () => { this.astroStore.markRtsCalendarForRegeneration() },
+          markRtsCalendarForRegeneration: () => { this.astroCalcCtl().markRtsCalendarForRegeneration() },
           openAstroTargetPicker: () => { this.astroCalcCtl().openAstroTargetPicker() },
           openEphemerisTargetPicker: () => { this.astroCalcCtl().openEphemerisTargetPicker() },
           openGraphTargetPicker: () => { this.astroCalcCtl().openGraphTargetPicker() },
@@ -7829,7 +7829,7 @@ export struct WindowNativeNode {
           planetTimeSeriesValueLabel: (value: number | undefined, metric: string) => this.planetTimeSeriesValueLabel(value, metric),
           publishAstroPanelState: () => { this.publishAstroPanelState() },
           reloadCurrentGraph: () => { this.astroCalcCtl().reloadCurrentGraph() },
-          reloadEclipses: () => { this.astroStore.reloadEclipses() },
+          reloadEclipses: () => { this.astroCalcCtl().reloadEclipses() },
           rtsCalendarStartOptionLabel: (offsetDays: number) => this.astroStore.rtsCalendarStartOptionLabel(offsetDays),
           searchObject: (name: string, catalogModuleId?: string, exactSelectionPayload?: string, placement?: string) => { this.searchObject(name, catalogModuleId, exactSelectionPayload, placement) },
           selectAstroFilter: (key: string, value: string) => { this.astroCalcCtl().selectAstroFilter(key, value) },

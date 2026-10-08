@@ -34,8 +34,10 @@ function harness() {
   const loads = [];
   // D7 fixture：控制器注入 (port, media, astro/ephemeris/wut/search store, hooks)，此处只装配
   // 三个被测方法用到的 astroStore / wutStore / hooks 与两个草稿字段。
-  controller.astroStore = { astroTab: 5, astroGroup: 0, astroContentOpacity: 1, astroContentOffsetX: 0, loadAstroTab: tab => loads.push(tab) };
+  controller.astroStore = { astroTab: 5, astroGroup: 0, astroContentOpacity: 1, astroContentOffsetX: 0 };
   controller.wutStore = { wutPeriod: 'evening', wutMinAltitude: 0, wutMaxMagnitude: 6, wutDirection: 'all', loadWutTargets: () => loads.push('wut') };
+  // §9 P0 S4：loadAstroTab 已自 AstroStore 迁入 AstroCalcController（桥加载/请求序号随之）。
+  controller.loadAstroTab = tab => loads.push(tab);
   controller.astroRequestedTab = -1;
   controller.astroTransitionId = 0;
   controller.panelVisible = true;
