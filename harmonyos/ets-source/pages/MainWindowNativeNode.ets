@@ -72,6 +72,7 @@ import { AstroCalcController, AstroCalcHostHooks } from '../capability/AstroCalc
 import { PluginFeatureController, PluginFeatureHostHooks } from '../capability/PluginFeatureController'
 import { ObjectInspectorMediaController, ObjectInspectorMediaHostHooks } from '../capability/ObjectInspectorMediaController'
 import { ScriptPlaybackController, ScriptPlaybackHostHooks } from '../capability/ScriptPlaybackController'
+import { GuideController, GuideControllerHooks } from '../capability/GuideController'
 import { TimeController, TimeHostHooks } from '../capability/TimeController'
 import { SkyCultureController, SkyCultureHostHooks } from '../capability/SkyCultureController'
 import { SkyCultureMakerController, SkyCultureMakerHostHooks } from '../capability/SkyCultureMakerController'
@@ -1024,6 +1025,8 @@ export struct WindowNativeNode {
   private objectInspectorMediaControllerImpl: ObjectInspectorMediaController | null = null
   // 脚本录制回放 UI 控制器（惰性构造；状态在 ScriptStore/ToolsStore，状态轮询定时器自持）。
   private scriptPlaybackControllerImpl: ScriptPlaybackController | null = null
+  // 交互导览行为控制器（惰性构造；状态在 GuideStore，播放器与 250ms tick 定时器自持）。
+  private guideControllerImpl: GuideController | null = null
   // 时间操作控制器（惰性构造；状态在 time/timeSettings/deltaT store，时间面板定时器自持）。
   private timeControllerImpl: TimeController | null = null
   private searchControllerImpl: SearchController | null = null
@@ -1266,7 +1269,7 @@ export struct WindowNativeNode {
   }
   private handleApplicationLifecycle = (foreground: boolean): void => {
     this.applicationInForeground = foreground
-    if (!foreground && this.guideStore.guideState.phase === 'observing') this.guideStore.pausePlayer()
+    if (!foreground && this.guideStore.guideState.phase === 'observing') this.guideCtl().pausePlayer()
     this.objectModelRendererCtl().setForeground(foreground)
     if (foreground) {
       if (this.foregroundRefreshPaused) {
@@ -1589,35 +1592,9 @@ export struct WindowNativeNode {
       setSessionExportText: (text: string): void => { this.tools.sessionExportText = text },
       canUseDistributed: (): boolean => this.canUseDistributed
     })
-    // 跨域/UI/引擎动作经具名 hooks 注入（store 不 import UI/他 store）。
-    this.guideStore.attachPort(hostPort)
-    this.guideStore.attachHooks({
-      flashHint: (text: ResourceStr): void => this.flashHint(text),
-      publishGuideState: (): void => this.publishGuideState(),
-      sessionBusy: (): boolean => this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
-      polarScopeVisible: (): boolean => this.polarScopeStore.polarScopeVisible,
-      panelVisible: (): boolean => this.panelVisible,
-      setPanelVisible: (value: boolean): void => { this.panelVisible = value },
-      hideInfoWindow: (): void => { this.infoWindowStore.infoWinVisible = false },
-      applicationInForeground: (): boolean => this.applicationInForeground,
-      gyroscopeEnabled: (): boolean => this.gyroStore.gyroscopeEnabled,
-      setGyroscopeEnabled: (value: boolean): void => { this.gyroStore.gyroscopeEnabled = value },
-      startGyroscope: (): void => this.gyroCtl().startGyroscope(),
-      stopGyroscope: (updateStatus: boolean): void => this.gyroCtl().stopGyroscope(updateStatus),
-      stopSkyInertia: (): void => this.skyInputCtl().stopSkyInertia(),
-      stopCompetingTasks: (): void => {
-        this.detailConnectorCtl().stopDetailAutoRefresh()
-        this.timeCtl().stopPanelTimers()
-        this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
-        this.astroCalcCtl().stopAstroCalcContextTimer()
-        this.telescopeStore.stopTelescopeLivePosition(false)
-      },
-      refreshState: (): void => { this.refreshState() },
-      reloadObserverInfo: (): void => { this.locationPickerStore.loadObserverInfo(true) },
-      animateTo: (action: () => void): void => {
-        this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, action)
-      }
-    })
+    // 导览域的引擎/定时器/桥已迁入 GuideController（§9 P0）；跨域/UI/引擎动作经
+    // guideCtl() 的具名 hooks 注入（state/GuideStore 现为纯状态）。
+    this.guideCtl()
     this.skyCultureSettingsStore.attachPort(hostPort, () => {})
     this.objectDetailStore.attachPort(hostPort, () => {})
     this.objectDetailStore.attachHooks({
@@ -1838,7 +1815,7 @@ export struct WindowNativeNode {
       const commandName = event['commandName'] as string
       const response = event['response'] as StellariumBridgeResponse
       if (commandName === 'startGuide' || commandName === 'guideAction') {
-        this.guideStore.executeGuideRequest(commandName, String(event['payload'] ?? ''), requestId)
+        this.guideCtl().executeGuideRequest(commandName, String(event['payload'] ?? ''), requestId)
         return
       }
       if (commandName === 'setSatellitesFlag' && response.ok === true) {
@@ -2188,10 +2165,9 @@ export struct WindowNativeNode {
 
   // 启动期自动定位（只触发一次）。GPS 可用时更新为真实位置，不可用时回退到已保存/默认位置。
   aboutToDisappear(): void {
-    this.guideStore.stopGuideTimer()
-    this.guideStore.guideGyroWasEnabled = false
-    this.guideStore.guidePanelWasVisible = false
-    this.guideStore.stopPlayer()
+    this.guideCtl().stopGuideTimer()
+    this.guideCtl().resetJourneyFlags()
+    this.guideCtl().stopPlayer()
     this.skyCultureMakerCtl().flushSkyCultureMakerSave()
     this.searchCtl().stop()
     this.saveAppSettings()
@@ -2965,6 +2941,43 @@ export struct WindowNativeNode {
     return this.astroCalcControllerImpl
   }
 
+  // 交互导览行为控制器惰性构造。状态在 GuideStore（纯数据：guideState / speechStatus）；
+  // 播放器与 250ms tick 定时器由控制器自持；桥经 HostCommandPort；面板/陀螺仪/后台任务互斥/
+  // 刷新与重载/animateTo 经宿主 hooks 注入（控制器不触碰 UI 上下文）。
+  private guideCtl(): GuideController {
+    if (this.guideControllerImpl === null) {
+      const hooks: GuideControllerHooks = {
+        flashHint: (text: ResourceStr): void => this.flashHint(text),
+        publishGuideState: (): void => this.publishGuideState(),
+        sessionBusy: (): boolean => this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
+        polarScopeVisible: (): boolean => this.polarScopeStore.polarScopeVisible,
+        panelVisible: (): boolean => this.panelVisible,
+        setPanelVisible: (value: boolean): void => { this.panelVisible = value },
+        hideInfoWindow: (): void => { this.infoWindowStore.infoWinVisible = false },
+        applicationInForeground: (): boolean => this.applicationInForeground,
+        gyroscopeEnabled: (): boolean => this.gyroStore.gyroscopeEnabled,
+        setGyroscopeEnabled: (value: boolean): void => { this.gyroStore.gyroscopeEnabled = value },
+        startGyroscope: (): void => this.gyroCtl().startGyroscope(),
+        stopGyroscope: (updateStatus: boolean): void => this.gyroCtl().stopGyroscope(updateStatus),
+        stopSkyInertia: (): void => this.skyInputCtl().stopSkyInertia(),
+        stopCompetingTasks: (): void => {
+          this.detailConnectorCtl().stopDetailAutoRefresh()
+          this.timeCtl().stopPanelTimers()
+          this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
+          this.astroCalcCtl().stopAstroCalcContextTimer()
+          this.telescopeStore.stopTelescopeLivePosition(false)
+        },
+        refreshState: (): void => { this.refreshState() },
+        reloadObserverInfo: (): void => { this.locationPickerStore.loadObserverInfo(true) },
+        animateTo: (action: () => void): void => {
+          this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, action)
+        }
+      }
+      this.guideControllerImpl = new GuideController(this.commandPort(), this.guideStore, hooks)
+    }
+    return this.guideControllerImpl
+  }
+
   // 插件功能行为控制器惰性构造。桥经 HostCommandPort；状态整体写 PluginStore；跨域路由
   // （astro/search store、viewTab 宿主 @State、openSubPanel 壳层路由）经宿主 hooks 注入。
   private pluginFeatureCtl(): PluginFeatureController {
@@ -3043,7 +3056,7 @@ export struct WindowNativeNode {
         reloadObserverInfo: (): void => { this.locationPickerStore.loadObserverInfo(true) },
         loadPlanetList: (): void => { this.sessionToolStore.loadPlanetList() },
         sessionBusy: (): boolean => this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
-        requestStopGuide: (): void => { this.guideStore.executeGuideRequest('guideAction', 'stop') },
+        requestStopGuide: (): void => { this.guideCtl().executeGuideRequest('guideAction', 'stop') },
         finishReplay: (message: string): void => this.recordingCtl().finishRecordingReplay(message),
         stopBackgroundTimers: (): void => {
           this.timeCtl().stopPanelTimers()
@@ -3283,8 +3296,8 @@ export struct WindowNativeNode {
 
   private publishGuideState(): void {
     AppStorage.setOrCreate('stellariumGuideState', JSON.stringify({
-      ok: true, state: this.guideStore.guideState, lastRequestId: this.guideStore.guideLastRequest,
-      result: this.guideStore.guideLastResult, guides: ASTRONOMY_GUIDES
+      ok: true, state: this.guideStore.guideState, lastRequestId: this.guideCtl().lastRequestId(),
+      result: this.guideCtl().lastResult(), guides: ASTRONOMY_GUIDES
     }))
   }
 
@@ -6586,7 +6599,7 @@ export struct WindowNativeNode {
             cardY: guideCardY(this.skyHeight, guideCardHeight(this.skyHeight, this.scriptControlSafeTop()), this.scriptControlSafeTop(), this.scriptStore.scriptControlOffsetY),
             onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
             onControlDragTouch: (event: TouchEvent) => { this.scriptPlaybackCtl().handleScriptControlDragTouch(event) },
-            onAction: (action: string) => { this.guideStore.executeGuideRequest('guideAction', action) }
+            onAction: (action: string) => { this.guideCtl().executeGuideRequest('guideAction', action) }
           })
         } else {
           ScriptFocusShell({
@@ -8010,7 +8023,7 @@ export struct WindowNativeNode {
         lineColor: this.nightModeStore.nmBorder(),
         scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
-        onStartGuide: (id: string) => { this.guideStore.executeGuideRequest('startGuide', id) },
+        onStartGuide: (id: string) => { this.guideCtl().executeGuideRequest('startGuide', id) },
         onStopPlayback: () => { this.scriptPlaybackCtl().stopScriptPlayback() },
         onImportScript: () => { this.scriptPlaybackCtl().importScriptFile() },
         onPlayScript: (name: string) => { this.scriptPlaybackCtl().playScriptByName(name) },

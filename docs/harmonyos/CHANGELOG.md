@@ -1,3 +1,25 @@
+## [2026-10-08] DevEco Code - 重构 §9 边界优化 S6：GuideStore 引擎/定时器/桥迁入 GuideController
+
+- **依据**：STATE-REVIEW §9.2 P0「Store 同时承担控制器职责」（GuideStore 持 `CommandPort` 直接调 `requestInteractive`、`GuidePlayer` 会话与 250ms tick 定时器，实质是控制器 + store 的混合体）；§10.2.1 目标形态「store 纯数据 + 纯派生、controller 持 `CommandPort` / 写 store / 自持定时器」。本片只做 guide 域播放器 / 定时器 / 桥调用的归位，不改面板签名、不改桥命令、不改 `.id()`。
+- **迁出清单（`state/GuideStore.ets` → 新建 `capability/GuideController.ets`）**：
+  - 字段 8 个：`guidePlayer` / `guideTimer` / `guideGyroWasEnabled` / `guidePanelWasVisible` / `guideLastRequest` / `guideLastResult` / `port` / `hooks`。
+  - 方法 5 个：`attachPort` / `attachHooks`（改为构造函数注入）、`startGuideTimer` / `stopGuideTimer`、`stopPlayer`、`pausePlayer`、`executeGuideRequest`。
+  - 接口 `GuideHostHooks` → 重命名并迁入控制器文件为 `GuideControllerHooks`（成员逐字不变）。
+  - store 侧同时删除：`GuidePlayer` / `GuideResult` / `AstronomyGuide` / `ASTRONOMY_GUIDES` / `StellariumBridgeResponse` / `I18n` / `CommandPort` 全部 import；仅保留 `GuideState`（`guideState` 字段类型）。
+- **store 保留（纯数据）**：`guideState: GuideState` 与 `speechStatus: string` 两个字段，`@Observed` 保留（仍被 UI 经 `@ObjectLink`/读取消费）。**`state/GuideStore.ets` 156 → 20 行（−136）**。
+- **新控制器与 hooks**：`export class GuideController`，构造 `(port: CommandPort, store: GuideStore, hooks: GuideControllerHooks)`；方法体逐字搬入，仅数据源前缀 `this.<字段>` → `this.store.<字段>`。控制器新增 `resetJourneyFlags()`（宿主清空 `guideGyroWasEnabled` / `guidePanelWasVisible` 快照）与 CLI 读取器 `lastRequestId(): string` / `lastResult(): GuideResult`（宿主 `publishGuideState` 用）。`capability/` 不 import `libentry.so` / `getUIContext` / `animateTo` / UI 上下文 —— `animateTo` 仍由 `hooks.animateTo` 回注。**`capability/GuideController.ets` 161 行（新）**。
+- **宿主改指向（`pages/MainWindowNativeNode.ets`）**：新增 `private guideControllerImpl: GuideController | null` 与惰性 `guideCtl()` getter（hooks 闭包逐字自原 `aboutToAppear` 的 `attachHooks({...})` 搬入）；`aboutToAppear` 的 `guideStore.attachPort(hostPort)` + `attachHooks({...})` 整块（−29 行）替换为 `this.guideCtl()`。调用点改指：`pausePlayer`（前台切换）、`executeGuideRequest`（CLI `startGuide`/`guideAction` 事件 L1841、`ScriptPlaybackHostHooks.requestStopGuide`、`InteractiveGuideShell` 的 `onAction`、`ScriptsPanel` 的 `onStartGuide`）、`aboutToDisappear` 的 `stopGuideTimer` + `resetJourneyFlags` + `stopPlayer`、`publishGuideState` 的 `lastRequestId()` / `lastResult()`。`guideState` / `speechStatus` 读取与写入（含 4 处 `speakSelectedObject` 的 `setSpeechStatus`）**全部留 store**。宿主 **8165 → 8178 行（+13，30 增 / 大部分为 getter 包裹）**。新增控制器文件数 1。
+- **逐字等价（§15.7 规则 5）**：`executeGuideRequest` 的 `hooks === null || port === null` 守护、`session_busy_or_unknown_guide` 判据、`['return','next','previous','stop','retry','center','closer','wider']` 列表、分支顺序、`bridge_timeout` / `guide_error` 文案、`ended` 收尾（停表 / 恢复面板 / 恢复陀螺仪 / `refreshState` / `reloadObserverInfo`）逐字不变。tick 定时器间隔 **250ms** 与 `tick(0.25)` 逐字不变；`guideGyroWasEnabled` / `guidePanelWasVisible` / `guideLastRequest` / `guideLastResult` 随方法整体迁入控制器（不跨对象共享）。
+- **测试同步**：`scripts/test-ohos-guide.mjs` 第 9 个用例的 CLI 结果断言由 `lastRequestId: this.guideStore.guideLastRequest` 改为 `lastRequestId: this.guideCtl().lastRequestId()`，并补 `result: this.guideCtl().lastResult()` 断言。
+- **度量**：`GuideStore` **156 → 20（−136）**；新增 `GuideController` **161**；宿主 **8165 → 8178（+13）**；新增控制器文件 **1**。
+- **验证**：
+  1. `node scripts/check-ohos-refactor-slice.mjs` → 切片预检通过。
+  2. `arkts_check`（GuideStore / GuideController / MainWindowNativeNode）→ 0 error。
+  3. `powershell -ExecutionPolicy Bypass -File scripts/build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy` → `BUILD SUCCESSFUL in 28 s`。
+  4. `node scripts/check-ohos-ui-contract.mjs` → `UI contract intact: 34 panels, 29 static ids, 18 dynamic prefixes, 50 id anchors`。
+  5. `node scripts/test-ohos-guide.mjs` → `# tests 9 / # pass 9 / # fail 0`。
+  6. 真机 `192.168.1.4:36717`（Mate 80 Pro）：`power-shell setmode 602` 常亮；`devecocli run --skip-build --device 192.168.1.4:36717` → `Smoke: PASS`；CLI 演练导览全链 —— `startGuide solar-neighbours` → `{"ok":true,"accepted":true}`，`getGuideState` → `state.active=true / phase=observing / index=0 / count=5 / lastRequestId=cli-…`；`guideAction next` → `getGuideState` `index=1`；`guideAction stop` → `getGuideState` `active=false / phase=idle`（面板 / 陀螺仪 / 观测信息按 `ended` 分支复原，与改动前行为一致）。`pidof com.cnchensh.stellarium` = `45148` 存活；`hilog -x -T ArkTS` 无 jscrash / ArkTS 报错。
+- **未走查**：`scripts/test-ohos-guide-pad.mjs` 为 macOS 专用（硬编码 `/Applications/DevEco-Studio.app` 与 `/tmp` 路径），未在本机 Windows 运行；改以等价的手工 CLI 序列（`startGuide` → `guideAction next` → `guideAction stop` → `getGuideState` 回读）覆盖同一链路的真机实证。`InteractiveGuideShell` 卡片 UI 的逐帧 tick 文案刷新未截图对照（手动模式下 `remaining` 不递减，与单测口径一致）。
 ## [2026-10-08] DevEco Code - 重构 §9 边界优化 S5：ScriptStore 桥调用迁入 ScriptPlaybackController
 
 - **依据**：STATE-REVIEW §9.2 P0「Store 同时承担控制器职责」（ScriptStore 8 个 `requestInteractive` + 450ms 视频状态轮询定时器，实质是控制器 + store 的混合体）；§10.2.1 目标形态「store 纯数据 + 纯派生、controller 持 `CommandPort` / 写 store / 自持定时器」。本片只做 script/recording/video 域桥调用与轮询定时器的归位，不改面板签名、不改桥命令、不改 `.id()`。
