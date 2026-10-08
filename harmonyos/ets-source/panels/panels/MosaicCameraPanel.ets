@@ -1,5 +1,5 @@
 import { I18n } from '../../pages/I18n'
-import { MosaicCameraMetric } from '../settings/SettingsRows'
+import { MosaicCameraMetric } from '../../common/ui/MosaicCameraMetric'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { MosaicStore } from '../../state/MosaicStore'
 

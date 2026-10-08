@@ -1,7 +1,7 @@
 import { I18n } from '../../pages/I18n'
 import { ArchaeoPlanetOption } from '../../pages/MainWindowModels'
 import { ArchaeoStore } from '../../state/ArchaeoStore'
-import { ArchaeoToggleRow } from '../settings/SettingsRows'
+import { ArchaeoToggleRow } from '../../common/ui/ArchaeoToggleRow'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
 // 考古学线条面板，对应 `activePanel === 'archaeoLines'`。

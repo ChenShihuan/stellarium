@@ -1,6 +1,6 @@
 import { I18n } from '../../pages/I18n'
 import { NavStarsStore } from '../../state/NavStarsStore'
-import { NavStarsToggleRow } from '../settings/SettingsRows'
+import { NavStarsToggleRow } from '../../common/ui/NavStarsToggleRow'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 
 // 航海星面板，对应 `activePanel === 'navStars'`。

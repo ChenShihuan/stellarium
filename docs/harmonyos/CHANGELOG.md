@@ -1,3 +1,10 @@
+## [2026-10-08] DevEco Code - 重构 §9 边界优化 S2：SettingsRows 跨域行归位 common/ui
+
+- **依据**：STATE-REVIEW §9 P1（`SettingsRows.ets` 事实充当跨域共享组件库）。其 7 个导出中 3 个被非设置面板消费：`NavStarsToggleRow`（NavStarsPanel）、`ArchaeoToggleRow`（ArchaeoLinesPanel）、`MosaicCameraMetric`（MosaicCameraPanel）。
+- **改动**：新建 `common/ui/NavStarsToggleRow.ets`、`common/ui/ArchaeoToggleRow.ets`、`common/ui/MosaicCameraMetric.ets`（组件体逐字搬家，仅按新目录调整 import 深度）；从 `panels/settings/SettingsRows.ets` 删除这三个 struct（−65 行）；改三个消费方 import 指向 `common/ui/`；`SettingsRows.ets` 头部注释同步说明其已回到设置域专用。保留在 `SettingsRows.ets` 的 4 个（`NavigationSwitchRow`/`EphemerisToggleRow`/`InformationModeButton`/`InformationSwitchRow`）仅被 `SettingsPanel` 消费。
+- **落点依据**：§4.2-4「新通用件统一进 `common/ui/`」，与既有 `common/ui/SettingsSwitchRow`、`SettingsChoiceButton` 同例。组件名不改（避免无谓改写与契约噪声）。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 7 文件 0 error；`BUILD SUCCESSFUL in 29s`；UI 契约 intact（**34 面板 / 29 静态 id / 18 动态前缀 / 50 锚点**，扫描文件 255 → 258）。真机未走查（无可用设备）；仅组件归属搬迁，渲染逻辑逐字不变。
+
 ## [2026-10-08] DevEco Code - 重构 §9 边界优化 S1：清理宿主死 import
 
 - **依据**：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §9 P4a（宿主死 import）。本轮按 §9 制定「三层边界优化」计划（阈值拆分 P0 + P1/P2/P4），S1 是最小、零风险的首片。
