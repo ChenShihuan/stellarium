@@ -33,6 +33,10 @@ export interface RecordingHostHooks {
   openScriptsPanel(): void
   // 非回放时切换脚本速率。
   changeScriptRate(direction: number): void
+  // 脚本录制列表 / 视频状态轮询的桥加载（ScriptPlaybackController 持有）。
+  loadRecordings(): void
+  startVideoStatePolling(): void
+  stopVideoStatePolling(): void
   recordBufferLength(): number
   recordBufferSnapshot(): Array<RecordCmd>
   recordBufferPush(cmd: RecordCmd): void
@@ -201,7 +205,7 @@ export class RecordingController {
         this.hooks.recordBufferClear()
         this.scriptStore.recordCount = 0
         this.scriptStore.recordName = ''
-        this.scriptStore.loadRecordings()
+        this.hooks.loadRecordings()
       } else {
         this.scriptStore.recordMsg = '保存失败：' + (r.error ?? '未知错误')
         this.hooks.flashHint(this.scriptStore.recordMsg)
@@ -317,7 +321,7 @@ export class RecordingController {
     this.port.requestInteractive('deleteRecording', file, (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.hooks.flashHint(I18n.t('msg_recording_deleted'))
-        this.scriptStore.loadRecordings()
+        this.hooks.loadRecordings()
       } else {
         this.hooks.flashHint(I18n.t('msg_delete_failed'))
       }
@@ -337,7 +341,7 @@ export class RecordingController {
         this.scriptStore.videoMaxFrames = r.maxFrames !== undefined ? r.maxFrames : 0
         this.scriptStore.videoArchivePath = ''
         this.scriptStore.videoArchiveFileName = ''
-        this.scriptStore.startVideoStatePolling()
+        this.hooks.startVideoStatePolling()
         this.hooks.flashHint('开始录制视频帧序列：' + fps + ' fps × ' + duration + ' s')
       } else {
         this.hooks.flashHint('开始录制失败：' + (r.error ?? '未知错误'))
@@ -349,7 +353,7 @@ export class RecordingController {
     this.port.requestInteractive('stopVideoRecording', '', (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.scriptStore.videoRecording = false
-        this.scriptStore.stopVideoStatePolling()
+        this.hooks.stopVideoStatePolling()
         const diskFrames = r.diskFrames
         const frameCount = r.frameCount
         this.scriptStore.videoFrameCount = diskFrames !== undefined ? diskFrames : (frameCount !== undefined ? frameCount : 0)

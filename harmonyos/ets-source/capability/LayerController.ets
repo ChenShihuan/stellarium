@@ -33,6 +33,10 @@ export interface LayerHostHooks extends BehaviorHostHooks {
   persistNightMode(): void
   // 星空文化「时间跟随」定时器收口（宿主保留）。
   syncSkyCultureTimeFollowTimer(): void
+  // 脚本列表 / 录制列表 / 视频状态桥加载（ScriptPlaybackController 持有）。
+  loadScriptList(): void
+  loadRecordings(): void
+  loadVideoRecordingState(): void
   // 视图标签页宿主 @State（组件 @Prop 消费，控制器经 hooks 读写）。
   viewTab(): number
   setViewTab(value: number): void
@@ -252,9 +256,9 @@ export class LayerController {
       this.hooks.setConfigTab(tabId)
       this.hooks.setConfigTabContentOffsetX(direction * 8)
       if (tabId === 5) {
-        this.scriptStore.loadScriptList()
-        this.scriptStore.loadRecordings()
-        this.scriptStore.loadVideoRecordingState()
+        this.hooks.loadScriptList()
+        this.hooks.loadRecordings()
+        this.hooks.loadVideoRecordingState()
       } else if (tabId === 6) {
         this.pluginStore.loadPluginList()
       }
