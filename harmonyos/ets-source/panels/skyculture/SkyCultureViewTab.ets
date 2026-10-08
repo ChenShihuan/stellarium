@@ -8,8 +8,8 @@ import { LayerStore } from '../../state/LayerStore'
 import { SkyCultureSettingsStore } from '../../state/SkyCultureSettingsStore'
 import { SkyCultureViewStore } from '../../state/SkyCultureViewStore'
 import { LayerSwitchRow } from '../layers/LayerSwitchRow'
-import { GraphLoadingRow } from '../astro/GraphGuides'
-import { SkyCultureDescriptionBlockView } from './SkyCultureDescriptionBlockView'
+import { GraphLoadingRow } from '../../common/ui/GraphLoadingRow'
+import { SkyCultureDescriptionBlockView } from '../../common/ui/SkyCultureDescriptionBlockView'
 import { SkyCultureSectionHeader, SkyCultureMetaItem, SkyCultureLabelSettingCard, SkyCultureFilterPicker } from './SkyCultureViewParts'
 
 // 「星空文化」视图标签页：图层 / 当前文化详情 / 标注 / 可读性等设置。

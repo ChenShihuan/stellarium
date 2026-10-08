@@ -1,3 +1,13 @@
+## [2026-10-08] DevEco Code - 重构 §9 边界优化 S3：跨域通用组件归位 common/ui
+
+- **依据**：STATE-REVIEW §9 P2（跨域复用组件住在「碰巧被别的域 import」的域目录）。`GraphLoadingRow`（astro 域文件，被 skyculture 的 SkyCultureViewTab 消费）与 `SkyCultureDescriptionBlockView`（skyculture 域文件，被 object 的 ConstellationCultureView 消费）为两个真实跨域件。
+- **改动**：
+  - 新建 `common/ui/GraphLoadingRow.ets`（从 `panels/astro/GraphGuides.ets` 抽出通用加载行，无天文域硬编码、无外部 import）；`GraphGuides.ets` 只余 `RtsSelectionGuide`/`GraphSelectionGuide` 两个引导块（头部注释同步）。
+  - `git mv panels/skyculture/SkyCultureDescriptionBlockView.ets → common/ui/SkyCultureDescriptionBlockView.ets`，文件内 import 深度改为 `./UiTokens`。
+  - 消费方 import 改指向：`AstroPanel`（拆成 `./GraphGuides` + `common/ui/GraphLoadingRow`）、`SkyCultureViewTab`（两处）、`ConstellationCultureView`（一处）。
+- **不动**：`LayerSwitchRow` 留 `panels/layers/`（4 个消费方 + 图层域特化，§9.2 P2 建议归属）。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 6 文件 0 error；`BUILD SUCCESSFUL in 49s`；UI 契约 intact（**34 面板 / 29 静态 id / 18 动态前缀 / 50 锚点**，扫描文件 258 → 259）；`scripts/**` 无引用被移动符号的夹具，无需同步。真机未走查（无可用设备）；仅组件归属搬迁。
+
 ## [2026-10-08] DevEco Code - 重构 §9 边界优化 S2：SettingsRows 跨域行归位 common/ui
 
 - **依据**：STATE-REVIEW §9 P1（`SettingsRows.ets` 事实充当跨域共享组件库）。其 7 个导出中 3 个被非设置面板消费：`NavStarsToggleRow`（NavStarsPanel）、`ArchaeoToggleRow`（ArchaeoLinesPanel）、`MosaicCameraMetric`（MosaicCameraPanel）。

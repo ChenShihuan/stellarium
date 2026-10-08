@@ -1,10 +1,11 @@
-import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
+import { UI_RADIUS_CONTROL } from './UiTokens'
 
 // 星文化描述块：按 kind 渲染标题 / 项目 / 表格行 / 正文。
 //
 // 天体详情卡的"星座文化"段与星文化制作器共用，因此做成共享组件；
 // `level` 的可选判断由调用方解析成 `headingLarge` 布尔量传入，组件内不做可选值判断；
 // 文字颜色（夜视）以 `@Prop textColor` 注入。
+// 2026-10-08 按 STATE-REVIEW §9 P2 从 `panels/skyculture/` 迁到 `common/ui/`。
 
 @Component
 export struct SkyCultureDescriptionBlockView {
