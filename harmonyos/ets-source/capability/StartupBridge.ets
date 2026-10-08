@@ -29,7 +29,6 @@ import { AstroStore } from '../state/AstroStore'
 import { LayerViewStore } from '../state/LayerViewStore'
 import { ScriptStore } from '../state/ScriptStore'
 import { LayerStore } from '../state/LayerStore'
-import { TimeSettingsStore } from '../state/TimeSettingsStore'
 
 // 宿主生命周期 / UI 动作注入（启动桥服务不触碰 UI 与宿主私有标志）。
 export interface StartupHooks {
@@ -48,6 +47,8 @@ export interface StartupHooks {
   restoreObserverLocation(): void
   // 脚本资源元数据表写入（ScriptPlaybackController 持有；启动桥 getScriptList 回包后回注）。
   setScriptMetadata(raw: Object | undefined): void
+  // 配置回读加载（已迁入 capability/SettingsController；本服务不持有该控制器，经此 hook 触发）。
+  reloadConfigurationSettings(): void
 }
 
 export class StartupBridge {
@@ -66,7 +67,6 @@ export class StartupBridge {
   private layerViewStore: LayerViewStore
   private scriptStore: ScriptStore
   private layerStore: LayerStore
-  private timeSettingsStore: TimeSettingsStore
 
   constructor(
     port: CommandPort,
@@ -84,7 +84,6 @@ export class StartupBridge {
     layerViewStore: LayerViewStore,
     scriptStore: ScriptStore,
     layerStore: LayerStore,
-    timeSettingsStore: TimeSettingsStore,
   ) {
     this.port = port
     this.hooks = hooks
@@ -101,7 +100,6 @@ export class StartupBridge {
     this.layerViewStore = layerViewStore
     this.scriptStore = scriptStore
     this.layerStore = layerStore
-    this.timeSettingsStore = timeSettingsStore
   }
 
   // 启动期只用一个轻量查询确认 Qt 核心就绪；成功后拉取天文化列表并放行后续启动任务。
@@ -234,7 +232,7 @@ export class StartupBridge {
         return
       }
       this.hooks.flashHint(I18n.t('settings_view_saved'))
-      this.timeSettingsStore.loadConfigurationSettings()
+      this.hooks.reloadConfigurationSettings()
     })
   }
 }

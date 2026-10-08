@@ -73,6 +73,7 @@ import { PluginFeatureController, PluginFeatureHostHooks } from '../capability/P
 import { ObjectInspectorMediaController, ObjectInspectorMediaHostHooks } from '../capability/ObjectInspectorMediaController'
 import { ScriptPlaybackController, ScriptPlaybackHostHooks } from '../capability/ScriptPlaybackController'
 import { GuideController, GuideControllerHooks } from '../capability/GuideController'
+import { SettingsController, TimeSettingsHostHooks } from '../capability/SettingsController'
 import { TimeController, TimeHostHooks } from '../capability/TimeController'
 import { SkyCultureController, SkyCultureHostHooks } from '../capability/SkyCultureController'
 import { SkyCultureMakerController, SkyCultureMakerHostHooks } from '../capability/SkyCultureMakerController'
@@ -1027,6 +1028,8 @@ export struct WindowNativeNode {
   private scriptPlaybackControllerImpl: ScriptPlaybackController | null = null
   // 交互导览行为控制器（惰性构造；状态在 GuideStore，播放器与 250ms tick 定时器自持）。
   private guideControllerImpl: GuideController | null = null
+  // 设置配置回读控制器（惰性构造；状态写 TimeSettingsStore 本域字段，跨域字段经 hooks 具名 setter）。
+  private settingsControllerImpl: SettingsController | null = null
   // 时间操作控制器（惰性构造；状态在 time/timeSettings/deltaT store，时间面板定时器自持）。
   private timeControllerImpl: TimeController | null = null
   private searchControllerImpl: SearchController | null = null
@@ -1519,7 +1522,7 @@ export struct WindowNativeNode {
     this.viewSettingsStore.attachHooks({
       flashHint: (text: ResourceStr): void => { this.flashHint(text) },
       setCurrentProjection: (name: string): void => { this.currentProjection = name },
-      reloadConfigurationSettings: (): void => { this.timeSettingsStore.loadConfigurationSettings() },
+      reloadConfigurationSettings: (): void => { this.settingsCtl().loadConfigurationSettings() },
       logProjectionError: (name: string, error: string): void => {
         hilog.error(0x0000, 'StellariumArkUI', 'setProjectionType rejected %{public}s err=%{public}s', name, error)
       }
@@ -1708,38 +1711,8 @@ export struct WindowNativeNode {
       syncNightModeFromEngine: (engineNight: boolean): void => this.nightModeStore.syncNightModeFromEngine(engineNight),
       applyAtmosphereResponse: (response: StellariumBridgeResponse): void => this.atmosphereStore.applyAtmosphereResponse(response)
     })
-    this.timeSettingsStore.attachPort(hostPort, () => {})
-    this.timeSettingsStore.attachHooks({
-      setUseMetricUnits: (value: boolean): void => { this.viewSettingsStore.useMetricUnits = value },
-      setConfigDitheringMode: (mode: string): void => { this.viewSettingsStore.configDitheringMode = mode },
-      setAutoZoomResets: (value: boolean): void => { this.viewSettingsStore.autoZoomResets = value },
-      setNavigationMouseEnabled: (value: boolean): void => { this.navigationStore.navigationMouseEnabled = value },
-      setNavigationMouseZoomEnabled: (value: boolean): void => { this.navigationStore.navigationMouseZoomEnabled = value },
-      setNavigationMoveKeysEnabled: (value: boolean): void => { this.navigationStore.navigationMoveKeysEnabled = value },
-      setNavigationZoomKeysEnabled: (value: boolean): void => { this.navigationStore.navigationZoomKeysEnabled = value },
-      setNavigationGravityLabelsEnabled: (value: boolean): void => { this.navigationStore.navigationGravityLabelsEnabled = value },
-      setNavigationStartupFov: (value: number): void => { this.navigationStore.navigationStartupFov = value },
-      setNavigationStartupAzimuth: (value: number): void => { this.navigationStore.navigationStartupAzimuth = value },
-      setNavigationStartupAltitude: (value: number): void => { this.navigationStore.navigationStartupAltitude = value },
-      setNavigationMaxFov: (value: number): void => { this.navigationStore.navigationMaxFov = value },
-      setEphemerisAvailability: (de430Available: boolean, de431Available: boolean, de440Available: boolean, de441Available: boolean): void => {
-        this.ephemerisStore.ephemerisDe430Available = de430Available
-        this.ephemerisStore.ephemerisDe431Available = de431Available
-        this.ephemerisStore.ephemerisDe440Available = de440Available
-        this.ephemerisStore.ephemerisDe441Available = de441Available
-      },
-      setEphemerisActive: (de430Active: boolean, de431Active: boolean, de440Active: boolean, de441Active: boolean): void => {
-        this.ephemerisStore.ephemerisDe430Active = de430Active
-        this.ephemerisStore.ephemerisDe431Active = de431Active
-        this.ephemerisStore.ephemerisDe440Active = de440Active
-        this.ephemerisStore.ephemerisDe441Active = de441Active
-      },
-      informationMode: (): string => this.infoWindowStore.informationMode,
-      setInformationMode: (mode: string): void => { this.infoWindowStore.informationMode = mode },
-      setInformationCustomMask: (mask: number): void => { this.infoWindowStore.informationCustomMask = mask },
-      applySelectedInfoMode: (mode: string): void => this.applySelectedInfoMode(mode),
-      applyTimeSettings: (response: StellariumBridgeResponse): void => this.timeCtl().applyTimeSettings(response)
-    })
+    // 设置「配置回读」加载已迁入 settingsCtl()（§9 P0-4，2026-10-08）：TimeSettingsStore 现为纯数据，
+    // 8 连发桥读归 SettingsController；跨域 setter 作为 TimeSettingsHostHooks 在该控制器惰性构造处注入。
     // 航海星 / 流星雨 / 搜索三域分别自持加载器（loadNavStars / loadMeteorShowers /
     // loadConstellationNavigation）与其配对写方；三者复用同一 HostCommandPort 实例，消费方均为
     // @ObjectLink（字段赋值即刷新），无 publish* 发布点，故 onChanged 传空实现。
@@ -2373,12 +2346,13 @@ export struct WindowNativeNode {
           selftestEnabled: (): boolean => this.SELFTEST,
           runSelftest: (): void => this.selfTestCtl().selfTestAllActions(),
           restoreObserverLocation: (): void => { this.locationCtl().restoreObserverLocation() },
-          setScriptMetadata: (raw: Object | undefined): void => { this.scriptPlaybackCtl().setScriptMetadata(raw) }
+          setScriptMetadata: (raw: Object | undefined): void => { this.scriptPlaybackCtl().setScriptMetadata(raw) },
+          reloadConfigurationSettings: (): void => { this.settingsCtl().loadConfigurationSettings() }
         },
         this.skyCultureViewStore, this.pluginStore, this.nightModeStore, this.telescopeStore,
         this.gyroStore, this.languageStore, this.audioStore, this.viewSettingsStore,
         this.overlayStore, this.astroStore, this.layerViewStore, this.scriptStore,
-        this.layerStore, this.timeSettingsStore
+        this.layerStore
       )
     }
     return this.startupBridgeImpl
@@ -2978,6 +2952,47 @@ export struct WindowNativeNode {
     return this.guideControllerImpl
   }
 
+  // 设置「配置回读」控制器惰性构造（§9 P0-4，2026-10-08；加载器自 TimeSettingsStore 迁入）。
+  // 桥经 HostCommandPort；本域字段写 TimeSettingsStore；跨域字段经 TimeSettingsHostHooks 具名 setter
+  // 写入各域 store；无 publish* 发布点，故无 onChanged。控制器不 import UI/NAPI。
+  private settingsCtl(): SettingsController {
+    if (this.settingsControllerImpl === null) {
+      const hooks: TimeSettingsHostHooks = {
+        setUseMetricUnits: (value: boolean): void => { this.viewSettingsStore.useMetricUnits = value },
+        setConfigDitheringMode: (mode: string): void => { this.viewSettingsStore.configDitheringMode = mode },
+        setAutoZoomResets: (value: boolean): void => { this.viewSettingsStore.autoZoomResets = value },
+        setNavigationMouseEnabled: (value: boolean): void => { this.navigationStore.navigationMouseEnabled = value },
+        setNavigationMouseZoomEnabled: (value: boolean): void => { this.navigationStore.navigationMouseZoomEnabled = value },
+        setNavigationMoveKeysEnabled: (value: boolean): void => { this.navigationStore.navigationMoveKeysEnabled = value },
+        setNavigationZoomKeysEnabled: (value: boolean): void => { this.navigationStore.navigationZoomKeysEnabled = value },
+        setNavigationGravityLabelsEnabled: (value: boolean): void => { this.navigationStore.navigationGravityLabelsEnabled = value },
+        setNavigationStartupFov: (value: number): void => { this.navigationStore.navigationStartupFov = value },
+        setNavigationStartupAzimuth: (value: number): void => { this.navigationStore.navigationStartupAzimuth = value },
+        setNavigationStartupAltitude: (value: number): void => { this.navigationStore.navigationStartupAltitude = value },
+        setNavigationMaxFov: (value: number): void => { this.navigationStore.navigationMaxFov = value },
+        setEphemerisAvailability: (de430Available: boolean, de431Available: boolean, de440Available: boolean, de441Available: boolean): void => {
+          this.ephemerisStore.ephemerisDe430Available = de430Available
+          this.ephemerisStore.ephemerisDe431Available = de431Available
+          this.ephemerisStore.ephemerisDe440Available = de440Available
+          this.ephemerisStore.ephemerisDe441Available = de441Available
+        },
+        setEphemerisActive: (de430Active: boolean, de431Active: boolean, de440Active: boolean, de441Active: boolean): void => {
+          this.ephemerisStore.ephemerisDe430Active = de430Active
+          this.ephemerisStore.ephemerisDe431Active = de431Active
+          this.ephemerisStore.ephemerisDe440Active = de440Active
+          this.ephemerisStore.ephemerisDe441Active = de441Active
+        },
+        informationMode: (): string => this.infoWindowStore.informationMode,
+        setInformationMode: (mode: string): void => { this.infoWindowStore.informationMode = mode },
+        setInformationCustomMask: (mask: number): void => { this.infoWindowStore.informationCustomMask = mask },
+        applySelectedInfoMode: (mode: string): void => this.applySelectedInfoMode(mode),
+        applyTimeSettings: (response: StellariumBridgeResponse): void => this.timeCtl().applyTimeSettings(response)
+      }
+      this.settingsControllerImpl = new SettingsController(this.commandPort(), this.timeSettingsStore, hooks)
+    }
+    return this.settingsControllerImpl
+  }
+
   // 插件功能行为控制器惰性构造。桥经 HostCommandPort；状态整体写 PluginStore；跨域路由
   // （astro/search store、viewTab 宿主 @State、openSubPanel 壳层路由）经宿主 hooks 注入。
   private pluginFeatureCtl(): PluginFeatureController {
@@ -3448,7 +3463,7 @@ export struct WindowNativeNode {
       } else if (panel === 'settings') {
         this.refreshState()
         this.catalogStore.loadCatalogHealth()
-        this.timeSettingsStore.loadConfigurationSettings()
+        this.settingsCtl().loadConfigurationSettings()
         if (this.configTab === 6) this.pluginStore.loadPluginList()
       } else if (panel === 'place') {
         this.refreshState()
