@@ -1,3 +1,9 @@
+## [2026-10-08] DevEco Code - 整理 STATE-REVIEW 评审文档：补 §9 实施状态与终态实测
+
+- **依据（用户要求）**：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` 长期停在工作区未提交（§9/§10 为另一会话新增），且 §9.4 附录存在实测偏差，需整理后入库。
+- **改动**：① 头部状态 / 日期 / 基线改为「正文评审 10-07 / 实施 10-08」，并区分 §1–§8（`c52a517961` / 8,017 行）与 §9–§10（`cbc8c5bfae` / 7,974 行）两个基线；② §9、§10 头部各加「实施状态」块，指向 `ARKTS-PAGES-REFACTOR-PLAN.md` §16；③ §9.4.1 修正评审时的**前瞻命名**（`BookmarkController` / `CatalogController` / `MeteorShowerController` / `SessionToolController` / `NavStarsController` / `ArchaeoLinesController` / `MosaicCameraController` / `PluginCommandController` / `DockController` / `OverlayController` / `ObjectMediaController` 均无对应文件），补按文件实测的 capability→state 边表（65 处 `import` 语句）；④ §9.4.2 补终态桥计数修正（`AstroStore`/`ScriptStore`/`GuideStore`/`TimeSettingsStore` 的 `requestInteractive` 15/8/1/8 → 0，`TelescopeStore` live-position 迁出）；⑤ 跨文档引用消歧（§15.7 / §11 指明属 PLAN）。
+- **验证**：纯文档改动，无代码 / 契约影响；`git diff` 复核，CRLF 归一（`loneLF 0`）。
+
 ## [2026-10-08] DevEco Code - §9 边界优化：注释整理到终态
 
 - **依据（用户要求）**：S1–S8 落地后新编辑文件的注释仍带迁移脚手架（"迁自 / 迁入"、"§9 P0"、"2026-10-08"、"STATE-REVIEW"、"逐字等价"），且个别描述已过期（`GuideController` 头误把 `getScriptStatus` / `getScriptCaptions` 列为导览桥；`AstroStore` 称 hooks 接口为"端口"；`GraphGuides` 仍写"三个引导块"）。
