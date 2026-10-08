@@ -746,11 +746,11 @@ panels/time/TimeWheelScrubber.ets ← 视图（现状已达成）
 - **列表内滑动**可能被判为点选 → 用 `ui drag`（按压—移动—释放）。
 - **替换"外层有条件包裹的块"时必须保留/补回 `if (...) {` 那一行**：若起始标记落在条件语句内部、而替换文本只写了新内容，会把 `if` 的开括号一起删掉，其闭合 `}` 变成孤儿 → 文件括号深度失衡 → 数千行之后爆出上百条 `UI component ... cannot be used in this place` / `Cannot find name 'width'`。**定位法**：脚本扫描全文件括号净深度（与 HEAD 对比应为 0），再逐 diff hunk 统计 `{`/`}` 净差额，锁定"删了一个 `{` 未补回"的 hunk。
 - **`arkts_check` 会漏掉结构失衡，绝不可替代构建**：曾出现 `arkts_check` 对四个文件全部报 "No errors"、而 `devecocli build` 立即失败的情况（括号深度 −1）。§13.2 第 5 步的"必须跑构建"因此是硬性要求。
-- **"某页一渲染应用就退出"的排查法（A/B + 二分）**：`git stash -u` 回到**上一个已验证提交**重新构建安装，重走完全相同的点击序列 —— 旧构建正常、新构建退出，即锁定为新改动；再把新改动按"最小可删单元"二分（Phase 3aa 保留三页中的两页即恢复正常，从而把差异锁到 `@BuilderParam` 这一处）。运行期退出在 hilog 里可能**没有任何 ArkTS 报错**，所以只能靠 `pidof com.cnchensh.stellarium` 判存活 + A/B 复现，不要浪费时间抓日志。
+- **"某页一渲染应用就退出"的排查法（A/B + 二分）**：`git stash -u` 回到**上一个已验证提交**重新构建安装，重走完全相同的点击序列 —— 旧构建正常、新构建退出，即锁定为新改动；再把新改动按"最小可删单元"二分（Phase 3aa 保留三页中的两页即恢复正常，从而把差异锁到 `@BuilderParam` 这一处）。运行期退出在 hilog 里可能**没有任何 ArkTS 报错**，所以只能靠 `pidof <本机调试包名>` 判存活 + A/B 复现，不要浪费时间抓日志。
 - **面板内的嵌套滚动会吞掉手势**：如搜索面板"目录天体"网格自身可滚动且占满可视区，`dumpLayout` 下无法把外层滚动拖到网格下方的块（星座 chips / 坐标输入曾因此无法交互验证）→ 需要交互验证尾部内容时，可先切到对象很少的分类让网格变短。
 - **批量改引用时必须同时补宿主 store 字段声明**：只把 `this.X` 改成 `this.store.X` 而忘了 `@State private store: XStore = new XStore()`，会让**所有**该引用推断为 `any`，构建报 `arkts-no-any-unknown`，且报错行号散落在毫不相关的业务方法里（13066/13948/18815…），极难一眼定位。**这两步必须成对执行。**
 - **类型导入要找对模块**：Phase 1c 的 `pages/MainWindowModels.ets` **只包含原单体序言区**的声明；`ObjectDetailField` / `ObjectDetailModel` / `SatellitePass` / `SkyCultureDescriptionBlock` 等类型的导出仍在 **`pages/StellariumTypes.ets`**。导入错模块会报 `declares 'X' locally, but it is not exported`。
-- **真机上同时装着两个 `QAbility` 包，且"看前台"与"跑 CLI"默认不是同一个**（2026-10-01）：仓库 `harmonyos/AppScope/app.json5` 的 `bundleName` 是发布配置 `com.joinother.skyinstrument`（versionCode 1000050），而 `scripts/build-ohos-hap-windows.ps1` 生成工程时把它覆盖为签名配置 **`com.cnchensh.stellarium`**（versionCode 1000054）并 `force-stop`/`aa start` 该包；`devecocli ui *` 作用于**前台窗口**，而 `scripts/stellarium-cli.mjs` 的 `DEFAULT_BUNDLE` 是 `com.joinother.skyinstrument` —— 一句 `openUiPanel` 就会把 skyinstrument 拉到前台，随后所有 `devecocli ui` 点击都落到它身上（曾整段误测到 v1000053）。**验收/复现一律以 `com.cnchensh.stellarium` 为准：CLI 显式带 `--bundle com.cnchensh.stellarium`，并在关键步骤后用 `aa dump -l` 复核 `state #FOREGROUND`。**
+- **真机上同时装着两个 `QAbility` 包，且"看前台"与"跑 CLI"默认不是同一个**（2026-10-01）：仓库 `harmonyos/AppScope/app.json5` 的 `bundleName` 是发布配置 `com.joinother.skyinstrument`（versionCode 1000050），而 Windows 构建脚本的 `-Install` 会 `force-stop`/`aa start` **本机签名配置的包名**（由 DevEco 自动签名决定，脚本从 `pack.info` 读取）；`devecocli ui *` 作用于**前台窗口**，而 `scripts/stellarium-cli.mjs` 的 `DEFAULT_BUNDLE` 是 `com.joinother.skyinstrument` —— 一句 `openUiPanel` 就会把 skyinstrument 拉到前台，随后所有 `devecocli ui` 点击都落到它身上（曾整段误测到另一个版本）。**验收/复现一律以本机安装的包名为准：CLI 显式带 `--bundle <本机调试包名>`（或设 `STELLARIUM_BUNDLE`），并在关键步骤后用 `aa dump -l` 复核 `state #FOREGROUND`。**
 - **`devecocli ui layout` 的 `Toggle` 节点不暴露 `checked`**：开关的真实状态只能靠截图 —— 把 ~3MB 全屏图**裁成小区域**（几十~一百 KB）再读，直接读全屏图会撑爆上下文。
 
 ### 13.4 常用命令
@@ -762,7 +762,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-ohos-hap-windo
 node scripts\check-ohos-ui-contract.mjs
 # 安装 / 启动
 & $hdc -t 192.168.3.95:40565 install -r build\libstellarium-harmonyos\entry\build\default\outputs\default\entry-default-signed.hap
-& $hdc -t 192.168.3.95:40565 shell aa start -b com.cnchensh.stellarium -a QAbility
+& $hdc -t 192.168.3.95:40565 shell aa start -b <本机调试包名> -a QAbility
 # UI 交互（语义化，优先于坐标点击）
 devecocli ui layout --device 192.168.3.95:40565
 devecocli ui click/drag/text --device 192.168.3.95:40565 ...

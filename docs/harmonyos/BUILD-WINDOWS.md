@@ -56,10 +56,11 @@ Windows 上都不成立，请以本文为准。
 ]
 ```
 
-> **包名**：`AppScope/app.json5` 的 `bundleName` 属于本地/发布配置。上游是
-> `com.joinother.skyinstrument`（属于原作者的 AGC 账号），本机调试用的是
-> `com.cnchensh.stellarium`。`sync-ohos-build-sources.sh` 已经**不再覆盖** `app.json5`，
+> **包名**：`AppScope/app.json5` 的 `bundleName` 属于本地/发布配置。上游（发布身份）是
+> `com.joinother.skyinstrument`（属于原作者的 AGC 账号）；本机调试身份由 DevEco 自动签名决定，
+> 可能是另一个已注册包名。`sync-ohos-build-sources.sh` 已经**不再覆盖** `app.json5`，
 > 否则包名会被还原、自动签名随即失配并报 `bundleName does not match the generated SigningConfigs`。
+> 构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，不写死任何身份。
 
 ---
 

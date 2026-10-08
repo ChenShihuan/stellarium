@@ -43,6 +43,11 @@
     Device serial for -Install (for example 192.168.3.95:40565). Defaults to
     the only connected target.
 
+.PARAMETER Bundle
+    Bundle name to force-stop / start on the device for -Install. Defaults to
+    the bundle name recorded in the packaged pack.info (i.e. whatever the local
+    signing config produced), so no signing identity is hardcoded here.
+
 .PARAMETER Release
     Build the release variant instead of debug.
 
@@ -59,6 +64,7 @@ param(
     [switch]$SkipResources,
     [switch]$Install,
     [string]$Device,
+    [string]$Bundle,
     [switch]$Release
 )
 
@@ -85,8 +91,8 @@ $BuildMode    = if ($Release) { 'release' } else { 'debug' }
 $UnsignedHap  = Join-Path $ProjectRoot "entry\build\default\outputs\default\entry-default-unsigned.hap"
 $SignedHap    = Join-Path $ProjectRoot "entry\build\default\outputs\default\entry-default-signed.hap"
 
-# Signing is configured for com.cnchensh.stellarium; pack.info is the cheapest
-# way to confirm the module was packaged at all.
+# pack.info carries the signed bundle name (whatever the local signing config
+# produced) and is the cheapest way to confirm the module was packaged at all.
 $PackInfo     = Join-Path $ProjectRoot 'entry\build\default\outputs\default\pack.info'
 
 function Assert-Path {
@@ -315,7 +321,17 @@ if ($Install) {
             Write-Host "    using the only connected target: $Device"
         }
 
-        & $HdcExe -t $Device shell 'aa force-stop com.cnchensh.stellarium' | Out-Null
+        # The bundle name is whatever the local signing config produced; read it
+        # from the packaged metadata instead of hardcoding a signing identity.
+        $BundleName = $Bundle
+        if (-not $BundleName) {
+            Assert-Path $PackInfo 'pack.info'
+            $BundleName = (Get-Content -LiteralPath $PackInfo -Raw -Encoding UTF8 | ConvertFrom-Json).summary.app.bundleName
+        }
+        if (-not $BundleName) { throw 'cannot determine the bundle name; pass -Bundle <name>' }
+        Write-Host "    bundle: $BundleName"
+
+        & $HdcExe -t $Device shell "aa force-stop $BundleName" | Out-Null
         & $HdcExe -t $Device file send $SignedHap /data/local/tmp/stellarium.hap
         if ($LASTEXITCODE -ne 0) { throw 'hdc file send failed' }
         & $HdcExe -t $Device shell 'bm install -p /data/local/tmp/stellarium.hap -r -w 600'
@@ -323,10 +339,10 @@ if ($Install) {
 
         # The device must be unlocked: in developer mode aa start cannot unlock
         # the screen and fails with 10106102.
-        & $HdcExe -t $Device shell 'aa start -b com.cnchensh.stellarium -a QAbility'
+        & $HdcExe -t $Device shell "aa start -b $BundleName -a QAbility"
         if ($LASTEXITCODE -ne 0) { throw 'aa start failed; unlock the device and keep the screen awake' }
         Start-Sleep -Seconds 20
-        & $HdcExe -t $Device shell 'ps -ef | grep com.cnchensh.stellarium'
+        & $HdcExe -t $Device shell "ps -ef | grep $BundleName"
     }
 }
 

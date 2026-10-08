@@ -134,7 +134,7 @@ OFF:  Image(bt_xxx.png).colorFilter(TINT_OFF)   // 压成暗灰 #7E8896（不再
 1. 静态：`arkts_check` 0 error；`devecocli build` SUCCESSFUL。
 2. 契约：`node scripts/check-ohos-ui-contract.mjs` intact（新增锚点须 `--update` 再生并说明）。
 3. 资源：`node scripts/audit-ohos-resource-coverage.mjs` 通过（新增 10 个 media 计入）。
-4. 真机（`--bundle com.cnchensh.stellarium`，勿用默认发布包名）：
+4. 真机（`--bundle <本机调试包名>`，勿用默认发布包名）：
    - Dock 中间按钮打开快捷操作面板，标题显示观测点；
    - 12 项逐一点按 → 图标亮/灭切换正确；
    - 用 `getState` 回读 `actionShow_Constellation_Lines` / `..._Labels` / `..._Art` / `..._Equatorial_Grid` / `..._Azimuthal_Grid` / `..._Ground` / `..._Atmosphere` / `..._Cardinal_Points` / `..._Nebulas` / `nightMode`，用卫星面板或 `setSatellitesFlag` 回执核对 `hints`，陀螺仪看 `gyroscopeEnabled` 与权限提示；
@@ -259,7 +259,7 @@ OFF:  Image(bt_xxx.png).colorFilter(TINT_OFF)   // 压成暗灰 #7E8896（不再
    而非映射键 `satellite` / `gyro`，真机上一眼看到两格是放大镜。
 3. **`arkts_check` 不查跨文件可见性**：`LayerController.setLayer` 是 private，只有完整 hvigor 构建才报错；
    公开入口是 `applyLayerSwitch`。
-4. `scripts/stellarium-cli.mjs` 必须显式 `--bundle com.cnchensh.stellarium`（默认是发布身份）。
+4. `scripts/stellarium-cli.mjs` 必须显式 `--bundle <本机调试包名>`（默认是发布身份）。
 
 ### 12.5 未纳入本次改动
 
@@ -540,7 +540,7 @@ QA7–QA12 全部完成。其中三个问题是**只有真机才暴露**的（`a
 1. 静态：`arkts_check` 0 error；`devecocli build` SUCCESSFUL。
 2. 契约：`check-ohos-ui-contract.mjs` intact（新增锚点须 `--update` 并说明）。
 3. 资源：`audit-ohos-resource-coverage.mjs` 通过（新增 3 枚 media 计入）。
-4. 真机（`--bundle com.cnchensh.stellarium`，勿用默认发布包名）：
+4. 真机（`--bundle <本机调试包名>`，勿用默认发布包名）：
    - **默认网格不变**：升级后首次打开仍是 `quickActionDefaults()` 的 12 项，顺序与一期逐项一致；
    - **N1**：点赤道仪格 → `getState` 回读 `actionSwitch_Equatorial_Mount` 翻转；杀进程重启后保持；
    - **N2**：点镜像格 → 星空左右镜像；打开极轴镜叠层，其「水平翻转」开关与快捷面板**同步为同一状态**；

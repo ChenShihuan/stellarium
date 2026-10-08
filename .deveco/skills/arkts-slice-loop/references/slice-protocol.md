@@ -59,8 +59,8 @@ git checkout -- 'docs/harmonyos/archive/audits/RESOURCE-COVERAGE-AUDIT-2026-08-2
 #    真机 192.168.3.95:40565（IP 会变，先 list targets）；真机下线时改用模拟器 127.0.0.1:5555
 #    （devecocli emulator list / start "Pura 90 Pro"；x86_64 UI-only 通道，见 PLATFORM-MATRIX §1.5）
 & $hdc -t $dev install -r build\libstellarium-harmonyos\entry\build\default\outputs\default\entry-default-signed.hap
-& $hdc -t $dev shell aa start -a QAbility -b com.cnchensh.stellarium
-& $hdc -t $dev shell "pidof com.cnchensh.stellarium"     # 为空 = 已退出，优先怀疑刚做的改动
+& $hdc -t $dev shell aa start -a QAbility -b <本机调试包名>   # 取自 build-ohos-hap-windows.ps1 -Install 打印
+& $hdc -t $dev shell "pidof <本机调试包名>"     # 为空 = 已退出，优先怀疑刚做的改动
 devecocli ui layout --device $dev
 devecocli ui click/drag/text --device $dev ...
 & $hdc -t $dev shell hilog -x | Select-String -Pattern 'detail-media|StellariumArkUI'   # 回调链路实证
@@ -127,6 +127,6 @@ ArkUI **没有**"按名字动态实例化组件"的能力（不能用 `Record<st
 
 - **优先真机**（`hdc list targets` 取当前设备号，IP 会变）：用户已在 DevEco 侧开启**屏幕常亮**，长片不再因锁屏中断。
 - 真机不可用时用模拟器 `127.0.0.1:5555`（`devecocli emulator start "Pura 90 Pro"`），按"三·补"的范围记录「模拟器无法覆盖（待真机）」。
-- **两个同名 App 陷阱**：本仓库产物是 `com.cnchensh.stellarium`，真机上另有 `com.joinother.skyinstrument`；`devecocli ui` 跟随前台窗口，而 `stellarium-cli.mjs` 默认可能连到另一个包 → **CLI 一律显式 `--bundle com.cnchensh.stellarium`**，并先 `aa dump -l` 确认前台。
+- **两个同名 App 陷阱**：本仓库本机调试构建装的包名由 DevEco 自动签名决定（`build-ohos-hap-windows.ps1 -Install` 打印，取自 `pack.info`），真机上另有发布身份 `com.joinother.skyinstrument`；`devecocli ui` 跟随前台窗口，而 `stellarium-cli.mjs` 默认可能连到另一个包 → **CLI 一律显式 `--bundle <本机调试包名>`（或设 `STELLARIUM_BUNDLE`）**，并先 `aa dump -l` 确认前台。
 - 每片真机实测至少给一处**点按后实时刷新**的证据（坐标/采样值/hilog/CLI 回读）；测后恢复改过的持久化设置。
 - 工具链故障（同步失败、hvigor 缓存损坏）**不属于切片回归**：`C:\Users\<user>\.hvigor\project_caches\<hash>\workspace` 缺 `@ohos/hvigor` 会让 IDE 同步报 `00308003`，脚本构建不受影响 —— 记录并请用户在 IDE 侧 `Invalidate Caches` / 修 hvigor 组件，不要试图用 junction 从安装目录链过去（按 realpath 判定无效）。

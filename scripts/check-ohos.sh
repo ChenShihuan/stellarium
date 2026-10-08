@@ -22,6 +22,11 @@ if ! node "$SCRIPT_DIR/check-ohos-platform-patch.mjs"; then
   exit 1
 fi
 
+if ! node "$SCRIPT_DIR/check-ohos-bundle-identity.mjs"; then
+  echo "Bundle identity check failed; remove any local Debug signing identity from tracked files."
+  exit 1
+fi
+
 echo "=== HarmonyOS 提交前检查 ==="
 echo ""
 

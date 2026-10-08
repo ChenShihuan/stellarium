@@ -363,6 +363,11 @@ hdc -t 7LZBB26323200303 shell uitest uiInput keyEvent 2050
 
 上述 `uitest` 命令属于设备端调试工具，不是应用运行时能力；正式包不会因此增加端口或网络权限。官方文档：[`aa工具`](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/aa-tool)、[`SDK命令行工具简介`](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/command-line-tools-overview)、[`UI测试`](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/uitest-guidelines)。
 
+> 包名解析：`stellarium-cli.mjs` 的默认包名取跟踪真源 `harmonyos/AppScope/app.json5` 的发布身份
+> （`com.joinother.skyinstrument`）。本机调试签名若用其它包名，请显式 `--bundle <包名>` 或设环境变量
+> `STELLARIUM_BUNDLE`；`scripts/build-ohos-hap-windows.ps1 -Install` 会打印并从 `pack.info` 读取它实际安装的
+> 包名，不写死任何签名身份。
+
 ## 限制
 
 - CLI 需要已连接、已授权的 `hdc` 设备和可调试安装包。

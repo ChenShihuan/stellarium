@@ -1,3 +1,5 @@
+> **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/BUNDLE-IDENTITY-CLEANUP.md`）。
+
 ## [2026-10-08] DevEco Code - 整理 STATE-REVIEW 评审文档：补 §9 实施状态与终态实测
 
 - **依据（用户要求）**：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` 长期停在工作区未提交（§9/§10 为另一会话新增），且 §9.4 附录存在实测偏差，需整理后入库。
