@@ -791,8 +791,8 @@ V2→V1 用 `makeV1Observed(...)`。
 ### 8.2 工具链与前置
 
 - **驱动**：`node scripts/stellarium-cli.mjs --device <id> --command <name> [--payload …] --json`
-- **包名陷阱（必须）**：CLI 默认 `--bundle com.joinother.skyinstrument`，而验收/前台是
-  **`com.cnchensh.stellarium`**（计划 §13.3）。每次显式 `--bundle com.cnchensh.stellarium`，
+- **包名陷阱（必须）**：CLI 默认 `--bundle com.joinother.skyinstrument`，而本机验收/前台可能是
+  **另一个由 DevEco 自动签名决定的调试包名**（计划 §13.3）。每次显式 `--bundle <本机调试包名>`（或设 `STELLARIUM_BUNDLE`），
   并用 `aa dump -l` 复核 `state #FOREGROUND`，否则会整段测到另一个包。
 - **设备**：真机（Mate 80 Pro）。x86_64 模拟器无 `libstellarium.so`，引擎遥测全为 `--`，
   **只可用于结构回归，不可用于性能结论**。
@@ -829,7 +829,7 @@ V2→V1 用 `makeV1Observed(...)`。
 - **复用既有范式**：`scripts/test-ohos-mist-performance.mjs`（帧遥测 + `summarize()` median/p95/max +
   增量采样）、`scripts/test-ohos-model-performance-pad.py`（模型 worker 指标 + `renderedAt` 异步等待）。
 - **产出建议**：新增 `scripts/measure-ohos-ui-performance.mjs`（通用场景运行器：
-  `--scenario S0..S6 --device <id> --bundle com.cnchensh.stellarium --output <json>`），
+  `--scenario S0..S6 --device <id> --bundle <本机调试包名> --output <json>`），
   首轮生成 `docs/harmonyos/json/perf/baseline-v1-<date>.json` 并登记到 CHANGELOG。
 - 基线必须**可复跑**：记录设备 SN 简写、构建提交、完整命令序列。
 - **基线时机**：应在 barrel 删除等收口切片**之后、V2 试点之前**采集，

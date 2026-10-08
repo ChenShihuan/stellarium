@@ -2,6 +2,11 @@ __
 builds
 build
 installers
+# Local agent/tooling scratch directories (never upstream)
+.deveco/
+.iis/
+__pycache__/
+*.pyc
 .DS_Store
 CMakeLists.txt.user*
 CMakeFiles
