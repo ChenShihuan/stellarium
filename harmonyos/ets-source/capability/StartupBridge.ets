@@ -46,6 +46,8 @@ export interface StartupHooks {
   // 启动恢复上次观测点（宿主侧读 preferences + setLocation；本服务不触碰 NAPI/UI）。
   // 放在启动任务里执行，确保晚于引擎 config 的默认位置（否则会被引擎默认覆盖回北京）。
   restoreObserverLocation(): void
+  // 脚本资源元数据表写入（ScriptPlaybackController 持有；启动桥 getScriptList 回包后回注）。
+  setScriptMetadata(raw: Object | undefined): void
 }
 
 export class StartupBridge {
@@ -121,7 +123,7 @@ export class StartupBridge {
       () => this.port.requestWhenReady('setLanguage', this.languageStore.selectedLanguage, () => {}),
       () => this.layerViewStore.loadLandscapeList(),
       () => this.port.requestWhenReady("getScriptList", "", (r: StellariumBridgeResponse) => {
-        if (r.ok === true && Array.isArray(r.items)) { this.scriptStore.scriptList = r.items as string[]; this.scriptStore.setScriptMetadata(r.details) }
+        if (r.ok === true && Array.isArray(r.items)) { this.scriptStore.scriptList = r.items as string[]; this.hooks.setScriptMetadata(r.details) }
       }),
       () => this.port.requestWhenReady('getProjectionList', '', (r: StellariumBridgeResponse) => {
         if (r.ok === true && r.current !== undefined) { this.hooks.setCurrentProjection(r.current as string) }

@@ -1578,43 +1578,6 @@ export struct WindowNativeNode {
       syncWheelFromSimulation: (jd: number): void => { this.wheel().syncFromSimulation(jd) },
       refreshSimTimeLight: (): void => { this.timeCtl().refreshSimTimeLight() }
     })
-    // 脚本录制 / 观测星球 / 星空文化标志 / 天体资料 / 指针坐标五域复用同一实例，
-    // 其消费方均为 @ObjectLink，字段赋值即刷新，五个域都无 publish* 发布点，故 onChanged 传空实现。
-    this.scriptStore.attachPort(hostPort, () => {})
-    // 回包后的 UI 提示经 ScriptHostHooks.flashHint 注入（store 不触碰 UI）。
-    this.scriptStore.attachHooks({
-      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
-      // 视频状态轮询收口时调用的宿主 stopVideoRecording（store 不触碰桥/UI）。
-      stopVideoRecording: (): void => { this.recordingCtl().stopVideoRecording() }
-    })
-    // 原生脚本播放的跨域/UI/定时器动作经具名注入（store 不触碰 UI/他 store）。
-    this.scriptStore.attachPlaybackHooks({
-      flashHint: (text: ResourceStr): void => { this.flashHint(text) },
-      sessionBusy: (): boolean => this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
-      guideActive: (): boolean => this.guideStore.guideState.active,
-      requestStopGuide: (): void => { this.guideStore.executeGuideRequest('guideAction', 'stop') },
-      finishReplay: (message: string): void => this.recordingCtl().finishRecordingReplay(message),
-      finishNativeScriptUi: (message: string): void => this.scriptPlaybackCtl().finishNativeScriptUi(message),
-      dismissScriptOverlays: (): void => {
-        this.panelVisible = false
-        this.infoWindowStore.infoWinVisible = false
-        this.gyroStore.gyroCalibPanelOpen = false
-      },
-      stopBackgroundTimers: (): void => {
-        this.timeCtl().stopPanelTimers()
-        this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
-        this.polarScopeCtl().stopPolarScopeTimer()
-      },
-      startStatusPolling: (): void => this.scriptPlaybackCtl().startScriptStatusPolling(),
-      stopStatusPolling: (): void => this.scriptPlaybackCtl().stopScriptStatusPolling(),
-      refreshStatus: (): void => { this.scriptPlaybackCtl().refreshScriptStatus() },
-      runWaitingAnimation: (action: () => void): void => {
-        this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, action)
-      },
-      logScriptError: (filename: string, error: string): void => {
-        hilog.error(0x0000, 'StellariumArkUI', 'playScript failed %{public}s err=%{public}s', filename, error)
-      }
-    })
     this.sessionToolStore.attachPort(hostPort, () => {})
     // 会话导出/应用/迁移的 UI 提示、剪贴板、ToolsStore 文本框与分布式能力经具名注入。
     this.sessionToolStore.attachHooks({
@@ -2433,7 +2396,8 @@ export struct WindowNativeNode {
           setBridgeSyncStarted: (value: boolean): void => { this.bridgeSyncStarted = value },
           selftestEnabled: (): boolean => this.SELFTEST,
           runSelftest: (): void => this.selfTestCtl().selfTestAllActions(),
-          restoreObserverLocation: (): void => { this.locationCtl().restoreObserverLocation() }
+          restoreObserverLocation: (): void => { this.locationCtl().restoreObserverLocation() },
+          setScriptMetadata: (raw: Object | undefined): void => { this.scriptPlaybackCtl().setScriptMetadata(raw) }
         },
         this.skyCultureViewStore, this.pluginStore, this.nightModeStore, this.telescopeStore,
         this.gyroStore, this.languageStore, this.audioStore, this.viewSettingsStore,
@@ -2501,6 +2465,9 @@ export struct WindowNativeNode {
         },
         openScriptsPanel: (): void => { this.setPanel('scripts') },
         changeScriptRate: (direction: number): void => { this.scriptPlaybackCtl().changeScriptRate(direction) },
+        loadRecordings: (): void => { this.scriptPlaybackCtl().loadRecordings() },
+        startVideoStatePolling: (): void => { this.scriptPlaybackCtl().startVideoStatePolling() },
+        stopVideoStatePolling: (): void => { this.scriptPlaybackCtl().stopVideoStatePolling() },
         recordBufferLength: (): number => this.recordBuffer.length,
         recordBufferSnapshot: (): Array<RecordCmd> => this.recordBuffer,
         recordBufferPush: (cmd: RecordCmd): void => { this.recordBuffer.push(cmd) },
@@ -2727,6 +2694,9 @@ export struct WindowNativeNode {
         persistEquatorialMount: (): void => { this.telescopeStore.persistEquatorialMount() },
         persistNightMode: (): void => { this.nightModeStore.persistNightMode() },
         syncSkyCultureTimeFollowTimer: (): void => { this.skyCultureCtl().syncSkyCultureTimeFollowTimer() },
+        loadScriptList: (): void => { this.scriptPlaybackCtl().loadScriptList() },
+        loadRecordings: (): void => { this.scriptPlaybackCtl().loadRecordings() },
+        loadVideoRecordingState: (): void => { this.scriptPlaybackCtl().loadVideoRecordingState() },
         viewTab: (): number => this.viewTab,
         setViewTab: (value: number): void => { this.viewTab = value },
         viewTabContentOpacity: (): number => this.viewTabContentOpacity,
@@ -3072,6 +3042,18 @@ export struct WindowNativeNode {
         },
         reloadObserverInfo: (): void => { this.locationPickerStore.loadObserverInfo(true) },
         loadPlanetList: (): void => { this.sessionToolStore.loadPlanetList() },
+        sessionBusy: (): boolean => this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
+        requestStopGuide: (): void => { this.guideStore.executeGuideRequest('guideAction', 'stop') },
+        finishReplay: (message: string): void => this.recordingCtl().finishRecordingReplay(message),
+        stopBackgroundTimers: (): void => {
+          this.timeCtl().stopPanelTimers()
+          this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
+          this.polarScopeCtl().stopPolarScopeTimer()
+        },
+        logScriptError: (filename: string, error: string): void => {
+          hilog.error(0x0000, 'StellariumArkUI', 'playScript failed %{public}s err=%{public}s', filename, error)
+        },
+        stopVideoRecording: (): void => { this.recordingCtl().stopVideoRecording() },
         animateWaiting: (action: () => void): void => {
           this.getUIContext().animateTo({ duration: 180, curve: curves.springMotion(0.55, 0.90) }, action)
         },
@@ -3493,9 +3475,9 @@ export struct WindowNativeNode {
       } else if (panel === 'help') {
         this.tools.loadAboutInfo()
       } else if (panel === 'scripts') {
-        this.scriptStore.loadScriptList()
-        this.scriptStore.loadRecordings()
-        this.scriptStore.loadVideoRecordingState()
+        this.scriptPlaybackCtl().loadScriptList()
+        this.scriptPlaybackCtl().loadRecordings()
+        this.scriptPlaybackCtl().loadVideoRecordingState()
       } else if (panel === 'telescope') {
         this.telescopeStore.loadTelescopeControlStatus()
       }
@@ -6623,11 +6605,11 @@ export struct WindowNativeNode {
             controlY: scriptControlY(this.skyHeight, this.scriptControlSafeTop(), this.scriptStore.scriptControlHeight(), this.scriptStore.scriptControlOffsetY),
             onSkyTouch: (event: TouchEvent) => { this.skyInputCtl().handleSkyTouch(event) },
             onControlDragTouch: (event: TouchEvent) => { this.scriptPlaybackCtl().handleScriptControlDragTouch(event) },
-            onContinue: () => { this.scriptStore.continueNativeScript() },
+            onContinue: () => { this.scriptPlaybackCtl().continueNativeScript() },
             onChangeRate: (delta: number) => { this.recordingCtl().changePlaybackRate(delta) },
             onToggleReplayPause: () => { this.recordingCtl().toggleReplayPause() },
-            onStop: () => { this.scriptStore.stopScriptPlayback() },
-            onSendKey: (k: string) => { this.scriptStore.sendScriptKey(k) }
+            onStop: () => { this.scriptPlaybackCtl().stopScriptPlayback() },
+            onSendKey: (k: string) => { this.scriptPlaybackCtl().sendScriptKey(k) }
           })
         }
       }
@@ -7727,7 +7709,7 @@ export struct WindowNativeNode {
         confirmPrivacyRevocation: () => { this.confirmPrivacyRevocation() },
         loadPluginList: () => { this.pluginStore.loadPluginList() },
         openPluginFeature: (id: string) => { this.pluginFeatureCtl().openPluginFeature(id) },
-        playScriptByName: (filename: string) => { this.scriptStore.playScriptByName(filename) },
+        playScriptByName: (filename: string) => { this.scriptPlaybackCtl().playScriptByName(filename) },
         triggerAction: (actionId: string) => { this.triggerAction(actionId) },
         moveToSelectedObject: () => { this.moveToSelectedObject() },
         onOpenLayersSky: () => { this.viewTab = 0; this.openSubPanel('layers') },
@@ -8029,14 +8011,14 @@ export struct WindowNativeNode {
         scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
         onStartGuide: (id: string) => { this.guideStore.executeGuideRequest('startGuide', id) },
-        onStopPlayback: () => { this.scriptStore.stopScriptPlayback() },
+        onStopPlayback: () => { this.scriptPlaybackCtl().stopScriptPlayback() },
         onImportScript: () => { this.scriptPlaybackCtl().importScriptFile() },
-        onPlayScript: (name: string) => { this.scriptStore.playScriptByName(name) },
+        onPlayScript: (name: string) => { this.scriptPlaybackCtl().playScriptByName(name) },
         onToggleRecording: () => { this.tools.recording ? this.recordingCtl().stopRecording() : this.recordingCtl().startRecording() },
         onSaveRecording: () => { this.recordingCtl().saveCurrentRecording() },
         onSetRecordName: (value: string) => { this.scriptStore.recordName = value },
         onPlayRecording: (file: string) => { this.recordingCtl().playRecording(file) },
-        onLoadRecording: (file: string, name: string) => { this.scriptStore.loadRecordingByName(file, name) },
+        onLoadRecording: (file: string, name: string) => { this.scriptPlaybackCtl().loadRecordingByName(file, name) },
         onShareRecording: (rec: RecordingEntry, idx: number) => {
           shareFile(this.hostMediaPort, this.hostPlatformPort, rec.path ?? '', utd.UniformDataType.PLAIN_TEXT, rec.name,
             'Stellarium 操作录制', 'recording-share-' + idx.toString(),
