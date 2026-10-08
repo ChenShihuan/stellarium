@@ -1,8 +1,8 @@
 # pages/ 重构终态架构评审（MainWindowNativeNode.ets 及其拆分结构）
 
-- **状态：** 第 3 版（按 M 轨道收尾后的终态全量重写），待用户评审。本文只做分析与评价，未改动任何源码。
-- **日期：** 2026-10-06
-- **评审基线：** HEAD `c52a517961`（M 轨道 7/7 收尾）；宿主自 `b675c48a0c` 起未再变动。
+- **状态：** 第 4 版（M 轨道终态 + 三层边界审查 + V2 协同分析）。§9 的三层边界问题（P0–P4）已于 2026-10-08 按「阈值拆分」执行完毕（S1–S9，见 `ARKTS-PAGES-REFACTOR-PLAN.md` §16）；本文正文保留 2026-10-07 评审口径，§9.4 附录补充终态实测修正。
+- **日期：** 2026-10-07（正文评审）；2026-10-08（§9 实施 + §9.4 实测）。
+- **评审基线：** §9/§10 基于 HEAD `cbc8c5bfae`（宿主 7,974 行）；§1–§8 的终态对象为 M 轨道收尾 `c52a517961`（宿主 8,017 行）。
 - **评审对象：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`（**8,017 行**）及
   `bridge/`（6 文件 / 319 行）、`capability/`（31 / 12,329）、`state/`（48 / 9,648）、
   `panels/`（119 / 16,852）、`common/`（31 / 87,486）、`pages/`（11 / 8,587）六层目录终态。
@@ -11,8 +11,9 @@
   PowerShell `Get-Content` 默认按 GBK 解码 UTF-8 文件，会把含中文注释的 LF 文件的部分换行符
   吞入上一行，行数**系统性偏低**（宿主曾被低估 444 行，"7,573 行"是错误读数）。
   装饰器计数用行锚定正则（附录命令），第 2 版 §7.1 部分数字含注释噪声，本版已修正。
-- **文档结构：** §1–§8 为终态评审（自含）；§9–§11 为 2026-10-04/05 的过程普查快照，
-  其建议**已全部执行完毕**，结论已并入 §2/§3（读者可跳过；届时移除不影响本文任何引用）。
+- **文档结构：** §1–§8 为终态评审（自含）；§9 为 2026-10-07 三层边界与交叉审查（量化 + 选项对比）；
+  §10 为 V1→V2 升级与 §9 边界问题的协同分析；
+  附录为复现命令与历史判据留档。
 
 ---
 
@@ -858,6 +859,453 @@ V2→V1 用 `makeV1Observed(...)`。
 
 + 该域状态切换（如 `setSatellitesFlag`）的 p95**。V1 基线（S0–S6）应在试点**之前**采集入库，
   作为唯一对照来源。
+
+---
+
+## 9. panels / capability / state 三层边界与交叉审查
+
+> **日期：** 2026-10-07（评审）；2026-10-08（实施 + §9.4 终态实测）
+> **基线：** HEAD `cbc8c5bfae`（宿主 7,974 行）
+> **依据：** 本文 §4.3 依赖审计、`ARKTS-PAGES-REFACTOR-PLAN.md` §15.7 架构规则 / §11 Barrel 策略
+> **方法：** 全量 import 扫描（252 `.ets`）+ 逐文件导出/消费追踪 + 规则对照
+> **范围：** 只做分析与选项对比，不选推荐方向，零代码改动（评审时）
+> **实施状态（2026-10-08）：** P0–P4 已按「阈值拆分」执行完毕（S1–S9），执行记录见 `ARKTS-PAGES-REFACTOR-PLAN.md` §16；
+> 五个超标 store（Astro/Script/Guide/TimeSettings/Telescope）的桥调用与持续定时器已移交各自控制器。
+> 下文量化件保留评审当时口径，§9.4 附录补充终态实测修正。
+
+### 9.1 层间依赖现状
+
+#### 9.1.1 六层 import 矩阵
+
+| 源 → 目标 | import 数 | 合规性 | 说明 |
+|---|---|---|---|
+| panels → state | 133 | ✅ 合规 | 面板读 store 渲染，§4.3 设计意图 |
+| panels → capability | 0 | ✅ 合规 | 面板不碰控制器 |
+| panels → bridge | 0 | ✅ 合规 | 面板不碰桥 |
+| capability → state | **64**→**65** | ✅ 合规 | 控制器持有 store 引用以写入桥回包数据（§9 队列后实测 65，见 §9.4.1） |
+| capability → panels | 0 | ✅ 合规 | 控制器不依赖面板 |
+| state → panels | 0 | ✅ 合规 | store 不依赖面板 |
+| state → capability | 0 | ✅ 合规 | store 不依赖控制器 |
+| state → bridge | 0 | ✅ 合规 | store 依赖端口接口（非桥实现），经 `attachPort` 注入 |
+| common → state | 1 | ⚠️ 已登记 | `SpeechService` → `GuideStore`（§4.3-4，冻结） |
+
+**方向性结论**：六层之间无环、单向成立。`capability → state` 的 64 处（§9 队列后实测 65 处）
+是设计意图（控制器持有 store 引用、写入桥回包数据、触发 UI 刷新），不是违规。
+
+#### 9.1.2 panels 内部域间依赖
+
+| 源域 → 目标域 | import 数 | 评估 |
+|---|---|---|
+| panels/panels/ → panels/\<domain\>/ | 44 | ✅ 面板体组合域子组件，属正常组合 |
+| panels/shell/ → 6 域 | 各 1–3 | ✅ 壳层编排器职责所需（§9.2-P3） |
+| panels/settings/ → panels/view/ | 1 | ✅ settings 引用 view 域子组件 |
+| panels/layers/ → panels/view/ | 1 | ✅ 图层标签页含视图坐标设置 |
+| panels/skyculture/ → panels/layers/ + panels/astro/ | 2 | ⚠️ 跨域组件消费（§9.2-P2/P3） |
+
+### 9.2 发现的问题（按严重程度分级）
+
+#### P0 · Store 同时承担控制器职责（state/capability 边界模糊）
+
+**现象**：绝大多数 store 持有 `CommandPort` 并直接调用 `requestInteractive`——
+这是控制器的本职。按 §15.7 规则 2「可观测数据入 `@Observed` store，
+草稿/逐帧字段留控制器」，store 应只承载数据，桥调用/定时器应归控制器。
+
+**量化**：
+
+| store 文件 | `requestInteractive` 调用数 | 定时器（`setInterval`/`setTimeout`） | 评估 |
+|---|---|---|---|
+| **AstroStore** | **15** | 0 | ⚠️ 实质上是控制器 + store 的混合体 |
+| **ScriptStore** | **8** | `setInterval` 450ms（视频状态轮询）+ `setTimeout` | ⚠️ 控制器职责重 |
+| **TimeSettingsStore** | **8** | 0 | ⚠️ 桥读密集 |
+| **TelescopeStore** | **3** | `setTimeout`（LX200 轮询） | ⚠️ 有定时器 |
+| **GuideStore** | **1** | `setInterval`（导览步进）+ `start()`/`stop()` | ⚠️ 有定时器 + 播放器 |
+| **CatalogStore** | **0** | `setInterval` 600ms（下载状态轮询） | ⚠️ 有定时器 |
+| **LocationStore** | **0** | 多条 `setTimeout` 链（分块索引构建/搜索） | ⚠️ 有定时器 |
+| **SatelliteStore** | **1** | `setTimeout` 90ms（防抖加载） | 中等 |
+| 其余 40 个 store | 1–4 | 0 | ✅ 可接受（少量桥调用属简单读写） |
+
+**根因**：D 轨道（STATE-REVIEW §10）将宿主行为下沉时，选择了
+「简单桥调用下沉进 store、复杂行为保留控制器」的策略。
+这对简单 store 合理（1–2 个 `requestInteractive`），但对 AstroStore/ScriptStore 等
+已累积到 8–15 个桥调用 + 定时器的 store，实质已无法单测、无法替换桥、
+且破坏了「store 无 IO」的初衷。
+
+**影响**：
+- Store 内桥调用不可 mock（需真桥才能测试）
+- 定时器在 store 里无法被宿主生命周期统一收口（§15.7 规则 3 要求
+  `start()`/`stop()` 在控制器里由宿主调度）
+- 桥调用失败时 store 内部处理错误路径，混合了数据逻辑与 IO 逻辑
+
+**选项对比**：
+
+| 维度 | A) 维持现状 | B) 全面拆分 | C) 阈值拆分（桥调用 ≥5 或有定时器） |
+|---|---|---|---|
+| **成本** | 零 | 极高（48 store × ~2 load* 方法 ≈ 96 个方法搬迁 + 宿主接线翻倍 + 控制器文件数激增） | 中（~7 store × ~5 方法 ≈ 35 个方法搬迁 + 已有控制器复用） |
+| **收益** | 无 | 边界清晰、全量可单测、宿主可统一调度所有定时器 | 解决最严重问题（AstroStore/ScriptStore 等）、其余 40 store 零风险 |
+| **风险** | 边界线持续模糊，新人难判断"几个桥调用算过多" | 大规模搬迁可能引入接线错误；控制器与 store 的 1:1 配对导致文件数翻倍 | 灰色地带仍存（4 个桥调用的 store 是否应拆？） |
+| **与 V2 协同** | V2 不改 IO 边界，维持现状无增量 | 拆分后的纯数据模型在 V2 下收益最大（§10 详述） | 同 B 方向，但范围可控 |
+| **影响面** | 0 文件 | 48 store + 22 控制器 + 宿主 | ~7 store + 已有控制器 + 宿主 |
+
+> 注：自然断点在 5——AstroStore(15)/ScriptStore(8)/TimeSettingsStore(8) 明显超标，
+> 其余 store 的 1–4 个桥调用属简单读写。但"5"本身是经验值，无严格理论依据。
+
+---
+
+#### P1 · SettingsRows.ets 承担跨域共享组件库
+
+**现象**：`panels/settings/SettingsRows.ets`（179 行）的 7 个导出中，
+4 个被非 settings 面板消费：
+
+| 导出 | 消费方 | 实属域 |
+|---|---|---|
+| `NavStarsToggleRow` | NavStarsPanel | sensors/navstars 域 |
+| `ArchaeoToggleRow` | ArchaeoLinesPanel | archaeo 域 |
+| `MosaicCameraMetric` | MosaicCameraPanel | tools 域 |
+| `NavigationSwitchRow` | SettingsPanel | settings 域 ✅ |
+| `EphemerisToggleRow` | SettingsPanel | settings 域 ✅ |
+| `InformationModeButton` | SettingsPanel | settings 域 ✅ |
+| `InformationSwitchRow` | SettingsPanel | settings 域 ✅ |
+
+该文件是**事实上的共享行组件库**，放在 settings/ 下是名称误导。
+
+**选项对比**：
+
+| 维度 | A) 消费方就近 | B) common/ui/ 收口 | C) 混合（通用件进 common、域特化件归域） |
+|---|---|---|---|
+| **成本** | 中（4 组件迁至消费方域 + import 修正） | 中（4 组件迁 common/ui/ + 命名去域化） | 中（2 通用件迁 common + 2 域特化件归域） |
+| **收益** | 域内聚，每个组件与主消费者同目录 | 零跨域依赖，共享组件集中管理 | 与 §4.2-4 口径一致（新通用件统一进 common/ui/） |
+| **风险** | 次消费方仍需跨域 import | common/ui/ 膨胀；命名需去域化（`NavigationSwitchRow` → `SettingsNavigationSwitchRow`？） | 两种归属策略并存，规则需明确 |
+| **与 V2 协同** | 无直接影响 | V2 `@Param` 替代 `@Prop` 可简化共享组件参数传递，但不影响文件归属 | 同上 |
+| **影响文件** | SettingsRows + NavStarsPanel + ArchaeoLinesPanel + MosaicCameraPanel | SettingsRows + 所有消费方 | 同 A + B 的子集 |
+
+---
+
+#### P2 · 跨域通用组件（3 件）
+
+**P2a · GraphLoadingRow**（`panels/astro/GraphGuides.ets`）
+
+被 `SkyCultureViewTab`（skyculture 域）消费。文件名和位置暗示纯 astro，
+但 `GraphLoadingRow` 是通用 spinner + label 行，无天文域硬编码。
+
+**P2b · SkyCultureDescriptionBlockView**（`panels/skyculture/`）
+
+被 `object/ConstellationCultureView`（object 域）和
+`skyculture/SkyCultureViewTab`（skyculture 域）共用。
+文件注释已承认「天体详情卡与星文化查看器共用」。
+
+**P2c · LayerSwitchRow**（`panels/layers/`）
+
+被 `SkyCultureViewTab`（skyculture 域）消费。
+图层开关行，含图层域特化逻辑。
+
+**选项对比**：
+
+| 维度 | A) 留原域 | B) 迁 common/ui/ | C) 混合（通用件迁 common、域特化件留原域） |
+|---|---|---|---|
+| **成本** | 零 | 小（3 组件迁 + import 修正） | 小（2 通用件迁 + 1 域件留） |
+| **收益** | 无 | 零跨域依赖 | 精确分类 |
+| **风险** | 跨域消费持续 | common/ui/ 增长 | 两次搬迁规则需文档化 |
+| **与 V2 协同** | 无 | V2 `@Provider`/`@Consumer` 可减少 prop drilling，但不改 import 关系 | 同上 |
+| **建议归属** | — | `GraphLoadingRow` → common/ui/（通用加载行） | `SkyCultureDescriptionBlockView` → common/ui/（参数化描述块）；`LayerSwitchRow` → 留 layers/（域特化） |
+
+---
+
+#### P3 · shell/ 跨域依赖广度 + layers/view/skyculture 交叉
+
+**P3a · shell/ 跨 6 域**
+
+`shell/` 的 6 个壳层文件从 6 个不同域（sensors/overlay/object/tools/guide/astro）
+import。壳层是布局编排器，需组装各域的浮层/卡片/控件。
+与 `pages/` 宿主的组合根职责同构，只是粒度更细。
+
+**评估**：**合理**。不建议拆分。
+
+**P3b · layers → view 与 skyculture → layers + astro**
+
+- `LayerViewTabs` → `ViewCoordinateSettings`（view 域）：「标记」标签页含视图坐标设置，合理
+- `SkyCultureViewTab` → `LayerSwitchRow`（layers 域）+ `GraphLoadingRow`（astro 域）：
+  星文化查看器引用图层开关和加载行
+
+**评估**：面板间引用对方域的**子组件**而非 store/控制器，属 UI 组合层交叉，风险可控。
+`LayerSwitchRow` 被两域消费可考虑迁 common/ui/（见 P2c）；
+`ViewCoordinateSettings` 被 layers 域消费合理，不动。
+
+---
+
+#### P4 · 宿主死 import / TimeWheelController 归属 / SpeechService 归属
+
+**P4a · 宿主死 import**
+
+宿主 L128/L143 有 4 个未使用的 import：
+`GraphLoadingRow`/`RtsSelectionGuide`/`GraphSelectionGuide`/`SkyCultureDescriptionBlockView`。
+
+**评估**：清理即可，极小工作量。
+
+**P4b · TimeWheelController.ets 位于 state/**
+
+`TimeWheelController`（225 行，普通类）与 `TimeWheelStore` 配对放在 `state/`。
+文件头部注释明确解释了分拆理由（逐帧字段不入 `@Observed`），
+控制器自持定时器、注入依赖、不碰 NAPI。
+
+**评估**：**合理**。与 store 配对放置便于维护。不改。
+
+**P4c · SpeechService.ets 位于 common/**
+
+`common/SpeechService.ets` 写入 `GuideStore.speechStatus`。
+语义上 SpeechService 是跨域服务而非 settings 专属。
+
+**评估**：已登记为例外（common→state 1 处，§4.3-4）。维持冻结。
+
+---
+
+### 9.3 不建议动的部分
+
+| 部分 | 原因 |
+|---|---|
+| capability → state 的 64 个 import | 设计意图，无环，拆分只增复杂度 |
+| panels/panels/ → panels/\<domain\>/ 的 44 个 import | 面板体组合域子组件，属正常组合 |
+| shell/ 跨 6 域 import | 壳层编排器职责所需 |
+| TimeWheelController 在 state/ | 配对放置有理，不改 |
+| SpeechService 在 common/ | 已登记例外，维持冻结 |
+| 桥调用 ≤4 的 40 个 store | 成本/收益不划算 |
+| state → bridge 的依赖 | store 依赖端口**接口**（非桥实现），经 `attachPort` 注入，符合依赖倒置 |
+
+### 9.4 附录：capability→state 依赖明细 + Store 桥调用计数
+
+#### 9.4.1 capability → state 依赖（评审时按语义分组）
+
+| 控制器 | 持有的 store 引用 |
+|---|---|
+| AstroCalcController | AstroStore, EphemerisStore, WutStore, SearchStore |
+| DetailConnectorController | ObjectDetailStore, InfoWindowStore |
+| LocationController | LocationPickerStore, LocationStore, SessionToolStore |
+| LayerController | LayerViewStore, LayerStore, SceneryStore, ObjectDetailStore |
+| ScriptPlaybackController | ScriptStore |
+| RecordingController | ScriptStore |
+| SearchController | SearchStore, ObjectDetailStore |
+| BookmarkController | BookmarkStore |
+| CatalogController | CatalogStore |
+| SatelliteController | SatelliteStore |
+| MeteorShowerController | MeteorShowerStore |
+| TelescopeController | TelescopeStore |
+| TimeController | TimeSettingsStore |
+| GuideController | GuideStore |
+| SessionToolController | SessionToolStore |
+| ObjectMediaController | ObjectDetailStore |
+| NavStarsController | NavStarsStore |
+| ArchaeoLinesController | ArchaeoStore |
+| MosaicCameraController | MosaicCameraStore |
+| PluginCommandController | CommandStore |
+| DockController | DockStore |
+| OverlayController | OverlayStore |
+
+> 注：部分控制器持有多个 store 引用是因为其编排逻辑跨域
+> （如 AstroCalcController 编排星历/行星/月相/现象，对应 AstroStore + EphemerisStore + WutStore）。
+> 这是组合根的合理下沉，不是循环依赖。
+>
+> **2026-10-08 终态实测修正**：上表部分名称是评审时的前瞻命名或近似 ——
+> `BookmarkController` / `CatalogController` / `MeteorShowerController` / `SessionToolController` /
+> `NavStarsController` / `ArchaeoLinesController` / `MosaicCameraController` / `PluginCommandController` /
+> `DockController` / `OverlayController` / `ObjectMediaController` 均无对应文件；
+> 这些 store（`BookmarkStore` / `MeteorStore` / `DockStore` / `CommandStore` / `NavStarsStore` /
+> `ArchaeoStore` / `MosaicStore` / `OverlayStore` / `ObjectMediaStore`）实际由宿主或其他 store 消费，
+> 不经 capability 控制器。按文件实测的 capability → state 边（2026-10-08，65 处 `import` 语句）如下：
+>
+> | capability 文件 | 持有的 store 引用 |
+> |---|---|
+> | AstroCalcController | AstroStore, EphemerisStore, WutStore, SearchStore |
+> | DetailConnectorController | ObjectDetailStore, InfoWindowStore |
+> | GuideController | GuideStore |
+> | LayerController | LayerStore, LayerViewStore, SceneryStore, ObjectDetailStore, PluginStore, ScriptStore, ViewSettingsStore |
+> | LocationController | LocationPickerStore, LocationStore, SessionToolStore |
+> | NebulaTextureController | NebulaTextureStore |
+> | ObjectInspectorMediaController | ObjectDetailStore, ObjectMediaStore |
+> | ObjectModelRenderer | InfoWindowStore, ObjectDetailStore, ObjectMediaStore |
+> | OcularController | ArchaeoStore, EquationOfTimeStore, MosaicStore, TelescopeStore |
+> | PluginFeatureController | AstroStore, PluginStore, SearchStore |
+> | PolarScopeController | PolarScopeStore |
+> | RecordingController | ToolsStore, ScriptStore |
+> | SatelliteController | SatelliteStore |
+> | ScriptPlaybackController | ToolsStore, ScriptStore |
+> | SearchController | CatalogStore, LanguageStore, SearchStore |
+> | SensorController | GyroStore, SessionToolStore |
+> | SettingsController | TimeSettingsStore |
+> | SkyCultureController | SkyCultureSettingsStore, SkyCultureViewStore |
+> | SkyCultureMakerController | SkyCultureMakerStore |
+> | SkyInputController | NightModeStore |
+> | SkyTextureStatusController | ToolsStore |
+> | StartupBridge | AstroStore, AudioStore, GyroStore, LanguageStore, LayerStore, LayerViewStore, NightModeStore, OverlayStore, PluginStore, ScriptStore, SkyCultureViewStore, TelescopeStore, ViewSettingsStore |
+> | TelescopeController | TelescopeStore |
+> | TimeController | DeltaTStore, TimeSettingsStore, TimeStore |
+> | ViewCoordinateController | OverlayStore |
+>
+> 注：本轮 §9 队列新增 `GuideController`（S6）与 `SettingsController`（S7）；`StartupBridge` 是启动服务
+>（非控制器），但也持有 store 引用。
+
+#### 9.4.2 Store 桥调用计数明细（`requestInteractive` 调用数，行锚定口径）
+
+| Store | 调用数 | 主要桥命令 |
+|---|---|---|
+| AstroStore | 15 | `getPlanetPositions`/`getEphemerisData`/`getTonightEvents`/`getAlmanac`/`getMoonPhase`/… |
+| ScriptStore | 8 | `playScript`/`stopScript`/`pauseScript`/`resumeScript`/`getVideoRecordingState`/… |
+| TimeSettingsStore | 8 | `getSimTime`/`setTimeRate`/`advanceTime`/`setJD`/`setDate`/… |
+| ObjectDetailStore | 4 | `getSelectedObjectInfo`/`getObjectInfo`/`getRTS`/… |
+| InfoWindowStore | 3 | `getSelectedObjectInfo`/`searchObject`/… |
+| SearchStore | 3 | `searchObject`/`listMatchingObjects`/`listObjects` |
+| BookmarkStore | 3 | `getBookmarks`/`addBookmark`/`deleteBookmark` |
+| CatalogStore | 0 | 无桥调用，但有 `setInterval` 600ms（下载状态轮询） |
+| LocationStore | 0 | 无桥调用，但有多条 `setTimeout` 链 |
+| EphemerisStore | 2 | `getEphemerisData`/… |
+| LayerStore | 2 | `setActionChecked`/… |
+| TelescopeStore | 3 | `getTelescopeControl`/`telescopeLx200GotoSelected`/… + `setTimeout` |
+| GuideStore | 1 | `getObjectSpokenText` + `setInterval`（导览步进）+ `start()`/`stop()` |
+| SatelliteStore | 1 | `getSatellites` + `setTimeout` 90ms |
+| 其余 33 store | 0–2 | 简单读写（`setConfigString`/`getState`/…） |
+
+> **2026-10-08 终态修正**：本轮 §9 P0 执行后，`AstroStore`（15→0）、`ScriptStore`（8→0）、`GuideStore`（1→0）、
+> `TimeSettingsStore`（8→0）的 `requestInteractive` 已随桥加载迁入各自控制器；`TelescopeStore` 的
+> live-position 持续轮询（`setTimeout` 链）亦迁入 `TelescopeController`（`loadOculars` 仍留 store）。
+> 上表为评审当时（2026-10-07）口径，保留以对照。
+
+---
+
+## 10. V1→V2 升级与 §9 边界问题的协同分析
+
+> **目的：** 评估 §7 V2 迁移能否优化 §9 发现的架构问题，以及拆分与 V2 的时序取舍。
+> **范围：** 只做分析，零代码改动，不选推荐方向。
+> **前提：** §7 已建立 V2 目标形态与迁移路径（A 阶段叶子+模型、B 阶段翻宿主）；
+> §9 已识别 P0–P4 五级问题。本节分析两者的交叉影响。
+> **实施状态（2026-10-08）：** §10.3 推荐的「先拆后翻」之「先拆」已完成（S1–S9，见
+> `ARKTS-PAGES-REFACTOR-PLAN.md` §16）——五域 store 已还原为纯数据、控制器持桥与定时器，正是
+> §10.2.1 的 V2 典型形态；V2 翻代（A/B/C 阶段）另立项。
+
+### 10.1 V2 对 §9 各问题的直接影响评估
+
+| 问题 | V2 是否触及根因 | 分析 |
+|---|---|---|
+| **P0 · Store 持有 CommandPort** | **否** | 桥调用是 IO 问题，非响应式问题。`@ObservedV2` + `@Trace` 不改变 store 是否应持有 `CommandPort`——V2 装饰器只影响"字段变更如何通知 UI"，不影响"谁应该调桥"。store 内桥调用在 V2 下依然存在，依然不可 mock、依然混合 IO 与数据逻辑。 |
+| **P1 · SettingsRows 跨域** | **否** | 文件组织问题，非响应式问题。V2 `@Param` 替代 `@Prop` 可简化共享组件的参数传递（1 个 model 对象替代 N 个 `@Prop` 快照），但不影响组件文件归属哪个目录。 |
+| **P2 · 跨域通用组件** | **否** | 同 P1，文件归属与 V2 无关。V2 `@Provider`/`@Consumer` 可减少 prop drilling，但不改变 import 关系。 |
+| **P3 · shell/ 广度 + 域间交叉** | **否** | 布局编排层的跨域组合，V2 无影响。 |
+| **P4 · 死 import / 归属** | **否** | 工程整洁问题，与响应式模型无关。 |
+
+**结论**：V2 对 §9 的五个问题均**不直接解决根因**。这些是架构/组织层面的问题，
+需要通过代码搬迁和职责重新划分来修复，而非响应式模型升级。
+
+### 10.2 V2 对 §9 问题的间接协同：拆分控制器的 V2 收益
+
+虽然 V2 不解决 §9 的根因，但**如果先做了 P0 拆分（store 内桥调用迁入控制器），
+则 V2 的收益会被放大**。反过来，如果不拆分就翻 V2，某些 V2 收益会被 store 内 IO 混合所稀释。
+
+#### 10.2.1 拆分后的 V2 典型形态
+
+```
+state/       @ObservedV2 class AstroModel {      // 纯数据，零 IO
+                @Trace planetPositions: PlanetPosition[]
+                @Trace ephemerisData: EphemerisData
+                @Computed get tonightEvents(): TonightEvent[]  // 派生缓存
+              }
+
+capability/  class AstroCalcController {         // 纯编排，持有桥
+                private port: CommandPort
+                private model: AstroModel         // 写入模型
+                loadPlanetPositions() {            // 桥调用
+                  this.port.requestInteractive('getPlanetPositions', ...)
+                    .then(data => { this.model.planetPositions = parse(data) })
+                }
+              }
+
+panels/      @ComponentV2 struct AstroPanel {     // 纯展示
+                @Param model: AstroModel           // 1 个 @Param 取代 N 个 @Prop
+                @Param controller: AstroCalcController  // 动作入口
+              }
+```
+
+#### 10.2.2 拆分对 V2 收益的放大点
+
+| # | V2 收益点 | 不拆分（现状 V2） | 拆分后 V2 | 放大机制 |
+|---|---|---|---|---|
+| 1 | `@Trace` 属性级刷新 | store 内桥调用写 `@Trace` 字段时，每次写入都触发 UI 通知——但桥回调内常连续写 N 个字段（如 AstroStore 收到星历包后写 `planetPositions`/`moonPhase`/`almanac` 等），N 次写入 = N 次重渲染 | 控制器收到桥回调后，一次性赋值 `model.planetPositions = ...`——只有**真正被 UI 读取的字段**才触发刷新，且 `@Monitor` 可合并同帧多次写入 | 拆分使 store 变成纯数据，控制器控制写入节奏，`@Trace` 的属性级粒度才真正生效 |
+| 2 | `@Computed` 派生缓存 | store 内桥方法（`load*`）和 `@Computed` 混在一起——`@Computed` 依赖的字段可能被桥回调高频更新，缓存频繁失效 | 控制器负责桥调用与写入时机，`@Computed` 只依赖纯数据字段，缓存命中的条件由控制器控制 | 拆分后 `@Computed` 的依赖图更清晰，缓存失效频率降低 |
+| 3 | `@Monitor` 写入合并 | store 内桥回调连续写 N 个字段 → V1 下 N 次重渲染，V2 下 `@Monitor` 可感知但仍然 N 次通知 | 控制器可在桥回调完成后再统一写入模型，`@Monitor` 一次感知 | 拆分使写入节奏可控，`@Monitor` 的合并能力才有用武之地 |
+| 4 | 可单测性 | store 内桥调用不可 mock（需真桥），V2 不改变这一点 | 控制器可注入 mock 桥，store 纯数据可独立验证 `@Computed`/`@Trace` | 拆分 + V2 = 可单测的纯数据模型 + 可 mock 的控制器 |
+
+#### 10.2.3 不拆分就翻 V2 的风险
+
+| 风险 | 说明 |
+|---|---|
+| `@Trace` 逐帧通知 | 如果 store 内有定时器驱动的桥轮询（如 ScriptStore 的 450ms 视频状态轮询、CatalogStore 的 600ms 下载状态轮询），每次轮询结果写 `@Trace` 字段都触发 UI 通知——与 V1 的 `@State` 重渲染等价，V2 的属性级优化被绕过 |
+| `@Computed` 频繁失效 | 桥回调写入依赖字段 → `@Computed` 缓存每次都失效 → 退化为无缓存的普通 getter |
+| 混合逻辑的 `@Monitor` | store 内桥调用的错误处理与 `@Monitor` 的数据响应逻辑混合，难以区分"桥调用失败的回退"与"数据变更的响应" |
+| 逐帧字段护栏 | §2.12-9 的逐帧字段在 V2 下仍须排除 `@Trace`（每帧写 `@Trace` 同样逐帧发通知）。store 内 IO 混合使"哪些字段不该加 `@Trace`"的判断更困难 |
+
+### 10.3 时序取舍：先拆后翻 vs 先翻后拆 vs 同步
+
+#### 10.3.1 三种时序的利弊对比
+
+| 维度 | A) 先拆后翻 | B) 先翻后拆 | C) 同步（拆+翻同批） |
+|---|---|---|---|
+| **依赖关系** | 拆分不依赖 V2，V2 不依赖拆分，两者独立可行 | 同左 | 同左 |
+| **V2 收益最大化** | ✅ 拆分后的纯数据模型在 V2 下收益最大（§10.2.2 四个放大点全部生效） | ⚠️ V2 收益被 store 内 IO 混合稀释（§10.2.3 四个风险） | ✅ 同 A |
+| **拆分的 V1 安全性** | ✅ 拆分在 V1 下做，现有 22 个控制器已验证过"控制器持有 store"模式 | ✅ 同 A | ⚠️ 同时改响应式模型 + 职责归属，变更面大 |
+| **风险控制** | ✅ 两步独立验证：先验证拆分（V1 build + 契约）、再验证 V2（A 阶段试点） | ⚠️ V2 先行时 store 内 IO 混合可能导致 V2 性能收益不达预期，需回溯排查 | ⚠️ 同批变更面大，出错时难定位是拆分问题还是 V2 问题 |
+| **回滚粒度** | ✅ 拆分回滚与 V2 回滚独立 | ⚠️ V2 翻代后若发现 store 内 IO 问题，需再拆分——但此时代码已是 V2 形态，拆分变更量更大 | ⚠️ 同批回滚，粒度粗 |
+| **总工作量** | 中（拆分 ~35 方法搬迁 + V2 A 阶段按域翻） | 中偏高（V2 A 阶段 + 发现 IO 问题后追加拆分，拆分在 V2 代码上做更复杂） | 高（同批变更量大，测试覆盖要求高） |
+| **与 §7 路径的兼容** | ✅ §7 A 阶段"V2 叶子 + V2 模型"天然契合拆分后的纯数据模型 | ⚠️ §7 A 阶段直接在现有 store 上加 `@ObservedV2`/`@Trace`，store 内桥调用导致 `@Trace` 逐帧通知 | ⚠️ 偏离 §7 "逐模块翻 V2"的渐进路径 |
+
+#### 10.3.2 依赖关系图
+
+```
+  拆分（P0）              V2 A 阶段
+  store内桥调用            @ObservedV2 模型
+  迁入控制器              + @ComponentV2 叶子
+       │                       │
+       │    ┌──────────────────┘
+       │    │  V2 收益被拆分放大
+       ▼    ▼
+  ┌──────────────────┐
+  │  纯数据模型 V2    │  ← 拆分 + V2 的终态
+  │  + 独立控制器     │
+  │  + 属性级刷新     │
+  └──────────────────┘
+
+  但两者无硬依赖：
+  - 拆分可在 V1 下独立完成（控制器持有 store，V1 已验证）
+  - V2 可在未拆分的 store 上独立进行（但有 §10.2.3 风险）
+  - 协同有增量收益，但不协同也不阻塞
+```
+
+### 10.4 P1–P4 与 V2 的协同评估
+
+| 问题 | V2 协同 | 分析 |
+|---|---|---|
+| **P1 · SettingsRows 跨域** | 弱协同 | V2 `@Param` 可简化共享组件参数传递（1 个 model 替代 N 个 `@Prop`），但不影响文件归属。无论选哪种归属策略，V2 翻代时机与 P1 搬迁时机独立。 |
+| **P2 · 跨域通用组件** | 弱协同 | 同 P1。V2 `@Provider`/`@Consumer` 可减少 prop drilling，但不改 import 关系。组件搬迁可在 V1 下完成，V2 翻代时自然受益。 |
+| **P3 · shell/ 广度** | 无协同 | 布局编排问题，V2 无影响。 |
+| **P4 · 死 import / 归属** | 无协同 | 工程整洁问题，与 V2 无关。 |
+
+**结论**：P1–P4 的搬迁与 V2 翻代**无时序依赖**，可独立安排。
+建议在 V2 A 阶段之前完成 P1–P2 搬迁（减少 V2 翻代时的 import 变更量），
+但非强制。
+
+### 10.5 综合分析总结
+
+1. **V2 不解决 §9 的根因**：五个问题均为架构/组织层面，需代码搬迁修复，
+   非响应式模型升级所能覆盖。
+
+2. **P0 拆分与 V2 有强协同**：拆分后的纯 `@ObservedV2` 数据模型 + 独立控制器
+   是 V2 的典型形态，四个放大点（属性级刷新生效、`@Computed` 缓存命中、
+   `@Monitor` 写入合并、可单测性）全部依赖拆分才能充分实现。
+
+3. **不拆分就翻 V2 有风险**：store 内 IO 混合会导致 `@Trace` 逐帧通知、
+   `@Computed` 频繁失效、`@Monitor` 逻辑混合、逐帧字段护栏判断困难。
+
+4. **P1–P4 与 V2 无强协同**：文件组织问题与响应式模型无关，搬迁时机独立。
+
+5. **时序建议**：基于分析，三种时序各有适用场景——
+   - 追求 V2 收益最大化且可接受拆分工作量 → 先拆后翻
+   - 优先验证 V2 可行性、拆分留后 → 先翻后拆（但需接受 V2 收益可能不达预期）
+   - 人力充足且变更控制能力强 → 同步（风险最高但最快到达终态）
 
 ## 附录：本文数字的复现命令
 
