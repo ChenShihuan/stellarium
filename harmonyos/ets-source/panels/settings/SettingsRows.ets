@@ -8,8 +8,6 @@ import { UI_RADIUS_CONTROL, UI_OPTION_ANIMATION_MS } from '../../common/ui/UiTok
 // 因此把"当前值/是否可点/夜视三色"由宿主算好后以 @Prop 传入、把写回动作以回调注入，
 // 点按即可实时刷新。
 // 命名说明：`EphemerisRow` 已是 `pages/StellariumTypes` 里的数据接口名，故组件取名 `EphemerisToggleRow`。
-// 历史：`NavStarsToggleRow` / `ArchaeoToggleRow` / `MosaicCameraMetric` 三个非设置域组件
-// 已按 STATE-REVIEW §9 P1 迁到 `common/ui/`（2026-10-08），本文件不再充当跨域共享库。
 
 // 行星历表一行（标签 + 已安装状态 + 启用开关）。
 @Component

@@ -1,5 +1,5 @@
 // 天文计算（astro）行为控制器：负责 RTS/星历/高度曲线/可观测日历/食相/月相/季节等
-// 全部桥加载（load* / reload* / mark* / cancel* / loadAstroTab，§9 P0 自 AstroStore 迁入）、
+// 全部桥加载（load* / reload* / mark* / cancel* / loadAstroTab）、
 // 计算面板的日期与行跳转、目标选择器路由、标签切换动画编排、上下文轮询、行星位置刷新、
 // 大气参数写回与当前页 CSV 导出。
 // 依赖 CommandPort、FileExportPort（picker/fileIo）、AstroStore / EphemerisStore / WutStore /
@@ -40,7 +40,7 @@ export interface AstroCalcHostHooks extends BehaviorHostHooks {
   setPanel(panel: string): void
   // 大气参数回包写入 AtmosphereStore（保留宿主实现，与 TimeStore 共用）。
   applyAtmosphereResponse(result: StellariumBridgeResponse): void
-  // 桥加载器（自 AstroStore 迁入）不能直接读取的宿主量：选中天体与日心位置几何布局。
+  // 桥加载器不能直接读取的宿主量：选中天体与日心位置几何布局。
   hasSelectedObject(): boolean
   selectedObjectName(): string
   hecLayoutPositions(positions: Array<HeliocentricPosition>): Array<HeliocentricPosition>
@@ -62,7 +62,7 @@ export class AstroCalcController {
   private rtsTargetPickerActive: boolean = false
   private ephemerisTargetPickerActive: boolean = false
   private astroContextTimer: number = 0
-  // —— 桥加载器的请求序号 / 代际（随 load* 方法自 AstroStore 迁入，避免跨对象共享）——
+  // —— 桥加载器的请求序号 / 代际 ——
   private rtsRequestSequence: number = 0
   private rtsCalendarLoadSequence: number = 0
   private ephemerisLoadSequence: number = 0
@@ -483,7 +483,7 @@ export class AstroCalcController {
     }
   }
 
-  // ===== 桥加载器（自 AstroStore 迁入，§9 P0）=====
+  // ===== 桥加载器 =====
   private hasSelected(): boolean {
     return this.hooks.hasSelectedObject()
   }

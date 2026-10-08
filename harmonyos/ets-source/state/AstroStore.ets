@@ -1,6 +1,6 @@
 // 天文计算面板（astro）域纯数据 store：面板子标签/分组、各计算页回包数据与请求态、日期起始模型等。
-// 面板 AstroPanel.ets 以 @ObjectLink 观察本 store；桥加载 / 请求序号已移交 AstroCalcController
-// （§9 P0），本 store 只保留数据与纯派生；跨 store（Wut）与宿主格式化助手经 AstroHostHooks 注入。
+// 面板 AstroPanel.ets 以 @ObjectLink 观察本 store；本 store 只保留数据与纯派生，桥加载与请求序号在
+// AstroCalcController；跨 store（Wut）与宿主格式化助手经 AstroHostHooks 注入。
 // 高频/逐帧或跨域字段（夜视三色、objectDetailStore、wutStore、Scroller）不入本 store。
 import { TonightEvents, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, PlanetPosition, HeliocentricPosition, CelestialPosition, WutTarget } from '../pages/StellariumTypes'
 import { AstroCsvExport } from '../pages/MainWindowModels'
@@ -8,7 +8,7 @@ import { graphModeLabel, graphStartOptionLabel, hourOffsetLabel, planetPairBodyN
 import { zhNameOf, planetZh, celestialTitle } from '../common/derive/labels'
 import { csvCell } from '../common/derive/skycult'
 
-// 本域辅助端口接口：store 不 import NAPI/UI，跨 store 与宿主逻辑经具名回调注入。
+// 本域 hooks 接口：store 不 import NAPI/UI，跨 store 与宿主逻辑经具名回调注入。
 export interface AstroHostHooks {
   // 跨域读取（objectDetailStore：选中天体）
   hasSelectedObject(): boolean
@@ -174,7 +174,7 @@ export class AstroStore {
   astroCalcSnapshot: string = ''
   tonightAstro: TonightEvents | null = null
 
-  // 宿主只在 aboutToAppear 注入纯跨度读取 / 格式化 hooks（桥与请求序号已移交 AstroCalcController）。
+  // 宿主在 aboutToAppear 注入纯跨域读取 / 格式化 hooks；桥与请求序号在 AstroCalcController。
   private hooks: AstroHostHooks | null = null
 
   attachHooks(hooks: AstroHostHooks): void {

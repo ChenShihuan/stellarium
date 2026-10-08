@@ -254,7 +254,7 @@ export class ScriptPlaybackController {
     }
   }
 
-  // ── 脚本 / 录制 / 视频状态桥加载与原生脚本播放（自 ScriptStore 迁入；数据源前缀改为 scriptStore）──
+  // ── 脚本 / 录制 / 视频状态桥加载与原生脚本播放 ──
 
   // 脚本面板「已保存录制」列表：桥拉取录制条目。
   loadRecordings(): void {

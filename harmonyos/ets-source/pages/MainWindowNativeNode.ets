@@ -1593,8 +1593,8 @@ export struct WindowNativeNode {
       setSessionExportText: (text: string): void => { this.tools.sessionExportText = text },
       canUseDistributed: (): boolean => this.canUseDistributed
     })
-    // 导览域的引擎/定时器/桥已迁入 GuideController（§9 P0）；跨域/UI/引擎动作经
-    // guideCtl() 的具名 hooks 注入（state/GuideStore 现为纯状态）。
+    // 导览域的引擎/定时器/桥在 GuideController；跨域/UI/引擎动作经
+    // guideCtl() 的具名 hooks 注入（state/GuideStore 为纯状态）。
     this.guideCtl()
     this.skyCultureSettingsStore.attachPort(hostPort, () => {})
     this.objectDetailStore.attachPort(hostPort, () => {})
@@ -1666,8 +1666,8 @@ export struct WindowNativeNode {
       applyLocation: (name: string, lat: number, lon: number, alt: number, planet: string): void => { this.locationCtl().setLocation(name, lat, lon, alt, planet) },
       setPickerMode: (mode: string): void => { this.locationPickerStore.locationPickMode = mode }
     })
-    // astro 域桥加载 / 请求序号已移交 astroCalcCtl()（§9 P0）；store 只保留数据与纯派生，
-    // 故不再 attachPort，只注入纯跨度读取 / 格式化 hooks。
+    // astro 域桥加载 / 请求序号在 astroCalcCtl()；store 只保留数据与纯派生，
+    // 故不 attachPort，只注入纯跨域读取 / 格式化 hooks。
     this.astroStore.attachHooks({
       hasSelectedObject: () => this.objectDetailStore.hasSelectedObject(),
       selectedObjectName: () => this.objectDetailStore.selectedName,
@@ -1709,7 +1709,7 @@ export struct WindowNativeNode {
       syncNightModeFromEngine: (engineNight: boolean): void => this.nightModeStore.syncNightModeFromEngine(engineNight),
       applyAtmosphereResponse: (response: StellariumBridgeResponse): void => this.atmosphereStore.applyAtmosphereResponse(response)
     })
-    // 设置「配置回读」加载已迁入 settingsCtl()（§9 P0-4，2026-10-08）：TimeSettingsStore 现为纯数据，
+    // 设置「配置回读」加载在 settingsCtl()：TimeSettingsStore 为纯数据，
     // 8 连发桥读归 SettingsController；跨域 setter 作为 TimeSettingsHostHooks 在该控制器惰性构造处注入。
     // 航海星 / 流星雨 / 搜索三域分别自持加载器（loadNavStars / loadMeteorShowers /
     // loadConstellationNavigation）与其配对写方；三者复用同一 HostCommandPort 实例，消费方均为
@@ -2784,7 +2784,7 @@ export struct WindowNativeNode {
   }
 
   // LX200 望远镜编辑器/控制命令控制器惰性构造。桥经 HostCommandPort；状态写 TelescopeStore；
-  // live-position 定时器簇由控制器自持（§9 P0-5）；「是否应刷新实时位置」谓词经 hooks 注入。
+  // live-position 定时器簇由控制器自持；「是否应刷新实时位置」谓词经 hooks 注入。
   private telescopeCtl(): TelescopeController {
     if (this.telescopeControllerImpl === null) {
       const hooks: TelescopeHostHooks = {
@@ -2953,9 +2953,9 @@ export struct WindowNativeNode {
     return this.guideControllerImpl
   }
 
-  // 设置「配置回读」控制器惰性构造（§9 P0-4，2026-10-08；加载器自 TimeSettingsStore 迁入）。
-  // 桥经 HostCommandPort；本域字段写 TimeSettingsStore；跨域字段经 TimeSettingsHostHooks 具名 setter
-  // 写入各域 store；无 publish* 发布点，故无 onChanged。控制器不 import UI/NAPI。
+  // 设置「配置回读」控制器惰性构造：桥经 HostCommandPort；本域字段写 TimeSettingsStore；
+  // 跨域字段经 TimeSettingsHostHooks 具名 setter 写入各域 store；无 publish* 发布点，故无 onChanged。
+  // 控制器不 import UI/NAPI。
   private settingsCtl(): SettingsController {
     if (this.settingsControllerImpl === null) {
       const hooks: TimeSettingsHostHooks = {
@@ -4276,11 +4276,6 @@ export struct WindowNativeNode {
   }
 
 // ===== 几何与布局 =====
-
-  // stopTelescopeLivePosition / scheduleTelescopeLivePosition / refreshTelescopeLivePosition /
-  // syncTelescopeLivePosition / setTelescopeLivePosition（及其 timer / pending / requestId 三字段）
-  // 已迁入 capability/TelescopeController.ets（§9 P0-5）；宿主保留 shouldRefreshTelescopePosition 谓词，
-  // 经 TelescopeHostHooks 在 telescopeCtl() 构造时注入。
 
   // （定时器自持；面板路由 / refreshState / flashHint 经 BehaviorHostHooks，叠层几何与桥回包 flags
   // 抽取经 PolarScopeHostHooks）。宿主保留叠层几何 polarScopeTopInset / polarScopeControlWidth /
