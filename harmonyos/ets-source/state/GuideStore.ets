@@ -11,8 +11,7 @@ import { GuideState } from '../common/derive/AstronomyGuide'
 //
 // 约束：guideState 与 speechStatus 只做整体赋值（含 animateTo 内赋值），不得原地变更字段。
 //
-// 导览引擎、tick 定时器与桥调用已移交 capability/GuideController（2026-10-08，STATE-REVIEW §9 P0）；
-// 本 store 保持纯状态，不再 import UI/NAPI/桥。
+// 导览引擎、tick 定时器与桥调用在 capability/GuideController；本 store 保持纯状态，不 import UI/NAPI/桥。
 @Observed
 export class GuideStore {
   guideState: GuideState = { active: false, phase: 'idle', guideId: '', index: 0, count: 0, automatic: false, remaining: 0, error: '' }

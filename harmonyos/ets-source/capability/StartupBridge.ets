@@ -47,7 +47,7 @@ export interface StartupHooks {
   restoreObserverLocation(): void
   // 脚本资源元数据表写入（ScriptPlaybackController 持有；启动桥 getScriptList 回包后回注）。
   setScriptMetadata(raw: Object | undefined): void
-  // 配置回读加载（已迁入 capability/SettingsController；本服务不持有该控制器，经此 hook 触发）。
+  // 配置回读加载由 capability/SettingsController 提供；本服务不持有该控制器，经此 hook 触发。
   reloadConfigurationSettings(): void
 }
 

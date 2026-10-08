@@ -5,11 +5,6 @@
 // 不 import NAPI/UI：桥经 CommandPort；状态整体写回 TelescopeStore
 //（面板经 @ObjectLink 消费）。各方法均不调 flashHint / refreshState；仅 live-position
 // 的「是否应刷新」谓词经 TelescopeHostHooks 由宿主回注（控制器不触碰 UI 生命周期）。
-//
-// 迁出自 state/TelescopeStore.ets（§9 P0-5，2026-10-08）：方法体逐字等价，仅把数据源前缀
-// 从 this.<字段> 改为 this.telescopeStore.<字段>，并把定时器句柄/标志/序号与 appliers
-//（applyTelescopeProfile/Profiles/EndpointStatus）整体移入本控制器；重试延迟
-// 1000/1800/500/100(默认)ms 与 reqId 作废语义、状态串逐字保留。
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import {

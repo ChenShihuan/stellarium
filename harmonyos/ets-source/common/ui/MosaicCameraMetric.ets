@@ -1,9 +1,6 @@
 import { I18n } from '../../pages/I18n'
 
-// 镶嵌相机角度指标（赤经 / 赤纬 / 旋转）。
-//
-// 唯一消费方是 `panels/panels/MosaicCameraPanel.ets`，原先住在 `panels/settings/SettingsRows.ets`
-// 里属名称误导；2026-10-08 按 STATE-REVIEW §9 P1 迁到 `common/ui/`。
+// 镶嵌相机角度指标（赤经 / 赤纬 / 旋转）：标签 + 角度读数。
 @Component
 export struct MosaicCameraMetric {
   @Prop labelKey: string

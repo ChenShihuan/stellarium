@@ -1,16 +1,13 @@
 // 「交互导览 / 语音播报」行为控制器：导览播放器（GuidePlayer）会话、导览状态回包、请求序号
 // 与 250ms tick 定时器、面板/陀螺仪/星图惯性等跨域收口动作。
 //
-// 依赖 GuideStore（纯状态：guideState / speechStatus，控制器只整体赋值）、CommandPort
-// （getScriptStatus / getScriptCaptions 之外的导览桥经 requestInteractive）与 GuideControllerHooks
+// 依赖 GuideStore（纯状态：guideState / speechStatus，控制器只整体赋值）、CommandPort（导览桥经
+// requestInteractive）与 GuideControllerHooks
 // 回注的宿主行为（flashHint / publishGuideState / 会话忙判定 / 面板与陀螺仪控制 / 后台任务互斥 /
 // 刷新与重载 / animateTo）。控制器不 import UI 上下文，animateTo 由 hooks 注入。
 //
 // tick 定时器（250ms）自持 startGuideTimer/stopGuideTimer，由宿主生命周期收口
 // （aboutToAppear 构造 / 导览结束回包 / aboutToDisappear）。
-//
-// 迁出自 state/GuideStore.ets（2026-10-08，STATE-REVIEW §9 P0）；方法体逐字等价，仅把数据源
-// 前缀从 this.<字段> 改为 this.store.<字段>，并原样保留比较边界、分支顺序、错误文案与 tick(0.25)。
 import { GuidePlayer, GuideState, GuideResult, AstronomyGuide, ASTRONOMY_GUIDES } from '../common/derive/AstronomyGuide'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { I18n } from '../pages/I18n'

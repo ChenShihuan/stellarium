@@ -3,7 +3,6 @@ import { UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 // 星图/图表区域的两个引导块。
 //
 // 都是纯展示 + 一个"打开目标选择器"回调：收夜视三色与回调，错误文案由 @Prop 驱动实时刷新。
-// 注：通用加载行 `GraphLoadingRow` 已按 STATE-REVIEW §9 P2 迁至 `common/ui/GraphLoadingRow.ets`（2026-10-08）。
 
 // 升中天落：未选天体时的引导。
 @Component

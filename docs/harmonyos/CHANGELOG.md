@@ -1,3 +1,10 @@
+## [2026-10-08] DevEco Code - §9 边界优化：注释整理到终态
+
+- **依据（用户要求）**：S1–S8 落地后新编辑文件的注释仍带迁移脚手架（"迁自 / 迁入"、"§9 P0"、"2026-10-08"、"STATE-REVIEW"、"逐字等价"），且个别描述已过期（`GuideController` 头误把 `getScriptStatus` / `getScriptCaptions` 列为导览桥；`AstroStore` 称 hooks 接口为"端口"；`GraphGuides` 仍写"三个引导块"）。
+- **改动**：把 18 个 `.ets` 的头 / 行内注释统一为**终态描述**——只讲"当前由谁持有桥与定时器、数据流向哪"，删除迁移日期与跟踪号，修正过期措辞；同步删除 `SettingsController` 遗留且未使用的 `seq` 占位字段。**无任何行为 / 接口 / 契约变更**（除删一个死私有字段）。
+- **涉及**：`capability/{AstroCalcController,ScriptPlaybackController,GuideController,SettingsController,TelescopeController,StartupBridge}`、`state/{AstroStore,GuideStore,TimeSettingsStore,TelescopeStore}`、`common/ui/{NavStarsToggleRow,ArchaeoToggleRow,MosaicCameraMetric,GraphLoadingRow,SkyCultureDescriptionBlockView}`、`panels/settings/SettingsRows`、`panels/astro/GraphGuides`、`pages/MainWindowNativeNode`。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 18 文件 0 error；`BUILD SUCCESSFUL in 44s`；契约 intact（**34 面板 / 29 静态 id / 18 动态前缀 / 50 锚点**）。真机未涉及（纯注释 + 删死字段）。
+
 ## [2026-10-08] DevEco Code - 重构 §9 边界优化 S9：队列收口（计划文档 §16 + 登记例外）
 
 - **依据**：STATE-REVIEW §9 三层边界优化队列（S1–S8 已逐片提交，本节为 S9 文档收口）。

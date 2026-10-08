@@ -6,9 +6,8 @@ import { CommandPort } from '../bridge/CommandPort'
 // 「望远镜控制」/「目镜（Oculars）」两面板的状态簇：持有目镜插件配置簇、
 // LX200 望远镜控制簇、「赤道仪」开关 equatorialMount。
 // 消费方（望远镜控制面板 / 目镜面板 / OcularSelector 等）以 @ObjectLink 观察，
-// 字段赋值即刷新。自持 CommandPort、请求序号 seq 供 loadOculars 使用；
-// live-position 定时器链与 loadTelescopeControlStatus 已迁入 capability/TelescopeController.ets
-//（§9 P0-5，2026-10-08）。只放数据与纯查表计算，不 import UI / NAPI。
+// 字段赋值即刷新。自持 CommandPort、请求序号 seq 供 loadOculars 使用；live-position 定时器链与
+// loadTelescopeControlStatus 在 capability/TelescopeController。只放数据与纯查表计算，不 import UI / NAPI。
 @Observed
 export class TelescopeStore {
   // —— 目镜（Oculars）——

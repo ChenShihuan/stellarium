@@ -1,13 +1,11 @@
-// 设置「配置回读」控制器（§9 P0-4，2026-10-08）：设置面板打开 / 保存视角后从引擎回读配置，
-// 8 连发 requestInteractive（日期格式 / 时间格式 / 距离单位 / 抖动模式 / 导航 / 星历 / 信息 / 时间设置）。
+// 设置「配置回读」控制器：设置面板打开 / 保存视角后从引擎回读配置，8 连发 requestInteractive
+// （日期格式 / 时间格式 / 距离单位 / 抖动模式 / 导航 / 星历 / 信息 / 时间设置）。
 //
-// 迁出自 state/TimeSettingsStore.ets（STATE-REVIEW §9 P0）；方法体逐字等价，仅把数据源前缀从
-// this.<字段> 改为 this.store.<字段>（本域 configDateFormat / configTimeFormat），其余跨域字段经
-// TimeSettingsHostHooks 具名 setter 写入（控制器不持有他域 store）。
+// 依赖 CommandPort、TimeSettingsStore（本域 configDateFormat / configTimeFormat）与
+// TimeSettingsHostHooks 具名 setter（其余跨域字段；控制器不持有他域 store）。
 //
-// 边界：本控制器仅为「配置回读」IO 加载器，不承载跨域设置动作分派 —— 旧 SettingsController 的
-// 中转层职责已于 M 轨道解散（见 STATE-REVIEW §3.4），跨域动作仍留各 store / 宿主。不 import UI/NAPI，
-// 桥经 CommandPort。
+// 边界：本控制器仅为「配置回读」IO 加载器，不承载跨域设置动作分派 —— 跨域动作仍留各 store / 宿主。
+// 不 import UI/NAPI，桥经 CommandPort。
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 import { TimeSettingsStore } from '../state/TimeSettingsStore'
@@ -44,8 +42,6 @@ export class SettingsController {
   private port: CommandPort | null = null
   private store: TimeSettingsStore
   private hooks: TimeSettingsHostHooks | null = null
-  // 本加载器不使用请求序号（交互读，无并发抑制需求）；预留以统一各控制器的桥注入约定。
-  private seq: number = 0
 
   constructor(port: CommandPort, store: TimeSettingsStore, hooks: TimeSettingsHostHooks) {
     this.port = port

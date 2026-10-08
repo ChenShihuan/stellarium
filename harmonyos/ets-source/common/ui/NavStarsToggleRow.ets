@@ -1,10 +1,6 @@
 import { UI_RADIUS_CONTROL } from './UiTokens'
 
-// 导航星插件设置开关行。
-//
-// 与 `ArchaeoToggleRow` / `MosaicCameraMetric` 一样，原先住在 `panels/settings/SettingsRows.ets`
-// 里但并非设置面板专用（唯一消费方是 `panels/panels/NavStarsPanel.ets`），
-// 2026-10-08 按 STATE-REVIEW §9 P1 迁到 `common/ui/`（§4.2-4「新通用件统一进 common/ui/」）。
+// 导航星插件设置开关行（标签 + 开关，可禁用）。
 @Component
 export struct NavStarsToggleRow {
   @Prop label: ResourceStr

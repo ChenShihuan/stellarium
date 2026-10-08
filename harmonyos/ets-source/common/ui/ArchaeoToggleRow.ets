@@ -1,9 +1,6 @@
 import { UI_RADIUS_CONTROL } from './UiTokens'
 
-// 考古线设置开关行。
-//
-// 唯一消费方是 `panels/panels/ArchaeoLinesPanel.ets`，原先住在 `panels/settings/SettingsRows.ets`
-// 里属名称误导；2026-10-08 按 STATE-REVIEW §9 P1 迁到 `common/ui/`。
+// 考古线设置开关行（标签 + 开关，选中态带底色/描边强调）。
 @Component
 export struct ArchaeoToggleRow {
   @Prop label: ResourceStr
