@@ -2,12 +2,14 @@ import { I18n } from '../../pages/I18n'
 import { SettingsChoiceButton } from '../../common/ui/SettingsChoiceButton'
 import { UI_RADIUS_CONTROL, UI_OPTION_ANIMATION_MS } from '../../common/ui/UiTokens'
 
-// 本组件文件：设置面板（"更多 > 设置"）里的各类行 / 按钮。
+// 本组件文件：设置面板（"更多 > 设置"）里的各类行 / 按钮 —— 设置域专用。
 //
-// 这些行都读宿主状态（信息模式、掩码、导航开关、导航星设置、考古线设置、镶嵌相机角度），
+// 这些行都读宿主状态（信息模式、掩码、导航开关、行星历表启用），
 // 因此把"当前值/是否可点/夜视三色"由宿主算好后以 @Prop 传入、把写回动作以回调注入，
 // 点按即可实时刷新。
 // 命名说明：`EphemerisRow` 已是 `pages/StellariumTypes` 里的数据接口名，故组件取名 `EphemerisToggleRow`。
+// 历史：`NavStarsToggleRow` / `ArchaeoToggleRow` / `MosaicCameraMetric` 三个非设置域组件
+// 已按 STATE-REVIEW §9 P1 迁到 `common/ui/`（2026-10-08），本文件不再充当跨域共享库。
 
 // 行星历表一行（标签 + 已安装状态 + 启用开关）。
 @Component
@@ -118,62 +120,3 @@ export struct NavigationSwitchRow {
   }
 }
 
-// 导航星插件设置开关行。
-@Component
-export struct NavStarsToggleRow {
-  @Prop label: ResourceStr
-  @Prop isOn: boolean
-  @Prop canToggle: boolean
-  @Prop textColor: string
-  @Prop panelColor: string
-  onToggle: (value: boolean) => void = () => {}
-
-  build() {
-    Row() {
-      Text(this.label).fontSize(12).fontColor(this.textColor).layoutWeight(1).maxLines(2)
-      Toggle({ type: ToggleType.Switch, isOn: this.isOn })
-        .enabled(this.canToggle)
-        .onChange((value: boolean) => { this.onToggle(value) })
-    }.width('100%').padding({ left: 10, right: 10 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
-  }
-}
-
-// 考古线设置开关行。
-@Component
-export struct ArchaeoToggleRow {
-  @Prop label: ResourceStr
-  @Prop isOn: boolean
-  @Prop canToggle: boolean
-  @Prop textColor: string
-  @Prop panelColor: string
-  @Prop borderColorValue: string
-  onToggle: (value: boolean) => void = () => {}
-
-  build() {
-    Row() {
-      Text(this.label).fontSize(12).fontColor(this.textColor).layoutWeight(1).maxLines(2)
-      Toggle({ type: ToggleType.Switch, isOn: this.isOn })
-        .enabled(this.canToggle)
-        .onChange((v: boolean) => { this.onToggle(v) })
-    }.width('100%').padding({ left: 10, right: 10, top: 5, bottom: 5 })
-      .backgroundColor(this.isOn ? 'rgba(107,163,214,0.12)' : this.panelColor)
-      .border({ width: 1, color: this.isOn ? 'rgba(107,163,214,0.18)' : this.borderColorValue })
-      .borderRadius(UI_RADIUS_CONTROL)
-  }
-}
-
-// 镶嵌相机角度指标（赤经 / 赤纬 / 旋转）。
-@Component
-export struct MosaicCameraMetric {
-  @Prop labelKey: string
-  @Prop value: number
-  @Prop subColor: string
-  @Prop textColor: string
-
-  build() {
-    Column({ space: 4 }) {
-      Text(I18n.t(this.labelKey)).fontSize(11).fontColor(this.subColor)
-      Text(this.value.toFixed(2) + '°').fontSize(14).fontColor(this.textColor)
-    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-  }
-}
