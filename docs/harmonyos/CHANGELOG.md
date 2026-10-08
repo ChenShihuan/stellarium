@@ -1,3 +1,10 @@
+## [2026-10-08] DevEco Code - 重构 §9 边界优化 S1：清理宿主死 import
+
+- **依据**：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §9 P4a（宿主死 import）。本轮按 §9 制定「三层边界优化」计划（阈值拆分 P0 + P1/P2/P4），S1 是最小、零风险的首片。
+- **改动**：删除 `pages/MainWindowNativeNode.ets` 三行未被引用的 import —— `LayerSwitchRow`（L111，仅剩一处注释提及）、`GraphLoadingRow`/`RtsSelectionGuide`/`GraphSelectionGuide`（L128）、`SkyCultureDescriptionBlockView`（L143）。五个符号在宿主全文仅出现于 import 本身（`grep` 复核），删除后宿主 **−3 行**。
+- **不做**：`TimeWheelController`（`state/`）、`SpeechService`（`common/`）维持冻结（§9.4 P4b/P4c 判定合理），本片不搬。
+- **验证**：`check-ohos-refactor-slice` 通过；`arkts_check` 0 error；`BUILD SUCCESSFUL in 31s`；UI 契约 intact（**34 面板 / 29 静态 id / 18 动态前缀 / 50 锚点**）。真机未走查（无可用设备：`devecocli device list` 无活动设备、WiFi `hdc tconn 192.168.3.95:36717` 连接失败）；本片仅删死 import，零运行期影响。
+
 ## [2026-10-07] DevEco Code - 修性能：选中天体后星等不再比名称晚一族拉
 
 - **依据（用户反馈）**：点星选中后，名称立刻出现，星等 / 距离要等一大截才填上。
