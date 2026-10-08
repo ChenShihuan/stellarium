@@ -1966,3 +1966,53 @@ A/B 已为"桥"建立 `CommandPort`；剩余子系统依赖**非桥 NAPI**，需
 
 **M 轨道收尾结论（2026-10-06，M7 后；7/7 全清）**：STATE-REVIEW §11 的 **M 轨道**（渲染管线 / 纯计算 / 类型模块从 `pages/` 归位）**7 片全部完成** —— M1（DetailModel 渲染管线 → `capability/` + `common/derive/`）、M2（位置参考数据三文件 → `common/location/`）、M3（`AstronomyGuide` → `common/derive/`、`AudioEngine` → `capability/`）、M6（`MediaPort` 接口隔离）、M4（扩展域模型 → `common/types/`，barrel 兜底）、M5（核心桥类型 → `common/types/`，barrel 兜底）、M7（国际化中心 → `capability/I18n.ets`，barrel 兜底；NAPI 判定见上）。**`pages/` 现仅余页面壳**（`ApplicationRoot` / `PrivacyBootstrap` / `StartupSky` / `StartupStarGeometry.ts` / `MainWindowNativeNode` / `FloatWindowNativeNode` / `SubWindowNativeNode` / `UiExtensionNativeNode`）**与 3 个一行式 barrel**（`pages/StellariumTypes.ets`→`common/types/`、`pages/MainWindowModels.ets`→`common/types/`、`pages/I18n.ets`→`capability/`）。**后续轨道备注**：消费者改直引新路径后可删这 3 个 barrel，归入 Phase 7 收口轨道。
 
+---
+
+## 16. 续作计划四：§9 三层边界优化（依据 STATE-REVIEW §9，2026-10-08 立 / 同日执行）
+
+> **背景**：五波重构（Phase 0–7 + A/B/P/D/M 轨道）完成后，`ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` §9（2026-10-07）审查 `panels / capability / state` 三层边界，判定 P0–P4 五类问题。本轮按用户批准的**阈值拆分**（只拆「桥调用 ≥5 或存在**持续**定时器」的 store）成 9 片执行，顺序 **P4 → P1 → P2 → P0 → 文档**。
+> **基线**：开工 HEAD `bf23e7776d`（宿主 8,017 行）；收尾 HEAD `94fbcf964f`。
+> **执行方式**：每片独立「开工普查 → store/controller 手术 → 宿主改指向 → 五步验收 → 真机 → 提交」，片间不停顿。真机 = HUAWEI Mate 80 Pro（本轮 IP 变更 `192.168.3.95` → `192.168.1.4:36717`）。
+
+### 16.1 切片总表
+
+| 片 | 问题 | 内容 | 提交 | 关键度量 |
+|---|---|---|---|---|
+| S1 | P4a | 删宿主 5 个死 import | `964fa2eaa3` | 宿主 −3 行 |
+| S2 | P1 | `SettingsRows` 3 个跨域行 → `common/ui/` | `70650955f2` | `SettingsRows` 179→114；新增 3 文件 |
+| S3 | P2 | `GraphLoadingRow` + `SkyCultureDescriptionBlockView` → `common/ui/` | `b7497fb450` | 新增 1 + 迁移 1；`LayerSwitchRow` 留原域 |
+| S4 | P0 | `AstroStore` 全部 `load*` → `AstroCalcController` | `45e0aff753` | store 1549→558（−991）；ctl 462→1429；宿主净 0 |
+| S5 | P0 | `ScriptStore` 桥 / 450ms 轮询 / 播放 → `ScriptPlaybackController` | `4c7362b37e` | store 408→139（−269）；ctl 237→413；宿主 −18 |
+| S6 | P0 | `GuideStore` 引擎 / 250ms tick / 桥 → 新建 `GuideController` | `b01c7d22d2` | store 156→20（−136）；新 ctl +161；宿主 +13 |
+| S7 | P0 | `TimeSettingsStore` 8 连发配置回读 → 新建 `SettingsController` | `02890884aa` | store 130→19（−111）；新 ctl +113；宿主 +15 |
+| S8 | P0 | `TelescopeStore` live-position 持续链 → `TelescopeController` | `94fbcf964f` | store 457→271（−186）；ctl 278→467；宿主 +2 |
+| S9 | 文档 | 本节 §16 + CHANGELOG 收口 | （本节） | — |
+
+### 16.2 逐片要点
+
+- **S1（P4a）**：宿主 L111/L128/L143 五个未被引用的 import（`LayerSwitchRow` / `GraphLoadingRow` / `RtsSelectionGuide` / `GraphSelectionGuide` / `SkyCultureDescriptionBlockView`）删除；`TimeWheelController`（`state/`）与 `SpeechService`（`common/`）按 §9.4b/c 维持冻结。
+- **S2（P1）**：`NavStarsToggleRow` / `ArchaeoToggleRow` / `MosaicCameraMetric` 各只有一个非设置域消费方，迁 `common/ui/`（§4.2-4 口径）。`SettingsRows.ets` 回归设置域专用（剩 4 个）。
+- **S3（P2）**：`GraphLoadingRow` 抽出为新文件；`SkyCultureDescriptionBlockView` `git mv` 迁 `common/ui/`。`LayerSwitchRow` 有 4 个消费方且域特化，按 §9.2 P2 建议归属**不动**。
+- **S4（P0 · AstroStore）**：迁出 24 个公开 loader + 8 个私有 helper + 16 个请求序号字段。`AstroHostHooks` 删去已迁走的 `loadWutTargets` / `ephemerisCustomStartJD` / `hecLayoutPositions` / `loadPlanetPositions`；控制器新注入 `hasSelectedObject` / `selectedObjectName` / `hecLayoutPositions`（控制器不 import `ObjectDetailStore`）。**面板文件零改动**（`load*` 入口本就是宿主下发的回调）。真机走查 `searchObject Mars` / `openUiPanel astro` / `getAstroPanelState` / `getTonightEvents` / `getAlmanac` + tab 0/1/5 快照与上下文回读。
+- **S5（P0 · ScriptStore）**：迁出 10 方法 + `videoStateTimer` / `seq`；`ScriptHostHooks` 与 `ScriptPlaybackHooks` 合并 / 删除。发现隐藏消费方 `StartupBridge`（`setScriptMetadata`）、`RecordingController`、`LayerController`，按既有「跨控制器经 hooks 转发」模式补注入。真机走查 `getScriptList` / `listRecordings` / `getVideoRecordingState` + 脚本面板启动 / 停止。
+- **S6（P0 · GuideStore）**：新建 `capability/GuideController`（`GuideHostHooks` 逐字改名 `GuideControllerHooks`，18 成员原样），store 只剩 `guideState` + `speechStatus`。新增 `resetJourneyFlags()` / `lastRequestId()` / `lastResult()` 供宿主清快照与 CLI 发布。真机走查 `startGuide solar-neighbours` → `next` → `stop` 全链。
+- **S7（P0 · TimeSettingsStore）**：新建 `capability/SettingsController`，整接口 `TimeSettingsHostHooks` 迁入；**不复活** M 轨道解散的跨域动作路由（`SettingsController` 只是 IO loader）。真机决定性回读实证：`setDateFormat ddmmyyyy` → 冷启动 → 设置页显示「日-月-年」（只能来自回读加载器），随后复原。
+- **S8（P0 · TelescopeStore）**：live-position 持续 `setTimeout` 链（1s 成功 / 1.8s 失败 / 500ms profile）迁入既有 `TelescopeController`；appliers（`applyTelescopeProfile(s)` / `applyTelescopeEndpointStatus`）经实测**整体迁入**（无外部引用，且 `applyTelescopeProfile` 直调已迁的 `schedule` / `stop`，留 store 会形成 `state→capability` 反依赖）。`loadOculars`（`requestWhenReady` 带超时、非持续定时器）留 store。**部分推翻 PLAN §15.12.6 D9 的定时器归属判定**（仅此一面）。真机实证 ~1s 轮询启停：开 → 每 ~1s 一条 `getTelescopePosition`；关 / 离开面板 → 5s 内 0 条（无泄漏）。
+
+### 16.3 登记例外（本轮明确不拆，§9.3）
+
+| 项 | 原因 |
+|---|---|
+| `CatalogStore` 600ms 下载轮询 / `SatelliteStore` 90ms 防抖 / `LocationStore` 分块 `setTimeout` | **自我收口、非持续**定时器（§15.7 规则 3 只约束持续定时器）；D 轨道 §15.12.6 已判定随方法留 store |
+| 桥调用 ≤4 的 39 个 store（`ObjectDetailStore` 4 / `InfoWindowStore` 3 / `SearchStore` 3 / `BookmarkStore` 3 / …） | 简单读写，成本 / 收益不划算（§9.3） |
+| `TimeWheelController` 在 `state/`、`SpeechService` 在 `common/` | §9.4b/c 判定合理，维持冻结 |
+| `capability → state` 64 处 import、`panels/panels → panels/<domain>` 44 处、shell 跨 6 域 | 设计意图，无环，改动只增复杂度（§9.3） |
+
+### 16.4 验收口径
+
+每片：`check-ohos-refactor-slice.mjs` 通过 → `arkts_check` 0 error → `build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy` `BUILD SUCCESSFUL` → `check-ohos-ui-contract.mjs` **50 锚点 / 34 面板 / 29 静态 id / 18 动态前缀 intact**（无 `--update`）→ 受影响 `*-ohos*.mjs` 全绿 → 真机 `devecocli run --skip-build` `Smoke: PASS` + 语义 CLI 走查 + `pidof` 存活 + `hilog` 无 jscrash。逐字等价（§15.7 规则 5）：方法体只改取值前缀，比较边界 / 分支 / 错误文案 / 定时参数不变。
+
+### 16.5 与 V2 的衔接
+
+本轮即 STATE-REVIEW §10.3 推荐的**「先拆后翻」**前置：S4–S8 后，astro / script / guide / time-settings / telescope 五域的 store 已是纯数据（S4 后 `AstroStore` 无 `CommandPort`；S6/S7 后 `GuideStore` / `TimeSettingsStore` 仅剩数据），控制器持有桥与定时器 —— 正是 §10.2.1 的 V2 典型形态（`@ObservedV2` 纯模型 + 独立控制器）。V2 翻代另立项，不混入本队列。
+

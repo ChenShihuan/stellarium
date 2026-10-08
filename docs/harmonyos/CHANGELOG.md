@@ -1,3 +1,10 @@
+## [2026-10-08] DevEco Code - 重构 §9 边界优化 S9：队列收口（计划文档 §16 + 登记例外）
+
+- **依据**：STATE-REVIEW §9 三层边界优化队列（S1–S8 已逐片提交，本节为 S9 文档收口）。
+- **改动**：在 `docs/harmonyos/research/ARKTS-PAGES-REFACTOR-PLAN.md` 追加 **§16 续作计划四：§9 三层边界优化** —— 含切片总表（S1–S8 的提交号与关键度量）、逐片要点、**登记例外清单**（CatalogStore 600ms / SatelliteStore 90ms / LocationStore 分块等自我收口轮询；桥调用 ≤4 的 39 个 store；TimeWheelController/SpeechService 冻结；§9.3「不建议动」各项）、验收口径、与 V2 的衔接（本轮即 §10.3「先拆后翻」前置）。
+- **队列终态**：`bf23e7776d` → `94fbcf964f`，共 9 个提交（S1 `964fa2eaa3` / S2 `70650955f2` / S3 `b7497fb450` / S4 `45e0aff753` / S5 `4c7362b37e` / S6 `b01c7d22d2` / S7 `02890884aa` / S8 `94fbcf964f` / S9 本节）。P0 五域 store 已还原为纯数据 + 控制器持桥与定时器；P1/P2/P4 组件归属与死码清理完成。每片均 `BUILD SUCCESSFUL` + 契约 intact（50/34/29/18）+ 真机 `Smoke: PASS`。
+- **验证**：仅文档改动，无代码/资源/契约变更。真机未涉及。
+
 ## [2026-10-08] DevEco Code - 重构 §9 边界优化 S8：TelescopeStore live-position 定时器链迁入 TelescopeController
 
 - **依据**：STATE-REVIEW §9.2 P0「Store 同时承担控制器职责」（`TelescopeStore` 自持 `CommandPort` 直接调 `requestInteractive`，并自持 LX200 live-position `setTimeout` 链 —— 成功 1s / 失败 1.8s 自续期，属 §15.7 规则 3 所指的**持续**定时器）；§10.2.1 目标形态「store 纯数据 + 纯派生、controller 持 `CommandPort` / 写 store / 自持定时器、`start()/stop()` 由宿主生命周期收口」。**部分推翻 PLAN §15.12.6 D9 的定时器归属判定**：D9 曾定「定时器仍由 store 自持」，本片据 §9 新判与 §15.7 规则 3「定时器由控制器自持」改为**只把 live-position 持续定时器链迁入控制器**；`loadOculars`（`requestWhenReady` 带超时 0/100/15、无持续定时器）按计划**留 store**，故未整体推翻 D9，仅修订其定时器归属一面。不改面板签名、不改桥命令、不改 `.id()`。
