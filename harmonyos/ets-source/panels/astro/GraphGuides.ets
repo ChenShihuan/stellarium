@@ -1,24 +1,9 @@
 import { UI_RADIUS_PILL } from '../../common/ui/UiTokens'
 
-// 星图/图表区域的三个小引导块。
+// 星图/图表区域的两个引导块。
 //
-// 都是纯展示 + 一个"打开目标选择器"回调：加载行收夜视两色，两个引导收夜视三色与回调。
-// 错误文案/进度文案由 @Prop 驱动实时刷新。
-
-// 计算中：转圈 + 进度文案。
-@Component
-export struct GraphLoadingRow {
-  @Prop label: string
-  @Prop accentColor: string
-  @Prop subColor: string
-
-  build() {
-    Row({ space: 8 }) {
-      LoadingProgress().width(22).height(22).color(this.accentColor)
-      Text(this.label).fontSize(11).fontColor(this.subColor)
-    }.width('100%').padding({ left: 8 }).margin({ top: 8, bottom: 6 })
-  }
-}
+// 都是纯展示 + 一个"打开目标选择器"回调：收夜视三色与回调，错误文案由 @Prop 驱动实时刷新。
+// 注：通用加载行 `GraphLoadingRow` 已按 STATE-REVIEW §9 P2 迁至 `common/ui/GraphLoadingRow.ets`（2026-10-08）。
 
 // 升中天落：未选天体时的引导。
 @Component

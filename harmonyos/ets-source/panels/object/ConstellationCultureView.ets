@@ -2,7 +2,7 @@ import { I18n } from '../../pages/I18n'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { ObjectDetailStore } from '../../state/ObjectDetailStore'
 import { SkyCultureDescriptionBlock } from '../../pages/StellariumTypes'
-import { SkyCultureDescriptionBlockView } from '../skyculture/SkyCultureDescriptionBlockView'
+import { SkyCultureDescriptionBlockView } from '../../common/ui/SkyCultureDescriptionBlockView'
 
 // 天体详情卡"资料"页里的星座文化段。
 //
