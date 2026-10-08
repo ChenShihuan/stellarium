@@ -64,7 +64,7 @@ import { LayerController, LayerHostHooks } from '../capability/LayerController'
 import { SkyTextureStatusController, SkyTextureStatusHostHooks } from '../capability/SkyTextureStatusController'
 import { NebulaTextureController, NebulaTextureHostHooks } from '../capability/NebulaTextureController'
 import { OcularController } from '../capability/OcularController'
-import { TelescopeController } from '../capability/TelescopeController'
+import { TelescopeController, TelescopeHostHooks } from '../capability/TelescopeController'
 import { PolarScopeController, PolarScopeHostHooks, PolarScopeSessionFlags } from '../capability/PolarScopeController'
 import { ViewCoordinateController, ViewCoordinateHostHooks } from '../capability/ViewCoordinateController'
 import { SatelliteController, SatelliteHostHooks } from '../capability/SatelliteController'
@@ -1009,7 +1009,7 @@ export struct WindowNativeNode {
   private skyCultureMakerControllerImpl: SkyCultureMakerController | null = null
   // 目镜/拼接相机/均时差/古天文线写回控制器（惰性构造；状态在 telescope/mosaic/equationOfTime/archaeo store）。
   private ocularControllerImpl: OcularController | null = null
-  // LX200 望远镜编辑器/控制命令控制器（惰性构造；状态在 TelescopeStore，定时器仍由 store 自持）。
+  // LX200 望远镜编辑器/控制命令控制器（惰性构造；状态在 TelescopeStore，live-position 定时器自持）。
   private telescopeControllerImpl: TelescopeController | null = null
   // 极轴镜行为控制器（惰性构造；状态在 PolarScopeStore，polarScopeTimer 由控制器自持）。
   private polarScopeControllerImpl: PolarScopeController | null = null
@@ -1294,7 +1294,7 @@ export struct WindowNativeNode {
       this.skyCultureCtl().syncSkyCultureTimeFollowTimer()
       this.polarScopeCtl().syncPolarScopeTimer()
       this.astroCalcCtl().syncAstroCalcContextTimer()
-      this.telescopeStore.syncTelescopeLivePosition()
+      this.telescopeCtl().syncTelescopeLivePosition()
       return
     }
 
@@ -1308,7 +1308,7 @@ export struct WindowNativeNode {
     this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.telescopeCtl().stopTelescopeLivePosition(false)
     this.detailConnectorCtl().stopDetailAutoRefresh()
     this.skyInputCtl().stop()
     void AudioEngine.getInstance().stop()
@@ -1531,10 +1531,8 @@ export struct WindowNativeNode {
     // 字段赋值即刷新，且该域无 publish* 发布点，故 onChanged 传空实现。
     this.telescopeStore.attachPort(hostPort, () => {})
     // 「是否应刷新」谓词读宿主 applicationInForeground / panelVisible / activePanel，故宿主保留
-    // shouldRefreshTelescopePosition 并经 TelescopeHostHooks 注入（store 不触碰 UI 生命周期）。
-    this.telescopeStore.attachHooks({
-      shouldRefreshTelescopePosition: (): boolean => this.shouldRefreshTelescopePosition()
-    })
+    // shouldRefreshTelescopePosition，并在 telescopeCtl() 构造时经 TelescopeHostHooks 注入
+    //（控制器不触碰 UI 生命周期；state/TelescopeStore 现为纯数据）。
     // 图层视图域（地景列表 / 行星轨道 / 行星轨迹）复用同一实例；消费方均为
     // @ObjectLink，字段赋值即刷新，该域无 publish* 发布点，onChanged 传空实现。
     this.layerViewStore.attachPort(hostPort, () => {})
@@ -1965,7 +1963,7 @@ export struct WindowNativeNode {
       if (commandName === 'setTelescopeLivePosition') {
         const value = String(event['payload'] ?? '').trim().toLowerCase()
         const enabled = value === '1' || value === 'true' || value === 'on'
-        this.telescopeStore.setTelescopeLivePosition(enabled)
+        this.telescopeCtl().setTelescopeLivePosition(enabled)
         hilog.info(0x0000, 'StellariumArkUI', '[cli-ui] telescope live position enabled=%{public}s', enabled.toString())
         return
       }
@@ -2174,7 +2172,7 @@ export struct WindowNativeNode {
     this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.telescopeCtl().stopTelescopeLivePosition(false)
     this.scriptPlaybackCtl().stopScriptStatusPolling()
     this.recordingCtl().stop()
     this.unregisterFoldListeners()
@@ -2786,10 +2784,13 @@ export struct WindowNativeNode {
   }
 
   // LX200 望远镜编辑器/控制命令控制器惰性构造。桥经 HostCommandPort；状态写 TelescopeStore；
-  // live-position 定时器簇仍由 TelescopeStore 自持，本控制器不自持定时器。
+  // live-position 定时器簇由控制器自持（§9 P0-5）；「是否应刷新实时位置」谓词经 hooks 注入。
   private telescopeCtl(): TelescopeController {
     if (this.telescopeControllerImpl === null) {
-      this.telescopeControllerImpl = new TelescopeController(this.commandPort(), this.telescopeStore)
+      const hooks: TelescopeHostHooks = {
+        shouldRefreshTelescopePosition: (): boolean => this.shouldRefreshTelescopePosition()
+      }
+      this.telescopeControllerImpl = new TelescopeController(this.commandPort(), this.telescopeStore, hooks)
     }
     return this.telescopeControllerImpl
   }
@@ -2939,7 +2940,7 @@ export struct WindowNativeNode {
           this.timeCtl().stopPanelTimers()
           this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
           this.astroCalcCtl().stopAstroCalcContextTimer()
-          this.telescopeStore.stopTelescopeLivePosition(false)
+          this.telescopeCtl().stopTelescopeLivePosition(false)
         },
         refreshState: (): void => { this.refreshState() },
         reloadObserverInfo: (): void => { this.locationPickerStore.loadObserverInfo(true) },
@@ -3374,7 +3375,7 @@ export struct WindowNativeNode {
     this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.telescopeCtl().stopTelescopeLivePosition(false)
     if (!nextVisible) {
       this.schedulePanelDataLoad(panel, false)
       const closeSerial = ++this.panelContentKey
@@ -3507,7 +3508,7 @@ export struct WindowNativeNode {
         this.scriptPlaybackCtl().loadRecordings()
         this.scriptPlaybackCtl().loadVideoRecordingState()
       } else if (panel === 'telescope') {
-        this.telescopeStore.loadTelescopeControlStatus()
+        this.telescopeCtl().loadTelescopeControlStatus()
       }
     }, 280) as number
   }
@@ -3697,7 +3698,7 @@ export struct WindowNativeNode {
     this.skyCultureCtl().stopSkyCultureTimeFollowTimer()
     this.polarScopeCtl().stopPolarScopeTimer()
     this.astroCalcCtl().stopAstroCalcContextTimer()
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.telescopeCtl().stopTelescopeLivePosition(false)
     if (this.panelDataLoadTimer >= 0) {
       clearTimeout(this.panelDataLoadTimer)
       this.panelDataLoadTimer = -1
@@ -4278,7 +4279,8 @@ export struct WindowNativeNode {
 
   // stopTelescopeLivePosition / scheduleTelescopeLivePosition / refreshTelescopeLivePosition /
   // syncTelescopeLivePosition / setTelescopeLivePosition（及其 timer / pending / requestId 三字段）
-  // shouldRefreshTelescopePosition 经 TelescopeHostHooks 注入。
+  // 已迁入 capability/TelescopeController.ets（§9 P0-5）；宿主保留 shouldRefreshTelescopePosition 谓词，
+  // 经 TelescopeHostHooks 在 telescopeCtl() 构造时注入。
 
   // （定时器自持；面板路由 / refreshState / flashHint 经 BehaviorHostHooks，叠层几何与桥回包 flags
   // 抽取经 PolarScopeHostHooks）。宿主保留叠层几何 polarScopeTopInset / polarScopeControlWidth /
@@ -8121,7 +8123,7 @@ export struct WindowNativeNode {
         onSync: () => { this.telescopeCtl().lx200SyncSelected() },
         onAbort: () => { this.telescopeCtl().lx200Abort() },
         onReadPosition: (center: boolean) => { this.telescopeCtl().readTelescopePosition(center) },
-        onSetLivePosition: (enabled: boolean) => { this.telescopeStore.setTelescopeLivePosition(enabled) }
+        onSetLivePosition: (enabled: boolean) => { this.telescopeCtl().setTelescopeLivePosition(enabled) }
       })
     } else if (this.activePanel === 'tools') {
       ToolsPanel({
