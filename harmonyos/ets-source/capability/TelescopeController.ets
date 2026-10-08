@@ -1,9 +1,15 @@
 // LX200 望远镜编辑器 / 控制命令行为控制器：负责档位编辑、协议与端点配置、
-// 连接测试、Goto/Sync/Abort 与指向读取。
+// 连接测试、Goto/Sync/Abort 与指向读取，以及 live-position 实时位置轮询链
+//（自持 setTimeout 链，宿主生命周期收口）与望远镜控制状态回读 loadTelescopeControlStatus。
 //
 // 不 import NAPI/UI：桥经 CommandPort；状态整体写回 TelescopeStore
-//（面板经 @ObjectLink 消费）。live-position 定时器簇由 TelescopeStore 自持，
-// 本控制器只调用其 start/stop/schedule。各方法均不调 flashHint / refreshState，故无 hooks 注入。
+//（面板经 @ObjectLink 消费）。各方法均不调 flashHint / refreshState；仅 live-position
+// 的「是否应刷新」谓词经 TelescopeHostHooks 由宿主回注（控制器不触碰 UI 生命周期）。
+//
+// 迁出自 state/TelescopeStore.ets（§9 P0-5，2026-10-08）：方法体逐字等价，仅把数据源前缀
+// 从 this.<字段> 改为 this.telescopeStore.<字段>，并把定时器句柄/标志/序号与 appliers
+//（applyTelescopeProfile/Profiles/EndpointStatus）整体移入本控制器；重试延迟
+// 1000/1800/500/100(默认)ms 与 reqId 作废语义、状态串逐字保留。
 import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import {
@@ -13,13 +19,32 @@ import { telescopeUpdateTime, telescopeErrorText } from '../common/derive/action
 import { CommandPort } from '../bridge/CommandPort'
 import { TelescopeStore } from '../state/TelescopeStore'
 
+// 宿主 → TelescopeController 的只读谓词注入：控制器不触碰 UI 生命周期。
+// 「是否应刷新实时位置」需读 applicationInForeground / panelVisible / activePanel 等
+// 生命周期与 UI 状态字段，这些字段留在宿主；控制器只在 schedule / sync 时经 hooks 调用。
+export interface TelescopeHostHooks {
+  shouldRefreshTelescopePosition(): boolean
+}
+
 export class TelescopeController {
   private port: CommandPort
   private telescopeStore: TelescopeStore
+  private hooks: TelescopeHostHooks | null = null
 
-  constructor(port: CommandPort, telescopeStore: TelescopeStore) {
+  // —— live-position 定时器簇（私有，不入被观察语义） ——
+  // 仅本控制器的 schedule / refresh / sync / stop 读写；reqId 用于作废在途回包。
+  private lx200LivePositionTimer: number = 0
+  private lx200LivePositionRequestPending: boolean = false
+  private lx200LivePositionRequestId: number = 0
+
+  constructor(port: CommandPort, telescopeStore: TelescopeStore, hooks: TelescopeHostHooks) {
     this.port = port
     this.telescopeStore = telescopeStore
+    this.hooks = hooks
+  }
+
+  private ensurePort(): CommandPort | null {
+    return this.port
   }
 
   // 模拟器直接给本地状态；其余协议向桥查询端点。
@@ -31,7 +56,7 @@ export class TelescopeController {
       return
     }
     this.port.requestInteractive('getTelescopeControl', this.telescopeStore.lx200Host.trim() + '|' + this.telescopeStore.lx200Port.trim(), (result: TelescopeControlResponse) => {
-      this.telescopeStore.applyTelescopeEndpointStatus(result)
+      this.applyTelescopeEndpointStatus(result)
     })
   }
 
@@ -40,7 +65,7 @@ export class TelescopeController {
     if (slot === this.telescopeStore.lx200SelectedSlot && !this.telescopeStore.lx200EditingNew) return
     this.port.requestInteractive('selectTelescopeProfile', slot.toString(), (result: TelescopeProfilesResponse) => {
       if (result.ok === true) {
-        this.telescopeStore.applyTelescopeProfiles(result)
+        this.applyTelescopeProfiles(result)
         this.validateTelescopeEditorStatus()
       } else {
         this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_load_failed')
@@ -50,7 +75,7 @@ export class TelescopeController {
 
   // 寻找空档位并初始化「新建」编辑器草稿。
   beginNewTelescopeProfile(): void {
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.stopTelescopeLivePosition(false)
     const used = new Set<number>(this.telescopeStore.lx200Profiles.map((profile: TelescopeProfile) => profile.slot))
     let slot = 1
     while (slot <= 9 && used.has(slot)) slot += 1
@@ -78,7 +103,7 @@ export class TelescopeController {
   // 切换协议并重置端点草稿。
   selectTelescopeProtocol(protocol: string): void {
     if (protocol === this.telescopeStore.lx200Protocol) return
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.stopTelescopeLivePosition(false)
     this.telescopeStore.lx200Protocol = protocol
     this.telescopeStore.lx200Position = ''
     this.telescopeStore.lx200PositionUpdatedAt = ''
@@ -126,7 +151,7 @@ export class TelescopeController {
         this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_save_failed')
         return
       }
-      this.telescopeStore.applyTelescopeProfiles(result)
+      this.applyTelescopeProfiles(result)
       this.telescopeStore.lx200Status = I18n.t('m_telescope_saved')
       this.validateTelescopeEditorStatus()
     }, () => { this.telescopeStore.lx200Busy = false })
@@ -135,12 +160,12 @@ export class TelescopeController {
   // 删除当前档位（新建草稿则改为回读）。
   deleteTelescopeProfile(): void {
     if (this.telescopeStore.lx200EditingNew) {
-      this.telescopeStore.loadTelescopeControlStatus()
+      this.loadTelescopeControlStatus()
       return
     }
     this.port.requestInteractive('deleteTelescopeProfile', this.telescopeStore.lx200SelectedSlot.toString(), (result: TelescopeProfilesResponse) => {
       if (result.ok === true) {
-        this.telescopeStore.applyTelescopeProfiles(result)
+        this.applyTelescopeProfiles(result)
         this.telescopeStore.lx200Status = I18n.t('m_telescope_deleted')
         this.validateTelescopeEditorStatus()
       } else {
@@ -155,23 +180,23 @@ export class TelescopeController {
       this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_test')
       return
     }
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.stopTelescopeLivePosition(false)
     this.telescopeStore.lx200Busy = true
     this.telescopeStore.lx200Status = I18n.t('m_telescope_connecting')
-    this.port.requestInteractive('testTelescopeConnection', this.telescopeStore.lx200Payload(), (result: TelescopeControlResponse) => {
+    this.port.requestInteractive('testTelescopeConnection', this.lx200Payload(), (result: TelescopeControlResponse) => {
       this.telescopeStore.lx200Busy = false
-      this.telescopeStore.applyTelescopeEndpointStatus(result)
+      this.applyTelescopeEndpointStatus(result)
       this.telescopeStore.lx200ConnectionState = result.ok === true ? 'available' : 'unavailable'
       this.telescopeStore.lx200Status = result.ok === true
         ? (result.simulated === true ? I18n.t('m_telescope_simulator_ready') : I18n.t('m_telescope_available'))
         : telescopeErrorText(result, I18n.t('m_telescope_test_failed'))
-      this.telescopeStore.scheduleTelescopeLivePosition()
+      this.scheduleTelescopeLivePosition()
     }, (result: StellariumBridgeResponse) => {
       const response = result as TelescopeControlResponse
       this.telescopeStore.lx200Busy = false
       if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
       this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_test_failed'))
-      this.telescopeStore.scheduleTelescopeLivePosition()
+      this.scheduleTelescopeLivePosition()
     })
   }
 
@@ -185,12 +210,12 @@ export class TelescopeController {
       const mode = result.mode === 'sync' ? I18n.t('m_telescope_mode_sync') : I18n.t('m_telescope_mode_goto')
       const coord = result.ra && result.dec ? ' · ' + result.ra + ' / ' + result.dec : ''
       this.telescopeStore.lx200Status = I18n.format('m_telescope_command_sent', [mode as string, target as string, coord])
-      if (result.mode === 'goto') this.telescopeStore.setTelescopeLivePosition(true)
+      if (result.mode === 'goto') this.setTelescopeLivePosition(true)
     } else {
       if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
       this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_disconnected'))
     }
-    this.telescopeStore.scheduleTelescopeLivePosition()
+    this.scheduleTelescopeLivePosition()
   }
 
   // 指向/同步/中止当前选中天体。
@@ -199,10 +224,10 @@ export class TelescopeController {
       this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
       return
     }
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.stopTelescopeLivePosition(false)
     this.telescopeStore.lx200Busy = true
     this.telescopeStore.lx200Status = I18n.t('m_telescope_sending_goto')
-    this.port.requestInteractive('telescopeLx200GotoSelected', this.telescopeStore.lx200Payload(),
+    this.port.requestInteractive('telescopeLx200GotoSelected', this.lx200Payload(),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result))
   }
@@ -212,10 +237,10 @@ export class TelescopeController {
       this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
       return
     }
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.stopTelescopeLivePosition(false)
     this.telescopeStore.lx200Busy = true
     this.telescopeStore.lx200Status = I18n.t('m_telescope_sending_sync')
-    this.port.requestInteractive('telescopeLx200SyncSelected', this.telescopeStore.lx200Payload(),
+    this.port.requestInteractive('telescopeLx200SyncSelected', this.lx200Payload(),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result),
       (result: StellariumBridgeResponse) => this.applyLx200Result(result))
   }
@@ -225,21 +250,21 @@ export class TelescopeController {
       this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
       return
     }
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.stopTelescopeLivePosition(false)
     this.telescopeStore.lx200Busy = true
-    this.port.requestInteractive('telescopeLx200Abort', this.telescopeStore.lx200Payload(), (result: StellariumBridgeResponse) => {
+    this.port.requestInteractive('telescopeLx200Abort', this.lx200Payload(), (result: StellariumBridgeResponse) => {
       const response = result as TelescopeControlResponse
       this.telescopeStore.lx200Busy = false
       if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
       this.telescopeStore.lx200Status = result.ok === true ? I18n.t('m_telescope_stop_sent') :
         telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
-      this.telescopeStore.scheduleTelescopeLivePosition()
+      this.scheduleTelescopeLivePosition()
     }, (result: StellariumBridgeResponse) => {
       const response = result as TelescopeControlResponse
       this.telescopeStore.lx200Busy = false
       if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
       this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_stop_failed'))
-      this.telescopeStore.scheduleTelescopeLivePosition()
+      this.scheduleTelescopeLivePosition()
     })
   }
 
@@ -249,11 +274,11 @@ export class TelescopeController {
       this.telescopeStore.lx200Status = I18n.t('m_telescope_save_before_control')
       return
     }
-    this.telescopeStore.stopTelescopeLivePosition(false)
+    this.stopTelescopeLivePosition(false)
     this.telescopeStore.lx200Busy = true
     this.telescopeStore.lx200Status = center ? I18n.t('m_telescope_centering') : I18n.t('m_telescope_reading_position')
     const command = center ? 'centerScreenOnTelescope' : 'getTelescopePosition'
-    this.port.requestInteractive(command, this.telescopeStore.lx200Payload(), (result: TelescopeControlResponse) => {
+    this.port.requestInteractive(command, this.lx200Payload(), (result: TelescopeControlResponse) => {
       this.telescopeStore.lx200Busy = false
       if (result.ok === true) {
         this.telescopeStore.lx200ConnectionState = 'available'
@@ -265,14 +290,178 @@ export class TelescopeController {
         if (result.state === 'available' || result.state === 'unavailable') this.telescopeStore.lx200ConnectionState = result.state
         this.telescopeStore.lx200Status = telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
       }
-      this.telescopeStore.scheduleTelescopeLivePosition()
+      this.scheduleTelescopeLivePosition()
     }, (result: StellariumBridgeResponse) => {
       const response = result as TelescopeControlResponse
       this.telescopeStore.lx200Busy = false
       if (response.state === 'available' || response.state === 'unavailable') this.telescopeStore.lx200ConnectionState = response.state
       this.telescopeStore.lx200PositionUpdateState = 'error'
       this.telescopeStore.lx200Status = telescopeErrorText(response, I18n.t('m_telescope_position_failed'))
-      this.telescopeStore.scheduleTelescopeLivePosition()
+      this.scheduleTelescopeLivePosition()
+    })
+  }
+
+  // ===== LX200 实时位置（live-position）定时器簇 =====
+  // 宿主只保留生命周期谓词 shouldRefreshTelescopePosition 并经 hooks 注入；
+  // 面板开合 / 前后台切换经本控制器的 set / sync / stop / schedule 收口。
+
+  // 读宿主生命周期字段的部分经 hooks 注入。
+  private shouldRefreshLivePosition(): boolean {
+    return this.hooks !== null && this.hooks.shouldRefreshTelescopePosition()
+  }
+
+  stopTelescopeLivePosition(markStale: boolean = true): void {
+    if (this.lx200LivePositionTimer !== 0) {
+      clearTimeout(this.lx200LivePositionTimer)
+      this.lx200LivePositionTimer = 0
+    }
+    this.lx200LivePositionRequestPending = false
+    this.lx200LivePositionRequestId++
+    if (markStale && this.telescopeStore.lx200Position.length > 0) {
+      this.telescopeStore.lx200PositionUpdateState = 'stale'
+    }
+  }
+
+  scheduleTelescopeLivePosition(delayMs: number = 1000): void {
+    if (!this.shouldRefreshLivePosition() || this.lx200LivePositionTimer !== 0) return
+    this.lx200LivePositionTimer = setTimeout(() => {
+      this.lx200LivePositionTimer = 0
+      this.refreshTelescopeLivePosition()
+    }, delayMs) as number
+  }
+
+  refreshTelescopeLivePosition(): void {
+    const port = this.ensurePort()
+    if (port === null) return
+    if (!this.shouldRefreshLivePosition() || this.lx200LivePositionRequestPending) return
+    this.lx200LivePositionRequestPending = true
+    this.telescopeStore.lx200PositionUpdateState = 'updating'
+    const requestId = ++this.lx200LivePositionRequestId
+    port.requestInteractive('getTelescopePosition', this.lx200Payload(), (result: TelescopeControlResponse) => {
+      if (requestId !== this.lx200LivePositionRequestId) return
+      this.lx200LivePositionRequestPending = false
+      if (result.ok === true) {
+        this.telescopeStore.lx200ConnectionState = 'available'
+        this.telescopeStore.lx200Position = (result.ra ?? '--:--:--') + ' / ' + (result.dec ?? '--°--:--')
+        this.telescopeStore.lx200PositionUpdatedAt = telescopeUpdateTime()
+        this.telescopeStore.lx200PositionUpdateState = 'fresh'
+        this.scheduleTelescopeLivePosition(1000)
+        return
+      }
+      if (result.state === 'available' || result.state === 'unavailable') this.telescopeStore.lx200ConnectionState = result.state
+      this.telescopeStore.lx200PositionUpdateState = 'error'
+      this.telescopeStore.lx200Status = telescopeErrorText(result, I18n.t('m_telescope_position_failed'))
+      this.scheduleTelescopeLivePosition(1800)
+    }, (result: StellariumBridgeResponse) => {
+      if (requestId !== this.lx200LivePositionRequestId) return
+      this.lx200LivePositionRequestPending = false
+      this.telescopeStore.lx200PositionUpdateState = 'error'
+      this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_position_failed')
+      this.scheduleTelescopeLivePosition(1800)
+    })
+  }
+
+  syncTelescopeLivePosition(): void {
+    if (!this.shouldRefreshLivePosition()) {
+      this.stopTelescopeLivePosition()
+      return
+    }
+    if (this.lx200LivePositionRequestPending || this.lx200LivePositionTimer !== 0) return
+    this.refreshTelescopeLivePosition()
+  }
+
+  setTelescopeLivePosition(enabled: boolean): void {
+    this.telescopeStore.lx200LivePositionEnabled = enabled
+    if (enabled) {
+      this.telescopeStore.lx200PositionUpdateState = 'updating'
+      this.syncTelescopeLivePosition()
+    } else {
+      this.stopTelescopeLivePosition()
+    }
+  }
+
+  lx200Payload(): string {
+    return JSON.stringify({
+      slot: this.telescopeStore.lx200SelectedSlot,
+      targetSource: this.telescopeStore.lx200TargetSource
+    })
+  }
+
+  applyTelescopeProfile(profile: TelescopeProfile): void {
+    this.stopTelescopeLivePosition(false)
+    this.telescopeStore.lx200SelectedSlot = profile.slot
+    this.telescopeStore.lx200Name = profile.name
+    this.telescopeStore.lx200Protocol = profile.protocol
+    this.telescopeStore.lx200DeviceModel = profile.deviceModel
+    this.telescopeStore.lx200Host = profile.host
+    this.telescopeStore.lx200Port = profile.port.toString()
+    this.telescopeStore.lx200Equinox = profile.equinox
+    this.telescopeStore.lx200CommandDelayMs = profile.commandDelayMs
+    this.telescopeStore.lx200Circles = profile.circles.join(', ')
+    this.telescopeStore.lx200ConnectionState = profile.protocol === 'simulated' ? 'available' : (profile.state ?? 'not_tested')
+    this.telescopeStore.lx200Position = ''
+    this.telescopeStore.lx200PositionUpdatedAt = ''
+    this.telescopeStore.lx200PositionUpdateState = 'idle'
+    if (profile.protocol === 'simulated') {
+      this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_simulated')
+      this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_offline')
+      this.telescopeStore.lx200Status = I18n.t('m_telescope_simulator_ready')
+    } else if (this.telescopeStore.lx200ConnectionState === 'unavailable') {
+      this.telescopeStore.lx200Status = profile.lastError ?? I18n.t('m_telescope_unavailable')
+    } else if (this.telescopeStore.lx200ConnectionState === 'available') {
+      this.telescopeStore.lx200Status = I18n.t('m_telescope_available')
+    } else {
+      this.telescopeStore.lx200Status = I18n.t('m_telescope_not_tested')
+    }
+    this.telescopeStore.lx200EditingNew = false
+    this.scheduleTelescopeLivePosition(500)
+  }
+
+  applyTelescopeProfiles(result: TelescopeProfilesResponse): void {
+    const profiles = result.profiles ?? []
+    this.telescopeStore.lx200Profiles = profiles
+    const selectedSlot = result.selectedSlot ?? (profiles.length > 0 ? profiles[0].slot : 1)
+    this.telescopeStore.lx200SelectedSlot = selectedSlot
+    const selected = profiles.find((profile: TelescopeProfile) => profile.slot === selectedSlot)
+    if (selected !== undefined) {
+      this.applyTelescopeProfile(selected)
+    }
+  }
+
+  applyTelescopeEndpointStatus(result: TelescopeControlResponse): void {
+    if (result.ok !== true) {
+      this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_invalid')
+      this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_tcp')
+      return
+    }
+    if (result.simulated === true || result.scope === 'offline_simulator') {
+      this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_simulated')
+      this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_offline')
+      this.telescopeStore.lx200ConnectionState = 'available'
+      return
+    }
+    this.telescopeStore.lx200Transport = I18n.t('m_telescope_transport_tcp')
+    const scope = result.scope as string
+    if (scope === 'local_device') this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_local')
+    else if (scope === 'local_or_lan') this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_lan')
+    else if (scope === 'public_or_unclassified' || scope === 'hostname_or_unclassified') this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_blocked')
+    else this.telescopeStore.lx200Scope = I18n.t('m_telescope_scope_unknown')
+    this.telescopeStore.lx200ConnectionState = result.state ?? this.telescopeStore.lx200ConnectionState
+  }
+
+  loadTelescopeControlStatus(): void {
+    const port = this.ensurePort()
+    if (port === null) return
+    port.requestInteractive('getTelescopeProfiles', '', (result: TelescopeProfilesResponse) => {
+      if (result.ok !== true) {
+        this.telescopeStore.lx200Status = result.error ?? I18n.t('m_telescope_load_failed')
+        return
+      }
+      this.applyTelescopeProfiles(result)
+      port.requestInteractive('getTelescopeControl', this.lx200Payload(), (endpoint: TelescopeControlResponse) => {
+        this.applyTelescopeEndpointStatus(endpoint)
+        this.scheduleTelescopeLivePosition(500)
+      })
     })
   }
 }
