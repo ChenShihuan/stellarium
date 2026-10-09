@@ -27,6 +27,11 @@ if ! node "$SCRIPT_DIR/check-ohos-bundle-identity.mjs"; then
   exit 1
 fi
 
+if ! node "$SCRIPT_DIR/check-ohos-star-catalog.mjs"; then
+  echo "Star catalog MD5 check failed; re-sync the bundled .cat files with defaultStarsConfig.json."
+  exit 1
+fi
+
 echo "=== HarmonyOS 提交前检查 ==="
 echo ""
 

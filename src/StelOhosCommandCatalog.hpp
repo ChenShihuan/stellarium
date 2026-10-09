@@ -33,9 +33,9 @@ inline QStringList names()
 		"getSelectedObjectInfo,getSelectedObjects,getSelectedType,getObjectDetailModel,getObjectDetailConnector,getCollaborationState,getSessionState,getSiderealTime,getSimulationTime,"
 		"getSkyCultureDetails,getSkyCultureInfo,getSkyCultureList,getSkyCultureMakerDraft,getSkyCultureState,getSkyCultureTerritoryGeometry,getSkyCultureVisualSettings,getLocationMapState,"
 		"getSkyCultures,getSolarElongation,getSolarSystemFlags,getStarCatalogStatus,getStarCatalogs,getStarCount,"
-        "getStarCountFull,getStarFlags,getStarScale,getState,getSurveyState,getSpectralDatasets,listSpectralDatasets,getSpectralState,getTimeFormat,getTimeInfo,getTimeNavigationTarget,getTonightEvents,"
+		"getStarCountFull,getStarFlags,getStarScale,getState,getSurveyState,getSpectralDatasets,listSpectralDatasets,getSpectralState,getTimeFormat,getTimeInfo,getTimeNavigationTarget,getTonightEvents,"
 		"getTracking,getTrailDisplaySettings,getVMagnitude,getVideoRecordingState,getViewCenterCoordinates,getViewDirection,getViewportOffset,getNavigationSettings,getKeyboardShortcuts,getInformationSettings,getTimeSettings,getEphemerisSettings,"
-		"getViewportSize,getUiLayout,getWutTargets,gotoBookmark,gotoNebulaTexture,gotoRADec,gyroDiagnostic,importCollaborationSession,importConfig,importNebulaTexture,importScript,listMatchingObjects,listNebulaTextures,listObjects,"
+		"getViewportSize,getUiLayout,getWutTargets,gotoBookmark,gotoNebulaTexture,gotoRADec,gyroDiagnostic,importCollaborationSession,importConfig,importNebulaTexture,importScript,importStarCatalog,listMatchingObjects,listNebulaTextures,listObjects,"
 		"listRecordings,loadPlugin,loadRecording,moveToAltAz,moveToSelected,moveToSelectedAt,panBy,pauseScript,playScript,"
 		"pointAtSky,pointAtSkyStop,refreshNebulaTextures,reloadSkyCulture,removeNebulaTexture,resetAngleMeasure,retryDeepSkyImages,resumeScript,saveRecording,saveScreenShot,searchObject,"
 		"selectAt,setPointerPosition,selftestActions,setAbsoluteStarScale,setActionChecked,setActionStates,setApplicationForeground,"
@@ -71,7 +71,7 @@ inline QString categoryFor(const QString& name)
 
 inline bool isRestricted(const QString& name)
 {
-	return name == "setConfigString" || name == "importConfig" || name == "importScript" || name == "exportConfig" || name == "applyCollaborationSession" || name == "importCollaborationSession" ||
+	return name == "setConfigString" || name == "importConfig" || name == "importScript" || name == "importStarCatalog" || name == "exportConfig" || name == "applyCollaborationSession" || name == "importCollaborationSession" ||
 		name == "downloadStarCatalog" || name == "loadPlugin" || name == "unloadPlugin" || name == "setPluginLoadAtStartup" ||
 		name.startsWith("telescope") || name == "setTelescopeLivePosition" || name == "startVideoRecording" || name == "stopVideoRecording" ||
 		name == "requestNotificationAuthorization" || name == "publishAstronomyNotification" || name == "cancelAstronomyNotification" ||
@@ -254,6 +254,11 @@ inline QJsonObject item(const QString& name)
 	{
 		value["description"] = QStringLiteral("从设备可读路径导入离线 .ssc 脚本到用户脚本目录；不执行脚本内容");
 		value["examplePayload"] = "/data/local/tmp/example.ssc";
+	}
+	else if (name == "importStarCatalog")
+	{
+		value["description"] = QStringLiteral("手动导入本地星表 .cat 并热加载；按 MD5 识别目标级（不看文件名），并校验前置级，识别或加载失败即拒绝（payload 为沙箱内源文件路径）");
+		value["examplePayload"] = "/data/storage/el2/base/files/imports/stars_6_1v0_4.cat";
 	}
 	else if (name == "getSkyCultureMakerDraft")
 		value["description"] = QStringLiteral("读取离线星空文化制作器草稿、撤销状态和草稿路径");
