@@ -340,7 +340,9 @@ export interface TonightPlanetRow {
   lock: string
 }
 
-// 星表下载（C++ 桥 getStarCatalogs / downloadStarCatalog / getStarCatalogStatus）
+// 星表下载（C++ 桥 getStarCatalogs / downloadStarCatalog / getStarCatalogStatus）。
+// magRange/count/sizeMb/checksum 由桥回包按 defaultStarsConfig.json 原样带出；
+// `source` 是从 url 派生的下载渠道标签，离线构建下用于在面板里标注来源。
 export interface StarCatalogItem {
   id: string
   name: string
@@ -350,6 +352,12 @@ export interface StarCatalogItem {
   url: string
   html: string
   checked: boolean
+  magRange: string
+  count: string
+  sizeMb: number
+  checksum: string
+  source: string
+  sourcePage: string
 }
 export interface StarCatalogRaw {
   id?: string
@@ -360,6 +368,10 @@ export interface StarCatalogRaw {
   url?: string
   html?: string
   checked?: boolean | string | number
+  magRange?: number[]
+  count?: number
+  sizeMb?: number
+  checksum?: string
 }
 export interface StarCatalogsResponse extends StellariumBridgeResponse {
   catalogs?: StarCatalogRaw[]

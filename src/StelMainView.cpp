@@ -115,6 +115,7 @@
 #include <QGraphicsWidget>
 #include <QGraphicsEffect>
 #include <QFileInfo>
+#include <QCryptographicHash>
 #include <QIcon>
 #include <QImageWriter>
 #include <QImageReader>
@@ -4835,6 +4836,131 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 		result["error"] = g_starDownloader.errorStr;
 		result["md5ok"] = g_starDownloader.md5ok;
 	#endif
+		return result;
+	}
+
+	if (commandName == "importStarCatalog")
+	{
+		// 本地手动导入（纯本地操作，不受 STELLARIUM_OHOS_OFFLINE 守卫限制）：
+		// payload 为已落到沙箱的源文件绝对路径；按 **MD5** 识别目标星表（不看文件名），
+		// 再按上游做法校验前置级并热加载。识别/校验/格式失败即拒绝。
+		StarMgr* sm = GETSTELMODULE(StarMgr);
+		if (!sm)
+		{
+			result["ok"] = false;
+			result["error"] = "no StarMgr";
+			result["reason"] = "io";
+			return result;
+		}
+		const QString sourcePath = arg.trimmed();
+		const QFileInfo sourceInfo(sourcePath);
+		if (!sourceInfo.isFile() || sourceInfo.size() == 0)
+		{
+			result["ok"] = false;
+			result["error"] = "source file not found or empty";
+			result["reason"] = "io";
+			return result;
+		}
+		// 轮询重发会让本命令被重复入队；同一文件（路径+大小+修改时间未变）已成功导入过则
+		// 直接返回，避免重复计算 MD5 与重复加载。
+		static QString s_lastCatalogImportPath;
+		static qint64 s_lastCatalogImportSize = -1;
+		static qint64 s_lastCatalogImportMtime = -1;
+		static QString s_lastCatalogImportId;
+		static bool s_lastCatalogImportLoaded = false;
+		const qint64 sourceMtime = sourceInfo.lastModified().toMSecsSinceEpoch();
+		if (s_lastCatalogImportLoaded && sourcePath == s_lastCatalogImportPath
+		    && sourceInfo.size() == s_lastCatalogImportSize && sourceMtime == s_lastCatalogImportMtime)
+		{
+			result["ok"] = true;
+			result["loaded"] = true;
+			result["id"] = s_lastCatalogImportId;
+			return result;
+		}
+		// 1) 计算源文件 MD5
+		QFile sourceFile(sourcePath);
+		if (!sourceFile.open(QIODevice::ReadOnly))
+		{
+			result["ok"] = false;
+			result["error"] = "cannot open source file";
+			result["reason"] = "io";
+			return result;
+		}
+		QCryptographicHash md5Hash(QCryptographicHash::Md5);
+		const bool hashed = md5Hash.addData(&sourceFile);
+		sourceFile.close();
+		if (!hashed)
+		{
+			result["ok"] = false;
+			result["error"] = "failed to hash source file";
+			result["reason"] = "io";
+			return result;
+		}
+		const QByteArray actualMd5 = md5Hash.result().toHex();
+		// 2) 按 MD5 匹配配置里的星表（不按文件名）
+		QVariantMap catDesc;
+		for (const QVariant& v : sm->getCatalogsDescription())
+		{
+			const QVariantMap m = v.toMap();
+			if (m.value("checksum").toByteArray() == actualMd5) { catDesc = m; break; }
+		}
+		if (catDesc.isEmpty())
+		{
+			result["ok"] = false;
+			result["error"] = "no star catalog matches this file's checksum";
+			result["reason"] = "checksum_mismatch";
+			return result;
+		}
+		const QString catalogId = catDesc.value("id").toString();
+		result["id"] = catalogId;
+		// 3) 前置级守卫：catalogsDescription 有序（stars0…stars8），更高级别需前置级全已加载。
+		bool prereqOk = true;
+		for (const QVariant& v : sm->getCatalogsDescription())
+		{
+			const QVariantMap m = v.toMap();
+			if (m.value("id").toString() == catalogId) break;
+			if (!m.value("checked").toBool()) { prereqOk = false; break; }
+		}
+		if (!prereqOk)
+		{
+			result["ok"] = false;
+			result["error"] = "prerequisite catalog not loaded";
+			result["reason"] = "prerequisite";
+			return result;
+		}
+		// 4) 归位到用户目录配置里的 fileName（同盘 rename，否则 copy + 删源）
+		const QString fileName = catDesc.value("fileName").toString();
+		const QString destDir = StelFileMgr::getUserDir() + "/stars/hip_gaia3";
+		StelFileMgr::makeSureDirExistsAndIsWritable(destDir);
+		const QString destPath = destDir + "/" + fileName;
+		if (sourceInfo.absoluteFilePath() != QFileInfo(destPath).absoluteFilePath())
+		{
+			if (QFile::exists(destPath)) QFile::remove(destPath);
+			if (!QFile::rename(sourcePath, destPath))
+			{
+				if (!QFile::copy(sourcePath, destPath))
+				{
+					result["ok"] = false;
+					result["error"] = "copy failed";
+					result["reason"] = "io";
+					return result;
+				}
+				QFile::remove(sourcePath);
+			}
+		}
+		QFile::setPermissions(destPath, QFile::permissions(destPath) | QFileDevice::ReadOwner);
+		// 5) 源文件 MD5 已在上文校验并匹配，直接加载（避免重复计算），并显式置 checked 标志。
+		catDesc["checked"] = true;
+		const bool loaded = sm->checkAndLoadCatalog(catDesc, true);
+		if (loaded) sm->setCheckFlag(catalogId, true);
+		s_lastCatalogImportPath = sourcePath;
+		s_lastCatalogImportSize = sourceInfo.size();
+		s_lastCatalogImportMtime = sourceMtime;
+		s_lastCatalogImportId = catalogId;
+		s_lastCatalogImportLoaded = loaded;
+		result["ok"] = loaded;
+		result["loaded"] = loaded;
+		if (!loaded) { result["error"] = "catalog load failed (unsupported format?)"; result["reason"] = "format"; }
 		return result;
 	}
 

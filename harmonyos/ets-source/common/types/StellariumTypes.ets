@@ -357,6 +357,7 @@ export interface StellariumBridgeResponse {
   totalCandidates?: number
   found?: boolean
   error?: string
+  reason?: string
   selectionRequired?: boolean
   name?: string
   englishName?: string

@@ -70,6 +70,19 @@
                 "maxFileSupported": 10
               }
             ]
+          },
+          {
+            "actions": [
+              "ohos.want.action.viewData"
+            ],
+            "uris": [
+              {
+                "scheme": "file",
+                "utd": "com.joinother.skyinstrument.stellarium-cat",
+                "linkFeature": "FileOpen",
+                "maxFileSupported": 10
+              }
+            ]
           }
         ],
         "metadata": [

@@ -1,4 +1,4 @@
-import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit'
+import { abilityAccessCtrl, common, Permissions, Want } from '@kit.AbilityKit'
 import { geoLocationManager } from '@kit.LocationKit'
 import { sensor } from '@kit.SensorServiceKit'
 import { curves } from '@kit.ArkUI'
@@ -943,6 +943,14 @@ export struct WindowNativeNode {
   @Watch('onCliUiEventChanged')
   @StorageLink('stellariumCliUiEvent')
   private cliUiEvent: string = ''
+  // 作为 .cat「打开方式」被拉起时由 QAbility 写入；此处消费并导入（见 handleOpenCatalogUri）。
+  @Watch('onOpenCatalogUriChanged')
+  @StorageLink('stellariumOpenCatalogUri')
+  private openCatalogUri: string = ''
+  @Watch('onQtContentReadyForCatalog')
+  @StorageLink('stellariumQtContentReady')
+  private qtContentReadyForCatalog: boolean = false
+  private pendingOpenCatalogUri: string = ''
   private privacyPageStartupStarted: boolean = false
   private lastCliUiEventId: string = ''
   @State private isExpandedLayout: boolean = false
@@ -3471,8 +3479,9 @@ export struct WindowNativeNode {
         this.sessionToolStore.loadPlanetList()
         this.locationPickerStore.loadObserverInfo()
         this.locationStore.loadSavedLocations()
-      } else if (panel === 'catalogs' && !OFFLINE_APPGALLERY_BUILD) {
-        if (this.catalogStore.catalogList.length === 0) this.catalogStore.loadStarCatalogs()
+      } else if (panel === 'catalogs') {
+        // 离线与在线模式都加载：面板统一显示 9 级星表（引擎 checked 状态为准，桥不可用回退静态快照）。
+        this.catalogStore.loadStarCatalogs()
       } else if (panel === 'bookmarks') {
         this.bookmarkStore.loadBookmarks()
       } else if (panel === 'oculars') {
@@ -6495,6 +6504,111 @@ export struct WindowNativeNode {
     }, 1600) as number
   }
 
+  // 用系统浏览器打开外部链接（星表下载页等）。宿主持有 UI 上下文，面板只回调 URL。
+  private openExternalUrl(url: string): void {
+    if (url.length === 0) {
+      return
+    }
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+    const want: Want = {
+      action: 'ohos.want.action.viewData',
+      entities: ['entity.system.browsable'],
+      uri: url
+    }
+    context.startAbility(want).then((): void => {
+      hilog.info(0x0000, 'StellariumArkUI', 'opened external url %{public}s', url)
+    }).catch((): void => {
+      this.flashHint(I18n.t('catalog_open_source_failed'))
+    })
+  }
+
+  // 手动导入星表：选本地 .cat（不看文件名，桥按 MD5 识别目标级），异步拷到用户目录再交桥导入。
+  private importCatalogFile(): void {
+    if (this.catalogStore.catalogImporting) {
+      return
+    }
+    const run = async (): Promise<void> => {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const options = new picker.DocumentSelectOptions()
+      options.fileSuffixFilters = [I18n.t('catalog_file_filter') + '|.cat']
+      options.maxSelectNumber = 1
+      let selectedUris: string[] = []
+      try {
+        selectedUris = await new picker.DocumentViewPicker(context).select(options)
+      } catch (error) {
+        this.flashHint(I18n.t('catalog_import_cancelled'))
+        return
+      }
+      if (selectedUris.length === 0 || selectedUris[0].length === 0) {
+        this.flashHint(I18n.t('catalog_import_cancelled'))
+        return
+      }
+      this.stageAndImportCatalog(selectedUris[0], context)
+    }
+    run()
+  }
+
+  // 把沙箱外的 .cat（picker / 打开方式给的 URI）落到用户目录后交桥按 MD5 导入。
+  private stageAndImportCatalog(uri: string, context: common.UIAbilityContext): void {
+    const run = async (): Promise<void> => {
+      let baseName = uri.substring(uri.lastIndexOf('/') + 1)
+      const queryIndex = baseName.indexOf('?')
+      if (queryIndex >= 0) baseName = baseName.substring(0, queryIndex)
+      try {
+        baseName = decodeURIComponent(baseName)
+      } catch (_error) {
+      }
+      baseName = baseName.trim()
+      if (!baseName.toLowerCase().endsWith('.cat')) {
+        baseName = 'catalog-import-' + Date.now().toString() + '.cat'
+      }
+      const destDir = context.filesDir + '/stellarium_userdir/stars/hip_gaia3'
+      fileIo.mkdirSync(destDir, true)
+      const destPath = destDir + '/' + baseName
+      if (fileIo.accessSync(destPath)) {
+        fileIo.unlinkSync(destPath)
+      }
+      try {
+        await fileIo.copy(uri, fileUri.getUriFromPath(destPath))
+      } catch (error) {
+        this.flashHint(I18n.t('catalog_import_failed'))
+        return
+      }
+      this.catalogStore.importLocalCatalog(destPath)
+    }
+    run()
+  }
+
+  // 「打开方式」收到的 .cat：Qt 就绪后按文件名匹配星表并导入（引擎未就绪先挂起）。
+  private onOpenCatalogUriChanged(): void {
+    const uri = this.openCatalogUri
+    if (uri.length === 0) {
+      return
+    }
+    this.openCatalogUri = ''
+    if (this.qtContentReadyForCatalog) {
+      this.handleOpenCatalogUri(uri)
+    } else {
+      this.pendingOpenCatalogUri = uri
+    }
+  }
+
+  private onQtContentReadyForCatalog(): void {
+    if (!this.qtContentReadyForCatalog || this.pendingOpenCatalogUri.length === 0) {
+      return
+    }
+    const uri = this.pendingOpenCatalogUri
+    this.pendingOpenCatalogUri = ''
+    this.handleOpenCatalogUri(uri)
+  }
+
+  // 「打开方式」收到的 .cat：打开星表面板并把文件交导入（桥按 MD5 识别目标级）。
+  private handleOpenCatalogUri(uri: string): void {
+    this.setPanel('catalogs')
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+    this.stageAndImportCatalog(uri, context)
+  }
+
   private currentGuide(): AstronomyGuide {
     return ASTRONOMY_GUIDES.find((guide: AstronomyGuide) => guide.id === this.guideStore.guideState.guideId) ?? ASTRONOMY_GUIDES[0]
   }
@@ -7861,7 +7975,9 @@ export struct WindowNativeNode {
       CatalogsPanel({
         catalogStore: this.catalogStore,
         cardBorderColor: this.nightModeStore.nmBorder(),
-        onDownload: (id: string) => { this.catalogStore.startCatalogDownload(id) }
+        onDownload: (id: string) => { this.catalogStore.startCatalogDownload(id) },
+        onOpenCatalogSource: (url: string) => { this.openExternalUrl(url) },
+        onImportCatalog: () => { this.importCatalogFile() }
       })
     } else if (this.activePanel === 'bookmarks') {
       BookmarkPanel({

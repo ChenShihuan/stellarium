@@ -1,5 +1,69 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-09] DevEco Code - 观测列表：GPS 来源改用逆地理编码取县一级名称（设计增补）
+
+- **依据（用户要求）**：观测记录分享特性中，GPS 定位结果采用逆地理编码获取**县一级行政区划名称**显示，括号内标注「GPS」。
+- **改动**：① `specs/OBSERVING-LIST-RECORD-SHARE.md` §7 名称解析改为**按来源分派**（引擎 `name` → `source==='gps'` 逆地理编码县一级 → 本地库 → 仅坐标），快照新增 `source` / `countyName`；§7.1 由「不采用」改为「**仅 GPS 来源采用**」的使用边界与接入约束；§8.2 `location` 增 `source` / `countyName`；§8.4 补 GPS 地点行示例；§10 增 `obs_location_gps_suffix`；§12 S3 与 §13 验证项 10 同步。② `NETWORK-INVENTORY.md` 该条目由「未采用」改为「**仅 GPS 来源，计划采用**」（外发字段 = 观测经纬度、触发 = 用户主动定位、失败回退本地库）。③ 版型 HTML 增 S0「C 区 GPS 县一级名称」变体（1080 契约内，字号/药丸不变）。
+- **代码锚点**：复用宿主已有 `ObserverLocationRecord.source`（`common/types/MainWindowModels.ets:424`）与 `quickLocationLabel`（`common/derive/labels.ets:337`）；`module.json5` **不新增权限**（逆地理编码联网由系统位置服务代理，不需要 INTERNET）。
+- **验证**：纯文档改动，无代码 / 权限 / 契约变更；CRLF 归一、UTF-8 无 BOM。构建与真机未涉及。
+
+## [2026-10-09] DevEco Code - 观测列表设计补充：系统逆地理编码的权限/联网结论
+
+- **依据（用户要求）**：核实「鸿蒙获取坐标 API 能否返回城市名」「是否涉及应用新增联网权限」，将结论增补到涉及文档。
+- **核对结论（官方文档）**：① 能返回城市名——`@kit.LocationKit` `geoLocationManager.getAddressesFromLocation(ReverseGeoCodeRequest)` → `GeoAddress[]`（`locality`/`subLocality`/`administrativeArea`/`placeName` 等），系统能力 `SystemCapability.Location.Location.Geocoder`；② **权限为 `ohos.permission.LOCATION`，不要 `ohos.permission.INTERNET`**——联网由系统位置服务代理，应用自身网络栈不发起；③ **但设备必须联网**（开发指导 `geocode-guidelines` 原文「需要访问后端服务，请确保设备联网」），外发发生在系统侧；④ 非穿戴设备仅支持中国境内（不含港澳台）。
+- **改动**：① `specs/OBSERVING-LIST-RECORD-SHARE.md` §7 新增「7.1 为何不采用系统逆地理编码（结论与依据）」；② `NETWORK-INVENTORY.md` 追加「2026-10-09 观测列表分享：系统逆地理编码评估（未采用）」条目，区分**权限申请（不需要 INTERNET）/ 设备联网（需要，系统侧）/ 数据外发登记（需要）**三件事。
+- **本期末结论**：观测地点城市名仍走本地 `LOCATION_HIERARCHY` 反查（§7），保持离线、无外发、无新权限；未来若接入按 opt-in 增强处理。
+- **验证**：纯文档改动，无代码/权限/契约变更；CRLF 归一、UTF-8 无 BOM。构建与真机未涉及。
+
+## [2026-10-09] DevEco Code - 观测列表增强设计稿：记录模型 / 双页签 / 导出分享 + 分享图版型契约
+
+- **依据（用户要求）**：观测列表页签分离（默认观测列表、tag 切换推荐）、已观测时间戳标记、导出当晚观测记录（截图分享 + JSON）、分享图模板（主目标贴图/上传图 + 记录列表 + 地点坐标 + 供 Stellarium 导入的二维码）、复制列表、一键清空观测时间、新增星表外自定义目标、赤道/时角坐标输入（不接受地平坐标）。**第 1 版设计稿，未实施，不改动任何源码。**
+- **改动**：① 新增 `docs/harmonyos/specs/OBSERVING-LIST-RECORD-SHARE.md`（14 节）：`ObservingTargetRecord` 记录模型（-1 哨兵风格）与同键迁移、双页签 IA、标记交互（`AlertDialog` 防误触）、自定义目标表单（`j2000`/`date`/`hourangle` 三模式）、新桥命令 `convertCoords`（C++ ~40 行，LST−HA + `equinoxEquToJ2000`）、`common/derive/coords.ets` 解析提取、地点快照（引擎名 → `LOCATION_HIERARCHY` 反查 ≤0.5°）、JSON 双 schema（`records` + `stellariumCompatible` 桌面兼容块，`CustomObject` 同构）、分享图管线（屏幕外 `ObservingShareCard` 1080×1920 + `componentSnapshot`）、ScanKit `generateBarcode` QR（阈值 2,600 字符、超限截断）、9 条语义 CLI、4 实施切片（S1–S4）、12 项验证清单；② 新增 `docs/harmonyos/specs/observing-list-share-template.html` —— §8.9 版型契约：A–F 六区（品牌头 64 / 标题 144 / 地点 52 / hero 686 / 记录列表 ≤5 行+尾行 / QR 底栏），配色 token 与日间主题同源（accent `#5B93BF`、surface `#101A2B`）且**固定不随夜间模式**，含 token 表、字号阶、高度预算、`data-bind` 绑定点与 S1–S5 降级形态（无城市 / 仅主目标 / QR 截断 / QR 失败 / hero 配图降级）；③ 设计文档 §10 补 6 个分享图 i18n 键（`obs_share_title` / `obs_share_qr_hint` / `obs_share_qr_sub` / `obs_share_only_hero` / `obs_share_qr_failed` / `obs_share_footer`），与版型 HTML 登记一致。
+- **边界**：全本地（QR 本地生成、分享图本地渲染），经 systemShare 外发，无新增联网（NETWORK-INVENTORY 不受影响）；无新权限；新依赖仅 `@kit.ScanKit` `generateBarcode` 与 `componentSnapshot`（项目首次使用）。
+- **验证**：纯文档改动，无代码 / 契约 / 资源变更；两文件 CRLF 归一（loneLF 0）、UTF-8 无 BOM。构建与真机未涉及。
+
+## [2026-10-09] DevEco Code - 修星表面板：导入后行内仍显「手动导入」（ForEach 键复用，真因）
+
+- **现象（用户反馈）**：导入 stars5 后，面板该行仍显示「手动导入」按钮；而**同屏摘要**已变为「已加载至 13.75 等（stars0–stars5）」。
+- **真因**：`CatalogsPanel` 的 `ForEach` **键生成器用了 `c.id`**。刷新后 store 用「同 id 的新对象」替换列表，ArkUI 按 key 判等 → **复用旧行、不再执行行构建**，于是行内仍保留旧的 `checked=false`；摘要不在 ForEach 内，故正常更新（这条「摘要对、行错」的不一致正是该坑的签名）。**上一版归因的「回包竞态」是次要因素，真正的元凶在这里。**
+- **修法**：① 键生成器纳入行内容依赖 —— `c.id + 是否已加载 + 导入/下载进行态`，状态一变即重建该行；② 移除 `CatalogStore.catalogLoaded` 一次性加载缓存，改为**每次打开面板都重查**（`checked` 由引擎决定，不能缓存），旧回包仍由序号丢弃；③ 保留导入后的乐观置位。
+- **验证（真机 Mate 80 Pro）**：面板 stars5 行显示 **「已加载」**（`12.0 ~ 13.75 等 / 8M 星 / 245 MB`，无按钮、无来源行），stars4 同为「已加载」；`getStarCatalogs` stars5 `checked:true`。`arkts_check` 0 error；`BUILD SUCCESSFUL`。
+
+## [2026-10-09] DevEco Code - 修星表面板：导入后立即显示「已加载」（回包竞态）
+
+- **现象（用户反馈）**：经「打开方式」导入 stars5 后，面板仍把该级显示为待导入（手动导入）。
+- **根因**：`CatalogStore.loadStarCatalogs()` 是「打开面板时拉一次 + 导入后重拉」，两次回包可能乱序——打开面板的旧回包（stars5=`false`）落在导入后重拉的新回包（stars5=`true`）之后，把状态覆盖回未加载。真机同一会话内即会看到该现象；重启后（启动即按已存在文件加载）才正常。
+- **修法**：① 加列表刷新序号 `catalogLoadSequence`，旧回包到达即丢弃；② 导入成功后 `markCatalogLoaded(id)` 就地**乐观更新**该级为已加载，不必等重拉。
+- **验证**：真机 stars5 已加载时面板摘要「已加载至 13.75 等（stars0–stars5）」、对应行「已加载」；`getStarCatalogs` stars5 `checked:true`。`arkts_check` 0 error；`BUILD SUCCESSFUL`。
+
+## [2026-10-09] DevEco Code - 星表注册为 .cat「打开方式」+ 改按 MD5 识别（真机导入 stars5 成功）
+
+- **依据（用户要求）**：把本应用注册为 `.cat` 文件类型的受支持打开方式，以便直接加载；并按用户决定**改按 MD5 识别**（不再按文件名匹配）。
+- **改动**：① 新增 `harmonyos/resources/rawfile/arkdata/utd/utd.json5`（自定义 UTD `com.joinother.skyinstrument.stellarium-cat`，后缀 `.cat`）+ `harmonyos/module.json5` 增加 QAbility 的 `ohos.want.action.viewData` + `uris`（`scheme:file`、该 UTD、`linkFeature:FileOpen`）；② `QAbility.onCreate/onNewWant` 检测 `want.uri` 为 `.cat` → 写 `AppStorage('stellariumOpenCatalogUri')`；宿主 `@StorageLink`(`@Watch`) 消费（Qt 未就绪先挂起）；③ 桥命令 `importStarCatalog` 改为 **payload = 源文件路径，按 MD5 匹配** `defaultStarsConfig.json` 的 `checksum` 识别目标级（去掉文件名匹配），再前置级守卫 + 归位 fileName + 加载；`手动导入` 按钮与「打开方式」共用同一路径；④ 同步长命令的**重复入队短路**（同路径+大小+mtime+上次成功则直接返回）；⑤ `StarMgr::setCheckFlag` private → public（仅可见性），导入成功后显式置位。
+- **真机验证（Mate 80 Pro `192.168.1.7:36717`）**：`stars_5_1v0_6.cat`（245 MB）从文件管理器「打开方式」→ 本应用 → 日志 `[catalog-open] received .cat open-with want` + `Loading star catalog: ... stars_5_1v0_6 - 5_1v0_6; 8051935 entries`；`getStarCountFull` → `catalogLevels:6 / total:10380312`（= 内置 2,328,377 + stars5 8,051,935）；`getStarCatalogs` → stars5 **`checked:true`**；重装/重启后保持。护栏：`arkts_check` 0 error；引擎重编 + `BUILD SUCCESSFUL`；`check-ohos-command-catalog`（359）。
+
+## [2026-10-09] DevEco Code - 星表扩展 P2：离线手动导入启用（严格校验 + 热加载，真机验证）
+
+- **依据（用户决定）**：采用上游通行做法——**严格校验不放松**（文件名 + MD5）。同时把未加载项的「打开下载页」链接文字换成具体 `.cat` 文件名，并把「手动导入」按钮启用。
+- **改动**：① `CatalogsPanel` 未加载项的链接文字由「打开下载页」改为 **`fileName`**（如 `stars_6_1v0_4.cat`）；②「手动导入」由灰标签改为**可点 `Button`**；③ 宿主新增 `importCatalogFile(id, fileName)`：`DocumentViewPicker`（过滤 `.cat`）→ 校验文件名 → `fileIo.copy` 异步拷到 `filesDir/stellarium_userdir/stars/hip_gaia3/<fileName>` → 回调 `CatalogStore.importLocalCatalog(id)`；④ 新桥命令 **`importStarCatalog`**（`src/StelMainView.cpp`）：前置级 + 文件名 + MD5 校验并**热加载**（复用 `checkAndLoadCatalog`，与下载完成同路径，失败即删），并在 `StelOhosCommandCatalog.hpp` 登记（命令数 358 → **359**）；⑤ 6 个 i18n 键（10 语言）。
+- **验证（真机 Mate 80 Pro `192.168.1.7:36717`）**：`arkts_check` 4 文件 0 error；**引擎重编**（增量）+ `BUILD SUCCESSFUL`；UI 契约 intact（50/34/29/18）；`check-ohos-command-catalog` 通过（359）。CLI `importStarCatalog stars6` → `{"ok":false,"error":"prerequisite catalog not loaded"}`（前置级守卫生效，命令已注册可达）；面板实测链接文字 `stars_7_1v0_4.cat` / `stars_8_2v0_3.cat`（可点），「手动导入」为可点按钮，点击**弹出系统文件选择器**（截图存证）。
+- **未端到端走查**：真正导入 912 MB 的 stars6 需本地备好该文件，本轮未做；文件名不匹配 / MD5 不符的拒绝路径由守卫与 `StarMgr` 既有 MD5 逻辑保证。
+
+## [2026-10-09] DevEco Code - 星表扩展 P1 补：SourceForge 下载页链接（浏览器跳转，真机验证）
+
+- **依据（用户要求）**：为星表面板加一个可从浏览器跳转的 SourceForge **下载页**链接（非直链）。
+- **改动**：`StarCatalogItem` 新增 `sourcePage`（由直链派生——去掉尾部 `/download` 与文件名，得到目录页）；`CatalogStore` 的映射与静态快照同步填充；`CatalogsPanel` 在未加载项的「来源：SourceForge」右侧新增下划线链接「打开下载页」；宿主新增 `openExternalUrl(url)`（`getUIContext().getHostContext()` + `Want{action:'ohos.want.action.viewData',entities:['entity.system.browsable'],uri}`），并经 `onOpenCatalogSource` 回注；新增 2 个 i18n 键。
+- **真机验证**（HUAWEI Mate 80 Pro `192.168.1.7:36717`）：`devecocli run --skip-build` → `Smoke: PASS`；`openUiPanel catalogs` → 滚动到 stars5；点击「打开下载页」→ 前台切到 `com.huawei.hmos.browser`，落点为 SourceForge `Stellarium Files → Home / Extra-data-files / stars-3.0` 文件列表（截图存证）。
+- **护栏**：`arkts_check` 5 文件 0 error；`BUILD SUCCESSFUL`；契约 intact（50/34/29/18）；i18n 源↔镜像一致。
+
+## [2026-10-09] DevEco Code - 星表扩展 P1：统一 9 级只读列表 + 下载渠道验证（模拟器验证）
+
+- **依据**：`docs/harmonyos/specs/STAR-CATALOG-EXTENSION.md`（设计稿 P1）。本轮**不打包 stars5**、**不改编译宏（保持离线）**，先做只读列表与渠道标注。
+- **下载渠道验证**：SourceForge `.../Extra-data-files/stars-3.0/` **有效**（目录页列出 stars_4–stars_8；`stars_5_1v0_6.cat/download` 经 302→302→200、`Content-Type: application/octet-stream`、`Content-Length: 257743872`、最终镜像 `zenlayer.dl.sourceforge.net`）；GitHub `Stellarium/stellarium-data` releases **不含** star 文件（只有 DSO `dso-3.23` / 翻译 / weekly 安装包）。结论：继续用 SourceForge。实测同时修正设计稿的 `STAR_CATALOG_5_BYTES`（257017856 → **257743872**）。
+- **改动**：`StarCatalogItem`/`StarCatalogRaw` 扩展 `magRange`/`count`/`sizeMb`/`checksum`/`source`；`CatalogStore.loadStarCatalogs()` 映射扩展字段并新增**静态 9 级快照**（桥不可用 / 空回包 / 失败时回退，使 UI-only 模拟器也能渲染）；`CatalogsPanel` 重写为统一 9 级列表（星等范围 / 星数 / 大小 + `[已加载]`/`[手动导入]`/`[下载]` + 未加载项 `来源：SourceForge`），去掉原离线空态；宿主星表面板离线 / 在线都加载；新增 10 个 i18n 键（10 语言）。
+- **未做（设计稿 P0/P2/P3）**：stars5 打包、在线下载端到端、离线手动导入（`importStarCatalog`）、运行时卸载（`removeStarCatalog`）。
+- **验证**：`arkts_check` 5 文件 0 error；`BUILD SUCCESSFUL`；契约 intact（**50/34/29/18**）；`check-ohos-i18n`（源↔镜像一致）与 `check-ohos-command-catalog`（358 命令）通过。**模拟器**（Pura 90 Pro，UI-only `127.0.0.1:5555`）：进入「更多功能 → 天体数据与扩展 → 星表下载」，列表渲染 stars0–stars8 共 9 行，标题「恒星星表」、摘要「已加载至 12.0 等（stars0–stars4）」，stars0–4「已加载」、stars5–8「手动导入 + 来源：SourceForge」，进程存活无崩溃。
+
 ## [2026-10-08] DevEco Code - 整理 STATE-REVIEW 评审文档：补 §9 实施状态与终态实测
 
 - **依据（用户要求）**：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` 长期停在工作区未提交（§9/§10 为另一会话新增），且 §9.4 附录存在实测偏差，需整理后入库。
