@@ -4,6 +4,88 @@ import { I18n } from '../pages/I18n'
 import { catalogIconForModule, catalogIconForObjectType } from '../common/derive/catalog'
 import { CommandPort } from '../bridge/CommandPort'
 
+// —— 内置星表静态快照 ——
+// 镜像 `stars/hip_gaia3/defaultStarsConfig.json` 的 9 级星表。引擎桥不可用时（UI-only 模拟器、
+// 桥未就绪、或引擎未回包）用它渲染面板，保证始终能看到完整级表；桥回包到达后以引擎的
+// `checked` 状态为准替换。`source` 由 url 派生，离线构建下用于标注下载渠道。
+const STAR_SOURCEFORGE_BASE = 'https://sourceforge.net/projects/stellarium/files/Extra-data-files/stars-3.0/'
+const STATIC_STAR_CATALOGS: StarCatalogRaw[] = [
+  { id: 'stars0', fileName: 'stars_0_0v0_21.cat', count: 0.005, magRange: [-2, 6], sizeMb: 0.2, checked: true },
+  { id: 'stars1', fileName: 'stars_1_0v0_16.cat', count: 0.022, magRange: [6, 7.5], sizeMb: 1.0, checked: true },
+  { id: 'stars2', fileName: 'stars_2_0v0_17.cat', count: 0.14, magRange: [7.5, 9], sizeMb: 6.5, checked: true },
+  { id: 'stars3', fileName: 'stars_3_0v0_10.cat', count: 0.42, magRange: [9, 10.5], sizeMb: 12.8, checked: true },
+  { id: 'stars4', fileName: 'stars_4_1v0_6.cat', count: 1.7, magRange: [10.5, 12], sizeMb: 53.1, checked: true, url: STAR_SOURCEFORGE_BASE + 'stars_4_1v0_6.cat/download' },
+  { id: 'stars5', fileName: 'stars_5_1v0_6.cat', count: 8.0, magRange: [12, 13.75], sizeMb: 245, checked: false, url: STAR_SOURCEFORGE_BASE + 'stars_5_1v0_6.cat/download' },
+  { id: 'stars6', fileName: 'stars_6_1v0_4.cat', count: 29.8, magRange: [13.75, 15.5], sizeMb: 912, checked: false, url: STAR_SOURCEFORGE_BASE + 'stars_6_1v0_4.cat/download' },
+  { id: 'stars7', fileName: 'stars_7_1v0_4.cat', count: 57.5, magRange: [15.5, 16.75], sizeMb: 1710, checked: false, url: STAR_SOURCEFORGE_BASE + 'stars_7_1v0_4.cat/download' },
+  { id: 'stars8', fileName: 'stars_8_2v0_3.cat', count: 122.9, magRange: [16.75, 18], sizeMb: 1830, checked: false, url: STAR_SOURCEFORGE_BASE + 'stars_8_2v0_3.cat/download' }
+]
+
+// 星等整数补 ".0"（-2 -> -2.0），小数原样（13.75 -> 13.75）。
+function catalogMagnitude(value: number): string {
+  return Number.isInteger(value) ? value.toFixed(1) : value.toString()
+}
+
+function catalogMagRange(raw: number[] | undefined): string {
+  if (raw === undefined || raw.length < 2) return ''
+  return catalogMagnitude(raw[0]) + ' ~ ' + catalogMagnitude(raw[1])
+}
+
+function catalogSizeLabel(sizeMb: number | undefined): string {
+  if (sizeMb === undefined || sizeMb <= 0) return ''
+  return sizeMb >= 1024 ? (sizeMb / 1024).toFixed(1) + ' GB' : sizeMb.toString() + ' MB'
+}
+
+// count 以"百万"为单位；<1M 显示 K，>=1M 显示 M。
+function catalogCountLabel(countMillions: number | undefined): string {
+  if (countMillions === undefined || countMillions <= 0) return ''
+  return countMillions < 1 ? Math.round(countMillions * 1000).toString() + 'K' : countMillions.toString() + 'M'
+}
+
+function catalogSourceLabel(url: string): string {
+  const lower = url.toLowerCase()
+  if (lower.indexOf('sourceforge') >= 0) return 'SourceForge'
+  if (lower.indexOf('github') >= 0) return 'GitHub'
+  return ''
+}
+
+// 从直链派生可浏览的"下载页面"（目录页）：去掉尾部 `/download` 与文件名，保留到目录。
+// 例：.../stars-3.0/stars_5_1v0_6.cat/download -> .../stars-3.0/
+function catalogSourcePage(url: string): string {
+  if (url.length === 0) return ''
+  let page = url
+  const downloadSuffix = '/download'
+  if (page.endsWith(downloadSuffix)) {
+    page = page.substring(0, page.length - downloadSuffix.length)
+  }
+  const slash = page.lastIndexOf('/')
+  return slash > 0 ? page.substring(0, slash + 1) : page
+}
+
+function mapCatalogRaw(raw: StarCatalogRaw): StarCatalogItem {
+  const url = raw.url ?? ''
+  return {
+    id: raw.id ?? '',
+    name: raw.name ?? (raw.id ?? I18n.t('catalog_fallback')),
+    size: catalogSizeLabel(raw.sizeMb),
+    key: raw.key ?? '',
+    fileName: raw.fileName ?? '',
+    url: url,
+    html: raw.html ?? '',
+    checked: raw.checked === true || raw.checked === 'true' || raw.checked === 1,
+    magRange: catalogMagRange(raw.magRange),
+    count: catalogCountLabel(raw.count),
+    sizeMb: raw.sizeMb ?? 0,
+    checksum: raw.checksum ?? '',
+    source: catalogSourceLabel(url),
+    sourcePage: catalogSourcePage(url)
+  }
+}
+
+function buildStarCatalogFallback(): StarCatalogItem[] {
+  return STATIC_STAR_CATALOGS.map((raw: StarCatalogRaw): StarCatalogItem => mapCatalogRaw(raw))
+}
+
 // 宿主 → CatalogStore 的检索域助手 / 跨 store setter。
 // `loadObjectCatalogCategories` 写本 store 的 objectCatalogCategories，同时读 / 写 SearchStore
 //（pendingPluginCatalogId / searchCategory / categoryModuleId），并复用宿主搜索域动作
@@ -41,11 +123,14 @@ export interface CatalogHostHooks {
 // 本域无 publish* 发布点、消费方均为 @ObjectLink（字段赋值即刷新），故 onChanged 为等价空实现。
 @Observed
 export class CatalogStore {
-  catalogList: StarCatalogItem[] = []
+  // 启动即以静态 9 级快照填充，保证面板/模拟器立即可渲染；桥回包到达后替换为引擎状态。
+  catalogList: StarCatalogItem[] = buildStarCatalogFallback()
   catalogLoading: boolean = false
   catalogBusy: boolean = false
   catalogDownloadingId: string = ''
   catalogMsg: string = ''
+  // 手动导入进行中（按 MD5 识别，与下载态分开）。
+  catalogImporting: boolean = false
   starCatalogHealth: CatalogHealthEntry = {}
   objectCatalogCategories: CatOption[] = []
 
@@ -53,6 +138,8 @@ export class CatalogStore {
   private port: CommandPort | null = null
   // 请求序号；本加载器暂未用到，预留以保持统一约定。
   private seq: number = 0
+  // 列表刷新序号：防止「打开面板时的旧回包」与「导入后重拉」竞争、把新状态覆盖成旧状态。
+  private catalogLoadSequence: number = 0
   private onChanged: (() => void) | null = null
   // 宿主助手 / 跨 store setter。
   private hooks: CatalogHostHooks | null = null
@@ -79,29 +166,91 @@ export class CatalogStore {
     }
   }
 
-  // 星表下载面板：桥查询可用星表列表。
+  // 星表下载面板：桥查询可用星表列表。**每次打开都重查**（各级的已加载/未加载由引擎的
+  // checked 决定，不能缓存），引擎桥不可用 / 回包为空时保留静态 9 级快照；旧回包由序号丢弃。
   loadStarCatalogs(): void {
     const port = this.ensurePort()
     if (port === null) {
       return
     }
     this.catalogLoading = true
+    const loadSeq = ++this.catalogLoadSequence
     port.requestWhenReady('getStarCatalogs', '', (r: StellariumBridgeResponse) => {
+      if (loadSeq !== this.catalogLoadSequence) return
       const resp = r as StarCatalogsResponse
       const list = resp.catalogs ?? []
-      this.catalogList = list.map((c: StarCatalogRaw): StarCatalogItem => ({
-        id: c.id ?? '',
-        name: c.name ?? (c.id ?? I18n.t('catalog_fallback')),
-        size: c.size ?? '',
-        key: c.key ?? '',
-        fileName: c.fileName ?? '',
-        url: c.url ?? '',
-        html: c.html ?? '',
-        checked: c.checked === true || c.checked === 'true' || c.checked === 1,
-      }))
+      this.catalogList = list.length > 0
+        ? list.map((c: StarCatalogRaw): StarCatalogItem => mapCatalogRaw(c))
+        : buildStarCatalogFallback()
+      this.catalogLoading = false
+      this.notifyChanged()
+    }, () => {
+      if (loadSeq !== this.catalogLoadSequence) return
+      this.catalogList = buildStarCatalogFallback()
       this.catalogLoading = false
       this.notifyChanged()
     })
+  }
+
+  // 手动导入本地星表：宿主把所选 / 被打开的文件落到沙箱后传来其路径；桥按 **MD5 识别**
+  // 目标级（不看文件名）并热加载。重活由宿主 fileIo 异步完成，这里只轮询回包。
+  importLocalCatalog(sourcePath: string): void {
+    const port = this.ensurePort()
+    if (port === null || this.catalogImporting) {
+      return
+    }
+    const hooks = this.hooks
+    this.catalogImporting = true
+    this.catalogMsg = I18n.t('catalog_importing')
+    port.requestLongRunning('importStarCatalog', sourcePath, (r: StellariumBridgeResponse) => {
+      this.catalogImporting = false
+      this.catalogMsg = ''
+      const importedId = r.id ?? ''
+      if (r.ok === true && importedId.length > 0) {
+        this.markCatalogLoaded(importedId)
+      }
+      if (hooks !== null) {
+        hooks.flashHint(this.importResultHint(r))
+      }
+      this.loadStarCatalogs()
+    }, () => {
+      this.catalogImporting = false
+      this.catalogMsg = ''
+      const failedHooks = this.hooks
+      if (failedHooks !== null) {
+        failedHooks.flashHint(I18n.t('catalog_import_failed'))
+      }
+    }, (progress: StellariumBridgeResponse): void => {}, 1200)
+  }
+
+  // 导入结果提示：按桥返回的 reason 映射到本地化文案。
+  private importResultHint(r: StellariumBridgeResponse): string {
+    if (r.ok === true) {
+      return I18n.t('catalog_import_success')
+    }
+    const reason = r.reason ?? ''
+    if (reason === 'checksum_mismatch') {
+      return I18n.t('catalog_import_no_match')
+    }
+    if (reason === 'prerequisite') {
+      return I18n.t('catalog_prereq_missing')
+    }
+    return I18n.t('catalog_import_failed')
+  }
+
+  // 导入成功后立刻把对应级标记为已加载（乐观更新），避免面板在重拉回包前还显示「手动导入」。
+  private markCatalogLoaded(id: string): void {
+    this.catalogList = this.catalogList.map((item: StarCatalogItem): StarCatalogItem => {
+      if (item.id !== id) {
+        return item
+      }
+      return {
+        id: item.id, name: item.name, size: item.size, key: item.key, fileName: item.fileName,
+        url: item.url, html: item.html, checked: true, magRange: item.magRange, count: item.count,
+        sizeMb: item.sizeMb, checksum: item.checksum, source: item.source, sourcePage: item.sourcePage
+      }
+    })
+    this.notifyChanged()
   }
 
   // 星表下载启动：忙时提示，否则下发下载命令并轮询状态。

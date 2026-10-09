@@ -949,6 +949,24 @@ export default class QAbility extends UIAbility {
     }
   }
 
+  // 作为 .cat 的「打开方式」被拉起时，want.uri 指向所选文件；转存到 AppStorage 交 ArkUI 导入。
+  private queueOpenCatalogWant(want: Want): void {
+    const uri = want.uri ?? '';
+    if (uri.length === 0) {
+      return;
+    }
+    let path = uri;
+    const queryIndex = path.indexOf('?');
+    if (queryIndex >= 0) {
+      path = path.substring(0, queryIndex);
+    }
+    if (!path.toLowerCase().endsWith('.cat')) {
+      return;
+    }
+    AppStorage.setOrCreate('stellariumOpenCatalogUri', uri);
+    hilog.info(LOG_DOMAIN, LOG_TAG, '[catalog-open] received .cat open-with want');
+  }
+
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam) {
     this.privacyProbeStartedAt = Date.now();
     this.logPrivacyProbe('ability-create');
@@ -967,6 +985,7 @@ export default class QAbility extends UIAbility {
     this.pendingLaunchParam = launchParam;
     this.queueCliRequest(want);
     this.routeCardWant(want);
+    this.queueOpenCatalogWant(want);
   }
 
   onDestroy(): void | Promise<void> {
@@ -1029,6 +1048,7 @@ export default class QAbility extends UIAbility {
     this.pendingLaunchParam = launchParam;
     this.queueCliRequest(want);
     this.routeCardWant(want);
+    this.queueOpenCatalogWant(want);
     if (this.qtAbilityCreated) {
       qpa.handleAbilityOnNewWant(this, want, launchParam);
       this.drainCliRequests();
