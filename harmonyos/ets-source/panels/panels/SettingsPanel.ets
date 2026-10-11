@@ -27,6 +27,9 @@ import { InfoRow } from '../../common/ui/InfoRow'
 import { EphemerisToggleRow, InformationModeButton, InformationSwitchRow, NavigationSwitchRow } from '../settings/SettingsRows'
 import { LanguageRow, DevicePrivacySection } from '../settings/DeviceAndLanguageRows'
 import { NotificationSection } from '../settings/NotificationSection'
+import { KeyboardShortcutSection } from '../settings/KeyboardShortcutSection'
+import { KeyboardShortcutStore } from '../../state/KeyboardShortcutStore'
+import { KeyboardShortcutItem } from '../../common/types/StellariumTypes'
 import { TimeSettingsSection } from '../settings/TimeSettingsSection'
 import { DeltaTSettingsBlock } from '../time/DeltaTSettingsBlock'
 import { sensZh, pluginZh, pluginDesc, pluginFeatureRoute, resourceText, scriptZh, scriptDesc } from '../../common/derive/labels'
@@ -43,6 +46,7 @@ export struct SettingsPanel {
   @ObjectLink navigationStore: NavigationSettingsStore
   @ObjectLink viewSettingsStore: ViewSettingsStore
   @ObjectLink notificationStore: NotificationStore
+  @ObjectLink keyboardShortcutStore: KeyboardShortcutStore
   @Prop configTab: number
   @Prop configTabContentOpacity: number
   @Prop configTabContentOffsetX: number
@@ -101,6 +105,13 @@ export struct SettingsPanel {
   requestNotificationAccess: () => void = () => {}
   scheduleNextSolarTermReminder: () => void = () => {}
   clearAstronomyReminders: () => void = () => {}
+  keyboardShortcutQueryChange: (value: string) => void = () => {}
+  keyboardShortcutSelectChange: (item: KeyboardShortcutItem) => void = () => {}
+  keyboardShortcutPrimaryChange: (value: string) => void = () => {}
+  keyboardShortcutAlternateChange: (value: string) => void = () => {}
+  keyboardShortcutSaveChange: () => void = () => {}
+  keyboardShortcutResetSelectedChange: () => void = () => {}
+  keyboardShortcutResetAllChange: () => void = () => {}
   loadPluginList: () => void = () => {}
   openPluginFeature: (id: string) => void = () => {}
   playScriptByName: (filename: string) => void = () => {}
@@ -497,6 +508,23 @@ export struct SettingsPanel {
             NavigationSwitchRow({ label: I18n.t('settings_view_keyboard_zoom'), isOn: this.navigationStore.navigationZoomKeysEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('zoomKeys', v) } })
             NavigationSwitchRow({ label: I18n.t('settings_view_gravity_labels'), isOn: this.navigationStore.navigationGravityLabelsEnabled, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('gravityLabels', v) } })
             NavigationSwitchRow({ label: I18n.t('s0302'), isOn: this.viewSettingsStore.autoZoomResets, textColor: this.textColor, accentColor: this.accentColor, panelColor: this.panelColor, borderColorValue: this.lineColor, onToggle: (v: boolean) => { this.setNavigationBoolean('autoZoomResets', v) } })
+
+            KeyboardShortcutSection({
+              store: this.keyboardShortcutStore,
+              textColor: this.textColor,
+              subColor: this.subColor,
+              accentColor: this.accentColor,
+              panelColor: this.panelColor,
+              inputColor: this.inputColor,
+              activeSoft: 'rgba(91,147,191,0.24)',
+              onQuery: (value: string) => { this.keyboardShortcutQueryChange(value) },
+              onSelect: (item: KeyboardShortcutItem) => { this.keyboardShortcutSelectChange(item) },
+              onPrimary: (value: string) => { this.keyboardShortcutPrimaryChange(value) },
+              onAlternate: (value: string) => { this.keyboardShortcutAlternateChange(value) },
+              onSave: () => { this.keyboardShortcutSaveChange() },
+              onResetSelected: () => { this.keyboardShortcutResetSelectedChange() },
+              onResetAll: () => { this.keyboardShortcutResetAllChange() }
+            })
 
             Text(I18n.t('settings_view_max_fov')).fontSize(12).fontColor(this.subColor).width('100%').margin({ top: 4, bottom: 4 })
             Row() {

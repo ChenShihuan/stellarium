@@ -41,6 +41,8 @@ export interface LayerHostHooks extends BehaviorHostHooks {
   refreshNotificationStatus(): void
   // 巡天 / 多波段图层状态回读（SurveyController 持有）；进入「巡天」页时刷新。
   loadSurveyState(): void
+  // 键盘快捷键列表回读（KeyboardShortcutController 持有）；进入「视图导航」页时刷新。
+  loadKeyboardShortcuts(): void
   // 视图标签页宿主 @State（组件 @Prop 消费，控制器经 hooks 读写）。
   viewTab(): number
   setViewTab(value: number): void
@@ -268,6 +270,8 @@ export class LayerController {
         this.pluginStore.loadPluginList()
       } else if (tabId === -1) {
         this.hooks.refreshNotificationStatus()
+      } else if (tabId === 7) {
+        this.hooks.loadKeyboardShortcuts()
       }
       hilog.info(0x0000, 'StellariumArkUI', '[settings-transition] swap id=%{public}d tab=%{public}d', transitionId, tabId)
       this.hooks.animateTabOut(170, (): void => {

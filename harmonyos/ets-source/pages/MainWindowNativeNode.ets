@@ -20,7 +20,7 @@ import { LOCATION_COUNTRY_NAMES } from '../common/location/countries'
 import { LOCATION_ZH_NAMES } from '../common/location/names_zh'
 import { ASTRONOMY_GUIDES, AstronomyGuide, GuideState, GuideStep } from '../common/derive/AstronomyGuide'
 
-import { StellariumBridgeResponse, SessionSnapshot, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, NameItem, SearchSug, WindowNativeNodeCreateInfo, ChipItem, LandscapeItem, ScriptMetadata, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass } from './StellariumTypes'
+import { StellariumBridgeResponse, SessionSnapshot, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, NameItem, SearchSug, WindowNativeNodeCreateInfo, ChipItem, LandscapeItem, ScriptMetadata, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass, KeyboardShortcutItem } from './StellariumTypes'
 import { setLifecycleListener } from '../common/StellariumLifecycle'
 import { AudioEngine } from '../capability/AudioEngine'
 import { I18n, LANGUAGE_DISPLAY, PROJECTION_KEYS } from './I18n'
@@ -59,6 +59,7 @@ import { SensorController, GyroGuideLayout, SensorHostHooks } from '../capabilit
 import { NotificationController, NotificationHostHooks } from '../capability/NotificationController'
 import { SurveyController, SurveyHostHooks } from '../capability/SurveyController'
 import { ARController, ARHostHooks } from '../capability/ARController'
+import { KeyboardShortcutController, KeyboardShortcutHostHooks } from '../capability/KeyboardShortcutController'
 import { RecordingController, RecordingHostHooks } from '../capability/RecordingController'
 import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
 import { SkyInputController, SkyInputHostHooks } from '../capability/SkyInputController'
@@ -110,6 +111,7 @@ import { GyroStore } from '../state/GyroStore'
 import { WutStore } from '../state/WutStore'
 import { NotificationStore } from '../state/NotificationStore'
 import { SurveyStore } from '../state/SurveyStore'
+import { KeyboardShortcutStore } from '../state/KeyboardShortcutStore'
 import { AstroStore } from '../state/AstroStore'
 import { LocationStore } from '../state/LocationStore'
 import { CityChipsRow } from '../panels/location/CityChipsRow'
@@ -984,6 +986,7 @@ export struct WindowNativeNode {
   @State private notificationStore: NotificationStore = new NotificationStore()
   @State private surveyStore: SurveyStore = new SurveyStore()
   @State private arStore: ARStore = new ARStore()
+  @State private keyboardShortcutStore: KeyboardShortcutStore = new KeyboardShortcutStore()
   @State private wutStore: WutStore = new WutStore()
   @State private astroStore: AstroStore = new AstroStore()
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
@@ -1008,6 +1011,8 @@ export struct WindowNativeNode {
   private surveyControllerImpl: SurveyController | null = null
   // AR 预研控制器（惰性构造；注入 ARStore / CommandPort 与宿主 hooks）。
   private arControllerImpl: ARController | null = null
+  // 键盘快捷键控制器（惰性构造；注入 KeyboardShortcutStore / CommandPort 与宿主 hooks）。
+  private keyboardShortcutControllerImpl: KeyboardShortcutController | null = null
   // 录制/回放/录屏控制器（惰性构造；recordBuffer 属 保留字段，经 hooks 读写）。
   private recordingControllerImpl: RecordingController | null = null
   // 对象检查器三维模型渲染器（惰性构造；逐帧/草稿字段留控制器，可观测子集在 ObjectMediaStore）。
@@ -2466,6 +2471,17 @@ export struct WindowNativeNode {
     return this.arControllerImpl
   }
 
+  // 键盘快捷键控制器惰性构造。状态已在 KeyboardShortcutStore（只搬行为）。
+  private keyboardShortcutCtl(): KeyboardShortcutController {
+    if (this.keyboardShortcutControllerImpl === null) {
+      const hooks: KeyboardShortcutHostHooks = {
+        flashHint: (text: ResourceStr): void => this.flashHint(text)
+      }
+      this.keyboardShortcutControllerImpl = new KeyboardShortcutController(this.keyboardShortcutStore, this.commandPort(), hooks)
+    }
+    return this.keyboardShortcutControllerImpl
+  }
+
   // 录制/回放/录屏控制器惰性构造。状态已在 ScriptStore（只搬行为与定时器）；
   // recordBuffer 属 保留字段，经 hooks 读写。
   private recordingCtl(): RecordingController {
@@ -2713,6 +2729,7 @@ export struct WindowNativeNode {
         loadVideoRecordingState: (): void => { this.scriptPlaybackCtl().loadVideoRecordingState() },
         refreshNotificationStatus: (): void => { this.notificationCtl().refreshStatus() },
         loadSurveyState: (): void => { this.surveyCtl().loadSurveyState() },
+        loadKeyboardShortcuts: (): void => { this.keyboardShortcutCtl().load() },
         viewTab: (): number => this.viewTab,
         setViewTab: (value: number): void => { this.viewTab = value },
         viewTabContentOpacity: (): number => this.viewTabContentOpacity,
@@ -7833,6 +7850,7 @@ export struct WindowNativeNode {
         navigationStore: this.navigationStore,
         viewSettingsStore: this.viewSettingsStore,
         notificationStore: this.notificationStore,
+        keyboardShortcutStore: this.keyboardShortcutStore,
         scroller: this.scriptListScroller,
         configTab: this.configTab,
         configTabContentOpacity: this.configTabContentOpacity,
@@ -7890,6 +7908,13 @@ export struct WindowNativeNode {
         requestNotificationAccess: () => { this.notificationCtl().requestAccess() },
         scheduleNextSolarTermReminder: () => { this.notificationCtl().scheduleNextSolarTerm() },
         clearAstronomyReminders: () => { this.notificationCtl().clearReminders() },
+        keyboardShortcutQueryChange: (value: string) => { this.keyboardShortcutStore.keyboardShortcutQuery = value; this.keyboardShortcutCtl().load() },
+        keyboardShortcutSelectChange: (item: KeyboardShortcutItem) => { this.keyboardShortcutCtl().select(item) },
+        keyboardShortcutPrimaryChange: (value: string) => { this.keyboardShortcutStore.keyboardShortcutPrimary = value },
+        keyboardShortcutAlternateChange: (value: string) => { this.keyboardShortcutStore.keyboardShortcutAlternate = value },
+        keyboardShortcutSaveChange: () => { this.keyboardShortcutCtl().save() },
+        keyboardShortcutResetSelectedChange: () => { this.keyboardShortcutCtl().resetSelected() },
+        keyboardShortcutResetAllChange: () => { this.keyboardShortcutCtl().resetAll() },
         loadPluginList: () => { this.pluginStore.loadPluginList() },
         openPluginFeature: (id: string) => { this.pluginFeatureCtl().openPluginFeature(id) },
         playScriptByName: (filename: string) => { this.scriptPlaybackCtl().playScriptByName(filename) },

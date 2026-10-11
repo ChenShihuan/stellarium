@@ -873,6 +873,19 @@ export interface SatelliteNamePrefix {
   label: string
 }
 
+// 键盘快捷键条目（getKeyboardShortcuts 返回）
+export interface KeyboardShortcutItem {
+  id: string
+  group: string
+  text: string
+  shortcut: string
+  alternateShortcut: string
+  defaultShortcut: string
+  defaultAlternateShortcut: string
+  checkable: boolean
+  global: boolean
+}
+
 export interface SessionSnapshot {
   schemaVersion?: number
   exportedAt?: string
