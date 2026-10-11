@@ -23,6 +23,7 @@ export struct ToolsPanel {
   @Prop sessionImportText: string
   onScreenshot: () => void = () => {}
   onExportConfig: () => void = () => {}
+  onShareConfig: () => void = () => {}
   onImportConfig: () => void = () => {}
   onConfigImportText: (value: string) => void = () => {}
   onSessionExport: () => void = () => {}
@@ -51,6 +52,8 @@ export struct ToolsPanel {
             Text(I18n.t('tools_config_backup')).fontSize(13).fontColor(this.textColor).layoutWeight(1)
             Button(I18n.t('btn_export_view')).fontSize(11).fontColor(this.textColor).backgroundColor(this.panelColor)
               .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.onExportConfig() })
+            Button(I18n.t('config_share')).fontSize(11).fontColor(this.textColor).backgroundColor(this.panelColor)
+              .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.onShareConfig() })
             Button(I18n.t('btn_import_config')).fontSize(11).fontColor(this.textColor).backgroundColor(this.panelColor)
               .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.onImportConfig() })
           }.width('100%')

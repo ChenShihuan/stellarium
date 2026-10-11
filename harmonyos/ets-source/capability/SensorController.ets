@@ -77,6 +77,7 @@ export class SensorController {
   // ── 订阅状态 / 事件计数（逐帧草稿，留控制器）──
   private gyroPausedForBackground: boolean = false
   private gyroLastTimeMs: number = 0
+  private lastGyroUiRequestMs: number = 0
   private gyroGuideTargetAz: number = Number.NaN
   private gyroGuideTargetAlt: number = Number.NaN
   private gyroGuideLastUpdateMs: number = 0
@@ -190,6 +191,24 @@ export class SensorController {
     }
   }
 
+  // UI 入口的统一切换：280ms 去抖 + pending 抑制，避免快速连点造成订阅竞态。
+  requestGyroscopeToggle(enabled: boolean): void {
+    const now = Date.now()
+    if (now - this.lastGyroUiRequestMs < 280) {
+      hilog.info(0x0000, 'StellariumArkUI', '[gyro-ui] duplicate tap ignored')
+      return
+    }
+    if (this.gyroStore.gyroscopePending) {
+      this.hooks.flashHint(this.gyroStore.gyroscopeStatus)
+      return
+    }
+    this.lastGyroUiRequestMs = now
+    this.gyroStore.gyroscopePending = true
+    this.gyroStore.gyroscopePendingTarget = enabled
+    this.toggleGyroscope(enabled)
+    this.hooks.flashHint(enabled ? I18n.t('m_gyro_listening') : I18n.t('m_gyro_off'))
+  }
+
   private refreshGyroDisplayRotation(source: string): void {
     const rotation = this.hooks.displayRotation()
     if (!Number.isInteger(rotation) || rotation < 0 || rotation > 3) {
@@ -269,6 +288,8 @@ export class SensorController {
     this.gyroStore.gyroCompassAngle = 0
     this.gyroUsingRotationVector = false
     this.gyroStore.gyroscopeEnabled = true
+    this.gyroStore.gyroscopePending = false
+    this.gyroStore.gyroscopePendingTarget = true
     this.refreshGyroDisplayRotation('start')
     this.gyroStore.gyroscopeStatus = '正在校准'
     this.port.fire('beginGyroViewTransition')
@@ -384,6 +405,8 @@ export class SensorController {
     this.gyroStore.gyroCompassAngle = 0
     this.gyroStore.gyroGuideVisible = false
     this.gyroStore.gyroscopeEnabled = false
+    this.gyroStore.gyroscopePending = false
+    this.gyroStore.gyroscopePendingTarget = false
     if (updateStatus) {
       this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_off')
     }

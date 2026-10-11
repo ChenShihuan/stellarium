@@ -246,7 +246,7 @@ import {
   MeteorShowersData, LogResponse,
   ScreenshotResponse, SpokenTextResponse, RecordCmd,
   RecordingEntry, RecordingsResponse, RecordingDetailResponse, ScriptCaption,
-  CommandCatalogEntry
+  CommandCatalogEntry, ExportConfigResponse
 } from './MainWindowModels'
 
 // Sky-texture status banner. Its visibility is driven purely by the live
@@ -2582,7 +2582,7 @@ export struct WindowNativeNode {
         resetPanelIdle: (): void => this.resetPanelIdle(),
         toggleMusic: (): void => this.audioStore.toggleMusic(),
         musicHintText: (): string => this.audioStore.musicEnabled ? I18n.t('music_on_hint') : I18n.t('music_off_hint'),
-        toggleGyroscope: (value: boolean): void => this.gyroCtl().toggleGyroscope(value),
+        toggleGyroscope: (value: boolean): void => this.gyroCtl().requestGyroscopeToggle(value),
         skyZoomButtonAt: (x: number, y: number): string => this.skyZoomButtonAt(x, y),
         dockActionAt: (x: number, y: number): ShellAction | null => this.dockActionAt(x, y),
         activateDockAction: (item: ShellAction): void => this.activateDockAction(item),
@@ -3232,7 +3232,7 @@ export struct WindowNativeNode {
     AppStorage.setOrCreate("stellariumSettings", JSON.stringify({
       nightMode: this.nightModeStore.nightMode,
       equatorialMount: this.telescopeStore.equatorialMount,
-      gyroscopeEnabled: this.gyroStore.gyroscopeEnabled,
+      gyroscopeEnabled: this.gyroStore.gyroscopeVisualEnabled(),
       gyroscopeSensitivityText: this.gyroStore.gyroscopeSensitivityText,
       selectedLanguage: this.languageStore.selectedLanguage,
       useMetricUnits: this.viewSettingsStore.useMetricUnits,
@@ -3440,9 +3440,35 @@ export struct WindowNativeNode {
     }
   }
 
+  // 导出配置并落盘后拉起系统分享。
+  private shareConfigBackup(): void {
+    this.callNativeWhenReady('exportConfig', '', (r: StellariumBridgeResponse) => {
+      const resp = r as ExportConfigResponse
+      const content = resp.ok === true ? (resp.content ?? '') : ''
+      if (content.length === 0) {
+        this.flashHint(I18n.t('config_export_failed'))
+        return
+      }
+      try {
+        const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+        const path = context.cacheDir + '/stellarium-config-backup-' + Date.now().toString() + '.json'
+        const file = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE)
+        const encoder = new util.TextEncoder('utf-8')
+        const bytes = encoder.encodeInto(content)
+        fileIo.writeSync(file.fd, bytes.buffer)
+        fileIo.closeSync(file)
+        shareFile(this.hostMediaPort, this.hostPlatformPort, path, utd.UniformDataType.PLAIN_TEXT,
+          I18n.t('config_share'), I18n.t('config_share_description'), 'config-share',
+          { flashHint: (text: ResourceStr): void => this.flashHint(text), isExpandedLayout: (): boolean => this.isExpandedLayout })
+      } catch (error) {
+        hilog.error(0x0000, 'StellariumArkUI', 'Config share failed: %{public}s', String(error))
+        this.flashHint(I18n.t('config_export_failed'))
+      }
+    })
+  }
+
   // 恢复默认 TLE 来源前先确认。
-  private confirmRestoreSatelliteSources(): void {
-    this.getUIContext().showAlertDialog({
+  private confirmRestoreSatelliteSources(): void {    this.getUIContext().showAlertDialog({
       title: I18n.t('sat_source_restore_title'),
       message: I18n.t('sat_source_restore_message'),
       primaryButton: { value: I18n.t('sat_source_cancel'), action: () => {} },
@@ -4220,8 +4246,7 @@ export struct WindowNativeNode {
     const quickId = this.compactQuickIdAt(x, y)
     if (quickId === 'gyro') {
       this.resetPanelIdle()
-      this.gyroCtl().toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
-      this.flashHint(this.gyroStore.gyroscopeEnabled ? '陀螺仪已开启，正在校准' : '陀螺仪已关闭')
+      this.gyroCtl().requestGyroscopeToggle(!this.gyroStore.gyroscopeVisualEnabled())
       return true
     }
     if (quickId === 'audio') {
@@ -4707,7 +4732,7 @@ export struct WindowNativeNode {
       'cardinal_points': this.layerStore.cardinalPoints,
       'nebulae': this.layerStore.nebulae,
       'satellites': this.satelliteStore.satHints,
-      'gyroscope': this.gyroStore.gyroscopeEnabled,
+      'gyroscope': this.gyroStore.gyroscopeVisualEnabled(),
       'night_mode': this.nightModeStore.nightMode,
       'equatorial_mount': this.telescopeStore.equatorialMount,
       'flip_horizontal': this.polarScopeStore.polarScopeHorizontalFlip,
@@ -4729,7 +4754,7 @@ export struct WindowNativeNode {
       return
     }
     if (id === 'gyroscope') {
-      this.gyroCtl().toggleGyroscope(value)
+      this.gyroCtl().requestGyroscopeToggle(value)
       return
     }
     if (id === 'night_mode') {
@@ -6958,7 +6983,7 @@ export struct WindowNativeNode {
                 chromeZoomHorizontal: this.chromeZoomHorizontal(),
                 onFlashHint: (text: string) => { this.flashHint(text) },
                 onCalibrate: () => { this.gyroCtl().calibrateGyroscope() },
-                onToggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
+                onToggleGyroscope: (enabled: boolean) => { this.gyroCtl().requestGyroscopeToggle(enabled) },
                 resolve: (key: string) => this.selectedDisplayValue(key),
                 nameOf: (name: string) => zhNameOf(name),
                 typeOf: (type: string) => zhType(type),
@@ -7097,7 +7122,7 @@ export struct WindowNativeNode {
                 onCompactTopQuickTouch: (event: TouchEvent) => { this.handleCompactTopQuickTouch(event) },
                 onFlashHint: (text: string) => { this.flashHint(text) },
                 onCalibrate: () => { this.gyroCtl().calibrateGyroscope() },
-                onToggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
+                onToggleGyroscope: (enabled: boolean) => { this.gyroCtl().requestGyroscopeToggle(enabled) },
                 resolve: (key: string) => this.selectedDisplayValue(key),
                 nameOf: (name: string) => zhNameOf(name),
                 typeOf: (type: string) => zhType(type),
@@ -8274,6 +8299,7 @@ export struct WindowNativeNode {
         sessionImportText: this.tools.sessionImportText,
         onScreenshot: () => { saveScreenshot(this.commandPort(), this.hostMediaPort, { flashHint: (text: ResourceStr): void => this.flashHint(text), screenshotSaving: (): boolean => this.tools.screenshotSaving, setScreenshotSaving: (saving: boolean): void => { this.tools.screenshotSaving = saving } }) },
         onExportConfig: () => { this.tools.exportConfig() },
+        onShareConfig: () => { this.shareConfigBackup() },
         onImportConfig: () => { this.tools.importConfig() },
         onConfigImportText: (value: string) => { this.tools.configImportText = value },
         onSessionExport: () => { this.sessionToolStore.sessionExport() },
