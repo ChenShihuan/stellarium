@@ -420,6 +420,14 @@
 
 ---
 
+## [2026-10-01] Codex - 卫星名称本地化与中文搜索
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`plugins/Satellites/src/Satellites.cpp`、`scripts/test-ohos-satellite-localization.mjs`；生成工程同步到 `build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets`。
+- **修改内容：** 中文界面将常见卫星任务族和星座名称从英文/拼音前缀转换为规范中文显示，包括星链、北斗、天链、天通、风云、遥感、高分、实践、实验、资源、吉林一号、格洛纳斯、伽利略、铱星、全球星、国际通信卫星、宇宙号和准天顶；保留编号、任务代号、NORAD 编号与原始英文名作为可核对信息。
+- **搜索：** 增加中文别名到原始 TLE 名称的匹配，支持按“星链 36933”“北斗”“风云”等检索，不改变原始目录标识。
+- **验证：** 新增卫星本地化契约检查；已通过 ArkTS HAP 编译、C++ `stellarium` 构建、生成工程同步和 `git diff --check`。当前环境未发现可用的 `hdc` 命令，因此本轮未进行设备安装回读。
+- **备注：** 非中文界面继续使用原始名称或已有官方翻译，不对国际任务名称进行未经确认的强行翻译。
+
 ## [2026-08-30] Codex - Sky Guide 功能、视觉与离线路线预研
 
 - **新增文件：** `docs/harmonyos/SKY-GUIDE-FEATURE-RESEARCH-2026-08-30.md`、`data/ohos/sky-guide-feature-contract.json`。
@@ -5141,3 +5149,238 @@
 - **修复：** 鸿蒙启动不再读取或保存 Qt 桌面窗口的尺寸、位置和全屏偏好；启动探针检测到小尺寸左上角自由窗口时调用系统窗口最大化，正常的用户自定义窗口尺寸不强制改动。
 - **验证：** C++ `stellarium` 构建、`sync-ohos-build-sources.sh`、`check-ohos.sh`、`CompileArkTS` 与 `assembleHap` 均通过；保留工程已有 ArkTS/API 告警，未修改签名、证书或 Profile。
 - **MateBook Pro 真机复现：** `window-probe` 记录到自由窗口 `515,318,2090x1394`，显示器为 `3120x2080`；自动调用 `Window.maximize(FOLLOW_APP_IMMERSIVE_SETTING)` 后重新截图，星象仪已铺满工作区，未再停留在左上角小窗口。
+## [2026-09-30] Codex - HarmonyOS PC 端规范审计与窗口适配收口
+
+- **修改文件：** `harmonyos/module.json5`、`harmonyos/ets-source/qability/QAbility.ets`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`docs/harmonyos/PC-UX-AUDIT-2026-09.md`。
+- **窗口适配：** 增加自由窗口最小宽高与宽高比约束；监听窗口尺寸、窗口矩形、窗口状态和系统密度变化，并通过 `AppStorage` 驱动响应式布局刷新。
+- **PC 交互：** Dock、顶部陀螺仪和声音控件增加键盘焦点与鼠标/触控板悬停反馈；布局尺寸回调不再重复触发原生桥同步调用。
+- **依据与边界：** 依据 HarmonyOS PC/平板适配指南和 Developer Knowledge MCP；不修改签名、证书、Profile、联网端点或隐私流程。
+- **验证结果：** 生成工程同步、`check-ohos.sh`、CompileArkTS、`assembleHap`、触控板契约检查和 `git diff --check` 通过；MateBook Pro 日志确认窗口监听注册，CLI 回读布局为 `expanded`，真机截图显示窗口铺满工作区。
+
+## [2026-09-30] Codex - 天体详情 typography 与坐标资料对齐
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`scripts/test-ohos-detail-live-values.mjs`；生成镜像 `build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets`。
+- **修改内容：** 收窄大屏字号放大比例，新增天体详情专用字号层级；标题由粗体大字改为中等强调，标签、数值、辅助说明和页签使用稳定层级；坐标与结构化资料统一固定标签列、左对齐数值列、可伸展行高，支持两行值而不重叠；资料页取消左右双列瀑布布局，改为连续对齐资料表；赤经、J2000 赤经去除原始格式前导空格。
+- **原因：** 修复 PC/Pad 天体详情中字号跳变、坐标列不齐、资料卡双列错落和长数值裁切/挤压问题，同时保持手机端现有紧凑布局。
+- **构建结果：** `sync-ohos-build-sources.sh`、`check-ohos.sh`（HAP 编译通过，6 个既有 ArkTS 警告）。
+- **验证结果：** `test-ohos-detail-live-values.mjs`、`test-ohos-detail-image-layout.mjs`、`test-ohos-distance-ui.mjs`、`test-ohos-touchpad-contract.mjs` 全部通过；MateBook Pro 安装新 HAP 后通过 CLI 选择月球并切换“坐标/资料”，真机截图确认坐标值统一左对齐且不再带前导空格。
+## [2026-10-01] Codex - PC 搜索输入与位置检索响应
+
+- **输入路由：** 搜索框和位置搜索框获得焦点时暂时交还文本编辑按键，避免根星图快捷键把输入的 `N` 误切换为夜间模式；同时为 `Delete`/退格键增加 ArkUI 文本框的显式删除兜底。
+- **位置搜索：** 为中国台湾地区、中国香港特别行政区和中国澳门特别行政区增加离线区域快速索引，搜索“台湾”等地区不再等待全库扫描；同时缩短输入防抖、提高分块扫描吞吐并更快发布首批结果。
+- **验证：** 新增 `scripts/test-ohos-search-input-routing.mjs` 静态契约检查；未修改联网端点、权限、签名、证书或 Profile。
+
+## [2026-10-01] Codex - 手机 Dock 宽度与按压反馈
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`scripts/test-ohos-dock-responsive.mjs`；生成工程同步到 `build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets`。
+- **修改内容：** 移除手机 Dock 在打开面板时从 92% 突然缩到 76% 的状态耦合；改为根据窗口宽度计算稳定宽度，手机窗口保留左右安全边距并限制最大宽度，避免小窗口 Dock 过长。按钮保留轻量按压反馈，缩放由 0.92 调整为 0.97，避免整栏视觉塌缩。
+- **验证：** Dock 响应式契约检查、`sync-ohos-build-sources.sh`、`check-ohos.sh`（HAP 编译通过）和 MateBook Pro 设备回读均通过；未修改签名、证书或 Profile。
+
+## [2026-10-01] Codex - 长时间范围过渡平滑
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`scripts/test-ohos-time-transition.mjs`；生成工程已同步到 `build/libstellarium-harmonyos/entry/src/main/ets/pages/MainWindowNativeNode.ets`。
+- **天文计算跳转：** 从固定约 1.9 秒改为按跨越天数自适应的平滑曲线；短跳转仍保持响应，跨月/跨年最长约 7 秒，并将长距离原生时间推送提高到约 30Hz，减少星空突然跳帧。
+- **时间转轴：** 年、月、日、时、分统一采用起点到目标的 smoothstep 插值，不再按“剩余差值三分之一”反复跳跃；原生时间更新节流为约 48ms，避免长范围过渡时桥接调用和 UI 重建拥塞。
+- **验证：** `test-ohos-time-transition.mjs`、Dock 契约检查、`git diff --check`、`sync-ohos-build-sources.sh`、`check-ohos.sh`（HAP 编译通过，6 个既有 ArkTS 警告）均通过；最新 Debug HAP 已覆盖安装 MateBook Pro（`192.168.1.39:43975`），CLI 回读应用正常运行约 33 FPS、时间速率保持实时。未修改签名、证书或 Profile。
+
+## [2026-10-01] Codex - 备案后联网服务再审
+
+- **复核结果：** 当前工程处于联网构建模式，但官网仍未部署资源 API；健康检查、卫星目录、系外行星目录和 HiPS 索引端点均实测 404，因此未把“联网构建”误报为“联网服务已全部开通”。
+- **后续边界：** 先部署无账号、无上传、无设备标识和无位置字段的版本化静态清单/TLE/小型目录，再做用户主动更新；HiPS/DSS、多光谱、天气、ADS-B、在线查询、Plate Solver、Push、实况窗、接续和 IAP 分别立项，不共享总联网开关。望远镜、RemoteControl、RemoteSync 和星闪继续限本机/局域网/本地无线。
+- **文档：** 详细台账更新于 `docs/harmonyos/NETWORK-INVENTORY.md`；未修改签名、证书、Profile 或客户端网络端点。
+
+## [2026-10-01] Codex - 卫星来源列表紧凑化与原版对齐
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`harmonyos/ets-source/pages/I18n.ets`、`src/StelMainView.cpp`、`scripts/test-ohos-satellite-sources-ui.mjs`、`docs/harmonyos/SATELLITE-PLUGIN-ALIGNMENT-AUDIT-2026-10.md`；生成工程在同步时更新。
+- **修改内容：** 卫星来源改为固定高度内层滚动；长 URL 默认显示主机和路径摘要，点按后查看完整地址；补齐来源启用开关、编辑、删除和恢复默认来源；保留原版 `0,`/`1,` 来源启用语义；显示联网更新关闭、更新中、错误和下一次更新倒计时。
+- **本地化：** 来源类型、启用状态、自动加入关系、编辑/保存/恢复和更新状态加入当前 ArkTS UI 的英语、简体中文、日语、韩语、法语、德语、西班牙语和俄语词条；URL、TLE 行和用户导入数据保持原文，不做破坏检索的翻译。
+- **对齐记录：** 新增卫星插件对齐审计；尚未虚假宣称已完成的差异包括 TLE 逐字段编辑、用户分组创建/重命名、Iridium flare 独立预测/导出页和卫星专属帮助页。
+- **验证结果：** `test-ohos-satellite-sources-ui.mjs`、`test-ohos-satellite-localization.mjs`、`sync-ohos-build-sources.sh`、`check-ohos.sh` 全部通过；HAP 编译通过，保留 6 个既有 ArkTS 编译提示；未修改签名、证书、Profile 或隐私权限。
+
+## [2026-10-01] Codex - 指针坐标、图层标签与巡天入口稳定化
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`harmonyos/ets-source/pages/I18n.ets`、`src/core/modules/HipsMgr.cpp`、`src/core/modules/HipsMgr.hpp`、`src/StelMainView.cpp`、`src/StelOhosCommandCatalog.hpp`、`scripts/test-ohos-pointer-surveys-ui.mjs`；生成工程已同步。
+- **指针坐标：** 开关和坐标制式选择改为本地乐观更新，成功操作不再重新加载整个面板；加载提示固定在预留区域，不再把面板整体向下顶；工具栏按钮增加说明，明确它只是快速显示/隐藏入口，不等于启用坐标显示。
+- **图层标签：** 巡天入口与标签栏移到固定的面板头部，内容区单独滚动；标签设置最小宽度和省略策略，窄窗口可横向滑动，不再因“深空/巡天”数量变化把标题挤动；桌面字号和行高同步放大。
+- **开关与巡天：** 统一开关选中色为低饱和天蓝 `#5B93BF`；新增 `getSurveyState` CLI/原生查询，显示 HiPS/TOAST 开关、目录加载状态和当前可见巡天数量，并用多语言说明巡天图层、瓦片加载和原版逐巡天调节能力的边界。
+- **验证结果：** `test-ohos-pointer-surveys-ui.mjs`、`git diff --check`、C++ `stellarium`、`sync-ohos-build-sources.sh`、`check-ohos.sh` 和 `CompileArkTS`/`assembleHap` 均通过；最新 Debug HAP 已安装 MateBook Pro（`192.168.1.39:43975`），CLI 回读 `getAppState` 正常，启动加载阶段短暂约 `0.15 FPS`，稳定后约 `30.3 FPS`，`getSurveyState` 正常返回；保留工程既有 ArkTS/API 警告，未修改签名、证书或 Profile。
+- **边界：** 桌面版的完整巡天目录及逐项伽马、亮度、饱和度、对比度、透明度、颜色通道和反色控件仍未全部移植；当前先提供稳定图层开关、状态查询和明确说明，不主动下载巡天瓦片。
+
+## [2026-10-01] Codex - 右上角陀螺仪快捷按钮反馈
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`scripts/test-ohos-gyro-quick-control.mjs`。
+- **修复内容：** 右上角陀螺仪按钮现在先显示“监听中”状态，再根据传感器订阅结果切换为工作中或不可用；按钮保留明确的开关底色，并增加绿色（已开启）、黄色（处理中）和灰色（已关闭）状态点。手机、平板和设置页共用同一状态源。
+- **触控修复：** 统一顶部快捷区、星图坐标兜底分派和侧栏入口到带防重复触发的切换函数，避免同一次触摸被 ArkUI 与 Qt 表面各处理一次，导致陀螺仪刚打开又被关闭。
+- **验证：** 增加陀螺仪快捷控制静态契约检查；未修改联网端点、隐私权限、SN/UDID、签名、证书或 Profile。设备安装和传感器实际订阅结果需在本轮构建后继续用 CLI 检查。
+
+## [2026-10-01] Codex - 上游代码差距与引进计划审计
+
+- **修改文件：** `docs/harmonyos/UPSTREAM-INTEGRATION-PLAN-2026-10.md`、`docs/harmonyos/CHANGELOG.md`
+- **审计内容：** 刷新 `origin/master` 到 `630fa8272f`，核对当前 HarmonyOS 分支与 Stellarium 26.3 上游快照的历史关系、数据资源、核心 API、插件逻辑、桌面 GUI 和联网能力差距；确认两者没有共同祖先，直接整树 merge 会把定制壳层和生成工程误当作上游代码。
+- **处理结论：** 建立 P0 数据/翻译、P1 核心与插件逻辑、P2 适配层、P3 暂不引入的分级清单；明确 `630fa8272f`、`a249c4a814`、`66b657b2fc`、`d1e24a2f36`、`1ca17032b2`、`8df92a2970`、`7d6fbcaba6`、`e8a3b85a03` 等候选提交的引进方式和冲突边界。
+- **处理原则：** 上游数据按资源清单和 SHA-256 审核导入；核心/插件代码按逻辑补丁选择性移植；Qt 桌面 UI、默认公网请求、签名/生成工程不直接引入。HarmonyOS 命令桥、ArkUI、离线优先和隐私边界保留本地实现。
+- **构建结果：** 本轮仅新增审计文档，未修改代码、签名、证书、Profile、联网端点或生成工程；未运行完整构建。
+- **验证结果：** 已完成上游引用、文件范围和近期候选提交核对；下一次引入具体数据或代码时必须按文档中的构建、资源和设备回归门槛验证。
+
+## [2026-10-01] Codex - 扩展桌面天文服务卡片
+
+- **修改文件：** `harmonyos/ets-source/form/SkyInstrumentCard.ets`、`harmonyos/ets-source/form/SkyInstrumentTonightCard.ets`、`harmonyos/ets-source/form/SkyInstrumentSatelliteCard.ets`、`harmonyos/ets-source/form/SkyInstrumentFormAbility.ets`、`harmonyos/resources/base/profile/form_config.json`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`docs/harmonyos/NOTIFICATION-AND-FORM-ROADMAP.md`
+- **修改内容：** 默认卡片从单一节气摘要扩展为天文总览；新增“今晚天象”和“卫星过境”两种服务卡片；共享本地快照展示月相、可观测行星数量、流星雨活动摘要和卫星目录状态；卡片点击分别进入年历、天象计算和卫星面板。
+- **设计边界：** 使用低饱和深色层级、2*4/4*4 自适应布局和有限摘要；不把天气数据伪装成已接入、不加载高清深空图/3D 模型、不初始化 Qt、不读取 SN、不新增公网请求。天气卡片留待单独完成数据源、隐私和镜像评估。
+- **官方依据：** 参考华为服务卡片信息层级、低饱和视觉、信息量和轻交互规范；实况窗仅适合用户主动触发、短时、持续变化的卫星过境等场景，不能用来承载静态天气或长期星图信息。
+- **构建结果：** 首次检查发现新增卡片源文件未被同步脚本复制到生成工程，已补齐同步清单；签名、证书、Profile 和联网配置未修改。
+- **验证结果：** 已重新运行 `scripts/sync-ohos-build-sources.sh` 和 `scripts/check-ohos.sh`；ETS 同步、离线目录审计与 HAP 编译全部通过，保留 6 个既有 ArkTS 编译提示。尚未在 Pad/PC 桌面卡片管理器中完成添加后的视觉验收；后续需验证 2*4/4*4、点击路由、无快照和过期快照状态。
+- **回归检查：** 新增 `scripts/test-ohos-form-cards.mjs`，校验三种卡片的配置、源文件、同步清单、快照字段和点击路由。
+
+## [2026-10-01] Codex - 首批多光谱 HiPS 图层入口
+
+- **修改文件：** `src/core/StelHips.{hpp,cpp}`、`src/core/modules/HipsMgr.{hpp,cpp}`、`src/StelMainView.cpp`、`src/StelOhosCommandCatalog.hpp`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`harmonyos/ets-source/pages/StellariumTypes.ets`、`docs/harmonyos/CLI.md`、`docs/harmonyos/NETWORK-INVENTORY.md`
+- **修改内容：** 增加 RASS X 射线、GALEX NUV、2MASS Color 三个真实巡天数据集的元数据、用户主动打开/关闭和状态查询；ArkUI 巡天页增加多光谱区块，首次选择时才创建 HiPS 图层并请求 properties/可见瓦片，关闭时保留缓存。
+- **CLI：** 新增 `listSpectralDatasets`（并保留 `getSpectralDatasets` 兼容别名）、`getSpectralState`、`setSpectralView`、`closeSpectralView`；支持 JSON 参数 `{\"id\":\"rass-xray\",\"enabled\":true}`。
+- **边界：** 当前是联网 HiPS 图层入口，不是完整离线数据包、科学 FITS 测光管线或圆形滤镜窗口；未伪造 UV/IR/X 射线数据，未新增默认启动请求。
+- **验证结果：** C++ `cmake --build build --parallel --target stellarium` 已通过（保留 3 条既有编译警告）；`scripts/sync-ohos-build-sources.sh`、ArkTS 反模式、JPEG 依赖、离线资源、联网本地化矩阵和 HAP 编译均通过（检查报告保留 6 条既有 ArkTS 警告）。同时修复了桥接响应类型声明与多光谱 HiPS 不应自动恢复的问题；签名、Profile 和证书不修改。
+- **联网安全补强：** 多光谱清单增加许可待核验、署名、用户主动联网策略和超时元数据；HiPS properties/全景请求增加超时，失败状态通过 CLI/ArkUI 回传；网络不可用时 `setSpectralView` 不伪装成已加载。
+- **服务器边界：** 补充 ECS 当前适合官网、清单和小型目录的承载范围，以及后续按监控、OSS/CDN、负载均衡逐级扩容的顺序；Workbench 当前缺少 `ecs:DescribeInstances` 只读权限，未扩大权限或虚构实例规格结论。
+## [2026-10-01] Codex - AGC 能力申请与 Profile 收口策略
+
+- **修改文件：** `docs/harmonyos/AGC-CAPABILITY-APPLICATION-MATRIX-2026-10.md`、`docs/harmonyos/NOTIFICATION-AND-FORM-ROADMAP.md`
+- **修改内容：** 记录 AGC 已启用能力、本轮已提交的代理提醒/实况窗/锁屏卡片/背板透明卡片、已通过的待机屏保卡片，以及优先通知、接续服务、ACL 和其他不应申请的能力；建立审批完成后只收口一个最终发布 Profile 的策略。
+- **修改原因：** 避免把系统权限、AGC 开放能力、数据源和 Profile 混为一谈，防止在审批期间反复生成 Profile 或申请不匹配的权限。
+- **构建结果：** 未修改代码、签名、证书、Profile、联网端点或生成工程；未运行构建。
+- **验证结果：** AGC“开放能力管理”页面已核对：代理提醒、实况窗、背板透明卡片、锁屏卡片为“审核中”，待机屏保卡片为“已通过”；优先通知和接续服务为“未申请”。
+- **备注：** 4 项待审能力通过后再统一更新/重新生成最终 Profile；旧 Profile 暂不删除，需先核对发布版本和构建引用。
+
+## [2026-10-01] Codex - 后续实况窗权益与 ACL 官方复核
+
+- **修改文件：** `docs/harmonyos/AGC-CAPABILITY-APPLICATION-MATRIX-2026-10.md`。
+- **修改内容：** 区分本轮实况窗调测权益与未来正式场景权益，补充锁屏沉浸实况窗单独权益、星闪普通权限与外设 DDK 受限 ACL 的实际申请门槛。
+- **修改原因：** 防止将调测审批当成正式上线资格，或将普通联网、AR、蓝牙和星闪误认为必须申请跨级 ACL。
+- **构建结果：** 仅文档改动，不运行构建；未修改签名、Profile、权限声明或联网行为。
+- **验证结果：** 已通过华为开发文档 MCP 核对权限管控、实况窗正式权益、锁屏沉浸实况窗及星闪权限资料；`git diff --check` 通过。
+
+## [2026-10-01] Codex - 穿戴路线纳入 Wear Engine 申请门槛
+
+- **修改文件：** `docs/harmonyos/AGC-CAPABILITY-APPLICATION-MATRIX-2026-10.md`。
+- **修改内容：** 将 Wear Engine 从“完全不考虑”改为“后续穿戴路线候选”；明确在穿戴端原型完成后按设备基础信息、穿戴用户状态和实际通信场景申请，避免提前申请健康传感器。
+- **修改原因：** 统一之前的穿戴调研结论与当前 AGC 权限策略，区分未来需要和当前可以提交的材料。
+- **构建结果：** 仅文档改动，不运行构建；未修改签名、Profile、权限声明或联网行为。
+- **验证结果：** 已用华为开发文档 MCP 核对 Wear Engine 设备/消息能力、穿戴用户状态与权限要求，以及接续服务异包名申请流程；`git diff --check` 通过。
+
+## [2026-10-01] Codex - 穿戴与 Seestar 对话结论归档
+
+- **修改文件：** `docs/harmonyos/SEESTAR-S50-PRO-INTEGRATION-RESEARCH-2026-10.md`、`docs/harmonyos/WEARABLE-GT5-WATCH5-ROADMAP-2026-10.md`、`docs/harmonyos/TELESCOPE-NEARLINK-RESEARCH-2026-09-02.md`、`docs/harmonyos/NETWORK-INVENTORY.md`、`docs/harmonyos/AGC-CAPABILITY-APPLICATION-MATRIX-2026-10.md`、`docs/harmonyos/CHANGELOG.md`。
+- **修改内容：** 整理 GT5/Watch 5 分类、调试渠道、独立应用与共享产品边界；记录 S50 Pro 官方 Alpaca、社区接口、合规核验、本地设备架构、CLI 草案、巡天与多波段区别、内置图片/实拍双层方案、WCS匹配、本地存储和分阶段验收。
+- **修改原因：** 用户要求保存本轮对话，作为后续穿戴、望远镜与观测资源开发依据；明确修正固定端口、视频协议、强制 Bridge、私有 API 官方支持及实拍替代巡天等过度概括。
+- **构建结果：** 仅文档改动，不运行应用构建；不修改源码、生成工程、签名、证书、Profile、权限或服务端配置。
+- **验证结果：** 已重新读取 ZWO 官方产品页、华为穿戴概览、社区图像协议和法规资料；文档链接及差异格式检查见本轮验证结果。尚无 S50 Pro/穿戴真机验收，不宣称功能已接入。
+- **备注：** 本轮未提交或推送 Git；保留工作区已有改动，未来代码实现前必须按本文能力、数据和安全门槛逐项验收。
+
+## [2026-10-01] Codex - 桌面卡片视觉与内容纠偏
+
+- **修改文件：** `harmonyos/ets-source/form/SkyInstrumentCard.ets`、`SkyInstrumentTonightCard.ets`、`SkyInstrumentSatelliteCard.ets`、`SkyInstrumentFormAbility.ets`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`harmonyos/resources/base/profile/form_config.json`、`scripts/test-ohos-form-cards.mjs`、`docs/harmonyos/NOTIFICATION-AND-FORM-ROADMAP.md`。
+- **修改内容：** 默认卡片从节气导向改为“今晚天象”总览；视觉上统一低饱和天蓝、深色层级、圆角、边框、状态徽标和信息块；补充月相、行星、流星雨、卫星摘要；默认尺寸改为 `2*4`，保留 `4*4`，节气只作为摘要而不再占据主视觉。
+- **修改原因：** 用户指出桌面卡片缺少审美、没有充分测试且内容几乎全是节气；本轮把内容和卡片层级重新按观测价值组织。
+- **构建结果：** 代码和资源尚未完成 HAP 构建；下一步先同步生成工程并运行卡片契约、ArkTS 编译和静态布局审计。
+- **验证结果：** 待执行；新增契约将检查默认尺寸、非节气主标题、四类天象字段、圆角/背景/边框和三张卡片路由。
+- **备注：** 尚未在桌面卡片管理器完成视觉真机验收；需要重点检查 `2*4`/`4*4` 的文字截断、留白和点击前台路由，不将静态契约通过误报为审美验收通过。
+
+## [2026-10-01] Codex - 桌面卡片真机验收与旧快照迁移
+
+- **修改文件：** `harmonyos/ets-source/form/SkyInstrumentCard.ets`、`harmonyos/ets-source/form/SkyInstrumentFormAbility.ets`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`scripts/test-ohos-form-cards.mjs`、`docs/harmonyos/CLI.md`、`docs/harmonyos/NOTIFICATION-AND-FORM-ROADMAP.md`。
+- **修改内容：** 压缩默认总览卡片的间距和信息层级，使旧桌面 `2*2` 宿主也能完整显示月相、行星、流星雨和卫星摘要；快照主摘要改为“今夜观测摘要”，不再把下一节气放在主视觉；启动时自动迁移旧的节气快照。独立“今晚天象”和“卫星过境”卡片继续承载更完整内容。
+- **修改原因：** 真机截图确认旧快照仍显示“下一节气”，且小尺寸桌面卡片会裁切底部内容；仅改 `form_config` 不会自动改变已添加卡片的尺寸，因此同时修复旧数据和紧凑布局。
+- **构建结果：** `assembleHap` 成功（`BUILD SUCCESSFUL`，未修改签名、证书或 Profile）；`scripts/sync-ohos-build-sources.sh` 同步成功。
+- **验证结果：** `node scripts/test-ohos-form-cards.mjs` 通过；`git diff --check` 通过；最终 `scripts/check-ohos.sh` 通过（6 个既有 ArkTS 警告）；HAP 已通过 HDC 覆盖安装到 `192.168.1.39:43975`。桌面真机截图确认默认卡片已显示“今晚天象”、月相、行星、流星雨和卫星摘要，未再显示下一节气主摘要；卫星专题卡片也已呈现。
+- **备注：** 桌面卡片是系统桌面宿主渲染，截图验证覆盖了当前 MatePad 桌面实际尺寸；2*4/4*4 新增或调整尺寸仍由系统卡片管理器控制，不以应用内截图替代宿主验收。
+
+## [2026-10-01] Codex - 桌面卡片视觉重构与小卡片补齐
+
+- **修改文件：** `harmonyos/ets-source/form/AstronomyCardSurface.ets`、`harmonyos/ets-source/form/AstronomyCardData.ts`、`harmonyos/ets-source/form/SkyInstrument*.ets`、`harmonyos/resources/base/profile/form_config.json`、`scripts/sync-ohos-build-sources.sh`、`scripts/test-ohos-form-cards.mjs`、`docs/harmonyos/CARD-UI-RESEARCH-2026-10.md`。
+- **修改内容：** 按华为卡片规范重新组织标题、主值、事实行和单一入口；加入月相暖金、卫星薄荷绿、流星淡紫、观星天青四组重点色、星点/轨道/月相装饰和统一按钮层级；新增 `今晚速览` 2*2 小卡片，月相、流星雨卡片继续支持 2*2，其他卡片保留 2*4/4*4。
+- **首次使用：** 旧快照或无快照时直接显示可读的本地摘要，不再把“等待本地计算”“打开应用刷新”作为主视觉；有最近快照时先展示快照，随后由应用前台刷新，不在卡片进程初始化 Qt、读取 SN 或访问公网。
+- **构建结果：** 已同步生成工程，`assembleHap` 输出 `BUILD SUCCESSFUL`；未修改签名、证书、Profile 或联网端点。
+- **验证结果：** 卡片契约与数据边界测试通过，覆盖 6 个卡片、月相路径、过期快照和异常快照；MatePad 覆盖安装成功，`getFormSnapshot` 在无需启动 Qt 的情况下读取到最新快照；`git diff --check` 通过。完整 `scripts/check-ohos.sh` 在本轮代码同步后继续执行，保留既有 6 个 ArkTS 警告。
+- **备注：** 桌面系统的卡片添加、删除和尺寸切换不是应用内 API；最终需在 MatePad 桌面管理器分别添加并检查 2*2、2*4、4*4，不能只用应用页面截图替代。
+
+## [2026-10-01] Codex - 桌面天文卡片 V2 刷新与视觉收口
+
+- **修改文件：** `harmonyos/ets-source/form/AstronomyCardSurface.ets`、`harmonyos/ets-source/form/SkyInstrument*.ets`、`harmonyos/ets-source/form/AstronomyCardData.ts`、`harmonyos/ets-source/qability/AstronomyCardService.ets`、`harmonyos/resources/base/profile/form_config.json`、`scripts/test-ohos-form-cards.mjs`、`docs/harmonyos/CARD-UI-RESEARCH-2026-10.md`。
+- **修改内容：** 按华为 API 23 卡片状态管理 V2 规则，将五个卡片入口迁移为 `@Entry @ComponentV2`，用 `@Provider`/`@Consumer` 接收共享快照；保留月相、暗夜、行星、流星雨、卫星目录和路由入口；压缩大卡片视觉组件间距与天体图形尺寸，修复卫星专题卡片详情文字拥挤。
+- **修改原因：** 桌面宿主曾保留“待计算/待刷新”旧字段，且卫星大卡片说明与事实行挤在一起；需要让 `updateForm` 数据按字段名可靠刷新，同时保持小尺寸可读、信息克制。
+- **构建结果：** `scripts/sync-ohos-build-sources.sh` 完成同步；`assembleHap` 输出 `BUILD SUCCESSFUL`；未修改签名、证书、Profile 或联网端点。
+- **验证结果：** `node scripts/test-ohos-form-cards.mjs`、`node --test scripts/test-ohos-time-transition.mjs`、`git diff --check` 和 `scripts/check-ohos.sh` 全部通过；检查保留 6 个既有 ArkTS 警告。MatePad `192.168.1.39:43975` 覆盖安装成功，CLI `refreshFormSnapshot` 返回 `updatedForms: 2`、`failedForms: 0`，验证快照含 4 颗可见行星、9.5 小时暗夜、月相 77% 和 2915 颗本地卫星。
+- **备注：** 桌面卡片宿主截图已检查深色层级、圆角、按钮、卫星说明和底部留白；系统桌面上已有卡片的添加/尺寸切换仍需由用户在桌面卡片管理器执行，不能由应用 CLI 代替。
+
+## [2026-10-01] Codex - 卡片首次使用状态最终收口
+
+- **修改文件：** `harmonyos/ets-source/form/AstronomyCardSurface.ets`、`harmonyos/ets-source/form/AstronomyCardData.ts`、`scripts/test-ohos-form-cards.mjs`、`docs/harmonyos/CHANGELOG.md`。
+- **修改内容：** 将无快照和过期快照的默认文案改为“本地快照/最近数据 · 待更新”，不再出现“等待本地计算”或强制“打开应用刷新”的主视觉提示；重新同步并覆盖安装最新 HAP。
+- **构建结果：** `assembleHap` 输出 `BUILD SUCCESSFUL`；未修改签名、证书、Profile 或联网端点。
+- **验证结果：** 6 卡片契约、数据边界、时间过渡、`git diff --check` 和 `scripts/check-ohos.sh` 全部通过；最终检查仍为全部通过、6 个既有 ArkTS 警告。
+
+## [2026-10-01] Codex - 修复鸿蒙指针坐标插件输入链路
+
+- **修改文件：** `src/StelMainView.hpp`、`src/StelMainView.cpp`、`src/StelOhosCommandCatalog.hpp`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`scripts/test-ohos-pointer-surveys-ui.mjs`。
+- **修改内容：** 鸿蒙端增加由 ArkUI 触摸/鼠标事件更新的逻辑指针位置；`selectAt`、`dragView`、缩放中心和悬停移动都会同步到 Qt 核心，指针坐标插件不再依赖鸿蒙设备上不存在的 `QCursor` 全局坐标。新增 `setPointerPosition` CLI 契约，并让 `getPointerCoordinates` 返回最近屏幕坐标，便于探针验证。
+- **修改原因：** 原实现只读取 `QCursor::pos()`，平板触摸和 ArkUI 鼠标事件没有写入 Qt 光标，因此插件开关虽然能打开，显示值会停在默认位置或看起来没有反应。
+- **构建结果：** Native `cmake --build build --parallel --target stellarium` 已通过；保留仓库原有 Qt/C++ 弃用警告。未修改签名、证书、Profile、联网配置或应用权限。
+- **验证结果：** 静态回归断言 5 项通过；Native 构建、`scripts/sync-ohos-build-sources.sh` 和 `assembleHap` 均成功。`scripts/check-ohos.sh`、卡片契约测试和 `git diff --check` 均通过；HAP 构建保留 6 条既有 ArkTS/API 警告。最新签名 HAP 已覆盖安装到 MatePad `192.168.1.39:43975`，CLI 已验证坐标从 `640|360`、`1024|720` 更新到 `selectAt` 的 `1500|900`，设备截图可见实时赤经/赤纬坐标文本。
+
+## [2026-10-01] Codex - 平滑长跨度天文时间跳转
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`scripts/test-ohos-time-transition.mjs`。
+- **修改内容：** 3 天及以上的中天、升落、月相、日食、节气和手动目标时间跳转改为由 Stellarium 核心连续推进时间，ArkUI 不再每 32–48 ms 反复写入 `setTimeToJD`；短跨度继续使用缓动插值，结束时统一精确落到目标 JD 并恢复原时间速率。
+- **修改原因：** 大跨度跳转时重复设置 JD 会让地平线和星图出现闪烁、突变与视角抖动；连续原生时间速率能减少命令队列抖动，并保持同一条平滑时间轨迹。
+- **构建结果：** `scripts/sync-ohos-build-sources.sh` 已成功同步生成工程和 `libstellarium.so`；`assembleHap` 已成功（33 项任务）。未修改签名、证书、Profile、联网配置或应用权限。保留既有 ArkTS/API 兼容性警告。
+- **验证结果：** `scripts/test-ohos-time-transition.mjs` 2 项通过，覆盖短跨度缓动、3 天以上原生连续速率路径以及年月滚轮过渡；最新 HAP 已覆盖安装并启动于 MatePad `192.168.1.39:43975`。通过时间面板的节气入口完成长跨度真机验收：设备观测到原生时间速率约 `37.7091533780016`，多次 CLI 轮询中的模拟时间连续前进至目标夏至附近，结束时精确落点并恢复为实时速率；过渡期间抽取的 3 张设备截图未见面板跳动或明显闪帧。验收后已将设备恢复到 `2026-10-01` 实时 1 倍速。
+- **最终检查：** `scripts/check-ohos.sh` 通过（全部通过，保留 6 个既有 ArkTS 警告）；`git diff --check` 通过。未修改签名、Profile、联网配置或应用权限。
+
+## [2026-10-01] Codex - PC 触控板与原版快捷键链路
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`harmonyos/ets-source/pages/StellariumTypes.ets`、`harmonyos/ets-source/pages/I18n.ets`、`src/StelMainView.cpp`、`src/StelOhosCommandCatalog.hpp`、`src/core/StelActionMgr.hpp`、`docs/harmonyos/PC-TOUCHPAD-AND-KEYBOARD-GUIDE.md`、`scripts/test-ohos-touchpad-contract.mjs`。
+- **修改内容：** 触控板轴事件按 `BEGIN/UPDATE/END/CANCEL` 区分双指平移、捏合和鼠标滚轮；双指平移松手后使用原生惯性，捏合继续以指针位置锚定，面板区域不会误传到星图。键盘事件改为优先进入 Stellarium 原生 `StelActionMgr`，保留鸿蒙端历史动作作为未处理事件的回退，支持字母、数字、功能键、修饰键和脚本键盘控制。
+- **修改内容：** 新增 `getKeyboardShortcuts`、`setKeyboardShortcut`、`resetKeyboardShortcuts` CLI；可列出 551 个原版动作、查看默认快捷键、编辑主/备用快捷键、检测冲突并恢复单项或全部默认值；“设置 → 视角与导航”新增快捷键编辑器和触控板/键盘使用说明。
+- **修改原因：** 修复双指移动/缩放不稳定、触控板松手无惯性、键盘快捷键被 ArkTS 硬编码截断，以及搜索输入时字母快捷键误触发等问题；让鸿蒙端与桌面原版快捷键使用同一套动作分发和持久化机制。
+- **构建结果：** `cmake --build build --parallel --target stellarium` 通过；同步生成工程后 `hvigorw assembleHap --no-daemon` 通过（`BUILD SUCCESSFUL`），未修改签名、证书、Profile 或权限。
+- **验证结果：** 触控板/键盘契约、卡片契约、`git diff --check` 和 `scripts/check-ohos.sh` 全部通过；最新签名 HAP 已覆盖安装到 MatePad `192.168.1.39:43975`。CLI 真机验证返回 `getKeyboardShortcuts` 共 551 个动作，`getNavigationSettings` 的移动/缩放开关均为开启，并以 `actionShow_Stars|S|` 完成无行为变化的快捷键写入回读验证。
+- **备注：** CLI 不能伪造 MateBook 的物理触控板轴事件；双指滑动、捏合和释放惯性的最终手感仍需在 MateBook/2in1 真机上实际操作验收。构建保留 6 个既有 ArkTS 警告，未发现新增编译错误。
+
+## [2026-10-01] Codex - 快捷键列表完整展示复验
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`docs/harmonyos/CHANGELOG.md`。
+- **修改内容：** 快捷键编辑器不再截取前 40 项，滚动区现在展示 CLI 返回的完整原版动作清单，仍可通过搜索快速定位。
+- **构建结果：** 重新同步生成工程并完成 `assembleHap`（`BUILD SUCCESSFUL`）；最新签名包已覆盖安装并启动于 MatePad `192.168.1.39:43975`。
+- **验证结果：** 真机 CLI 复验 `getKeyboardShortcuts`、`getNavigationSettings`，移动/缩放开关均为开启；触控板/键盘契约与 `git diff --check` 通过。
+
+## [2026-10-01] Codex - 修复指针坐标仅点击更新
+
+- **修改文件：** `harmonyos/ets-source/pages/MainWindowNativeNode.ets`、`scripts/test-ohos-pointer-surveys-ui.mjs`。
+- **修改内容：** 按 HarmonyOS `MouseAction` 枚举改正鼠标按下、移动、释放的事件判断；`Move` 的实际值为 3，旧代码把释放值 2 当成移动，因此自由移动不会刷新指针坐标，点击释放反而会触发一次同步。
+- **修改原因：** 指针坐标插件只有点击星图后同步，平时移动鼠标或触控板指针不同步。
+- **构建结果：** 已同步生成工程并完成 `assembleHap`，`BUILD SUCCESSFUL`；保留工程既有 6 个 ArkTS 警告，未新增编译错误。
+- **验证结果：** 指针契约、触控板契约、`scripts/check-ohos.sh` 和 `git diff --check` 通过；新包已覆盖安装并启动于 MatePad `192.168.1.39:43975`。CLI `setPointerPosition`/`getPointerCoordinates` 回读通过；当前设备没有可独立验证的实体鼠标悬浮输入，PC 实体鼠标自由移动仍需在 MateBook 上复验。
+- **MCP依据：** 华为官方“鼠标事件”和“支持鼠标输入事件”文档确认 `MouseAction.Press=1`、`Release=2`、`Move=3`，且 `onMouse` 支持外接鼠标和触控板移动事件。
+
+## [2026-10-01] Codex - 重做桌面服务卡片视觉层级
+
+- **修改文件：** `harmonyos/ets-source/form/AstronomyCardSurface.ets`、`harmonyos/resources/base/profile/form_config.json`、`scripts/test-ohos-form-cards.mjs`、`docs/harmonyos/CARD-UI-RESEARCH-2026-10.md`。
+- **修改内容：** 以“一个结论、两条证据、一个动作”重排六类服务卡片；按月相、卫星、流星雨和今晚天象分别使用识别性主视觉，去掉固定星点和通用大按钮堆叠；2*2、2*4、4*4 按真实卡片宽高切换信息密度，并统一状态眉题、事实块、圆角和主次按钮层级。
+- **修改原因：** 旧版虽然功能字段齐全，但视觉像演示样板：主视觉偏中、说明文字过长、大小卡片信息密度不一致，首次使用和不同内容类型缺少明确的阅读顺序。
+- **构建结果：** `scripts/sync-ohos-build-sources.sh` 完成同步；`assembleHap` 输出 `BUILD SUCCESSFUL`；未修改签名、证书、Profile、权限或联网端点。
+- **验证结果：** 卡片契约、时间过渡、`git diff --check` 和 `scripts/check-ohos.sh` 通过；最新 HAP 已覆盖安装到 MatePad `192.168.1.39:43975`。已检查应用启动态和卡片快照刷新；系统桌面添加/删除/尺寸切换仍需在桌面卡片管理器逐项操作，不能由应用内截图代替。
+- **备注：** 当前天气、实时过境、多光谱大图仍不伪装成卡片内实时内容，待数据源、权限和缓存策略完成后再增加“观测条件”卡片。
+
+## [2026-10-01] Codex - 桌面卡片实机视觉复验与动态数据修复
+
+- **修复内容：** 将事实栏从多参数 `@Builder` 改为独立的 `@ComponentV2`/`@Param` 组件，修复快照刷新后主标题更新、事实栏却仍停留在默认值的问题；修正月相遮罩的绘制方式，避免 75% 照明显示成偏移的小月牙。
+- **视觉调整：** 2*4 卡片隐藏不必要的底部按钮行，避免系统宿主裁切；4*4 卫星卡增加轨道目录的低干扰示意区域，保留“本地快照”事实，不伪造实时过境；所有卡片改为整卡点击进入对应页面，减少演示式按钮堆叠。
+- **真机复验：** 目标设备实际型号为 `HAD-W32`、设备类型 `2in1`（MateBook/PC），此前条目误写为 MatePad，本条予以纠正。覆盖安装后 `refreshFormSnapshot` 返回 `updatedForms: 3、failedForms: 0`；桌面截图确认 3 颗/4 颗可见行星、日落 17:45、日出 05:53、2915 颗本地卫星和 2026-10-01 快照均显示在事实栏。
+- **点击验收：** 点击总览卡进入天文计算 `tab=5`；点击卫星卡后 CLI 回读 `panel=satellites、matchedCount=2915、loading=false`。未修改签名、Profile、权限或联网端点。
+- **验证结果：** `scripts/test-ohos-form-cards.mjs`、`git diff --check`、资源同步和 `assembleHap --no-daemon` 通过；构建保留工程已有的 ArkTS/API 兼容性告警，无新增编译错误。
+
+## [2026-10-01] Codex - 卫星事件导航性能与地平线稳定性
+
+- **修改文件：** `src/StelMainView.cpp`、`plugins/Satellites/src/Satellite.cpp`、`harmonyos/ets-source/pages/MainWindowNativeNode.ets`。
+- **修改内容：** 卫星的升起/中天/落下查询统一走本地过境预测，返回数值 JD 事件，避免在渲染线程上反复扫描多天并阻塞画面；查询完成后恢复原始时间和相机方向。时间导航期间暂停卫星详情的高频刷新，避免详情计算与时间过渡争用渲染线程。
+- **稳定性：** 时间跳转保留非跟踪状态下的视线方向和屏幕上方向；选中目标不在视口内时不建立屏幕锚定，避免反向地平线分支导致画面倒转。
+- **验证：** 已完成 `git diff --check`、Native 构建、鸿蒙生成工程同步和 `assembleHap`；未修改签名、Profile、权限或联网配置。

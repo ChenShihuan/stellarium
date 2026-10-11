@@ -2,6 +2,7 @@ import { formBindingData, FormExtensionAbility, formInfo, formProvider } from '@
 import { common, Want } from '@kit.AbilityKit'
 import preferences from '@ohos.data.preferences'
 import hilog from '@ohos.hilog'
+import { defaultAstronomyCard, normalizeAstronomyCard } from './AstronomyCardData'
 
 const CARD_STORE = 'sky_instrument_card'
 const CARD_SNAPSHOT_KEY = 'almanacSnapshot'
@@ -9,12 +10,7 @@ const DOMAIN = 0xD003
 const TAG = 'SkyInstrumentForm'
 
 function defaultCardData(): Record<string, string> {
-  return {
-    'title': '星象仪',
-    'subtitle': '二十四节气',
-    'summary': '打开应用查看本地天象与节气时间',
-    'updatedAt': '打开应用刷新年历'
-  }
+  return defaultAstronomyCard()
 }
 
 async function readCardData(context: common.FormExtensionContext): Promise<Record<string, string>> {
@@ -23,13 +19,7 @@ async function readCardData(context: common.FormExtensionContext): Promise<Recor
     const store = await preferences.getPreferences(context, CARD_STORE)
     const raw = await store.get(CARD_SNAPSHOT_KEY, '')
     if (typeof raw !== 'string' || raw.length === 0) return fallback
-    const parsed = JSON.parse(raw) as Record<string, string>
-    return {
-      'title': parsed['title'] ?? fallback['title'],
-      'subtitle': parsed['subtitle'] ?? fallback['subtitle'],
-      'summary': parsed['summary'] ?? fallback['summary'],
-      'updatedAt': parsed['updatedAt'] ?? fallback['updatedAt']
-    }
+    return normalizeAstronomyCard(raw, Date.now())
   } catch (error) {
     hilog.warn(DOMAIN, TAG, 'read card snapshot failed: %{public}s', String(error))
     return fallback

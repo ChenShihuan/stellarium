@@ -36,10 +36,11 @@ node scripts/stellarium-cli.mjs --device <设备ID> --command getAstronomyRemind
 - 该计算使用随包太阳系模型，不联网、不读取 SN/位置上传；设备观测位置只影响年历中的本地时间换算，不改变节气的全球交节时刻。
 - 目前查询和点击跳转默认不注册提醒；需要时通过 `scheduleNextSolarTermReminder` 主动注册一次系统代理提醒，不会因为读取年历而自动订阅。
 
-### 桌面服务卡片（2026-09-23）
+### 桌面服务卡片（2026-10-01）
 
-- 生成工程已注册 `SkyInstrumentFormAbility` 和 `sky_instrument_card` ArkTS 卡片。卡片数据来自应用年历成功加载后写入的本地偏好快照，不联网、不加载 Qt、不读取 SN。
-- 卡片默认展示“星象仪 / 下一节气 / 交节本地时间 / 快照更新时间”，用户点按卡片通过 `FormLink` 打开天文计算年历页。卡片不是通知，也不是实况窗。
+- 生成工程已注册 `SkyInstrumentFormAbility` 和五张 ArkTS 卡片。卡片数据来自应用天象计算成功加载后写入的本地偏好快照，不联网、不加载 Qt、不读取 SN。
+- 默认卡片展示“今晚天象 / 月相 / 行星 / 暗夜观测窗口 / 流星雨 / 卫星”摘要；独立卡片分别承载暗夜观测、卫星、月相和流星雨入口。节气仍由年历页和提醒功能负责，不再占据桌面卡片的主信息位。用户点按卡片通过 `postCardAction` 打开对应业务页；卡片不是通知，也不是实况窗。
+- `AstronomyCardSurface` 根据系统提供的卡片宽高切换紧凑/展开信息层级；小尺寸只保留一个核心结论和一个操作按钮，避免标题、事实行或更新时间被裁切。
 - `form_config.json` 启用 30 分钟被动刷新；它只刷新最近一次本地快照，不代表后台重新计算了星历。首次使用应先在应用内打开并刷新年历。
 - 代理提醒代码和 CLI 已接入；卫星过境倒计时、锁屏实况窗仍未接入。代理提醒仍需要单独的用户订阅、AGC 开放能力审查和包含能力的新 Profile。
 
@@ -179,6 +180,19 @@ node scripts/check-ohos-command-catalog.mjs
 ```
 
 这个检查会比较 C++ 分发器中的命令和目录，避免新增功能无法被 CLI、AI 或应用内命令面板发现。
+
+## 多光谱巡天
+
+多光谱入口使用真实 HiPS 巡天图层，不对可见光星图做伪彩染色。目录查询不会联网；只有明确打开数据集时才请求该数据集的 `properties` 与当前视场瓦片。当前首批目录为 `rass-xray`（RASS X 射线）、`galex-nuv`（GALEX NUV 紫外）和 `2mass-color`（2MASS J/H/K 近红外合成）：
+
+```bash
+node scripts/stellarium-cli.mjs --command listSpectralDatasets --json
+node scripts/stellarium-cli.mjs --command getSpectralState --json
+node scripts/stellarium-cli.mjs --command setSpectralView --payload-json '{"id":"rass-xray","enabled":true}' --json
+node scripts/stellarium-cli.mjs --command closeSpectralView --json
+```
+
+`setSpectralView` 只负责显式切换当前图层；`closeSpectralView` 隐藏图层但保留进程内缓存。退出时不会把这些远程数据源写入普通 HiPS 自动恢复列表，因此不会因曾经查看过多光谱而在下次启动时静默联网。离线包导入、镜像源和 FITS 科学分析仍是后续阶段。
 
 ## 目录筛选
 

@@ -117,6 +117,12 @@ public:
 	QGraphicsWidget* getGuiWidget() const {return guiItem;}
 	//! Return mouse position coordinates
 	QPoint getMousePos() const;
+#if defined(__OHOS__)
+	//! Update the logical pointer position supplied by the ArkUI sky surface.
+	//! HarmonyOS does not expose a QCursor position for touch input, but the
+	//! pointer-coordinate plugin still needs the last sky point to project it.
+	void setOhosMousePos(qreal x, qreal y);
+#endif
 
 	//! Returns the main application OpenGL context,
 	//! which should be used for all drawing Stellarium does
@@ -370,6 +376,8 @@ private:
 	double lastEventTimeSec;
 #if defined(__OHOS__)
 	double lastOhosRenderTimeSec;
+	QPoint ohosMousePos;
+	bool ohosMousePosValid;
 #endif
 
 	//! The minimum desired frame rate in frame per second.

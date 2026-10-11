@@ -37,6 +37,10 @@
           "split",
           "floating"
         ],
+        "minWindowWidth": 320,
+        "minWindowHeight": 240,
+        "minWindowRatio": 0.5,
+        "maxWindowRatio": 2,
         "description": "$string:QAbility_desc",
         "icon": "$media:app_icon",
         "label": "$string:QAbility_label",

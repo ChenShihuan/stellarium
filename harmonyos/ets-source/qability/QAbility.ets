@@ -16,6 +16,8 @@ import { setConsentAcceptedListener, setStartupCanvasReadyListener } from '../co
 import { scheduleDeepSkyImageExtraction, setDeepSkyImageExtractionForeground } from './StellariumResourceBootstrap';
 import { AstronomyNotificationService, AstronomyNotificationPayload } from './AstronomyNotificationService';
 import { AstronomyReminderService, AstronomyReminderRequest } from './AstronomyReminderService';
+import { readAstronomyCard, publishAstronomyCard } from './AstronomyCardService';
+import { CardTonightData } from '../form/AstronomyCardData';
 import { CollaborationSessionOptions, collaborationNativeState, collaborationPreview, createCollaborationSession } from './CollaborationSessionService';
 
 interface StellariumCliRequest {
@@ -101,6 +103,27 @@ export default class QAbility extends UIAbility {
   private cliRequests: StellariumCliRequest[] = [];
   private safeAreaWindow: Window.Window | null = null;
   private safeAreaTopPixels: number = 0;
+  private windowEnvironmentWindow: Window.Window | null = null;
+  private windowEnvironmentDensity: number = 0;
+  private windowEnvironmentStatus: string = 'unknown';
+
+  private readonly windowSizeChangeCallback = (size: Window.Size): void => {
+    this.publishWindowEnvironment('windowSizeChange', size.width, size.height);
+  };
+
+  private readonly windowStatusDidChangeCallback = (status: Window.WindowStatusType): void => {
+    this.windowEnvironmentStatus = String(status);
+    this.publishWindowEnvironment('windowStatusDidChange');
+  };
+
+  private readonly windowRectChangeCallback = (change: Window.RectChangeOptions): void => {
+    this.publishWindowEnvironment('windowRectChange', change.rect.width, change.rect.height);
+  };
+
+  private readonly systemDensityChangeCallback = (density: number): void => {
+    this.windowEnvironmentDensity = Number.isFinite(density) ? density : 0;
+    this.publishWindowEnvironment('systemDensityChange');
+  };
 
   private readonly avoidAreaChangeCallback = (data: WindowAvoidAreaChange): void => {
     if (data.type === Window.AvoidAreaType.TYPE_SYSTEM || data.type === Window.AvoidAreaType.TYPE_CUTOUT) {
@@ -262,6 +285,43 @@ export default class QAbility extends UIAbility {
     }
     const request = this.cliRequests[0];
     request.attempts += 1;
+    if (request.commandName === 'getFormSnapshot') {
+      if (request.attempts > 1) return;
+      readAstronomyCard(this.context).then((snapshot) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: true, snapshot: snapshot }));
+      }).catch((error: Error) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: error.message }));
+      });
+      return;
+    }
+    if (request.commandName === 'refreshFormSnapshot') {
+      if (!hasCurrentPrivacyConsent() || !this.isForeground) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'privacy consent and foreground are required' }));
+        return;
+      }
+      let response: Record<string, Object>;
+      try {
+        response = JSON.parse(command('getTonightEvents', '')) as Record<string, Object>;
+      } catch (error) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'astronomy calculation failed' }));
+        return;
+      }
+      if (response['pending'] === true && request.attempts < 120) {
+        setTimeout(() => this.drainCliRequests(), 80);
+        return;
+      }
+      if (response['ok'] !== true || response['tonight'] === undefined) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'astronomy data is not ready' }));
+        return;
+      }
+      publishAstronomyCard(this.context, response['tonight'] as CardTonightData).then((result) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: true, snapshot: result.snapshot,
+          updatedForms: result.updatedForms, failedForms: result.failedForms }));
+      }).catch((error: Error) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: error.message }));
+      });
+      return;
+    }
     if (request.commandName.includes('Collaboration') && (!hasCurrentPrivacyConsent() || !this.isForeground)) {
       this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'privacy consent and foreground are required' }));
       return;
@@ -827,7 +887,10 @@ export default class QAbility extends UIAbility {
         await mainWindow.setSpecificSystemBarEnabled('navigationIndicator', false);
       }
       await this.repairSmallFreeformWindow(windowStage);
-      if (this.qtAbilityCreated && hasCurrentPrivacyConsent()) this.registerScreenSafeArea(mainWindow);
+      if (this.qtAbilityCreated && hasCurrentPrivacyConsent()) {
+        this.registerScreenSafeArea(mainWindow);
+        this.registerWindowEnvironmentListeners(mainWindow);
+      }
       hilog.info(LOG_DOMAIN, LOG_TAG, 'QAbility::enterImmersive() success');
     } catch (err) {
       hilog.error(LOG_DOMAIN, LOG_TAG, 'QAbility::enterImmersive() failed: ' + JSON.stringify(err));
@@ -902,6 +965,67 @@ export default class QAbility extends UIAbility {
     AppStorage.setOrCreate<number>('stellariumScreenSafeBottomPixels', bottom);
   }
 
+  private publishWindowEnvironment(source: string, width: number = 0, height: number = 0): void {
+    AppStorage.setOrCreate('stellariumWindowEnvironment', JSON.stringify({
+      ok: true,
+      source: source,
+      width: Number.isFinite(width) ? Math.max(0, Math.round(width)) : 0,
+      height: Number.isFinite(height) ? Math.max(0, Math.round(height)) : 0,
+      status: this.windowEnvironmentStatus,
+      density: this.windowEnvironmentDensity,
+      timestamp: Date.now()
+    }));
+  }
+
+  private unregisterWindowEnvironmentListeners(): void {
+    if (this.windowEnvironmentWindow === null) return;
+    const target = this.windowEnvironmentWindow;
+    try { target.off('windowSizeChange', this.windowSizeChangeCallback); } catch (err) { }
+    try { target.off('windowStatusDidChange', this.windowStatusDidChangeCallback); } catch (err) { }
+    try { target.off('windowRectChange', this.windowRectChangeCallback); } catch (err) { }
+    try { target.off('systemDensityChange', this.systemDensityChangeCallback); } catch (err) { }
+    this.windowEnvironmentWindow = null;
+  }
+
+  private registerWindowEnvironmentListeners(mainWindow: Window.Window): void {
+    if (this.windowEnvironmentWindow !== null && this.windowEnvironmentWindow !== mainWindow) {
+      this.unregisterWindowEnvironmentListeners();
+    }
+    this.windowEnvironmentWindow = mainWindow;
+    try {
+      const properties = mainWindow.getWindowProperties();
+      this.windowEnvironmentStatus = String(mainWindow.getWindowStatus());
+      this.publishWindowEnvironment('initial', properties.windowRect.width, properties.windowRect.height);
+    } catch (err) {
+      this.publishWindowEnvironment('initial');
+    }
+    try {
+      mainWindow.off('windowSizeChange', this.windowSizeChangeCallback);
+      mainWindow.on('windowSizeChange', this.windowSizeChangeCallback);
+    } catch (err) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, '[window-env] windowSizeChange unavailable');
+    }
+    try {
+      mainWindow.off('windowStatusDidChange', this.windowStatusDidChangeCallback);
+      mainWindow.on('windowStatusDidChange', this.windowStatusDidChangeCallback);
+    } catch (err) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, '[window-env] windowStatusDidChange unavailable');
+    }
+    try {
+      mainWindow.off('windowRectChange', this.windowRectChangeCallback);
+      mainWindow.on('windowRectChange', this.windowRectChangeCallback);
+    } catch (err) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, '[window-env] windowRectChange unavailable');
+    }
+    try {
+      mainWindow.off('systemDensityChange', this.systemDensityChangeCallback);
+      mainWindow.on('systemDensityChange', this.systemDensityChangeCallback);
+    } catch (err) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, '[window-env] systemDensityChange unavailable');
+    }
+    hilog.info(LOG_DOMAIN, LOG_TAG, '[window-env] PC window listeners registered');
+  }
+
   private registerScreenSafeArea(mainWindow: Window.Window): void {
     if (this.safeAreaWindow !== null && this.safeAreaWindow !== mainWindow) {
       try {
@@ -955,6 +1079,7 @@ export default class QAbility extends UIAbility {
     setConsentAcceptedListener(undefined);
     setStartupCanvasReadyListener(undefined);
     this.stopInputStallProbe();
+    this.unregisterWindowEnvironmentListeners();
     hilog.info(LOG_DOMAIN, LOG_TAG, 'QAbility::onDestroy()');
     if (this.qtAbilityCreated) {
       return qpa.handleAbilityOnDestroy(this);
@@ -1050,6 +1175,7 @@ export default class QAbility extends UIAbility {
   }
 
   onWindowStageDestroy() {
+    this.unregisterWindowEnvironmentListeners();
     this.rootContentLoaded = false;
     this.qtWindowStage = undefined;
     hilog.info(LOG_DOMAIN, LOG_TAG, 'QAbility::onStageDestroy()');

@@ -93,6 +93,7 @@ bool satelliteMatchesSearch(const Satellite& satellite, const QString& query)
 	}
 
 	const QString englishName = satellite.getEnglishName().toUpper();
+	const QString normalizedEnglishName = normalizeSatelliteSearch(englishName);
 	if (englishName.startsWith(QStringLiteral("ISS")) || englishName.contains(QStringLiteral("ZARYA")) || englishName.contains(QStringLiteral("NAUKA")))
 	{
 		return normalizedQuery == QStringLiteral("iss")
@@ -114,6 +115,38 @@ bool satelliteMatchesSearch(const Satellite& satellite, const QString& query)
 			|| normalizedQuery.contains(QStringLiteral("mengtian"))
 			|| normalizedQuery.contains(QStringLiteral("问天"))
 			|| normalizedQuery.contains(QStringLiteral("梦天"));
+	}
+	const QList<QPair<QString, QString>> localizedAliases = {
+		{QStringLiteral("STARLINK"), QStringLiteral("星链")},
+		{QStringLiteral("BEIDOU"), QStringLiteral("北斗")},
+		{QStringLiteral("TIANLIAN"), QStringLiteral("天链")},
+		{QStringLiteral("TIANTONG"), QStringLiteral("天通")},
+		{QStringLiteral("FENGYUN"), QStringLiteral("风云")},
+		{QStringLiteral("YAOGAN"), QStringLiteral("遥感")},
+		{QStringLiteral("GAOFEN"), QStringLiteral("高分")},
+		{QStringLiteral("SHIJIAN"), QStringLiteral("实践")},
+		{QStringLiteral("SHIYAN"), QStringLiteral("实验")},
+		{QStringLiteral("ZIYUAN"), QStringLiteral("资源")},
+		{QStringLiteral("JILIN"), QStringLiteral("吉林一号")},
+		{QStringLiteral("GLONASS"), QStringLiteral("格洛纳斯")},
+		{QStringLiteral("GALILEO"), QStringLiteral("伽利略")},
+		{QStringLiteral("IRIDIUM"), QStringLiteral("铱星")},
+		{QStringLiteral("GLOBALSTAR"), QStringLiteral("全球星")},
+		{QStringLiteral("INTELSAT"), QStringLiteral("国际通信卫星")},
+		{QStringLiteral("GONETS"), QStringLiteral("戈涅斯")},
+		{QStringLiteral("COSMOS"), QStringLiteral("宇宙号")},
+		{QStringLiteral("QZSS"), QStringLiteral("准天顶")}
+	};
+	for (const auto& alias : localizedAliases)
+	{
+		if (!englishName.contains(alias.first))
+			continue;
+		const QString normalizedAlias = normalizeSatelliteSearch(alias.second);
+		if (normalizedQuery == normalizedAlias)
+			return true;
+		if (normalizedQuery.startsWith(normalizedAlias)
+			&& normalizedEnglishName.contains(normalizedQuery.mid(normalizedAlias.size())))
+			return true;
 	}
 	return false;
 }

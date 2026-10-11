@@ -70,6 +70,8 @@ public:
 	QString getGroup() const {return group;}
 	const QKeySequence getShortcut() const {return keySequence;}
 	const QKeySequence getAltShortcut() const {return altKeySequence;}
+	const QKeySequence getDefaultShortcut() const {return defaultKeySequence;}
+	const QKeySequence getDefaultAltShortcut() const {return defaultAltKeySequence;}
 	QString getText() const;
 	void setText(const QString& value) {text = value; emit changed();}
 signals:

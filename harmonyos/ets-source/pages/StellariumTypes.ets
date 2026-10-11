@@ -354,11 +354,13 @@ export interface StellariumBridgeResponse {
   format?: string
   isTimeNow?: boolean
   pending?: boolean
+  accepted?: boolean
   progress?: number
   totalDays?: number
   totalCandidates?: number
   found?: boolean
   error?: string
+  conflictAction?: string
   selectionRequired?: boolean
   name?: string
   englishName?: string
@@ -387,6 +389,8 @@ export interface StellariumBridgeResponse {
   query?: string
   timeRate?: number
   value?: string
+  datasets?: Object[]
+  spectral?: Object
   altitudes?: number[]
   magnitudes?: number[]
   visibleNow?: boolean[]
