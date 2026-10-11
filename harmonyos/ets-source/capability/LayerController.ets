@@ -37,6 +37,8 @@ export interface LayerHostHooks extends BehaviorHostHooks {
   loadScriptList(): void
   loadRecordings(): void
   loadVideoRecordingState(): void
+  // 通知/后台提醒状态回读（NotificationController 持有）；进入「设备与隐私」页时刷新。
+  refreshNotificationStatus(): void
   // 视图标签页宿主 @State（组件 @Prop 消费，控制器经 hooks 读写）。
   viewTab(): number
   setViewTab(value: number): void
@@ -261,6 +263,8 @@ export class LayerController {
         this.hooks.loadVideoRecordingState()
       } else if (tabId === 6) {
         this.pluginStore.loadPluginList()
+      } else if (tabId === -1) {
+        this.hooks.refreshNotificationStatus()
       }
       hilog.info(0x0000, 'StellariumArkUI', '[settings-transition] swap id=%{public}d tab=%{public}d', transitionId, tabId)
       this.hooks.animateTabOut(170, (): void => {

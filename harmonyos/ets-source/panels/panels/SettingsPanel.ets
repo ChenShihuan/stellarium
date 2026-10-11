@@ -22,9 +22,11 @@ import { EphemerisStore } from '../../state/EphemerisStore'
 import { PluginStore } from '../../state/PluginStore'
 import { NavigationSettingsStore } from '../../state/NavigationSettingsStore'
 import { ViewSettingsStore } from '../../state/ViewSettingsStore'
+import { NotificationStore } from '../../state/NotificationStore'
 import { InfoRow } from '../../common/ui/InfoRow'
 import { EphemerisToggleRow, InformationModeButton, InformationSwitchRow, NavigationSwitchRow } from '../settings/SettingsRows'
 import { LanguageRow, DevicePrivacySection } from '../settings/DeviceAndLanguageRows'
+import { NotificationSection } from '../settings/NotificationSection'
 import { TimeSettingsSection } from '../settings/TimeSettingsSection'
 import { DeltaTSettingsBlock } from '../time/DeltaTSettingsBlock'
 import { sensZh, pluginZh, pluginDesc, pluginFeatureRoute, resourceText, scriptZh, scriptDesc } from '../../common/derive/labels'
@@ -40,6 +42,7 @@ export struct SettingsPanel {
   @ObjectLink pluginStore: PluginStore
   @ObjectLink navigationStore: NavigationSettingsStore
   @ObjectLink viewSettingsStore: ViewSettingsStore
+  @ObjectLink notificationStore: NotificationStore
   @Prop configTab: number
   @Prop configTabContentOpacity: number
   @Prop configTabContentOffsetX: number
@@ -95,6 +98,9 @@ export struct SettingsPanel {
   setObjectDetailConnector: (enabled: boolean) => void = () => {}
   toggleGyroscope: (enabled: boolean) => void = () => {}
   confirmPrivacyRevocation: () => void = () => {}
+  requestNotificationAccess: () => void = () => {}
+  scheduleNextSolarTermReminder: () => void = () => {}
+  clearAstronomyReminders: () => void = () => {}
   loadPluginList: () => void = () => {}
   openPluginFeature: (id: string) => void = () => {}
   playScriptByName: (filename: string) => void = () => {}
@@ -139,6 +145,17 @@ export struct SettingsPanel {
         Column({ space: 0 }) {
           if (this.configTab === -1) {
             DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.textColor, subColor: this.subColor, onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
+            NotificationSection({
+              notificationEnabled: this.notificationStore.astronomyNotificationEnabled,
+              notificationBusy: this.notificationStore.astronomyNotificationBusy,
+              reminderCount: this.notificationStore.astronomyReminderCount,
+              statusText: this.notificationStore.astronomyNotificationStatus,
+              textColor: this.textColor,
+              subColor: this.subColor,
+              onRequestAccess: () => { this.requestNotificationAccess() },
+              onScheduleNextSolarTerm: () => { this.scheduleNextSolarTermReminder() },
+              onClearReminders: () => { this.clearAstronomyReminders() }
+            })
           } else if (this.configTab === 0) {
             LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
             Text('行星历表').fontSize(12).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 4 })

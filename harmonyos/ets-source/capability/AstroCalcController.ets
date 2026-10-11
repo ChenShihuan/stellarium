@@ -1192,6 +1192,7 @@ export class AstroCalcController {
     }
     const requestId = ++this.almanacRequestSequence
     this.astroStore.almanacSeasons = []
+    this.astroStore.almanacSolarTerms = []
     this.astroStore.almanacSeasonYear = ''
     this.astroStore.almanacData = new Map()
     this.astroStore.almanacError = ''
@@ -1220,6 +1221,7 @@ export class AstroCalcController {
         data.set('moonPhase', av['moonPhase'] !== undefined ? String(av['moonPhase']) : '0')
         this.astroStore.almanacData = data
         if (Array.isArray(av['seasonEvents'])) this.astroStore.almanacSeasons = av['seasonEvents'] as Array<SeasonEvent>
+        if (Array.isArray(av['solarTerms'])) this.astroStore.almanacSolarTerms = av['solarTerms'] as Array<SeasonEvent>
         if (av['seasonYear'] !== undefined) this.astroStore.almanacSeasonYear = String(av['seasonYear'])
         if (this.astroStore.almanacData.size === 0) this.astroStore.almanacError = '当前没有可显示的年历数据。'
       } else {

@@ -9,12 +9,34 @@ import BuildProfile from 'BuildProfile';
 import qpa from 'libqohos.so';
 import { command } from 'libentry.so';
 import { notifyLifecycle } from '../common/StellariumLifecycle';
-import {LOG_DOMAIN, LOG_TAG} from '../common/QtAppConstants';
+import {LOG_DOMAIN, LOG_TAG, APP_ICP_FILING_NUMBER, APP_ICP_FILING_URL} from '../common/QtAppConstants';
 import { hasCurrentPrivacyConsent } from './PrivacyConsent';
 import { writeClipboardText } from './ClipboardService';
 import QtWindowStageAdapter from './QtWindowStageAdapter';
 import { setConsentAcceptedListener, setStartupCanvasReadyListener } from '../common/PrivacyStartup';
 import { scheduleDeepSkyImageExtraction, setDeepSkyImageExtractionForeground } from './StellariumResourceBootstrap';
+import { AstronomyNotificationService, AstronomyNotificationPayload } from './AstronomyNotificationService';
+import { AstronomyReminderService, AstronomyReminderRequest } from './AstronomyReminderService';
+import { readAstronomyCard, publishAstronomyCard } from './AstronomyCardService';
+import { CardTonightData } from '../form/AstronomyCardData';
+import { CollaborationSessionOptions, collaborationNativeState, collaborationPreview, createCollaborationSession } from './CollaborationSessionService';
+
+interface AstronomyReminderResponse {
+  ok: boolean;
+  reminderId?: number;
+  error?: string;
+  code?: number;
+  notificationEnabled?: boolean;
+  reminderCount?: number;
+  event?: Object;
+}
+
+interface SolarTermCandidate {
+  date: string;
+  jd?: number;
+  label?: string;
+  key?: string;
+}
 
 interface StellariumCliRequest {
   commandName: string;
@@ -106,6 +128,35 @@ export default class QAbility extends UIAbility {
     return typeof value === 'string' ? value : '';
   }
 
+  // 天象卡片点击跳转：从桌面卡片 Want 的 parameters（或嵌套 params JSON）提取 panel/tab，
+  // 写入 AppStorage 供主窗口消费并打开对应面板。
+  private routeCardWant(want: Want): void {
+    const parameters = want.parameters as Record<string, Object> | undefined;
+    if (parameters === undefined) return;
+    let panel = this.readCliString(parameters, 'panel').trim();
+    let tab = this.readCliString(parameters, 'tab').trim();
+    const nested = parameters['params'];
+    if (panel.length === 0 && typeof nested === 'string') {
+      try {
+        const parsed = JSON.parse(nested) as Record<string, Object>;
+        panel = typeof parsed['panel'] === 'string' ? String(parsed['panel']).trim() : '';
+        tab = typeof parsed['tab'] === 'string' ? String(parsed['tab']).trim() : tab;
+      } catch (error) {
+        hilog.warn(LOG_DOMAIN, LOG_TAG, '[form-route] ignored malformed card params');
+      }
+    } else if (panel.length === 0 && nested !== undefined && typeof nested === 'object') {
+      const parsed = nested as Record<string, Object>;
+      panel = typeof parsed['panel'] === 'string' ? String(parsed['panel']).trim() : '';
+      tab = typeof parsed['tab'] === 'string' ? String(parsed['tab']).trim() : tab;
+    }
+    if (panel.length === 0) return;
+    AppStorage.setOrCreate('stellariumCardRoute', JSON.stringify({
+      panel: panel,
+      tab: tab,
+      routeId: Date.now().toString()
+    }));
+  }
+
   private queueCliRequest(want: Want): void {
     const parameters = want.parameters as Record<string, Object> | undefined;
     const commandName = this.readCliString(parameters, 'skyinstrument.cli.command').trim();
@@ -139,6 +190,20 @@ export default class QAbility extends UIAbility {
     if (this.cliRequests.some((request: StellariumCliRequest) => request.requestId === requestId)) {
       return;
     }
+    if (commandName === 'getUiLayout') {
+      this.finishCliRequest({ commandName, payload, requestId, attempts: 0 },
+        AppStorage.get<string>('stellariumUiLayoutState') ?? JSON.stringify({
+          ok: true, ready: false, mode: 'unknown', override: 'auto'
+        }));
+      return;
+    }
+    if (commandName === 'getLocationMapState') {
+      this.finishCliRequest({ commandName, payload, requestId, attempts: 0 },
+        AppStorage.get<string>('stellariumLocationMapState') ?? JSON.stringify({
+          ok: true, provider: 'offline', phase: 'ready', observerCoordinateSystem: 'WGS84'
+        }));
+      return;
+    }
     this.cliRequests.push({ commandName: commandName, payload: payload, requestId: requestId, attempts: 0 });
     hilog.info(LOG_DOMAIN, LOG_TAG, '[cli] queued requestId=%{public}s command=%{public}s', requestId, commandName);
     this.drainCliRequests();
@@ -159,7 +224,38 @@ export default class QAbility extends UIAbility {
     if (commandName === 'setObjectDetailTab') return true;
     if (commandName === 'setObjectModelView') return true;
     return commandName === 'openUiPanel' || commandName === 'openPluginFeature' || commandName === 'closeUiPanel' || commandName === 'backUiPanel' ||
-      commandName === 'setLayerTab' || commandName === 'setSkyCultureMakerTab' || commandName === 'setGyroscopeEnabled' || commandName === 'setTelescopeLivePosition';
+      commandName === 'setLayerTab' || commandName === 'setSkyCultureMakerTab' || commandName === 'setGyroscopeEnabled' || commandName === 'setTelescopeLivePosition' || commandName === 'setLocationMapProvider' || commandName === 'setUiLayoutMode';
+  }
+
+  // 协作会话：创建 / 导出（copy 时写剪贴板）。
+  private async createCollaborationCli(request: StellariumCliRequest): Promise<void> {
+    try {
+      let options: CollaborationSessionOptions = {};
+      if (request.payload.trim().length > 0) options = JSON.parse(request.payload) as CollaborationSessionOptions;
+      const session = createCollaborationSession(command('getSessionState', ''), options);
+      const response: Record<string, Object> = {};
+      response['ok'] = true;
+      response['session'] = session;
+      response['preview'] = collaborationPreview(JSON.stringify(session));
+      if (request.commandName === 'exportCollaborationSession' && options.copy === true) {
+        response['clipboard'] = await writeClipboardText(JSON.stringify(session, null, 2));
+      }
+      this.finishCliRequest(request, JSON.stringify(response));
+    } catch (error) {
+      this.finishCliRequest(request, JSON.stringify({ ok: false, error: String(error) }));
+    }
+  }
+
+  // 协作会话：应用到本地引擎（applySessionState）。
+  private async applyCollaborationCli(request: StellariumCliRequest): Promise<void> {
+    try {
+      const nativeState = collaborationNativeState(request.payload);
+      const result = JSON.parse(command('applySessionState', nativeState)) as Record<string, Object>;
+      result['sessionPreview'] = collaborationPreview(request.payload);
+      this.finishCliRequest(request, JSON.stringify(result));
+    } catch (error) {
+      this.finishCliRequest(request, JSON.stringify({ ok: false, error: String(error) }));
+    }
   }
 
   private drainCliRequests(): void {
@@ -168,6 +264,218 @@ export default class QAbility extends UIAbility {
     }
     const request = this.cliRequests[0];
     request.attempts += 1;
+    if (request.commandName === 'getNotificationStatus') {
+      AstronomyNotificationService.isEnabled().then((enabled: boolean) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: true, enabled: enabled }));
+      });
+      return;
+    }
+    if (request.commandName === 'requestNotificationAuthorization') {
+      AstronomyNotificationService.requestAuthorization(this.context).then((enabled: boolean) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: true, enabled: enabled }));
+      });
+      return;
+    }
+    if (request.commandName === 'publishAstronomyNotification') {
+      let payload: AstronomyNotificationPayload;
+      try {
+        payload = JSON.parse(request.payload) as AstronomyNotificationPayload;
+      } catch (error) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'payload must be notification JSON' }));
+        return;
+      }
+      if (!Number.isInteger(payload.id) || payload.id <= 0 || payload.title.length === 0 || payload.text.length === 0) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'id, title and text are required' }));
+        return;
+      }
+      AstronomyNotificationService.publish(payload).then((published: boolean) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: published, published: published }));
+      });
+      return;
+    }
+    if (request.commandName === 'cancelAstronomyNotification') {
+      const id = Number(request.payload.trim());
+      if (!Number.isInteger(id) || id <= 0) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'notification id must be a positive integer' }));
+        return;
+      }
+      AstronomyNotificationService.cancel(id);
+      this.finishCliRequest(request, JSON.stringify({ ok: true, cancelled: id }));
+      return;
+    }
+    if (request.commandName === 'getAstronomyReminderStatus') {
+      AstronomyReminderService.status().then((status) => {
+        this.finishCliRequest(request, JSON.stringify(status));
+      });
+      return;
+    }
+    if (request.commandName === 'getAstronomyReminders') {
+      AstronomyReminderService.list().then((result) => {
+        this.finishCliRequest(request, JSON.stringify(result));
+      });
+      return;
+    }
+    if (request.commandName === 'scheduleAstronomyReminder') {
+      let payload: AstronomyReminderRequest;
+      try {
+        payload = JSON.parse(request.payload) as AstronomyReminderRequest;
+      } catch (error) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'payload must be reminder JSON' }));
+        return;
+      }
+      AstronomyReminderService.schedule(payload).then((result) => {
+        this.finishCliRequest(request, JSON.stringify(result));
+      });
+      return;
+    }
+    if (request.commandName === 'scheduleNextSolarTermReminder') {
+      let nativeResponse: Record<string, Object>;
+      try {
+        nativeResponse = JSON.parse(command('getAlmanac', '')) as Record<string, Object>;
+      } catch (error) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'almanac is not ready' }));
+        return;
+      }
+      if (nativeResponse['pending'] === true) {
+        if (request.attempts < 120) {
+          setTimeout(() => this.drainCliRequests(), 80);
+          return;
+        }
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'almanac command timed out', pending: true }));
+        return;
+      }
+      const nestedResult = nativeResponse['result'] as Record<string, Object> | undefined;
+      const nestedAlmanac = nestedResult?.['almanac'] as Record<string, Object> | undefined;
+      const almanac = (nativeResponse['almanac'] as Record<string, Object> | undefined) ?? nestedAlmanac ?? nativeResponse;
+      const rawTerms = almanac['solarTerms'] ?? nativeResponse['solarTerms'] ?? nestedResult?.['solarTerms'];
+      const terms = Array.isArray(rawTerms) ? rawTerms as Array<SolarTermCandidate> : [];
+      const rawCurrentJD = almanac['currentJD'] ?? nativeResponse['currentJD'] ?? nestedResult?.['currentJD'];
+      const currentJD = Number(String(rawCurrentJD ?? ''));
+      const directNextDate = String(almanac['nextSolarTermDate'] ?? nativeResponse['nextSolarTermDate'] ?? nestedResult?.['nextSolarTermDate'] ?? '');
+      const directNextJD = Number(String(almanac['nextSolarTermJD'] ?? nativeResponse['nextSolarTermJD'] ?? nestedResult?.['nextSolarTermJD'] ?? ''));
+      const directNextLabel = String(almanac['nextSolarTermLabel'] ?? nativeResponse['nextSolarTermLabel'] ?? nestedResult?.['nextSolarTermLabel'] ?? '下一节气');
+      const directNext: SolarTermCandidate | undefined = directNextDate.length > 0
+        ? { date: directNextDate, jd: directNextJD, label: directNextLabel, key: directNextLabel }
+        : undefined;
+      const next = directNext ?? terms.find((term: SolarTermCandidate): boolean => {
+        const termJD = Number(String(term.jd ?? ''));
+        if (Number.isFinite(currentJD) && Number.isFinite(termJD)) {
+          return termJD > currentJD + (30 / 86400);
+        }
+        const rawDate = String(term.date ?? '');
+        const dateParts = rawDate.split('T');
+        const dayParts = dateParts[0].split('-');
+        const timeParts = (dateParts[1] ?? '00:00:00').split(':');
+        const date = dayParts.length === 3 && timeParts.length >= 2
+          ? new Date(Number(dayParts[0]), Number(dayParts[1]) - 1, Number(dayParts[2]), Number(timeParts[0]), Number(timeParts[1]), Number(timeParts[2] ?? 0))
+          : new Date(rawDate);
+        return Number.isFinite(date.getTime()) && date.getTime() > Date.now() + 30 * 1000;
+      });
+      if (next === undefined) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'no upcoming solar term in the current almanac' }));
+        return;
+      }
+      const label = String(next.label ?? '下一节气');
+      AstronomyReminderService.schedule({
+        at: String(next.date),
+        title: '星象仪 · 下一节气',
+        content: `${label} 即将到来，打开星象仪查看年历和观测信息。`,
+        eventId: String(next.key ?? label),
+        kind: 'solar-term',
+        panel: 'astro',
+        tab: 8
+      }).then((result) => {
+        const response: AstronomyReminderResponse = { ok: result.ok };
+        if (result.reminderId !== undefined) response.reminderId = result.reminderId;
+        if (result.error !== undefined) response.error = result.error;
+        if (result.code !== undefined) response.code = result.code;
+        if (result.notificationEnabled !== undefined) response.notificationEnabled = result.notificationEnabled;
+        if (result.reminderCount !== undefined) response.reminderCount = result.reminderCount;
+        response.event = next;
+        this.finishCliRequest(request, JSON.stringify(response));
+      });
+      return;
+    }
+    if (request.commandName === 'cancelAstronomyReminder') {
+      const reminderId = Number(request.payload.trim());
+      AstronomyReminderService.cancel(reminderId).then((result) => {
+        this.finishCliRequest(request, JSON.stringify(result));
+      });
+      return;
+    }
+    if (request.commandName === 'clearAstronomyReminders') {
+      AstronomyReminderService.cancelAll().then((result) => {
+        this.finishCliRequest(request, JSON.stringify(result));
+      });
+      return;
+    }
+    if (request.commandName === 'getFormSnapshot') {
+      if (request.attempts > 1) return;
+      readAstronomyCard(this.context).then((snapshot) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: true, snapshot: snapshot }));
+      }).catch((error: Error) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: error.message }));
+      });
+      return;
+    }
+    if (request.commandName === 'refreshFormSnapshot') {
+      if (!hasCurrentPrivacyConsent() || !this.isForeground) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'privacy consent and foreground are required' }));
+        return;
+      }
+      let response: Record<string, Object>;
+      try {
+        response = JSON.parse(command('getTonightEvents', '')) as Record<string, Object>;
+      } catch (error) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'astronomy calculation failed' }));
+        return;
+      }
+      if (response['pending'] === true && request.attempts < 120) {
+        setTimeout(() => this.drainCliRequests(), 80);
+        return;
+      }
+      if (response['ok'] !== true || response['tonight'] === undefined) {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'astronomy data is not ready' }));
+        return;
+      }
+      publishAstronomyCard(this.context, response['tonight'] as CardTonightData).then((result) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: true, snapshot: result.snapshot,
+          updatedForms: result.updatedForms, failedForms: result.failedForms }));
+      }).catch((error: Error) => {
+        this.finishCliRequest(request, JSON.stringify({ ok: false, error: error.message }));
+      });
+      return;
+    }
+    if (request.commandName.includes('Collaboration') && (!hasCurrentPrivacyConsent() || !this.isForeground)) {
+      this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'privacy consent and foreground are required' }));
+      return;
+    }
+    if (request.commandName === 'getCollaborationState') {
+      this.finishCliRequest(request, JSON.stringify({
+        ok: true, systemContinuation: false, cloudSync: false, liveCollaboration: false,
+        fileTransfer: true, sessionSchemaVersion: 2,
+        ui: AppStorage.get<string>('stellariumCollaborationUi') ?? '{}'
+      }));
+      return;
+    }
+    if (request.commandName === 'createCollaborationSession' || request.commandName === 'exportCollaborationSession') {
+      if (request.attempts > 1) return;
+      void this.createCollaborationCli(request);
+      return;
+    }
+    if (request.commandName === 'previewCollaborationSession' || request.commandName === 'importCollaborationSession') {
+      this.finishCliRequest(request, JSON.stringify(collaborationPreview(request.payload)));
+      return;
+    }
+    if (request.commandName === 'applyCollaborationSession') {
+      if (request.attempts > 1) return;
+      void this.applyCollaborationCli(request);
+      return;
+    }
+    if (request.commandName === 'getAppFilingInfo') {
+      this.finishCliRequest(request, JSON.stringify({ ok: true, type: 'app', number: APP_ICP_FILING_NUMBER, verificationUrl: APP_ICP_FILING_URL }));
+      return;
+    }
     if (request.commandName === 'copyTextToClipboard') {
       if (request.attempts > 1) return;
       writeClipboardText(request.payload).then((result) => {
@@ -616,6 +924,7 @@ export default class QAbility extends UIAbility {
     this.pendingWant = want;
     this.pendingLaunchParam = launchParam;
     this.queueCliRequest(want);
+    this.routeCardWant(want);
   }
 
   onDestroy(): void | Promise<void> {
@@ -675,6 +984,7 @@ export default class QAbility extends UIAbility {
     this.pendingWant = want;
     this.pendingLaunchParam = launchParam;
     this.queueCliRequest(want);
+    this.routeCardWant(want);
     if (this.qtAbilityCreated) {
       qpa.handleAbilityOnNewWant(this, want, launchParam);
       this.drainCliRequests();
