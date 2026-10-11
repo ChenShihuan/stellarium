@@ -1610,6 +1610,7 @@ export struct WindowNativeNode {
       },
       sessionImportText: (): string => this.tools.sessionImportText,
       setSessionExportText: (text: string): void => { this.tools.sessionExportText = text },
+      shareSessionJson: (json: string): void => { this.shareCollaborationSession(json) },
       canUseDistributed: (): boolean => this.canUseDistributed
     })
     // 导览域的引擎/定时器/桥在 GuideController；跨域/UI/引擎动作经
@@ -3416,8 +3417,26 @@ export struct WindowNativeNode {
     }
   }
 
-  private setPanel(panel: string, preserveHistory: boolean = false, forceVisible: boolean = false, routeDirection: number = 0): void {
-    if (!preserveHistory) {
+  // 协作会话分享：把会话信封落盘到 cacheDir 后拉起系统分享。
+  private shareCollaborationSession(json: string): void {
+    try {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const path = context.cacheDir + '/stellarium-observation-handoff-' + Date.now().toString() + '.json'
+      const file = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE)
+      const encoder = new util.TextEncoder('utf-8')
+      const bytes = encoder.encodeInto(json)
+      fileIo.writeSync(file.fd, bytes.buffer)
+      fileIo.closeSync(file)
+      shareFile(this.hostMediaPort, this.hostPlatformPort, path, utd.UniformDataType.PLAIN_TEXT,
+        I18n.t('session_share'), I18n.t('session_share_description'), 'session-share',
+        { flashHint: (text: ResourceStr): void => this.flashHint(text), isExpandedLayout: (): boolean => this.isExpandedLayout })
+    } catch (error) {
+      hilog.error(0x0000, 'StellariumArkUI', 'Session share failed: %{public}s', String(error))
+      this.flashHint(I18n.t('m_session_export_failed'))
+    }
+  }
+
+  private setPanel(panel: string, preserveHistory: boolean = false, forceVisible: boolean = false, routeDirection: number = 0): void {    if (!preserveHistory) {
       this.panelNavigationStack = []
       this.panelNavigationDepth = 0
     }
@@ -8236,6 +8255,7 @@ export struct WindowNativeNode {
         onImportConfig: () => { this.tools.importConfig() },
         onConfigImportText: (value: string) => { this.tools.configImportText = value },
         onSessionExport: () => { this.sessionToolStore.sessionExport() },
+        onSessionShare: () => { this.sessionToolStore.sessionShare() },
         onSessionApply: () => { this.sessionToolStore.sessionApply() },
         onSessionImportText: (value: string) => { this.tools.sessionImportText = value },
         onLoadLog: () => { this.tools.loadLog() },

@@ -16,6 +16,8 @@ export interface SessionToolHooks {
   sessionImportText(): string
   // 写 ToolsStore 的会话导出文本框。
   setSessionExportText(text: string): void
+  // 把协作会话 JSON 落盘并拉起系统分享。
+  shareSessionJson(json: string): void
   // 是否具备分布式续传能力。
   canUseDistributed(): boolean
 }
@@ -186,9 +188,26 @@ export class SessionToolStore {
     })
   }
 
-  // 跨设备续传（当前基础 SDK 无分布式软总线，给出本地能力说明）。
-  sessionHandoff(): void {
+  // 生成协作会话信封（schema v2）并拉起系统分享；隐私门控由 QAbility 侧命令处理。
+  sessionShare(): void {
+    const port = this.ensurePort()
     const hooks = this.hooks
+    if (port === null || hooks === null) {
+      return
+    }
+    port.requestWhenReady('createCollaborationSession', '{"includeLocation":false}', (envelope: StellariumBridgeResponse) => {
+      if (!envelope.ok || envelope.session === undefined) {
+        this.sessionHint = I18n.t('m_session_export_failed')
+        return
+      }
+      const json = JSON.stringify(envelope.session, null, '  ')
+      this.sessionHint = I18n.t('session_share')
+      hooks.shareSessionJson(json)
+    })
+  }
+
+  // 跨设备续传（当前基础 SDK 无分布式软总线，给出本地能力说明）。
+  sessionHandoff(): void {    const hooks = this.hooks
     if (hooks === null) {
       return
     }
