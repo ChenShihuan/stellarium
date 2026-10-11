@@ -48,6 +48,7 @@ export function skyDataHubActions(): ShellAction[] {
     { label: I18n.t('panel_satellites'), icon: 'satellite', panel: 'satellites' },
     { label: I18n.t('panel_meteorshowers'), icon: 'meteor', panel: 'meteorshowers' },
     { label: I18n.pluginName('Scenery3d'), icon: 'scenery3d', panel: 'scenery3d' },
+    { label: 'AR 预研', icon: 'gyro', panel: 'ar' },
     { label: I18n.t('panel_catalogs'), icon: 'catalogs', panel: 'catalogs' },
     { label: I18n.t('more_plugins_manage'), icon: 'settings', panel: 'pluginManager' }
   ]

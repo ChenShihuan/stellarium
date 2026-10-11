@@ -58,6 +58,7 @@ import { StartupBridge, StartupHooks } from '../capability/StartupBridge'
 import { SensorController, GyroGuideLayout, SensorHostHooks } from '../capability/SensorController'
 import { NotificationController, NotificationHostHooks } from '../capability/NotificationController'
 import { SurveyController, SurveyHostHooks } from '../capability/SurveyController'
+import { ARController, ARHostHooks } from '../capability/ARController'
 import { RecordingController, RecordingHostHooks } from '../capability/RecordingController'
 import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
 import { SkyInputController, SkyInputHostHooks } from '../capability/SkyInputController'
@@ -86,6 +87,7 @@ import { TimeStore } from '../state/TimeStore'
 import { SatelliteStore } from '../state/SatelliteStore'
 import { ScriptStore } from '../state/ScriptStore'
 import { SceneryStore } from '../state/SceneryStore'
+import { ARStore } from '../state/ARStore'
 import { CatalogStore } from '../state/CatalogStore'
 import { MeteorStore } from '../state/MeteorStore'
 import { CommandStore } from '../state/CommandStore'
@@ -202,6 +204,7 @@ import { InteractiveGuideShell } from '../panels/shell/InteractiveGuideShell'
 import { AngleMeasurePanel } from '../panels/panels/AngleMeasurePanel'
 import { AudioPanel } from '../panels/panels/AudioPanel'
 import { Scenery3dPanel } from '../panels/panels/Scenery3dPanel'
+import { ARPreviewPanel } from '../panels/ar/ARPreviewPanel'
 import { CatalogsPanel } from '../panels/panels/CatalogsPanel'
 import { PlacePanel } from '../panels/panels/PlacePanel'
 import { CommandsPanel } from '../panels/panels/CommandsPanel'
@@ -977,6 +980,7 @@ export struct WindowNativeNode {
   @State private gyroStore: GyroStore = new GyroStore()
   @State private notificationStore: NotificationStore = new NotificationStore()
   @State private surveyStore: SurveyStore = new SurveyStore()
+  @State private arStore: ARStore = new ARStore()
   @State private wutStore: WutStore = new WutStore()
   @State private astroStore: AstroStore = new AstroStore()
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
@@ -999,6 +1003,8 @@ export struct WindowNativeNode {
   private notificationControllerImpl: NotificationController | null = null
   // 巡天 / 多波段图层控制器（惰性构造；注入 SurveyStore / CommandPort 与宿主 hooks）。
   private surveyControllerImpl: SurveyController | null = null
+  // AR 预研控制器（惰性构造；注入 ARStore / CommandPort 与宿主 hooks）。
+  private arControllerImpl: ARController | null = null
   // 录制/回放/录屏控制器（惰性构造；recordBuffer 属 保留字段，经 hooks 读写）。
   private recordingControllerImpl: RecordingController | null = null
   // 对象检查器三维模型渲染器（惰性构造；逐帧/草稿字段留控制器，可观测子集在 ObjectMediaStore）。
@@ -2441,6 +2447,17 @@ export struct WindowNativeNode {
     return this.surveyControllerImpl
   }
 
+  // AR 预研控制器惰性构造。状态已在 ARStore（只搬行为）；UI 提示经 hooks 回注。
+  private arCtl(): ARController {
+    if (this.arControllerImpl === null) {
+      const hooks: ARHostHooks = {
+        flashHint: (text: ResourceStr): void => this.flashHint(text)
+      }
+      this.arControllerImpl = new ARController(this.arStore, this.commandPort(), hooks)
+    }
+    return this.arControllerImpl
+  }
+
   // 录制/回放/录屏控制器惰性构造。状态已在 ScriptStore（只搬行为与定时器）；
   // recordBuffer 属 保留字段，经 hooks 读写。
   private recordingCtl(): RecordingController {
@@ -3504,6 +3521,8 @@ export struct WindowNativeNode {
       } else if (panel === 'layers') {
         this.refreshState()
         if (this.viewTab === 4) this.layerViewStore.loadLandscapeList()
+      } else if (panel === 'ar') {
+        this.arCtl().loadCapabilities()
       } else if (panel === 'settings') {
         this.refreshState()
         this.catalogStore.loadCatalogHealth()
@@ -8033,6 +8052,16 @@ export struct WindowNativeNode {
         accentColor: this.nightModeStore.nmAccent(),
         onToggleEnabled: (enabled: boolean) => { this.layerCtl().setScenery3dEnabled(enabled) },
         onSelectScene: (id: string) => { this.layerCtl().setScenery3dScene(id) }
+      })
+    } else if (this.activePanel === 'ar') {
+      ARPreviewPanel({
+        arStore: this.arStore,
+        textColor: this.nightModeStore.nmText(),
+        subColor: this.nightModeStore.nmSub(),
+        accentColor: this.nightModeStore.nmAccent(),
+        panelColor: this.nightModeStore.nmBg(),
+        onSetMode: (mode: string) => { this.arCtl().setMode(mode) },
+        onSetRevealProgress: (value: number) => { this.arCtl().setRevealProgress(value) }
       })
     } else if (this.activePanel === 'skyCultureMaker') {
       SkyCultureMakerPanel({
