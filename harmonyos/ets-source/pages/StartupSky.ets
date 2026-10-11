@@ -14,6 +14,7 @@ export struct StartupSky {
   @Watch('refreshTitle') @StorageLink('i18nLang') private language: string = ''
   @Watch('updateMotion') @StorageLink('stellariumStartupForeground') private foreground: boolean = true
   @StorageLink('stellariumStartupSkyReady') private skyPrepared: boolean = false
+  @StorageLink('stellariumPrivacyNativeStartupAllowed') private nativeStartupAllowed: boolean = false
   private context: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
   private targets: StartupPoint[] = []
   private backgroundAppearance: StartupStarAppearance[] = []
@@ -120,9 +121,17 @@ export struct StartupSky {
       const now = Date.now()
       const step = Math.min(100, now - this.lastTick)
       this.elapsed += step
-      // The title assembles from the very first frame (during resource loading),
-      // not once the sky is ready: gathering is what shows the "星象仪" wordmark
-      // to the user while the engine boots.
+      if (!this.nativeStartupAllowed) {
+        this.lastTick = now
+        this.draw()
+        return
+      }
+      if (!this.skyPrepared && this.assemblyElapsed < STARTUP_GATHER_MS) {
+        this.assemblyElapsed += Math.min(step, 33)
+        this.lastTick = now
+        this.draw()
+        return
+      }
       this.assemblyElapsed += step
       // The scatter/reveal waits for the sky gate; it is the hand-off signal
       // ("resources ready, enter the main UI"), so it must not run on a timer
@@ -143,7 +152,7 @@ export struct StartupSky {
 
   private draw(): void {
     const pen = this.context
-    const reveal = startupEase(this.releaseElapsed / STARTUP_REVEAL_MS)
+    const reveal = this.skyPrepared ? startupEase(this.releaseElapsed / STARTUP_REVEAL_MS) : 0
     pen.globalAlpha = 1
     pen.fillStyle = '#05070F'
     pen.fillRect(0, 0, this.canvasWidth, this.canvasHeight)
