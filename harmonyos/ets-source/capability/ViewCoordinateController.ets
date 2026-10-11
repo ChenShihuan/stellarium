@@ -149,9 +149,26 @@ export class ViewCoordinateController {
 
   // 写指针坐标设置并回读状态。
   setPointerCoordinates(setting: string, value: string): void {
+    // Optimistically mirror the change so the panel does not reload (and
+    // flicker) on success; only reload when the bridge rejects it.
+    this.applyPointerCoordinatesSetting(setting, value)
     this.port.requestWhenReady('setPointerCoordinates', setting + '|' + value, (r: StellariumBridgeResponse) => {
-      if (r.ok !== true) this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed')
-      this.overlayStore.loadPointerCoordinates()
+      if (r.ok !== true) {
+        this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed')
+        this.overlayStore.loadPointerCoordinates()
+      }
     }, () => { this.overlayStore.pointerCoordinatesStatus = I18n.t('plugin_action_failed') }, 0, 100, 15)
+  }
+
+  private applyPointerCoordinatesSetting(setting: string, value: string): void {
+    const on = value === '1' || value === 'true'
+    if (setting === 'enabled') this.overlayStore.pointerCoordinatesEnabled = on
+    else if (setting === 'startup') this.overlayStore.pointerCoordinatesStartup = on
+    else if (setting === 'button') this.overlayStore.pointerCoordinatesButton = on
+    else if (setting === 'constellation') this.overlayStore.pointerCoordinatesConstellation = on
+    else if (setting === 'crossedLines') this.overlayStore.pointerCoordinatesCrossedLines = on
+    else if (setting === 'elongation') this.overlayStore.pointerCoordinatesElongation = on
+    else if (setting === 'system') this.overlayStore.pointerCoordinatesSystem = value
+    else if (setting === 'place') this.overlayStore.pointerCoordinatesPlace = value
   }
 }
