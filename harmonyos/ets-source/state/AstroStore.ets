@@ -46,6 +46,7 @@ export class AstroStore {
   almanacLoading: boolean = false
   almanacError: string = ''
   almanacSeasons: Array<SeasonEvent> = []
+  almanacSolarTerms: Array<SeasonEvent> = []
   almanacSeasonYear: string = ''
   planetPositions: Array<PlanetPosition> = []
   planetPositionsLoading: boolean = false

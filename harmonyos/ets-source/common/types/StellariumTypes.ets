@@ -838,6 +838,8 @@ export interface SeasonEvent {
   jd?: number
   date?: string
   durationDays?: number
+  key?: string
+  index?: number
 }
 
 // 今夜天文事件聚合（getTonightEvents 返回）

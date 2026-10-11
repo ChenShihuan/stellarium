@@ -56,6 +56,7 @@ import { saveScreenshot, exportScreenshotToUserStorage } from '../common/platfor
 import { speakSelectedObject } from '../common/SpeechService'
 import { StartupBridge, StartupHooks } from '../capability/StartupBridge'
 import { SensorController, GyroGuideLayout, SensorHostHooks } from '../capability/SensorController'
+import { NotificationController, NotificationHostHooks } from '../capability/NotificationController'
 import { RecordingController, RecordingHostHooks } from '../capability/RecordingController'
 import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
 import { SkyInputController, SkyInputHostHooks } from '../capability/SkyInputController'
@@ -104,6 +105,7 @@ import { SearchStore } from '../state/SearchStore'
 import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { GyroStore } from '../state/GyroStore'
 import { WutStore } from '../state/WutStore'
+import { NotificationStore } from '../state/NotificationStore'
 import { AstroStore } from '../state/AstroStore'
 import { LocationStore } from '../state/LocationStore'
 import { CityChipsRow } from '../panels/location/CityChipsRow'
@@ -971,6 +973,7 @@ export struct WindowNativeNode {
   @State private searchStore: SearchStore = new SearchStore()
   @State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()
   @State private gyroStore: GyroStore = new GyroStore()
+  @State private notificationStore: NotificationStore = new NotificationStore()
   @State private wutStore: WutStore = new WutStore()
   @State private astroStore: AstroStore = new AstroStore()
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
@@ -989,6 +992,8 @@ export struct WindowNativeNode {
   private startupBridgeImpl: StartupBridge | null = null
   // 传感器/陀螺仪控制器（惰性构造；注入 SensorPort/CommandPort/store 与宿主 hooks）。
   private sensorControllerImpl: SensorController | null = null
+  // 通知/后台提醒控制器（惰性构造；注入 NotificationStore 与宿主 hooks）。
+  private notificationControllerImpl: NotificationController | null = null
   // 录制/回放/录屏控制器（惰性构造；recordBuffer 属 保留字段，经 hooks 读写）。
   private recordingControllerImpl: RecordingController | null = null
   // 对象检查器三维模型渲染器（惰性构造；逐帧/草稿字段留控制器，可观测子集在 ObjectMediaStore）。
@@ -2400,6 +2405,21 @@ export struct WindowNativeNode {
     return this.sensorControllerImpl
   }
 
+  // 通知/后台提醒控制器惰性构造。状态已在 NotificationStore（只搬行为）；
+  // UI 提示、UIAbility 上下文、年历节气快照与加载触发经 hooks 回注。
+  private notificationCtl(): NotificationController {
+    if (this.notificationControllerImpl === null) {
+      const hooks: NotificationHostHooks = {
+        flashHint: (text: ResourceStr): void => this.flashHint(text),
+        hostContext: (): common.UIAbilityContext => this.getUIContext().getHostContext() as common.UIAbilityContext,
+        almanacSolarTerms: (): SeasonEvent[] => this.astroStore.almanacSolarTerms,
+        loadAlmanac: (): void => { this.astroCalcCtl().loadAlmanac() }
+      }
+      this.notificationControllerImpl = new NotificationController(this.notificationStore, hooks)
+    }
+    return this.notificationControllerImpl
+  }
+
   // 录制/回放/录屏控制器惰性构造。状态已在 ScriptStore（只搬行为与定时器）；
   // recordBuffer 属 保留字段，经 hooks 读写。
   private recordingCtl(): RecordingController {
@@ -2645,6 +2665,7 @@ export struct WindowNativeNode {
         loadScriptList: (): void => { this.scriptPlaybackCtl().loadScriptList() },
         loadRecordings: (): void => { this.scriptPlaybackCtl().loadRecordings() },
         loadVideoRecordingState: (): void => { this.scriptPlaybackCtl().loadVideoRecordingState() },
+        refreshNotificationStatus: (): void => { this.notificationCtl().refreshStatus() },
         viewTab: (): number => this.viewTab,
         setViewTab: (value: number): void => { this.viewTab = value },
         viewTabContentOpacity: (): number => this.viewTabContentOpacity,
@@ -7678,6 +7699,7 @@ export struct WindowNativeNode {
         ephemerisStore: this.ephemerisStore,
         navigationStore: this.navigationStore,
         viewSettingsStore: this.viewSettingsStore,
+        notificationStore: this.notificationStore,
         scroller: this.scriptListScroller,
         configTab: this.configTab,
         configTabContentOpacity: this.configTabContentOpacity,
@@ -7732,6 +7754,9 @@ export struct WindowNativeNode {
         setObjectDetailConnector: (enabled: boolean) => { this.setObjectDetailConnector(enabled) },
         toggleGyroscope: (enabled: boolean) => { this.gyroCtl().toggleGyroscope(enabled) },
         confirmPrivacyRevocation: () => { this.confirmPrivacyRevocation() },
+        requestNotificationAccess: () => { this.notificationCtl().requestAccess() },
+        scheduleNextSolarTermReminder: () => { this.notificationCtl().scheduleNextSolarTerm() },
+        clearAstronomyReminders: () => { this.notificationCtl().clearReminders() },
         loadPluginList: () => { this.pluginStore.loadPluginList() },
         openPluginFeature: (id: string) => { this.pluginFeatureCtl().openPluginFeature(id) },
         playScriptByName: (filename: string) => { this.scriptPlaybackCtl().playScriptByName(filename) },
