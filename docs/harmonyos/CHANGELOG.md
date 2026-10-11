@@ -1,5 +1,13 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-11] DevEco Code - privacy-v2 → pr-upstream-20261008 功能迁移（P0–P13）
+
+- **依据（用户要求）**：把 `joinother/fix/api22-privacy-v2`（`aae34f085e`）在旧单体上实现的功能，按 `docs/harmonyos/specs/PRIVACY-V2-TO-UPSTREAM-MIGRATION.md` 分片手工迁入 upstream 的 Store/Controller/panel 架构（不 git merge）。
+- **改动**：P0 引擎命令（C++ 桥命令、命令目录、HipsMgr/SpecificTimeMgr/StelHips/StelTextureMgr 等，并叠加 upstream 的缩放锚定、WUT 星等上限、WUT 取消、纹理预算复位）；P1 隐私合规（PrivacyConsent/PrivacyBootstrap/StartupSky 门控/QAbility 窗口恢复）；P2 通知·提醒·卡片·协作服务与 ArkUI 命令路由；P3 桌面卡片表单 + FormAbility 配置；P4 协作会话分享；P5 HiPS 巡天 + 多波段图层 + 40 条 I18n；P6 AR 预研面板；P7 在线地图选点 + 搜索排序修正；P8 键盘快捷键编辑器；P10 卫星来源编辑 + 名称本地化；P11 时间平滑过渡；P12 陀螺仪防抖 + 配置分享；P13 compatibleSdkVersion 6.1.0(23)。
+- **提交**：`08212ebf04`(P0) `883dd4a40f`(P1) `000c761dc4`(P2) `8a8ed554cb`(P5) `cedad606cc`(P6) `5d19662fed`(P3) `306cc20b9a`(P4) `f5bf23ce20`(P7) `1d8ec4c0b5`(P13) `6a42b0756c`(P10) `35633037ba`(P12) `77e6e67d4a`(P8) `e265c948a5`(P11)。
+- **验证**：每片 `arkts_check` 0 error；`build-ohos-hap-windows.ps1 -SkipEngine -SkipDeploy` 均 `BUILD SUCCESSFUL`；UI 契约 intact（35 面板 / 29 静态 id / 18 动态前缀 / 50 锚点）；命令目录一致（399 命令）。
+- **未纳入**（后续）：P12 指针坐标防抖与 `uiLayoutOverride` 布局增强；P14 仅剩 `ArPreviewBridgeResponse` 归位 types（可选）。
+
 ## [2026-10-08] DevEco Code - 整理 STATE-REVIEW 评审文档：补 §9 实施状态与终态实测
 
 - **依据（用户要求）**：`docs/harmonyos/research/ARKTS-PAGES-REFACTOR-STATE-REVIEW.md` 长期停在工作区未提交（§9/§10 为另一会话新增），且 §9.4 附录存在实测偏差，需整理后入库。
