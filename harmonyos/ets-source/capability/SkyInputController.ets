@@ -57,6 +57,8 @@ export interface SkyInputHostHooks {
   compactDockWidthPercent(): number
   dockTop(): number
   dockHeight(): number
+  // 文本输入框聚焦时，天空键盘处理器必须让位给输入法。
+  keyboardTextInputFocused(): boolean
   compactTopQuickX(): number
   isCompactTopQuickPoint(x: number, y: number): boolean
   lastInfoWinCloseMs(): number
@@ -283,6 +285,7 @@ export class SkyInputController {
   }
 
   handleSkyKey(event: KeyEvent): boolean {
+    if (this.hooks.keyboardTextInputFocused()) { return false }
     if (event.type !== 0) { return false }
     const width = Math.round(this.hooks.skyWidth()).toString()
     const height = Math.round(this.hooks.skyHeight()).toString()

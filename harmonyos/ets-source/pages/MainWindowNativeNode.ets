@@ -1078,6 +1078,8 @@ export struct WindowNativeNode {
   private lastInfoWinCloseMs: number = 0
   private dismissedObjectName: string = ''
   @State private panelContentKey: number = 0
+  // 文本输入聚焦标志：聚焦时天空键盘处理器让位给输入法（搜索/位置输入）。
+  @State private keyboardTextInputFocused: boolean = false
   private languageSwitchTimer: number = -1
   @State private cardOffsetX: number = 0
   @State private cardOffsetY: number = 0
@@ -2600,6 +2602,7 @@ export struct WindowNativeNode {
         compactDockWidthPercent: (): number => this.compactDockWidthPercent(),
         dockTop: (): number => this.dockTop(),
         dockHeight: (): number => this.dockHeight(),
+        keyboardTextInputFocused: (): boolean => this.keyboardTextInputFocused,
         compactTopQuickX: (): number => this.compactTopQuickX(),
         isCompactTopQuickPoint: (x: number, y: number): boolean => this.isCompactTopQuickPoint(x, y),
         lastInfoWinCloseMs: (): number => this.lastInfoWinCloseMs,
@@ -7703,6 +7706,8 @@ export struct WindowNativeNode {
         contextOf: (item: LocSearchItem) => this.locationPickerStore.locationResultContext(item, this.sessionToolStore.observerPlanet),
         onUseDeviceLocation: () => { this.locationCtl().useDeviceLocation() },
         onSearchLocations: (query: string) => { this.locationStore.searchLocations(query) },
+        onInputFocus: () => { this.keyboardTextInputFocused = true },
+        onInputBlur: () => { this.keyboardTextInputFocused = false },
         onPickSearchItem: (item: LocSearchItem) => { this.locationStore.selectSearchLocation(item) },
         onApply: () => { this.locationCtl().applyPickerLocation() },
         onSelectMapProvider: (provider: string) => { this.locationCtl().setLocationMapProvider(provider) },
@@ -7895,6 +7900,8 @@ export struct WindowNativeNode {
           this.searchStore.searchSuggestions = []
         },
         onInputFocus: () => {
+          // 聚焦搜索框时，天空键盘处理器让位给输入法。
+          this.keyboardTextInputFocused = true
           // 手机上把候选结果留在软键盘之上；用户仍可把面板拖回 6/10 吸附点。
           if (!this.isExpandedLayout && !this.isFoldHoverLayout && this.compactPanelSnapRatio < 0.9) {
             this.getUIContext().animateTo({ duration: 260, curve: curves.springMotion(0.48, 0.90) }, () => {
@@ -7904,6 +7911,7 @@ export struct WindowNativeNode {
             this.scheduleSelectedObjectForUiChange(300)
           }
         },
+        onInputBlur: () => { this.keyboardTextInputFocused = false },
         onSetPage: (page: string) => { this.searchCtl().setSearchFilterPage(page) },
         onSelectCategory: (code: string) => { this.searchCtl().selectSearchFilterCategory(code) },
         onSelectVisibility: (filter: string) => { this.searchCtl().selectSearchVisibilityFilter(filter) },

@@ -17,6 +17,8 @@ export struct LocationSearchPanel {
   @Prop inputColor: string
   onSearch: (query: string) => void = () => {}
   onNameDraft: (name: string) => void = () => {}
+  onInputFocus: () => void = () => {}
+  onInputBlur: () => void = () => {}
   contextOf: (item: LocSearchItem) => string = () => ''
   onPickItem: (item: LocSearchItem) => void = () => {}
 
@@ -44,10 +46,11 @@ export struct LocationSearchPanel {
             clearTimeout(this.store.locSearchDebounce)
             this.store.locSearchDebounce = setTimeout(() => { this.onSearch(value) }, 260)
           })
+          .onFocus(() => { this.onInputFocus() })
+          .onBlur(() => { this.onInputBlur() })
           .onSubmit(() => {
             clearTimeout(this.store.locSearchDebounce)
-            this.onSearch(this.store.locSearchQuery)
-          })
+            this.onSearch(this.store.locSearchQuery)          })
         if (this.store.locSearching) {
           LoadingProgress().width(18).height(18).color('#7FB3DC')
         } else {
