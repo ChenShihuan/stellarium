@@ -56,6 +56,7 @@ export interface SkyInputHostHooks {
   polarScopeVisible(): boolean
   compactDockWidthPercent(): number
   dockTop(): number
+  dockHeight(): number
   compactTopQuickX(): number
   isCompactTopQuickPoint(x: number, y: number): boolean
   lastInfoWinCloseMs(): number
@@ -433,7 +434,7 @@ export class SkyInputController {
         }
         return
       }
-      if (isDockPoint(downX, downY, this.hooks.polarScopeVisible(), this.hooks.isExpandedLayout(), this.hooks.skyWidth(), this.hooks.skyHeight(), this.hooks.panelVisible(), this.hooks.panelWidth(), this.hooks.panelOffsetX(), this.hooks.edgeMargin(), this.hooks.compactDockWidthPercent(), this.hooks.dockTop())) {
+      if (isDockPoint(downX, downY, this.hooks.polarScopeVisible(), this.hooks.isExpandedLayout(), this.hooks.skyWidth(), this.hooks.skyHeight(), this.hooks.panelVisible(), this.hooks.panelWidth(), this.hooks.panelOffsetX(), this.hooks.edgeMargin(), this.hooks.compactDockWidthPercent(), this.hooks.dockTop(), this.hooks.dockHeight())) {
         this.resetSkyTapSequence()
         this.gestureOwner = SkyGestureOwner.None
         this.hooks.setDockTouchActive(true)
