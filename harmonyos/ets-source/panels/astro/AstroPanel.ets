@@ -2137,6 +2137,21 @@ export struct AstroPanel {
                     .backgroundColor(this.lineColor)
                     .margin({ top: 4, bottom: 4 })
                 }
+                if (this.store.almanacSolarTerms.length > 0) {
+                  Text('二十四节气').fontSize(11).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
+                  ForEach(this.store.almanacSolarTerms, (term: SeasonEvent) => {
+                    Row() {
+                      Text(term.label ?? '').fontSize(11).fontColor(this.accentColor).width(48)
+                      Text(this.host.fmtDateTime(term.date)).fontSize(11).fontColor(this.textColor).layoutWeight(1)
+                    }.width('100%').height(28).padding({ left: 8, right: 8 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
+                    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
+                    .onClick(() => { this.host.jumpToAlmanacSeason(term) })
+                  }, (term: SeasonEvent, index: number) => (term.key ?? (term.jd ?? index)).toString())
+                  Row()
+                    .width('100%').height(0.5)
+                    .backgroundColor(this.lineColor)
+                    .margin({ top: 4, bottom: 4 })
+                }
                 Text(I18n.t('s0372')).fontSize(11).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 2 })
                 InfoRow({ label: I18n.t('s0365'), value: this.host.jdToDateStr(this.store.almanacData.get('sunRise') ?? '0') })
                 InfoRow({ label: I18n.t('s0366'), value: this.host.jdToDateStr(this.store.almanacData.get('sunSet') ?? '0') })

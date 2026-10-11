@@ -5610,8 +5610,8 @@ export struct WindowNativeNode {
       case 'selectedCoordApparentAltAz': return this.objectDetailStore.selectedCoordApparentAltAz || this.objectDetailStore.selectedCoordAlt
       case 'selectedCoordEcliptic': return this.objectDetailStore.selectedCoordEcliptic
       case 'selectedCoordEclipticJ2000': return this.objectDetailStore.selectedCoordEclipticJ2000
-      case 'selectedCoordEq': return this.objectDetailStore.selectedCoordEq
-      case 'selectedCoordEqJ2000': return this.objectDetailStore.selectedCoordEqJ2000
+      case 'selectedCoordEq': return this.objectDetailStore.selectedCoordEq.trim()
+      case 'selectedCoordEqJ2000': return this.objectDetailStore.selectedCoordEqJ2000.trim()
       case 'selectedCoordGalactic': return this.objectDetailStore.selectedCoordGalactic
       case 'selectedCoordGeometricAltAz': return this.objectDetailStore.selectedCoordGeometricAltAz
       case 'selectedCoordParallactic': return this.objectDetailStore.selectedCoordParallactic
