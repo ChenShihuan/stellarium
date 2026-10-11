@@ -3440,7 +3440,18 @@ export struct WindowNativeNode {
     }
   }
 
-  private setPanel(panel: string, preserveHistory: boolean = false, forceVisible: boolean = false, routeDirection: number = 0): void {    if (!preserveHistory) {
+  // 恢复默认 TLE 来源前先确认。
+  private confirmRestoreSatelliteSources(): void {
+    this.getUIContext().showAlertDialog({
+      title: I18n.t('sat_source_restore_title'),
+      message: I18n.t('sat_source_restore_message'),
+      primaryButton: { value: I18n.t('sat_source_cancel'), action: () => {} },
+      secondaryButton: { value: I18n.t('sat_source_restore'), action: () => { this.satelliteCtl().restoreSatelliteSources() } }
+    })
+  }
+
+  private setPanel(panel: string, preserveHistory: boolean = false, forceVisible: boolean = false, routeDirection: number = 0): void {
+    if (!preserveHistory) {
       this.panelNavigationStack = []
       this.panelNavigationDepth = 0
     }
@@ -8070,6 +8081,9 @@ export struct WindowNativeNode {
         catalogHealthTextOf: (title: string, health: CatalogHealthEntry) => this.catalogHealthText(title, health),
         catalogHealthColorOf: (health: CatalogHealthEntry) => this.catalogHealthColor(health),
         onDeleteSource: (index: number) => { this.satelliteCtl().deleteSatelliteSource(index) },
+        onEditSource: (index: number) => { this.satelliteCtl().editSatelliteSource(index) },
+        onToggleSourceEnabled: (index: number, enabled: boolean) => { this.satelliteCtl().setSatelliteSourceEnabled(index, enabled) },
+        onRestoreSources: () => { this.confirmRestoreSatelliteSources() },
         onSourceInput: (value: string) => { this.satelliteStore.satSourceInput = value },
         onSourceAddNew: (value: boolean) => { this.satelliteStore.satSourceAddNew = value },
         onAddSource: () => { this.satelliteCtl().addSatelliteSource() },

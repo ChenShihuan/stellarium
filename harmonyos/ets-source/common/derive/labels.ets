@@ -5,6 +5,7 @@
 
 import { I18n } from '../../pages/I18n'
 import { PluginFeatureRoute } from '../../pages/MainWindowModels'
+import { SatelliteNamePrefix } from '../../common/types/StellariumTypes'
 import { clamp } from './astro'
 
 // 资源文案：空值 / 全空白时回退到给定占位文本。
@@ -19,11 +20,74 @@ export function describeDecodeError(err: Error): string {
   return name + ': ' + message
 }
 
+// 卫星名称本地化：把常见卫星罗马名 / 关键型号映射为中文（ISS→国际空间站、CSS→中国空间站…）。
+// 仅中文语言下生效；无匹配返回空串，由调用方回落到通用名称。
+export function satelliteLocalizedName(raw: string): string {
+  const language = I18n.getLanguage()
+  if (language !== 'zh_CN' && language !== 'zh_TW' && language !== 'zh_HK') return ''
+  const value = raw.trim()
+  const key = value.toUpperCase().replace(/[（）()\s_-]/g, '')
+  const traditional = language !== 'zh_CN'
+  if (key === 'ISS' || key === 'ISSZARYA') {
+    return traditional ? '國際太空站（曙光號功能貨艙）' : '国际空间站（曙光号功能货舱）'
+  }
+  if (key === 'ISSNAUKA') {
+    return traditional ? '國際太空站（科學號艙段）' : '国际空间站（科学号舱段）'
+  }
+  if (key === 'CSSTIANHE' || key === 'TIANGONGTIANHE' || key === 'TIANHE') {
+    return traditional ? '中國空間站（天和核心艙）' : '中国空间站（天和核心舱）'
+  }
+  if (key === 'CSSWENTIAN' || key === 'WENTIAN') {
+    return traditional ? '中國空間站（問天實驗艙）' : '中国空间站（问天实验舱）'
+  }
+  if (key === 'CSSMENGTIAN' || key === 'MENGTIAN') {
+    return traditional ? '中國空間站（夢天實驗艙）' : '中国空间站（梦天实验舱）'
+  }
+  if (key === 'CSS' || key === 'TIANGONG') {
+    return traditional ? '中國空間站' : '中国空间站'
+  }
+  if (/^JILIN[-_ ]*1/i.test(value)) {
+    const suffix = value.replace(/^JILIN[-_ ]*1/i, '').trim()
+    const label = traditional ? '吉林一號' : '吉林一号'
+    return suffix.length > 0 ? label + ' ' + suffix : label
+  }
+  const prefixes: SatelliteNamePrefix[] = [
+    { token: 'STARLINK', label: traditional ? '星鏈' : '星链' },
+    { token: 'BEIDOU', label: '北斗' },
+    { token: 'TIANLIAN', label: traditional ? '天鏈' : '天链' },
+    { token: 'TIANTONG', label: '天通' },
+    { token: 'FENGYUN', label: traditional ? '風雲' : '风云' },
+    { token: 'YAOGAN', label: traditional ? '遙感' : '遥感' },
+    { token: 'GAOFEN', label: '高分' },
+    { token: 'SHIJIAN', label: traditional ? '實踐' : '实践' },
+    { token: 'SHIYAN', label: traditional ? '實驗' : '实验' },
+    { token: 'ZIYUAN', label: traditional ? '資源' : '资源' },
+    { token: 'JILIN', label: '吉林' },
+    { token: 'GLONASS', label: traditional ? '格洛納斯' : '格洛纳斯' },
+    { token: 'GALILEO', label: '伽利略' },
+    { token: 'IRIDIUM', label: traditional ? '銥星' : '铱星' },
+    { token: 'GLOBALSTAR', label: '全球星' },
+    { token: 'INTELSAT', label: traditional ? '國際通信衛星' : '国际通信卫星' },
+    { token: 'GONETS', label: '戈涅斯' },
+    { token: 'COSMOS', label: traditional ? '宇宙號' : '宇宙号' },
+    { token: 'QZSS', label: traditional ? '準天頂' : '准天顶' }
+  ]
+  for (const item of prefixes) {
+    const token = item.token.toUpperCase()
+    if (!key.startsWith(token)) continue
+    const suffix = value.substring(item.token.length).replace(/^[\s_-]+/, '').trim()
+    return suffix.length > 0 ? item.label + ' ' + suffix : item.label
+  }
+  return ''
+}
+
 // 天体名称本地化：仅中文语言下裁掉尾部英文 / 拉丁名（"天狼 Sirius" → "天狼"）。
 export function zhNameOf(raw: string): string {
   if (!raw || raw.length === 0) { return raw }
   const value = raw.trim()
   if (I18n.getLanguage() !== 'zh_CN' && I18n.getLanguage() !== 'zh_TW') { return value }
+  const satelliteName = satelliteLocalizedName(value)
+  if (satelliteName.length > 0) return satelliteName
   // Stellarium 的官方中文星名有时保留英文/拉丁名，例如“天狼 Sirius”。
   // 主标题只显示中文部分，英文名和目录号由独立副标题承载。
   if (!/[一-鿿]/.test(value)) { return value }

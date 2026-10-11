@@ -867,6 +867,12 @@ export interface SurveyStateResponse extends StellariumBridgeResponse {
   toastEnabled?: boolean
 }
 
+// 卫星名称本地化前缀映射（satelliteLocalizedName 用）
+export interface SatelliteNamePrefix {
+  token: string
+  label: string
+}
+
 export interface SessionSnapshot {
   schemaVersion?: number
   exportedAt?: string

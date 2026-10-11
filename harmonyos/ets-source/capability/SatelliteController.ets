@@ -54,16 +54,23 @@ export class SatelliteController {
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
   }
 
-  // 把输入框 URL 追加为来源写回。
+  // 把输入框 URL 追加为来源写回；编辑态下替换对应来源而非追加。
   addSatelliteSource(): void {
     const url = this.satelliteStore.satSourceInput.trim()
     if (url.length === 0) { this.satelliteStore.satSourceStatus = I18n.t('sat_source_empty'); return }
     const sources: SatelliteSourceInput[] = []
-    for (const source of this.satelliteStore.satSources) sources.push({ url: source.url, addNew: source.addNew })
-    sources.push({ url: url, addNew: this.satelliteStore.satSourceAddNew })
+    for (let sourceIndex = 0; sourceIndex < this.satelliteStore.satSources.length; sourceIndex++) {
+      const source = this.satelliteStore.satSources[sourceIndex]
+      sources.push({
+        url: sourceIndex === this.satelliteStore.editingSatelliteSourceIndex ? url : source.url,
+        addNew: source.addNew
+      })
+    }
+    if (this.satelliteStore.editingSatelliteSourceIndex < 0) sources.push({ url: url, addNew: this.satelliteStore.satSourceAddNew })
     this.port.requestInteractive('setSatelliteSources', JSON.stringify({ sources: sources }), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.satelliteStore.satSourceInput = ''
+        this.satelliteStore.editingSatelliteSourceIndex = -1
         this.satelliteStore.satSourceStatus = I18n.t('sat_source_saved')
         this.satelliteStore.loadSatelliteSources()
       } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
@@ -71,8 +78,7 @@ export class SatelliteController {
   }
 
   // 按索引剔除来源后写回。
-  deleteSatelliteSource(index: number): void {
-    const sources: SatelliteSourceInput[] = []
+  deleteSatelliteSource(index: number): void {    const sources: SatelliteSourceInput[] = []
     for (let sourceIndex = 0; sourceIndex < this.satelliteStore.satSources.length; sourceIndex++) {
       if (sourceIndex !== index) {
         const source = this.satelliteStore.satSources[sourceIndex]
@@ -82,6 +88,43 @@ export class SatelliteController {
     this.port.requestInteractive('setSatelliteSources', JSON.stringify({ sources: sources }), (r: StellariumBridgeResponse) => {
       if (r.ok === true) {
         this.satelliteStore.satSourceStatus = I18n.t('sat_source_deleted')
+        this.satelliteStore.loadSatelliteSources()
+      } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
+    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
+  }
+
+  // 进入编辑：把来源 URL 回填输入框并展开该行。
+  editSatelliteSource(index: number): void {
+    const source = this.satelliteStore.satSources[index]
+    if (source === undefined) return
+    this.satelliteStore.editingSatelliteSourceIndex = index
+    this.satelliteStore.satSourceInput = source.url
+    this.satelliteStore.expandedSatelliteSourceIndex = index
+  }
+
+  // 开关单个来源的自动加入标志后写回。
+  setSatelliteSourceEnabled(index: number, enabled: boolean): void {
+    const sources: SatelliteSourceInput[] = []
+    for (let sourceIndex = 0; sourceIndex < this.satelliteStore.satSources.length; sourceIndex++) {
+      const source = this.satelliteStore.satSources[sourceIndex]
+      sources.push({ url: source.url, addNew: sourceIndex === index ? enabled : source.addNew })
+    }
+    this.port.requestInteractive('setSatelliteSources', JSON.stringify({ sources: sources }), (r: StellariumBridgeResponse) => {
+      if (r.ok === true) {
+        this.satelliteStore.satSourceStatus = enabled ? I18n.t('sat_source_enabled') : I18n.t('sat_source_disabled')
+        this.satelliteStore.loadSatelliteSources()
+      } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
+    }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
+  }
+
+  // 恢复默认 TLE 来源（清空编辑态后重载）。
+  restoreSatelliteSources(): void {
+    this.port.requestInteractive('restoreSatelliteSources', '', (r: StellariumBridgeResponse) => {
+      if (r.ok === true) {
+        this.satelliteStore.editingSatelliteSourceIndex = -1
+        this.satelliteStore.expandedSatelliteSourceIndex = -1
+        this.satelliteStore.satSourceInput = ''
+        this.satelliteStore.satSourceStatus = I18n.t('sat_source_restore')
         this.satelliteStore.loadSatelliteSources()
       } else this.satelliteStore.satSourceStatus = r.error ?? I18n.t('sat_source_invalid')
     }, (failure: StellariumBridgeResponse) => { this.satelliteStore.satSourceStatus = failure.error ?? I18n.t('sat_source_invalid') })
