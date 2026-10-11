@@ -51,7 +51,7 @@ export struct DockButton {
       .onTouch((event: TouchEvent) => { this.onTouchEvent(event) })
       .stateStyles({
         pressed: {
-          .scale({ x: 0.92, y: 0.92 })
+          .scale({ x: 0.97, y: 0.97 })
           .backgroundColor('rgba(255, 255, 255, 0.10)')
         }
       })

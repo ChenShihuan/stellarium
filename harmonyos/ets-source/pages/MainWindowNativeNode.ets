@@ -38,7 +38,7 @@ import { resourceText, describeDecodeError, zhNameOf, zhType, planetZh, sensZh, 
 import { isSafeSkyCultureArtPath, cleanSkyCultureDescription, cleanSkyCultureNarration, isCliPanelName, parseObservingList, formatRate, configDitheringLabel, isRecordable } from '../common/derive/skycult'
 import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions, automationHubActions, getCityPreset, validationFromResponse, officialLocationAliases, panelRouteParent, inferredPanelRouteDirection, locationSearchMatchScore } from '../common/derive/actions'
 import { quickActionById, quickCandidateRowsFor } from '../common/derive/quickActions'
-import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelTop, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
+import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
 import { objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
 import { BridgeClient } from '../bridge/BridgeClient'
@@ -952,6 +952,8 @@ export struct WindowNativeNode {
   private privacyNativeStartupAllowed: boolean = false
   @StorageLink('stellariumScreenSafeTopPixels')
   private screenSafeTopPixels: number = 0
+  @StorageLink('stellariumScreenSafeBottomPixels')
+  private screenSafeBottomPixels: number = 0
   @Watch('onCliUiEventChanged')
   @StorageLink('stellariumCliUiEvent')
   private cliUiEvent: string = ''
@@ -2597,6 +2599,7 @@ export struct WindowNativeNode {
         polarScopeVisible: (): boolean => this.polarScopeStore.polarScopeVisible,
         compactDockWidthPercent: (): number => this.compactDockWidthPercent(),
         dockTop: (): number => this.dockTop(),
+        dockHeight: (): number => this.dockHeight(),
         compactTopQuickX: (): number => this.compactTopQuickX(),
         isCompactTopQuickPoint: (x: number, y: number): boolean => this.isCompactTopQuickPoint(x, y),
         lastInfoWinCloseMs: (): number => this.lastInfoWinCloseMs,
@@ -3989,7 +3992,7 @@ export struct WindowNativeNode {
       y >= this.EDGE_MARGIN - 8 && y <= this.EDGE_MARGIN + 58) {
       return true
     }
-    if (isDockPoint(x, y, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop())) {
+    if (isDockPoint(x, y, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop(), this.dockHeight())) {
       return true
     }
     if (this.overlayStore.viewCoordinatesVisible) {
@@ -4032,7 +4035,7 @@ export struct WindowNativeNode {
       if (this.panelVisible) {
         const pl = panelLeft(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
         const pr = panelRight(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
-        const pt = panelTop(this.EDGE_MARGIN, this.panelOffsetY)
+        const pt = this.panelTop()
         if (x >= pl - 30 && x <= pr + 30 && y >= pt - 30 && y <= pt + this.panelMaxHeight + 30) {
           return true
         }
@@ -4088,7 +4091,7 @@ export struct WindowNativeNode {
 		    }
 
     const left = panelLeft(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
-    const top = panelTop(this.EDGE_MARGIN, this.panelOffsetY)
+    const top = this.panelTop()
     const right = panelRight(this.isExpandedLayout, this.skyWidth, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN)
     if (isPanelBackPoint(x, y, this.canGoBackPanel(), this.isExpandedLayout, this.isFoldHoverLayout, this.panelWidth, this.skyWidth, this.skyHeight, this.compactPanelHeight(), this.panelOffsetX, this.panelOffsetY, this.EDGE_MARGIN)) {
       this.handlePanelBackTap()
@@ -4400,7 +4403,7 @@ export struct WindowNativeNode {
   }
 
   private dockActionAt(x: number, y: number): ShellAction | null {
-    if (!isDockPoint(x, y, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop())) {
+    if (!isDockPoint(x, y, this.polarScopeStore.polarScopeVisible, this.isExpandedLayout, this.skyWidth, this.skyHeight, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent(), this.dockTop(), this.dockHeight())) {
       return null
     }
     const actions = this.canonicalDockActions()
@@ -4660,7 +4663,7 @@ export struct WindowNativeNode {
     if (this.isFoldHoverLayout) {
       return Math.max(Math.min(this.skyHeight * 0.46, 520), 320)
     }
-    return Math.max(this.skyHeight - 318, 320)
+    return Math.min(Math.max(160, this.compactPanelBottom() - 70), Math.max(this.skyHeight - 318, 320))
   }
 
   private hoverSkyPaneHeight(): number {
@@ -4868,9 +4871,13 @@ export struct WindowNativeNode {
 
   private compactDockWidthPercent(): number {
     if (this.isFoldHoverLayout) {
-      return this.panelVisible ? 46 : 58
+      return 58
     }
-    return this.panelVisible ? 76 : 92
+    // Keep the phone Dock a stable width when a panel opens instead of letting
+    // it jump between a panel-visible and idle percentage.
+    const width = Math.max(1, this.skyWidth)
+    const targetWidth = Math.min(420, Math.max(288, width - 48))
+    return clamp(targetWidth * 100 / width, 82, 92)
   }
 
   private compactDockLabelFontSize(): number {
@@ -4890,7 +4897,45 @@ export struct WindowNativeNode {
   }
 
   private dockTop(): number {
-    return this.isExpandedLayout ? this.skyHeight - 62 : this.skyHeight - 82
+    return Math.max(0, this.skyHeight - this.dockHeight() - this.dockBottomClearance())
+  }
+
+  private dockHeight(): number {
+    return this.isExpandedLayout ? (this.isLargeDesktopCanvas() ? 78 : 72) : 66
+  }
+
+  private isLargeDesktopCanvas(): boolean {
+    // Freeform HarmonyOS PC windows report vp dimensions after display density
+    // conversion, so a visually large 2-in-1 window can be ~540vp wide even
+    // though it covers >1000 physical pixels. Keep phones out of this branch
+    // while treating that PC window as a readable large canvas.
+    return this.isExpandedLayout && (this.skyWidth >= 520 || (this.skyWidth >= 700 && this.skyHeight >= 500))
+  }
+
+  private panelFontSize(base: number): number {
+    if (!this.isLargeDesktopCanvas()) return base
+    return Math.min(base + 2, Math.round(base * 1.22))
+  }
+
+  private dockBottomClearance(): number {
+    return this.getUIContext().px2vp(Math.max(0, this.screenSafeBottomPixels)) + 30
+  }
+
+  private dockBottom(): number {
+    return this.dockTop() + this.dockHeight()
+  }
+
+  private compactPanelBottom(): number {
+    return this.dockTop() - 10
+  }
+
+  private expandedPanelAvailableHeight(): number {
+    const available = this.dockBottom() - this.panelTop()
+    return Math.max(220, Math.min(this.skyHeight - this.panelTop(), available))
+  }
+
+  private panelTop(): number {
+    return this.EDGE_MARGIN + this.panelOffsetY
   }
 
   private objectInspectorInlineModelSize(): number {
@@ -5076,9 +5121,9 @@ export struct WindowNativeNode {
     if (this.isExpandedLayout) {
       if (this.panelVisible) {
         obstacles.push({
-          label: 'panel', left: expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX), top: panelTop(this.EDGE_MARGIN, this.panelOffsetY),
+          label: 'panel', left: expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX), top: this.panelTop(),
           right: expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX) + this.panelWidth,
-          bottom: panelTop(this.EDGE_MARGIN, this.panelOffsetY) + this.panelMaxHeight
+          bottom: this.panelTop() + this.panelMaxHeight
         })
       }
       if (this.infoWindowStore.infoWinVisible) {
@@ -7069,7 +7114,7 @@ export struct WindowNativeNode {
                 Stack({ alignContent: Alignment.TopStart }) { this.floatingPanel() }
                   .width(this.panelWidth)
                   .height(this.panelMaxHeight)
-                  .position({ x: expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX), y: panelTop(this.EDGE_MARGIN, this.panelOffsetY) })
+                  .position({ x: expandedMainPanelLeft(this.EDGE_MARGIN, this.panelOffsetX), y: this.panelTop() })
                   // Default keeps the panel above the sibling sky surface while still
                   // letting its deepest child (Button, Slider, Scroll, TextInput) own
                   // the gesture. Block would stop those controls at this outer shell.
@@ -7224,7 +7269,7 @@ export struct WindowNativeNode {
           // handlers lets tablet touches be intercepted before they reach it.
           Stack() { }
             .width(dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()))
-            .height(this.isExpandedLayout ? 62 : 82)
+            .height(this.dockHeight())
             .position({ x: dockLeft(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()), y: this.dockTop() })
             .hitTestBehavior(HitTestMode.Block)
             .zIndex(80)

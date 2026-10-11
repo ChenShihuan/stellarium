@@ -114,8 +114,17 @@ export default class QAbility extends UIAbility {
   private readonly avoidAreaChangeCallback = (data: WindowAvoidAreaChange): void => {
     if (data.type === Window.AvoidAreaType.TYPE_SYSTEM || data.type === Window.AvoidAreaType.TYPE_CUTOUT) {
       this.publishScreenSafeArea(data.area.topRect.height);
+    } else if (data.type === Window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR) {
+      this.publishNavigationSafeArea(data.area.bottomRect.height);
     }
   };
+
+  // 把导航指示条底部内边距发布给 ArkUI，避免 Dock 被导航条吞掉。
+  // 非有限值 / 负值归零。
+  private publishNavigationSafeArea(bottomPixels: number): void {
+    const bottom = Number.isFinite(bottomPixels) ? Math.max(0, bottomPixels) : 0;
+    AppStorage.setOrCreate<number>('stellariumScreenSafeBottomPixels', bottom);
+  }
 
   private isCliCommandName(value: string): boolean {
     return /^[A-Za-z][A-Za-z0-9_]*$/.test(value) && value.length <= 96;
@@ -914,6 +923,13 @@ export default class QAbility extends UIAbility {
       }
     }
     this.safeAreaWindow = mainWindow;
+    try {
+      const navigationArea = mainWindow.getWindowAvoidArea(Window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
+      this.publishNavigationSafeArea(navigationArea.bottomRect.height);
+    } catch (err) {
+      this.publishNavigationSafeArea(0);
+      hilog.warn(LOG_DOMAIN, LOG_TAG, '[safe-area] navigation area unavailable');
+    }
     try {
       const systemArea = mainWindow.getWindowAvoidArea(Window.AvoidAreaType.TYPE_SYSTEM);
       const cutoutArea = mainWindow.getWindowAvoidArea(Window.AvoidAreaType.TYPE_CUTOUT);

@@ -285,12 +285,14 @@ export function isPanelBackPoint(x: number, y: number, canGoBack: boolean,
 export function isDockPoint(x: number, y: number, polarScopeVisible: boolean,
   isExpandedLayout: boolean, skyWidth: number, skyHeight: number, panelVisible: boolean,
   panelWidth: number, panelOffsetX: number, edgeMargin: number, compactDockWidthPercent: number,
-  dockTopValue: number): boolean {
+  dockTopValue: number, dockHeightValue: number): boolean {
   if (polarScopeVisible) return false
   const left = dockLeft(isExpandedLayout, skyWidth, panelVisible, panelWidth, panelOffsetX, edgeMargin, compactDockWidthPercent)
   const right = left + dockWidthPixels(isExpandedLayout, skyWidth, panelVisible, panelWidth, panelOffsetX, edgeMargin, compactDockWidthPercent)
   const top = dockTopValue
-  const bottom = skyHeight
+  // The hit layer stops at the Dock's own bottom so the navigation strip below
+  // it is not swallowed by the sky-blocking layer.
+  const bottom = top + dockHeightValue
   return x >= left - 8 && x <= right + 8 && y >= top - 8 && y <= bottom
 }
 
