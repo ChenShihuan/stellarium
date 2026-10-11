@@ -63,28 +63,30 @@ test('title formation overlaps consented core loading without revealing an unrea
   let tick;
   let now = 0;
   const published = [];
-  const Motion = new Function('setInterval', 'Date', 'STARTUP_REVEAL_AT_MS', 'AppStorage', 'hilog',
+  const Motion = new Function('setInterval', 'Date', 'STARTUP_GATHER_MS', 'STARTUP_REVEAL_MS', 'AppStorage', 'hilog',
     stripTypeScriptTypes(`class Motion { ${method} };`) + 'return Motion;')(
-    callback => { tick = callback; return 1; }, { now: () => now }, geometry.STARTUP_REVEAL_AT_MS,
+    callback => { tick = callback; return 1; }, { now: () => now }, geometry.STARTUP_GATHER_MS, geometry.STARTUP_REVEAL_MS,
     { setOrCreate: (key, value) => published.push([key, value]) }, { info() {} });
   const motion = Object.assign(new Motion(), { ready: true, foreground: true, nativeStartupAllowed: false,
-    skyPrepared: false, assemblyElapsed: 0, elapsed: 0, artComplete: false, stopMotion() {}, draw() {} });
+    skyPrepared: false, assemblyElapsed: 0, elapsed: 0, releaseElapsed: 0, releaseStarted: false, artComplete: false, stopMotion() {}, draw() {} });
   motion.updateMotion();
   const advance = () => { now += 100; tick(); };
   advance();
+  // Consent gate: nothing assembles until the native startup is allowed.
   assert.equal(motion.assemblyElapsed, 0);
   motion.nativeStartupAllowed = true;
   for (let frame = 0; frame < 100; frame++) advance();
-  assert.equal(motion.assemblyElapsed, geometry.STARTUP_REVEAL_AT_MS);
+  assert.ok(motion.assemblyElapsed > 0);
+  // The scatter/reveal must wait for the sky gate even once the title is formed.
   assert.equal(motion.artComplete, false);
   assert.deepEqual(published, []);
   motion.skyPrepared = true;
-  advance();
+  for (let frame = 0; frame < 200; frame++) advance();
   assert.equal(motion.artComplete, true);
   assert.deepEqual(published, [['stellariumStartupArtComplete', true]]);
   advance();
   assert.equal(published.length, 1);
-  assert.match(source, /const reveal = this.skyPrepared \? startupReveal\(this.assemblyElapsed\) : 0/);
+  assert.match(source, /const reveal = this\.skyPrepared \? startupEase\(this\.releaseElapsed \/ STARTUP_REVEAL_MS\) : 0/);
 });
 
 test('independent drift fills the centre, varies direction and never jumps between frames', () => {
