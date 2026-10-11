@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const root = path.resolve(new URL('..', import.meta.url).pathname)
+const root = path.resolve(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'))
 const source = fs.readFileSync(path.join(root, 'harmonyos/ets-source/pages/MainWindowNativeNode.ets'), 'utf8')
 
 assert.match(source, /@State private keyboardTextInputFocused: boolean = false/)

@@ -46,6 +46,8 @@ export interface AstroCalcHostHooks extends BehaviorHostHooks {
   hecLayoutPositions(positions: Array<HeliocentricPosition>): Array<HeliocentricPosition>
   // 平滑前往目标时刻（宿主 TimeTransitionController）；onFinished 在到达后回调。
   animateTimeToJd(targetJd: number, label: string, onFinished?: () => void): void
+  // 年历加载完成后刷新桌面卡片快照（宿主 AstronomyCardService.publishAstronomyCard）。
+  persistAlmanacCardSnapshot(): void
 }
 
 export class AstroCalcController {
@@ -1214,6 +1216,7 @@ export class AstroCalcController {
         if (Array.isArray(av['seasonEvents'])) this.astroStore.almanacSeasons = av['seasonEvents'] as Array<SeasonEvent>
         if (Array.isArray(av['solarTerms'])) this.astroStore.almanacSolarTerms = av['solarTerms'] as Array<SeasonEvent>
         if (av['seasonYear'] !== undefined) this.astroStore.almanacSeasonYear = String(av['seasonYear'])
+        this.hooks.persistAlmanacCardSnapshot()
         if (this.astroStore.almanacData.size === 0) this.astroStore.almanacError = '当前没有可显示的年历数据。'
       } else {
         this.astroStore.almanacError = r.error ?? '年历计算失败，请点刷新后重试。'
