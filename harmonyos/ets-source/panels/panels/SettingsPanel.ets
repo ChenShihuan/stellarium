@@ -155,7 +155,7 @@ export struct SettingsPanel {
           .margin({ top: 4, bottom: 8 }).id('config-tabs-' + this.i18nLang)
         Column({ space: 0 }) {
           if (this.configTab === -1) {
-            DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.textColor, subColor: this.subColor, onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
+            DevicePrivacySection({ gyroscopeEnabled: this.gyroStore.gyroscopeEnabled, sensitivityText: sensZh(this.gyroStore.gyroscopeSensitivityText), textColor: this.textColor, subColor: this.subColor, panelColor: this.panelColor, onToggleGyroscope: (v: boolean) => { this.toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) }, onRevoke: () => { this.confirmPrivacyRevocation() } })
             NotificationSection({
               notificationEnabled: this.notificationStore.astronomyNotificationEnabled,
               notificationBusy: this.notificationStore.astronomyNotificationBusy,
