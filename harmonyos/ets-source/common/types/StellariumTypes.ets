@@ -820,6 +820,51 @@ export interface StellariumBridgeResponse {
   archiveError?: string
   planets?: string[]
   tonight?: TonightEvents
+  datasets?: SpectralDataset[]
+  spectral?: SpectralState
+  session?: Object
+  preview?: Object
+  accepted?: boolean
+  conflictAction?: string
+}
+
+// 多波段 HiPS 数据集（getSpectralDatasets 返回）
+export interface SpectralDataset {
+  id: string
+  title: string
+  band: string
+  source: string
+  coverage: string
+  license?: string
+  attribution?: string
+  licenseReviewRequired?: boolean
+  networkPolicy?: string
+  timeoutSeconds?: number
+  surveyUrl?: string
+  available?: boolean
+  enabled?: boolean
+  loading?: boolean
+  ready?: boolean
+  error?: string
+}
+
+// 多波段图层当前状态（getSpectralState / setSpectralView 返回）
+export interface SpectralState {
+  enabled?: boolean
+  datasetId?: string
+  loading?: boolean
+  ready?: boolean
+  error?: string
+}
+
+// HiPS / TOAST 巡天图层状态（getSurveyState 返回）
+export interface SurveyStateResponse extends StellariumBridgeResponse {
+  hipsEnabled?: boolean
+  hipsLoaded?: boolean
+  hipsLoading?: boolean
+  hipsSurveyCount?: number
+  hipsVisibleCount?: number
+  toastEnabled?: boolean
 }
 
 export interface SessionSnapshot {

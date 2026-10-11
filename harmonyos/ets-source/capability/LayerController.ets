@@ -39,6 +39,8 @@ export interface LayerHostHooks extends BehaviorHostHooks {
   loadVideoRecordingState(): void
   // 通知/后台提醒状态回读（NotificationController 持有）；进入「设备与隐私」页时刷新。
   refreshNotificationStatus(): void
+  // 巡天 / 多波段图层状态回读（SurveyController 持有）；进入「巡天」页时刷新。
+  loadSurveyState(): void
   // 视图标签页宿主 @State（组件 @Prop 消费，控制器经 hooks 读写）。
   viewTab(): number
   setViewTab(value: number): void
@@ -232,6 +234,7 @@ export class LayerController {
       if (transitionId !== this.viewTabTransitionId) return
       this.hooks.setViewTab(tabId)
       if (tabId === 4) this.layerViewStore.loadLandscapeList()
+      if (tabId === 6) this.hooks.loadSurveyState()
       this.hooks.setViewTabContentOffsetX(direction * 10)
       hilog.info(0x0000, 'StellariumArkUI', '[layer-transition] swap id=%{public}d tab=%{public}d', transitionId, tabId)
       this.hooks.animateTabOut(170, (): void => {

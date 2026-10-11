@@ -7,6 +7,7 @@ import { LayerViewStore } from '../../state/LayerViewStore'
 import { OverlayStore } from '../../state/OverlayStore'
 import { SkyCultureSettingsStore } from '../../state/SkyCultureSettingsStore'
 import { SkyCultureViewStore } from '../../state/SkyCultureViewStore'
+import { SurveyStore } from '../../state/SurveyStore'
 import { LayerPresetBar } from '../layers/LayerPresetBar'
 import { LayerTabs } from '../layers/LayerTabs'
 import { LayerSkyTab, LayerSsoTab, LayerDsoTab, LayerMarkingsTab, LayerLandscapeTab, LayerSurveysTab } from '../layers/LayerViewTabs'
@@ -29,6 +30,7 @@ export struct LayersPanel {
   @ObjectLink skyCultureViewStore: SkyCultureViewStore
   @ObjectLink skyCultureSettingsStore: SkyCultureSettingsStore
   @ObjectLink atmosphereStore: AtmosphereStore
+  @ObjectLink surveyStore: SurveyStore
   @Prop nightModeOn: boolean
   @Prop viewTab: number
   @Prop expandedLayout: boolean
@@ -55,6 +57,9 @@ export struct LayersPanel {
   onPreset: (preset: string) => void = () => {}
   onSelectTab: (id: number) => void = () => {}
   onToggleLayer: (actionId: string, cmd: string, value: boolean) => void = () => {}
+  onRefreshSurvey: () => void = () => {}
+  onSelectSpectral: (id: string) => void = () => {}
+  onCloseSpectral: () => void = () => {}
   onSetSkyDisplay: (setting: string, value: boolean | number) => void = () => {}
   onStarMagLimit: (value: number) => void = () => {}
   onMilkyWayBright: (value: number) => void = () => {}
@@ -231,8 +236,16 @@ export struct LayersPanel {
           } else if (this.viewTab === 6 && !OFFLINE_APPGALLERY_BUILD) {
             LayerSurveysTab({
               layerStore: this.layerStore,
+              surveyStore: this.surveyStore,
+              textColor: this.textColor,
               subColor: this.subColor,
-              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.onToggleLayer(actionId, cmd, value) }
+              accentColor: this.accentColor,
+              panelColor: this.panelColor,
+              lineColor: this.cardBorder,
+              onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.onToggleLayer(actionId, cmd, value) },
+              onRefreshSurvey: () => { this.onRefreshSurvey() },
+              onSelectSpectral: (id: string) => { this.onSelectSpectral(id) },
+              onCloseSpectral: () => { this.onCloseSpectral() }
             })
           } else {
             LayerSkyTab({
