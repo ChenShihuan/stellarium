@@ -950,6 +950,9 @@ export struct WindowNativeNode {
   @Watch('onCliUiEventChanged')
   @StorageLink('stellariumCliUiEvent')
   private cliUiEvent: string = ''
+  @Watch('onCardRouteChanged')
+  @StorageLink('stellariumCardRoute')
+  private cardRoute: string = ''
   private privacyPageStartupStarted: boolean = false
   private lastCliUiEventId: string = ''
   @State private isExpandedLayout: boolean = false
@@ -3389,6 +3392,28 @@ export struct WindowNativeNode {
     this.panelNavigationStack = parent.length > 0 ? [parent] : []
     this.panelNavigationDepth = this.panelNavigationStack.length
     this.setPanel(panel, true, true)
+  }
+
+  // 天象卡片点击路由：QAbility 写入 AppStorage('stellariumCardRoute')，此处消费并打开对应面板。
+  private onCardRouteChanged(): void {
+    this.consumeCardRoute()
+  }
+
+  private consumeCardRoute(): void {
+    if (this.cardRoute.length === 0) return
+    try {
+      const route = JSON.parse(this.cardRoute) as Record<string, Object>
+      const panel = String(route['panel'] ?? '').trim()
+      if (!isCliPanelName(panel)) return
+      const tab = Number(String(route['tab'] ?? ''))
+      this.openPanelFromCli(panel)
+      if (panel === 'astro' && Number.isInteger(tab) && tab >= 0 && tab <= 9) {
+        setTimeout(() => { this.astroCalcCtl().selectAstroTab(tab) }, 220)
+      }
+      AppStorage.setOrCreate('stellariumCardRoute', '')
+    } catch (error) {
+      hilog.warn(0x0000, 'StellariumArkUI', '[form-route] ignored malformed route')
+    }
   }
 
   private setPanel(panel: string, preserveHistory: boolean = false, forceVisible: boolean = false, routeDirection: number = 0): void {

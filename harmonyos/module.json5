@@ -37,6 +37,10 @@
           "split",
           "floating"
         ],
+        "minWindowWidth": 320,
+        "minWindowHeight": 240,
+        "minWindowRatio": 0.5,
+        "maxWindowRatio": 2,
         "description": "$string:QAbility_desc",
         "icon": "$media:app_icon",
         "label": "$string:QAbility_label",
@@ -81,7 +85,25 @@
         "continuable": false
       }
     ],
+    "extensionAbilities": [
+      {
+        "name": "SkyInstrumentFormAbility",
+        "srcEntry": "./ets/form/SkyInstrumentFormAbility.ets",
+        "label": "$string:QAbility_label",
+        "description": "$string:QAbility_desc",
+        "type": "form",
+        "metadata": [
+          {
+            "name": "ohos.extension.form",
+            "resource": "$profile:form_config"
+          }
+        ]
+      }
+    ],
     "requestPermissions": [
+      {
+        "name": "ohos.permission.INTERNET"
+      },
       {
         "name": "ohos.permission.APPROXIMATELY_LOCATION",
         "reason": "$string:stellarium_permission_reason_location",
@@ -113,6 +135,15 @@
       },
       {
         "name": "ohos.permission.GYROSCOPE",
+        "usedScene": {
+          "abilities": [
+            "QAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.PUBLISH_AGENT_REMINDER",
         "usedScene": {
           "abilities": [
             "QAbility"
