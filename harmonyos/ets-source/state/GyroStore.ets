@@ -9,6 +9,9 @@ export class GyroStore {
   gyroGuideX: number = 0
   gyroGuideY: number = 0
   gyroscopeEnabled: boolean = false
+  // 切换中的乐观 UI：pending 期间指示器显示 pendingTarget，避免控件状态与引擎回包打架。
+  gyroscopePending: boolean = false
+  gyroscopePendingTarget: boolean = false
   gyroscopeStatus: ResourceStr = I18n.t('m_gyro_off')
   gyroscopeSensitivityText: string = 'Standard'
   gyroCalibPanelOpen: boolean = false
@@ -17,4 +20,16 @@ export class GyroStore {
   gyroOffsetAz: number = 0    // 方位角校准偏移（度）
   gyroOffsetAlt: number = 0   // 高度角校准偏移（度）
   gyroCompassAzAlignment: number = 0
+
+  // 切换中的乐观显示值（pending 期间取目标态）。
+  gyroscopeVisualEnabled(): boolean {
+    return this.gyroscopePending ? this.gyroscopePendingTarget : this.gyroscopeEnabled
+  }
+
+  // 陀螺仪指示点颜色：切换中黄、开启绿、关闭灰。
+  gyroIndicatorColor(): string {
+    if (this.gyroscopePending) return '#FFD36E'
+    if (this.gyroscopeEnabled) return '#72E0A0'
+    return 'rgba(255, 255, 255, 0.42)'
+  }
 }
