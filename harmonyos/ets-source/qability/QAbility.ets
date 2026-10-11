@@ -57,6 +57,8 @@ export default class QAbility extends UIAbility {
   private qtInitialized: boolean = false;
   private qtStartupInProgress: boolean = false;
   private inputStallProbeTimer: number = -1;
+  private pendingPrivacyWindowRestore: boolean = false;
+  private desktopWindowRepairAttempts: number = 0;
 
   private stopInputStallProbe(): void {
     if (this.inputStallProbeTimer >= 0) {
@@ -438,6 +440,9 @@ export default class QAbility extends UIAbility {
     this.privacyAccepted = true;
     this.logPrivacyGate('system privacy consent accepted');
     hilog.info(LOG_DOMAIN, LOG_TAG, 'Privacy consent accepted; starting Qt');
+    if (this.pendingPrivacyWindowRestore && this.pendingWindowStage !== null) {
+      this.restoreWindowAfterConsent(this.pendingWindowStage);
+    }
     void this.startQtIfReady();
   }
 
@@ -643,16 +648,26 @@ export default class QAbility extends UIAbility {
     this.pendingWindowStage = windowStage;
     this.logPrivacyProbe('window-stage-restore');
     if (this.qtInitialized) {
-      void this.preparePrivacyHostPage(windowStage).then((ready: boolean) => {
-        if (ready && this.qtWindowStage !== undefined && hasCurrentPrivacyConsent()) {
-          qpa.handleAbilityOnWindowStageRestore(this, this.qtWindowStage);
-          AppStorage.setOrCreate('stellariumPrivacyNativeStartupAllowed', true);
-          void this.enterImmersive(windowStage);
-        }
-      });
+      if (!hasCurrentPrivacyConsent()) {
+        this.pendingPrivacyWindowRestore = true;
+        this.logPrivacyProbe('window-stage-restore-deferred', 'consent not yet accepted');
+        return;
+      }
+      this.restoreWindowAfterConsent(windowStage);
     } else {
       void this.requestPrivacyAfterWindowReady(windowStage);
     }
+  }
+
+  private restoreWindowAfterConsent(windowStage: Window.WindowStage): void {
+    this.pendingPrivacyWindowRestore = false;
+    void this.preparePrivacyHostPage(windowStage).then((ready: boolean) => {
+      if (ready && this.qtWindowStage !== undefined && hasCurrentPrivacyConsent()) {
+        qpa.handleAbilityOnWindowStageRestore(this, this.qtWindowStage);
+        AppStorage.setOrCreate('stellariumPrivacyNativeStartupAllowed', true);
+        void this.enterImmersive(windowStage);
+      }
+    });
   }
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
