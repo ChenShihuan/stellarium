@@ -57,6 +57,7 @@ import { speakSelectedObject } from '../common/SpeechService'
 import { StartupBridge, StartupHooks } from '../capability/StartupBridge'
 import { SensorController, GyroGuideLayout, SensorHostHooks } from '../capability/SensorController'
 import { NotificationController, NotificationHostHooks } from '../capability/NotificationController'
+import { SurveyController, SurveyHostHooks } from '../capability/SurveyController'
 import { RecordingController, RecordingHostHooks } from '../capability/RecordingController'
 import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
 import { SkyInputController, SkyInputHostHooks } from '../capability/SkyInputController'
@@ -106,6 +107,7 @@ import { ObjectDetailStore } from '../state/ObjectDetailStore'
 import { GyroStore } from '../state/GyroStore'
 import { WutStore } from '../state/WutStore'
 import { NotificationStore } from '../state/NotificationStore'
+import { SurveyStore } from '../state/SurveyStore'
 import { AstroStore } from '../state/AstroStore'
 import { LocationStore } from '../state/LocationStore'
 import { CityChipsRow } from '../panels/location/CityChipsRow'
@@ -974,6 +976,7 @@ export struct WindowNativeNode {
   @State private objectDetailStore: ObjectDetailStore = new ObjectDetailStore()
   @State private gyroStore: GyroStore = new GyroStore()
   @State private notificationStore: NotificationStore = new NotificationStore()
+  @State private surveyStore: SurveyStore = new SurveyStore()
   @State private wutStore: WutStore = new WutStore()
   @State private astroStore: AstroStore = new AstroStore()
   @State private objectMediaStore: ObjectMediaStore = new ObjectMediaStore()
@@ -994,6 +997,8 @@ export struct WindowNativeNode {
   private sensorControllerImpl: SensorController | null = null
   // 通知/后台提醒控制器（惰性构造；注入 NotificationStore 与宿主 hooks）。
   private notificationControllerImpl: NotificationController | null = null
+  // 巡天 / 多波段图层控制器（惰性构造；注入 SurveyStore / CommandPort 与宿主 hooks）。
+  private surveyControllerImpl: SurveyController | null = null
   // 录制/回放/录屏控制器（惰性构造；recordBuffer 属 保留字段，经 hooks 读写）。
   private recordingControllerImpl: RecordingController | null = null
   // 对象检查器三维模型渲染器（惰性构造；逐帧/草稿字段留控制器，可观测子集在 ObjectMediaStore）。
@@ -2420,6 +2425,22 @@ export struct WindowNativeNode {
     return this.notificationControllerImpl
   }
 
+  // 巡天 / 多波段图层控制器惰性构造。状态已在 SurveyStore（只搬行为）；
+  // 巡天开关回写 LayerStore、UI 提示经 hooks 回注。
+  private surveyCtl(): SurveyController {
+    if (this.surveyControllerImpl === null) {
+      const hooks: SurveyHostHooks = {
+        applySurveyFlags: (hipsEnabled: boolean, toastEnabled: boolean): void => {
+          this.layerStore.hipsSurveys = hipsEnabled
+          this.layerStore.toastSurvey = toastEnabled
+        },
+        flashHint: (text: ResourceStr): void => this.flashHint(text)
+      }
+      this.surveyControllerImpl = new SurveyController(this.surveyStore, this.commandPort(), hooks)
+    }
+    return this.surveyControllerImpl
+  }
+
   // 录制/回放/录屏控制器惰性构造。状态已在 ScriptStore（只搬行为与定时器）；
   // recordBuffer 属 保留字段，经 hooks 读写。
   private recordingCtl(): RecordingController {
@@ -2666,6 +2687,7 @@ export struct WindowNativeNode {
         loadRecordings: (): void => { this.scriptPlaybackCtl().loadRecordings() },
         loadVideoRecordingState: (): void => { this.scriptPlaybackCtl().loadVideoRecordingState() },
         refreshNotificationStatus: (): void => { this.notificationCtl().refreshStatus() },
+        loadSurveyState: (): void => { this.surveyCtl().loadSurveyState() },
         viewTab: (): number => this.viewTab,
         setViewTab: (value: number): void => { this.viewTab = value },
         viewTabContentOpacity: (): number => this.viewTabContentOpacity,
@@ -7501,6 +7523,7 @@ export struct WindowNativeNode {
         skyCultureSettingsStore: this.skyCultureSettingsStore,
         atmosphereStore: this.atmosphereStore,
         overlayStore: this.overlayStore,
+        surveyStore: this.surveyStore,
         nightModeOn: this.nightModeStore.nightMode,
         viewTab: this.viewTab,
         expandedLayout: this.isExpandedLayout,
@@ -7526,6 +7549,9 @@ export struct WindowNativeNode {
         onPreset: (preset: string) => { this.layerCtl().applyLayerPreset(preset) },
         onSelectTab: (id: number) => { this.switchViewTab(id) },
         onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
+        onRefreshSurvey: () => { this.surveyCtl().loadSurveyState() },
+        onSelectSpectral: (id: string) => { this.surveyCtl().setSpectralDataset(id) },
+        onCloseSpectral: () => { this.surveyCtl().closeSpectralView() },
         onSetSkyDisplay: (setting: string, value: boolean | number) => { this.layerCtl().setSkyDisplaySetting(setting, value) },
         onStarMagLimit: (value: number) => { this.layerCtl().applyStarMagLimit(value) },
         onMilkyWayBright: (value: number) => { this.layerCtl().applyMilkyWayBright(value) },

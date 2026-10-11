@@ -6,6 +6,8 @@ import { OverlayStore } from '../../state/OverlayStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { LayerSwitchRow } from './LayerSwitchRow'
 import { ObservationAidBlock } from './ObservationAidBlock'
+import { LayerSpectralSection } from './LayerSpectralSection'
+import { SurveyStore } from '../../state/SurveyStore'
 import { ViewCoordinateSettings } from '../view/ViewCoordinateSettings'
 
 // 本组件文件：「图层」面板六个视图标签页（天空 / 太阳系天体 / 深空天体 /
@@ -667,8 +669,16 @@ export struct LayerLandscapeTab {
 @Component
 export struct LayerSurveysTab {
   @ObjectLink layerStore: LayerStore
+  @ObjectLink surveyStore: SurveyStore
+  @Prop textColor: string
   @Prop subColor: string
+  @Prop accentColor: string
+  @Prop panelColor: string
+  @Prop lineColor: string
   onToggleLayer: (actionId: string, cmd: string, value: boolean) => void = () => {}
+  onRefreshSurvey: () => void = () => {}
+  onSelectSpectral: (id: string) => void = () => {}
+  onCloseSpectral: () => void = () => {}
 
   build() {
     Column({ space: 0 }) {
@@ -677,6 +687,17 @@ export struct LayerSurveysTab {
       Row() {
         Text(I18n.t('i0215')).fontSize(10).fontColor('#CC8FB6FF').width('100%').padding({ left: 2 })
       }.height(18).width('100%').margin({ top: 8 })
+      LayerSpectralSection({
+        surveyStore: this.surveyStore,
+        textColor: this.textColor,
+        subColor: this.subColor,
+        accentColor: this.accentColor,
+        panelColor: this.panelColor,
+        lineColor: this.lineColor,
+        onRefreshSurvey: () => { this.onRefreshSurvey() },
+        onSelectSpectral: (id: string) => { this.onSelectSpectral(id) },
+        onCloseSpectral: () => { this.onCloseSpectral() }
+      })
     }.width('100%')
   }
 }
