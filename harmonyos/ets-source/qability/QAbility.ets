@@ -73,6 +73,7 @@ export default class QAbility extends UIAbility {
   private privacyRequestStarted: boolean = false;
   private privacyAccepted: boolean = false;
   private rootContentLoaded: boolean = false;
+  private rootContentLoading: Promise<boolean> | undefined = undefined;
   private rootStorage: LocalStorage = new LocalStorage();
   private qtWindowStage: QtWindowStageAdapter | undefined = undefined;
   private qtAbilityCreated: boolean = false;
@@ -188,6 +189,14 @@ export default class QAbility extends UIAbility {
       requestId = `cli-${Date.now()}`;
     }
     if (this.cliRequests.some((request: StellariumCliRequest) => request.requestId === requestId)) {
+      return;
+    }
+    if (commandName === 'getPrivacyConsentState') {
+      this.finishCliRequest({ commandName, payload, requestId, attempts: 0 }, JSON.stringify({
+        ok: true, currentAgreementsAccepted: hasCurrentPrivacyConsent(),
+        nativeInitialized: this.qtInitialized,
+        foreground: this.isForeground
+      }));
       return;
     }
     if (commandName === 'getUiLayout') {
@@ -704,7 +713,18 @@ export default class QAbility extends UIAbility {
     if (this.rootContentLoaded) {
       return true;
     }
+    // Overlapping window-create / restore callbacks must prepare one root only.
+    if (this.rootContentLoading !== undefined) {
+      return this.rootContentLoading;
+    }
+    const loading = this.doPreparePrivacyHostPage(windowStage);
+    this.rootContentLoading = loading;
+    const result = await loading;
+    this.rootContentLoading = undefined;
+    return result;
+  }
 
+  private async doPreparePrivacyHostPage(windowStage: Window.WindowStage): Promise<boolean> {
     try {
       this.logPrivacyProbe('privacy-window-prepare-start');
       AppStorage.setOrCreate('stellariumPrivacyNativeStartupAllowed', false);
@@ -748,8 +768,8 @@ export default class QAbility extends UIAbility {
     this.privacyAccepted = true;
     this.logPrivacyGate('system privacy consent accepted');
     hilog.info(LOG_DOMAIN, LOG_TAG, 'Privacy consent accepted; starting Qt');
-    if (this.pendingPrivacyWindowRestore && this.pendingWindowStage !== null) {
-      this.restoreWindowAfterConsent(this.pendingWindowStage);
+    if (this.pendingPrivacyWindowRestore) {
+      this.restoreWindowAfterConsent();
     }
     void this.startQtIfReady();
   }
@@ -962,21 +982,23 @@ export default class QAbility extends UIAbility {
         this.logPrivacyProbe('window-stage-restore-deferred', 'consent not yet accepted');
         return;
       }
-      this.restoreWindowAfterConsent(windowStage);
+      this.restoreWindowAfterConsent();
     } else {
       void this.requestPrivacyAfterWindowReady(windowStage);
     }
   }
 
-  private restoreWindowAfterConsent(windowStage: Window.WindowStage): void {
+  // 隐私同意后的窗口恢复：同步、幂等；未同意时保持 pending 等待下一次同意事件。
+  private restoreWindowAfterConsent(): void {
+    if (!this.pendingPrivacyWindowRestore) return;
+    if (!hasCurrentPrivacyConsent()) return;
+    if (this.qtWindowStage === undefined) return;
     this.pendingPrivacyWindowRestore = false;
-    void this.preparePrivacyHostPage(windowStage).then((ready: boolean) => {
-      if (ready && this.qtWindowStage !== undefined && hasCurrentPrivacyConsent()) {
-        qpa.handleAbilityOnWindowStageRestore(this, this.qtWindowStage);
-        AppStorage.setOrCreate('stellariumPrivacyNativeStartupAllowed', true);
-        void this.enterImmersive(windowStage);
-      }
-    });
+    qpa.handleAbilityOnWindowStageRestore(this, this.qtWindowStage);
+    AppStorage.setOrCreate('stellariumPrivacyNativeStartupAllowed', true);
+    if (this.pendingWindowStage !== null) {
+      void this.enterImmersive(this.pendingWindowStage);
+    }
   }
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
@@ -1036,6 +1058,7 @@ export default class QAbility extends UIAbility {
 
   onWindowStageDestroy() {
     this.rootContentLoaded = false;
+    this.rootContentLoading = undefined;
     this.qtWindowStage = undefined;
     hilog.info(LOG_DOMAIN, LOG_TAG, 'QAbility::onStageDestroy()');
     this.logPrivacyProbe('window-stage-destroy');

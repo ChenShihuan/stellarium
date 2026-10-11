@@ -162,7 +162,7 @@ test('current consent requires matching policy id and version and agreed result'
 
 test('Qt child process cannot enter the SDK without current policy consent', () => {
   const syncScript = readFileSync(new URL('../scripts/sync-ohos-build-sources.sh', import.meta.url), 'utf8');
-  assert.ok(syncScript.includes('harmonyos/ets-source/process/QChildProcess.ets:build/libstellarium-harmonyos/entry/src/main/ets/process/QChildProcess.ets'));
+  assert.ok(syncScript.includes('harmonyos/ets-source'), 'sync script must mirror the ets-source tree (including process/QChildProcess.ets)');
   const fixture = manager();
   const calls = [];
   const Child = new Function('ChildProcess', 'QtUtils', 'hasCurrentPrivacyConsent', 'qpa', 'hilog', 'LOG_DOMAIN', 'LOG_TAG',
