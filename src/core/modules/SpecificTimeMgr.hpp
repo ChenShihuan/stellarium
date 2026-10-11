@@ -77,6 +77,13 @@ public:
 	//! @todo the solution should be extended to the wider year range; see https://github.com/Stellarium/stellarium/pull/2497 for details
 	double getSolstice(int year, SpecificTimeMgr::Solstice solstice);
 
+	//! Compute a Chinese solar term crossing for a Gregorian year.
+	//! termIndex is ordered from 小寒 (0) through 冬至 (23), at 15 degree solar-longitude intervals.
+	//! The returned value is a Julian Ephemeris Date in the same time basis as the other
+	//! SpecificTimeMgr event methods. It is calculated from the bundled solar-system model;
+	//! no network data is required.
+	double getSolarTerm(int year, int termIndex);
+
 public slots:
 	//! Set twilight altitude [degrees]
 	void setTwilightAltitude(double alt);

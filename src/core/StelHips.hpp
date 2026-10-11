@@ -51,6 +51,7 @@ class HipsSurvey : public QObject
 	Q_PROPERTY(QString url MEMBER url CONSTANT)
 	Q_PROPERTY(QJsonObject properties MEMBER properties NOTIFY propertiesChanged)
 	Q_PROPERTY(bool isLoading READ isLoading NOTIFY statusChanged)
+	Q_PROPERTY(QString lastError READ getLastError NOTIFY statusChanged)
 	Q_PROPERTY(bool visible READ isVisible WRITE setVisible NOTIFY visibleChanged)
 	Q_PROPERTY(float gamma READ getGamma WRITE setGamma NOTIFY displaySettingsChanged)
 	Q_PROPERTY(float saturation READ getSaturation WRITE setSaturation NOTIFY displaySettingsChanged)
@@ -118,6 +119,8 @@ public:
 
 	//! Get whether the survey is still loading.
 	bool isLoading(void) const;
+	//! Return the last properties/all-sky request error, if any.
+	QString getLastError() const { return lastError; }
 
 	bool isPlanetarySurvey(void) const { return planetarySurvey; }
 
@@ -178,6 +181,7 @@ private:
 	// reply to the initial download of the properties file and to the
 	// allsky texture.
 	QNetworkReply *networkReply = Q_NULLPTR;
+	QString lastError;
 
 	QImage allsky = QImage();
 	bool noAllsky = false;

@@ -26,8 +26,13 @@
 #include "SpecificTimeMgr.hpp"
 #include "StelActionMgr.hpp"
 #include "StelTranslator.hpp"
+#include "planetsephems/precession.h"
 
 #include <QSettings>
+#include <QDate>
+
+#include <algorithm>
+#include <cmath>
 
 SpecificTimeMgr::SpecificTimeMgr()
 	: twilightAltitude(0.)
@@ -515,6 +520,72 @@ double SpecificTimeMgr::getSolstice(int year, SpecificTimeMgr::Solstice solstice
 	}
 
 	return JDE0 + 0.00001*S/deltaLambda;
+}
+
+double SpecificTimeMgr::getSolarTerm(int year, int termIndex)
+{
+	if (year < 1 || year > 3000 || termIndex < 0 || termIndex >= 24)
+		return 0.0;
+
+	const PlanetP earth = GETSTELMODULE(SolarSystem)->getEarth();
+	if (!earth)
+		return 0.0;
+
+	const double startJD = static_cast<double>(QDate(year, 1, 1).toJulianDay()) - 0.5;
+	const double endJD = static_cast<double>(QDate(year + 1, 1, 1).toJulianDay()) - 0.5;
+	const double targetLongitude = std::fmod(285.0 + 15.0 * static_cast<double>(termIndex), 360.0);
+
+	auto solarLongitude = [&](double jd) -> double {
+		const double jde = jd + core->computeDeltaT(jd) / 86400.0;
+		const Vec3d earthPosition = earth->getHeliocentricEclipticPos(jde);
+		double obliquity, chi, omega, psi, nutationLongitude, nutationObliquity;
+		getPrecessionAnglesVondrak(jde, &obliquity, &chi, &omega, &psi);
+		getNutationAngles(jde, &nutationLongitude, &nutationObliquity);
+		const Vec3d positionOfDate = (Mat4d::xrotation(-obliquity) * Mat4d::zrotation(-chi)
+			* Mat4d::xrotation(omega) * Mat4d::zrotation(psi)) * earthPosition;
+		double longitude = std::atan2(-positionOfDate[1], -positionOfDate[0]) * 180.0 / M_PI
+			+ nutationLongitude * 180.0 / M_PI - 20.4898 / (3600.0 * earthPosition.norm());
+		if (longitude < 0.0)
+			longitude += 360.0;
+		return longitude;
+	};
+	auto forwardDistance = [](double from, double to) -> double {
+		double distance = std::fmod(to - from, 360.0);
+		if (distance < 0.0)
+			distance += 360.0;
+		return distance;
+	};
+
+	const double step = 10.0;
+	double previousJD = startJD;
+	double previousLongitude = solarLongitude(previousJD);
+	for (double nextJD = startJD + step; previousJD < endJD; nextJD += step)
+	{
+		const double currentJD = std::min(nextJD, endJD);
+		const double currentLongitude = solarLongitude(currentJD);
+		const double travelled = forwardDistance(previousLongitude, currentLongitude);
+		const double targetDistance = forwardDistance(previousLongitude, targetLongitude);
+		if (travelled > 0.0 && travelled < 15.0 && targetDistance <= travelled)
+		{
+			double lowJD = previousJD;
+			double highJD = currentJD;
+			for (int iteration = 0; iteration < 24; ++iteration)
+			{
+				const double middleJD = (lowJD + highJD) * 0.5;
+				const double middleDistance = forwardDistance(previousLongitude, solarLongitude(middleJD));
+				if (middleDistance >= targetDistance)
+					highJD = middleJD;
+				else
+					lowJD = middleJD;
+			}
+			return (lowJD + highJD) * 0.5;
+		}
+		previousJD = currentJD;
+		previousLongitude = currentLongitude;
+		if (currentJD >= endJD)
+			break;
+	}
+	return 0.0;
 }
 
 void SpecificTimeMgr::currentMarchEquinox()

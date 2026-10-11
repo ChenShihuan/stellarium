@@ -71,7 +71,7 @@ public:
 //	//! Returns the estimated memory usage of all textures currently loaded through StelTexture
 //	int getGLMemoryUsage();
 private:
-	void onFrameFinished();
+	void beginFrame();
 	//! Called by StelTexture to indicate the beginning of loading of a texture, so we can measure time spent on it
 	void reportTextureLoadStart();
 	//! Called by StelTexture to indicate the end of loading of a texture, so we can measure time spent on it

@@ -954,6 +954,9 @@ bool StelLocationMgr::deleteUserLocation(const QString& id)
 // lookup location from OS location service or IP address.
 void StelLocationMgr::locationFromIP()
 {
+#if defined(STELLARIUM_OHOS_OFFLINE) || defined(Q_OS_OHOS)
+	return;
+#else
 	// TODO: Find out how to properly setup geoclue2 on Linux, then reactivate.
 #ifdef Q_OS_WIN
 #if (QT_VERSION>=QT_VERSION_CHECK(6,6,0))
@@ -1005,6 +1008,7 @@ void StelLocationMgr::locationFromIP()
 	}
 #if (QT_VERSION>=QT_VERSION_CHECK(6,6,0))
 });
+#endif
 #endif
 #endif
 }
