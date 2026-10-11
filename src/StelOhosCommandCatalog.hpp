@@ -11,7 +11,7 @@ inline QStringList names()
 {
 	return QStringLiteral(
 		"copyTextToClipboard,getAppFilingInfo,getNotificationStatus,requestNotificationAuthorization,publishAstronomyNotification,cancelAstronomyNotification,getAstronomyReminderStatus,getAstronomyReminders,scheduleAstronomyReminder,scheduleNextSolarTermReminder,cancelAstronomyReminder,clearAstronomyReminders,getGuideState,startGuide,guideAction,beginGuidedSession,endGuidedSession,"
-		"setAstroTab,setAstroGroup,setAstroFilter,setAstroScroll,getAstroPanelState,"
+		"setAstroTab,setAstroGroup,setAstroFilter,setAstroScroll,getAstroPanelState,getFormSnapshot,refreshFormSnapshot,"
 		"addBookmark,addDay,addHour,addMinute,addMonth,addYear,advanceTime,angleMeasurePoint,applyCollaborationSession,applySessionState,"
 		"beginGyroViewTransition,beginSkyGesture,cancelGyroViewTransition,clearSelection,cycleCCD,cycleLens,cycleOcular,cycleTelescope,getViewAnchorState,setViewAnchorProbe,"
 		"deleteBookmark,deleteRecording,downloadStarCatalog,dragView,endPinch,exportConfig,getAboutInfo,"
@@ -33,12 +33,12 @@ inline QStringList names()
 		"getSelectedObjectInfo,getSelectedObjects,getSelectedType,getObjectDetailModel,getObjectDetailConnector,getCollaborationState,getSessionState,getSiderealTime,getSimulationTime,"
 		"getSkyCultureDetails,getSkyCultureInfo,getSkyCultureList,getSkyCultureMakerDraft,getSkyCultureState,getSkyCultureTerritoryGeometry,getSkyCultureVisualSettings,getLocationMapState,"
 		"getSkyCultures,getSolarElongation,getSolarSystemFlags,getStarCatalogStatus,getStarCatalogs,getStarCount,"
-		"getStarCountFull,getStarFlags,getStarScale,getState,getTimeFormat,getTimeInfo,getTimeNavigationTarget,getTonightEvents,"
-		"getTracking,getTrailDisplaySettings,getVMagnitude,getVideoRecordingState,getViewCenterCoordinates,getViewDirection,getViewportOffset,getNavigationSettings,getInformationSettings,getTimeSettings,getEphemerisSettings,"
+        "getStarCountFull,getStarFlags,getStarScale,getState,getSurveyState,getSpectralDatasets,listSpectralDatasets,getSpectralState,getTimeFormat,getTimeInfo,getTimeNavigationTarget,getTonightEvents,"
+		"getTracking,getTrailDisplaySettings,getVMagnitude,getVideoRecordingState,getViewCenterCoordinates,getViewDirection,getViewportOffset,getNavigationSettings,getKeyboardShortcuts,getInformationSettings,getTimeSettings,getEphemerisSettings,"
 		"getViewportSize,getUiLayout,getWutTargets,gotoBookmark,gotoNebulaTexture,gotoRADec,gyroDiagnostic,importCollaborationSession,importConfig,importNebulaTexture,importScript,listMatchingObjects,listNebulaTextures,listObjects,"
 		"listRecordings,loadPlugin,loadRecording,moveToAltAz,moveToSelected,moveToSelectedAt,panBy,pauseScript,playScript,"
 		"pointAtSky,pointAtSkyStop,refreshNebulaTextures,reloadSkyCulture,removeNebulaTexture,resetAngleMeasure,retryDeepSkyImages,resumeScript,saveRecording,saveScreenShot,searchObject,"
-		"selectAt,selftestActions,setAbsoluteStarScale,setActionChecked,setActionStates,setApplicationForeground,"
+		"selectAt,setPointerPosition,selftestActions,setAbsoluteStarScale,setActionChecked,setActionStates,setApplicationForeground,"
 		"setARMode,setARRevealProgress,setAtmosphereFlag,setAtmosphereParams,setAutoMoveDuration,setAutoZoom,setAutoZoomResets,setBortleScale,setCCD,"
 		"setConfigString,setConstellationFlag,setCrosshairs,setDate,setDateFormat,setDitheringMode,setDsoLabels,setFOV,"
 		"setFieldOfView,setFlagClearSky,setFlagGravityLabels,setFlatHorizon,setFovMarkerSetting,setGridFlag,setGyroView,"
@@ -49,10 +49,10 @@ inline QStringList names()
 		"selectOcularInstrument,setOcularMode,setOcularSetting,rotateOcularReticle,resetOcularInstrument,setMosaicCamera,setEquationOfTime,setArchaeoLineSetting,setNavStarsSetting,setOrbitDisplaySetting,setPluginLoadAtStartup,setPointerCoordinates,setProjectionType,setSatellitesFlag,setScenery3dEnabled,setScenery3dScene,setScriptRate,setSkyCulture,"
 		"setSkyCultureCommonNames,setSkyCultureDefault,setSkyCultureLabelStyle,setSkyCultureScreenLabelStyle,"
 		"setSkyCultureShortLabels,setSkyCultureVisualColor,setSkyCultureVisualSetting,setSkyDisplaySetting,setSolarSystemFlag,setObjectDetailConnector,"
-		"setStarFlag,setStarLabelsAmount,setStarScale,setTelrad,setTimeFormat,setTimeRate,setTimeToJD,setJulianDate,setTracking,"
-		"setTrailDisplaySetting,setVerticalClamp,setViewLock,setViewportOffset,setNavigationSetting,setInformationSetting,setTimeSetting,setEphemerisSetting,setTelescopeLivePosition,setLocationMapProvider,setUiLayoutMode,saveCurrentView,saveAllSettings,restoreDefaultSettings,startPanInertia,startVideoRecording,openPluginFeature,"
+        "setStarFlag,setStarLabelsAmount,setStarScale,setSpectralView,setTelrad,setTimeFormat,setTimeRate,setTimeToJD,setJulianDate,setTracking,"
+		"setTrailDisplaySetting,setVerticalClamp,setViewLock,setViewportOffset,setNavigationSetting,setInformationSetting,setTimeSetting,setEphemerisSetting,setKeyboardShortcut,resetKeyboardShortcuts,setTelescopeLivePosition,setLocationMapProvider,setUiLayoutMode,saveCurrentView,saveAllSettings,restoreDefaultSettings,startPanInertia,startVideoRecording,openPluginFeature,"
 		"stopPanInertia,stopScript,continueScript,sendKey,stopVideoRecording,createCollaborationSession,exportCollaborationSession,previewCollaborationSession,importLandscape,getTelescopeControl,getTelescopeProfiles,saveTelescopeProfile,deleteTelescopeProfile,selectTelescopeProfile,testTelescopeConnection,getTelescopePosition,centerScreenOnTelescope,telescopeLx200Abort,telescopeLx200GotoSelected,telescopeLx200SyncSelected,"
-			"triggerAction,unloadPlugin,validateNebulaTexture,zoomBy,zoomStep,getCommandCatalog,getCommandSchema,getCommandStatus,"
+            "triggerAction,unloadPlugin,validateNebulaTexture,closeSpectralView,zoomBy,zoomStep,getCommandCatalog,getCommandSchema,getCommandStatus,"
 			"saveSkyCultureMakerDraft,resetSkyCultureMakerDraft,addSkyCultureMakerConstellation,updateSkyCultureMakerConstellation,removeSkyCultureMakerConstellation,"
 			"addSkyCultureMakerLine,addSkyCultureMakerSelectedStar,importSkyCultureMakerArtwork,setSkyCultureMakerArtworkAnchor,removeSkyCultureMakerArtwork,"
 			"undoSkyCultureMakerEdit,validateSkyCultureMakerDraft,exportSkyCultureMaker,importSkyCultureMaker").split(',');
@@ -97,6 +97,11 @@ inline QJsonObject item(const QString& name)
 		value["offline"] = true;
 	}
 	value["payload"] = QJsonObject{{"type", "string"}, {"required", false}, {"encoding", "legacy-or-json"}};
+	if (name == "getFormSnapshot" || name == "refreshFormSnapshot")
+	{
+		value["transport"] = QStringLiteral("ArkUI");
+		value["description"] = QStringLiteral("查询本地天象卡片快照，或在前台重算并刷新已添加的卡片；不联网、不读取设备标识，数据按当前星图观测日期和地点计算。");
+	}
 	if (name == "copyTextToClipboard")
 	{
 		value["transport"] = QStringLiteral("ArkUI");
@@ -134,6 +139,11 @@ inline QJsonObject item(const QString& name)
 		value["examplePayload"] = "Satellites|1";
 	}
 	else if (name == "selectAt") value["examplePayload"] = "720|480|1440|960";
+	else if (name == "setPointerPosition")
+	{
+		value["description"] = QStringLiteral("更新星图上的触摸/鼠标指针位置，供指针坐标插件实时投影；仅保存在本地，不读取设备标识");
+		value["examplePayload"] = "720|480";
+	}
 	else if (name == "setActionChecked") value["examplePayload"] = "actionShow_Stars|1";
 	else if (name == "getConstellationArtStatus")
 	{
@@ -212,6 +222,19 @@ inline QJsonObject item(const QString& name)
 		value["description"] = QStringLiteral("重新尝试解码当前视野中失败的离线深空资料图，不重载整套图库");
 	else if (name == "getNebulaTextureStatus")
 		value["description"] = QStringLiteral("诊断星云纹理插件的离线配置、图片文件、解码、四角映射和运行时图层状态");
+	else if (name == "getSurveyState")
+		value["description"] = QStringLiteral("读取 HiPS 与 TOAST 巡天图层的开关、目录加载状态和当前选中数量；不主动下载巡天瓦片");
+	else if (name == "getSpectralDatasets" || name == "listSpectralDatasets")
+		value["description"] = QStringLiteral("列出首批真实多波段巡天数据集及覆盖、来源和当前加载状态；不自动请求数据");
+	else if (name == "getSpectralState")
+		value["description"] = QStringLiteral("读取当前多波段图层、加载状态和错误；与普通 HiPS 巡天状态分开");
+	else if (name == "setSpectralView")
+	{
+		value["description"] = QStringLiteral("用户主动打开或关闭一个真实多波段 HiPS 图层；首次打开才请求对应 properties 和可见瓦片");
+		value["examplePayload"] = "{\"id\":\"rass-xray\",\"enabled\":true}";
+	}
+	else if (name == "closeSpectralView")
+		value["description"] = QStringLiteral("关闭多波段图层并取消其可见瓦片绘制，不删除缓存");
 	else if (name == "listNebulaTextures")
 		value["description"] = QStringLiteral("列出用户导入的星云纹理及图片、解码、映射状态；不包含内置深空图库");
 	else if (name == "importNebulaTexture")

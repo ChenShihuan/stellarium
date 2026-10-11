@@ -101,10 +101,14 @@ HipsSurvey::HipsSurvey(const QString& url_, const QString& group, const QString&
 	// Immediately download the properties and replace the hipslist data with them.
 	QNetworkRequest req = QNetworkRequest(getUrlFor("properties"));
 	req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferCache);
+	req.setTransferTimeout(12000);
 	req.setRawHeader("User-Agent", StelUtils::getUserAgentString().toLatin1());
 	QNetworkReply* networkReply = StelApp::getInstance().getNetworkAccessManager()->get(req);
 	connect(networkReply, &QNetworkReply::finished, this, [&, networkReply] {
 		QByteArray data = networkReply->readAll();
+		lastError.clear();
+		if (networkReply->error() != QNetworkReply::NoError)
+			lastError = networkReply->errorString();
 		for (const QByteArray &line : data.split('\n'))
 		{
 			if (line.startsWith("#")) continue;
@@ -130,6 +134,9 @@ HipsSurvey::HipsSurvey(const QString& url_, const QString& group, const QString&
 		emit propertiesChanged();
 		emit statusChanged();
 		networkReply->deleteLater();
+		this->networkReply = Q_NULLPTR;
+		if (!lastError.isEmpty())
+			qWarning() << "Failed to load HiPS properties for" << url << ":" << lastError;
 	});
 }
 
@@ -329,6 +336,7 @@ bool HipsSurvey::getAllsky()
 		qDebug() << "Load allsky" << path;
 		QNetworkRequest req = QNetworkRequest(path);
 		req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferCache);
+		req.setTransferTimeout(15000);
 		req.setRawHeader("User-Agent", StelUtils::getUserAgentString().toLatin1());
 		networkReply = StelApp::getInstance().getNetworkAccessManager()->get(req);
 		emit statusChanged();
@@ -342,6 +350,7 @@ bool HipsSurvey::getAllsky()
 	{
 		updateProgressBar(100, 100);
 		if (networkReply->error() == QNetworkReply::NoError) {
+			lastError.clear();
 			QByteArray data = networkReply->readAll();
 			qDebug().nospace() << "Got allsky for " << getTitle() << ", " << data.size() << " bytes";
 			allsky = QImage::fromData(data);
@@ -351,6 +360,7 @@ bool HipsSurvey::getAllsky()
 				noAllsky = true;
 			}
 		} else {
+			lastError = networkReply->errorString();
 			noAllsky = true;
 		}
 		networkReply->deleteLater();

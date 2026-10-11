@@ -16,16 +16,31 @@ for (const token of [
   "callNativeFire('zoomBy'",
   "'|1|'",
   "callNativeFire('endPinch'",
-  'event.scrollStep !== undefined',
+  'typeof event.scrollStep',
+  'axisPanActive',
+  'finishAxisPan',
+  "callNativeFire('startPanInertia'",
   "callNativeFire('zoomStep'",
-  "callNativeFire('panBy'"
+  "callNativeFire('panBy'",
+  'getModifierKeyState',
+  "callInteractive('sendKey'",
+  'keyboardToken'
 ]) {
   assert.ok(source.includes(token), `${token} missing from touchpad input path`);
 }
 
-for (const token of ['zoomBy', 'endPinch', 'zoomStep']) {
+for (const token of ['zoomBy', 'endPinch', 'zoomStep', 'startPanInertia']) {
   assert.match(native, new RegExp(`commandName == "${token}"`), `${token} missing from native bridge`);
   assert.match(catalog, new RegExp(`\\b${token}\\b`), `${token} missing from command catalog`);
+}
+
+for (const token of ['getKeyboardShortcuts', 'setKeyboardShortcut', 'resetKeyboardShortcuts']) {
+  assert.match(native, new RegExp(`commandName == "${token}"`), `${token} missing from native bridge`);
+  assert.match(catalog, new RegExp(`\\b${token}\\b`), `${token} missing from command catalog`);
+}
+
+for (const token of ['getDefaultShortcut', 'getDefaultAltShortcut']) {
+  assert.match(read('src/core/StelActionMgr.hpp'), new RegExp(token), `${token} missing from action manager`);
 }
 
 for (const token of [
@@ -37,7 +52,17 @@ for (const token of [
   assert.match(i18n, new RegExp(`['"]${token}['"]`), `${token} missing from localized guide`);
 }
 
-for (const token of ['双指滑动', '双指捏合', 'zoomBy', 'endPinch', '不能伪造']) {
+for (const token of [
+  'settings_shortcuts_title',
+  'settings_shortcuts_search',
+  'settings_shortcuts_primary',
+  'settings_shortcuts_alternate',
+  'settings_shortcuts_save'
+]) {
+  assert.match(i18n, new RegExp(`['"]${token}['"]`), `${token} missing from shortcut editor`);
+}
+
+for (const token of ['双指滑动', '双指捏合', '惯性', '快捷键编辑器', 'zoomBy', 'endPinch', '不能伪造']) {
   assert.match(guide, new RegExp(token), `${token} missing from touchpad guide`);
 }
 

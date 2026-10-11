@@ -24,6 +24,8 @@
 #include "StelHips.hpp"
 #include <QLoggingCategory>
 #include <QJsonArray>
+#include <QJsonObject>
+#include <QMap>
 
 
 //! @class HipsMgr
@@ -71,6 +73,13 @@ public:
 	Q_INVOKABLE
 	HipsSurveyP getSurveyByUrl(const QString &url);
 
+	int getSurveyCount() const { return surveys.size(); }
+	int getVisibleSurveyCount() const;
+	QJsonArray getSpectralDatasets() const;
+	QJsonObject getSpectralState() const;
+	bool setSpectralView(const QString& datasetId, bool enabled, QString* error = nullptr);
+	void closeSpectralView();
+
 	State getState() const {return state;}
 	bool isLoaded() const {return state == Loaded;}
 
@@ -108,6 +117,7 @@ private:
 	State state = Created;
 	//! Used internally to keep track of the loading state.
 	int nbSourcesLoaded = 0;
+	QMap<QString, HipsSurveyP> spectralSurveys;
 };
 
 #endif // HIPSMGR_HPP

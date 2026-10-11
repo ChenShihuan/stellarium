@@ -32,6 +32,40 @@
 
 Q_LOGGING_CATEGORY(HiPS,"stel.HiPS", QtInfoMsg)
 
+namespace
+{
+struct SpectralDataset
+{
+	const char* id;
+	const char* title;
+	const char* band;
+	const char* surveyUrl;
+	const char* source;
+	const char* coverage;
+	const char* license;
+	const char* attribution;
+};
+
+const QList<SpectralDataset>& spectralDatasetCatalog()
+{
+	static const QList<SpectralDataset> catalog = {
+		{"rass-xray", "RASS X-ray", "X-ray", "https://alasky.cds.unistra.fr/RASS/", "ROSAT All-Sky Survey", "全天球，曝光和能段因区域而异", "上游条款待逐产品核验", "MPE / CDS"},
+		{"galex-nuv", "GALEX NUV", "Ultraviolet", "https://alasky.cds.unistra.fr/GALEX/GALEXGR6_7_NUV/", "GALEX GR6/7", "约 78.8% 天区覆盖，存在观测空洞", "上游条款待逐产品核验", "STScI / NASA"},
+		{"2mass-color", "2MASS Color", "Near infrared", "https://alasky.cds.unistra.fr/2MASS/Color/", "2MASS J/H/K", "近红外 J/H/K 合成，接近全天覆盖", "上游条款待逐产品核验", "UMass / IPAC / Caltech"}
+	};
+	return catalog;
+}
+
+bool isSpectralSurveyUrl(const QString& url)
+{
+	for (const SpectralDataset& descriptor : spectralDatasetCatalog())
+	{
+		if (url == QString::fromLatin1(descriptor.surveyUrl)) return true;
+	}
+	return false;
+}
+}
+
 HipsMgr::HipsMgr()
 {
 	setObjectName("HipsMgr");
@@ -57,7 +91,7 @@ HipsMgr::~HipsMgr()
 		QStringList surveyUrls;
 		for (auto &survey: surveys)
 		{
-			if (survey->isVisible() && survey->planet.isEmpty())
+			if (survey->isVisible() && survey->planet.isEmpty() && !isSpectralSurveyUrl(survey->getUrl()))
 				surveyUrls << survey->getUrl();
 		}
 
@@ -83,7 +117,7 @@ HipsMgr::~HipsMgr()
 		conf->beginWriteArray("surveySettings");
 		for (auto &survey: surveys)
 		{
-			if (survey->isPlanetarySurvey() || survey->hasDefaultDisplaySettings())
+			if (survey->isPlanetarySurvey() || survey->hasDefaultDisplaySettings() || isSpectralSurveyUrl(survey->getUrl()))
 				continue;
 			conf->setArrayIndex(settingsIndex++);
 			conf->setValue("url", survey->getUrl());
@@ -218,6 +252,7 @@ void HipsMgr::restoreVisibleSurveys()
 	{
 		conf->setArrayIndex(i);
 		const QString url = conf->value("url").toString();
+		if (isSpectralSurveyUrl(url)) continue;
 		HipsSurveyP survey = getSurveyByUrl(url);
 		if (survey && !survey->isPlanetarySurvey())
 		{
@@ -244,7 +279,7 @@ void HipsMgr::saveSurveySettings() const
 	conf->beginWriteArray("surveySettings");
 	for (auto &survey: surveys)
 	{
-		if (survey->isPlanetarySurvey() || survey->hasDefaultDisplaySettings())
+		if (survey->isPlanetarySurvey() || survey->hasDefaultDisplaySettings() || isSpectralSurveyUrl(survey->getUrl()))
 			continue;
 		conf->setArrayIndex(settingsIndex++);
 		conf->setValue("url", survey->getUrl());
@@ -304,6 +339,123 @@ HipsSurveyP HipsMgr::getSurveyByUrl(const QString &url)
 		if (survey->getUrl() == url) return survey;
 	}
 	return HipsSurveyP(Q_NULLPTR);
+}
+
+int HipsMgr::getVisibleSurveyCount() const
+{
+	int count = 0;
+	for (const auto& survey : surveys)
+		if (survey->isVisible() && !survey->isPlanetarySurvey())
+			++count;
+	return count;
+}
+
+QJsonArray HipsMgr::getSpectralDatasets() const
+{
+	QJsonArray datasets;
+	for (const SpectralDataset& descriptor : spectralDatasetCatalog())
+	{
+		QJsonObject item;
+		const QString id = QString::fromLatin1(descriptor.id);
+		const HipsSurveyP survey = spectralSurveys.value(id);
+		item["id"] = id;
+		item["title"] = QString::fromLatin1(descriptor.title);
+		item["band"] = QString::fromLatin1(descriptor.band);
+		item["source"] = QString::fromLatin1(descriptor.source);
+		item["coverage"] = QString::fromLatin1(descriptor.coverage);
+		item["license"] = QString::fromLatin1(descriptor.license);
+		item["attribution"] = QString::fromLatin1(descriptor.attribution);
+		item["licenseReviewRequired"] = true;
+		item["networkPolicy"] = QStringLiteral("user-initiated");
+		item["timeoutSeconds"] = 12;
+		item["surveyUrl"] = QString::fromLatin1(descriptor.surveyUrl);
+		item["available"] = true;
+		item["enabled"] = survey && survey->isVisible();
+		item["loading"] = survey && survey->isLoading();
+		item["error"] = survey ? survey->getLastError() : QString();
+		item["ready"] = survey && !survey->isLoading() && survey->getLastError().isEmpty()
+			&& survey->property("properties").toJsonObject().contains("hips_order_max");
+		datasets.append(item);
+	}
+	return datasets;
+}
+
+QJsonObject HipsMgr::getSpectralState() const
+{
+	QJsonObject state;
+	state["enabled"] = false;
+	state["datasetId"] = QString();
+	state["loading"] = false;
+	state["ready"] = false;
+	state["error"] = QString();
+	for (const SpectralDataset& descriptor : spectralDatasetCatalog())
+	{
+		const QString id = QString::fromLatin1(descriptor.id);
+		const HipsSurveyP survey = spectralSurveys.value(id);
+		if (!survey || !survey->isVisible()) continue;
+		state["enabled"] = true;
+		state["datasetId"] = id;
+		state["loading"] = survey->isLoading();
+		state["ready"] = !survey->isLoading();
+		state["error"] = survey->getLastError();
+		state["ready"] = !survey->isLoading() && survey->getLastError().isEmpty()
+			&& survey->property("properties").toJsonObject().contains("hips_order_max");
+		break;
+	}
+	return state;
+}
+
+bool HipsMgr::setSpectralView(const QString& datasetId, const bool enabled, QString* error)
+{
+	const SpectralDataset* descriptor = nullptr;
+	for (const SpectralDataset& candidate : spectralDatasetCatalog())
+	{
+		if (datasetId == QString::fromLatin1(candidate.id))
+		{
+			descriptor = &candidate;
+			break;
+		}
+	}
+	if (!descriptor)
+	{
+		if (error) *error = QStringLiteral("unknown spectral dataset: %1").arg(datasetId);
+		return false;
+	}
+
+	if (!enabled)
+	{
+		if (spectralSurveys.contains(datasetId)) spectralSurveys.value(datasetId)->setVisible(false);
+		return true;
+	}
+
+	for (auto it = spectralSurveys.cbegin(); it != spectralSurveys.cend(); ++it)
+		if (it.key() != datasetId && it.value()) it.value()->setVisible(false);
+
+	HipsSurveyP survey = spectralSurveys.value(datasetId);
+	if (!survey)
+	{
+		QMap<QString, QString> initialProperties;
+		initialProperties.insert(QStringLiteral("obs_title"), QString::fromLatin1(descriptor->title));
+		initialProperties.insert(QStringLiteral("hips_frame"), QStringLiteral("equatorial"));
+		initialProperties.insert(QStringLiteral("hips_status"), QStringLiteral("public master clonableOnce"));
+		survey = HipsSurveyP(new HipsSurvey(QString::fromLatin1(descriptor->surveyUrl), QStringLiteral("spectral"), QStringLiteral("equatorial"), QStringLiteral("image"), initialProperties));
+		connect(survey.data(), &HipsSurvey::propertiesChanged, this, &HipsMgr::surveysChanged);
+		connect(survey.data(), &HipsSurvey::visibleChanged, this, &HipsMgr::updateActiveSurveys);
+		connect(survey.data(), &HipsSurvey::displaySettingsChanged, this, &HipsMgr::saveSurveySettings);
+		spectralSurveys.insert(datasetId, survey);
+		surveys.append(survey);
+		emit gotNewSurvey(survey);
+	}
+	setFlagShow(true);
+	survey->setVisible(true);
+	emit surveysChanged();
+	return true;
+}
+
+void HipsMgr::closeSpectralView()
+{
+	for (auto it = spectralSurveys.cbegin(); it != spectralSurveys.cend(); ++it)
+		if (it.value()) it.value()->setVisible(false);
 }
 
 bool HipsMgr::getFlagShow(void) const

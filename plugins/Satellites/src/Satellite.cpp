@@ -761,6 +761,12 @@ QVariantList Satellite::getPassPredictions(StelCore* core, double hours, int lim
 		pass.insert("start", localString(startJD));
 		pass.insert("peak", localString(peak.jd));
 		pass.insert("end", localString(endJD));
+		// Keep machine-readable event times alongside the localized labels. The
+		// HarmonyOS time-navigation bridge uses these values to jump to a
+		// satellite pass without reparsing a locale-dependent string.
+		pass.insert("startJD", startJD);
+		pass.insert("peakJD", peak.jd);
+		pass.insert("endJD", endJD);
 		pass.insert("startUtc", utcString(startJD));
 		pass.insert("peakUtc", utcString(peak.jd));
 		pass.insert("endUtc", utcString(endJD));
