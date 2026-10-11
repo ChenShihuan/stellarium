@@ -69,6 +69,88 @@
 namespace
 {
 
+QString normalizeSatelliteSearch(const QString& value)
+{
+	QString normalized = value.normalized(QString::NormalizationForm_KC).toCaseFolded();
+	normalized.remove(QRegularExpression(QStringLiteral("[\\p{P}\\p{S}\\s]+")));
+	return normalized;
+}
+
+bool satelliteMatchesSearch(const Satellite& satellite, const QString& query)
+{
+	const QString normalizedQuery = normalizeSatelliteSearch(query);
+	if (normalizedQuery.isEmpty())
+		return true;
+
+	const QStringList names = {
+		satellite.getID(), satellite.getEnglishName(), satellite.getNameI18n()
+	};
+	for (const QString& name : names)
+	{
+		const QString normalizedName = normalizeSatelliteSearch(name);
+		if (normalizedName == normalizedQuery || normalizedName.contains(normalizedQuery))
+			return true;
+	}
+
+	const QString englishName = satellite.getEnglishName().toUpper();
+	const QString normalizedEnglishName = normalizeSatelliteSearch(englishName);
+	if (englishName.startsWith(QStringLiteral("ISS")) || englishName.contains(QStringLiteral("ZARYA")) || englishName.contains(QStringLiteral("NAUKA")))
+	{
+		return normalizedQuery == QStringLiteral("iss")
+			|| normalizedQuery.contains(QStringLiteral("国际空间站"))
+			|| normalizedQuery.contains(QStringLiteral("internationalspacestation"))
+			|| normalizedQuery.contains(QStringLiteral("国际太空站"));
+	}
+	if (englishName.startsWith(QStringLiteral("CSS")) || englishName.contains(QStringLiteral("TIANGONG"))
+		|| englishName.contains(QStringLiteral("TIANHE")) || englishName.contains(QStringLiteral("WENTIAN"))
+		|| englishName.contains(QStringLiteral("MENGTIAN")))
+	{
+		return normalizedQuery.contains(QStringLiteral("天宫"))
+			|| normalizedQuery.contains(QStringLiteral("中国空间站"))
+			|| normalizedQuery.contains(QStringLiteral("css"))
+			|| normalizedQuery.contains(QStringLiteral("tiangong"))
+			|| normalizedQuery.contains(QStringLiteral("chinaspacestation"))
+			|| normalizedQuery.contains(QStringLiteral("tianhe"))
+			|| normalizedQuery.contains(QStringLiteral("wentian"))
+			|| normalizedQuery.contains(QStringLiteral("mengtian"))
+			|| normalizedQuery.contains(QStringLiteral("问天"))
+			|| normalizedQuery.contains(QStringLiteral("梦天"));
+	}
+	const QList<QPair<QString, QString>> localizedAliases = {
+		{QStringLiteral("STARLINK"), QStringLiteral("星链")},
+		{QStringLiteral("BEIDOU"), QStringLiteral("北斗")},
+		{QStringLiteral("TIANLIAN"), QStringLiteral("天链")},
+		{QStringLiteral("TIANTONG"), QStringLiteral("天通")},
+		{QStringLiteral("FENGYUN"), QStringLiteral("风云")},
+		{QStringLiteral("YAOGAN"), QStringLiteral("遥感")},
+		{QStringLiteral("GAOFEN"), QStringLiteral("高分")},
+		{QStringLiteral("SHIJIAN"), QStringLiteral("实践")},
+		{QStringLiteral("SHIYAN"), QStringLiteral("实验")},
+		{QStringLiteral("ZIYUAN"), QStringLiteral("资源")},
+		{QStringLiteral("JILIN"), QStringLiteral("吉林一号")},
+		{QStringLiteral("GLONASS"), QStringLiteral("格洛纳斯")},
+		{QStringLiteral("GALILEO"), QStringLiteral("伽利略")},
+		{QStringLiteral("IRIDIUM"), QStringLiteral("铱星")},
+		{QStringLiteral("GLOBALSTAR"), QStringLiteral("全球星")},
+		{QStringLiteral("INTELSAT"), QStringLiteral("国际通信卫星")},
+		{QStringLiteral("GONETS"), QStringLiteral("戈涅斯")},
+		{QStringLiteral("COSMOS"), QStringLiteral("宇宙号")},
+		{QStringLiteral("QZSS"), QStringLiteral("准天顶")}
+	};
+	for (const auto& alias : localizedAliases)
+	{
+		if (!englishName.contains(alias.first))
+			continue;
+		const QString normalizedAlias = normalizeSatelliteSearch(alias.second);
+		if (normalizedQuery == normalizedAlias)
+			return true;
+		if (normalizedQuery.startsWith(normalizedAlias)
+			&& normalizedEnglishName.contains(normalizedQuery.mid(normalizedAlias.size())))
+			return true;
+	}
+	return false;
+}
+
 QByteArray unzipData(const QByteArray& fd)
 {
 	QTemporaryFile zip;
@@ -567,11 +649,13 @@ void Satellites::init()
 	// Set up download manager and the update schedule.
 	downloadMgr = new QNetworkAccessManager(this);
 	connect(downloadMgr, &QNetworkAccessManager::finished, this, &Satellites::saveDownloadedUpdate);
+#ifndef Q_OS_OHOS
 	updateTimer = new QTimer(this);
 	updateTimer->setSingleShot(false);   // recurring check for update
 	updateTimer->setInterval(13000);     // check once every 13 seconds to see if it is time for an update
 	connect(updateTimer, &QTimer::timeout, this, &Satellites::checkForUpdate);
 	updateTimer->start();
+#endif
 #else
 	qInfo() << "[Satellites] HarmonyOS offline build: online TLE updates are disabled.";
 #endif
@@ -760,7 +844,7 @@ StelObjectP Satellites::searchByNameI18n(const QString& nameI18n) const
 	{
 		if (sat->initialized && sat->displayed)
 		{
-			if (sat->getNameI18n().toUpper() == objw)
+			if (satelliteMatchesSearch(*sat, nameI18n))
 				return qSharedPointerCast<StelObject>(sat);
 		}
 	}
@@ -795,7 +879,7 @@ StelObjectP Satellites::searchByName(const QString& englishName) const
 	{
 		if (sat->initialized && sat->displayed)
 		{
-			if (sat->getEnglishName().toUpper() == objw)
+			if (satelliteMatchesSearch(*sat, englishName))
 				return qSharedPointerCast<StelObject>(sat);
 		}
 	}
@@ -1234,7 +1318,7 @@ void Satellites::loadSettings()
 	setLastUpdate(QDateTime::fromString(conf->value("last_update", "2001-05-25T12:00:00").toString(), Qt::ISODate));
 	setFlagHintsVisible(conf->value("show_satellite_hints", true).toBool());
 	Satellite::showLabels = conf->value("show_satellite_labels", false).toBool();
-#ifdef STELLARIUM_OHOS_OFFLINE
+#if defined(STELLARIUM_OHOS_OFFLINE) || defined(Q_OS_OHOS)
 	updatesEnabled = false;
 #else
 	updatesEnabled = conf->value("updates_enabled", true).toBool();
@@ -1719,14 +1803,7 @@ QVariantMap Satellites::getCatalogSummary(const QString& group, const QString& q
 			continue;
 
 		QString localizedName;
-		bool matches = normalizedQuery.isEmpty()
-			|| satellite->id.contains(normalizedQuery, Qt::CaseInsensitive)
-			|| satellite->name.contains(normalizedQuery, Qt::CaseInsensitive);
-		if (!matches)
-		{
-			localizedName = satellite->getNameI18n();
-			matches = localizedName.contains(normalizedQuery, Qt::CaseInsensitive);
-		}
+		const bool matches = satelliteMatchesSearch(*satellite, normalizedQuery);
 		if (!matches)
 			continue;
 
@@ -2749,7 +2826,7 @@ void Satellites::setUpdateFrequencyHours(int hours)
 
 void Satellites::checkForUpdate(void)
 {
-#ifdef STELLARIUM_OHOS_OFFLINE
+#if defined(STELLARIUM_OHOS_OFFLINE) || defined(Q_OS_OHOS)
 	return;
 #else
 	if (updatesEnabled && (updateState != Updating)
@@ -4164,6 +4241,12 @@ void Satellites::translations()
 	N_("TIANHE");
 	// TRANSLATORS: Satellite name: China's space station name (with name of base module)
 	N_("TIANGONG (TIANHE)");
+	// TRANSLATORS: Satellite name: China Space Station Tianhe core module
+	N_("CSS (TIANHE)");
+	// TRANSLATORS: Satellite name: China Space Station Wentian laboratory module
+	N_("CSS (WENTIAN)");
+	// TRANSLATORS: Satellite name: China Space Station Mengtian laboratory module
+	N_("CSS (MENGTIAN)");
 
 	// Special terms for communications
 	// NOTE: Please remember to update Satellite::getCommLinkInfo() method after updating the list of terms

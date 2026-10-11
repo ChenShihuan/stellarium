@@ -1,0 +1,352 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-09-30",
+  "policy": {
+    "onlineBuildMeans": "permission-and-code-path-only",
+    "runtimeDefault": "bundled-or-user-initiated",
+    "localizationOrder": [
+      "bundle",
+      "domestic-static-mirror",
+      "controlled-query",
+      "local-device"
+    ],
+    "neverDefault": [
+      "user-image-upload",
+      "ip-location",
+      "public-device-control",
+      "unbounded-user-url"
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "satellites.tle.stations",
+      "sourceId": "satellites.tle.stations",
+      "name": "卫星 TLE：空间站分组",
+      "state": "bundled-local",
+      "localFallback": "plugins/Satellites/resources/satellites.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；运行时用户主动刷新或导入本地文件",
+      "outboundFields": [],
+      "nextAction": "部署带版本、哈希、历元和签名清单的 HTTPS 静态文件后，再接入显式更新器"
+    },
+    {
+      "id": "satellites.tle.visual",
+      "sourceId": "satellites.tle.visual",
+      "name": "卫星 TLE：可见目标分组",
+      "state": "bundled-local",
+      "localFallback": "plugins/Satellites/resources/satellites.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；运行时用户主动刷新或导入本地文件",
+      "outboundFields": [],
+      "nextAction": "与 stations 共用一个版本化目录清单，失败时保留旧快照"
+    },
+    {
+      "id": "satellites.tle.active",
+      "sourceId": "satellites.tle.active",
+      "name": "卫星 TLE：活跃卫星分组",
+      "state": "bundled-local",
+      "localFallback": "plugins/Satellites/resources/satellites.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；运行时用户主动刷新或导入本地文件",
+      "outboundFields": [],
+      "nextAction": "镜像只分发数据，不接收位置、设备标识或账号"
+    },
+    {
+      "id": "satellites.tle.satnogs",
+      "sourceId": "satellites.tle.satnogs",
+      "name": "卫星 TLE：SatNOGS 补充源",
+      "state": "bundled-local",
+      "localFallback": "plugins/Satellites/resources/satellites.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；运行时用户主动刷新或导入本地文件",
+      "outboundFields": [],
+      "nextAction": "核对上游再分发许可后再纳入镜像"
+    },
+    {
+      "id": "catalog.exoplanets",
+      "sourceId": "catalog.exoplanets",
+      "name": "系外行星目录",
+      "state": "bundled-local",
+      "localFallback": "plugins/Exoplanets/resources/exoplanets.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；应用读取本地 QRC",
+      "outboundFields": [],
+      "nextAction": "保留来源、版本、署名和校验值，先不做运行时下载"
+    },
+    {
+      "id": "catalog.meteor-showers",
+      "sourceId": "catalog.meteor-showers",
+      "name": "流星雨目录",
+      "state": "bundled-local",
+      "localFallback": "plugins/MeteorShowers/resources/MeteorShowers.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；应用本地计算流星雨",
+      "outboundFields": [],
+      "nextAction": "静态目录可镜像，但不把镜像下载变成后台任务"
+    },
+    {
+      "id": "catalog.novae",
+      "sourceId": "catalog.novae",
+      "name": "新星目录",
+      "state": "bundled-local",
+      "localFallback": "plugins/Novae/resources/novae.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；应用读取本地 QRC",
+      "outboundFields": [],
+      "nextAction": "核对数据许可后与其他静态目录共用清单"
+    },
+    {
+      "id": "catalog.supernovae",
+      "sourceId": "catalog.supernovae",
+      "name": "超新星目录",
+      "state": "bundled-local",
+      "localFallback": "plugins/Supernovae/resources/supernovae.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；应用读取本地 QRC",
+      "outboundFields": [],
+      "nextAction": "核对数据许可后与其他静态目录共用清单"
+    },
+    {
+      "id": "catalog.pulsars",
+      "sourceId": "catalog.pulsars",
+      "name": "脉冲星目录",
+      "state": "bundled-local",
+      "localFallback": "plugins/Pulsars/resources/pulsars.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；应用读取本地 QRC",
+      "outboundFields": [],
+      "nextAction": "核对数据许可后与其他静态目录共用清单"
+    },
+    {
+      "id": "catalog.quasars",
+      "sourceId": "catalog.quasars",
+      "name": "类星体目录",
+      "state": "bundled-local",
+      "localFallback": "plugins/Quasars/resources/quasars.json",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期更新；应用读取本地 QRC",
+      "outboundFields": [],
+      "nextAction": "核对数据许可后与其他静态目录共用清单"
+    },
+    {
+      "id": "survey.hips.directory",
+      "sourceId": "survey.hips.directory",
+      "name": "HiPS 巡天目录",
+      "state": "user-online-pending",
+      "localFallback": "none",
+      "mirrorEligible": "controlled-static-mirror",
+      "trigger": "用户主动打开在线巡天",
+      "outboundFields": ["sky-tile-identifier"],
+      "nextAction": "先做有许可的小范围离线包；完整镜像需同步目录、properties 和全部瓦片"
+    },
+    {
+      "id": "survey.dss.tiles",
+      "sourceId": "survey.dss.tiles",
+      "name": "DSS 巡天瓦片",
+      "state": "user-online-pending",
+      "localFallback": "none",
+      "mirrorEligible": "controlled-static-mirror",
+      "trigger": "用户主动打开巡天图层",
+      "outboundFields": ["sky-tile-identifier"],
+      "nextAction": "确认原始数据许可和存储成本后再建设境内瓦片服务"
+    },
+    {
+      "id": "survey.hips.tiles",
+      "sourceId": "survey.hips.tiles",
+      "name": "HiPS 巡天瓦片",
+      "state": "user-online-pending",
+      "localFallback": "none",
+      "mirrorEligible": "controlled-static-mirror",
+      "trigger": "用户主动打开巡天图层并浏览视场",
+      "outboundFields": ["sky-tile-identifier"],
+      "nextAction": "采用受控瓦片缓存，禁止 properties 或瓦片继续逃逸到境外"
+    },
+    {
+      "id": "query.simbad",
+      "sourceId": "query.simbad",
+      "name": "SIMBAD 天体查询",
+      "state": "user-online-pending",
+      "localFallback": "none",
+      "mirrorEligible": "controlled-query",
+      "trigger": "用户主动提交天体名称查询",
+      "outboundFields": ["user-query"],
+      "nextAction": "先做查询词脱敏、限流、缓存和失败降级，不做任意 URL 代理"
+    },
+    {
+      "id": "query.online.exoplanets",
+      "sourceId": "query.online.exoplanets",
+      "name": "系外行星在线查询",
+      "state": "user-online-pending",
+      "localFallback": "catalog.exoplanets",
+      "mirrorEligible": "controlled-query",
+      "trigger": "用户主动查询，优先读取内置目录",
+      "outboundFields": ["object-query"],
+      "nextAction": "本地目录优先；远程查询单独提示来源、限流和缓存"
+    },
+    {
+      "id": "query.online.aavso",
+      "sourceId": "query.online.aavso",
+      "name": "AAVSO 变星查询",
+      "state": "user-online-pending",
+      "localFallback": "none",
+      "mirrorEligible": "controlled-query",
+      "trigger": "用户主动查询变星资料",
+      "outboundFields": ["object-query"],
+      "nextAction": "确认 API 使用条款后再评估境内缓存"
+    },
+    {
+      "id": "query.online.gcvs",
+      "sourceId": "query.online.gcvs",
+      "name": "GCVS 变星目录查询",
+      "state": "user-online-pending",
+      "localFallback": "none",
+      "mirrorEligible": "controlled-query",
+      "trigger": "用户主动查询变星资料",
+      "outboundFields": ["object-query"],
+      "nextAction": "先核对服务可用性、数据许可和国内替代"
+    },
+    {
+      "id": "query.online.wikipedia",
+      "sourceId": "query.online.wikipedia",
+      "name": "百科外部网页",
+      "state": "user-online-pending",
+      "localFallback": "built-in-object-summary",
+      "mirrorEligible": "not-recommended",
+      "trigger": "用户主动打开外部网页",
+      "outboundFields": ["object-query"],
+      "nextAction": "不做内容镜像；应用内保留结构化简介和来源链接"
+    },
+    {
+      "id": "query.plate-solver.astrometry",
+      "sourceId": "query.plate-solver.astrometry",
+      "name": "照片上传解算",
+      "state": "user-online-pending",
+      "localFallback": "local-image-import",
+      "mirrorEligible": "not-recommended",
+      "trigger": "用户明确选择在线解算并确认上传",
+      "outboundFields": ["user-image"],
+      "nextAction": "独立同意、移除 EXIF、限制大小和保留期；不随总联网开关开启"
+    },
+    {
+      "id": "core.ip-location",
+      "sourceId": "core.ip-location",
+      "name": "IP 自动定位",
+      "state": "not-localizable",
+      "localFallback": "system-location-or-manual-location",
+      "mirrorEligible": "not-recommended",
+      "trigger": "不在鸿蒙端启用",
+      "outboundFields": ["public-ip"],
+      "nextAction": "永久关闭；使用系统定位（用户授权）或手动选择地点"
+    },
+    {
+      "id": "catalog.mpc",
+      "sourceId": "catalog.mpc",
+      "name": "MPC 小行星和彗星资料",
+      "state": "build-mirror",
+      "localFallback": "user-local-file-import",
+      "mirrorEligible": "domestic-static-mirror",
+      "trigger": "构建期目录更新或用户导入本地轨道文件",
+      "outboundFields": ["object-query"],
+      "nextAction": "动态星历仍需用户主动查询；静态轨道文件先做许可核对和构建期镜像"
+    },
+    {
+      "id": "realtime.planes",
+      "sourceId": "realtime.planes",
+      "name": "实时飞机 ADS-B",
+      "state": "user-online-pending",
+      "localFallback": "disabled",
+      "mirrorEligible": "not-recommended",
+      "trigger": "用户主动打开飞机图层并授权位置使用",
+      "outboundFields": ["latitude", "longitude", "radius"],
+      "nextAction": "确认数据许可、费用和境内实时服务后再接入；不以静态镜像替代实时航迹"
+    },
+    {
+      "id": "platform.map-kit",
+      "sourceId": null,
+      "name": "华为 Map Kit 位置选点",
+      "state": "platform-pending",
+      "localFallback": "offline-world-map",
+      "mirrorEligible": "not-applicable",
+      "trigger": "用户主动选择华为地图",
+      "outboundFields": ["map-viewport", "user-selected-coordinate"],
+      "nextAction": "完成 AGC Map Kit、Profile 和 Pad 断网/超时验收；文化研究地图继续本地化"
+    },
+    {
+      "id": "platform.local-location",
+      "sourceId": null,
+      "name": "系统定位",
+      "state": "local-device",
+      "localFallback": "manual-location",
+      "mirrorEligible": "not-applicable",
+      "trigger": "用户授予定位权限并主动使用定位",
+      "outboundFields": [],
+      "nextAction": "只在本地计算观测位置，不替换为 IP 定位"
+    },
+    {
+      "id": "platform.local-notification",
+      "sourceId": null,
+      "name": "本地通知和代理提醒",
+      "state": "local-device",
+      "localFallback": "in-app-reminder-list",
+      "mirrorEligible": "not-applicable",
+      "trigger": "用户主动创建提醒并授权通知",
+      "outboundFields": [],
+      "nextAction": "继续使用本地通知；不因联网模式切换成远程 Push"
+    },
+    {
+      "id": "platform.push",
+      "sourceId": null,
+      "name": "华为 Push 远程提醒",
+      "state": "platform-pending",
+      "localFallback": "platform.local-notification",
+      "mirrorEligible": "not-applicable",
+      "trigger": "未来用户明确开启远程提醒",
+      "outboundFields": ["push-token", "reminder-payload"],
+      "nextAction": "先完成 AGC 能力、Profile、服务端令牌生命周期和隐私告知"
+    },
+    {
+      "id": "platform.iap",
+      "sourceId": null,
+      "name": "华为应用内购",
+      "state": "platform-pending",
+      "localFallback": "offline-entitlements",
+      "mirrorEligible": "not-applicable",
+      "trigger": "用户主动打开购买页",
+      "outboundFields": ["order-id", "product-id", "entitlement-state"],
+      "nextAction": "完成商户认证、数字商品协议、服务端订单校验和恢复购买验收"
+    },
+    {
+      "id": "platform.app-linking",
+      "sourceId": null,
+      "name": "App Linking",
+      "state": "platform-pending",
+      "localFallback": "website-download-page",
+      "mirrorEligible": "not-applicable",
+      "trigger": "用户点击官网中的应用入口",
+      "outboundFields": [],
+      "nextAction": "仅做已备案官网到应用市场的显式跳转，不把它当数据同步服务"
+    },
+    {
+      "id": "local.telescope-control",
+      "sourceId": null,
+      "name": "LX200/OnStep/望远镜控制",
+      "state": "local-device",
+      "localFallback": "offline-simulator",
+      "mirrorEligible": "not-applicable",
+      "trigger": "用户主动连接本机、串口或局域网设备",
+      "outboundFields": ["telescope-command", "device-address"],
+      "nextAction": "只允许本机/私网/星闪链路；不通过公网镜像或服务器中转"
+    },
+    {
+      "id": "local.remote-control",
+      "sourceId": null,
+      "name": "RemoteControl/RemoteSync",
+      "state": "local-device",
+      "localFallback": "disabled",
+      "mirrorEligible": "not-applicable",
+      "trigger": "用户主动启动本机或局域网控制",
+      "outboundFields": ["session-state", "view-state"],
+      "nextAction": "默认回环地址、认证、超时和防火墙限制；禁止直接暴露公网"
+    }
+  ]
+}

@@ -21439,6 +21439,21 @@ msgstr "天和核心艙"
 msgid "TIANGONG (TIANHE)"
 msgstr "天宮號 (天和核心艙)"
 
+#. TRANSLATORS: Satellite name: China Space Station Tianhe core module
+#: plugins/Satellites/src/Satellites.cpp:4170
+msgid "CSS (TIANHE)"
+msgstr "中國空間站（天和核心艙）"
+
+#. TRANSLATORS: Satellite name: China Space Station Wentian laboratory module
+#: plugins/Satellites/src/Satellites.cpp:4172
+msgid "CSS (WENTIAN)"
+msgstr "中國空間站（問天實驗艙）"
+
+#. TRANSLATORS: Satellite name: China Space Station Mengtian laboratory module
+#: plugins/Satellites/src/Satellites.cpp:4174
+msgid "CSS (MENGTIAN)"
+msgstr "中國空間站（夢天實驗艙）"
+
 #. TRANSLATORS: An uplink (UL or U/L) is the link from a ground station to a
 #. satellite
 #: plugins/Satellites/src/Satellites.cpp:4013

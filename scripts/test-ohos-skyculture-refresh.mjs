@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const source = readFileSync(new URL('../harmonyos/ets-source/qability/StellariumResourceBootstrap.ets', import.meta.url), 'utf8');
-const match = source.match(/function refreshSkyCultureEditorialResources\([^)]*\): void \{([\s\S]*?)\n\}/);
+const match = source.match(/async function refreshSkyCultureEditorialResources\([^)]*\): Promise<void> \{([\s\S]*?)\n\}/);
 assert.ok(match);
 const body = match[1].replace(': Array<string>', '').replace(/\(path: string\)/g, '(path)');
-const factory = new Function('exists', 'fileSize', 'writeRawFile', 'writeMarker', 'hilog', 'RAW_ROOT',
-  'SKYCULTURE_EDITORIAL_MARKER', 'LOG_DOMAIN', 'LOG_TAG', `return function(appContext, installRoot) {${body}}`);
+const factory = new Function('exists', 'fileSize', 'writeRawFileAsync', 'writeMarker', 'hilog', 'RAW_ROOT',
+  'SKYCULTURE_EDITORIAL_MARKER', 'LOG_DOMAIN', 'LOG_TAG',
+  `return async function(appContext, installRoot) {${body}}`);
 
 function harness({ marker = false, fail = '', missing = '' } = {}) {
   const writes = [];
@@ -24,16 +25,16 @@ function harness({ marker = false, fail = '', missing = '' } = {}) {
       if (path.endsWith(fail) && fail) throw new Error('write failed');
       writes.push({ raw, path });
     }, path => markers.push(path), { info() {} }, 'raw', 'marker-v3', 0, 'test');
-  const context = { resourceManager: { getRawFileListSync: directory => {
+  const context = { resourceManager: { getRawFileList: async directory => {
     assert.ok(directories[directory], `Unexpected raw directory: ${directory}`);
     return directories[directory];
   } } };
   return { run: () => refresh(context, '/sandbox'), writes, markers };
 }
 
-test('refresh includes all bundled culture descriptions, not only three hardcoded cultures', () => {
+test('refresh includes all bundled culture descriptions, not only three hardcoded cultures', async () => {
   const fixture = harness();
-  fixture.run();
+  await fixture.run();
   assert.deepEqual(fixture.writes.map(write => write.path), [
     '/sandbox/data/skyculture_editorial_context.json', '/sandbox/skycultures/chinese/description.md',
     '/sandbox/skycultures/tukano/description.md', '/sandbox/translations/stellarium-skycultures-descriptions/zh_CN.qm',
@@ -42,22 +43,22 @@ test('refresh includes all bundled culture descriptions, not only three hardcode
   assert.deepEqual(fixture.markers, ['/sandbox/marker-v3']);
 });
 
-test('completed marker avoids rewriting intact resources', () => {
+test('completed marker avoids rewriting intact resources', async () => {
   const fixture = harness({ marker: true });
-  fixture.run();
+  await fixture.run();
   assert.equal(fixture.writes.length, 0);
   assert.equal(fixture.markers.length, 0);
 });
 
-test('missing culture resource invalidates an existing marker', () => {
+test('missing culture resource invalidates an existing marker', async () => {
   const fixture = harness({ marker: true, missing: 'tukano/description.md' });
-  fixture.run();
+  await fixture.run();
   assert.equal(fixture.writes.length, 5);
 });
 
-test('failed refresh cannot write the completion marker', () => {
+test('failed refresh cannot write the completion marker', async () => {
   const fixture = harness({ fail: 'tukano/description.md' });
-  assert.throws(fixture.run, /write failed/);
+  await assert.rejects(fixture.run, /write failed/);
   assert.equal(fixture.markers.length, 0);
 });
 

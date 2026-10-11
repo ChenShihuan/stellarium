@@ -142,6 +142,22 @@ else
   echo "WARNING: missing cross-compiled libstellarium.so at $NATIVE_SOURCE; generated HAP may contain an older native library" >&2
 fi
 
+# The generated project owns the HAP rawfile tree, so a normal source mirror
+# can otherwise package an older catalog-manifest than the source tree. Refresh
+# the full resource mirror only when its manifest changed (or when the caller
+# explicitly requests it). This keeps ordinary ArkTS-only syncs fast while
+# making catalog updates reproducible.
+RAWFILE_ROOT="$REPO_ROOT/build/libstellarium-harmonyos/entry/src/main/resources/rawfile/stellarium"
+if [ "${OHOS_SYNC_RESOURCES:-auto}" != "0" ]; then
+  if [ "${OHOS_SYNC_RESOURCES:-auto}" = "1" ] || \
+    ! cmp -s "$REPO_ROOT/data/ohos/catalog-manifest.json" "$RAWFILE_ROOT/data/ohos/catalog-manifest.json"; then
+    echo "Resource manifest changed; synchronizing HAP rawfile resources"
+    "$SCRIPT_DIR/sync-ohos-resources.sh"
+  else
+    echo "HAP rawfile resources already match data/ohos/catalog-manifest.json"
+  fi
+fi
+
 OHOS_ADDITIONAL_PKGS="${OHOS_ADDITIONAL_PKGS:-$HOME/.local/opt/ohos/additional-packages}"
 JPEG_SOURCE="$OHOS_ADDITIONAL_PKGS/lib/libjpeg.so"
 JPEG_TARGET="$GEN_ROOT/entry/libs/arm64-v8a/libjpeg.so"

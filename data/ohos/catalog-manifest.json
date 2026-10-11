@@ -61,9 +61,9 @@
           "format": "tle-3le",
           "sourceMode": "upstream",
           "resolvedEndpoint": "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=3LE",
-          "bytes": 3528,
-          "entries": 21,
-          "sha256": "561eb4cfb9e8a92662de0cab23141c20ae8492845d2f3ef1e6bad59444f2289d",
+          "bytes": 3360,
+          "entries": 20,
+          "sha256": "f6d4d48eaaf07f9877545c08e35998ace597d68d573bb5507769b7f2e1f33947",
           "ok": true
         },
         {
@@ -72,9 +72,20 @@
           "format": "tle-3le",
           "sourceMode": "upstream",
           "resolvedEndpoint": "https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=3LE",
-          "bytes": 26376,
-          "entries": 157,
-          "sha256": "3457ddc85ac61175ce4cd78b6f0206dc9a06148a2c0184bb49af21f17cfd83a8",
+          "bytes": 26208,
+          "entries": 156,
+          "sha256": "2e4d7c0379b10f430b5af1ff8953c2feb8b1f1b27b186477b92526d5f45592a3",
+          "ok": true
+        },
+        {
+          "sourceId": "satellites.tle.active",
+          "role": "primary",
+          "format": "tle-3le",
+          "sourceMode": "upstream",
+          "resolvedEndpoint": "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=3LE",
+          "bytes": 2682624,
+          "entries": 15968,
+          "sha256": "6f7bc851382d5272cbfaacd42ae8c37f813d76e9bbb9a7a1eb5acaa33ecdab9e",
           "ok": true
         },
         {
@@ -83,33 +94,25 @@
           "format": "satnogs-json",
           "sourceMode": "upstream",
           "resolvedEndpoint": "https://db.satnogs.org/api/tle/?format=json",
-          "bytes": 524191,
-          "entries": 1671,
-          "sha256": "a97bb7850621b37a02bc59159c15f755bd420c6213d3444fbc947179072d614d",
+          "bytes": 519959,
+          "entries": 1679,
+          "sha256": "78943e6ad990cd8997cacc09ff9c2289d6d2df94ed957dcbca9bf1604c61c00c",
           "ok": true
         }
       ],
-      "sourceErrors": [
-        {
-          "sourceId": "satellites.tle.active",
-          "role": "primary",
-          "sourceMode": "upstream",
-          "resolvedEndpoint": "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=3LE",
-          "error": "satellites.tle.active: HTTP 403"
-        }
-      ],
-      "fetchedAt": "2026-08-27T09:54:53.973Z",
-      "sha256": "f82d11a95714c7c8d21b72cd6d3a25ba49f175309fc4ce66bab27f4ef7a69670",
-      "bytes": 1924760,
+      "sourceErrors": [],
+      "fetchedAt": "2026-09-30T10:35:50.223Z",
+      "sha256": "522577d2ffbe3e37ca30690f8c0a3ccfda06cd8dd30faf2f131edd5b9713e841",
+      "bytes": 1944603,
       "entries": 3134,
       "validTleEntries": 3134,
-      "refreshedEntries": 796,
-      "primaryRefreshedEntries": 166,
-      "supplementalRefreshedEntries": 630,
-      "supplementalAvailableEntries": 1645,
-      "verified": false,
-      "partial": true
+      "refreshedEntries": 2750,
+      "primaryRefreshedEntries": 2702,
+      "supplementalRefreshedEntries": 48,
+      "supplementalAvailableEntries": 571,
+      "verified": true,
+      "partial": false
     }
   },
-  "generatedAt": "2026-08-27T09:54:53.973Z"
+  "generatedAt": "2026-09-30T10:35:50.223Z"
 }

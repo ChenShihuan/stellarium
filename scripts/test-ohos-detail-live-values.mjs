@@ -30,6 +30,23 @@ test('hidden or unavailable coordinates do not retain their last value', () => {
   assert.equal(getter.call(state, 'selectedCoordApparentAltAz', zhNameOf), '');
 });
 
+test('equatorial formatting does not indent coordinate table values', () => {
+  const state = { selectedCoordEq: '   3h45m47.8s  +24°40\'48.9"', selectedCoordEqJ2000: '   3h44m11.5s  +24°35\'42.4"' };
+  assert.equal(getter.call(state, 'selectedCoordEq'), state.selectedCoordEq.trim());
+  assert.equal(getter.call(state, 'selectedCoordEqJ2000'), state.selectedCoordEqJ2000.trim());
+});
+
+test('detail tabs and coordinate rows share restrained type sizing and flexible row heights', () => {
+  for (const builder of ['objectDetailTab', 'selectedCoordinateRow', 'objectDataRow', 'structuredObjectDetailRow']) {
+    const body = source.match(new RegExp('\\n  ' + builder + '\\([^\\n]*\\) \\{([\\s\\S]*?)\\n  \\}'))[1];
+    assert.match(body, /objectDetailFontSize/);
+    assert.doesNotMatch(body, /panelFontSize/);
+    if (builder !== 'objectDetailTab') assert.match(body, /constraintSize\(\{ minHeight:/);
+  }
+  const card = source.match(/\n  unifiedObjectDetailCard\(\) \{([\s\S]*?)\n  \}/)[1];
+  assert.doesNotMatch(card, /this\.objectDataTile\(/);
+});
+
 test('structured row resolves replaced fields and handles fields that disappear', () => {
   // 段落助手（detailFieldLabel/detailFieldValue/...）已随结构化资料界面搬进 StructuredDetailRows.ets，
   // 并改成接收 store 的文件作用域函数。

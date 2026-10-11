@@ -11,6 +11,7 @@ struct ApplicationRoot {
   @Watch('onLanguageChanged') @StorageLink('i18nLang') private language: string = ''
   @StorageLink('stellariumStartupForeground') private foreground: boolean = true
   @StorageLink('stellariumPrivacyNativeStartupAllowed') private nativeAllowed: boolean = false
+  @StorageLink('stellariumPrivacyConsentVerifiedUi') private consentVerifiedUi: boolean = false
   @StorageLink('stellariumQtContentReady') private qtContentReady: boolean = false
   @Watch('onSkyReady') @StorageLink('stellariumStartupSkyReady') private skyReady: boolean = false
   @Watch('onSkyReady') @StorageLink('stellariumStartupArtComplete') private artComplete: boolean = false
@@ -61,7 +62,7 @@ struct ApplicationRoot {
       if (this.loadingVisible) {
         Stack() {
           StartupSky().hitTestBehavior(HitTestMode.Block)
-          if (this.nativeAllowed) {
+          if (this.nativeAllowed || this.consentVerifiedUi) {
             Row({ space: 8 }) {
               Text(this.loadingLabel)
                 .fontSize(12).fontColor('#9CAEC5').maxLines(2)
