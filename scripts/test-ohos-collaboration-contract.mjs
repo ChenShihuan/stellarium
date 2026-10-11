@@ -34,7 +34,10 @@ assert.doesNotMatch(service, /nativeState\[['"](SN|UDID|password|telescopeHost|t
 assert.match(service, /stellarium\.collaboration\.session/);
 assert.match(module, /"continuable": false/);
 assert.match(ability, /OnContinueResult\.REJECT/);
-assert.match(sync, /CollaborationSessionService\.ets/);
+assert.ok(fs.existsSync(path.join(root, 'harmonyos/ets-source/qability/CollaborationSessionService.ets')));
+// sync-ohos-build-sources.sh mirrors the whole harmonyos/ets-source tree, so the
+// service is carried over without an explicit per-file entry.
+assert.match(sync, /mirror_ets_sources/);
 // The application currently supports an explicit online build.  The
 // collaboration payload itself must remain local and redacted; the module
 // permission is not evidence that a session was uploaded.

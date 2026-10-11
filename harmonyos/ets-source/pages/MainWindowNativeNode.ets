@@ -20,7 +20,7 @@ import { LOCATION_COUNTRY_NAMES } from '../common/location/countries'
 import { LOCATION_ZH_NAMES } from '../common/location/names_zh'
 import { ASTRONOMY_GUIDES, AstronomyGuide, GuideState, GuideStep } from '../common/derive/AstronomyGuide'
 
-import { StellariumBridgeResponse, SessionSnapshot, TonightPlanet, TonightShower, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, NameItem, SearchSug, WindowNativeNodeCreateInfo, ChipItem, LandscapeItem, ScriptMetadata, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass, KeyboardShortcutItem } from './StellariumTypes'
+import { StellariumBridgeResponse, SessionSnapshot, TonightPlanet, TonightShower, TonightEvents, WutTarget, EphemerisRow, AstroCalcContext, RtsCalendarDay, AltAzPoint, AnnualElevationPoint, ObservabilityDay, LunarElongationPoint, PlanetTimeSeriesPoint, PlanetPairDistancePoint, PlanetCalcItem, PhenomenonItem, EclipseItem, PlanetaryTransitItem, MoonPhaseItem, SeasonEvent, LangOption, HierCity, NameItem, SearchSug, WindowNativeNodeCreateInfo, ChipItem, LandscapeItem, ScriptMetadata, HeliocentricPosition, CelestialPosition, ObjectInfo, SkyCultureItem, SkyCultureRawItem, SkyCultureArtItem, SkyCultureDescriptionBlock, SkyCultureTerritoryEntry, SkyCultureTerritoryPolygon, PluginItem, Scenery3dItem, ShellAction, LocSearchItem, SavedLocation, ObjectDetailField, ObjectDetailModel, SatellitePass, KeyboardShortcutItem } from './StellariumTypes'
 import { setLifecycleListener } from '../common/StellariumLifecycle'
 import { AudioEngine } from '../capability/AudioEngine'
 import { I18n, LANGUAGE_DISPLAY, PROJECTION_KEYS } from './I18n'
@@ -61,6 +61,8 @@ import { SurveyController, SurveyHostHooks } from '../capability/SurveyControlle
 import { ARController, ARHostHooks } from '../capability/ARController'
 import { KeyboardShortcutController, KeyboardShortcutHostHooks } from '../capability/KeyboardShortcutController'
 import { TimeTransitionController, TimeTransitionHostHooks } from '../capability/TimeTransitionController'
+import { publishAstronomyCard } from '../qability/AstronomyCardService'
+import { CardTonightData } from '../form/AstronomyCardData'
 import { RecordingController, RecordingHostHooks } from '../capability/RecordingController'
 import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
 import { SkyInputController, SkyInputHostHooks } from '../capability/SkyInputController'
@@ -3019,7 +3021,8 @@ export struct WindowNativeNode {
         hasSelectedObject: (): boolean => this.objectDetailStore.hasSelectedObject(),
         selectedObjectName: (): string => this.objectDetailStore.selectedName,
         hecLayoutPositions: (positions: Array<HeliocentricPosition>): Array<HeliocentricPosition> => hecLayoutPositions(positions),
-        animateTimeToJd: (targetJd: number, label: string, onFinished?: () => void): void => { this.timeTransitionCtl().animate(targetJd, label, onFinished) }
+        animateTimeToJd: (targetJd: number, label: string, onFinished?: () => void): void => { this.timeTransitionCtl().animate(targetJd, label, onFinished) },
+        persistAlmanacCardSnapshot: (): void => { this.persistAlmanacCardSnapshot() }
       }
       this.astroCalcControllerImpl = new AstroCalcController(
         this.commandPort(), this.hostMediaPort, this.astroStore, this.ephemerisStore, this.wutStore, this.searchStore, hooks)
@@ -3440,6 +3443,20 @@ export struct WindowNativeNode {
     this.panelNavigationStack = parent.length > 0 ? [parent] : []
     this.panelNavigationDepth = this.panelNavigationStack.length
     this.setPanel(panel, true, true)
+  }
+
+  // 年历加载完成后，拉取今夜天象并刷新桌面卡片快照。
+  private persistAlmanacCardSnapshot(): void {
+    this.callNativeWhenReady('getTonightEvents', '', (response: StellariumBridgeResponse) => {
+      if (response.ok !== true || response.tonight === undefined) return
+      const tonight = response.tonight as TonightEvents
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+      void publishAstronomyCard(context, tonight as CardTonightData).then((result) => {
+        hilog.info(0xD003, 'Stellarium', '[form-update] updated=%{public}d failed=%{public}d', result.updatedForms, result.failedForms)
+      }).catch((error: Error) => {
+        hilog.warn(0xD003, 'Stellarium', 'save card snapshot failed: %{public}s', error.message)
+      })
+    })
   }
 
   // 天象卡片点击路由：QAbility 写入 AppStorage('stellariumCardRoute')，此处消费并打开对应面板。
