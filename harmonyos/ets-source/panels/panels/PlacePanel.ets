@@ -6,6 +6,7 @@ import { LocationPickerStore } from '../../state/LocationPickerStore'
 import { SessionToolStore } from '../../state/SessionToolStore'
 import { CityChipsRow } from '../location/CityChipsRow'
 import { LocationPickerPanel } from '../location/LocationPickerPanel'
+import { LocationMapSection } from '../location/LocationMapSection'
 import { ContinuationSection } from '../astro/ContinuationSection'
 import { ObserverPlanetSection, PointingTestSection, WatchGyroSection, TonightEventsSection } from '../astro/SessionToolSections'
 
@@ -31,12 +32,16 @@ export struct PlacePanel {
   @Prop accentColor: string
   @Prop panelColor: string
   @Prop borderTint: string
+  @Prop mapAllowed: boolean
   planetLabel: (en: string) => string = (en: string) => en
   contextOf: (item: LocSearchItem) => string = () => ''
   onUseDeviceLocation: () => void = () => {}
   onSearchLocations: (query: string) => void = () => {}
   onPickSearchItem: (item: LocSearchItem) => void = () => {}
   onApply: () => void = () => {}
+  onSelectMapProvider: (provider: string) => void = () => {}
+  onPickMap: (latitude: number, longitude: number) => void = () => {}
+  onMapFallback: () => void = () => {}
   onSelectContinent: (c: string) => void = () => {}
   onSelectCountry: (c: string) => void = () => {}
   onSelectRegion: (r: string) => void = () => {}
@@ -90,6 +95,19 @@ export struct PlacePanel {
         onSelectCountry: (c: string) => { this.onSelectCountry(c) },
         onSelectRegion: (r: string) => { this.onSelectRegion(r) },
         onSelectCity: (c: string) => { this.onSelectCity(c) }
+      })
+      LocationMapSection({
+        provider: this.locationStore.locationMapProvider,
+        latitude: this.locationPickerStore.locationPickerLatitude,
+        longitude: this.locationPickerStore.locationPickerLongitude,
+        mapAllowed: this.mapAllowed,
+        textColor: this.textColor,
+        subColor: this.subColor,
+        accentColor: this.accentColor,
+        panelColor: this.panelColor,
+        onSelectProvider: (provider: string) => { this.onSelectMapProvider(provider) },
+        onPick: (latitude: number, longitude: number) => { this.onPickMap(latitude, longitude) },
+        onFallback: () => { this.onMapFallback() }
       })
       CityChipsRow({
         store: this.locationStore,
