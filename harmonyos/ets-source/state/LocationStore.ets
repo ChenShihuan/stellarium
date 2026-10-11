@@ -35,6 +35,8 @@ export class LocationStore {
   locSearching: boolean = false
   locSearchDebounce: number = 0
   savedLocations: SavedLocation[] = []
+  // 在线地图提供方：'offline' 使用内建坐标输入，'huawei' 使用 MapKit 在线选点。
+  locationMapProvider: string = 'offline'
 
   // —— 离线分块搜索草稿（不对 UI 直接暴露）——
   private locSearchRequestId: number = 0

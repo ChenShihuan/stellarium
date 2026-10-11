@@ -153,9 +153,14 @@ export class LocationPickerStore {
     this.locationPickerStatus = status
   }
 
+  // 在线地图点选：只更新草稿坐标（名称 / 海拔由用户确认时补）。
+  applyPickedCoordinates(latitude: number, longitude: number): void {
+    this.locationPickerLatitude = clamp(latitude, -90, 90)
+    this.locationPickerLongitude = clamp(longitude, -180, 180)
+  }
+
   // Translate continent name from Chinese to current language
-  translateContinent(name: string): string {
-    const map: Record<string, string> = {
+  translateContinent(name: string): string {    const map: Record<string, string> = {
       '亚洲': I18n.t('continent_asia'),
       '欧洲': I18n.t('continent_europe'),
       '北美洲': I18n.t('continent_north_america'),
@@ -594,8 +599,8 @@ export class LocationPickerStore {
       .sort((left: LocSearchItem, right: LocSearchItem) => {
         const leftText = left.name + ' ' + (left.displayName ?? '') + ' ' + (LOCATION_ZH_NAMES[left.name] ?? '')
         const rightText = right.name + ' ' + (right.displayName ?? '') + ' ' + (LOCATION_ZH_NAMES[right.name] ?? '')
-        return locationSearchMatchScore(query, [left.name, left.displayName ?? '', LOCATION_ZH_NAMES[left.name] ?? ''], leftText) -
-          locationSearchMatchScore(query, [right.name, right.displayName ?? '', LOCATION_ZH_NAMES[right.name] ?? ''], rightText)
+        return locationSearchMatchScore(query, [right.name, right.displayName ?? '', LOCATION_ZH_NAMES[right.name] ?? ''], rightText) -
+          locationSearchMatchScore(query, [left.name, left.displayName ?? '', LOCATION_ZH_NAMES[left.name] ?? ''], leftText)
       })
   }
 }

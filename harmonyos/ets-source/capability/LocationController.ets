@@ -56,9 +56,20 @@ export class LocationController {
     this.hooks = hooks
   }
 
+  // 切换在线地图提供方：'offline' 用内建坐标输入，'huawei' 用 MapKit 在线选点。
+  // 切到在线需隐私同意 + 前台；状态经 AppStorage 发布给 getLocationMapState 命令。
+  setLocationMapProvider(provider: string): void {
+    if (provider !== 'offline' && provider !== 'huawei') return
+    if (provider === 'huawei' && (!this.hooks.privacyAllowed() || !this.hooks.inForeground() || !this.hooks.hasPrivacyConsent())) return
+    this.locationStore.locationMapProvider = provider
+    AppStorage.setOrCreate('stellariumLocationMapState', JSON.stringify({
+      ok: true, provider: provider, phase: provider === 'offline' ? 'ready' : 'requested',
+      error: '', operation: '', observerCoordinateSystem: 'WGS84'
+    }))
+  }
+
   // 大洲选择（清空下级层级，纯 store 写）。
-  selectContinent(c: string): void {
-    this.pickerStore.hierContinent = c
+  selectContinent(c: string): void {    this.pickerStore.hierContinent = c
     this.pickerStore.hierCountry = ''
     this.pickerStore.hierRegion = ''
     this.pickerStore.hierCity = ''

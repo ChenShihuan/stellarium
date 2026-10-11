@@ -1825,6 +1825,10 @@ export struct WindowNativeNode {
         this.satelliteCtl().selectSatelliteGroup(String(event['payload'] ?? '').trim())
         return
       }
+      if (commandName === 'setLocationMapProvider') {
+        this.locationCtl().setLocationMapProvider(String(event['payload'] ?? '').trim())
+        return
+      }
       if (commandName === 'setSearchBrowserPage' || commandName === 'selectSearchCategory') {
         if (!this.panelVisible || this.activePanel !== 'search') this.openPanelFromCli('search')
         this.searchStore.searchText = ''
@@ -7553,12 +7557,16 @@ export struct WindowNativeNode {
         accentColor: this.nightModeStore.nmAccent(),
         panelColor: this.nightModeStore.nmBg(),
         borderTint: this.nightModeStore.nmBorder(),
+        mapAllowed: this.privacyNativeStartupAllowed && this.applicationInForeground && hasCurrentPrivacyConsent(),
         planetLabel: (en: string) => planetZh(en),
         contextOf: (item: LocSearchItem) => this.locationPickerStore.locationResultContext(item, this.sessionToolStore.observerPlanet),
         onUseDeviceLocation: () => { this.locationCtl().useDeviceLocation() },
         onSearchLocations: (query: string) => { this.locationStore.searchLocations(query) },
         onPickSearchItem: (item: LocSearchItem) => { this.locationStore.selectSearchLocation(item) },
         onApply: () => { this.locationCtl().applyPickerLocation() },
+        onSelectMapProvider: (provider: string) => { this.locationCtl().setLocationMapProvider(provider) },
+        onPickMap: (latitude: number, longitude: number) => { this.locationPickerStore.applyPickedCoordinates(latitude, longitude) },
+        onMapFallback: () => { this.locationCtl().setLocationMapProvider('offline') },
         onSelectContinent: (c: string) => { this.locationCtl().selectContinent(c) },
         onSelectCountry: (c: string) => { this.locationCtl().selectCountry(c) },
         onSelectRegion: (r: string) => { this.locationCtl().selectRegion(r) },
