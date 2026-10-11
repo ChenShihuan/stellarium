@@ -60,6 +60,7 @@ import { NotificationController, NotificationHostHooks } from '../capability/Not
 import { SurveyController, SurveyHostHooks } from '../capability/SurveyController'
 import { ARController, ARHostHooks } from '../capability/ARController'
 import { KeyboardShortcutController, KeyboardShortcutHostHooks } from '../capability/KeyboardShortcutController'
+import { TimeTransitionController, TimeTransitionHostHooks } from '../capability/TimeTransitionController'
 import { RecordingController, RecordingHostHooks } from '../capability/RecordingController'
 import { ObjectModelRenderer, ObjectModelRendererHostHooks } from '../capability/ObjectModelRenderer'
 import { SkyInputController, SkyInputHostHooks } from '../capability/SkyInputController'
@@ -1013,6 +1014,8 @@ export struct WindowNativeNode {
   private arControllerImpl: ARController | null = null
   // 键盘快捷键控制器（惰性构造；注入 KeyboardShortcutStore / CommandPort 与宿主 hooks）。
   private keyboardShortcutControllerImpl: KeyboardShortcutController | null = null
+  // 时间平滑过渡控制器（惰性构造；注入 CommandPort 与宿主 hooks）。
+  private timeTransitionControllerImpl: TimeTransitionController | null = null
   // 录制/回放/录屏控制器（惰性构造；recordBuffer 属 保留字段，经 hooks 读写）。
   private recordingControllerImpl: RecordingController | null = null
   // 对象检查器三维模型渲染器（惰性构造；逐帧/草稿字段留控制器，可观测子集在 ObjectMediaStore）。
@@ -2482,6 +2485,28 @@ export struct WindowNativeNode {
     return this.keyboardShortcutControllerImpl
   }
 
+  // 时间平滑过渡控制器惰性构造。
+  private timeTransitionCtl(): TimeTransitionController {
+    if (this.timeTransitionControllerImpl === null) {
+      const hooks: TimeTransitionHostHooks = {
+        flashHint: (text: ResourceStr): void => this.flashHint(text),
+        getSimulationTime: (onOk: (jd: number, timeRate: number) => void, onFailure: () => void): void => {
+          this.commandPort().requestInteractive('getSimulationTime', '', (r: StellariumBridgeResponse) => {
+            if (r.ok !== true) { onFailure(); return }
+            onOk(Number(r.jd), Number(r.timeRate ?? 0))
+          }, () => onFailure())
+        },
+        setTimeRate: (rate: number): void => { this.timeCtl().setTimeRate(rate) },
+        syncTimeRateState: (rate: number): void => { this.timeCtl().syncTimeRateState(rate) },
+        syncWheelFromSimulation: (jd: number): void => { this.wheel().syncFromSimulation(jd) },
+        refreshTimeNow: (): void => { this.timeCtl().refreshTimeNow() },
+        refreshState: (): void => { this.refreshState() }
+      }
+      this.timeTransitionControllerImpl = new TimeTransitionController(this.commandPort(), hooks)
+    }
+    return this.timeTransitionControllerImpl
+  }
+
   // 录制/回放/录屏控制器惰性构造。状态已在 ScriptStore（只搬行为与定时器）；
   // recordBuffer 属 保留字段，经 hooks 读写。
   private recordingCtl(): RecordingController {
@@ -2993,7 +3018,8 @@ export struct WindowNativeNode {
         applyAtmosphereResponse: (result: StellariumBridgeResponse): void => { this.atmosphereStore.applyAtmosphereResponse(result) },
         hasSelectedObject: (): boolean => this.objectDetailStore.hasSelectedObject(),
         selectedObjectName: (): string => this.objectDetailStore.selectedName,
-        hecLayoutPositions: (positions: Array<HeliocentricPosition>): Array<HeliocentricPosition> => hecLayoutPositions(positions)
+        hecLayoutPositions: (positions: Array<HeliocentricPosition>): Array<HeliocentricPosition> => hecLayoutPositions(positions),
+        animateTimeToJd: (targetJd: number, label: string, onFinished?: () => void): void => { this.timeTransitionCtl().animate(targetJd, label, onFinished) }
       }
       this.astroCalcControllerImpl = new AstroCalcController(
         this.commandPort(), this.hostMediaPort, this.astroStore, this.ephemerisStore, this.wutStore, this.searchStore, hooks)

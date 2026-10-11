@@ -44,6 +44,8 @@ export interface AstroCalcHostHooks extends BehaviorHostHooks {
   hasSelectedObject(): boolean
   selectedObjectName(): string
   hecLayoutPositions(positions: Array<HeliocentricPosition>): Array<HeliocentricPosition>
+  // 平滑前往目标时刻（宿主 TimeTransitionController）；onFinished 在到达后回调。
+  animateTimeToJd(targetJd: number, label: string, onFinished?: () => void): void
 }
 
 export class AstroCalcController {
@@ -142,9 +144,7 @@ export class AstroCalcController {
   jumpToRtsCalendar(day: RtsCalendarDay): void {
     const jd = day.transitJD ?? day.riseJD ?? day.setJD ?? 0
     if (jd <= 0) return
-    this.port.requestInteractive('setJD', jd.toString(), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.hooks.refreshState()
-    })
+    this.hooks.animateTimeToJd(jd, '升中天落时刻', () => { this.hooks.refreshState() })
   }
 
   // RTS 日历「指定日期」DatePickerDialog。
@@ -176,11 +176,9 @@ export class AstroCalcController {
   // 星历行跳转并重载星历。
   jumpToEphemerisRow(row: EphemerisRow): void {
     if (row.jd === undefined || row.jd <= 0) return
-    this.port.requestInteractive('setJD', String(row.jd), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) {
-        this.hooks.refreshState()
-        this.loadEphemeris()
-      }
+    this.hooks.animateTimeToJd(row.jd, '星历时刻', () => {
+      this.hooks.refreshState()
+      this.loadEphemeris()
     })
   }
 
@@ -236,9 +234,7 @@ export class AstroCalcController {
   // 可观测日历最佳日跳转。
   jumpToObservabilityDay(day: ObservabilityDay): void {
     if (day.bestJD === undefined || day.bestJD <= 0) return
-    this.port.requestInteractive('setJD', String(day.bestJD), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.hooks.refreshState()
-    })
+    this.hooks.animateTimeToJd(day.bestJD, '最佳观测时刻', () => { this.hooks.refreshState() })
   }
 
   // 食相「指定日期」DatePickerDialog。
@@ -257,17 +253,14 @@ export class AstroCalcController {
   // 天象行跳转。
   jumpToPhenomenon(item: PhenomenonItem): void {
     if (item.jd === undefined || item.jd <= 0) return
-    this.port.requestInteractive('setJD', String(item.jd), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.hooks.refreshState()
-    })
+    this.hooks.animateTimeToJd(item.jd, '天象时刻', () => { this.hooks.refreshState() })
   }
 
   // 今晚观测目标行跳转 + 选中并居中。
   jumpToWutTarget(target: WutTarget): void {
     if (target.jd === undefined || target.jd <= 0 || target.englishName === undefined) return
     const targetName = target.englishName
-    this.port.requestInteractive('setJD', String(target.jd), (timeResult: StellariumBridgeResponse) => {
-      if (timeResult.ok !== true) { return }
+    this.hooks.animateTimeToJd(target.jd, '最佳观测时刻', () => {
       // Selecting is not centring. searchObject only marks the target; the
       // engine's own handler never moves the view, so this row button looked
       // dead. Run the same post-selection placement the global search uses -
@@ -387,15 +380,13 @@ export class AstroCalcController {
   // 月相行跳转。
   jumpToMoonPhase(item: MoonPhaseItem): void {
     if (item.jd === undefined || item.jd <= 0) return
-    this.port.requestInteractive('setJD', String(item.jd), () => { this.hooks.refreshState() })
+    this.hooks.animateTimeToJd(item.jd, item.phase ?? '月相时刻', () => { this.hooks.refreshState() })
   }
 
   // 季节节点行跳转。
   jumpToAlmanacSeason(event: SeasonEvent): void {
     if (event.jd === undefined || event.jd <= 0) return
-    this.port.requestInteractive('setJD', String(event.jd), (r: StellariumBridgeResponse) => {
-      if (r.ok === true) this.hooks.refreshState()
-    })
+    this.hooks.animateTimeToJd(event.jd, event.label ?? '节气时刻', () => { this.hooks.refreshState() })
   }
 
   // 天文面板前台且可见。
