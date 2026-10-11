@@ -40,6 +40,8 @@ export struct PlacePanel {
   onPickSearchItem: (item: LocSearchItem) => void = () => {}
   onApply: () => void = () => {}
   onSelectMapProvider: (provider: string) => void = () => {}
+  onInputFocus: () => void = () => {}
+  onInputBlur: () => void = () => {}
   onPickMap: (latitude: number, longitude: number) => void = () => {}
   onMapFallback: () => void = () => {}
   onSelectContinent: (c: string) => void = () => {}
@@ -88,6 +90,8 @@ export struct PlacePanel {
         panelColor: this.panelColor,
         onUseDeviceLocation: () => { this.onUseDeviceLocation() },
         onSearchLocations: (query: string) => { this.onSearchLocations(query) },
+        onInputFocus: () => { this.onInputFocus() },
+        onInputBlur: () => { this.onInputBlur() },
         contextOf: (item: LocSearchItem) => this.contextOf(item),
         onPickSearchItem: (item: LocSearchItem) => { this.onPickSearchItem(item) },
         onApply: () => { this.onApply() },

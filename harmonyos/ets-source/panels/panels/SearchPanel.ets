@@ -33,6 +33,7 @@ export struct SearchPanel {
   onInput: (value: string) => void = () => {}
   onSubmit: (text: string) => void = () => {}
   onInputFocus: () => void = () => {}
+  onInputBlur: () => void = () => {}
   onSetPage: (page: string) => void = () => {}
   onSelectCategory: (code: string) => void = () => {}
   onSelectVisibility: (filter: string) => void = () => {}
@@ -59,7 +60,8 @@ export struct SearchPanel {
             store: this.store,
             onInput: (value: string) => { this.onInput(value) },
             onSubmit: (text: string) => { this.onSubmit(text) },
-            onInputFocus: () => { this.onInputFocus() }
+            onInputFocus: () => { this.onInputFocus() },
+        onInputBlur: () => { this.onInputBlur() }
           })
         }
         .width('100%')

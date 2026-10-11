@@ -57,6 +57,8 @@ export struct LocationPickerPanel {
   @Prop panelColor: string
   onUseDeviceLocation: () => void = () => {}
   onSearchLocations: (query: string) => void = () => {}
+  onInputFocus: () => void = () => {}
+  onInputBlur: () => void = () => {}
   contextOf: (item: LocSearchItem) => string = () => ''
   onPickSearchItem: (item: LocSearchItem) => void = () => {}
   onApply: () => void = () => {}
@@ -169,6 +171,8 @@ export struct LocationPickerPanel {
         inputColor: this.inputColor,
         onSearch: (query: string) => { this.onSearchLocations(query) },
         onNameDraft: (name: string) => { this.pickerStore.locationPickerName = name },
+        onInputFocus: () => { this.onInputFocus() },
+        onInputBlur: () => { this.onInputBlur() },
         contextOf: (item: LocSearchItem) => this.contextOf(item),
         onPickItem: (item: LocSearchItem) => { this.onPickSearchItem(item) }
       })

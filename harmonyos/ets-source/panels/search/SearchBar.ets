@@ -14,6 +14,7 @@ export struct SearchBar {
   onInput: (value: string) => void = () => {}
   onSubmit: (text: string) => void = () => {}
   onInputFocus: () => void = () => {}
+  onInputBlur: () => void = () => {}
 
   build() {
     Row({ space: 8 }) {
@@ -34,6 +35,7 @@ export struct SearchBar {
           this.onInput(value)
         })
         .onFocus(() => { this.onInputFocus() })
+        .onBlur(() => { this.onInputBlur() })
         .onSubmit(() => {
           if (this.store.searchText.length > 0) {
             this.onSubmit(this.store.searchText)
