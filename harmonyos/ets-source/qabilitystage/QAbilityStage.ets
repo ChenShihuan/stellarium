@@ -54,9 +54,13 @@ export default class QAbilityStage extends AbilityStage {
         QAbilityStage.privacyGateReleased = false;
         throw new Error('Privacy consent changed during resource preparation');
       }
+      await prepareStellariumResources(appContext);
+      if (!hasCurrentPrivacyConsent()) {
+        QAbilityStage.privacyGateReleased = false;
+        throw new Error('Privacy consent changed during resource finalization');
+      }
       hilog.info(LOG_DOMAIN, LOG_TAG,
         `[privacy-probe] phase=resource-prepare-finish; elapsedMs=${Date.now() - preparationStartedAt}`);
-      prepareStellariumResources(appContext);
       hilog.info(LOG_DOMAIN, LOG_TAG,
         `[startup] Qt resource preparation completed in ${Date.now() - preparationStartedAt} ms`);
       hilog.info(LOG_DOMAIN, LOG_TAG, '[privacy-probe] phase=qt-setup-start');

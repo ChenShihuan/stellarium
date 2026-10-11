@@ -1,0 +1,8 @@
+[Unit]
+Description=Check Skyinstrument certificate renewal daily
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=3600
+Persistent=true
+[Install]
+WantedBy=timers.target

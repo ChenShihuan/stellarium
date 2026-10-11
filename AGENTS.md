@@ -1,5 +1,7 @@
 # Project Conventions
 
+- Server operations follow `docs/harmonyos/SERVER-SECURITY.md`. Use `scripts/resource-server-cli.sh` for routine diagnostics. Workbench can reuse a session across requested usernames: always verify the actual OS user before executing commands. Do not silently escalate to root, broaden RAM permissions, expose public ports, or copy credentials into commands or the repository.
+
 - Test application navigation, selections, options, and feedback through the existing semantic CLI first. Inspect both the native command catalog and ArkUI-specific command handlers. Do not use coordinate clicks for ordinary navigation; reserve screenshots/layout inspection for visual verification and touch injection for explicit hit-testing/gesture tests. Record missing UI commands instead of silently replacing them with coordinate automation. Follow `docs/harmonyos/DEVELOPMENT-MCP-WORKFLOW.md`.
 
 - Content involving China, including maps, geographic scope, political terminology, regional names, and cultural descriptions, follows official Chinese terminology and geographic presentation requirements.

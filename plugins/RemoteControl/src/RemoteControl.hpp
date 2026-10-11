@@ -83,6 +83,7 @@ public:
 	bool getFlagEnableCors() const { return enableCors; }
 
 	QString getPassword() const { return password; }
+	QString getHost() const { return host; }
 	QString getCorsOrigin() const { return corsOrigin; }
 	int getPort() const {return port; }
 
@@ -99,6 +100,8 @@ public slots:
 	//! The password is required by RequestHandler for all HTTP requests.
 	//! Basic HTTP auth is used, without a user name.
 	void setPassword(const QString& password);
+
+	void setHost(const QString& host);
 
 	//! If true, Access-Control-Allow-Origin header will be appended to responses.
 	void setFlagEnableCors(bool b);
@@ -131,7 +134,7 @@ public slots:
 	//! Starts the HTTP server using the current settings and begins handling requests.
 	//! Uses the RequestHandler class for processing.
 	//! @see RequestHandler
-	void startServer();
+	bool startServer();
 	//! Stops the HTTP server gracefully
 	void stopServer();
 
@@ -144,6 +147,7 @@ signals:
 
 	void portChanged(int val);
 	void passwordChanged(const QString& val);
+	void hostChanged(const QString& val);
 	void corsOriginChanged(const QString& val);
 
 
@@ -157,6 +161,7 @@ private:
 	bool autoStart;
 	bool usePassword;
 	QString password;
+	QString host;
 	bool enableCors;
 	QString corsOrigin;
 
@@ -191,4 +196,3 @@ public:
 };
 
 #endif /*REMOTECONTROL_HPP*/
-

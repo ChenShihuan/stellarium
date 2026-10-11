@@ -215,7 +215,7 @@ Satellite::Satellite(const QString& identifier, const QVariantMap& map)
 
 	orbitValid = true;
 	initialized = true;
-	isISS = (name.compare("25544"));
+	isISS = (id == QStringLiteral("25544"));
 	isStarlink = (name.startsWith("STARLINK"));
 	moon = GETSTELMODULE(SolarSystem)->getMoon();
 	sun = GETSTELMODULE(SolarSystem)->getSun();
@@ -251,6 +251,12 @@ double Satellite::roundToDp(float n, int dp)
 
 QString Satellite::getNameI18n() const
 {
+	if (name.compare(QStringLiteral("CSS (TIANHE)"), Qt::CaseInsensitive) == 0)
+	{
+		const QString translated = q_("TIANGONG (TIANHE)");
+		if (translated != QStringLiteral("TIANGONG (TIANHE)"))
+			return translated;
+	}
 	return q_(name);
 }
 
@@ -755,6 +761,12 @@ QVariantList Satellite::getPassPredictions(StelCore* core, double hours, int lim
 		pass.insert("start", localString(startJD));
 		pass.insert("peak", localString(peak.jd));
 		pass.insert("end", localString(endJD));
+		// Keep machine-readable event times alongside the localized labels. The
+		// HarmonyOS time-navigation bridge uses these values to jump to a
+		// satellite pass without reparsing a locale-dependent string.
+		pass.insert("startJD", startJD);
+		pass.insert("peakJD", peak.jd);
+		pass.insert("endJD", endJD);
 		pass.insert("startUtc", utcString(startJD));
 		pass.insert("peakUtc", utcString(peak.jd));
 		pass.insert("endUtc", utcString(endJD));

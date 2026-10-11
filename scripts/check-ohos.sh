@@ -136,6 +136,18 @@ fi
 
 echo ""
 
+# 2.8. 检查联网能力逐项本地化矩阵
+echo "[2.8/3] 检查联网本地化矩阵..."
+if node "$SCRIPT_DIR/check-ohos-network-localization.mjs" > /tmp/ohos-network-localization.log; then
+  echo -e "${GREEN}  ✅ 联网能力逐项本地化矩阵通过${NC}"
+else
+  echo -e "${RED}  ❌ 联网能力逐项本地化矩阵失败${NC}"
+  cat /tmp/ohos-network-localization.log
+  ERRORS=$((ERRORS + 1))
+fi
+
+echo ""
+
 # 3. 尝试编译（可选，如果环境已配置）
 echo "[3/3] 尝试编译 HAP..."
 NODE_BIN="$DEVECO_HOME/tools/node/bin/node"
