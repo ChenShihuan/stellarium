@@ -1,6 +1,7 @@
 import { I18n } from '../../pages/I18n'
 import { ToolsStore } from '../../state/ToolsStore'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
+import { AppFilingInfo } from '../../common/ui/AppFilingInfo'
 
 // 帮助面板，对应 `activePanel === 'help'`：静态说明文字 + 手势/快捷操作图例。
 //
@@ -92,6 +93,7 @@ export struct HelpPanel {
           .backgroundColor(this.lineColor)
           .margin({ top: 8, bottom: 4 })
         Text(I18n.t('c_about')).fontSize(13).fontColor(this.textColor).width('100%')
+        AppFilingInfo({ subColor: this.subColor, panelColor: this.panelColor })
         if (this.tools.aboutVersion.length > 0) {
           Text('Stellarium ' + this.tools.aboutVersion + ' · Qt ' + this.tools.aboutQt).fontSize(10).fontColor('#99FFFFFF').width('100%')
           Text(I18n.t('c_user_dir') + ': ' + this.tools.aboutUserDir).fontSize(9).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })

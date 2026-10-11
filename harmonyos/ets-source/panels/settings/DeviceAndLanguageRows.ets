@@ -1,6 +1,7 @@
 import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES } from '../../pages/I18n'
 import { LangOption } from '../../pages/StellariumTypes'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
+import { AppFilingInfo } from '../../common/ui/AppFilingInfo'
 
 // 本组件文件：设置面板的「语言」「陀螺仪」「设备与隐私」三块。
 //
@@ -75,12 +76,14 @@ export struct DevicePrivacySection {
   @Prop sensitivityText: string
   @Prop textColor: string
   @Prop subColor: string
+  @Prop panelColor: string
   onToggleGyroscope: (value: boolean) => void = () => {}
   onRevoke: () => void = () => {}
 
   build() {
     Column({ space: 0 }) {
       Text(I18n.t('settings_device_privacy')).fontSize(13).fontColor(this.textColor).width('100%').margin({ top: 4, bottom: 8 })
+      AppFilingInfo({ subColor: this.subColor, panelColor: this.panelColor })
       GyroscopeRow({ isOn: this.gyroscopeEnabled, onToggle: (value: boolean) => { this.onToggleGyroscope(value) } })
       Row() {
         Text(I18n.t('i0230')).fontSize(12).fontColor(this.subColor).width(86)
