@@ -1,5 +1,15 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-11] DevEco Code - privacy-v2 合并收口与契约测试补齐（第三波）
+
+- **依据（用户要求）**：非 `harmonyos/ets-source` 的文件（C/C++、data、po、scripts、docs）用 git merge 正确处理改名/删除；随后补齐契约测试暴露的未迁移行为。
+- **合并**：`merge joinother/fix/api22-privacy-v2 (aae34f085e)` → `ecd620b3ea`。自动并入 6 个插件隐私/离线守卫、RemoteControl、Satellites、`data/ohos/*`、`po/*`、`translations/*`、34 篇 docs/harmonyos、`website/`、26 个新脚本；意外补回此前漏迁的 ApplicationRoot/QChildProcess/QAbilityStage/StellariumResourceBootstrap 隐私门控；`ets-source`/`src` 取我方迁移版本，`build/` 保持删除。
+- **补齐的行为**：历法 24 节气渲染；赤道坐标 trim；`persistAlmanacCardSnapshot`；`getPrivacyConsentState` 只读命令 + `restoreWindowAfterConsent` 同步幂等 + `preparePrivacyHostPage` 并发去重；导航指示条安全区（`stellariumScreenSafeBottomPixels`）；Dock 响应式几何（dockHeight/dockBottomClearance/isLargeDesktopCanvas/panelFontSize…，命中层不再是硬编码高度）；`isDockPoint` 以 Dock 底为界；ICP 备案共享组件；巡天说明文案；指针坐标乐观写；文本聚焦时键盘让位。
+- **脚本修复**：7 个脚本的 Windows 盘符路径 bug、CRLF 正则、目录镜像断言。
+- **提交**：`ecd620b3ea`(merge) `4e10aef280` `205823f595` `01a92eb5ff` `55236204ab` `b7874cfce6` `7e319a8d25` `8603d7a773` `91c30969f8` `4710add7ae` `61777ca2a8`(输入) 等。
+- **验证**：`devecocli build` BUILD SUCCESSFUL；UI 契约 intact（35/29/18/50）；命令目录一致（399）；契约套件 **30 通过 / 1 失败**；真机 `Smoke: PASS`。
+- **剩余（环境型，非代码缺口）**：`check-ohos-privacy-artifact.mjs` 需 `build/qt-platform-patch/*`（Qt 平台补丁构建产物）、`ark_disasm` 与签名 HAP 才能运行；其校验的源码级隐私守卫已随合并就位。
+
 ## [2026-10-11] DevEco Code - privacy-v2 → pr-upstream-20261008 功能迁移（P0–P13）
 
 - **依据（用户要求）**：把 `joinother/fix/api22-privacy-v2`（`aae34f085e`）在旧单体上实现的功能，按 `docs/harmonyos/specs/PRIVACY-V2-TO-UPSTREAM-MIGRATION.md` 分片手工迁入 upstream 的 Store/Controller/panel 架构（不 git merge）。
