@@ -6,6 +6,7 @@ import {
   SatellitesResponse,
   CatalogHealthEntry
 } from '../pages/MainWindowModels'
+import { I18n } from '../pages/I18n'
 import { StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
 
@@ -45,6 +46,9 @@ export class SatelliteStore {
   satTleFileInput: string = ''
   satSourceAddNew: boolean = false
   satSourceStatus: string = ''
+  // 来源编辑：-1 表示无；editing 控制保存/新增文案，expanded 控制展开行。
+  expandedSatelliteSourceIndex: number = -1
+  editingSatelliteSourceIndex: number = -1
   satUpdateFrequencyInput: string = '72'
   satelliteListLoading: boolean = false
   satelliteCatalogHealth: CatalogHealthEntry = {}
@@ -85,9 +89,30 @@ export class SatelliteStore {
     }
   }
 
+  // 来源预览文案：本地文件显示「本地文件 · 路径」，远程显示「域名 · 路径」。
+  satelliteSourcePreview(url: string): string {
+    const value = url.trim()
+    if (value.toLowerCase().startsWith('file://')) {
+      return I18n.t('sat_source_local_file') + ' · ' + value.substring(7)
+    }
+    const withoutScheme = value.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    const slash = withoutScheme.indexOf('/')
+    return slash >= 0 ? withoutScheme.substring(0, slash) + ' · ' + withoutScheme.substring(slash) : withoutScheme
+  }
+
+  // 更新状态文案：禁用 / 更新中 / 错误 / 倒计时（分/时）。
+  satelliteUpdateStatusText(): string {
+    if (!this.satUpdateSettings.updatesEnabled) return I18n.t('sat_updates_disabled')
+    if (this.satUpdateSettings.updateState === 0) return I18n.t('sat_updating')
+    if (this.satUpdateSettings.updateState === 3 || this.satUpdateSettings.updateState === 4) return I18n.t('sat_update_error')
+    const seconds = Math.max(0, this.satUpdateSettings.secondsToUpdate)
+    if (seconds <= 60) return I18n.t('sat_update_less_minute')
+    if (seconds < 3600) return I18n.format('sat_update_minutes', [Math.floor(seconds / 60).toString()])
+    return I18n.format('sat_update_hours', [Math.floor(seconds / 3600).toString()])
+  }
+
   // 卫星面板「数据源」：桥拉取 TLE 源列表与更新设置。
-  loadSatelliteSources(): void {
-    const port = this.ensurePort()
+  loadSatelliteSources(): void {    const port = this.ensurePort()
     if (port === null) {
       return
     }

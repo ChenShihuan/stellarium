@@ -24,6 +24,9 @@ export struct SatellitesPanel {
   catalogHealthTextOf: (title: string, health: CatalogHealthEntry) => string = (title: string) => title
   catalogHealthColorOf: (health: CatalogHealthEntry) => string = () => '#99FFFFFF'
   onDeleteSource: (index: number) => void = () => {}
+  onEditSource: (index: number) => void = () => {}
+  onToggleSourceEnabled: (index: number, enabled: boolean) => void = () => {}
+  onRestoreSources: () => void = () => {}
   onSourceInput: (value: string) => void = () => {}
   onSourceAddNew: (value: boolean) => void = () => {}
   onAddSource: () => void = () => {}
@@ -73,16 +76,25 @@ export struct SatellitesPanel {
           Text(I18n.t('sat_sources_offline_hint')).fontSize(10).fontColor('#99FFFFFF').width('100%').maxLines(3)
           if (this.satelliteStore.satSources.length > 0) {
             ForEach(this.satelliteStore.satSources, (source: SatelliteSource, sourceIndex: number) => {
-              Row({ space: 6 }) {
-                Column({ space: 2 }) {
-                  Text((source.local ? I18n.t('sat_source_local') : I18n.t('sat_source_remote')) + ' · ' + source.scheme.toUpperCase())
-                    .fontSize(11).fontColor(source.valid ? '#DCEEFF' : '#FFE1A6').maxLines(1)
-                  Text(source.url).fontSize(9).fontColor('#88FFFFFF').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-                }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                if (source.addNew) Text(I18n.t('sat_source_add_new')).fontSize(9).fontColor('#B7D8F0')
-                Button(I18n.t('sat_source_delete')).fontSize(10).fontColor('#FFE1A6').backgroundColor('rgba(180,60,50,0.22)')
-                  .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
-                  .onClick(() => { this.onDeleteSource(sourceIndex) })
+              Column({ space: 4 }) {
+                Row({ space: 6 }) {
+                  Column({ space: 2 }) {
+                    Text((source.local ? I18n.t('sat_source_local') : I18n.t('sat_source_remote')) + ' · ' + source.scheme.toUpperCase())
+                      .fontSize(11).fontColor(source.valid ? '#DCEEFF' : '#FFE1A6').maxLines(1)
+                    Text(source.url).fontSize(9).fontColor('#88FFFFFF').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+                  }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+                  if (source.addNew) Text(I18n.t('sat_source_add_new')).fontSize(9).fontColor('#B7D8F0')
+                  Toggle({ type: ToggleType.Switch, isOn: source.addNew }).width(40).height(22)
+                    .onChange((value: boolean) => { this.onToggleSourceEnabled(sourceIndex, value) })
+                  Button(I18n.t('sat_source_edit')).fontSize(10).fontColor('#E1F2FA').backgroundColor('rgba(91,147,191,0.22)')
+                    .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
+                    .onClick(() => { this.onEditSource(sourceIndex) })
+                  Button(I18n.t('sat_source_delete')).fontSize(10).fontColor('#FFE1A6').backgroundColor('rgba(180,60,50,0.22)')
+                    .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
+                    .onClick(() => { this.onDeleteSource(sourceIndex) })
+                }.width('100%')
+                Text(this.satelliteStore.satelliteSourcePreview(source.url)).fontSize(10).fontColor('#88FFFFFF').width('100%')
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               }.width('100%').padding({ left: 8, right: 8, top: 6, bottom: 6 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
             }, (source: SatelliteSource) => source.index.toString() + ':' + source.url)
           }
@@ -94,7 +106,7 @@ export struct SatellitesPanel {
             Toggle({ type: ToggleType.Switch, isOn: this.satelliteStore.satSourceAddNew }).width(42).height(24)
               .onChange((value: boolean) => { this.onSourceAddNew(value) })
             Text(I18n.t('sat_source_add_new')).fontSize(10).fontColor('#B7D8F0').layoutWeight(1)
-            Button(I18n.t('sat_source_add')).fontSize(11).fontColor('#E1F2FA').backgroundColor('rgba(91,147,191,0.34)')
+            Button(this.satelliteStore.editingSatelliteSourceIndex >= 0 ? I18n.t('sat_source_save') : I18n.t('sat_source_add')).fontSize(11).fontColor('#E1F2FA').backgroundColor('rgba(91,147,191,0.34)')
               .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 10, right: 10 }).onClick(() => { this.onAddSource() })
           }.width('100%')
           Row({ space: 6 }) {
@@ -105,6 +117,12 @@ export struct SatellitesPanel {
               .onChange((value: string) => { this.onTleFileInput(value) })
             Button(I18n.t('sat_tle_import')).fontSize(10).fontColor('#E1F2FA').backgroundColor('rgba(91,147,191,0.25)')
               .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 8, right: 8 }).onClick(() => { this.onImportTle() })
+          }.width('100%')
+          Row({ space: 6 }) {
+            Button(I18n.t('sat_source_restore')).fontSize(10).fontColor('#FFE1A6').backgroundColor('rgba(180,60,50,0.16)')
+              .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 }).onClick(() => { this.onRestoreSources() })
+            Text(this.satelliteStore.satelliteUpdateStatusText()).fontSize(10).fontColor('#7599AD').layoutWeight(1)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }.width('100%')
           Row() {
             Text(I18n.t('sat_auto_add')).fontSize(11).fontColor('#E5FFFFFF').layoutWeight(1)
