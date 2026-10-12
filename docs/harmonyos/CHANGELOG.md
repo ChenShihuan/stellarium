@@ -1,5 +1,13 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-12] DevEco Code - 月相桌面卡片方形外框修复
+
+- **依据（用户复测反馈）**：月相桌面卡片上出现一个方形外框。
+- **根因**：`harmonyos/ets-source/form/AstronomyCardSurface.ets` 中月面外层 `Stack` 是 `visualSize*0.80` 的**正方形**，加了 `.border({width:1,...})` 但**未设置 `borderRadius`**，因此圆月之外的边框呈直角方形（`moon`/`overview`/`compact` 三类共用该分支）。
+- **修复**：给该 `Stack` 补 `.borderRadius(this.visualSize() * 0.40)`，边框随月面变为正圆；并补 `.clip(true)`，使 `moonMaskOffset()` 可达一整个直径的阴影圆盘被裁进月面内（此前会甩出月轮之外、压到右侧文字）。
+- **校验**：`arkts_check` 通过；`devecocli build` BUILD SUCCESSFUL；真机安装启动冒烟通过。表单卡片需在桌面**移除后重新添加**才会重绘最新布局。
+- **遗留（未改动，待定）**：同文件 `route()` 里 `postCardAction` 的 `bundleName` 仍写死发布身份 `com.joinother.skyinstrument`，debug 包（`com.cnchensh.stellarium`）下点卡片路由会指向不存在的包。
+
 ## [2026-10-12] DevEco Code - docs/harmonyos 顶层文档分类归位
 
 - **依据（用户要求）**：把未放入分类子文件夹的 35 个顶层文档，按 docs/harmonyos/AGENTS.md §2.2 的分类树判读归位；新增 server/ 承载服务器与联网部署文档。
