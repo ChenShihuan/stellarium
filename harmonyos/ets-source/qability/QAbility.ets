@@ -518,6 +518,12 @@ export default class QAbility extends UIAbility {
         JSON.stringify({ ok: false, error: 'astronomy panel has not loaded' }));
       return;
     }
+    // 「当前面板」只读回读：openUiPanel / closeUiPanel 只回 accepted，断言需要读这一条。
+    if (request.commandName === 'getUiPanelState') {
+      this.finishCliRequest(request, AppStorage.get<string>('stellariumUiPanelState') ??
+        JSON.stringify({ ok: false, error: 'main window has not loaded' }));
+      return;
+    }
     if (request.commandName === 'getSatellitePanelState') {
       this.finishCliRequest(request, AppStorage.get<string>('stellariumSatellitePanelState') ??
         JSON.stringify({ ok: false, error: 'satellite panel has not loaded' }));
