@@ -75,7 +75,7 @@ ss -lntp
 
 ### 单实例 CLI 授权准备（2026-09-07）
 
-用户已创建 `skyinstrument-cli`（显示名称“星象仪服务器运维”），并明确允许单台上海 ECS 运维授权。候选策略见 [JSON 模板](workbench-single-instance-policy.template.json)；替换地域、账号 ID 和实例 ID 后才可提交。当前模板不包含密钥、通配资源或全管理权限。
+用户已创建 `skyinstrument-cli`（显示名称“星象仪服务器运维”），并明确允许单台上海 ECS 运维授权。候选策略见 [JSON 模板](../workbuddy/workbench-single-instance-policy.template.json)；替换地域、账号 ID 和实例 ID 后才可提交。当前模板不包含密钥、通配资源或全管理权限。
 
 - **校正：四个动作均使用 `acs:ecs:地域:账号:instance/实例`。** 2026-09-07 用户绑定策略后，摘要把 `LoginECSInstance` 判为无效授权。实查 RAM 可视化编辑器，该动作所需资源类型为 ECS Instance，必要 ARN 是 `acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}`；旧 `ecs/实例` 被明确列入“未识别资源”。[英文凭据指南](https://www.alibabacloud.com/help/en/ecs/user-guide/install-and-configure-workbench-cli-credentials) 与已安装 Skill 的 `ecs/` 示例不适用于本次控制台定义，不再作为可直接提交的模板；ECS 查询另参见 [DescribeInstances 授权表](https://help.aliyun.com/zh/ecs/developer-reference/api-ecs-2014-05-26-describeinstances)。
 - 此策略允许在指定服务器内执行命令，不是只读系统账户；RAM 的实例限制不能替代 Linux 用户和 sudo 权限。不得据此宣称服务器内只可操作资源目录。
@@ -86,7 +86,7 @@ ss -lntp
 
 ### CLI 实际连通（2026-09-07 19:29）
 
-后续 19:42 已收紧安全组、部署关键配置审计和普通运维身份；以下为连通时历史记录，最新基线和未解决边界以 `SERVER-SECURITY.md` 为准。
+后续 19:42 已收紧安全组、部署关键配置审计和普通运维身份；以下为连通时历史记录，最新基线和未解决边界以 `server/SERVER-SECURITY.md` 为准。
 
 - 凭据文件权限 0600，不读取或记录密钥值。`workbench config switch --profile skyinstrument` 后两次指定实例 exec 均成功，远端退出码 0。
 - 1.0.1 后台启动曾超时且没有日志；前台启动提示 `profile "default" not found`。虽然 exec 显式传了 profile，后台仍受当前配置影响；切换当前 profile 后解决，不必重建密钥。

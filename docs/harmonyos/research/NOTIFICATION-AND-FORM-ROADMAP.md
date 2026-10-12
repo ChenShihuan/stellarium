@@ -394,4 +394,4 @@ harmonyos/resources/base/profile/form_config.json
 - Notification Kit 的普通通知链路已按“用户主动授权后才调用”实现；未授权时发布通知必须返回可解释的失败结果，不能通过定时器或后台轮询绕过系统授权。
 - `PUBLISH_AGENT_REMINDER` 是系统代理提醒的能力边界。没有设备/账号实际授予该能力时，可以在 Debug 包验证参数校验、授权门槛、错误回传、取消和清理；不能把本地模拟成功当成后台提醒已经可用。
 - 本轮已按路线集中提交代理提醒、实况窗、锁屏卡片和背板透明卡片；待机屏保卡片已通过。真实系统联调仍要等对应 AGC 状态变为“已通过”和最终 Profile 收口，当前不伪造成功，也不新增未经核验的联网调用。
-- 不再按单项调试反复创建 Profile。当前候选 Profile 只作为审批期间的占位，不包含待审批权益；审批完成后统一更新或只创建一个最终发布 Profile。优先通知、异包名接续和无匹配 ACL 已按规则明确不申请。详见 `AGC-CAPABILITY-APPLICATION-MATRIX-2026-10.md`。
+- 不再按单项调试反复创建 Profile。当前候选 Profile 只作为审批期间的占位，不包含待审批权益；审批完成后统一更新或只创建一个最终发布 Profile。优先通知、异包名接续和无匹配 ACL 已按规则明确不申请。详见 `release/AGC-CAPABILITY-APPLICATION-MATRIX-2026-10.md`。

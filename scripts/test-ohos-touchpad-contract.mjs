@@ -11,7 +11,7 @@ const input = read('harmonyos/ets-source/capability/SkyInputController.ets');
 const native = read('src/StelMainView.cpp');
 const catalog = read('src/StelOhosCommandCatalog.hpp');
 const i18n = read('harmonyos/ets-source/capability/I18n.ets');
-const guide = read('docs/harmonyos/PC-TOUCHPAD-AND-KEYBOARD-GUIDE.md');
+const guide = read('docs/harmonyos/specs/PC-TOUCHPAD-AND-KEYBOARD-GUIDE.md');
 
 for (const token of [
   'event.getPinchAxisScaleValue()',

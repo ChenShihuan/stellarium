@@ -10,7 +10,7 @@ const arPanel = read('harmonyos/ets-source/panels/ar/ARPreviewPanel.ets');
 const arController = read('harmonyos/ets-source/capability/ARController.ets');
 const catalog = read('src/StelOhosCommandCatalog.hpp');
 const native = read('src/StelMainView.cpp');
-const roadmap = read('docs/harmonyos/AR-ENGINE-PORTAL-ROADMAP-2026-09-23.md');
+const roadmap = read('docs/harmonyos/research/AR-ENGINE-PORTAL-ROADMAP-2026-09-23.md');
 const cli = read('docs/harmonyos/CLI.md');
 
 // The AR preview panel is now a standalone component (panels/ar/ARPreviewPanel.ets)
