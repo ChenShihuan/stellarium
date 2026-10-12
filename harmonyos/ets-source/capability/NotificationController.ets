@@ -92,7 +92,7 @@ export class NotificationController {
       kind: 'solar-term',
       panel: 'astro',
       tab: 8
-    }).then((result) => {
+    }, this.hooks.hostContext().abilityInfo.bundleName).then((result) => {
       this.store.astronomyNotificationBusy = false
       if (result.ok === true) {
         this.hooks.flashHint('下一节气提醒已交给系统管理。')
