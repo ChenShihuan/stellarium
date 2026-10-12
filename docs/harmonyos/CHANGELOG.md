@@ -1,5 +1,15 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-12] DevEco Code - 快捷面板第二行图标下沿被切 1-2px 修复
+
+- **依据（用户复测反馈）**：快捷面板打开后，第二行图标下沿触及不可显示区域，肉眼可见 1px 左右或更多。
+- **根因**：`quickPanelContentHeight()` 让面板高度**恰好等于**内容高度（这是刻意的，见 QUICK-ACTIONS-PANEL-PLAN §12.6 第 4 条：`Scroll` 会把比视口短的内容垂直居中，故容器必须等于内容）。但理论高度没有覆盖两处逐项物理像素对齐：① 每行 6 格按浮点宽均分后各自对齐到物理像素（每行最多多占 1px）；② 固定 chrome（抓手 28+2、头部 44/56+14、上下内边距 12/16）各自对齐。真机 Mate 80 Pro 实测内容 350px 落在 348px 视口里，第二行被压成 163px（第一行 165px），下沿被切 2px。
+- **修复**（`harmonyos/ets-source/pages/MainWindowNativeNode.ets`）：
+  - `quickPanelGridCellSize()` 把格子尺寸**向上**对齐到整物理像素（`Math.ceil(cell * density) / density`），使由它推出的高度不小于图标真实高度 —— 宁可多出不足 1px 空白也不切图标；
+  - `quickPanelContentHeight()` 的 `grid` 项加 4 物理像素取整余量（`px2vp(4)`，不足半个 vp，肉眼不可见），覆盖固定 chrome 的逐项对齐偏差。
+- **校验**：`arkts_check` 0 error、`BUILD SUCCESSFUL`、UI 契约不变（35 面板 / 29 静态 id / 18 动态前缀 / 50 id 锚点）、命令目录 399 一致。真机 `ui layout` 复核：两行等高 165/165（改前 165/163），内容 350px < 视口 352px，图标下沿落在视口内 —— 不再被裁。
+- **附记**：快捷面板无法用语义 CLI 打开（`getCommandCatalog` 里没有开面板命令），本次经 `aa start --ps panel quick` 深链未生效，最终按 Dock「快捷开关」节点 bounds 坐标点击验证。**建议补一条语义开面板命令**，避免后续再退回坐标自动化。
+
 ## [2026-10-12] DevEco Code - 月相桌面卡片方形外框修复
 
 - **依据（用户复测反馈）**：月相桌面卡片上出现一个方形外框。

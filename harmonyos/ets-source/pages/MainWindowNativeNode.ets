@@ -4716,12 +4716,20 @@ export struct WindowNativeNode {
   // 快捷面板高度按内容算（标题栏 + 两行图标；编辑态再加候选带与操作条），只用于该面板（见 QUICK-ACTIONS-PANEL-PLAN §6/§13.5）。
   // 单元格宽由面板内宽均分（QuickActionCell 是 layoutWeight(1) + aspectRatio(1)），所以高度可预知；
   // 容器高度与内容一致时 Scroll 不会把内容垂直居中，图标就贴着标题栏。
+  //
+  // 但格子宽度是「均分后的浮点值」，ArkUI 落布局时会把它对齐到整物理像素，且取整方向不保证向下：
+  // 直接拿理论值当高度就会比真实两行矮一点点（计划 §12.6 第 4 条实测视口 112.7vp < 真实两行 113.3vp，
+  // 密度 3.5 下差约 2px），第二行下沿随即被 Scroll 视口切掉。故这里把格子显式**向上**对齐到整物理像素，
+  // 让由它推出的面板高度必定不小于图标的真实高度 —— 宁可多出不足 1px 的空白，也不切掉图标。
   private quickPanelGridCellSize(): number {
     const inner = this.isExpandedLayout
       ? this.panelWidth - 36
       : (this.isFoldHoverLayout ? this.skyWidth * 0.64 : this.skyWidth * 0.94) - this.compactPanelHorizontalPadding() * 2
     // 分子扣掉 5 个格间隙（QuickActionGrid 的 Row space = 4）。
-    return Math.max((inner - 20) / 6, 40)
+    const cell = Math.max((inner - 20) / 6, 40)
+    const density = this.getUIContext().vp2px(1)
+    if (!(density > 0)) return cell
+    return Math.ceil(cell * density) / density
   }
 
   private quickPanelContentHeight(): number {
@@ -4735,7 +4743,11 @@ export struct WindowNativeNode {
       ? (candidateRows * cell + (candidateRows - 1) * 6)
       : 0
     const editableExtra = this.quickPanelStore.editable ? (10 + 1 + 12 + 8 + 28) : 0
-    const grid = slots + candidates + editableExtra
+    // 理论高度之外再留 4 物理像素的「取整余量」：内容里有两类逐项物理像素对齐 ——
+    // 每行 6 格按浮点宽均分后各自对齐（每行最多多占 1px），以及固定 chrome（抓手 / 头部 / 内外边距）
+    // 各自对齐。真机 Mate 80 Pro 实测真实占用比理论值多约 2px，第二行下沿就被 Scroll 视口切掉；
+    // 4px 不足半个 vp，肉眼不可见，但保证视口永远不小于内容。
+    const grid = slots + candidates + editableExtra + this.getUIContext().px2vp(4)
     const header = this.timeStore.panelSubtitle(this.activePanel).length > 0 ? 56 : 44
     if (this.isExpandedLayout) {
       // PadPanelHandle 高 17（5 + margin 2 + 10），floatingPanel 内边距 18。
