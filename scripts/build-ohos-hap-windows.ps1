@@ -65,7 +65,11 @@ param(
     [switch]$Install,
     [string]$Device,
     [string]$Bundle,
-    [switch]$Release
+    [switch]$Release,
+    # '' = keep the existing CMake cache; 'online'/'offline' sets
+    # STELLARIUM_OHOS_OFFLINE for the engine configure step.
+    [ValidateSet('', 'offline', 'online')]
+    [string]$NetworkMode = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -198,6 +202,11 @@ if (-not $SkipEngine) {
             '-DENABLE_GPS=0', '-DENABLE_INDI=0', '-DENABLE_MEDIA=0',
             '-DENABLE_SHOWMYSKY=0', '-DENABLE_XLSX=0'
         )
+        if ($NetworkMode) {
+            $offlineFlag = if ($NetworkMode -eq 'online') { 'OFF' } else { 'ON' }
+            Write-Host "    network mode: $NetworkMode (STELLARIUM_OHOS_OFFLINE=$offlineFlag)"
+            $configureArgs += "-DSTELLARIUM_OHOS_OFFLINE=$offlineFlag"
+        }
 
         # Stellarium pulls md4c, nlopt and (because OHOS libc++ has no floating
         # point std::from_chars) header-only fast_float through CPM/FetchContent.
