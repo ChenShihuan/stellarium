@@ -124,8 +124,33 @@
 ## 十二、默认不改变的行为（供对照）
 
 - **拾取优先级**：卫星分数 −10 的设定保留（仅在相关开关开启时生效）。
-- **时间滚轮**：保留 upstream 的手势惯性轮（含速度倍率、拖动/惯性/重基准），未替换为 privacy 的「月/年平滑跳转」版本。
+- **时间滚轮**：只有**拖动 + 惯性 + 单位切换**（年/月/日/时/分/秒芯片调用 `selectTimeWheelUnit`）。privacy 分支里的「月/年平滑跳转」（`advanceTimeWheel` + `startTimeWheelTransition` 缓动）经核实是**死代码**——仅有定义、无任何 UI 调用点（`finishTimeWheelTransition` 因计时器恒为 0 而空操作）。经确认**保持现状、不接线**，故设备上无此入口可测。
 - **位置搜索地区过滤**：由预设城市（`中国台湾地区`/`中国香港特别行政区`/`中国澳门特别行政区`）快捷匹配覆盖，未单列地区扫描过滤。
+
+## 十二·补、网络模式（离线 / 在线）切换
+
+巡天页签（`v0006`）与联网能力由**网络模式**总控，仓库内三处开关必须一致：
+
+| 开关 | 位置 | offline | online |
+|---|---|---|---|
+| `OFFLINE_APPGALLERY_BUILD` | `harmonyos/ets-source/common/types/MainWindowModels.ets` | `true` | `false` |
+| `STELLARIUM_OHOS_OFFLINE` | 引擎 CMake 缓存（`build/CMakeCache.txt`） | `ON` | `OFF` |
+| `ohos.permission.INTERNET` | `harmonyos/module.json5` | 移除 | 声明 |
+
+当前仓库为 **offline**（巡天页签不显示，符合离线构建）。
+
+切换命令（引擎需重编，约 1–2 分钟）：
+
+```powershell
+# 离线
+powershell -File scripts/build-ohos-hap-windows.ps1 -NetworkMode offline -SkipDeploy
+# 在线（巡天/多波段可测）
+powershell -File scripts/build-ohos-hap-windows.ps1 -NetworkMode online -SkipDeploy
+```
+
+`-NetworkMode` 只控制引擎的 `STELLARIUM_OHOS_OFFLINE`；UI 标志与 INTERNET 权限需同时改（或用 `scripts/set-ohos-network-mode.sh <offline|online>`，它一次改齐三处并配置 CMake）。
+
+> 提醒：仅当三处一致时模式才有效；混合状态（如 INTERNET 有但 UI 为 offline）会导致巡天页签消失。
 
 ## 十三、环境型验证（本机 Windows 不适用）
 
