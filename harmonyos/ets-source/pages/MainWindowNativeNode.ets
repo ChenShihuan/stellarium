@@ -3421,6 +3421,18 @@ export struct WindowNativeNode {
     }))
   }
 
+  // 「当前面板」的只读回读（CLI getUiPanelState）：openUiPanel / closeUiPanel 只返回 accepted，
+  // 断言「面板确实开了」需要这条命令（此前只能退回坐标点击验证）。与 getAstroPanelState 同一套
+  // AppStorage 发布方式，由页面在面板状态变化时写入。
+  private publishUiPanelState(): void {
+    AppStorage.setOrCreate('stellariumUiPanelState', JSON.stringify({
+      ok: true, panel: this.activePanel, visible: this.panelVisible,
+      expanded: this.isExpandedLayout, foldHover: this.isFoldHoverLayout,
+      navigationDepth: this.panelNavigationDepth, backAvailable: this.canGoBackPanel(),
+      editable: this.activePanel === 'quick' ? this.quickPanelStore.editable : false
+    }))
+  }
+
   private publishSearchBrowserState(error: string = ''): void {
     AppStorage.setOrCreate('stellariumSearchBrowserState', JSON.stringify({
       ok: error.length === 0, error: error, page: this.searchStore.searchFilterPage || 'browse',
@@ -3602,6 +3614,7 @@ export struct WindowNativeNode {
           this.fullInspectorRequested = false
           this.infoWindowStore.infoWinExpanded = false
         }
+        this.publishUiPanelState()
       } }, () => {
         this.panelRouteOpacity = 0
         this.panelRouteOffsetX = -closeDirection * 18
@@ -3623,6 +3636,7 @@ export struct WindowNativeNode {
         this.resetPanelIdle()
         this.schedulePanelDataLoad(panel, true)
         this.scheduleSelectedObjectForUiChange(380)
+        this.publishUiPanelState()
         this.finishPanelRouteTransition(routeSerial)
       } }, () => {
         if (this.panelContentKey !== routeSerial) return
@@ -3636,6 +3650,7 @@ export struct WindowNativeNode {
     this.resetPanelIdle()
     this.schedulePanelDataLoad(panel, true)
     this.scheduleSelectedObjectForUiChange(380)
+    this.publishUiPanelState()
     this.finishPanelRouteTransition(routeSerial)
   }
 
@@ -3894,6 +3909,7 @@ export struct WindowNativeNode {
       if (Number.isFinite(v)) this.viewTab = v
       if (Number.isFinite(c)) this.configTab = c
     }
+    this.publishUiPanelState()
   }
 
   private closePanel(force: boolean = false): void {
@@ -3935,6 +3951,7 @@ export struct WindowNativeNode {
         this.fullInspectorRequested = false
         this.infoWindowStore.infoWinExpanded = false
       }
+      this.publishUiPanelState()
     } }, () => {
       this.panelRouteOpacity = 0
       this.panelRouteOffsetX = -closeDirection * 18
@@ -3942,6 +3959,7 @@ export struct WindowNativeNode {
       this.panelPresentationOffsetY = this.isExpandedLayout ? 0 : 18
     })
     this.scheduleSelectedObjectForUiChange(220)
+    this.publishUiPanelState()
   }
 
 // ===== 命中测试与触摸分发 =====
@@ -4708,6 +4726,7 @@ export struct WindowNativeNode {
   private handlePanelHeaderAction(): void {
     if (this.activePanel === 'quick') {
       this.quickPanelStore.toggleEdit()
+      this.publishUiPanelState()
       return
     }
     if (this.activePanel === 'layers') { this.layerCtl().clearMarkingLayers() }
@@ -7455,6 +7474,8 @@ export struct WindowNativeNode {
           this.panelWidth = Math.min(Math.max(this.skyWidth * 0.28, 280), 400)
           this.panelMaxHeight = Math.min(this.skyHeight * 0.78, 700)
         }
+        // 首次布局即发布一次面板状态，保证 getUiPanelState 在用户还没开关过面板时也有可读值。
+        this.publishUiPanelState()
       })
   }
 

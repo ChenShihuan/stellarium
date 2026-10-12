@@ -11,7 +11,7 @@ inline QStringList names()
 {
 	return QStringLiteral(
 		"copyTextToClipboard,getAppFilingInfo,getNotificationStatus,requestNotificationAuthorization,publishAstronomyNotification,cancelAstronomyNotification,getAstronomyReminderStatus,getAstronomyReminders,scheduleAstronomyReminder,scheduleNextSolarTermReminder,cancelAstronomyReminder,clearAstronomyReminders,getGuideState,startGuide,guideAction,beginGuidedSession,endGuidedSession,"
-		"setAstroTab,setAstroGroup,setAstroFilter,setAstroScroll,getAstroPanelState,getFormSnapshot,refreshFormSnapshot,"
+		"setAstroTab,setAstroGroup,setAstroFilter,setAstroScroll,getAstroPanelState,getUiPanelState,getFormSnapshot,refreshFormSnapshot,"
 		"addBookmark,addDay,addHour,addMinute,addMonth,addYear,advanceTime,angleMeasurePoint,applyCollaborationSession,applySessionState,"
 		"beginGyroViewTransition,beginSkyGesture,cancelGyroViewTransition,clearSelection,cycleCCD,cycleLens,cycleOcular,cycleTelescope,getViewAnchorState,setViewAnchorProbe,"
 		"deleteBookmark,deleteRecording,downloadStarCatalog,dragView,endPinch,exportConfig,getAboutInfo,"
@@ -124,6 +124,12 @@ inline QJsonObject item(const QString& name)
 		else if (name == "setAstroGroup") value["examplePayload"] = "0";
 		else if (name == "setAstroFilter") value["examplePayload"] = "period|morning";
 		else if (name == "setAstroScroll") value["examplePayload"] = "380";
+	}
+	if (name == "getUiPanelState")
+	{
+		value["category"] = QStringLiteral("ArkUI 面板");
+		value["executionLayer"] = QStringLiteral("ArkUI");
+		value["description"] = QStringLiteral("鸿蒙 UI 命令：回读主窗口当前面板状态（panel/visible/expanded/navigationDepth/editable）。openUiPanel 与 closeUiPanel 只返回 accepted，断言面板是否真的打开/关闭需要读这一条。");
 	}
 	else if (name == "searchObject") value["examplePayload"] = "M31";
 	else if (name == "setFOV" || name == "setFieldOfView") value["examplePayload"] = "45";

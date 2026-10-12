@@ -1,5 +1,16 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-12] DevEco Code - 补 getUiPanelState：面板状态只读回读命令
+
+- **依据**：上一条修快捷面板时发现，`openUiPanel` / `closeUiPanel` 只返回 `accepted`，无法断言「面板是否真的打开/关闭」，语义复测因此缺了读回一环（只有 astro / satellite / search / guide 各自的专用 state 命令）。
+- **新增命令 `getUiPanelState`**（只读，`mutatesState:false`，category「ArkUI 面板」，executionLayer「ArkUI」）返回 `{ ok, panel, visible, expanded, foldHover, navigationDepth, backAvailable, editable }`。
+- **实现**（三处 + 目录）：
+  - `harmonyos/ets-source/pages/MainWindowNativeNode.ets`：新增 `publishUiPanelState()`（与 `publishAstroPanelState` 同一套 AppStorage 发布），并在 `setPanel`（普通打开 / 切换 / 关闭分支）、`openSubPanel`、`closePanel`（含 `animateTo` 的 `onFinish`，`panelVisible=false` 是那时才置位）、快捷面板编辑态切换、以及首次 `onAreaChange`（保证启动即有初值）发布。
+  - `harmonyos/ets-source/qability/QAbility.ets`：`request.commandName === 'getUiPanelState'` 读 `AppStorage('stellariumUiPanelState')`。
+  - `src/StelOhosCommandCatalog.hpp`：`names()` 增补 + 中文描述（**改了 `src/`，必须去掉 `-SkipEngine` 重编引擎**；已确认新串进入 `libstellarium.so`）。
+  - `scripts/check-ohos-command-catalog.mjs`：`uiCommands` 白名单增补。
+- **校验**：`arkts_check` 0 error、引擎重编后 `BUILD SUCCESSFUL`、命令目录契约 400（+1）、UI 契约不变、`--list` 可见该命令。真机全周期实测：启动初值 `panel:"object",visible:false` → `openUiPanel quick` 后 `panel:"quick",visible:true` → `closeUiPanel` 后 `visible:false` → `openUiPanel layers` 后 `panel:"layers",visible:true`。
+
 ## [2026-10-12] DevEco Code - 快捷面板第二行图标下沿被切 1-2px 修复
 
 - **依据（用户复测反馈）**：快捷面板打开后，第二行图标下沿触及不可显示区域，肉眼可见 1px 左右或更多。
@@ -8,7 +19,7 @@
   - `quickPanelGridCellSize()` 把格子尺寸**向上**对齐到整物理像素（`Math.ceil(cell * density) / density`），使由它推出的高度不小于图标真实高度 —— 宁可多出不足 1px 空白也不切图标；
   - `quickPanelContentHeight()` 的 `grid` 项加 4 物理像素取整余量（`px2vp(4)`，不足半个 vp，肉眼不可见），覆盖固定 chrome 的逐项对齐偏差。
 - **校验**：`arkts_check` 0 error、`BUILD SUCCESSFUL`、UI 契约不变（35 面板 / 29 静态 id / 18 动态前缀 / 50 id 锚点）、命令目录 399 一致。真机 `ui layout` 复核：两行等高 165/165（改前 165/163），内容 350px < 视口 352px，图标下沿落在视口内 —— 不再被裁。
-- **附记**：快捷面板无法用语义 CLI 打开（`getCommandCatalog` 里没有开面板命令），本次经 `aa start --ps panel quick` 深链未生效，最终按 Dock「快捷开关」节点 bounds 坐标点击验证。**建议补一条语义开面板命令**，避免后续再退回坐标自动化。
+- **附记（已更正）**：本次验证一度退回「按 Dock『快捷开关』节点 bounds 坐标点击」，并误记「没有语义开面板命令」。**更正：`openUiPanel` 早已存在，且 `'quick'` 本就在 `isCliPanelName` 白名单里** —— `node scripts/stellarium-cli.mjs --command openUiPanel --payload quick ...` 实测可直接打开快捷面板，不需要坐标点击。当时漏判的原因是只在`--list` 输出里做了大小写敏感的关键字筛选。真正缺的是**只读回读**，已在同日下一条补齐。
 
 ## [2026-10-12] DevEco Code - 月相桌面卡片方形外框修复
 
