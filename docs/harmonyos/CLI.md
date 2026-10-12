@@ -509,7 +509,7 @@ node scripts/stellarium-cli.mjs --command applyCollaborationSession --payload '<
 - ArkUI“分享接续包”会生成临时本地 JSON 后调用系统分享面板；分享内容先脱敏，临时文件只用于分享，不作为完整配置备份。
 - ArkUI“分享备份”只在用户主动点击时调用系统分享面板；完整配置可能包含位置和插件设置，因此不与“接续包”混用，也不后台发送。
 
-完整设计、配对、局域网和未来云端边界见 `COLLABORATION-AND-CONTINUATION-ROADMAP.md`。
+完整设计、配对、局域网和未来云端边界见 `research/COLLABORATION-AND-CONTINUATION-ROADMAP.md`。
 
 ## PC 响应式布局与触控诊断
 

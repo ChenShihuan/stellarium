@@ -38,4 +38,4 @@ GT5 按轻量级智能穿戴路线研究，Watch 5 按智能穿戴路线研究�
 4. 按真实业务准备穿戴申请、证书指纹和分发资料，再统一处理最终 Profile；不预申请健康数据或泛化 ACL。
 5. GT5 与 Watch 5 分别验收表冠、圆屏文字、字体、多语言、暗色/红光、耗电、提醒可靠性和后台限制。
 
-相关文档：[AGC 能力矩阵](AGC-CAPABILITY-APPLICATION-MATRIX-2026-10.md)、[通知与服务卡片](NOTIFICATION-AND-FORM-ROADMAP.md)、[Seestar 接入与图片路线](SEESTAR-S50-PRO-INTEGRATION-RESEARCH-2026-10.md)。当前不新建应用、不申请能力、不更换 Profile。
+相关文档：[AGC 能力矩阵](../release/AGC-CAPABILITY-APPLICATION-MATRIX-2026-10.md)、[通知与服务卡片](NOTIFICATION-AND-FORM-ROADMAP.md)、[Seestar 接入与图片路线](SEESTAR-S50-PRO-INTEGRATION-RESEARCH-2026-10.md)。当前不新建应用、不申请能力、不更换 Profile。

@@ -74,25 +74,36 @@ OpenGL ES → XComponent → Framebuffer
 ```
 docs/harmonyos/
 ├── （上面 9 个常读文档）
-├── release/      ← 构建·发布·签名·上架：RELEASE-PACKAGING、BUILD-IDENTITY、SIGNING-GUIDE、
-│                    APP-STORE-SUBMISSION、STORE-LISTING-DRAFT、DEVECO-COLLAB、BUILD-CHECK
+├── release/      ← 构建·发布·签名·上架·备案·软著：RELEASE-PACKAGING、BUILD-IDENTITY、SIGNING-GUIDE、
+│                    APP-STORE-SUBMISSION、STORE-LISTING-DRAFT、DEVECO-COLLAB、BUILD-CHECK、
+│                    BUNDLE-IDENTITY-CLEANUP、AGC-CAPABILITY-*（能力申请/材料/审核）、SOFTWARE-COPYRIGHT-*
 ├── policy/       ← 合规与政策：COMPLIANCE-GUIDE、LOCALIZATION-POLICY、
-│                    SKY-CULTURE-EDITORIAL-GUIDELINES、PRIVACY-REVIEW-2026-09-08、QT-CLIPBOARD-REVIEW-FIX
+│                    SKY-CULTURE-EDITORIAL-GUIDELINES、PRIVACY-REVIEW-2026-09-08、QT-CLIPBOARD-REVIEW-FIX、
+│                    PRIVACY-AGREEMENT-RENEWAL、PRIVACY-DOUBLE-DIALOG-*、PRIVACY-STARTUP-UI-*、
+│                    SN-CALL-BOUNDARY-AUDIT-*、NETWORK-LOCALIZATION-MATRIX
+├── server/       ← 服务器与联网部署：SERVER-SECURITY（运维安全基线）、SERVER-PREPARATION、
+│                    NETWORK-DEPLOYMENT-PLAN-*（联网服务部署与备案号核查）
 ├── specs/        ← 现行实现规格：UI-ARCHITECTURE（界面与窗口层级）、CODEBASE-OVERVIEW.html（工程代码库总览）、
 │                    MIST-HORIZON、POLAR-SCOPE-OVERLAY、PROCEDURAL-OBJECT-MODELS、DETAIL-MODEL-*、
 │                    SATELLITE-PANEL-ORBIT-UX、SEARCH-BROWSER-UX、SCRIPT-DESIGN、I18N-ARCHITECTURE、
 │                    STARTUP-MOTION-DESIGN、INTERACTIVE-ASTRONOMY-GUIDES、ASTRO-CALC-MOTION、
-│                    OFFLINE-*、DEEP-SKY-RESOURCE-INVENTORY
+│                    OFFLINE-*、DEEP-SKY-RESOURCE-INVENTORY、MAP-KIT-INTEGRATION-PLAN、
+│                    PC-TOUCHPAD-AND-KEYBOARD-GUIDE、SCREEN-ANCHOR-*、STARTUP-TEXTURE-BUDGET-*
 ├── research/     ← 预研与路线图：CELESTIA-INTEGRATION、MULTIWAVELENGTH-SKY、
 │                    SKY-GUIDE-FEATURE、TELESCOPE-NEARLINK、DESKTOP-GUI-ASSET-REUSE-PLAN、ROADMAP-*、
 │                    PANEL-PLUGIN-ARCHITECTURE-ROADMAP（面板/插件产品级归属）、
-│                    ARKTS-PAGES-REFACTOR-PLAN（pages/ 代码结构重构方案）
+│                    ARKTS-PAGES-REFACTOR-PLAN（pages/ 代码结构重构方案）、
+│                    AR-ENGINE-PORTAL-ROADMAP-*、CARD-UI-RESEARCH-*、COLLABORATION-AND-CONTINUATION-ROADMAP、
+│                    DIGITAL-GOODS-AND-IAP-ROADMAP-*、DOMESTIC-RESOURCE-DISTRIBUTION-RESEARCH-*、
+│                    ONSTEP-NEARLINK-PRODUCT-ROADMAP、SEESTAR-S50-PRO-INTEGRATION-RESEARCH-*、
+│                    STARGAZING-HUB-RESEARCH-*、UPSTREAM-INTEGRATION-PLAN-*、WEARABLE-GT5-WATCH5-ROADMAP-*
 ├── testing/      ← 验证环境与测试平台：PLATFORM-MATRIX（模拟器/真机/云调试各自能验什么、约束与证据）
 ├── json/         ← 全部保留的数据文件（星空文化修订/复核数据、各轮 pad 实测记录）
 │   └── culture-review-batches/   ← 被 scripts/review-skyculture-passages.py 读取
-├── archive/      ← 历史留存量：audits/（各轮审计与复核报告）、design/（早期设计稿）、
-│                    MOBILE-UI-HANDOVER.md
-├── workbuddy/    ← WorkBuddy Agent 记录：memory/（Qt for OHOS 踩坑）、phase2/（工具包与补丁）
+├── archive/      ← 历史留存量：audits/（各轮审计与复核报告，含 PC-UX-AUDIT-*、
+│                    SATELLITE-PLUGIN-ALIGNMENT-AUDIT-*）、design/（早期设计稿）、MOBILE-UI-HANDOVER.md
+├── workbuddy/    ← WorkBuddy Agent 记录：memory/（Qt for OHOS 踩坑）、phase2/（工具包与补丁）、
+│                    workbench-single-instance-policy.template.json
 ├── skills/       ← 可复制到 Agent 运行时的技能包
 └── signing/      ← 签名证书和配置（不入库，见 .gitignore）
 ```

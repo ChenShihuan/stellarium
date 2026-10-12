@@ -1,4 +1,12 @@
-> **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/BUNDLE-IDENTITY-CLEANUP.md`）。
+> **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
+
+## [2026-10-12] DevEco Code - docs/harmonyos 顶层文档分类归位
+
+- **依据（用户要求）**：把未放入分类子文件夹的 35 个顶层文档，按 docs/harmonyos/AGENTS.md §2.2 的分类树判读归位；新增 server/ 承载服务器与联网部署文档。
+- **移动（git mv，保留历史）**：release/ 10（AGC-*×4、BUNDLE-IDENTITY-CLEANUP、SOFTWARE-COPYRIGHT-*×5）；policy/ 5（PRIVACY-AGREEMENT-RENEWAL、PRIVACY-DOUBLE-DIALOG-*、PRIVACY-STARTUP-UI-*、SN-CALL-BOUNDARY-AUDIT-*、NETWORK-LOCALIZATION-MATRIX）；server/ 3（SERVER-SECURITY、SERVER-PREPARATION、NETWORK-DEPLOYMENT-PLAN-*，新增目录）；specs/ 4（MAP-KIT-INTEGRATION-PLAN、PC-TOUCHPAD-AND-KEYBOARD-GUIDE、SCREEN-ANCHOR-*、STARTUP-TEXTURE-BUDGET-*）；research/ 10；archive/audits/ 2（PC-UX-AUDIT-*、SATELLITE-PLUGIN-ALIGNMENT-AUDIT-*）；workbuddy/ 1（workbench-single-instance-policy.template.json）。
+- **引用同步**：3 个脚本（check-ohos-bundle-identity 白名单、test-ohos-ar-contract、test-ohos-touchpad-contract）、根 AGENTS.md、docs/harmonyos/AGENTS.md 分类树、KNOWN-ISSUES / NETWORK-INVENTORY / CLI / website README 及移动文档内部链接均已更新。
+- **保留**：docs/harmonyos/CHANGELOG.md 历史条目按当时路径原样保留（不改写历史）。
+- **校验**：相对链接校验 253 条，剩余 9 条断链均为**整理前已存在**（DEVECO-COLLAB/PRIVACY-REVIEW/skills/archive/skycultures），与本次无关。
 
 ## [2026-10-11] DevEco Code - privacy-v2 合并收口与契约测试补齐（第三波）
 

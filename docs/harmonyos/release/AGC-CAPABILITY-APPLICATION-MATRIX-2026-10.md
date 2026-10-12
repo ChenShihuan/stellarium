@@ -34,7 +34,7 @@
 
 ## 后续申请门槛（官方 MCP 复核，2026-10-01）
 
-穿戴产品的具体分层、GT5 测试渠道、AppID/包名待确认项见[GT5 与 Watch 5 穿戴端路线](WEARABLE-GT5-WATCH5-ROADMAP-2026-10.md)。不因同一产品就假设同一 HAP 可跨两种穿戴运行时安装，也不提前创建独立手表产品。
+穿戴产品的具体分层、GT5 测试渠道、AppID/包名待确认项见[GT5 与 Watch 5 穿戴端路线](../research/WEARABLE-GT5-WATCH5-ROADMAP-2026-10.md)。不因同一产品就假设同一 HAP 可跨两种穿戴运行时安装，也不提前创建独立手表产品。
 
 - **实况窗正式权益：** 本轮申请的是调测权益。官方流程要求先充分联调、提交真实效果和场景方案，再申请正式权益；当前文档还列出已上架且月活至少 1000 的入口条件。不能将天文观测自行认定为已获准的导航业务，最终以华为场景评审为准。依据：[申请实况窗正式权限](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/liveview-formal-authority)。
 - **锁屏沉浸实况窗：** 与本轮的普通锁屏卡片不同。若做卫星倒计时的大型动态锁屏展示，还需核对并申请相应实况窗及锁屏沉浸实况窗权益，不能凭普通锁屏卡片审批直接启用。依据：[锁屏沉浸实况窗](https://developer.huawei.com/consumer/cn/doc/best-practices/bpta-lock-screen-immersive-live-window)。

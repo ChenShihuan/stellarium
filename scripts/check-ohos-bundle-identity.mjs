@@ -18,7 +18,7 @@ const FORBIDDEN = [
 // 允许保留历史痕迹的文件（真机记录 / 本清理方案的示例）。
 const ALLOWLIST = new Set([
   'docs/harmonyos/CHANGELOG.md',
-  'docs/harmonyos/BUNDLE-IDENTITY-CLEANUP.md',
+  'docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md',
 ]);
 
 // 跳过二进制/大体积资产，只扫文本。
