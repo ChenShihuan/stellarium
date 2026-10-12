@@ -38,9 +38,15 @@ assert.ok(fs.existsSync(path.join(root, 'harmonyos/ets-source/qability/Collabora
 // sync-ohos-build-sources.sh mirrors the whole harmonyos/ets-source tree, so the
 // service is carried over without an explicit per-file entry.
 assert.match(sync, /mirror_ets_sources/);
-// The application currently supports an explicit online build.  The
-// collaboration payload itself must remain local and redacted; the module
-// permission is not evidence that a session was uploaded.
-assert.match(module, /ohos\.permission\.INTERNET/);
+// The INTERNET permission follows the selected network mode (offline removes
+// it). Either way the collaboration payload itself must stay local and
+// redacted; the module permission is not evidence that a session was uploaded.
+const offlineBuild = /const OFFLINE_APPGALLERY_BUILD: boolean = true/.test(
+  read('harmonyos/ets-source/common/types/MainWindowModels.ets'));
+if (offlineBuild) {
+  assert.doesNotMatch(module, /ohos\.permission\.INTERNET/);
+} else {
+  assert.match(module, /ohos\.permission\.INTERNET/);
+}
 assert.doesNotMatch(service, /https?:\/\//);
 console.log('HarmonyOS collaboration contract passed.');
