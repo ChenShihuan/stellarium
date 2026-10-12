@@ -17,7 +17,7 @@ import hilog from '@ohos.hilog'
 import { KeyCode } from '@kit.InputKit'
 import { CommandPort } from '../bridge/CommandPort'
 import { NightModeStore } from '../state/NightModeStore'
-import { ShellAction } from '../pages/StellariumTypes'
+import { ShellAction, StellariumBridgeResponse } from '../pages/StellariumTypes'
 import { clamp, distance } from '../common/derive/astro'
 import { touchWindowX, touchWindowY, panelTop, panelLeft, panelRight, isDockPoint, compactTopQuickY } from '../common/derive/geometry'
 
@@ -284,37 +284,93 @@ export class SkyInputController {
     }
   }
 
-  handleSkyKey(event: KeyEvent): boolean {
-    if (this.hooks.keyboardTextInputFocused()) { return false }
-    if (event.type !== 0) { return false }
+  // 提取 Ctrl/Alt/Shift 前缀，拼成引擎 StelActionMgr 认识的组合键名。
+  private keyboardModifierPrefix(event: KeyEvent): string {
+    const modifiers: string[] = []
+    try {
+      if (event.getModifierKeyState && event.getModifierKeyState(['Ctrl'])) modifiers.push('CTRL')
+      if (event.getModifierKeyState && event.getModifierKeyState(['Alt'])) modifiers.push('ALT')
+      if (event.getModifierKeyState && event.getModifierKeyState(['Shift'])) modifiers.push('SHIFT')
+    } catch (_) { }
+    return modifiers.length === 0 ? '' : modifiers.join('+') + '+'
+  }
+
+  // 把 ArkUI 键码折算成与快捷键编辑器一致的键名。
+  private keyboardToken(event: KeyEvent): string {
+    switch (event.keyCode) {
+      case KeyCode.KEYCODE_DPAD_UP: return 'UP'
+      case KeyCode.KEYCODE_DPAD_DOWN: return 'DOWN'
+      case KeyCode.KEYCODE_DPAD_LEFT: return 'LEFT'
+      case KeyCode.KEYCODE_DPAD_RIGHT: return 'RIGHT'
+      case KeyCode.KEYCODE_PAGE_UP: return 'PAGEUP'
+      case KeyCode.KEYCODE_PAGE_DOWN: return 'PAGEDOWN'
+      case KeyCode.KEYCODE_PLUS: return 'PLUS'
+      case KeyCode.KEYCODE_EQUALS: return 'EQUALS'
+      case KeyCode.KEYCODE_MINUS: return 'MINUS'
+      case KeyCode.KEYCODE_SPACE: return 'SPACE'
+      case KeyCode.KEYCODE_ENTER: return 'ENTER'
+      case KeyCode.KEYCODE_ESCAPE: return 'ESC'
+      case KeyCode.KEYCODE_DEL: return 'BACKSPACE'
+      case KeyCode.KEYCODE_FORWARD_DEL: return 'DELETE'
+      default: {
+        const text = String(event.keyText ?? '').trim().toUpperCase()
+        if (text === 'ARROWUP') return 'UP'
+        if (text === 'ARROWDOWN') return 'DOWN'
+        if (text === 'ARROWLEFT') return 'LEFT'
+        if (text === 'ARROWRIGHT') return 'RIGHT'
+        if (text === ' ') return 'SPACE'
+        if (text.length > 0) return text.replace(/\s+/g, '')
+        return ''
+      }
+    }
+  }
+
+  // 引擎未接受该键（无绑定动作）时的本地回落。
+  private fallbackKeyboardToken(token: string): void {
     const width = Math.round(this.hooks.skyWidth()).toString()
     const height = Math.round(this.hooks.skyHeight()).toString()
-    const pan = (x: number, y: number): boolean => {
+    const pan = (x: number, y: number): void => {
       this.commandPort.fire('panBy', x.toString() + '|' + y.toString() + '|' + width + '|' + height)
-      return true
     }
-    switch (event.keyCode) {
-      case KeyCode.KEYCODE_DPAD_UP: return pan(0, -80)
-      case KeyCode.KEYCODE_DPAD_DOWN: return pan(0, 80)
-      case KeyCode.KEYCODE_DPAD_LEFT: return pan(-80, 0)
-      case KeyCode.KEYCODE_DPAD_RIGHT: return pan(80, 0)
-      case KeyCode.KEYCODE_PLUS:
-      case KeyCode.KEYCODE_EQUALS: this.hooks.zoomStep(0.8); return true
-      case KeyCode.KEYCODE_MINUS: this.hooks.zoomStep(1.25); return true
-      case KeyCode.KEYCODE_SPACE: this.hooks.centerSelectedObjectFromKeyboard(); return true
-      case KeyCode.KEYCODE_ENTER: this.hooks.moveToSelectedObject(); return true
-      case KeyCode.KEYCODE_F: this.hooks.setPanel('search'); return true
-      case KeyCode.KEYCODE_N:
+    switch (token) {
+      case 'UP': pan(0, -80); break
+      case 'DOWN': pan(0, 80); break
+      case 'LEFT': pan(-80, 0); break
+      case 'RIGHT': pan(80, 0); break
+      case 'PAGEUP': this.hooks.zoomStep(0.8); break
+      case 'PAGEDOWN': this.hooks.zoomStep(1.25); break
+      case 'PLUS':
+      case 'EQUALS': this.hooks.zoomStep(0.8); break
+      case 'MINUS': this.hooks.zoomStep(1.25); break
+      case 'SPACE': this.hooks.centerSelectedObjectFromKeyboard(); break
+      case 'ENTER': this.hooks.moveToSelectedObject(); break
+      case 'F': this.hooks.setPanel('search'); break
+      case 'N':
         this.nightModeStore.nightMode = !this.nightModeStore.nightMode
         this.hooks.persistNightMode()
         this.commandPort.fire('setNightMode', this.nightModeStore.nightMode ? 'true' : 'false')
-        return true
-      case KeyCode.KEYCODE_ESCAPE:
-        if (this.hooks.modelImmersive()) this.hooks.setModelImmersive(false)
-        else this.hooks.closePanel()
-        return true
-      default: return false
+        break
+      default: break
     }
+  }
+
+  handleSkyKey(event: KeyEvent): boolean {
+    if (this.hooks.keyboardTextInputFocused()) { return false }
+    if (event.type !== 0) { return false }
+    const token = this.keyboardToken(event)
+    if (token.length === 0) return false
+    if (token === 'ESC') {
+      if (this.hooks.modelImmersive()) this.hooks.setModelImmersive(false)
+      else this.hooks.closePanel()
+      return true
+    }
+    // 先把组合键交给引擎的 StelActionMgr（用户自定义快捷键在此生效）；
+    // 引擎未接受时回落到本地默认行为。
+    const payload = this.keyboardModifierPrefix(event) + token
+    this.commandPort.requestInteractive('sendKey', payload, (result: StellariumBridgeResponse) => {
+      if (result.accepted !== true) this.fallbackKeyboardToken(token)
+    }, () => { this.fallbackKeyboardToken(token) })
+    return true
   }
 
   // The floating panel sits above the sky touch surface.  Keep its gestures
