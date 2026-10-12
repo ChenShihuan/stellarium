@@ -105,7 +105,7 @@ export struct ConfigFallbackPanel {
                 Text(this.observingDisplayName(name))
                   .fontSize(11).fontColor("#E5FFFFFF")
                 Text('x')
-                  .fontSize(9).fontColor("rgba(255,255,255,0.4)")
+                  .fontSize(10).fontColor("rgba(255,255,255,0.4)")
                   .onClick(() => {
                     this.removeObservingTarget(name)
                   })

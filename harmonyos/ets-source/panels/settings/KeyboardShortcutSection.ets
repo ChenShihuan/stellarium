@@ -43,7 +43,7 @@ export struct KeyboardShortcutSection {
               Row({ space: 6 }) {
                 Column({ space: 1 }) {
                   Text(item.text.length > 0 ? item.text : item.id).fontSize(10).fontColor(this.textColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(item.id + ' · ' + item.group).fontSize(8).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text(item.id + ' · ' + item.group).fontSize(10).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                 Text(item.shortcut.length > 0 ? item.shortcut : '—').fontSize(10)
                   .fontColor(this.store.keyboardShortcutSelectedId === item.id ? this.accentColor : this.subColor)

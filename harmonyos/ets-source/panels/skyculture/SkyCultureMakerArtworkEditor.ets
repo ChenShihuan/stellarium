@@ -26,10 +26,10 @@ export struct SkyCultureMakerArtworkEditor {
       Row({ space: 8 }) {
         Column({ space: 2 }) {
           Text(I18n.t('sky_culture_maker_artwork')).fontSize(11).fontColor(this.textColor).width('100%')
-          Text(I18n.t('sky_culture_maker_artwork_hint')).fontSize(9).lineHeight(14).fontColor(this.subColor).width('100%')
+          Text(I18n.t('sky_culture_maker_artwork_hint')).fontSize(10).lineHeight(14).fontColor(this.subColor).width('100%')
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Button(this.store.artworkImporting ? I18n.t('sky_culture_maker_artwork_importing') : I18n.t('sky_culture_maker_artwork_choose'))
-          .fontSize(9).fontColor(this.textColor).backgroundColor(this.bgColor).height(30).borderRadius(UI_RADIUS_CONTROL)
+          .fontSize(10).fontColor(this.textColor).backgroundColor(this.bgColor).height(30).borderRadius(UI_RADIUS_CONTROL)
           .enabled(!this.store.artworkImporting).onClick(() => { this.onImport() })
       }.width('100%')
       if (this.store.selected()?.image !== undefined) {
@@ -40,12 +40,12 @@ export struct SkyCultureMakerArtworkEditor {
           } else if (this.store.artworkPreviewState === 'preparing') {
             Column({ space: 7 }) {
               LoadingProgress().width(20).height(20).color(this.accentColor)
-              Text(I18n.t('sky_culture_maker_artwork_preparing')).fontSize(9).fontColor(this.subColor)
+              Text(I18n.t('sky_culture_maker_artwork_preparing')).fontSize(10).fontColor(this.subColor)
             }
           } else {
             Text(I18n.t(this.store.artworkPreviewState === 'decodeFailed'
               ? 'sky_culture_maker_artwork_decode_failed' : 'sky_culture_maker_artwork_missing'))
-              .fontSize(9).fontColor('#FFB7B7').textAlign(TextAlign.Center).padding({ left: 16, right: 16 })
+              .fontSize(10).fontColor('#FFB7B7').textAlign(TextAlign.Center).padding({ left: 16, right: 16 })
           }
           ForEach([0, 1, 2], (anchorIndex: number) => {
             if ((this.store.artworkAnchor(anchorIndex)?.hip ?? 0) > 0) {
@@ -71,14 +71,14 @@ export struct SkyCultureMakerArtworkEditor {
         Row({ space: 6 }) {
           ForEach([0, 1, 2], (anchorIndex: number) => {
             Button(I18n.format('sky_culture_maker_anchor', [(anchorIndex + 1).toString(), this.store.artworkAnchorHipText(anchorIndex)]))
-              .fontSize(9).fontColor(anchorIndex === this.store.artworkAnchorIndex ? '#FFFFFFFF' : this.subColor)
+              .fontSize(10).fontColor(anchorIndex === this.store.artworkAnchorIndex ? '#FFFFFFFF' : this.subColor)
               .backgroundColor(anchorIndex === this.store.artworkAnchorIndex ? this.accentColor : this.bgColor)
               .height(30).layoutWeight(1).borderRadius(UI_RADIUS_CONTROL)
               .onClick(() => { this.store.artworkAnchorIndex = anchorIndex })
           }, (anchorIndex: number) => anchorIndex.toString())
         }.width('100%')
-        Text(I18n.t('sky_culture_maker_anchor_instruction')).fontSize(9).lineHeight(14).fontColor(this.subColor).width('100%')
-        Button(I18n.t('sky_culture_maker_artwork_remove')).fontSize(9).fontColor('#FFB7B7')
+        Text(I18n.t('sky_culture_maker_anchor_instruction')).fontSize(10).lineHeight(14).fontColor(this.subColor).width('100%')
+        Button(I18n.t('sky_culture_maker_artwork_remove')).fontSize(10).fontColor('#FFB7B7')
           .backgroundColor('rgba(255,107,107,0.12)').height(30).width('100%').borderRadius(UI_RADIUS_CONTROL)
           .onClick(() => { this.onRemove() })
       }

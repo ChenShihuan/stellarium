@@ -51,7 +51,7 @@ export struct MeteorShowersPanel {
         if (this.meteorStore.msCatalogName.length > 0 || this.meteorStore.msCatalogVersion.length > 0 || this.meteorStore.msCatalogSource.length > 0) {
           Column({ space: 2 }) {
             Text('原版流星雨目录' + (this.meteorStore.msCatalogVersion.length > 0 ? ' · v' + this.meteorStore.msCatalogVersion : '')).fontSize(10).fontColor('#88FFFFFF').width('100%')
-            if (this.meteorStore.msCatalogSource.length > 0) Text(I18n.t('resource_source') + ': ' + this.meteorStore.msCatalogSource).fontSize(9).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (this.meteorStore.msCatalogSource.length > 0) Text(I18n.t('resource_source') + ': ' + this.meteorStore.msCatalogSource).fontSize(10).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor('rgba(111, 168, 207, 0.08)').borderRadius(UI_RADIUS_CONTROL)
         }
         Text(I18n.t('meteor_radiant_desc'))

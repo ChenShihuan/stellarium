@@ -54,7 +54,7 @@ export struct OcularSelector {
                     .fontSize(11).fontColor(this.store.ocularInstrumentIndex(this.kind) === item.index ? '#FFFFFF' : this.textColor)
                     .fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   Text(this.store.ocularInstrumentSummary(this.kind, item))
-                    .fontSize(9).fontColor(this.store.ocularInstrumentIndex(this.kind) === item.index ? '#D8EEFF' : this.subColor)
+                    .fontSize(10).fontColor(this.store.ocularInstrumentIndex(this.kind) === item.index ? '#D8EEFF' : this.subColor)
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 }.alignItems(HorizontalAlign.Start)
               }

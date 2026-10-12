@@ -351,22 +351,22 @@ export struct SettingsPanel {
                     Row() {
                       Text(scriptZh(s)).fontSize(11).fontColor(this.textColor)
                         .fontWeight(FontWeight.Medium).layoutWeight(1)
-                      Text('▶').fontSize(9).fontColor('#7FD0FF')
+                      Text('▶').fontSize(10).fontColor('#7FD0FF')
                     }
                     .height(28).width('100%').padding({ left: 10, right: 10 })
                     if (scriptDesc(s)) {
                       Text(scriptDesc(s))
-                        .fontSize(8).fontColor('#77FFFFFF').width('100%')
+                        .fontSize(10).fontColor('#77FFFFFF').width('100%')
                         .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                         .padding({ left: 10, right: 10, bottom: 3 })
                     }
                     if (this.scriptMetaLine(s).length > 0) {
                       Text(this.scriptMetaLine(s))
-                        .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .fontSize(10).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                         .padding({ left: 10, right: 10, bottom: 3 })
                     }
                     if (this.scriptSourceLine(s).length > 0) {
-                      Text(this.scriptSourceLine(s)).fontSize(8).fontColor('#55FFFFFF').width('100%').maxLines(1)
+                      Text(this.scriptSourceLine(s)).fontSize(10).fontColor('#55FFFFFF').width('100%').maxLines(1)
                         .textOverflow({ overflow: TextOverflow.Ellipsis }).padding({ left: 10, right: 10, bottom: 3 })
                     }
                   }
@@ -410,7 +410,7 @@ export struct SettingsPanel {
                       Text(pluginZh(pl.name)).fontSize(12).fontColor(this.textColor)
                         .fontWeight(FontWeight.Medium).layoutWeight(1)
                       Text(pl.loaded ? I18n.t('plugin_runtime_loaded') : I18n.t('plugin_runtime_unloaded'))
-                        .fontSize(9).fontColor(pl.loaded ? '#B9E6C4' : this.subColor)
+                        .fontSize(10).fontColor(pl.loaded ? '#B9E6C4' : this.subColor)
                         .padding({ left: 7, right: 7, top: 3, bottom: 3 })
                         .backgroundColor(pl.loaded ? 'rgba(70, 150, 96, 0.18)' : this.panelColor)
                         .borderRadius(UI_RADIUS_PILL)
@@ -422,15 +422,15 @@ export struct SettingsPanel {
                         .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                     }
                     Text(I18n.t('resource_author') + ': ' + resourceText(pl.authors, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + resourceText(pl.license, I18n.t('resource_not_provided')))
-                      .fontSize(9).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                      .fontSize(10).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                     if (this.pluginMetaLine(pl).length > 0) {
                       Text(this.pluginMetaLine(pl))
-                        .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .fontSize(10).fontColor('#66FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                     }
                     Row({ space: 8 }) {
                       Text(I18n.t('plugin_all_loaded_policy')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
                     }.width('100%').height(24)
-                    Text(this.pluginFeatureDestination(pl.id)).fontSize(9).fontColor(this.subColor).width('100%')
+                    Text(this.pluginFeatureDestination(pl.id)).fontSize(10).fontColor(this.subColor).width('100%')
                       .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                     if (this.pluginFeatureIsActionable(pl.id)) {
                       Button() {
@@ -453,7 +453,7 @@ export struct SettingsPanel {
                           ? I18n.t('plugin_network_disabled')
                           : I18n.t('plugin_offline_disabled')
                         : I18n.t('plugin_background_only'))
-                        .fontSize(9).fontColor(this.subColor).width('100%').maxLines(2)
+                        .fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
                     }
                   }
                   .width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
@@ -487,7 +487,7 @@ export struct SettingsPanel {
                   .onChange((enabled: boolean) => { this.setViewLockState(enabled) })
               }.width('100%')
               Text(this.viewSettingsStore.viewLock ? I18n.t('view_lock_enabled') : I18n.t('settings_view_lock_hint'))
-                .fontSize(9).fontColor(this.subColor).width('100%').maxLines(3)
+                .fontSize(10).fontColor(this.subColor).width('100%').maxLines(3)
             }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
               .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 8 })
 

@@ -37,7 +37,7 @@ export struct ObservingPanel {
       Row({ space: 8 }) {
         Text(I18n.t('panel_observing_list')).fontSize(15).fontColor(this.textColor).layoutWeight(1)
         if (this.observingListStore.observingListReady) {
-          Text(I18n.t('observing_list_saved')).fontSize(9).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(I18n.t('observing_list_saved')).fontSize(10).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         Button(I18n.t('dock_search')).fontSize(11).fontColor(this.textColor).backgroundColor(this.panelColor)
           .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
@@ -74,10 +74,10 @@ export struct ObservingPanel {
             Column({ space: 2 }) {
               Row({ space: 6 }) {
                 Text(this.targetTitleOf(target)).fontSize(13).fontColor(this.textColor).fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                Text(this.typeOf(target.type ?? '')).fontSize(9).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                Text(this.typeOf(target.type ?? '')).fontSize(10).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               }.width('100%')
               if (this.targetSubtitleOf(target).length > 0) {
-                Text(this.targetSubtitleOf(target)).fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                Text(this.targetSubtitleOf(target)).fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               }
               Text('高度 ' + (target.altitude ?? 0).toFixed(0) + '°  方位 ' + (target.azimuth ?? 0).toFixed(0) + '°  ' + (target.magnitude ?? 0).toFixed(1) + ' 等')
                 .fontSize(10).fontColor(this.subColor).width('100%').maxLines(1)

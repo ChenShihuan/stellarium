@@ -84,22 +84,22 @@ export struct ScriptsPanel {
                 Row() {
                   Text(scriptZh(s)).fontSize(11).fontColor(this.textColor)
                     .fontWeight(FontWeight.Medium).layoutWeight(1)
-                  Text('▶').fontSize(9).fontColor('#7FD0FF')
+                  Text('▶').fontSize(10).fontColor('#7FD0FF')
                 }
                 .height(28).width('100%').padding({ left: 10, right: 10 })
                 if (scriptDesc(s)) {
                   Text(scriptDesc(s))
-                    .fontSize(8).fontColor('#77FFFFFF').width('100%')
+                    .fontSize(10).fontColor('#77FFFFFF').width('100%')
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     .padding({ left: 10, right: 10, bottom: 3 })
                 }
                 if (this.scriptMetaLine(s).length > 0) {
                   Text(this.scriptMetaLine(s))
-                    .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    .fontSize(10).fontColor('#66FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     .padding({ left: 10, right: 10, bottom: 3 })
                 }
                 if (this.scriptSourceLine(s).length > 0) {
-                  Text(this.scriptSourceLine(s)).fontSize(8).fontColor('#55FFFFFF').width('100%').maxLines(1)
+                  Text(this.scriptSourceLine(s)).fontSize(10).fontColor('#55FFFFFF').width('100%').maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis }).padding({ left: 10, right: 10, bottom: 3 })
                 }
             }

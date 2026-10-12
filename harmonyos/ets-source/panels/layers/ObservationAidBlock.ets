@@ -21,7 +21,7 @@ export struct ObservationAidBlock {
       Row() {
         Column({ space: 1 }) {
           Text('大气折射').fontSize(12).fontColor(this.textColor).width('100%')
-          Text('空气会把贴近地平线的天体"抬高"一点，开启后显示的是肉眼实际看到的位置').fontSize(9).fontColor(this.subColor).width('100%')
+          Text('空气会把贴近地平线的天体"抬高"一点，开启后显示的是肉眼实际看到的位置').fontSize(10).fontColor(this.subColor).width('100%')
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Toggle({ type: ToggleType.Switch, isOn: this.refractionOn })
           .onChange((v: boolean) => { this.onAtmosphere(v ? 1013 : 0, this.atmoTemperature, this.atmoExtinction) })
@@ -51,7 +51,7 @@ export struct ObservationAidBlock {
         Text(this.atmoExtinction.toFixed(2)).fontSize(10).fontColor(this.subColor).width(72).textAlign(TextAlign.End)
       }.width('100%').padding({ left: 10, right: 10 })
       Text('消光越大，越靠近地平线的星星被大气挡得越暗（城市雾霾天可调高）。')
-        .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
+        .fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
     }.width('100%')
   }
 }

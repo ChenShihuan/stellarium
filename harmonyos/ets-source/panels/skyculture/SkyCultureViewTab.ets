@@ -186,7 +186,7 @@ export struct SkyCultureViewTab {
           Row() {
             Column({ space: 1 }) {
               Text(I18n.t('culture_art_gallery')).fontSize(11).fontColor(this.textColor).width('100%')
-              Text(this.skyCultureViewStore.artItems.length + ' ' + I18n.t('culture_offline_art')).fontSize(9).fontColor(this.subColor).width('100%')
+              Text(this.skyCultureViewStore.artItems.length + ' ' + I18n.t('culture_offline_art')).fontSize(10).fontColor(this.subColor).width('100%')
             }.layoutWeight(1)
             Button(this.skyCultureViewStore.artExpanded ? '收起' : '查看').fontSize(10).fontColor(this.accentColor).backgroundColor(this.panelColor)
               .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
@@ -209,14 +209,14 @@ export struct SkyCultureViewTab {
                       LoadingProgress().width(24).height(24).color(this.accentColor)
                     }.width('100%').aspectRatio(1).backgroundColor('rgba(0,0,0,0.22)').borderRadius(UI_RADIUS_CONTROL)
                   } else if (this.artStatus(art.rawPath) === 'decodeFailed') {
-                    Text('图像解码失败').fontSize(9).fontColor(this.subColor).width('100%').aspectRatio(1)
+                    Text('图像解码失败').fontSize(10).fontColor(this.subColor).width('100%').aspectRatio(1)
                       .textAlign(TextAlign.Center).backgroundColor('rgba(0,0,0,0.22)').borderRadius(UI_RADIUS_CONTROL)
                   } else {
-                    Text('绘图资源未安装').fontSize(9).fontColor(this.subColor).width('100%').aspectRatio(1)
+                    Text('绘图资源未安装').fontSize(10).fontColor(this.subColor).width('100%').aspectRatio(1)
                       .textAlign(TextAlign.Center).backgroundColor('rgba(0,0,0,0.22)').borderRadius(UI_RADIUS_CONTROL)
                   }
                   Text(art.name !== undefined && art.name.length > 0 ? art.name : '星座绘图 ' + art.index)
-                    .fontSize(9).fontColor(this.subColor).width('100%').maxLines(1)
+                    .fontSize(10).fontColor(this.subColor).width('100%').maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis }).textAlign(TextAlign.Center)
                 }.width('31%').padding(4).margin({ right: 1, bottom: 8 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
                   .onClick(() => {
@@ -225,7 +225,7 @@ export struct SkyCultureViewTab {
               }, (art: SkyCultureArtItem) => art.rawPath)
             }.width('100%').padding({ top: 5, bottom: 5 })
             if (this.skyCultureViewStore.artItems.length > 24) {
-              Text('已显示前 24 幅，完整绘图仍由星图图层按需加载。').fontSize(9).fontColor(this.subColor).width('100%')
+              Text('已显示前 24 幅，完整绘图仍由星图图层按需加载。').fontSize(10).fontColor(this.subColor).width('100%')
             }
           }
         }
@@ -280,10 +280,10 @@ export struct SkyCultureViewTab {
                 Row({ space: 8 }) {
                   Column({ space: 1 }) {
                     Text(entry.name.length > 0 ? entry.name : '未命名地理档案').fontSize(10).fontColor(this.textColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    Text(this.settings.skyCultureTerritoryRange(entry)).fontSize(9).fontColor(this.subColor).width('100%')
+                    Text(this.settings.skyCultureTerritoryRange(entry)).fontSize(10).fontColor(this.subColor).width('100%')
                   }.layoutWeight(1)
                   if (entry.countryCode.length > 0) {
-                    Text(entry.countryCode).fontSize(9).fontColor(this.accentColor).padding({ left: 5, right: 5, top: 2, bottom: 2 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
+                    Text(entry.countryCode).fontSize(10).fontColor(this.accentColor).padding({ left: 5, right: 5, top: 2, bottom: 2 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
                   }
                 }.width('100%').padding({ left: 6, right: 6, top: 5, bottom: 5 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
               }, (entry: SkyCultureTerritoryEntry, index: number) => entry.name + '-' + entry.beginTime + '-' + entry.endTime + '-' + index)
@@ -295,7 +295,7 @@ export struct SkyCultureViewTab {
             Column({ space: 1 }) {
               Text(I18n.t('culture_map')).fontSize(11).fontColor(this.textColor).width('100%')
               Text('使用本地地图和文化资料，不联网；文化分布示意不代表现行行政区划或政治边界')
-                .fontSize(9).fontColor(this.subColor).width('100%').maxLines(2)
+                .fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
             }.layoutWeight(1)
             Button(this.settings.skyCultureTerritoryMapExpanded ? I18n.t('culture_update_map') : I18n.t('culture_view_map')).fontSize(10).fontColor(this.accentColor).backgroundColor(this.panelColor)
               .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 }).enabled(!this.settings.skyCultureTerritoryMapLoading)
@@ -312,19 +312,19 @@ export struct SkyCultureViewTab {
                 TextInput({ text: this.settings.skyCultureTerritoryMapYearInput, placeholder: '年份' }).fontSize(11).fontColor(this.textColor).height(28).width(86)
                   .onChange((value: string) => { this.settings.skyCultureTerritoryMapYearInput = value })
                   .onSubmit(() => { this.settings.applySkyCultureTerritoryMapYearInput() })
-                Button('同步星图时间').fontSize(9).fontColor(this.accentColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 7, right: 7 })
+                Button('同步星图时间').fontSize(10).fontColor(this.accentColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 7, right: 7 })
                   .onClick(() => { this.settings.syncSkyCultureTerritoryMapYearToSimulation() })
-                Button('更新').fontSize(9).fontColor(this.accentColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
+                Button('更新').fontSize(10).fontColor(this.accentColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 8, right: 8 })
                   .enabled(!this.settings.skyCultureTerritoryMapLoading)
                   .onClick(() => { this.onLoadTerritoryMap() })
               }.width('100%')
-              Text('地图年份独立于文化目录筛选；可按星图当前时间同步。').fontSize(9).fontColor(this.subColor).width('100%')
+              Text('地图年份独立于文化目录筛选；可按星图当前时间同步。').fontSize(10).fontColor(this.subColor).width('100%')
               Row() {
                 Column({ space: 1 }) {
                   Text('按观测地旋转地图').fontSize(10).fontColor(this.textColor).width('100%')
                   Text(this.settings.skyCultureMapUseLocationRotation
                     ? (this.settings.skyCultureObserverLatitude < 0 ? '南半球：地图已旋转 180°' : '北半球：保持标准方向')
-                    : '关闭时保持标准方向').fontSize(9).fontColor(this.subColor).width('100%')
+                    : '关闭时保持标准方向').fontSize(10).fontColor(this.subColor).width('100%')
                 }.layoutWeight(1)
                 Toggle({ type: ToggleType.Switch, isOn: this.settings.skyCultureMapUseLocationRotation }).width(38).height(21)
                   .onChange((enabled: boolean) => {
@@ -388,7 +388,7 @@ export struct SkyCultureViewTab {
         Column({ space: 1 }) {
           Text('显示国际通用名称').fontSize(11).fontColor(this.textColor).width('100%')
           Text(this.settings.skyCultureUsesCommonNames ? '当前文化包含可用的国际通用名称' : '当前文化没有可用的国际通用名称')
-            .fontSize(9).fontColor(this.subColor).width('100%')
+            .fontSize(10).fontColor(this.subColor).width('100%')
         }.layoutWeight(1)
         Toggle({ type: ToggleType.Switch, isOn: this.settings.skyCultureOverrideCommonNames }).width(40).height(22)
           .enabled(this.settings.skyCultureUsesCommonNames)
@@ -584,7 +584,7 @@ export struct SkyCultureViewTab {
       Row() {
         Column({ space: 1 }) {
           Text('图层颜色').fontSize(12).fontColor(this.subColor).width('100%')
-          Text('为当前显示的文化图层分别设置颜色').fontSize(9).fontColor(this.subColor).width('100%')
+          Text('为当前显示的文化图层分别设置颜色').fontSize(10).fontColor(this.subColor).width('100%')
         }.layoutWeight(1)
         Button(this.settings.skyCultureColorsExpanded ? '收起' : '展开').fontSize(10).fontColor(this.accentColor).height(28)
           .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).padding({ left: 9, right: 9 })
@@ -705,7 +705,7 @@ export struct SkyCultureViewTab {
         Column({ space: 2 }) {
           Text('组合名称显示').fontSize(11).fontColor(this.textColor).width('100%')
           Text('星图：' + this.settings.skyCultureStyleSummary(this.settings.skyCultureScreenStyleMask) + ' · 资料：' + this.settings.skyCultureStyleSummary(this.settings.skyCultureInfoStyleMask))
-            .fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.layoutWeight(1)
         Button(this.settings.skyCultureNameCombinationExpanded ? '收起' : '设置').fontSize(10).fontColor(this.accentColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(28)
           .padding({ left: 9, right: 9 }).onClick(() => { this.settings.skyCultureNameCombinationExpanded = !this.settings.skyCultureNameCombinationExpanded })
@@ -791,7 +791,7 @@ export struct SkyCultureViewTab {
     Row() {
       Column({ space: 1 }) {
         Text(I18n.t('culture_filter_by_year')).fontSize(11).fontColor(this.textColor).width('100%')
-        Text(I18n.t('culture_filter_by_year_hint')).fontSize(9).fontColor(this.subColor).width('100%')
+        Text(I18n.t('culture_filter_by_year_hint')).fontSize(10).fontColor(this.subColor).width('100%')
       }.layoutWeight(1)
       Toggle({ type: ToggleType.Switch, isOn: this.settings.skyCultureTimeFiltering }).width(40).height(22)
         .onChange((enabled: boolean) => {
@@ -839,7 +839,7 @@ export struct SkyCultureViewTab {
           Row({ space: 6 }) {
             Column({ space: 1 }) {
               Text('按星图模拟时间').fontSize(10).fontColor(this.textColor).width('100%')
-              Text(this.settings.skyCultureFormatYear(this.settings.skyCultureSimulationYear)).fontSize(9).fontColor(this.subColor).width('100%')
+              Text(this.settings.skyCultureFormatYear(this.settings.skyCultureSimulationYear)).fontSize(10).fontColor(this.subColor).width('100%')
             }.layoutWeight(1)
             Button('同步').fontSize(10).fontColor(this.accentColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 9, right: 9 })
               .onClick(() => {
@@ -861,8 +861,8 @@ export struct SkyCultureViewTab {
             .showSteps(false).showTips(false).width('100%')
             .onChange((year: number) => { this.settings.setSkyCultureTimeYear(year) })
           Row() {
-            Text('公元前 40000 年').fontSize(9).fontColor(this.subColor).layoutWeight(1)
-            Text('当代').fontSize(9).fontColor(this.subColor)
+            Text('公元前 40000 年').fontSize(10).fontColor(this.subColor).layoutWeight(1)
+            Text('当代').fontSize(10).fontColor(this.subColor)
           }.width('100%')
         } else {
           Row({ space: 6 }) {
@@ -909,7 +909,7 @@ export struct SkyCultureViewTab {
               Column({ space: 2 }) {
                 Text(this.settings.skyCultureDisplayName(sc.id, sc.name)).fontSize(13).fontColor(this.textColor).fontWeight(sc.id === this.selectedSkyCultureId() ? FontWeight.Medium : FontWeight.Regular).width('100%').maxLines(2).lineHeight(18).textOverflow({ overflow: TextOverflow.Ellipsis })
                 Text(this.settings.skyCultureRegionText(sc.region ?? []) + ' · ' + this.settings.skyCultureClassificationText(sc.classification ?? ''))
-                  .fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               }.layoutWeight(1)
               if (sc.id === this.selectedSkyCultureId()) {
                 Row({ space: 4 }) {

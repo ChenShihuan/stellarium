@@ -69,8 +69,8 @@ test('large PC typography and panel baseline use the same responsive geometry', 
 });
 
 test('all fixed shell font sizes and adaptive minima meet 10fp', () => {
-  // The shell is now the page (MainWindowNativeNode.ets) plus the shell panels.
-  // Panels under a domain (astro/satellite/...) keep their own dense typography.
+  // Every fixed font size in the refactored UI (page + panels + shared ui) must
+  // meet the 10fp accessibility minimum.
   const files = [new URL('../harmonyos/ets-source/pages/MainWindowNativeNode.ets', import.meta.url)];
   const walk = (url) => {
     for (const entry of readdirSync(url, { withFileTypes: true })) {
@@ -79,7 +79,8 @@ test('all fixed shell font sizes and adaptive minima meet 10fp', () => {
       else if (entry.name.endsWith('.ets')) files.push(child);
     }
   };
-  walk(new URL('../harmonyos/ets-source/panels/shell/', import.meta.url));
+  walk(new URL('../harmonyos/ets-source/panels/', import.meta.url));
+  walk(new URL('../harmonyos/ets-source/common/ui/', import.meta.url));
   let count = 0;
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
@@ -92,7 +93,7 @@ test('all fixed shell font sizes and adaptive minima meet 10fp', () => {
       assert.ok(Number(match[1]) >= 10, `${file.pathname}: ${match[0]}`);
     }
   }
-  assert.ok(count > 20, `expected the shell to declare fixed sizes, got ${count}`);
+  assert.ok(count > 500, `expected the shell to declare fixed sizes, got ${count}`);
 });
 
 test('navigation avoid-area changes replace old insets, including hiding the indicator', () => {

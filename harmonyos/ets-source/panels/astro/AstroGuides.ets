@@ -19,7 +19,7 @@ export struct AstroSelectionGuide {
       Row({ space: 8 }) {
         Column({ space: 2 }) {
           Text(I18n.t('astro_selection_required')).fontSize(11).fontColor(this.textColor).width('100%')
-          Text(I18n.t('astro_selection_required_hint')).fontSize(9).fontColor(this.subColor).width('100%').maxLines(2)
+          Text(I18n.t('astro_selection_required_hint')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Button(I18n.t('astro_select_on_map')).fontSize(10).fontColor(this.textColor).backgroundColor(this.accentColor)
           .borderRadius(UI_RADIUS_CONTROL).height(30).padding({ left: 9, right: 9 })

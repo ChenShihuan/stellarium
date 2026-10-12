@@ -59,7 +59,7 @@ export struct SatellitesPanel {
             Text('内置快照：' + this.satelliteStore.satCatalogSnapshot.replace('T', ' ').replace('Z', ' UTC')).fontSize(10).fontColor('#88FFFFFF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           if (this.satelliteStore.satCatalogSource.length > 0) {
-            Text(I18n.t('resource_source') + ': ' + this.satelliteStore.satCatalogSource).fontSize(9).fontColor('#66FFFFFF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(I18n.t('resource_source') + ': ' + this.satelliteStore.satCatalogSource).fontSize(10).fontColor('#66FFFFFF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           Text(this.catalogHealthTextOf('卫星目录', this.satelliteStore.satelliteCatalogHealth))
             .fontSize(11).fontColor(this.catalogHealthColorOf(this.satelliteStore.satelliteCatalogHealth)).maxLines(2)
@@ -81,9 +81,9 @@ export struct SatellitesPanel {
                   Column({ space: 2 }) {
                     Text((source.local ? I18n.t('sat_source_local') : I18n.t('sat_source_remote')) + ' · ' + source.scheme.toUpperCase())
                       .fontSize(11).fontColor(source.valid ? '#DCEEFF' : '#FFE1A6').maxLines(1)
-                    Text(source.url).fontSize(9).fontColor('#88FFFFFF').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+                    Text(source.url).fontSize(10).fontColor('#88FFFFFF').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
                   }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                  if (source.addNew) Text(I18n.t('sat_source_add_new')).fontSize(9).fontColor('#B7D8F0')
+                  if (source.addNew) Text(I18n.t('sat_source_add_new')).fontSize(10).fontColor('#B7D8F0')
                   Toggle({ type: ToggleType.Switch, isOn: source.addNew }).width(40).height(22)
                     .onChange((value: boolean) => { this.onToggleSourceEnabled(sourceIndex, value) })
                   Button(I18n.t('sat_source_edit')).fontSize(10).fontColor('#E1F2FA').backgroundColor('rgba(91,147,191,0.22)')

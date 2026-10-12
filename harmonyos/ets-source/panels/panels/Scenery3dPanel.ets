@@ -45,16 +45,16 @@ export struct Scenery3dPanel {
           Column({ space: 4 }) {
             Row() {
               Text(scene.name.length > 0 ? scene.name : scene.id).fontSize(13).fontColor(this.textColor).fontWeight(FontWeight.Medium).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              if (scene.current === true) Text('当前').fontSize(9).fontColor(this.accentColor)
+              if (scene.current === true) Text('当前').fontSize(10).fontColor(this.accentColor)
               if (this.sceneryStore.scenery3dLoadingId === scene.id) LoadingProgress().width(16).height(16).color(this.accentColor)
             }.width('100%')
             Text(resourceText(scene.description, I18n.t('resource_not_provided'))).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(I18n.t('resource_author') + ': ' + resourceText(scene.author, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + resourceText(scene.copyright, I18n.t('resource_not_provided'))).fontSize(9).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(I18n.t('resource_author') + ': ' + resourceText(scene.author, I18n.t('resource_not_provided')) + ' · ' + I18n.t('resource_license') + ': ' + resourceText(scene.copyright, I18n.t('resource_not_provided'))).fontSize(10).fontColor('#77FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
             if (scene.planet || scene.landscape || scene.modelScenery) {
-              Text((scene.planet ? '星球: ' + scene.planet : '') + (scene.landscape ? ' · 地景: ' + scene.landscape : '') + (scene.modelScenery ? ' · 模型: ' + scene.modelScenery : '')).fontSize(9).fontColor('#66FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+              Text((scene.planet ? '星球: ' + scene.planet : '') + (scene.landscape ? ' · 地景: ' + scene.landscape : '') + (scene.modelScenery ? ' · 模型: ' + scene.modelScenery : '')).fontSize(10).fontColor('#66FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
             }
-            if (scene.source) Text(I18n.t('resource_source') + ': ' + scene.source).fontSize(8).fontColor('#55FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            if (scene.descriptionSource) Text('介绍文件: ' + scene.descriptionSource).fontSize(8).fontColor('#55FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (scene.source) Text(I18n.t('resource_source') + ': ' + scene.source).fontSize(10).fontColor('#55FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (scene.descriptionSource) Text('介绍文件: ' + scene.descriptionSource).fontSize(10).fontColor('#55FFFFFF').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }.width('100%').padding({ left: 10, right: 10, top: 9, bottom: 9 }).backgroundColor(scene.current === true ? 'rgba(80,140,200,0.18)' : this.panelColor).borderRadius(UI_RADIUS_CONTROL)
             .onClick(() => { this.onSelectScene(scene.id) })
         }, (scene: Scenery3dItem) => scene.id)

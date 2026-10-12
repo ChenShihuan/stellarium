@@ -44,7 +44,7 @@ export struct Lx200Panel {
       Row() {
         Column({ space: 2 }) {
           Text(I18n.t('m_telescope_devices')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.textColor)
-          Text(I18n.t('m_telescope_devices_hint')).fontSize(9).fontColor(this.subColor).maxLines(2)
+          Text(I18n.t('m_telescope_devices_hint')).fontSize(10).fontColor(this.subColor).maxLines(2)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Text('+')
           .fontSize(20).fontColor(this.textColor).textAlign(TextAlign.Center)
@@ -76,7 +76,7 @@ export struct Lx200Panel {
           Text(I18n.format('m_telescope_slot_title', [this.store.lx200SelectedSlot.toString()]))
             .fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.textColor).layoutWeight(1)
           Text(this.store.lx200EditingNew ? I18n.t('m_telescope_unsaved') : I18n.t('m_telescope_saved_profile'))
-            .fontSize(9).fontColor(this.store.lx200EditingNew ? '#FFD59A' : '#8FD3B2')
+            .fontSize(10).fontColor(this.store.lx200EditingNew ? '#FFD59A' : '#8FD3B2')
         }.width('100%')
         TextInput({ text: this.store.lx200Name, placeholder: I18n.t('m_telescope_name') })
           .height(38).fontSize(13).fontColor(this.textColor).placeholderColor(this.subColor)
@@ -104,7 +104,7 @@ export struct Lx200Panel {
               .onChange((value: string) => { this.store.lx200Port = value; this.onValidateEditor() })
           }.width('100%')
         } else {
-          Text(I18n.t('m_telescope_simulator_hint')).fontSize(9).fontColor(this.subColor).width('100%').maxLines(3)
+          Text(I18n.t('m_telescope_simulator_hint')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3)
             .padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
         }
         Row({ space: 6 }) {
@@ -123,14 +123,14 @@ export struct Lx200Panel {
             Text(I18n.t('m_telescope_device_model')).fontSize(10).fontColor(this.subColor)
             Text(this.store.lx200DeviceModel).fontSize(12).fontColor(this.textColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Text(this.store.lx200Protocol === 'simulated' ? I18n.t('m_telescope_offline_badge') : 'LX200').fontSize(9).fontColor('#B9D9F2').padding({ left: 8, right: 8, top: 4, bottom: 4 })
+          Text(this.store.lx200Protocol === 'simulated' ? I18n.t('m_telescope_offline_badge') : 'LX200').fontSize(10).fontColor('#B9D9F2').padding({ left: 8, right: 8, top: 4, bottom: 4 })
             .backgroundColor('rgba(91,147,191,0.16)').borderRadius(UI_RADIUS_PILL)
         }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
         if (this.store.lx200Protocol === 'lx200_tcp') {
           Scroll() {
             Row({ space: 6 }) {
               ForEach(LX200_DEVICE_MODELS, (model: string) => {
-                Text(model).fontSize(9).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                Text(model).fontSize(10).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   .fontColor(this.store.lx200DeviceModel === model ? '#FFFFFF' : this.subColor)
                   .height(30).padding({ left: 10, right: 10, top: 7 })
                   .backgroundColor(this.store.lx200DeviceModel === model ? this.accentColor : this.panelColor)
@@ -168,7 +168,7 @@ export struct Lx200Panel {
           .height(38).fontSize(12).fontColor(this.textColor).placeholderColor(this.subColor)
           .backgroundColor(this.inputColor).border({ width: 1, color: this.inputLineColor }).borderRadius(UI_RADIUS_CONTROL)
           .onChange((value: string) => { this.store.lx200Circles = value })
-        Text(I18n.t('m_telescope_fov_hint')).fontSize(9).fontColor(this.subColor).width('100%').maxLines(2)
+        Text(I18n.t('m_telescope_fov_hint')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
 
         Row({ space: 8 }) {
           Button(I18n.t('m_telescope_save')).fontSize(11).fontColor('#FFFFFF').height(34).layoutWeight(1)
@@ -221,7 +221,7 @@ export struct Lx200Panel {
         Row({ space: 8 }) {
           Column({ space: 2 }) {
             Text(I18n.t('m_telescope_live_position')).fontSize(11).fontColor(this.textColor)
-            Text(I18n.t('m_telescope_live_position_hint')).fontSize(9).fontColor(this.subColor).maxLines(2)
+            Text(I18n.t('m_telescope_live_position_hint')).fontSize(10).fontColor(this.subColor).maxLines(2)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           Toggle({ type: ToggleType.Switch, isOn: this.store.lx200LivePositionEnabled })
             .enabled(!this.store.lx200EditingNew)
@@ -235,7 +235,7 @@ export struct Lx200Panel {
               (this.store.lx200PositionUpdateState === 'stale' ? I18n.format('m_telescope_live_stale', [this.store.lx200PositionUpdatedAt]) :
                 (this.store.lx200PositionUpdateState === 'updating' ? I18n.t('m_telescope_live_updating') :
                   I18n.format('m_telescope_live_updated', [this.store.lx200PositionUpdatedAt]))))
-              .fontSize(9).fontColor(this.store.lx200PositionUpdateState === 'error' ? '#FFB8B8' : this.subColor)
+              .fontSize(10).fontColor(this.store.lx200PositionUpdateState === 'error' ? '#FFB8B8' : this.subColor)
           }.width('100%').padding({ top: 6, bottom: 6 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
         }
         Row({ space: 8 }) {
@@ -246,8 +246,8 @@ export struct Lx200Panel {
         }.width('100%').height(30)
       }.width('100%').padding(12).backgroundColor('rgba(91,147,191,0.10)').borderRadius(UI_RADIUS_PANEL)
 
-      Text(I18n.t('m_telescope_unavailable_protocols')).fontSize(9).fontColor(this.subColor).width('100%').maxLines(3)
-      Text(I18n.t('m_telescope_connection_lifecycle')).fontSize(9).fontColor(this.subColor).width('100%').maxLines(3)
+      Text(I18n.t('m_telescope_unavailable_protocols')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3)
+      Text(I18n.t('m_telescope_connection_lifecycle')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3)
     }
       .width('100%')
       .margin({ top: 8, bottom: 8 })

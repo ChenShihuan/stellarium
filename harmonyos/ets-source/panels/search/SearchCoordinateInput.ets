@@ -17,7 +17,7 @@ export struct SearchCoordinateInput {
     Column() {
       Row() {
         Text(I18n.t('s_coord_input')).fontSize(12).fontColor(this.subColor).layoutWeight(1)
-        Text(I18n.t('s_coord_format_hint')).fontSize(9).fontColor('#66FFFFFF').maxLines(2).textAlign(TextAlign.End)
+        Text(I18n.t('s_coord_format_hint')).fontSize(10).fontColor('#66FFFFFF').maxLines(2).textAlign(TextAlign.End)
       }
       .height(32).width('100%').padding({ left: 10, right: 10 }).margin({ top: 10 })
       Column({ space: 6 }) {

@@ -126,7 +126,7 @@ export struct LayerSkyTab {
           Text(this.layerViewStore.meteorZhr + ' / 小时').fontSize(11).fontColor(this.textColor).width(66).textAlign(TextAlign.End)
         }.height(36).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 2 })
         Text('实际可见数量还会受夜间、地景亮度和地平高度影响')
-          .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 86, right: 10 }).margin({ bottom: 4 })
+          .fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 86, right: 10 }).margin({ bottom: 4 })
       }
       LayerSwitchRow({ label: '黄道光', isOn: this.layerStore.zodiacalLight, onToggle: (value: boolean) => { this.onToggleLayer('zodiacalLight', 'setSkyDisplayZodiacalLight', value) } })
       if (this.layerStore.zodiacalLight) {
@@ -208,7 +208,7 @@ export struct LayerSsoTab {
         Row() {
           Column({ space: 1 }) {
             Text('轨道显示方式').fontSize(12).fontColor(this.subColor).width('100%')
-            Text('控制轨道显示对象、线条和配色分类').fontSize(9).fontColor(this.subColor).width('100%')
+            Text('控制轨道显示对象、线条和配色分类').fontSize(10).fontColor(this.subColor).width('100%')
           }.layoutWeight(1)
           Button(this.layerViewStore.orbitSettingsExpanded ? '收起' : '设置').fontSize(10).fontColor(this.accentColor).height(28)
             .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).padding({ left: 9, right: 9 })
@@ -222,7 +222,7 @@ export struct LayerSsoTab {
             Row() {
               Column({ space: 1 }) {
                 Text('只显示当前选中天体').fontSize(11).fontColor(this.textColor).width('100%')
-                Text('关闭后显示所有符合条件的轨道').fontSize(9).fontColor(this.subColor).width('100%')
+                Text('关闭后显示所有符合条件的轨道').fontSize(10).fontColor(this.subColor).width('100%')
               }.layoutWeight(1)
               Toggle({ type: ToggleType.Switch, isOn: this.layerViewStore.orbitIsolated }).width(40).height(22)
                 .onChange((enabled: boolean) => { this.onSetOrbitFlag('isolated', enabled) })
@@ -230,7 +230,7 @@ export struct LayerSsoTab {
             Row() {
               Column({ space: 1 }) {
                 Text('始终显示八大行星轨道').fontSize(11).fontColor(this.textColor).width('100%')
-                Text('可与当前选中的小天体轨道同时显示').fontSize(9).fontColor(this.subColor).width('100%')
+                Text('可与当前选中的小天体轨道同时显示').fontSize(10).fontColor(this.subColor).width('100%')
               }.layoutWeight(1)
               Toggle({ type: ToggleType.Switch, isOn: this.layerViewStore.orbitMajorPlanets }).width(40).height(22)
                 .onChange((enabled: boolean) => { this.onSetOrbitFlag('majorPlanets', enabled) })
@@ -238,7 +238,7 @@ export struct LayerSsoTab {
             Row() {
               Column({ space: 1 }) {
                 Text('仅显示行星轨道').fontSize(11).fontColor(this.textColor).width('100%')
-                Text('隐藏小行星、彗星等其他天体轨道').fontSize(9).fontColor(this.subColor).width('100%')
+                Text('隐藏小行星、彗星等其他天体轨道').fontSize(10).fontColor(this.subColor).width('100%')
               }.layoutWeight(1)
               Toggle({ type: ToggleType.Switch, isOn: this.layerViewStore.orbitPlanetsOnly }).width(40).height(22)
                 .onChange((enabled: boolean) => { this.onSetOrbitFlag('planetsOnly', enabled) })
@@ -246,7 +246,7 @@ export struct LayerSsoTab {
             Row() {
               Column({ space: 1 }) {
                 Text('包含卫星轨道').fontSize(11).fontColor(this.textColor).width('100%')
-                Text('显示行星周围卫星的轨道').fontSize(9).fontColor(this.subColor).width('100%')
+                Text('显示行星周围卫星的轨道').fontSize(10).fontColor(this.subColor).width('100%')
               }.layoutWeight(1)
               Toggle({ type: ToggleType.Switch, isOn: this.layerViewStore.orbitWithMoons }).width(40).height(22)
                 .onChange((enabled: boolean) => { this.onSetOrbitFlag('withMoons', enabled) })
@@ -254,7 +254,7 @@ export struct LayerSsoTab {
             Row() {
               Column({ space: 1 }) {
                 Text('轨道保持显示').fontSize(11).fontColor(this.textColor).width('100%')
-                Text('天体移出屏幕后仍持续绘制轨道').fontSize(9).fontColor(this.subColor).width('100%')
+                Text('天体移出屏幕后仍持续绘制轨道').fontSize(10).fontColor(this.subColor).width('100%')
               }.layoutWeight(1)
               Toggle({ type: ToggleType.Switch, isOn: this.layerViewStore.orbitPermanent }).width(40).height(22)
                 .onChange((enabled: boolean) => { this.onSetOrbitFlag('permanent', enabled) })
@@ -283,7 +283,7 @@ export struct LayerSsoTab {
         Row() {
           Column({ space: 1 }) {
             Text('轨迹显示方式').fontSize(12).fontColor(this.subColor).width('100%')
-            Text('控制保留对象、历史跨度、线宽与颜色').fontSize(9).fontColor(this.subColor).width('100%')
+            Text('控制保留对象、历史跨度、线宽与颜色').fontSize(10).fontColor(this.subColor).width('100%')
           }.layoutWeight(1)
           Button(this.layerViewStore.trailSettingsExpanded ? '收起' : '设置').fontSize(10).fontColor(this.accentColor).height(28)
             .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).padding({ left: 9, right: 9 })
@@ -297,7 +297,7 @@ export struct LayerSsoTab {
             Row() {
               Column({ space: 1 }) {
                 Text('仅保留最近选中天体').fontSize(11).fontColor(this.textColor).width('100%')
-                Text('关闭后显示当前可见的全部太阳系天体轨迹').fontSize(9).fontColor(this.subColor).width('100%')
+                Text('关闭后显示当前可见的全部太阳系天体轨迹').fontSize(10).fontColor(this.subColor).width('100%')
               }.layoutWeight(1)
               Toggle({ type: ToggleType.Switch, isOn: this.layerViewStore.trailIsolated }).width(40).height(22)
                 .onChange((enabled: boolean) => { this.onSetTrailFlag('isolated', enabled) })
@@ -622,22 +622,22 @@ export struct LayerLandscapeTab {
                 .fontColor(this.layerViewStore.currentLandscapeId === item.id ? this.accentColor : this.textColor)
                 .layoutWeight(1)
               if (this.layerViewStore.currentLandscapeId === item.id) {
-                Text(I18n.t('s0602')).fontSize(9).fontColor(this.accentColor).margin({ right: 8 })
+                Text(I18n.t('s0602')).fontSize(10).fontColor(this.accentColor).margin({ right: 8 })
               }
             }
             if (item.author || item.description) {
               Text(this.resourceText(item.description, I18n.t('resource_not_provided')))
-                .fontSize(9).fontColor(this.subColor).width('100%').maxLines(2)
+                .fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
               Text(I18n.t('resource_author') + ': ' + this.resourceText(item.author, I18n.t('resource_not_provided')))
-                .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(1)
+                .fontSize(10).fontColor('#66FFFFFF').width('100%').maxLines(1)
             }
             if (item.hasLocation === true) {
               Text(this.resourceText(item.planet, 'Earth') + ' · ' + this.resourceText(item.timezone, '时区未提供'))
-                .fontSize(8).fontColor('#66FFFFFF').width('100%').maxLines(1)
+                .fontSize(10).fontColor('#66FFFFFF').width('100%').maxLines(1)
             }
             if (item.source) {
-              Text(I18n.t('resource_source') + ': ' + item.source).fontSize(8).fontColor('#55FFFFFF')
+              Text(I18n.t('resource_source') + ': ' + item.source).fontSize(10).fontColor('#55FFFFFF')
                 .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             }
           }

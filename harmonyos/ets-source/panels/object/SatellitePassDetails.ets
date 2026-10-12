@@ -47,7 +47,7 @@ export struct SatellitePassTimelineRow {
         Divider().vertical(true).height(18).color('rgba(143,211,255,0.28)')
       }.width(10).height(30).justifyContent(FlexAlign.Center)
       Column({ space: 1 }) {
-        Text(this.label).fontSize(this.tablet ? 10 : 9).fontColor('#8FBBD6')
+        Text(this.label).fontSize(this.tablet ? 10 : 10).fontColor('#8FBBD6')
         Text(satellitePassTime(this.time)).fontSize(this.tablet ? 12 : 11).fontColor('#E1F2FA')
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.layoutWeight(1)
@@ -78,15 +78,15 @@ export struct SatellitePassCard {
       }.width('100%')
       Row({ space: 10 }) {
         Column({ space: 1 }) {
-          Text(I18n.t('satellite_pass_max_altitude')).fontSize(9).fontColor('#8FBBD6')
+          Text(I18n.t('satellite_pass_max_altitude')).fontSize(10).fontColor('#8FBBD6')
           Text(satellitePassAltitude(this.pass.maxAltitude)).fontSize(this.tablet ? 12 : 11).fontColor('#E1F2FA')
         }.layoutWeight(1)
         Column({ space: 1 }) {
-          Text(I18n.t('satellite_pass_peak')).fontSize(9).fontColor('#8FBBD6')
+          Text(I18n.t('satellite_pass_peak')).fontSize(10).fontColor('#8FBBD6')
           Text(satellitePassAngle(this.pass.peakAzimuth)).fontSize(this.tablet ? 12 : 11).fontColor('#E1F2FA')
         }.layoutWeight(1)
         Column({ space: 1 }) {
-          Text(I18n.t('satellite_pass_visibility')).fontSize(9).fontColor('#8FBBD6')
+          Text(I18n.t('satellite_pass_visibility')).fontSize(10).fontColor('#8FBBD6')
           Text(satellitePassVisibility(this.pass)).fontSize(this.tablet ? 11 : 10).fontColor('#E1F2FA')
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.layoutWeight(1)
@@ -143,7 +143,7 @@ export struct SatellitePassDetails {
           }, (pass: SatellitePass, index: number) => 'satellite-pass-' + index.toString() + '-' + satellitePassTime(pass.start))
         }
         if (this.store.selectedSatellitePassesLoaded && this.tleEpoch.length > 0) {
-          Text(I18n.format('satellite_pass_offline_source', [this.tleEpoch])).fontSize(9).fontColor('#7599AD')
+          Text(I18n.format('satellite_pass_offline_source', [this.tleEpoch])).fontSize(10).fontColor('#7599AD')
             .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
       }

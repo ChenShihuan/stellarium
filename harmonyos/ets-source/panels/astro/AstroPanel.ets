@@ -278,26 +278,26 @@ export struct AstroPanel {
           if (this.store.astroExporting) {
             LoadingProgress().width(16).height(16).color(this.accentColor)
           }
-          Text('CSV').fontSize(9).fontColor(this.subColor)
+          Text('CSV').fontSize(10).fontColor(this.subColor)
         }.width('100%').padding({ left: 2, right: 2 }).margin({ bottom: 6 }).alignItems(VerticalAlign.Center)
         if (this.store.astroContext !== undefined) {
           Column({ space: 2 }) {
             Row({ space: 6 }) {
               Text(this.store.astroContext.observerLocation !== undefined && this.store.astroContext.observerLocation.length > 0 ? this.store.astroContext.observerLocation : '当前观测位置')
                 .fontSize(10).fontColor(this.textColor).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              Text(this.store.astroContext.offline === true ? '离线计算' : '本地计算').fontSize(9).fontColor(this.accentColor)
+              Text(this.store.astroContext.offline === true ? '离线计算' : '本地计算').fontSize(10).fontColor(this.accentColor)
             }.width('100%')
             Text('时间 ' + this.host.fmtDateTime(this.store.astroContext.localTime) + ' · 时区 ' + (this.store.astroContext.timeZone ?? '--'))
-              .fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             Text('平恒星时 ' + (this.store.astroContext.meanSiderealTime ?? '--') + ' · 视恒星时 ' + (this.store.astroContext.apparentSiderealTime ?? '--') + ' · 时间方程 ' + this.host.fmtNum(this.store.astroContext.equationOfTimeMinutes, 2, ' 分钟'))
-              .fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             Text('太阳 ' + this.host.fmtNum(this.store.astroContext.sunAltitude, 1, '°') + ' / ' + this.host.fmtNum(this.store.astroContext.sunAzimuth, 1, '°')
               + ' · 月亮 ' + this.host.fmtNum(this.store.astroContext.moonAltitude, 1, '°') + ' / ' + this.host.fmtNum(this.store.astroContext.moonAzimuth, 1, '°')
               + ' · 月面 ' + this.host.fmtNum(this.store.astroContext.moonIllumination, 1, '%'))
-              .fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             if (this.store.astroCalcSnapshot.length > 0) {
               Text('参数快照 · ' + this.store.astroCalcSnapshot)
-                .fontSize(9).fontColor('#A8FFFFFF').width('100%').maxLines(2)
+                .fontSize(10).fontColor('#A8FFFFFF').width('100%').maxLines(2)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
             }
           }.width('100%').padding({ left: 8, right: 8, top: 6, bottom: 6 })
@@ -338,7 +338,7 @@ export struct AstroPanel {
                     Text(I18n.t('s0376')).fontSize(10).fontColor(this.subColor).width(50)
                     Text(I18n.t('s0377')).fontSize(10).fontColor(this.subColor).width(40)
                   }.width('100%')
-                  Text('赤经/赤纬（当日） · 距离 · 视直径 · 中天').fontSize(8).fontColor(this.subColor).width('100%')
+                  Text('赤经/赤纬（当日） · 距离 · 视直径 · 中天').fontSize(10).fontColor(this.subColor).width('100%')
                 }.width('100%').padding({ left: 8, right: 8 }).margin({ top: 4, bottom: 2 })
                 if (this.store.planetPositionsLoading) {
                   Row({ space: 8 }) {
@@ -363,7 +363,7 @@ export struct AstroPanel {
                         Text((p.rightAscension ?? '--') + ' / ' + (p.declination ?? '--')
                           + ' · ' + (p.distanceAU !== undefined ? p.distanceAU.toFixed(3) + ' AU' : '--')
                           + ' · 中天 ' + (p.transit !== undefined ? this.host.fmtDateTime(p.transit) : '--'))
-                          .fontSize(8).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                       }.height(40).width('100%').padding({ left: 8, right: 8, top: 3, bottom: 3 })
                       .backgroundColor(this.panelColor)
                       .borderRadius(UI_RADIUS_CONTROL)
@@ -404,7 +404,7 @@ export struct AstroPanel {
                     .borderRadius(UI_RADIUS_PILL).height(30).padding({ left: 10, right: 10 })
                     .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                     .onClick(() => { this.host.loadHeliocentricPositions() })
-                  Text(this.store.hecTime.length > 0 ? this.host.fmtDateTime(this.store.hecTime) : '正在计算…').fontSize(9).fontColor(this.subColor).layoutWeight(1)
+                  Text(this.store.hecTime.length > 0 ? this.host.fmtDateTime(this.store.hecTime) : '正在计算…').fontSize(10).fontColor(this.subColor).layoutWeight(1)
                 }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 5 })
                 if (this.store.hecPositionsLoading) {
                   Row({ space: 8 }) {
@@ -428,7 +428,7 @@ export struct AstroPanel {
                   }, (orbit: HeliocentricOrbit) => orbit.name)
                   Circle().width(34).height(34).fill('#F4C454').opacity(0.12)
                   Circle().width(22).height(22).fill('#F4C454')
-                  Text('太阳').fontSize(8).fontColor('#30240D')
+                  Text('太阳').fontSize(10).fontColor('#30240D')
                   ForEach(this.store.hecPositions, (position: HeliocentricPosition) => {
                     Circle().width(hecPointSize(position) + 4).height(hecPointSize(position) + 4).fill(this.panelColor)
                       .position({ x: this.host.hecPointLeft(position) - 2, y: this.host.hecPointTop(position) - 2 })
@@ -442,7 +442,7 @@ export struct AstroPanel {
                   ForEach(HELIOCENTRIC_PLANET_ORBITS, (orbit: HeliocentricOrbit) => {
                     Row({ space: 4 }) {
                       Circle().width(6).height(6).fill(orbit.color)
-                      Text(orbit.name).fontSize(9).fontColor(this.subColor)
+                      Text(orbit.name).fontSize(10).fontColor(this.subColor)
                     }.margin({ right: 9, bottom: 4 })
                   }, (orbit: HeliocentricOrbit) => orbit.name)
                 }.width(292).margin({ bottom: 5 })
@@ -507,7 +507,7 @@ export struct AstroPanel {
                     .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                     .onClick(() => { this.host.loadCelestialPositions() })
                 }.width('100%').padding({ left: 4, right: 4 }).margin({ bottom: 5 })
-                Text(this.store.celestialPositionTime.length > 0 ? this.host.fmtDateTime(this.store.celestialPositionTime) : '正在计算…').fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 4 }).margin({ bottom: 4 })
+                Text(this.store.celestialPositionTime.length > 0 ? this.host.fmtDateTime(this.store.celestialPositionTime) : '正在计算…').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 4 }).margin({ bottom: 4 })
                 if (this.store.celestialPositionsLoading) {
                   Row({ space: 8 }) {
                     LoadingProgress().width(20).height(20).color(this.accentColor)
@@ -527,16 +527,16 @@ export struct AstroPanel {
                             Text('星等 ' + position.magnitude.toFixed(1)).fontSize(10).fontColor(this.subColor).width(60).textAlign(TextAlign.End)
                           }.width('100%')
                           if (this.host.celestialPositionSubtitle(position).length > 0) {
-                            Text(this.host.celestialPositionSubtitle(position)).fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                            Text(this.host.celestialPositionSubtitle(position)).fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                           }
                           Text((this.store.celestialPositionHorizontal ? '方位 ' : '赤经 ') + position.firstCoordinate + '   ' + (this.store.celestialPositionHorizontal ? '高度 ' : '赤纬 ') + position.secondCoordinate)
-                            .fontSize(9).fontColor('#B8FFFFFF').width('100%').maxLines(1)
+                            .fontSize(10).fontColor('#B8FFFFFF').width('100%').maxLines(1)
                           Text('地平高度 ' + position.altitude.toFixed(1) + '°   距日 ' + (position.elongation ?? 0).toFixed(1) + '°')
-                            .fontSize(9).fontColor('#88FFFFFF').width('100%').maxLines(1)
+                            .fontSize(10).fontColor('#88FFFFFF').width('100%').maxLines(1)
                           Text('视直径 ' + (position.angularSizeArcmin !== undefined ? position.angularSizeArcmin.toFixed(2) + '′' : '--')
                             + (position.distanceAU !== undefined ? '   距离 ' + position.distanceAU.toFixed(3) + ' AU' : '')
                             + (position.transit !== undefined ? '   中天 ' + this.host.fmtClock(position.transit) : ''))
-                            .fontSize(9).fontColor('#70FFFFFF').width('100%').maxLines(1)
+                            .fontSize(10).fontColor('#70FFFFFF').width('100%').maxLines(1)
                         }
                         .width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 })
                         .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)
@@ -564,7 +564,7 @@ export struct AstroPanel {
               if (this.store.ephemerisMode === 0) {
                 Row({ space: 8 }) {
                   Column({ space: 1 }) {
-                    Text('星历目标').fontSize(9).fontColor(this.subColor)
+                    Text('星历目标').fontSize(10).fontColor(this.subColor)
                     Text(this.objectDetailStore.selectedName.length > 0 ? zhNameOf(this.objectDetailStore.selectedName) : '尚未选择天体')
                       .fontSize(11).fontColor(this.objectDetailStore.selectedName.length > 0 ? this.textColor : this.subColor)
                       .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -689,7 +689,7 @@ export struct AstroPanel {
               } else {
                 Text(this.store.ephemerisName + ' · 从' + this.host.ephemerisStartOptionLabel(this.store.ephemerisStartOffsetDays) + '开始，持续 ' + this.store.ephemerisDays.toString() + ' 天（每 ' + this.store.ephemerisStepHours.toString() + ' 小时）').fontSize(11).fontColor(this.textColor).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
                 if (this.store.ephemerisMeta.length > 0) {
-                  Text(this.store.ephemerisMeta).fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
+                  Text(this.store.ephemerisMeta).fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
                 }
               }
               ForEach(this.store.ephemerisData, (row: EphemerisRow) => {
@@ -698,27 +698,27 @@ export struct AstroPanel {
                     Text(this.host.fmtEphemerisDate(row.date)).fontSize(10).fontColor(this.textColor).width(96)
                     Text((row.bodyName !== undefined ? row.bodyName + '  ' : '') + '赤经 ' + (row.ra ?? '--')).fontSize(10).fontColor(this.subColor).layoutWeight(1).maxLines(1)
                   }.width('100%')
-                  Text('赤纬 ' + (row.dec ?? '--')).fontSize(9).fontColor('#B8FFFFFF').width('100%').maxLines(1)
+                  Text('赤纬 ' + (row.dec ?? '--')).fontSize(10).fontColor('#B8FFFFFF').width('100%').maxLines(1)
                   if (row.raOfDate !== undefined || row.decOfDate !== undefined) {
-                    Text('当日坐标 ' + (row.raOfDate ?? '--') + '  ' + (row.decOfDate ?? '--')).fontSize(9).fontColor('#A0FFFFFF').width('100%').maxLines(1)
+                    Text('当日坐标 ' + (row.raOfDate ?? '--') + '  ' + (row.decOfDate ?? '--')).fontSize(10).fontColor('#A0FFFFFF').width('100%').maxLines(1)
                   }
                   Text('高度 ' + this.host.fmtNum(row.altitude, 1, '°')
                     + '   方位 ' + this.host.fmtNum(row.azimuth, 0, '°')
                     + '   星等 ' + this.host.fmtNum(row.magnitude, 1, ''))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').maxLines(1)
+                    .fontSize(10).fontColor('#88FFFFFF').width('100%').maxLines(1)
                   if (row.hourAngle !== undefined || row.polarDistanceDegrees !== undefined) {
                     Text('时角 ' + (row.hourAngle ?? '--') + '   极距 ' + this.host.fmtNum(row.polarDistanceDegrees, 2, '°')
                       + (row.airmass !== undefined ? '   气团 ' + row.airmass.toFixed(2) : ''))
-                      .fontSize(9).fontColor('#80FFFFFF').width('100%').maxLines(1)
+                      .fontSize(10).fontColor('#80FFFFFF').width('100%').maxLines(1)
                   }
                   if (row.phase !== undefined || row.distanceAU !== undefined || row.elongationDegrees !== undefined) {
                     Text((row.phase !== undefined ? '相位 ' + (row.phase * 100).toFixed(1) + '%' : '')
                       + (row.distanceAU !== undefined ? '   距离 ' + row.distanceAU.toFixed(3) + ' AU' : '')
                       + (row.elongationDegrees !== undefined ? '   距日 ' + row.elongationDegrees.toFixed(1) + '°' : ''))
-                      .fontSize(9).fontColor('#70FFFFFF').width('100%').maxLines(1)
+                      .fontSize(10).fontColor('#70FFFFFF').width('100%').maxLines(1)
                   }
                   if (row.angularSizeArcmin !== undefined) {
-                    Text('视直径 ' + row.angularSizeArcmin.toFixed(2) + '′').fontSize(9).fontColor('#70FFFFFF').width('100%').maxLines(1)
+                    Text('视直径 ' + row.angularSizeArcmin.toFixed(2) + '′').fontSize(10).fontColor('#70FFFFFF').width('100%').maxLines(1)
                   }
                 }.width('100%').padding({ left: 8, right: 8, top: 5, bottom: 5 })
                 .backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
@@ -839,7 +839,7 @@ export struct AstroPanel {
                 Text(this.store.rtsCalendarError).fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 8 }).margin({ top: 4 })
               } else if (this.store.rtsCalendarData.length > 0) {
                 Text(this.store.rtsCalendarName + ' · 从' + this.host.rtsCalendarStartOptionLabel(this.store.rtsCalendarStartOffsetDays) + '开始，持续 ' + rtsCalendarDurationLabel(this.store.rtsCalendarDays) + '；每项按本地日期计算，点击可跳到该日中天。')
-                  .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
+                  .fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 4 })
                 ForEach(this.store.rtsCalendarData, (day: RtsCalendarDay) => {
                   Column({ space: 1 }) {
                     Row() {
@@ -854,7 +854,7 @@ export struct AstroPanel {
                     if (day.status === undefined) {
                       Text('中天高度 ' + (day.transitAltitude ?? 0).toFixed(1) + '°   星等 ' + (day.magnitude ?? 0).toFixed(1)
                         + '   距日 ' + (day.solarElongation ?? 0).toFixed(1) + '°   距月 ' + (day.lunarElongation ?? 0).toFixed(1) + '°')
-                        .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 }).maxLines(1)
+                        .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 }).maxLines(1)
                     }
                   }.width('100%').padding({ top: 4, bottom: 4 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
                   .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
@@ -979,13 +979,13 @@ export struct AstroPanel {
                     PhenomenonRelationMark({ type: p.type ?? '' })
                   }.width(52).height(44).backgroundColor(this.panelColor).border({ width: 1, color: this.lineColor }).borderRadius(UI_RADIUS_CONTROL)
                   Column({ space: 3 }) {
-                    Text(phenomenonCaption(p.type ?? '')).fontSize(9).fontColor(this.subColor).fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    Text(phenomenonCaption(p.type ?? '')).fontSize(10).fontColor(this.subColor).fontWeight(FontWeight.Medium).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     Text((p.bodyA ?? '天体') + ' 与 ' + (p.bodyB ?? '太阳'))
                       .fontSize(12).fontColor(this.textColor).fontWeight(FontWeight.Medium).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    Text(this.host.fmtDateTime(p.date)).fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    Text(this.host.fmtDateTime(p.date)).fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                   Column({ space: 3 }) {
-                    Text(p.metricLabel ?? '角距').fontSize(9).fontColor(this.subColor).width('100%').textAlign(TextAlign.End)
+                    Text(p.metricLabel ?? '角距').fontSize(10).fontColor(this.subColor).width('100%').textAlign(TextAlign.End)
                     Text(this.host.fmtNum(p.separation, 2, p.metricUnit ?? '°')).fontSize(11).fontColor(this.textColor).fontWeight(FontWeight.Medium)
                       .width('100%').textAlign(TextAlign.End).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   }.width(84).alignItems(HorizontalAlign.End)
@@ -998,7 +998,7 @@ export struct AstroPanel {
               Text(I18n.t('i0129')).fontSize(13).fontColor(this.textColor).width('100%').margin({ top: 4, bottom: 8 })
               Row({ space: 8 }) {
                 Column({ space: 1 }) {
-                  Text('曲线目标').fontSize(9).fontColor(this.subColor)
+                  Text('曲线目标').fontSize(10).fontColor(this.subColor)
                   Text(this.host.graphTargetLabel()).fontSize(12).fontColor(this.objectDetailStore.selectedName.length > 0 ? this.textColor : this.subColor)
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
@@ -1165,11 +1165,11 @@ export struct AstroPanel {
                   }
                 }.width('100%').height(96).padding({ left: 6, right: 6 })
                 Row() {
-                  Text(this.store.graphMode === 0 ? '现在' : '0°').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
-                  Text(this.store.graphMode === 0 ? this.host.altAzMidpointLabel() : '180°').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
-                  Text(this.store.graphMode === 0 ? '+' + this.store.altAzHours.toString() + 'h' : '360°').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
+                  Text(this.store.graphMode === 0 ? '现在' : '0°').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
+                  Text(this.store.graphMode === 0 ? this.host.altAzMidpointLabel() : '180°').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
+                  Text(this.store.graphMode === 0 ? '+' + this.store.altAzHours.toString() + 'h' : '360°').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
                 }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
-                Text(this.store.graphMode === 0 ? (this.store.altAzMinimum <= 0 ? '横线是地平线；主曲线为目标，金色为太阳，银灰色为月亮。' : '曲线仅显示不低于 ' + this.store.altAzMinimum.toString() + '° 的部分；主曲线为目标，金色为太阳，银灰色为月亮。') : '方位角从北方 0° 起顺时针增加：东 90°、南 180°、西 270°。').fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
+                Text(this.store.graphMode === 0 ? (this.store.altAzMinimum <= 0 ? '横线是地平线；主曲线为目标，金色为太阳，银灰色为月亮。' : '曲线仅显示不低于 ' + this.store.altAzMinimum.toString() + '° 的部分；主曲线为目标，金色为太阳，银灰色为月亮。') : '方位角从北方 0° 起顺时针增加：东 90°、南 180°、西 270°。').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
                 if (this.store.graphMode === 0) {
                   InfoRow({ label: '当前位置', value: this.host.altAzNowLabel() })
                   InfoRow({ label: '最高高度', value: this.host.altAzMaxLabel() })
@@ -1232,10 +1232,10 @@ export struct AstroPanel {
                     }
                   }.width('100%').height(96).padding({ left: 6, right: 6 })
                   Row() {
-                    Text('1月').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
-                    Text('4月').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
-                    Text('7月').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
-                    Text('10月').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
+                    Text('1月').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
+                    Text('4月').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
+                    Text('7月').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
+                    Text('10月').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
                   }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
                   InfoRow({ label: '全年最高', value: this.host.annualMaxLabel() })
                   InfoRow({ label: '显示下限', value: this.store.annualElevationMinimum === -90 ? '不限制' : this.store.annualElevationMinimum.toString() + '°' })
@@ -1300,11 +1300,11 @@ export struct AstroPanel {
                       }.width('100%').padding({ left: 8, right: 8 })
                       if ((day.darkHours ?? 0) > 0) {
                         Text('最佳 ' + this.host.fmtClock(day.peakTime) + ' · 最高 ' + this.host.fmtNum(day.maxAltitude, 1, '°') + ' · 暗夜 ' + this.host.fmtNum(day.darkHours, 1, ' 小时'))
-                          .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 12, right: 8 })
+                          .fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 12, right: 8 })
                         Text('月亮：照亮 ' + this.host.fmtNum(day.moonIllumination, 0, ' %') + '，高度 ' + this.host.fmtNum(day.moonAltitude, 0, '°'))
-                          .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12, right: 8 })
+                          .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12, right: 8 })
                       } else {
-                        Text('当地没有完整的天文暗夜。').fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 12, right: 8 })
+                        Text('当地没有完整的天文暗夜。').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 12, right: 8 })
                       }
                     }.width('100%').padding({ top: 5, bottom: 5 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
                     .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
@@ -1384,11 +1384,11 @@ export struct AstroPanel {
                     Divider().color('#E8B24B').strokeWidth(1).width('100%').position({ x: 0, y: this.host.lunarElongationLineTop() })
                   }.width('100%').height(96).padding({ left: 6, right: 6 })
                   Row() {
-                    Text('现在').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
-                    Text('+' + Math.round(this.store.lunarElongationDays / 2).toString() + '天').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
-                    Text('+' + this.store.lunarElongationDays.toString() + '天').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
+                    Text('现在').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
+                    Text('+' + Math.round(this.store.lunarElongationDays / 2).toString() + '天').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
+                    Text('+' + this.store.lunarElongationDays.toString() + '天').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
                   }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
-                  Text('纵轴 0°-180°；金色横线是 ' + this.store.lunarElongationLimit.toString() + '° 参考线。').fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
+                  Text('纵轴 0°-180°；金色横线是 ' + this.store.lunarElongationLimit.toString() + '° 参考线。').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
                   InfoRow({ label: '当前月距', value: this.host.lunarElongationNowLabel() })
                   InfoRow({ label: '最接近月亮', value: this.host.lunarElongationClosestLabel() })
                   InfoRow({ label: '参考线', value: this.store.lunarElongationLimit.toString() + '°' })
@@ -1436,7 +1436,7 @@ export struct AstroPanel {
                   ForEach([['magnitude', 'phase', 'distance', 'elongation', 'angularSize'], ['phaseAngle', 'heliocentricDistance', 'transitAltitude', 'rightAscension', 'declination']], (metrics: Array<string>, row: number) => {
                     Row({ space: 3 }) {
                       ForEach(metrics, (metric: string) => {
-                        Text(planetMetricLabel(metric)).fontSize(9).maxLines(1)
+                        Text(planetMetricLabel(metric)).fontSize(10).maxLines(1)
                           .fontColor(this.store.planetTimeSeriesLeftMetric === metric ? this.textColor : this.subColor)
                           .padding({ left: 5, right: 5, top: 4, bottom: 4 })
                           .backgroundColor(this.store.planetTimeSeriesLeftMetric === metric ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -1452,7 +1452,7 @@ export struct AstroPanel {
                   ForEach([['magnitude', 'phase', 'distance', 'elongation', 'angularSize'], ['phaseAngle', 'heliocentricDistance', 'transitAltitude', 'rightAscension', 'declination']], (metrics: Array<string>, row: number) => {
                     Row({ space: 3 }) {
                       ForEach(metrics, (metric: string) => {
-                        Text(planetMetricLabel(metric)).fontSize(9).maxLines(1)
+                        Text(planetMetricLabel(metric)).fontSize(10).maxLines(1)
                           .fontColor(this.store.planetTimeSeriesRightMetric === metric ? this.textColor : this.subColor)
                           .padding({ left: 5, right: 5, top: 4, bottom: 4 })
                           .backgroundColor(this.store.planetTimeSeriesRightMetric === metric ? '#9C6A24' : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -1494,13 +1494,13 @@ export struct AstroPanel {
                     }.width('100%').height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
                   }.width('100%').height(96).padding({ left: 6, right: 6 })
                   Row() {
-                    Text('现在').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
-                    Text('+' + Math.round(this.store.planetTimeSeriesDays / 2).toString() + '天').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
-                    Text(this.store.planetTimeSeriesDays === 365 ? '+1年' : '+' + this.store.planetTimeSeriesDays.toString() + '天').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
+                    Text('现在').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
+                    Text('+' + Math.round(this.store.planetTimeSeriesDays / 2).toString() + '天').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
+                    Text(this.store.planetTimeSeriesDays === 365 ? '+1年' : '+' + this.store.planetTimeSeriesDays.toString() + '天').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
                   }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
                   Text('蓝色左轴：' + this.store.planetTimeSeriesLeftMin.toFixed(1) + ' - ' + this.store.planetTimeSeriesLeftMax.toFixed(1) + planetMetricUnit(this.store.planetTimeSeriesLeftMetric)
                     + '；金色右轴：' + this.store.planetTimeSeriesRightMin.toFixed(1) + ' - ' + this.store.planetTimeSeriesRightMax.toFixed(1) + planetMetricUnit(this.store.planetTimeSeriesRightMetric))
-                    .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
+                    .fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
                   InfoRow({ label: '当前 ' + planetMetricLabel(this.store.planetTimeSeriesLeftMetric), value: this.host.planetTimeSeriesValueLabel(this.store.planetTimeSeriesData[0].left, this.store.planetTimeSeriesLeftMetric) })
                   InfoRow({ label: '当前 ' + planetMetricLabel(this.store.planetTimeSeriesRightMetric), value: this.host.planetTimeSeriesValueLabel(this.store.planetTimeSeriesData[0].right, this.store.planetTimeSeriesRightMetric) })
                 }
@@ -1662,14 +1662,14 @@ export struct AstroPanel {
                   Column({ space: 1 }) {
                     Row() {
                       Text(p.name ?? '').fontSize(11).fontColor(this.textColor).layoutWeight(1)
-                      Text((p.visible === true ? '现在可见' : '在地平线下')).fontSize(9)
+                      Text((p.visible === true ? '现在可见' : '在地平线下')).fontSize(10)
                         .fontColor((p.visible === true) ? this.accentColor : this.subColor).width(64)
                       Text((p.magnitude ?? 0).toFixed(1) + ' 等').fontSize(10).fontColor(this.subColor).width(52)
                     }.width('100%').padding({ left: 8, right: 8 })
                     Text('升 ' + this.host.fmtClock(p.rise)
                       + '  中天 ' + this.host.fmtClock(p.transit)
                       + '  落 ' + this.host.fmtClock(p.set))
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   }.width('100%').padding({ top: 4, bottom: 4 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
                   .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                   .onClick(() => { if (p.transitJd !== undefined) this.host.callNative('setJD', String(p.transitJd)) })
@@ -1730,29 +1730,29 @@ export struct AstroPanel {
                     Text((p.magnitude ?? 0).toFixed(1) + ' 等').fontSize(10).fontColor(this.subColor).width(52)
                   }.width('100%').padding({ left: 8, right: 8 })
                   Text('赤经 ' + String(p.ra ?? '--') + '   赤纬 ' + String(p.dec ?? '--'))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                    .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   Text('高度 ' + (p.altitude ?? 0).toFixed(1) + '°   方位 ' + (p.azimuth ?? 0).toFixed(1) + '°'
                     + (p.distanceAU !== undefined ? ('   距离 ' + (p.distanceAU ?? 0).toFixed(3) + ' AU') : ''))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                    .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   if (p.elongation !== undefined) {
                     Text('距角 ' + ((p.elongation ?? 0) * 180 / Math.PI).toFixed(1) + '°'
                       + '   相位 ' + ((p.phase ?? 0) * 100).toFixed(0) + '%')
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   }
                   if (p.phaseAngleDegrees !== undefined || p.heliocentricDistanceAU !== undefined) {
                     Text((p.phaseAngleDegrees !== undefined ? '相位角 ' + p.phaseAngleDegrees.toFixed(1) + '°' : '')
                       + (p.heliocentricDistanceAU !== undefined ? '   日心距 ' + p.heliocentricDistanceAU.toFixed(3) + ' AU' : ''))
-                      .fontSize(9).fontColor('#70FFFFFF').width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor('#70FFFFFF').width('100%').padding({ left: 12 })
                   }
                   if (p.illumination !== undefined) {
                     Text('照亮 ' + (p.illumination ?? 0).toFixed(1) + '%   月龄 ' + (p.age ?? 0).toFixed(1) + ' 天')
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   }
                   if (p.rise !== undefined) {
                     Text('升 ' + this.host.fmtClock(p.rise)
                       + '  中天 ' + this.host.fmtClock(p.transit)
                       + '  落 ' + this.host.fmtClock(p.set))
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   }
                 }.width('100%').padding({ top: 5, bottom: 5 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
                 .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
@@ -1766,7 +1766,7 @@ export struct AstroPanel {
                   ForEach([['Sun', 'Earth', 'Moon', 'Mercury', 'Venus', 'Mars'], ['Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']], (bodies: Array<string>, row: number) => {
                     Row({ space: 3 }) {
                       ForEach(bodies, (body: string) => {
-                        Text(planetPairBodyName(body)).fontSize(9)
+                        Text(planetPairBodyName(body)).fontSize(10)
                           .fontColor(this.store.planetPairFirst === body ? this.textColor : this.subColor)
                           .padding({ left: 6, right: 6, top: 4, bottom: 4 })
                           .backgroundColor(this.store.planetPairFirst === body ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -1787,7 +1787,7 @@ export struct AstroPanel {
                   ForEach([['Sun', 'Earth', 'Moon', 'Mercury', 'Venus', 'Mars'], ['Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']], (bodies: Array<string>, row: number) => {
                     Row({ space: 3 }) {
                       ForEach(bodies, (body: string) => {
-                        Text(planetPairBodyName(body)).fontSize(9)
+                        Text(planetPairBodyName(body)).fontSize(10)
                           .fontColor(this.store.planetPairSecond === body ? this.textColor : this.subColor)
                           .padding({ left: 6, right: 6, top: 4, bottom: 4 })
                           .backgroundColor(this.store.planetPairSecond === body ? '#9C6A24' : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
@@ -1872,12 +1872,12 @@ export struct AstroPanel {
                     }.width('100%').height(96).alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.SpaceBetween)
                   }.width('100%').height(96).padding({ left: 6, right: 6 })
                   Row() {
-                    Text('-' + this.store.planetPairDays.toString() + '天').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
-                    Text('现在').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
-                    Text('+' + this.store.planetPairDays.toString() + '天').fontSize(9).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
+                    Text('-' + this.store.planetPairDays.toString() + '天').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Start)
+                    Text('现在').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.Center)
+                    Text('+' + this.store.planetPairDays.toString() + '天').fontSize(10).fontColor(this.subColor).layoutWeight(1).textAlign(TextAlign.End)
                   }.width('100%').padding({ left: 6, right: 6 }).margin({ bottom: 6 })
                   Text(this.store.planetPairAngularAvailable ? '蓝色线性距离：' + this.store.planetPairLinearMin.toFixed(3) + ' - ' + this.store.planetPairLinearMax.toFixed(3) + ' AU；金色角距离：' + this.store.planetPairAngularMin.toFixed(1) + ' - ' + this.store.planetPairAngularMax.toFixed(1) + '°' : '蓝色为线性距离；与观测地球比较时，表观角距离不适用。')
-                    .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
+                    .fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 6 })
                   InfoRow({ label: '当前线性距离', value: planetPairLinearLabel(this.store.planetPairDistanceData[this.host.planetPairCurrentIndex()].linearDistance) })
                   if (this.store.planetPairAngularAvailable) {
                     InfoRow({ label: '当前角距离', value: (this.store.planetPairDistanceData[this.host.planetPairCurrentIndex()].angularDistance ?? 0).toFixed(1) + '°' })
@@ -1965,7 +1965,7 @@ export struct AstroPanel {
               Text('食的类型').fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 2 }).margin({ bottom: 3 })
               Row({ space: 3 }) {
                 ForEach(['全部', '全食', '环食', '偏食', '半影食'], (label: string, index: number) => {
-                  Text(label).fontSize(9).fontColor(this.store.eclipseTypeFilter === index ? this.textColor : this.subColor)
+                  Text(label).fontSize(10).fontColor(this.store.eclipseTypeFilter === index ? this.textColor : this.subColor)
                     .padding({ left: 7, right: 7, top: 4, bottom: 4 })
                     .backgroundColor(this.store.eclipseTypeFilter === index ? this.accentColor : this.panelColor).animation({ duration: UI_OPTION_ANIMATION_MS, curve: Curve.EaseOut })
                     .borderRadius(UI_RADIUS_CONTROL).clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
@@ -1997,38 +1997,38 @@ export struct AstroPanel {
                   if (e.kind === 'solar' && e.saros !== undefined) {
                     Text('沙罗周期 ' + (e.saros ?? 0).toString() + '   ' + (Math.abs(e.pathWidthKm ?? 0) > 0.1
                       ? '中心路径宽 ' + Math.abs(e.pathWidthKm ?? 0).toFixed(0) + ' 千米' : '非中心食'))
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 }).maxLines(1)
+                      .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 }).maxLines(1)
                   }
                   if (e.durationMin !== undefined && Math.abs(e.durationMin ?? 0) > 0.001) {
                     Text('中心食持续 ' + Math.abs(e.durationMin ?? 0).toFixed(1) + ' 分钟   中心点 '
                       + (e.centralLat ?? 0).toFixed(1) + '°, ' + (e.centralLng ?? 0).toFixed(1) + '°   路径偏离 ' + (e.gamma ?? 0).toFixed(3))
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   }
                   if (e.kind === 'lunar') {
                     Text('沙罗周期 ' + (e.saros ?? 0).toString() + '   路径偏离 ' + (e.gamma ?? 0).toFixed(3)
                       + '   半影食分 ' + (e.penumbralMagnitude ?? 0).toFixed(2)
                       + '   本影食分 ' + (e.umbralMagnitude ?? 0).toFixed(2))
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 }).maxLines(1)
+                      .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 }).maxLines(1)
                     Text((e.visibility ?? '本地条件未知') + '   月亮高度 ' + (e.localMoonAltitude ?? 0).toFixed(1) + '°')
-                      .fontSize(9).fontColor(this.accentColor).width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor(this.accentColor).width('100%').padding({ left: 12 })
                   }
                   if (e.kind === 'solar' && e.localVisible === true) {
                     Text('本地食甚 ' + this.host.fmtClock(e.localMax) + '   食分 ' + (e.localMagnitude ?? 0).toFixed(2)
                       + '   太阳高度 ' + (e.localSunAltitude ?? 0).toFixed(1) + '°')
-                      .fontSize(9).fontColor(this.accentColor).width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor(this.accentColor).width('100%').padding({ left: 12 })
                     Text((e.localFirstContactLabel ?? '初亏') + ' ' + this.host.fmtClock(e.localFirstContact)
                       + '   ' + (e.localLastContactLabel ?? '复圆') + ' ' + this.host.fmtClock(e.localLastContact))
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                     if (e.localCentralType !== undefined) {
                       Text('本地' + e.localCentralType + '：' + this.host.fmtClock(e.localCentralStart)
                         + ' - ' + this.host.fmtClock(e.localCentralEnd))
-                        .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                        .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                     }
                   } else if (e.kind === 'solar' && e.localVisible === false) {
-                    Text('本地不可见').fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                    Text('本地不可见').fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   }
                   if (e.note !== undefined) {
-                    Text(e.note ?? '').fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                    Text(e.note ?? '').fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   }
                 }.width('100%').padding({ top: 4, bottom: 4 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 2 })
                 .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
@@ -2089,15 +2089,15 @@ export struct AstroPanel {
                     }.width('100%').padding({ left: 8, right: 8 })
                     Text('C1 ' + this.host.fmtClock(transit.firstContact) + '   C2 ' + this.host.fmtClock(transit.secondContact)
                       + '   食甚 ' + this.host.fmtClock(transit.middle) + '   C3 ' + this.host.fmtClock(transit.thirdContact) + '   C4 ' + this.host.fmtClock(transit.lastContact))
-                      .fontSize(9).fontColor('#CCFFFFFF').width('100%').padding({ left: 12, right: 8 }).maxLines(2)
+                      .fontSize(10).fontColor('#CCFFFFFF').width('100%').padding({ left: 12, right: 8 }).maxLines(2)
                     Text('最小距日中心 ' + (transit.minimumSeparation ?? 0).toFixed(3) + '°   全程 ' + (transit.durationMin ?? 0).toFixed(1) + ' 分钟')
-                      .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                      .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                     if (transit.localVisible === true) {
                       Text('本地可见 ' + (transit.observableDurationMin ?? 0).toFixed(1) + ' 分钟   食甚太阳高度 ' + (transit.sunAltitude ?? 0).toFixed(1) + '°')
-                        .fontSize(9).fontColor(this.accentColor).width('100%').padding({ left: 12 })
+                        .fontSize(10).fontColor(this.accentColor).width('100%').padding({ left: 12 })
                     } else {
                       Text('本地不可见（食甚太阳高度 ' + (transit.sunAltitude ?? 0).toFixed(1) + '°）')
-                        .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                        .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                     }
                   }.width('100%').padding({ top: 5, bottom: 5 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
                   .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
@@ -2216,9 +2216,9 @@ export struct AstroPanel {
                     Text('照亮 ' + (item.illumination ?? 0).toFixed(0) + '%').fontSize(10).fontColor(this.subColor).width(70)
                   }.width('100%').padding({ left: 8, right: 8 })
                   Text('高度 ' + (item.altitude ?? 0).toFixed(1) + '°   方位 ' + (item.azimuth ?? 0).toFixed(1) + '°')
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                    .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                   Text('升 ' + this.host.fmtClock(item.rise) + '  中天 ' + this.host.fmtClock(item.transit) + '  落 ' + this.host.fmtClock(item.set))
-                    .fontSize(9).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
+                    .fontSize(10).fontColor('#88FFFFFF').width('100%').padding({ left: 12 })
                 }.width('100%').padding({ top: 5, bottom: 5 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).margin({ bottom: 3 })
                 .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
                 .onClick(() => { this.host.jumpToMoonPhase(item) })
