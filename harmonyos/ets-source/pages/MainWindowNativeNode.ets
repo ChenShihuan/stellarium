@@ -6810,6 +6810,7 @@ export struct WindowNativeNode {
   // 手动导入星表：选本地 .cat（不看文件名，桥按 MD5 识别目标级），异步拷到用户目录再交桥导入。
   private importCatalogFile(): void {
     if (this.catalogStore.catalogImporting) {
+      hilog.warn(0xD002, 'Stellarium', '[star-catalog] picker skipped: an import is already running')
       return
     }
     const run = async (): Promise<void> => {
@@ -6821,16 +6822,24 @@ export struct WindowNativeNode {
       try {
         selectedUris = await new picker.DocumentViewPicker(context).select(options)
       } catch (error) {
+        hilog.info(0xD002, 'Stellarium', '[star-catalog] picker dismissed: %{public}s',
+          JSON.stringify(error))
         this.flashHint(I18n.t('catalog_import_cancelled'))
         return
       }
       if (selectedUris.length === 0 || selectedUris[0].length === 0) {
+        hilog.info(0xD002, 'Stellarium', '[star-catalog] picker returned no file')
         this.flashHint(I18n.t('catalog_import_cancelled'))
         return
       }
+      hilog.info(0xD002, 'Stellarium', '[star-catalog] picked uri=%{public}s', selectedUris[0])
       this.stageAndImportCatalog(selectedUris[0], context)
     }
-    run()
+    run().catch((error: Error) => {
+      hilog.error(0xD002, 'Stellarium', '[star-catalog] picker flow failed: %{public}s',
+        JSON.stringify(error))
+      this.flashHint(I18n.t('catalog_import_failed'))
+    })
   }
 
   // 把沙箱外的 .cat（picker / 打开方式给的 URI）落到用户目录后交桥按 MD5 导入。
@@ -6848,20 +6857,37 @@ export struct WindowNativeNode {
         baseName = 'catalog-import-' + Date.now().toString() + '.cat'
       }
       const destDir = context.filesDir + '/stellarium_userdir/stars/hip_gaia3'
-      fileIo.mkdirSync(destDir, true)
       const destPath = destDir + '/' + baseName
-      if (fileIo.accessSync(destPath)) {
-        fileIo.unlinkSync(destPath)
+      // 先 access 再按需 mkdir：真机上 mkdirSync(recursion) 会抛 13900015（文件存在）。
+      // 整段（含 unlink）必须包在 try 里 —— 原先裸奔时任一抛出都会变成未处理的 promise rejection，
+      // 既不弹提示也不写日志，「手动导入」因此表现为「点了没反应、列表不变」。
+      try {
+        if (!fileIo.accessSync(destDir)) fileIo.mkdirSync(destDir, true)
+        if (fileIo.accessSync(destPath)) fileIo.unlinkSync(destPath)
+      } catch (error) {
+        hilog.error(0xD002, 'Stellarium', '[star-catalog] prepare failed dir=%{public}s err=%{public}s',
+          destDir, JSON.stringify(error))
+        this.flashHint(I18n.t('catalog_import_failed'))
+        return
       }
+      hilog.info(0xD002, 'Stellarium', '[star-catalog] staging uri=%{public}s -> %{public}s',
+        uri, destPath)
       try {
         await fileIo.copy(uri, fileUri.getUriFromPath(destPath))
       } catch (error) {
+        // 这条路径原先只弹通用提示、不写日志，导致「导入失败」查不到原因。
+        hilog.error(0xD002, 'Stellarium', '[star-catalog] copy failed err=%{public}s',
+          JSON.stringify(error))
         this.flashHint(I18n.t('catalog_import_failed'))
         return
       }
       this.catalogStore.importLocalCatalog(destPath)
     }
-    run()
+    run().catch((error: Error) => {
+      hilog.error(0xD002, 'Stellarium', '[star-catalog] stage flow failed: %{public}s',
+        JSON.stringify(error))
+      this.flashHint(I18n.t('catalog_import_failed'))
+    })
   }
 
   // 「打开方式」收到的 .cat：Qt 就绪后按文件名匹配星表并导入（引擎未就绪先挂起）。
@@ -6871,6 +6897,8 @@ export struct WindowNativeNode {
       return
     }
     this.openCatalogUri = ''
+    hilog.info(0xD002, 'Stellarium', '[star-catalog] open-with uri=%{public}s qtReady=%{public}s',
+      uri, String(this.qtContentReadyForCatalog))
     if (this.qtContentReadyForCatalog) {
       this.handleOpenCatalogUri(uri)
     } else {

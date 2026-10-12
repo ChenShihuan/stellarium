@@ -1,5 +1,20 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-12] DevEco Code - 修星表面板「手动导入」按钮点了没反应（未处理的 promise rejection）
+
+- **依据（用户复测反馈）**：星表列表里未加载行的「手动导入」按钮，选完文件后列表不变、也看不到任何原因；早前一次还只显示通用的「导入失败：版本不符或文件损坏」。
+- **先排除接线问题**：真机 UI 树里确认按钮存在且 `clickable=true`，点击后确实拉起系统选择器（`[picker] modalPicker start` + `fileSuffixFilters: .cat, maxSelectNumber: 1`），宿主 `activePanel === 'catalogs'` 分支也确实传了 `onImportCatalog` —— **按钮是实连的**，问题在选择之后。
+- **根因（两处，叠加成「静默失败」）**：
+  1. `stageAndImportCatalog` 的 async 体里，`fileIo.mkdirSync(destDir, true)` / `accessSync` / `unlinkSync` **裸奔在 try 之外**，且 `run()` 没有 `.catch()`。真机上 `mkdirSync(recursion)` 会抛 **13900015「文件存在」**，异常变成**未处理的 promise rejection** —— 既不弹提示也不写日志。
+  2. `CatalogStore.importLocalCatalog` 的失败回调把桥回包的 `reason` 丢掉、一律显示 `catalog_import_failed`（「版本不符或文件损坏」），所以 `checksum_mismatch` / `prerequisite` 的精确文案（`catalog_import_no_match` / `catalog_prereq_missing`）**永远不可达**，把「目录创建失败」误报成「文件版本不符」，误导排查方向。
+- **修复**：
+  1. 准备目录改为**先 `access` 再按需 `mkdir`**，整段（含 unlink）纳入 try，失败即弹提示并留日志；
+  2. 两处 fire-and-forget 的 async 体（picker 流程、落盘流程）补 `.catch()`，异常不再静默；
+  3. 失败回包改走 `importResultHint(r)`，按 `reason` 显示精确原因；
+  4. 两条入口（面板按钮、`.cat` 打开方式）统一打 `[star-catalog]` 链路日志：`picked uri` / `staging uri -> dest` / `import start` / `import ok id` / `import failed reason=… error=…`。**成功只留主干、失败才展开**，避免逐步 info 刷屏。
+- **定位证据**：用户 PC 源文件 `stars_5_1v0_6.cat` 实测 MD5 `eb2834985d5885ac03695084cded6897`、257743872 字节，与 `defaultStarsConfig.json` 的 stars5 校验值**完全一致**（文件本身没问题）；日志停在 `[star-catalog] prepare failed dir=… err={"code":13900015}`。修复后用户用 stars5 行的「手动导入」**成功导入**。
+- **校验**：`arkts_check` 0 error、`BUILD SUCCESSFUL`、契约套件 8/8（含 `check-ohos-star-catalog`）、真机装机启动无崩溃。
+
 ## [2026-10-12] DevEco Code - 补 getUiPanelState：面板状态只读回读命令
 
 - **依据**：上一条修快捷面板时发现，`openUiPanel` / `closeUiPanel` 只返回 `accepted`，无法断言「面板是否真的打开/关闭」，语义复测因此缺了读回一环（只有 astro / satellite / search / guide 各自的专用 state 命令）。

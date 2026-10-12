@@ -3,6 +3,7 @@ import { CatOption, NameItem, StellariumBridgeResponse } from '../pages/Stellari
 import { I18n } from '../pages/I18n'
 import { catalogIconForModule, catalogIconForObjectType } from '../common/derive/catalog'
 import { CommandPort } from '../bridge/CommandPort'
+import hilog from '@ohos.hilog'
 
 // —— 内置星表静态快照 ——
 // 镜像 `stars/hip_gaia3/defaultStarsConfig.json` 的 9 级星表。引擎桥不可用时（UI-only 模拟器、
@@ -196,16 +197,23 @@ export class CatalogStore {
   // 目标级（不看文件名）并热加载。重活由宿主 fileIo 异步完成，这里只轮询回包。
   importLocalCatalog(sourcePath: string): void {
     const port = this.ensurePort()
-    if (port === null || this.catalogImporting) {
+    if (port === null) {
+      hilog.warn(0xD002, 'Stellarium', '[star-catalog] import skipped: bridge port not ready')
+      return
+    }
+    if (this.catalogImporting) {
+      hilog.warn(0xD002, 'Stellarium', '[star-catalog] import skipped: previous import still running')
       return
     }
     const hooks = this.hooks
     this.catalogImporting = true
     this.catalogMsg = I18n.t('catalog_importing')
+    hilog.info(0xD002, 'Stellarium', '[star-catalog] import start path=%{public}s', sourcePath)
     port.requestLongRunning('importStarCatalog', sourcePath, (r: StellariumBridgeResponse) => {
       this.catalogImporting = false
       this.catalogMsg = ''
       const importedId = r.id ?? ''
+      hilog.info(0xD002, 'Stellarium', '[star-catalog] import ok id=%{public}s', importedId)
       if (r.ok === true && importedId.length > 0) {
         this.markCatalogLoaded(importedId)
       }
@@ -213,12 +221,17 @@ export class CatalogStore {
         hooks.flashHint(this.importResultHint(r))
       }
       this.loadStarCatalogs()
-    }, () => {
+    }, (r: StellariumBridgeResponse) => {
+      // 失败回包同样带 reason（checksum_mismatch / prerequisite / io / format），必须走
+      // importResultHint 才能显示精确原因；原先一律显示「版本不符或文件损坏」是误导。
       this.catalogImporting = false
       this.catalogMsg = ''
+      hilog.warn(0xD002, 'Stellarium',
+        '[star-catalog] import failed reason=%{public}s error=%{public}s',
+        r.reason ?? '', r.error ?? '')
       const failedHooks = this.hooks
       if (failedHooks !== null) {
-        failedHooks.flashHint(I18n.t('catalog_import_failed'))
+        failedHooks.flashHint(this.importResultHint(r))
       }
     }, (progress: StellariumBridgeResponse): void => {}, 1200)
   }
