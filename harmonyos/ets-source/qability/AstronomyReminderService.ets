@@ -52,6 +52,12 @@ export class AstronomyReminderService {
   private static errorResult(error: BusinessError, fallback: string): AstronomyReminderResult {
     const failure = error as BusinessError
     const code = typeof failure?.code === 'number' ? failure.code : undefined
+    if (code === 1700001) {
+      return { ok: false, error: '尚未开启通知权限，请在系统设置中允许本应用发送通知。', code: code, notificationEnabled: false }
+    }
+    if (code === 1700002) {
+      return { ok: false, error: '本应用未获得「代理提醒」使用权限（需在 AGC 申请该受限权限并使用对应签名），当前提醒上限为 0。', code: code }
+    }
     return { ok: false, error: failure?.message ?? fallback, code: code }
   }
 
