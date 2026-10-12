@@ -21,7 +21,11 @@ for (const token of [
   "commandPort.fire('startPanInertia'",
   "commandPort.fire('panBy'",
   'KeyCode.KEYCODE_SPACE',
-  'KeyCode.KEYCODE_ESCAPE'
+  'KeyCode.KEYCODE_ESCAPE',
+  'keyboardToken(event)',
+  'keyboardModifierPrefix(event)',
+  "requestInteractive('sendKey'",
+  'fallbackKeyboardToken(token)'
 ]) {
   assert.ok(input.includes(token), `${token} missing from the touchpad/keyboard input path`);
 }
