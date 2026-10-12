@@ -132,7 +132,7 @@ export struct SkyCultureMakerConstellationEditor {
         ForEach(this.store.constellations[this.store.selectedConstellation].lines, (line: number[], lineIndex: number) => {
           Row({ space: 8 }) {
             Text('HIP ' + line.join('  ·  ')).fontSize(10).fontColor(this.textColor).layoutWeight(1).maxLines(2)
-            Button(I18n.t('nebula_texture_remove')).fontSize(9).fontColor('#FFB7B7').backgroundColor('rgba(255,107,107,0.12)')
+            Button(I18n.t('nebula_texture_remove')).fontSize(10).fontColor('#FFB7B7').backgroundColor('rgba(255,107,107,0.12)')
               .height(28).borderRadius(UI_RADIUS_CONTROL).padding({ left: 8, right: 8 }).onClick(() => { this.onRemoveLine(lineIndex) })
           }.width('100%').padding({ left: 10, right: 8, top: 6, bottom: 6 }).backgroundColor(this.bgColor).borderRadius(UI_RADIUS_CONTROL)
         }, (line: number[], lineIndex: number) => line.join('-') + '/' + lineIndex.toString())

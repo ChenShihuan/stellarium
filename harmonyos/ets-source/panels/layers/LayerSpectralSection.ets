@@ -25,7 +25,7 @@ export struct LayerSpectralSection {
           .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 })
           .onClick(() => { this.onRefreshSurvey() })
       }.width('100%').margin({ top: 10 })
-      Text(I18n.t('survey_usage')).fontSize(9).fontColor(this.subColor).width('100%').maxLines(3)
+      Text(I18n.t('survey_usage')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3)
         .textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ top: 6 })
       Text(this.surveyStore.surveyStateText).fontSize(11).fontColor(this.subColor).width('100%').margin({ top: 8 })
       Column({ space: 6 }) {
@@ -33,7 +33,7 @@ export struct LayerSpectralSection {
           Row() {
             Column({ space: 2 }) {
               Text(dataset.title).fontSize(11).fontColor(this.textColor)
-              Text(dataset.band + ' · ' + dataset.source).fontSize(9).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              Text(dataset.band + ' · ' + dataset.source).fontSize(10).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             Text(this.surveyStore.spectralActiveId === dataset.id ? '已显示' : (dataset.loading === true ? '加载中' : '打开'))
               .fontSize(10)
@@ -51,7 +51,7 @@ export struct LayerSpectralSection {
         }, (dataset: SpectralDataset) => dataset.id)
       }.width('100%').margin({ top: 8 })
       Text(this.surveyStore.spectralStateText).fontSize(10).fontColor(this.subColor).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text(I18n.t('survey_alignment_hint')).fontSize(9).fontColor(this.subColor).width('100%').maxLines(3)
+      Text(I18n.t('survey_alignment_hint')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(3)
         .textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ top: 4 })
       Button('关闭多波段图层').fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor)
         .borderRadius(UI_RADIUS_CONTROL).height(28).padding({ left: 10, right: 10 }).margin({ top: 6 })

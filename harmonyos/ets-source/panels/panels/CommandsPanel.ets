@@ -44,8 +44,8 @@ export struct CommandsPanel {
           ForEach(this.filteredCommandCatalog(), (item: CommandCatalogEntry) => {
             Row({ space: 6 }) {
               Text(item.name).fontSize(11).fontColor(this.textColor).layoutWeight(1).maxLines(1)
-              Text(item.category).fontSize(9).fontColor(this.subColor)
-              if (item.requiresConfirmation) Text('需确认').fontSize(8).fontColor('#FFD38A')
+              Text(item.category).fontSize(10).fontColor(this.subColor)
+              if (item.requiresConfirmation) Text('需确认').fontSize(10).fontColor('#FFD38A')
             }
             .width('100%').height(29).padding({ left: 8, right: 8 })
             .backgroundColor(this.commandStore.commandNameInput === item.name ? 'rgba(91,147,191,0.25)' : this.panelColor)
@@ -79,7 +79,7 @@ export struct CommandsPanel {
       }.width('100%')
       if (this.commandStore.commandResultText.length > 0) {
         Scroll() {
-          Text(this.commandStore.commandResultText).fontSize(9).fontColor(this.subColor).fontFamily('monospace').width('100%')
+          Text(this.commandStore.commandResultText).fontSize(10).fontColor(this.subColor).fontFamily('monospace').width('100%')
         }.width('100%').height(150).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).padding(8)
       }
     }.width('100%')

@@ -16,7 +16,7 @@ export struct SiderealTimeRow {
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.width('100%').padding({ left: 10, right: 10, top: 3, bottom: 3 })
       Text('恒星时 = 此刻正好在你头顶中天的那条赤经线，用来判断某个天体现在转到哪儿了。')
-        .fontSize(9).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 2 })
+        .fontSize(10).fontColor(this.subColor).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 2 })
     }.width('100%')
   }
 }

@@ -59,7 +59,7 @@ export struct ToolsPanel {
           }.width('100%')
           if (this.store.configExportVisible) {
             Scroll() {
-              Text(this.store.configExportText.length > 0 ? this.store.configExportText : '（配置为空）').fontSize(9).fontColor(this.subColor).width('100%').fontFamily('monospace')
+              Text(this.store.configExportText.length > 0 ? this.store.configExportText : '（配置为空）').fontSize(10).fontColor(this.subColor).width('100%').fontFamily('monospace')
             }.width('100%').height(120).backgroundColor(this.inputColor).borderRadius(UI_RADIUS_CONTROL).padding(8)
           }
           TextArea({ placeholder: I18n.t('c_config_import_hint'), text: this.configImportText })
@@ -82,7 +82,7 @@ export struct ToolsPanel {
           Text(I18n.t('session_hint')).fontSize(10).fontColor(this.subColor).width('100%')
           if (this.store.sessionExportText.length > 0) {
             Scroll() {
-              Text(this.store.sessionExportText).fontSize(9).fontColor(this.subColor).width('100%').fontFamily('monospace')
+              Text(this.store.sessionExportText).fontSize(10).fontColor(this.subColor).width('100%').fontFamily('monospace')
             }.width('100%').height(100).backgroundColor(this.inputColor).borderRadius(UI_RADIUS_CONTROL).padding(8)
           }
           TextArea({ placeholder: I18n.t('session_import_hint'), text: this.sessionImportText })
@@ -106,7 +106,7 @@ export struct ToolsPanel {
           }.width('100%')
           if (this.store.logVisible) {
             Scroll() {
-              Text(this.store.logText.length > 0 ? this.store.logText : '（日志为空）').fontSize(9).fontColor(this.subColor).width('100%').fontFamily('monospace')
+              Text(this.store.logText.length > 0 ? this.store.logText : '（日志为空）').fontSize(10).fontColor(this.subColor).width('100%').fontFamily('monospace')
             }.width('100%').height(180).backgroundColor(this.inputColor).borderRadius(UI_RADIUS_CONTROL).padding(8)
           }
         }.width('100%').padding(10).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)

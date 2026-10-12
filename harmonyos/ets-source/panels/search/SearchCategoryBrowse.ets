@@ -95,7 +95,7 @@ export struct SearchCategoryBrowse {
                 Text(item.zh ?? item.name ?? '')
                   .fontSize(12).minFontSize(10).fontColor(this.textColor).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                 if (this.subtitleFor(item).length > 0) {
-                  Text(this.subtitleFor(item)).fontSize(9).minFontSize(8)
+                  Text(this.subtitleFor(item)).fontSize(10).minFontSize(10)
                     .fontColor(item.visibleNow === true ? '#7FB3DC' : this.subColor).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                 }
               }

@@ -119,7 +119,7 @@ export struct TimeWheelScrubber {
         Row() {
           ForEach(this.store.timeWheelTickLabels, (_label: string, index: number) => {
             Column({ space: 2 }) {
-              Text(this.visibleTickLabel(index)).maxLines(1).minFontSize(8)
+              Text(this.visibleTickLabel(index)).maxLines(1).minFontSize(10)
                 .fontSize(this.store.timeWheelUnit === 'year' ? 10 : 12)
                 .fontWeight(FontWeight.Medium)
                 .fontColor('#E7F3FC')

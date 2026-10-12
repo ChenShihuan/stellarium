@@ -72,8 +72,8 @@ export struct NebulaTexturesPanel {
             Text(I18n.format('nebula_texture_summary', [String(this.store.nebulaTextureStatus?.readyCount ?? 0), String(this.store.nebulaTextureStatus?.count ?? 0)]))
               .fontSize(11).fontColor(this.textColor).width('100%')
             Text(this.store.nebulaTextureStatus?.configLoaded === true ? I18n.t('nebula_texture_config_ok') : I18n.t('nebula_texture_config_invalid'))
-              .fontSize(9).fontColor(this.subColor).width('100%')
-            Text(I18n.t('nebula_texture_offline_solver')).fontSize(9).fontColor('#FFD59A').width('100%').maxLines(2)
+              .fontSize(10).fontColor(this.subColor).width('100%')
+            Text(I18n.t('nebula_texture_offline_solver')).fontSize(10).fontColor('#FFD59A').width('100%').maxLines(2)
           }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor('rgba(111,168,207,0.08)').borderRadius(UI_RADIUS_CONTROL)
         }
         if ((this.store.nebulaTextureStatus?.items ?? []).length > 0) {
@@ -81,18 +81,18 @@ export struct NebulaTexturesPanel {
             Column({ space: 4 }) {
               Row() {
                 Text(item.imageUrl).fontSize(11).fontColor(this.textColor).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                Text(this.nebulaTextureStatusLabel(item.status)).fontSize(9).fontColor(item.ready === true ? '#B9E6C4' : '#FFD59A')
+                Text(this.nebulaTextureStatusLabel(item.status)).fontSize(10).fontColor(item.ready === true ? '#B9E6C4' : '#FFD59A')
                   .padding({ left: 6, right: 6, top: 3, bottom: 3 }).backgroundColor('rgba(255,255,255,0.06)').borderRadius(UI_RADIUS_PILL)
               }.width('100%')
               if (item.width !== undefined && item.height !== undefined) {
                 Text(item.width.toString() + ' × ' + item.height.toString() + ' · RA ' + (item.centerRaDeg ?? 0).toFixed(2) + '° · Dec ' + (item.centerDecDeg ?? 0).toFixed(2) + '°')
-                  .fontSize(9).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .fontSize(10).fontColor(this.subColor).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               }
-              if (item.decodeError !== undefined) Text(item.decodeError).fontSize(9).fontColor('#FFD59A').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+              if (item.decodeError !== undefined) Text(item.decodeError).fontSize(10).fontColor('#FFD59A').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
               Row({ space: 6 }) {
-                Button(I18n.t('btn_center')).fontSize(9).fontColor(this.textColor).backgroundColor(this.accentColor).borderRadius(UI_RADIUS_CONTROL).height(26).layoutWeight(1)
+                Button(I18n.t('btn_center')).fontSize(10).fontColor(this.textColor).backgroundColor(this.accentColor).borderRadius(UI_RADIUS_CONTROL).height(26).layoutWeight(1)
                   .enabled(item.ready === true).onClick(() => { this.onGoto(item.imageUrl) })
-                Button(I18n.t('nebula_texture_remove')).fontSize(9).fontColor(this.textColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(26).layoutWeight(1)
+                Button(I18n.t('nebula_texture_remove')).fontSize(10).fontColor(this.textColor).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL).height(26).layoutWeight(1)
                   .onClick(() => { this.onRemove(item.imageUrl) })
               }.width('100%')
             }.width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 }).backgroundColor(this.panelColor).borderRadius(UI_RADIUS_CONTROL)

@@ -22,7 +22,7 @@ export struct SkyCultureSectionHeader {
       Row().width(3).height(27).backgroundColor(this.accentColor).borderRadius(2)
       Column({ space: 2 }) {
         Text(this.title).fontSize(13).fontColor(this.textColor).fontWeight(FontWeight.Medium).width('100%')
-        Text(this.subtitle).fontSize(9).fontColor(this.subColor).width('100%').maxLines(2)
+        Text(this.subtitle).fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
     }.width('100%').padding({ left: 2, right: 2, top: 4, bottom: 7 })
@@ -82,7 +82,7 @@ export struct SkyCultureLabelSettingCard {
       Column() {
         Row() {
           Column({ space: 1 }) {
-            Text(this.title).fontSize(9).fontColor(this.subColor).width('100%')
+            Text(this.title).fontSize(10).fontColor(this.subColor).width('100%')
             Text(this.options[this.mode])
               .fontSize(12).fontColor(this.textColor).width('100%').maxLines(2).lineHeight(17)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -169,7 +169,7 @@ export struct SkyCultureFilterOption {
       Text(this.label).fontSize(12).fontColor(this.textColor).layoutWeight(1)
         .maxLines(2).lineHeight(17).textOverflow({ overflow: TextOverflow.Ellipsis })
       if (this.selected) {
-        Text(I18n.t('culture_current')).fontSize(9).fontColor(this.accentColor)
+        Text(I18n.t('culture_current')).fontSize(10).fontColor(this.accentColor)
       }
     }.height(44).width('100%').padding({ left: 12, right: 12 })
       .backgroundColor(this.selected ? this.selectedBg : this.optionBg)

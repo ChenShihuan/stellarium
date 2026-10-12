@@ -35,7 +35,7 @@ export struct SkyCultureMakerValidationPanel {
         ForEach(this.store.validation.errors.concat(this.store.validation.warnings), (issue: SkyCultureMakerIssue, index: number) => {
           Column({ space: 3 }) {
             Text(issue.field).fontSize(10).fontWeight(FontWeight.Medium).fontColor(issue.severity === 'error' ? '#FFB7B7' : '#FFD49A').width('100%')
-            Text(this.store.issueText(issue.code, issue.message)).fontSize(9).lineHeight(14).fontColor(this.subColor).width('100%')
+            Text(this.store.issueText(issue.code, issue.message)).fontSize(10).lineHeight(14).fontColor(this.subColor).width('100%')
           }.width('100%').padding({ left: 10, right: 10, top: 7, bottom: 7 }).backgroundColor(this.bgColor).borderRadius(UI_RADIUS_CONTROL)
         }, (issue: SkyCultureMakerIssue, index: number) => issue.field + '/' + issue.code + '/' + index.toString())
       }

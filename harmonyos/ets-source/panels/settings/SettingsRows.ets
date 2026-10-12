@@ -26,7 +26,7 @@ export struct EphemerisToggleRow {
     Row() {
       Column({ space: 1 }) {
         Text(this.label).fontSize(11).fontColor(this.available ? this.textColor : this.subColor).width('100%')
-        Text(this.available ? (this.isEnabled ? '已安装 · 使用中' : '已安装 · 未启用') : '未安装').fontSize(9).fontColor(this.subColor).width('100%')
+        Text(this.available ? (this.isEnabled ? '已安装 · 使用中' : '已安装 · 未启用') : '未安装').fontSize(10).fontColor(this.subColor).width('100%')
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       Toggle({ type: ToggleType.Switch, isOn: this.isEnabled }).width(42).height(24).enabled(this.available)
         .selectedColor(this.accentColor).onChange((value: boolean) => { this.onToggle(value) })

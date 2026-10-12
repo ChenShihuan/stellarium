@@ -19,7 +19,7 @@ export struct JulianDateControls {
       Row() {
         Text(I18n.t('julian_date')).fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.textColor).layoutWeight(1)
         Text(this.store.julianCalendarSystem === 'julian' ? I18n.t('julian_calendar_active') : I18n.t('gregorian_calendar_active'))
-          .fontSize(9).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('58%')
+          .fontSize(10).fontColor(this.subColor).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('58%')
       }.width('100%')
       JulianDateInputRow({
         store: this.store,
@@ -41,7 +41,7 @@ export struct JulianDateControls {
         onAdjust: this.onAdjust,
         onApply: this.onApply
       })
-      Text(I18n.t('julian_date_hint')).fontSize(9).lineHeight(14).fontColor(this.subColor).width('100%')
+      Text(I18n.t('julian_date_hint')).fontSize(10).lineHeight(14).fontColor(this.subColor).width('100%')
       if (this.store.julianDateError.length > 0) {
         Text(this.store.julianDateError).fontSize(10).fontColor('#F59B9B').width('100%')
       }

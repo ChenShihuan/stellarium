@@ -33,27 +33,27 @@ export struct HelpPanel {
           .margin({ top: 8, bottom: 4 })
         Text(I18n.t('i0310')).fontSize(13).fontColor(this.textColor).width('100%')
         Row({ space: 10 }) {
-          Text('DRAG').fontSize(8).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
+          Text('DRAG').fontSize(10).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
             .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.panelColor)
           Text(I18n.t('i0311')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
         }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
         Row({ space: 10 }) {
-          Text('PINCH').fontSize(8).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
+          Text('PINCH').fontSize(10).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
             .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.panelColor)
           Text(I18n.t('i0312')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
         }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
         Row({ space: 10 }) {
-          Text('TAP').fontSize(8).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
+          Text('TAP').fontSize(10).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
             .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.panelColor)
           Text(I18n.t('i0313')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
         }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
         Row({ space: 10 }) {
-          Text('2FD').fontSize(8).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
+          Text('2FD').fontSize(10).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
             .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.panelColor)
           Text(I18n.t('i0314')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
         }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
         Row({ space: 10 }) {
-          Text('HOLD').fontSize(8).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
+          Text('HOLD').fontSize(10).fontColor(this.accentColor).fontWeight(FontWeight.Bold).width(36).height(20)
             .textAlign(TextAlign.Center).borderRadius(UI_RADIUS_CONTROL).backgroundColor(this.panelColor)
           Text(I18n.t('i0315')).fontSize(10).fontColor('#99FFFFFF').layoutWeight(1)
         }.width('100%').padding({ left: 4, right: 4 }).alignItems(VerticalAlign.Center)
@@ -96,8 +96,8 @@ export struct HelpPanel {
         AppFilingInfo({ subColor: this.subColor, panelColor: this.panelColor })
         if (this.tools.aboutVersion.length > 0) {
           Text('Stellarium ' + this.tools.aboutVersion + ' · Qt ' + this.tools.aboutQt).fontSize(10).fontColor('#99FFFFFF').width('100%')
-          Text(I18n.t('c_user_dir') + ': ' + this.tools.aboutUserDir).fontSize(9).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(I18n.t('c_config_file') + ': ' + this.tools.aboutConfigFile).fontSize(9).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(I18n.t('c_user_dir') + ': ' + this.tools.aboutUserDir).fontSize(10).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(I18n.t('c_config_file') + ': ' + this.tools.aboutConfigFile).fontSize(10).fontColor('#99FFFFFF').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         } else {
           Text(I18n.t('c_loading')).fontSize(10).fontColor('#99FFFFFF').width('100%')
         }

@@ -13,7 +13,7 @@ export struct ObjectDataTile {
 
   build() {
     Column({ space: 3 }) {
-      Text(this.label).fontSize(9).fontColor('#8FBBD6').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      Text(this.label).fontSize(10).fontColor('#8FBBD6').width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       Text(this.value.length > 0 ? this.value : '--').fontSize(11).fontColor('#E0F1F8').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
     }
       .width('100%').height(48).padding({ left: 9, right: 9, top: 6, bottom: 6 })
@@ -79,7 +79,7 @@ export struct ObjectCompactMetric {
   build() {
     Column() {
       Text(this.label)
-        .fontSize(9).fontColor('#8FBBD6').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        .fontSize(10).fontColor('#8FBBD6').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       Text(this.value.length > 0 ? this.value : '--')
         .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#E7F7FF').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ top: 1 })
     }

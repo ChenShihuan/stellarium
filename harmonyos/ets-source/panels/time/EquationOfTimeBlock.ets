@@ -30,7 +30,7 @@ export struct EquationOfTimeBlock {
       Row() {
         Column({ space: 2 }) {
           Text(I18n.t('equation_of_time_title')).fontSize(12).fontColor(this.textColor).width('100%')
-          Text(I18n.t('equation_of_time_hint')).fontSize(9).fontColor(this.subColor).width('100%').maxLines(2)
+          Text(I18n.t('equation_of_time_hint')).fontSize(10).fontColor(this.subColor).width('100%').maxLines(2)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         if (this.store.equationOfTimeLoading) {
           LoadingProgress().width(18).height(18).color(this.accentColor)

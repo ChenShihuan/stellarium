@@ -27,7 +27,7 @@ export struct ConstellationCultureView {
               .fontSize(10).fontColor('#8FBBD6').width('100%').maxLines(2)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }.layoutWeight(1)
-          Text(I18n.t('culture_source_material')).fontSize(9).fontColor('#8FBBD6')
+          Text(I18n.t('culture_source_material')).fontSize(10).fontColor('#8FBBD6')
             .padding({ left: 7, right: 7, top: 4, bottom: 4 })
             .backgroundColor('rgba(91,147,191,0.14)').borderRadius(UI_RADIUS_CONTROL)
         }.width('100%')
@@ -67,7 +67,7 @@ export struct ConstellationCultureView {
             .fontColor('#8FBBD6').width('100%').lineHeight(17)
         }
         if (this.store.selectedConstellationCultureDescriptionSource.length > 0) {
-          Text(this.store.selectedConstellationCultureDescriptionSource).fontSize(9).fontColor('#7599AD')
+          Text(this.store.selectedConstellationCultureDescriptionSource).fontSize(10).fontColor('#7599AD')
             .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
       }
