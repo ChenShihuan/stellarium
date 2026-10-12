@@ -127,7 +127,7 @@ export class AstronomyReminderService {
   public static async list(): Promise<AstronomyReminderListResult> {
     try {
       const reminders = await reminderAgentManager.getAllValidReminders()
-      const items = reminders.map((item) => {
+      const items = reminders.map((item): AstronomyReminderItem => {
         const request = item.reminderReq
         const dateTime = request.reminderType === reminderAgentManager.ReminderType.REMINDER_TYPE_CALENDAR
           ? (request as reminderAgentManager.ReminderRequestCalendar).dateTime

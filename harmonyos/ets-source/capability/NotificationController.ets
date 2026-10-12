@@ -21,6 +21,8 @@ export interface NotificationHostHooks {
 export class NotificationController {
   private store: NotificationStore
   private hooks: NotificationHostHooks
+  // 「订阅下一节气提醒」的年历就绪重试计数（0 表示未在重试）。
+  private solarTermRetryCount: number = 0
 
   constructor(store: NotificationStore, hooks: NotificationHostHooks) {
     this.store = store
@@ -60,16 +62,27 @@ export class NotificationController {
   }
 
   // 从当前年历节气列表中选取下一节气，注册系统后台代理提醒。
+  // 年历是异步计算的：首次点击若尚未就绪，会先触发计算并自动轮询重试，单击即可完成。
   scheduleNextSolarTerm(): void {
     const next = this.hooks.almanacSolarTerms().find((term: SeasonEvent): boolean => {
       const time = new Date(term.date ?? '').getTime()
       return Number.isFinite(time) && time > Date.now() + 30 * 1000
     })
     if (next === undefined) {
-      this.hooks.loadAlmanac()
-      this.hooks.flashHint('正在计算下一节气，请稍后再试。')
+      if (this.solarTermRetryCount === 0) {
+        this.hooks.flashHint('正在计算下一节气…')
+        this.hooks.loadAlmanac()
+      }
+      if (this.solarTermRetryCount < 40) {
+        this.solarTermRetryCount += 1
+        setTimeout(() => { this.scheduleNextSolarTerm() }, 300)
+        return
+      }
+      this.solarTermRetryCount = 0
+      this.hooks.flashHint('暂未取到节气，请稍后在年历页刷新后重试。')
       return
     }
+    this.solarTermRetryCount = 0
     this.store.astronomyNotificationBusy = true
     AstronomyReminderService.schedule({
       at: String(next.date),
