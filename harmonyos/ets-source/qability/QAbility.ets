@@ -341,7 +341,7 @@ export default class QAbility extends UIAbility {
         this.finishCliRequest(request, JSON.stringify({ ok: false, error: 'payload must be reminder JSON' }));
         return;
       }
-      AstronomyReminderService.schedule(payload).then((result) => {
+      AstronomyReminderService.schedule(payload, this.context.abilityInfo.bundleName).then((result) => {
         this.finishCliRequest(request, JSON.stringify(result));
       });
       return;
@@ -402,7 +402,7 @@ export default class QAbility extends UIAbility {
         kind: 'solar-term',
         panel: 'astro',
         tab: 8
-      }).then((result) => {
+      }, this.context.abilityInfo.bundleName).then((result) => {
         const response: AstronomyReminderResponse = { ok: result.ok };
         if (result.reminderId !== undefined) response.reminderId = result.reminderId;
         if (result.error !== undefined) response.error = result.error;

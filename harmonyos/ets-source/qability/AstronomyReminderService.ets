@@ -85,7 +85,7 @@ export class AstronomyReminderService {
     }
   }
 
-  public static async schedule(payload: AstronomyReminderRequest): Promise<AstronomyReminderResult> {
+  public static async schedule(payload: AstronomyReminderRequest, bundleName: string = ''): Promise<AstronomyReminderResult> {
     if (payload.title.trim().length === 0 || payload.content.trim().length === 0) {
       return { ok: false, error: 'title and content are required' }
     }
@@ -116,7 +116,8 @@ export class AstronomyReminderService {
       groupId: AstronomyReminderService.GROUP_ID,
       tapDismissed: true,
       wantAgent: {
-        pkgName: AstronomyReminderService.BUNDLE_NAME,
+        // 点击提醒要拉起「当前安装的」包：debug 包名与发布包名不同，必须运行时派生。
+        pkgName: bundleName.length > 0 ? bundleName : AstronomyReminderService.BUNDLE_NAME,
         abilityName: AstronomyReminderService.ABILITY_NAME,
         uri: 'skyinstrument://astronomy/reminder',
         parameters: parameters
