@@ -105,6 +105,7 @@ import { DeltaTStore } from '../state/DeltaTStore'
 import { TimeSettingsStore } from '../state/TimeSettingsStore'
 import { SettingsChoiceButton } from '../common/ui/SettingsChoiceButton'
 import { NightModeStore } from '../state/NightModeStore'
+import { accentForNightMode, slotsForNightMode, stellariumTheme, AstroColors, DEFAULT_SLOTS, ThemeSlots } from '../state/StellariumTheme'
 import { TimeWheelController } from '../state/TimeWheelController'
 import { BookmarkStore } from '../state/BookmarkStore'
 import { BookmarkPanel } from '../panels/panels/BookmarkPanel'
@@ -244,7 +245,7 @@ import {
   LayerPresetState, MARKING_LAYER_ACTION_IDS, CONTENT_LAYER_ACTION_IDS, AstroCsvExport, CELESTIAL_POSITION_CATEGORIES, HELIOCENTRIC_PLANET_ORBITS,
   HELIOCENTRIC_DISTANCE_GUIDES, PHENOMENA_START_OPTIONS,
   GyroGuideProjection, SkyUiObstacle, BookmarkItem,
-  BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, QUICK_PANEL_STORE, INFO_WINDOW_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
+  BookmarkRaw, BookmarksResponse, BOOKMARK_STORE, SEARCH_HISTORY_STORE, OBSERVING_STORE, LOCATION_STORE, QUICK_PANEL_STORE, INFO_WINDOW_STORE, NIGHT_MODE_STORE, ObserverLocationRecord, OFFLINE_APPGALLERY_BUILD,
   OcularsData, OcularsResponse, PointerCoordinatesData, PointerCoordinatesResponse,
   EquationOfTimeData, ArchaeoLinesData, ArchaeoPlanetOption, SatellitesData, SatelliteListItem,
   SatelliteSource, SatelliteUpdateSettings, SatelliteSourcesResponse, CatalogHealthEntry,
@@ -1137,6 +1138,10 @@ export struct WindowNativeNode {
   @StorageLink('i18nLang') private i18nLang: string = I18n.systemLanguage()
   @State private bridgeSyncStarted: boolean = false
   @State private nightModeStore: NightModeStore = new NightModeStore()
+  // 宿主直属 UI 的主题槽位缓存。WithTheme 只作用于子树，宿主的 onWillApplyTheme 收到的是祖先主题，
+  // 因此宿主按 nightMode 直接取与子树同源的槽位。
+  private hostSlotsNight: boolean | undefined = undefined
+  private hostSlotsCache: ThemeSlots = DEFAULT_SLOTS
   @State private locationText: string = '--'
   @State private coordinateText: string = '--'
   @State private altitudeText: string = '--'
@@ -1618,6 +1623,7 @@ export struct WindowNativeNode {
     this.nebulaTextureStore.attachPort(hostPort, () => {})
     // store，复用同一 HostCommandPort；两 store 无 publish* 发布点，故仅注入端口与跨域/UI hooks。
     this.nightModeStore.attachPort(hostPort)
+    this.nightModeStore.attachPersistFn((night: boolean) => { this.persistNightModePreference(night) })
     this.julianStore.attachPort(hostPort)
     this.julianStore.attachHooks({
       syncWheelFromSimulation: (jd: number): void => { this.wheel().syncFromSimulation(jd) },
@@ -2247,7 +2253,7 @@ export struct WindowNativeNode {
       },
       secondaryButton: {
         value: I18n.t('privacy_revoke_confirm'),
-        fontColor: '#E36A6A',
+        fontColor: this.hostSlots().errorText,
         action: () => { this.revokePrivacyConsent() }
       }
     })
@@ -2764,6 +2770,7 @@ export struct WindowNativeNode {
         setLandscapeDetailOpen: (value: boolean): void => { this.landscapeDetailOpen = value },
         persistEquatorialMount: (): void => { this.telescopeStore.persistEquatorialMount() },
         persistNightMode: (): void => { this.nightModeStore.persistNightMode() },
+        applyNightMode: (enabled: boolean): void => { this.nightModeStore.applyNightMode(enabled, true) },
         syncSkyCultureTimeFollowTimer: (): void => { this.skyCultureCtl().syncSkyCultureTimeFollowTimer() },
         loadScriptList: (): void => { this.scriptPlaybackCtl().loadScriptList() },
         loadRecordings: (): void => { this.scriptPlaybackCtl().loadRecordings() },
@@ -4826,6 +4833,17 @@ export struct WindowNativeNode {
 
   // 快捷操作面板各项当前值（一律读既有 store，与池中 id 一一对应）。
   // 入口类（type === 'entry'）**刻意不入表**：查不到即恒为 false，格子永远不会显示成「永久点亮」。
+  private async persistNightModePreference(night: boolean): Promise<void> {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const store = await preferences.getPreferences(ctx, NIGHT_MODE_STORE)
+      await store.put('nightMode', night)
+      await store.flush()
+    } catch (error) {
+      hilog.warn(0x0000, 'StellariumArkUI', '[night] persist preference failed')
+    }
+  }
+
   private quickActionValues(): Record<string, boolean> {
     return {
       'constellation_lines': this.layerStore.constellationLines,
@@ -6130,8 +6148,8 @@ export struct WindowNativeNode {
     if (width <= 0 || height <= 0) return
     this.skyCultureMapContext.clearRect(0, 0, width, height)
     this.skyCultureMapContext.lineWidth = 1.2
-    this.skyCultureMapContext.strokeStyle = 'rgba(255, 219, 115, 0.96)'
-    this.skyCultureMapContext.fillStyle = 'rgba(255, 194, 76, 0.18)'
+    this.skyCultureMapContext.strokeStyle = AstroColors.cultureMapStroke
+    this.skyCultureMapContext.fillStyle = AstroColors.cultureMapFill
     for (let polygonIndex = 0; polygonIndex < this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons.length; polygonIndex++) {
       const points = this.skyCultureSettingsStore.skyCultureTerritoryMapPolygons[polygonIndex].points
       if (points.length < 3) continue
@@ -6484,10 +6502,21 @@ export struct WindowNativeNode {
     return title + '已核验（' + checkedAt + '）'
   }
 
-  private catalogHealthColor(health: CatalogHealthEntry): string {
-    if (!this.catalogHealthLoaded || !this.catalogManifestPresent || health.status === 'unknown') return '#99FFFFFF'
-    if (health.status === 'stale' || health.status === 'attention') return '#FFE1A6'
-    return '#B7D8F0'
+  // 宿主直属 UI 的取色入口：nightMode 变化时重建一次槽位缓存。
+  private hostSlots(): ThemeSlots {
+    const night = this.nightModeStore.nightMode
+    if (this.hostSlotsNight !== night) {
+      this.hostSlotsNight = night
+      this.hostSlotsCache = slotsForNightMode(night)
+    }
+    return this.hostSlotsCache
+  }
+
+  private catalogHealthColor(health: CatalogHealthEntry): ResourceColor {
+    const c = this.hostSlots()
+    if (!this.catalogHealthLoaded || !this.catalogManifestPresent || health.status === 'unknown') return c.sub
+    if (health.status === 'stale' || health.status === 'attention') return c.warning
+    return c.tertiary
   }
 
   // 确保插件已加载，未加载时先 loadPlugin 再回调
@@ -6937,6 +6966,7 @@ export struct WindowNativeNode {
 // ===== 页面渲染入口与内联 @Builder =====
 
   build() {
+    WithTheme({ theme: stellariumTheme(this.nightModeStore.nightMode) }) {
     Stack() {
       // Language refresh anchor: reading i18nLang creates a reactive
       // dependency on AppStorage('i18nLang'). When language changes,
@@ -6982,9 +7012,9 @@ export struct WindowNativeNode {
           .width(120)
           .height(120)
           .borderRadius(60)
-          .backgroundColor(this.nightModeStore.nightMode ? 'rgba(180, 40, 20, 0.15)' : 'rgba(107, 163, 214, 0.12)')
-          .border({ width: 1, color: 'rgba(107, 163, 214, 0.10)' })
-          .shadow({ radius: 42, color: 'rgba(107, 163, 214, 0.18)', offsetX: 0, offsetY: 0 })
+          .backgroundColor(this.hostSlots().chipInactiveBg)
+          .border({ width: 1, color: this.hostSlots().border })
+          .shadow({ radius: 42, color: this.hostSlots().accentSoft, offsetX: 0, offsetY: 0 })
           .align(Alignment.Center)
           .offset({ x: this.skyTouchX - this.skyWidth / 2, y: this.skyTouchY - this.skyHeight / 2 })
           .hitTestBehavior(HitTestMode.None)
@@ -6996,9 +7026,9 @@ export struct WindowNativeNode {
           .width(120)
           .height(120)
           .borderRadius(60)
-          .backgroundColor(this.nightModeStore.nightMode ? 'rgba(180, 40, 20, 0.15)' : 'rgba(107, 163, 214, 0.12)')
-          .border({ width: 1, color: 'rgba(107, 163, 214, 0.10)' })
-          .shadow({ radius: 42, color: 'rgba(107, 163, 214, 0.18)', offsetX: 0, offsetY: 0 })
+          .backgroundColor(this.hostSlots().chipInactiveBg)
+          .border({ width: 1, color: this.hostSlots().border })
+          .shadow({ radius: 42, color: this.hostSlots().accentSoft, offsetX: 0, offsetY: 0 })
           .align(Alignment.Center)
           .offset({ x: this.skyTouchX2 - this.skyWidth / 2, y: this.skyTouchY2 - this.skyHeight / 2 })
           .hitTestBehavior(HitTestMode.None)
@@ -7116,12 +7146,9 @@ export struct WindowNativeNode {
                 modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
                 warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
                 fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
-                starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
                 satelliteVisible: this.objectDetailStore.selectedObjectIsArtificialSatellite(),
                 tleEpoch: this.objectDetailStore.selectedSatelliteTleEpoch(),
-                accent: this.nightModeStore.nmAccent(),
                 cultureVisible: this.objectDetailStore.selectedObjectIsConstellation(),
-                textColor: this.nightModeStore.nmText(),
                 connectorVisible: this.overlayStore.objectDetailConnectorVisible && !this.infoWindowStore.observeModeEnabled(),
                 connectorLength: this.objectDetailConnectorLength,
                 connectorX: this.objectDetailConnectorX,
@@ -7226,12 +7253,9 @@ export struct WindowNativeNode {
                 modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
                 warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
                 fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
-                starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
                 satelliteVisible: this.objectDetailStore.selectedObjectIsArtificialSatellite(),
                 tleEpoch: this.objectDetailStore.selectedSatelliteTleEpoch(),
-                accent: this.nightModeStore.nmAccent(),
                 cultureVisible: this.objectDetailStore.selectedObjectIsConstellation(),
-                textColor: this.nightModeStore.nmText(),
                 connectorVisible: this.overlayStore.objectDetailConnectorVisible && !this.infoWindowStore.observeModeEnabled(),
                 connectorLength: this.objectDetailConnectorLength,
                 connectorX: this.objectDetailConnectorX,
@@ -7260,7 +7284,7 @@ export struct WindowNativeNode {
                 chromeRowY: this.chromeRowY(),
                 chromeRowWidth: dockWidthPixels(this.isExpandedLayout, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.EDGE_MARGIN, this.compactDockWidthPercent()),
                 chromeRowPosXLeft: chromeRowPosXLeft(this.isExpandedLayout, this.EDGE_MARGIN, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()),
-                chromeRowPosXRight: chromeRowPosXRight(this.isExpandedLayout, this.skyWidth, this.EDGE_MARGIN, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()),
+                chromeRowPosXRight: chromeRowPosXRight(this.isExpandedLayout, this.EDGE_MARGIN, this.skyWidth, this.panelVisible, this.panelWidth, this.panelOffsetX, this.compactDockWidthPercent()),
                 chromeZoomHorizontal: this.chromeZoomHorizontal(),
                 onFlashHint: (text: string) => { this.flashHint(text) },
                 onCalibrate: () => { this.gyroCtl().calibrateGyroscope() },
@@ -7353,12 +7377,9 @@ export struct WindowNativeNode {
                 modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
                 warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
                 fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
-                starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
                 satelliteVisible: this.objectDetailStore.selectedObjectIsArtificialSatellite(),
                 tleEpoch: this.objectDetailStore.selectedSatelliteTleEpoch(),
-                accent: this.nightModeStore.nmAccent(),
                 cultureVisible: this.objectDetailStore.selectedObjectIsConstellation(),
-                textColor: this.nightModeStore.nmText(),
                 connectorVisible: this.overlayStore.objectDetailConnectorVisible && !this.infoWindowStore.observeModeEnabled(),
                 connectorLength: this.objectDetailConnectorLength,
                 connectorX: this.objectDetailConnectorX,
@@ -7453,10 +7474,10 @@ export struct WindowNativeNode {
               this.handleDockTouch(event)
             })
 
-          HarmonyShell({
-            overlayStore: this.overlayStore,
-            gyroStore: this.gyroStore,
-            isExpandedLayout: this.isExpandedLayout,
+            HarmonyShell({
+              overlayStore: this.overlayStore,
+              gyroStore: this.gyroStore,
+              isExpandedLayout: this.isExpandedLayout,
             viewCoordinatesVisible: this.overlayStore.viewCoordinatesVisible,
             primaryText: this.viewCoordinatePrimaryText,
             secondaryText: this.viewCoordinateSecondaryText,
@@ -7483,9 +7504,9 @@ export struct WindowNativeNode {
       }
       if (!this.scriptStore.scriptPlaybackVisible(this.guideStore.guideState.active) && (!this.tools.recording || this.tools.recordingUiExpanded)) {
         if (this.polarScopeStore.polarScopeVisible) {
-          PolarScopeOverlay({
-            polarScopeStore: this.polarScopeStore,
-            controlWidth: this.polarScopeControlWidth(),
+            PolarScopeOverlay({
+              polarScopeStore: this.polarScopeStore,
+              controlWidth: this.polarScopeControlWidth(),
             topInset: this.polarScopeTopInset(),
             footerHeight: this.polarScopeFooterHeight(),
             skyWidth: this.skyWidth,
@@ -7499,13 +7520,9 @@ export struct WindowNativeNode {
           })
         }
         if (this.skyCultureViewStore.artPreviewOpen) {
-          SkyCultureArtPreviewOverlay({
-            skyCultureViewStore: this.skyCultureViewStore,
-            textColor: this.nightModeStore.nmText(),
-            subColor: this.nightModeStore.nmSub(),
-            accentColor: this.nightModeStore.nmAccent(),
-            bgColor: this.nightModeStore.nmBg(),
-            topInset: this.mediaPreviewTopInset(),
+            SkyCultureArtPreviewOverlay({
+              skyCultureViewStore: this.skyCultureViewStore,
+              topInset: this.mediaPreviewTopInset(),
             closeSkyCultureArtPreview: () => { this.skyCultureCtl().closeSkyCultureArtPreview() },
             onSkyCultureArtLoaded: () => { this.skyCultureCtl().onSkyCultureArtLoaded() },
             onSkyCultureArtError: () => { this.skyCultureCtl().onSkyCultureArtError() },
@@ -7513,9 +7530,9 @@ export struct WindowNativeNode {
           })
         }
         if (this.objectMediaStore.objectInspectorMediaFullscreen) {
-          ObjectInspectorMediaPreviewOverlay({
-            objectMediaStore: this.objectMediaStore,
-            titleText: zhNameOf(this.objectDetailStore.selectedName),
+            ObjectInspectorMediaPreviewOverlay({
+              objectMediaStore: this.objectMediaStore,
+              titleText: zhNameOf(this.objectDetailStore.selectedName),
             topInset: this.mediaPreviewTopInset(),
             closeObjectInspectorMediaPreview: () => { this.objectInspectorMediaCtl().closeObjectInspectorMediaPreview() },
             onObjectInspectorMediaPreviewLoaded: () => { this.objectInspectorMediaCtl().onObjectInspectorMediaPreviewLoaded() },
@@ -7524,9 +7541,9 @@ export struct WindowNativeNode {
           })
         }
         if (this.objectMediaStore.objectInspectorModelImmersive) {
-          ObjectInspectorModelOverlay({
-            objectMediaStore: this.objectMediaStore,
-            titleText: this.objectDetailStore.selectedName,
+            ObjectInspectorModelOverlay({
+              objectMediaStore: this.objectMediaStore,
+              titleText: this.objectDetailStore.selectedName,
             noticeText: this.objectMediaStore.objectInspectorModelNotice(),
             topInset: this.mediaPreviewTopInset(),
             onCloseOverlay: () => { this.objectModelRendererCtl().setObjectInspectorModelImmersive(false) },
@@ -7539,20 +7556,20 @@ export struct WindowNativeNode {
       if (this.tools.skyTextureStatusVisible) {
         Row({ space: 8 }) {
           if (!this.tools.skyTextureStatusError) {
-            LoadingProgress().width(16).height(16).color('#9EDCFA')
+            LoadingProgress().width(16).height(16).color(this.hostSlots().spinner)
           }
           Text(this.tools.skyTextureStatusText)
-            .fontSize(11).fontColor('#EDF9FF').maxLines(1)
+            .fontSize(11).fontColor(this.hostSlots().textStrong).maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           if (this.tools.skyTextureStatusError) {
             Button('重试')
-              .height(28).fontSize(10).fontColor('#F4FBFF')
-              .backgroundColor('rgba(255,255,255,0.12)').borderRadius(UI_RADIUS_PILL)
+              .height(28).fontSize(10).fontColor(this.hostSlots().textStrong)
+              .backgroundColor(this.hostSlots().overlayButton).borderRadius(UI_RADIUS_PILL)
               .onClick(() => { this.skyTextureStatusCtl().retrySkyTextureStatus() })
           }
         }
           .height(38).padding({ left: 12, right: 10 })
-          .backgroundColor(this.tools.skyTextureStatusError ? 'rgba(111,50,42,0.92)' : 'rgba(16,31,46,0.90)')
+          .backgroundColor(this.tools.skyTextureStatusError ? this.hostSlots().errorBg : this.hostSlots().panelGlassStrong)
           .backdropBlur(18).borderRadius(UI_RADIUS_PILL)
           .position({ x: 16, y: (this.isExpandedLayout || this.isFoldHoverLayout) ? 58 : 98 })
           .constraintSize({ maxWidth: Math.max(220, this.skyWidth - 32) })
@@ -7560,29 +7577,10 @@ export struct WindowNativeNode {
           .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut }))
       }
 
-      // Native night mode colors the Qt sky. These permanent, input-transparent
-      // layers extend the same low-luminance red treatment to the ArkUI tree.
-      Stack()
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#A00000')
-        .blendMode(BlendMode.COLOR, BlendApplyType.OFFSCREEN)
-        .opacity(this.nightModeStore.nightMode ? 0.78 : 0)
-        .animation({ duration: 450, curve: Curve.EaseInOut })
-        .hitTestBehavior(HitTestMode.Transparent)
-        .zIndex(98)
-      Stack()
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#000000')
-        .opacity(this.nightModeStore.nightMode ? 0.48 : 0)
-        .animation({ duration: 450, curve: Curve.EaseInOut })
-        .hitTestBehavior(HitTestMode.Transparent)
-        .zIndex(99)
     }
       .width('100%')
       .height('100%')
-      .backgroundColor(Color.Black)
+      .backgroundColor(AstroColors.windowBase)
       .focusable(true)
       .defaultFocus(true)
       .onKeyEvent((event: KeyEvent): boolean => {
@@ -7619,6 +7617,7 @@ export struct WindowNativeNode {
         // 首次布局即发布一次面板状态，保证 getUiPanelState 在用户还没开关过面板时也有可读值。
         this.publishUiPanelState()
       })
+    }
   }
 
   // 收起当前页面按钮：把右侧浮动面板收回到左侧栏
@@ -7675,11 +7674,11 @@ export struct WindowNativeNode {
       .height(this.activePanel === 'quick' ? this.quickPanelContentHeight() : this.panelMaxHeight)
       .constraintSize({ maxHeight: this.activePanel === 'quick' ? this.quickPanelContentHeight() : this.panelMaxHeight })
       .padding({ top: 18, left: 18, right: 18, bottom: 18 })
-      .backgroundColor(this.panelIdleGlass ? 'rgba(10, 14, 26, 0.55)' : 'rgba(18, 22, 36, 0.82)')
+      .backgroundColor(this.panelIdleGlass ? this.hostSlots().panelGlass : this.hostSlots().panelGlassStrong)
       .backdropBlur(this.panelIdleGlass ? 45 : 30)
-      .border({ width: 0.5, color: this.panelIdleGlass ? 'rgba(91, 147, 191, 0.18)' : 'rgba(91, 147, 191, 0.12)' })
+      .border({ width: 0.5, color: this.hostSlots().border })
       .borderRadius(UI_RADIUS_SHEET)
-      .shadow({ radius: 34, color: 'rgba(0, 0, 0, 0.34)', offsetX: 0, offsetY: 18 })
+      .shadow({ radius: 34, color: this.hostSlots().shadowSoft, offsetX: 0, offsetY: 18 })
       .margin({ top: 28, bottom: 28 })
       .onTouch((event: TouchEvent) => { this.notePanelTouch(event) })
       .scale({ x: this.panelIdleOpacity < 1 ? 0.97 : 1.0, y: this.panelIdleOpacity < 1 ? 0.97 : 1.0 })
@@ -7732,11 +7731,11 @@ export struct WindowNativeNode {
       .width(this.isFoldHoverLayout ? '64%' : '94%')
       .height(this.compactPanelHeight())
       .padding({ top: 12, left: this.compactPanelHorizontalPadding(), right: this.compactPanelHorizontalPadding(), bottom: 16 })
-      .backgroundColor(this.panelIdleGlass ? 'rgba(10, 14, 26, 0.55)' : 'rgba(18, 22, 36, 0.82)')
+      .backgroundColor(this.panelIdleGlass ? this.hostSlots().panelGlass : this.hostSlots().panelGlassStrong)
       .backdropBlur(this.panelIdleGlass ? 45 : 30)
-      .border({ width: 0.5, color: this.panelIdleGlass ? 'rgba(91, 147, 191, 0.18)' : 'rgba(91, 147, 191, 0.12)' })
+      .border({ width: 0.5, color: this.hostSlots().border })
       .borderRadius(UI_RADIUS_SHEET)
-      .shadow({ radius: 30, color: 'rgba(0, 0, 0, 0.32)', offsetX: 0, offsetY: 14 })
+      .shadow({ radius: 30, color: this.hostSlots().shadowSoft, offsetX: 0, offsetY: 14 })
       .margin({ bottom: 10 })
       .hitTestBehavior(HitTestMode.Default)
       .onTouch((event: TouchEvent) => { this.notePanelTouch(event) })
@@ -7759,19 +7758,19 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'observeHub') {
       HubActionList({
         actions: observingHubActions(), description: I18n.t('more_workspace_observing_desc'),
-        subColor: this.nightModeStore.nmSub(), languageRevision: this.languageStore.languageRevision,
+        languageRevision: this.languageStore.languageRevision,
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'dataHub') {
       HubActionList({
         actions: skyDataHubActions(), description: I18n.t('more_sky_data_desc'),
-        subColor: this.nightModeStore.nmSub(), languageRevision: this.languageStore.languageRevision,
+        languageRevision: this.languageStore.languageRevision,
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'automationHub') {
       HubActionList({
         actions: automationHubActions(), description: I18n.t('more_automation_desc'),
-        subColor: this.nightModeStore.nmSub(), languageRevision: this.languageStore.languageRevision,
+        languageRevision: this.languageStore.languageRevision,
         onOpenPanel: (panel: string) => { this.openSubPanel(panel) }
       })
     } else if (this.activePanel === 'object') {
@@ -7793,13 +7792,8 @@ export struct WindowNativeNode {
         modelNotice: this.objectMediaStore.objectInspectorModelNotice(),
         warmupText: this.objectMediaStore.objectInspectorMediaWarmupText(),
         fallbackKind: objectInspectorFallbackVisualKind(this.objectDetailStore.selectedObjectType, this.objectDetailStore.selectedType),
-        starColor: objectInspectorStarColor(this.objectDetailStore.selectedTemperatureK),
         satVisible: this.objectDetailStore.selectedObjectIsArtificialSatellite(),
         tleEpoch: this.objectDetailStore.selectedSatelliteTleEpoch(),
-        textColor: this.nightModeStore.nmText(),
-        panelColor: this.nightModeStore.nmBg(),
-        borderTint: this.nightModeStore.nmBorder(),
-        accentColor: this.nightModeStore.nmAccent(),
         nameOf: (raw: string) => zhNameOf(raw),
         typeOf: (type: string) => zhType(type),
         statusOf: (en: string) => this.selectedStatusZh(en),
@@ -7840,12 +7834,6 @@ export struct WindowNativeNode {
         manualDay: this.timeStore.manualDay,
         manualHour: this.timeStore.manualHour,
         manualMinute: this.timeStore.manualMinute,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
-        inputColor: this.nightModeStore.nmInput(),
-        borderTint: this.nightModeStore.nmBorder(),
         onSelectUnit: (unit: string) => { this.wheel().selectUnit(unit) },
         onWheelTouch: (event: TouchEvent) => { this.wheel().handleTouch(event) },
         onChip: (id: string) => { this.timeCtl().handleChip(id) },
@@ -7870,12 +7858,6 @@ export struct WindowNativeNode {
         altitudeText: this.altitudeText,
         expandedLayout: this.isExpandedLayout,
         skyWidth: this.skyWidth,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        inputColor: this.nightModeStore.nmInput(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
-        borderTint: this.nightModeStore.nmBorder(),
         mapAllowed: this.privacyNativeStartupAllowed && this.applicationInForeground && hasCurrentPrivacyConsent(),
         planetLabel: (en: string) => planetZh(en),
         contextOf: (item: LocSearchItem) => this.locationPickerStore.locationResultContext(item, this.sessionToolStore.observerPlanet),
@@ -7927,17 +7909,6 @@ export struct WindowNativeNode {
         skyCultureArtThumbnailPixelMaps: this.skyCultureArtThumbnailPixelMaps,
         narrationParagraphs: this.skyCultureViewStore.skyCultureNarrationParagraphs(),
         mapContext: this.skyCultureMapContext,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
-        cardBorder: this.nightModeStore.nmBorder(),
-        inputColor: this.nightModeStore.nmInput(),
-        pickerSurface: this.nightModeStore.nmPickerSurface(),
-        pickerHeader: this.nightModeStore.nmPickerHeader(),
-        pickerHeaderActive: this.nightModeStore.nmPickerHeaderActive(),
-        pickerSelected: this.nightModeStore.nmPickerSelected(),
-        pickerOption: this.nightModeStore.nmPickerOption(),
         onPreset: (preset: string) => { this.layerCtl().applyLayerPreset(preset) },
         onSelectTab: (id: number) => { this.switchViewTab(id) },
         onToggleLayer: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
@@ -7992,6 +7963,7 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'quick') {
       QuickPanel({
         store: this.quickPanelStore,
+        nightModeStore: this.nightModeStore,
         values: this.quickActionValues(),
         onToggle: (id: string, value: boolean) => { this.quickToggle(id, value) },
         onHint: (text: string) => { this.flashHint(text) }
@@ -7999,21 +7971,11 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'pointerCoordinates') {
       PointerCoordinatesPanel({
         store: this.overlayStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
-        lineColor: this.nightModeStore.nmBorder(),
         onSetSetting: (setting: string, value: string) => { this.viewCoordinateCtl().setPointerCoordinates(setting, value) }
       })
     } else if (this.activePanel === 'commands') {
       CommandsPanel({
         commandStore: this.commandStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        inputColor: this.nightModeStore.nmInput(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
         onSearchTextChange: (value: string) => { this.commandStore.commandSearchText = value },
         onNameInputChange: (value: string) => { this.commandStore.commandNameInput = value; this.commandStore.commandPendingConfirmation = '' },
         onPayloadInputChange: (value: string) => { this.commandStore.commandPayloadInput = value },
@@ -8035,11 +7997,6 @@ export struct WindowNativeNode {
         satelliteCatalogHealth: this.satelliteStore.satelliteCatalogHealth,
         starCatalogHealth: this.catalogStore.starCatalogHealth,
         gyroSensitivityText: sensZh(this.gyroStore.gyroscopeSensitivityText),
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
-        lineColor: this.nightModeStore.nmBorder(),
         onToggleGyroscope: (v: boolean) => { this.gyroCtl().toggleGyroscope(v); this.flashHint(v ? I18n.t('s0719') : I18n.t('s0720')) },
         onRevoke: () => { this.confirmPrivacyRevocation() },
         onApplyLayerSwitch: (actionId: string, cmd: string, value: boolean) => { this.layerCtl().applyLayerSwitch(actionId, cmd, value) },
@@ -8063,10 +8020,6 @@ export struct WindowNativeNode {
         categories: this.catalogStore.searchAllCategoryOptions(),
         categoryIconKey: this.catalogStore.searchCategoryIcon(this.searchStore.searchCategory),
         categoryLabel: this.catalogStore.searchCategoryLabel(this.searchStore.searchCategory),
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        panelColor: this.nightModeStore.nmBg(),
-        inputColor: this.nightModeStore.nmInput(),
         scroller: this.searchPanelScroller,
         onInput: (value: string) => { this.searchCtl().scheduleSuggestions(value.trim()) },
         onSubmit: (text: string) => {
@@ -8142,12 +8095,6 @@ export struct WindowNativeNode {
         scriptList: this.scriptStore.scriptList,
         pluginStore: this.pluginStore,
         fovText: this.fovText,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
-        lineColor: this.nightModeStore.nmBorder(),
-        inputColor: this.nightModeStore.nmInput(),
         informationMaskHas: (key: string) => { return this.infoWindowStore.informationMaskHas(key) },
         pluginMetaLine: (plugin: PluginItem) => { return this.pluginFeatureCtl().pluginMetaLine(plugin) },
         pluginFeatureDestination: (id: string) => { return this.pluginFeatureCtl().pluginFeatureDestination(id) },
@@ -8199,11 +8146,6 @@ export struct WindowNativeNode {
         store: this.astroStore,
         wutStore: this.wutStore,
         objectDetailStore: this.objectDetailStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        panelColor: this.nightModeStore.nmBg(),
-        accentColor: this.nightModeStore.nmAccent(),
-        lineColor: this.nightModeStore.nmBorder(),
         scroller: this.astroPanelScroller,
         host: {
           almanacHoursLabel: (key: string) => this.astroStore.almanacHoursLabel(key),
@@ -8215,7 +8157,7 @@ export struct WindowNativeNode {
           altBarHeight: (alt: number | undefined) => this.astroStore.altBarHeight(alt),
           altBarWidth: () => this.astroStore.altBarWidth(),
           altCurveSegmentWidth: () => this.astroStore.altCurveSegmentWidth(),
-          altitudeCurveColor: (altitude: number | undefined, color: string) => this.astroStore.altitudeCurveColor(altitude, color),
+          altitudeCurveColor: (altitude: number | undefined, color: ResourceColor) => this.astroStore.altitudeCurveColor(altitude, color),
           annualBarHeight: (altitude: number | undefined) => this.astroStore.annualBarHeight(altitude),
           annualBarWidth: () => this.astroStore.annualBarWidth(),
           annualMaxLabel: () => this.astroStore.annualMaxLabel(),
@@ -8239,7 +8181,7 @@ export struct WindowNativeNode {
           graphCustomStartLabel: () => this.astroStore.graphCustomStartLabel(),
           graphTargetLabel: () => this.astroStore.graphTargetLabel(),
           hasSelectedObject: () => this.objectDetailStore.hasSelectedObject(),
-          hecPointColor: (position: HeliocentricPosition) => hecPointColor(position, this.nightModeStore.nmAccent()),
+          hecPointColor: (position: HeliocentricPosition) => hecPointColor(position, accentForNightMode(this.nightModeStore.nightMode)),
           hecPointLeft: (position: HeliocentricPosition) => hecPointLeft(position),
           hecPointTop: (position: HeliocentricPosition) => hecPointTop(position),
           hecTitle: (position: HeliocentricPosition) => celestialTitle(position.name, position.englishName),
@@ -8304,17 +8246,11 @@ export struct WindowNativeNode {
         } else if (this.activePanel === 'help') {
       HelpPanel({
         tools: this.tools,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        lineColor: this.nightModeStore.nmBorder(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
         onOpenTools: () => { this.openSubPanel('tools') }
       })
 	    } else if (this.activePanel === 'catalogs') {
       CatalogsPanel({
         catalogStore: this.catalogStore,
-        cardBorderColor: this.nightModeStore.nmBorder(),
         onDownload: (id: string) => { this.catalogStore.startCatalogDownload(id) },
         onOpenCatalogSource: (url: string) => { this.openExternalUrl(url) },
         onImportCatalog: () => { this.importCatalogFile() }
@@ -8323,7 +8259,6 @@ export struct WindowNativeNode {
       BookmarkPanel({
         store: this.bookmarkStore,
         selectedName: this.objectDetailStore.selectedName,
-        cardBorderColor: this.nightModeStore.nmBorder(),
         onSaveView: () => { this.bookmarkStore.addCurrentBookmark() },
         onGoto: (id: string) => { this.bookmarkStore.gotoBookmark(id) },
         onDelete: (id: string) => { this.bookmarkStore.deleteBookmark(id) }
@@ -8331,11 +8266,6 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'oculars') {
       OcularsPanel({
         store: this.telescopeStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
-        lineColor: this.nightModeStore.nmBorder(),
         onOpenSubPanel: (name: string) => { this.openSubPanel(name) },
         onSetOcularMode: (isOn: boolean) => { this.ocularCtl().setOcularMode(isOn) },
         onSetTelrad: (isOn: boolean) => { this.ocularCtl().setTelrad(isOn) },
@@ -8353,20 +8283,11 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'mosaicCamera') {
       MosaicCameraPanel({
         mosaicStore: this.mosaicStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        panelColor: this.nightModeStore.nmBg(),
-        accentColor: this.nightModeStore.nmAccent(),
         onSetSetting: (setting: string, value: string) => { this.ocularCtl().setMosaicCamera(setting, value) }
       })
     } else if (this.activePanel === 'archaeoLines') {
       ArchaeoLinesPanel({
         archaeoStore: this.archaeoStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        panelColor: this.nightModeStore.nmBg(),
-        accentColor: this.nightModeStore.nmAccent(),
-        borderTint: this.nightModeStore.nmBorder(),
         onSetSetting: (setting: string, value: string) => { this.ocularCtl().setArchaeoLineSetting(setting, value) },
         onLineWidthPreview: (value: number) => { this.archaeoStore.archaeoLineWidth = value },
         onSetLineWidth: (value: number) => { this.ocularCtl().setArchaeoLineSetting('lineWidth', value.toString()) }
@@ -8374,30 +8295,17 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'angleMeasure') {
       AngleMeasurePanel({
         store: this.tools,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        panelColor: this.nightModeStore.nmBg(),
-        accentColor: this.nightModeStore.nmAccent(),
         onToggle: (enabled: boolean) => { this.tools.toggleAngleMeasure(enabled) },
         onReset: () => { this.resetAngleMeasure() }
       })
     } else if (this.activePanel === 'navStars') {
       NavStarsPanel({
         navStarsStore: this.navStarsStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        panelColor: this.nightModeStore.nmBg(),
-        accentColor: this.nightModeStore.nmAccent(),
         onSetSetting: (setting: string, value: string) => { this.navStarsStore.setNavStarsSetting(setting, value) }
       })
     } else if (this.activePanel === 'satellites') {
       SatellitesPanel({
         satelliteStore: this.satelliteStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        panelColor: this.nightModeStore.nmBg(),
-        inputColor: this.nightModeStore.nmInput(),
-        accentColor: this.nightModeStore.nmAccent(),
         panelScroller: this.satellitePanelScroller,
         groupScroller: this.satelliteGroupScroller,
         onPublishState: () => { this.publishSatellitePanelState() },
@@ -8428,27 +8336,18 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'meteorshowers') {
       MeteorShowersPanel({
         meteorStore: this.meteorStore,
-        panelColor: this.nightModeStore.nmBg(),
         onSetFlag: (flag: string, value: boolean) => { this.meteorStore.setMeteorShowersFlag(flag, value) },
         onSearch: (name: string) => { this.searchObject(name, '', '', 'center') }
       })
     } else if (this.activePanel === 'scenery3d') {
       Scenery3dPanel({
         sceneryStore: this.sceneryStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        panelColor: this.nightModeStore.nmBg(),
-        accentColor: this.nightModeStore.nmAccent(),
         onToggleEnabled: (enabled: boolean) => { this.layerCtl().setScenery3dEnabled(enabled) },
         onSelectScene: (id: string) => { this.layerCtl().setScenery3dScene(id) }
       })
     } else if (this.activePanel === 'ar') {
       ARPreviewPanel({
         arStore: this.arStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
         onSetMode: (mode: string) => { this.arCtl().setMode(mode) },
         onSetRevealProgress: (value: number) => { this.arCtl().setRevealProgress(value) }
       })
@@ -8456,8 +8355,6 @@ export struct WindowNativeNode {
       SkyCultureMakerPanel({
         store: this.skyCultureMakerStore,
         panelWidth: this.panelWidth,
-        subColor: this.nightModeStore.nmSub(), textColor: this.nightModeStore.nmText(), accentColor: this.nightModeStore.nmAccent(), bgColor: this.nightModeStore.nmBg(),
-        inputColor: this.nightModeStore.nmInput(), inputBorderColor: this.nightModeStore.nmInputBorder(),
         onEdited: () => { this.skyCultureMakerCtl().scheduleSkyCultureMakerSave() },
         onAdd: () => { this.skyCultureMakerCtl().addSkyCultureMakerConstellation() },
         onSelect: (index: number) => { this.skyCultureMakerCtl().selectSkyCultureMakerConstellation(index) },
@@ -8481,10 +8378,6 @@ export struct WindowNativeNode {
         } else if (this.activePanel === 'nebulaTextures') {
       NebulaTexturesPanel({
         store: this.nebulaTextureStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
         onSetVisible: (enabled: boolean) => { this.nebulaTextureCtl().setNebulaTextureVisible(enabled) },
         onRefresh: () => { this.nebulaTextureCtl().refreshNebulaTextures() },
         onImport: () => { this.nebulaTextureCtl().importNebulaTextureFile() },
@@ -8497,11 +8390,6 @@ export struct WindowNativeNode {
         tools: this.tools,
         guideSessionActive: this.scriptStore.scriptSessionActive(this.tools.recording, this.guideStore.guideState.active),
         scriptStore: this.scriptStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(),
-        lineColor: this.nightModeStore.nmBorder(),
         scriptMetaLine: (filename: string) => { return this.scriptStore.scriptMetaLine(filename) },
         scriptSourceLine: (filename: string) => { return this.scriptStore.scriptSourceLine(filename) },
         onStartGuide: (id: string) => { this.guideCtl().executeGuideRequest('startGuide', id) },
@@ -8544,11 +8432,6 @@ export struct WindowNativeNode {
       ObservingPanel({
         wutStore: this.wutStore,
         observingListStore: this.obsListStore,
-        textColor: this.nightModeStore.nmText(),
-        subColor: this.nightModeStore.nmSub(),
-        panelColor: this.nightModeStore.nmBg(),
-        borderTint: this.nightModeStore.nmBorder(),
-        accentColor: this.nightModeStore.nmAccent(),
         onOpenSearch: () => { this.openSubPanel('search') },
         onClearAll: () => {
           this.obsListStore.observingList = []
@@ -8574,8 +8457,6 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'telescope') {
       TelescopePanel({
         store: this.telescopeStore,
-        textColor: this.nightModeStore.nmText(), subColor: this.nightModeStore.nmSub(), accentColor: this.nightModeStore.nmAccent(),
-        panelColor: this.nightModeStore.nmBg(), inputColor: this.nightModeStore.nmInput(), lineColor: this.nightModeStore.nmBorder(), inputLineColor: this.nightModeStore.nmInputBorder(),
         onBeginNew: () => { this.telescopeCtl().beginNewTelescopeProfile() },
         onSelectProfile: (slot: number) => { this.telescopeCtl().selectTelescopeProfile(slot) },
         onSelectProtocol: (protocol: string) => { this.telescopeCtl().selectTelescopeProtocol(protocol) },
@@ -8592,7 +8473,6 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'tools') {
       ToolsPanel({
         store: this.tools,
-        textColor: this.nightModeStore.nmText(), subColor: this.nightModeStore.nmSub(), panelColor: this.nightModeStore.nmBg(), inputColor: this.nightModeStore.nmInput(),
         configImportText: this.tools.configImportText,
         sessionImportText: this.tools.sessionImportText,
         onScreenshot: () => { saveScreenshot(this.commandPort(), this.hostMediaPort, { flashHint: (text: ResourceStr): void => this.flashHint(text), screenshotSaving: (): boolean => this.tools.screenshotSaving, setScreenshotSaving: (saving: boolean): void => { this.tools.screenshotSaving = saving } }) },
@@ -8610,9 +8490,6 @@ export struct WindowNativeNode {
     } else if (this.activePanel === 'audio') {
       AudioPanel({
         audioStore: this.audioStore,
-        textColor: this.nightModeStore.nmText(),
-        panelColor: this.nightModeStore.nmBg(),
-        accentColor: this.nightModeStore.nmAccent(),
         onToggleMusic: (enabled: boolean) => {
           this.audioStore.musicEnabled = enabled
           const engine = AudioEngine.getInstance()
@@ -8637,7 +8514,6 @@ export struct WindowNativeNode {
         viewSettingsStore: this.viewSettingsStore,
         observingListStore: this.obsListStore,
         skyCultureViewStore: this.skyCultureViewStore,
-        panelColor: this.nightModeStore.nmBg(),
         observingDisplayName: (name: string) => { return this.wutStore.observingDisplayName(name) },
         selectObservingTarget: (name: string) => { this.searchObject(name); this.flashHint(I18n.t('i0082')) },
         removeObservingTarget: (name: string) => { this.removeObservingTarget(name) },
@@ -8657,5 +8533,4 @@ export struct WindowNativeNode {
       })
     }
   }
-
 }

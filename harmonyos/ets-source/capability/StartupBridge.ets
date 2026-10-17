@@ -167,7 +167,8 @@ export class StartupBridge {
         const saved = JSON.parse(settings) as Record<string, boolean | string>
         if (saved.nightMode !== undefined) {
           this.nightModeStore.nightMode = saved.nightMode as boolean
-          this.port.requestWhenReady('setNightMode', this.nightModeStore.nightMode ? 'true' : 'false', () => {})
+          AppStorage.setOrCreate('stellariumNightMode', saved.nightMode as boolean)
+          this.port.requestWhenReady('setActionChecked', 'actionShow_Night_Mode|' + (this.nightModeStore.nightMode ? '1' : '0'), () => {})
         }
         if (saved.equatorialMount !== undefined) {
           this.telescopeStore.equatorialMount = saved.equatorialMount as boolean

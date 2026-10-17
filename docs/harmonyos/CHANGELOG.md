@@ -1,5 +1,30 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-20] 夜间模式主题重构
+
+移除 zIndex 98/99 两层暴力遮罩（红色 BlendMode.COLOR + 黑色压暗），改用 ArkUI 原生 `WithTheme(CustomTheme) → onWillApplyTheme → ThemeSlots` 机制，131 个 .ets 文件接入，主题色字面量归零。架构文档见 `docs/harmonyos/specs/NIGHT-MODE-THEME-ARCHITECTURE.md`。
+
+- **核心**：`StellariumTheme.ets` 定义 DayColors/NightColors（54 令牌）+ ThemeSlots（55 槽位）+ AstroColors（天文固定色）；组件声明 `@State c: ThemeSlots = DEFAULT_SLOTS` + `onWillApplyTheme` 自动刷新，无需 prop drilling。
+- **夜间开关路径**：`LayerController.applyNightMode` → 引擎 `setNightMode` → QAction `actionShow_Night_Mode` setChecked → 属性同步，不再走普通 `setLayer`。
+- **GPU 夜间渲染**：`submitOhosFramebuffer` 新增夜间 shader pass（luminance → 红），保留零拷贝路径。
+- **视觉修复**：Toggle/Slider 默认令牌统一为 `compBackgroundPrimaryContrary`（夜间中红 `#A03020`）；选中文字用 `c.onAccent`；目录类图标 10 个 `_night.svg` 双色调变体；详情参数值亮红 `metricValue`。
+- **NightModeStore 清理**：511→69 行，移除 `nm*()` 访问器与调色板，仅保留状态与持久化。
+
+## [2026-10-16] 夜间模式主题重构计划：代码核查与全量修订
+
+- **依据（用户要求）**：对 `.deveco/plans/1790425749316-kind-nebula.md`（夜间模式主题重构执行计划）逐项代码核查后，按用户批准的修正项全量重写计划文档（**不含「星空观感」检查项**——用户明确豁免）。纯计划文档变更，无代码改动。
+- **核查发现（原计划问题）**：
+  - **范围低估 ~4 倍**：实测（2026-10-13，模式 `'#[0-9A-Fa-f]{6,8}'` + `'rgba(`）panels/ + common/ 硬编码色 **115 文件 / 1148 处**（原计划仅 260+/40+）；pages/ 宿主层另 5 文件 / 44 处未计入；范围内合计 **117 文件 / 1164 处**（`Color.*` 枚举未计入，扫描兜底）。
+  - **广域组件未评估**：LayerSwitchRow（**104 个调用文件**）、InfoRow（**56 个调用文件**）若走机制一（@ObjectLink 无默认值必须父传）会迫使全部调用文件改构造参数——不可行。
+  - 其余：4 处路径错误（RecordingControlBar→`panels/tools/`、ObjectPanel→`panels/panels/`、ConstellationCultureView→`panels/object/`、HubActionList→`panels/shell/`）；`statusRecording`≡`recordingDot` 字段重复；扫描正则漏 8 位 hex（`#E5FFFFFF`，本项目主格式）；「日间像素级一致」与对照表近色合并自相矛盾；宿主自身硬编码、已主题化五文件残留、切换动画丢失均未覆盖。
+- **修订（计划文档全量重写）**：
+  - **新增机制三**（广域组件专用，调用文件 ≥ 20）：`@StorageProp('stellariumNightMode')` + NightModeStore.ets **导出** `NightPalette`/`DAY_PALETTE`/`NIGHT_PALETTE`，命名属性访问（禁 `palette[key]` 动态取色）；store 切换时已写该 AppStorage 键（NightModeStore.ets:164/171），**调用点零改动**；键名不得变更。
+  - **Slice A 重排**：导出调色板 → 机制三先行改造 LayerSwitchRow/InfoRow（缩小删遮罩后残留面）→ 色板扩 12+4 字段 / 16 访问器（基数 42→58，不设 statusRecording）→ StellariumTheme CustomColors 增 4 令牌（fontTertiary/fontFourth/iconSecondary/compDivider，双源同值交叉注释）→ TimePanel 机制一范式验证 → 删遮罩（MainWindowNativeNode.ets:7571-7589，zIndex 98 `#A00000` @0.78 / 99 `#000000` @0.48）。
+  - **新增 Slice H**：附录 A 其余文件（66 文件 / 304 处）+ 已主题化五文件残留清扫（InteractiveGuideShell 12 / PanelChromeExtras 11 / MorePanel 8 / HubActionList 6 / DockButton 3）+ 宿主层 pages/（MainWindowNativeNode 32 处等 5 文件 44 处）+ 最终三模式扫描。
+  - **附录 A 全量实测清单**（路径逐一 Test-Path 核实，唯一权威）：A 3/13 · B 5/56 · C 7/134 · D 5/230 · E 9/175 · F 12/162 · G 10/90 · H 66/304；范围外（科学固定色）3 文件 / 28 处（MainWindowModels/astro.ets/media.ets）。
+  - **验证矩阵 / 风险 / 模板更新**：日间回归口径改「近色合并位点允许轻微变化」（nmSoft/nmDetailValue/nmDetailSubValue，重点位点人工确认）；扫描三模式补 8 位 hex 与 `Color.(White|Black|Red)`；改造模板第 6 步明确「更新全部实例化点（不只在 MainWindowNativeNode——中层组件也实例化子组件）」；切换动画（450 ms 渐变→瞬时跳变）记录为可后补项。
+- **验证**：纯计划文档；无代码 / 权限 / 契约变更；CRLF 归一、UTF-8 无 BOM；构建与真机不涉及。
+
 ## [2026-10-12] DevEco Code - 修星表面板「手动导入」按钮点了没反应（未处理的 promise rejection）
 
 - **依据（用户复测反馈）**：星表列表里未加载行的「手动导入」按钮，选完文件后列表不变、也看不到任何原因；早前一次还只显示通用的「导入失败：版本不符或文件损坏」。

@@ -1,5 +1,6 @@
 import { StellariumBridgeResponse, LandscapeItem } from '../pages/StellariumTypes'
 import { CommandPort } from '../bridge/CommandPort'
+import { AstroColors } from './StellariumTheme'
 
 // 「图层」面板（activePanel === 'layers'）六个视图标签页的数值/展开态设置簇。
 //
@@ -41,8 +42,8 @@ export class LayerViewStore {
   trailSelectionCount: number = 1
   trailYears: number = 1
   trailThickness: number = 1
-  trailColor: string = '#FFFFFF'
-  trailColorInput: string = '#FFFFFF'
+  trailColor: string = AstroColors.starPoint
+  trailColorInput: string = AstroColors.starPoint
 
   // —— 视场标记尺寸 ——
   fovCircularMarkerSize: number = 1
