@@ -1292,6 +1292,7 @@ void StelApp::setVisionModeNight(bool b)
 	if (flagNightVision!=b)
 	{
 		flagNightVision=b;
+		immediateSave("viewing/flag_night", b);
 		emit visionNightModeChanged(b);
 	}
 }

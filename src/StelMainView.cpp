@@ -1636,18 +1636,126 @@ void submitOhosFramebuffer(QOpenGLFunctions* gl)
 		s_readbackH = readH;
 	}
 
+	// Night-vision post-process. The native render pump bypasses the
+	// QGraphicsEffect attached to the scene root, so tint the submitted frame on
+	// the GPU while keeping the zero-copy texture path intact.
+	static GLuint s_nightFBO = 0;
+	static GLuint s_nightTex = 0;
+	static GLuint s_nightVBO = 0;
+	static QOpenGLShaderProgram* s_nightProgram = nullptr;
+	static int s_nightW = 0;
+	static int s_nightH = 0;
+	static bool s_nightInitFailed = false;
+	const bool nightVision = StelApp::getInstance().getVisionModeNight();
+	if (nightVision && !s_nightInitFailed && s_nightProgram == nullptr)
+	{
+		s_nightProgram = new QOpenGLShaderProgram();
+		const auto vs = StelOpenGL::globalShaderPrefix(StelOpenGL::VERTEX_SHADER) +
+			"ATTRIBUTE highp vec4 a_pos;\n"
+			"ATTRIBUTE highp vec2 a_texCoord;\n"
+			"VARYING highp vec2 v_texCoord;\n"
+			"void main(void)\n"
+			"{\n"
+			"    v_texCoord = a_texCoord;\n"
+			"    gl_Position = a_pos;\n"
+			"}\n";
+		const auto fs = StelOpenGL::globalShaderPrefix(StelOpenGL::FRAGMENT_SHADER) +
+			"VARYING highp vec2 v_texCoord;\n"
+			"uniform sampler2D u_source;\n"
+			"void main(void)\n"
+			"{\n"
+			"    mediump vec3 color = texture2D(u_source, v_texCoord).rgb;\n"
+			"    mediump float luminance = max(max(color.r, color.g), color.b);\n"
+			"    FRAG_COLOR = vec4(luminance, luminance * 0.3, 0.0, 1.0);\n"
+			"}\n";
+		if (s_nightProgram->addShaderFromSourceCode(QOpenGLShader::Vertex, vs) &&
+			s_nightProgram->addShaderFromSourceCode(QOpenGLShader::Fragment, fs) &&
+			s_nightProgram->link())
+		{
+			s_nightProgram->bind();
+			const GLfloat quad[] = {
+				-1.f, -1.f, 0.f, 0.f,
+				 1.f, -1.f, 1.f, 0.f,
+				-1.f,  1.f, 0.f, 1.f,
+				 1.f,  1.f, 1.f, 1.f
+			};
+			gl->glGenBuffers(1, &s_nightVBO);
+			gl->glBindBuffer(GL_ARRAY_BUFFER, s_nightVBO);
+			gl->glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+			s_nightProgram->release();
+		}
+		else
+		{
+			s_nightInitFailed = true;
+			delete s_nightProgram;
+			s_nightProgram = nullptr;
+		}
+	}
+	const bool tintNight = nightVision && s_nightProgram != nullptr;
+	if (tintNight)
+	{
+		if (s_nightFBO == 0)
+		{
+			gl->glGenFramebuffers(1, &s_nightFBO);
+			gl->glGenTextures(1, &s_nightTex);
+		}
+		if (s_nightW != readW || s_nightH != readH)
+		{
+			glBindTexture(GL_TEXTURE_2D, s_nightTex);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, readW, readH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			s_nightW = readW;
+			s_nightH = readH;
+		}
+	}
+
 	// Get QOpenGLExtraFunctions for glBlitFramebuffer
 	QOpenGLExtraFunctions* extraFns = QOpenGLContext::currentContext()->extraFunctions();
 
-	// Blit (downsample) from main framebuffer to readback FBO
+	// Blit (downsample) from main framebuffer to the source/readback FBO
 	GLint mainFBO = 0;
 	gl->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &mainFBO);
+	const GLuint blitFBO = tintNight ? s_nightFBO : s_readbackFBO;
+	const GLuint blitTex = tintNight ? s_nightTex : s_readbackTex;
 	gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, mainFBO);
-	gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, s_readbackFBO);
-	gl->glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_readbackTex, 0);
+	gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, blitFBO);
+	gl->glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, blitTex, 0);
 	if (extraFns)
 	{
 		extraFns->glBlitFramebuffer(0, 0, width, height, 0, 0, readW, readH, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+	}
+
+	if (tintNight)
+	{
+		const GLboolean depthWasEnabled = gl->glIsEnabled(GL_DEPTH_TEST);
+		const GLboolean blendWasEnabled = gl->glIsEnabled(GL_BLEND);
+		gl->glBindFramebuffer(GL_FRAMEBUFFER, s_readbackFBO);
+		gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_readbackTex, 0);
+		gl->glViewport(0, 0, readW, readH);
+		gl->glDisable(GL_DEPTH_TEST);
+		gl->glDisable(GL_BLEND);
+		s_nightProgram->bind();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, s_nightTex);
+		s_nightProgram->setUniformValue("u_source", 0);
+		gl->glBindBuffer(GL_ARRAY_BUFFER, s_nightVBO);
+		const int posLoc = s_nightProgram->attributeLocation("a_pos");
+		const int uvLoc = s_nightProgram->attributeLocation("a_texCoord");
+		gl->glEnableVertexAttribArray(posLoc);
+		gl->glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), reinterpret_cast<const void*>(0));
+		gl->glEnableVertexAttribArray(uvLoc);
+		gl->glVertexAttribPointer(uvLoc, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), reinterpret_cast<const void*>(2 * sizeof(GLfloat)));
+		gl->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		gl->glDisableVertexAttribArray(uvLoc);
+		gl->glDisableVertexAttribArray(posLoc);
+		gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
+		s_nightProgram->release();
+		gl->glBindFramebuffer(GL_FRAMEBUFFER, mainFBO);
+		gl->glViewport(0, 0, width, height);
+		if (depthWasEnabled) gl->glEnable(GL_DEPTH_TEST); else gl->glDisable(GL_DEPTH_TEST);
+		if (blendWasEnabled) gl->glEnable(GL_BLEND); else gl->glDisable(GL_BLEND);
 	}
 
 	// When both EGL contexts can join the same share group, the XComponent can
@@ -1698,6 +1806,7 @@ void submitOhosFramebuffer(QOpenGLFunctions* gl)
 
 	if (!rgba)
 		return;
+
 	++observedFrames;
 	if (submittedFrames == 0)
 	{
@@ -3607,7 +3716,10 @@ QJsonObject currentStateJson()
 				"actionShow_Quadrature_Line",
 				"actionShow_Ray_Helpers",
 			"actionShow_Hips_Surveys",
-			"actionShow_Toast_Survey"
+			"actionShow_Toast_Survey",
+			"actionShow_Night_Mode",
+			"actionHorizontal_Flip",
+			"actionVertical_Flip"
 		};
 		for (const QString& id : ids)
 		{
@@ -5971,14 +6083,19 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			qInfo() << "[StellariumOhos][selectAt] candidate elapsedMs=" << selectTimer.elapsed();
 			}
 
-			objectMgr->setObjectSearchRadius(44.0);
+			objectMgr->setObjectSearchRadius(60.0);
 			found = objectMgr->findAndSelect(core, sx, sy);
 			objectMgr->setObjectSearchRadius(25.0);
 			if (!found && constellationAtTap)
 			{
-				found = objectMgr->setSelectedObject(constellationAtTap);
-				qInfo() << "[StellariumOhos][selectAt] constellation fallback"
-						<< constellationAtTap->getID() << constellationAtTap->getNameI18n();
+				auto* constellationMgr = GETSTELMODULE(ConstellationMgr);
+				if (constellationMgr
+					&& (constellationMgr->getFlagLines() || constellationMgr->getFlagLabels()))
+				{
+					found = objectMgr->setSelectedObject(constellationAtTap);
+					qInfo() << "[StellariumOhos][selectAt] constellation fallback"
+							<< constellationAtTap->getID() << constellationAtTap->getNameI18n();
+				}
 			}
 			qInfo() << "[StellariumOhos][selectAt] found" << found;
 			qInfo() << "[StellariumOhos][selectAt] object-search elapsedMs=" << selectTimer.elapsed();
@@ -13335,6 +13452,7 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			else if (name == "iconicMode") sats->setFlagIconicMode(val);
 			else if (name == "hideInvisible") sats->setFlagHideInvisible(val);
 			else ok = false;
+			if (ok) sats->saveSettingsToConfig();
 			result["ok"] = ok;
 			if (!ok) result["error"] = "unknown satellite flag: " + name;
 			return result;
@@ -13402,6 +13520,7 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			else if (name == "activeOnly") ms->setActiveRadiantOnly(val);
 			else if (name == "marker") ms->setEnableMarker(val);
 			else ok = false;
+			if (ok) ms->saveSettings();
 			result["ok"] = ok;
 			if (!ok) result["error"] = "unknown meteor showers flag: " + name;
 			return result;
@@ -14568,7 +14687,15 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 		if (commandName == "setNightMode")
 		{
 			bool on = (arg.trimmed() == "1" || arg.trimmed().toLower() == "true");
-			StelApp::getInstance().setVisionModeNight(on);
+			// Keep the QAction and the StelApp property in sync. Setting only the
+			// property leaves actionShow_Night_Mode unchecked, and the action/property
+			// reconciliation can silently flip the property back a moment later.
+			StelActionMgr* nightActionMgr = StelApp::getInstance().getStelActionManager();
+			StelAction* nightAction = nightActionMgr ? nightActionMgr->findAction("actionShow_Night_Mode") : nullptr;
+			if (nightAction && nightAction->isCheckable())
+				nightAction->setChecked(on);
+			else
+				StelApp::getInstance().setVisionModeNight(on);
 			result["ok"] = true;
 			result["night"] = StelApp::getInstance().getVisionModeNight();
 			return result;
@@ -17417,6 +17544,7 @@ void StelMainView::init()
 	stelApp->setGui(gui);
 	stelApp->init(configuration);
 #if defined(__OHOS__)
+	stelApp->setFlagImmediateSave(true);
 	connect(&stelApp->getStelObjectMgr(), &StelObjectMgr::selectedObjectChanged, this,
 		[this](StelModule::StelModuleSelectAction) {
 			if (stelApp->getScriptMgr().scriptIsRunning()) return;
@@ -17991,6 +18119,11 @@ void StelMainView::setOhosApplicationForeground(bool foreground)
 
 	if (!foreground)
 	{
+		if (StelApp::isInitialized())
+		{
+			emit StelApp::getInstance().getCore()->configurationDataSaved();
+			StelApp::getInstance().getSettings()->sync();
+		}
 		// The app has no background task. Stop every continuous render activity
 		// while retaining the OpenGL scene so returning to the foreground is fast.
 		fpsTimer->stop();
