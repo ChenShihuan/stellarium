@@ -1,5 +1,9 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-20] 赤道仪/天顶附近缩放抖动修复
+
+手势锚点改用挂载系规范 up，极点附近按 `sin ε` 交接 transported up，避免 `1/sin` 放大；手势期间冻结 roll；0.5 px 亚像素死区阻断质心抖动。
+
 ## [2026-10-20] 夜间模式主题重构
 
 移除 zIndex 98/99 两层暴力遮罩（红色 BlendMode.COLOR + 黑色压暗），改用 ArkUI 原生 `WithTheme(CustomTheme) → onWillApplyTheme → ThemeSlots` 机制，131 个 .ets 文件接入，主题色字面量归零。架构文档见 `docs/harmonyos/specs/NIGHT-MODE-THEME-ARCHITECTURE.md`。

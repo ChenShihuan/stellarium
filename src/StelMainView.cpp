@@ -2494,6 +2494,58 @@ static void ohosCaptureSelectedZoomAnchor()
 	s_ohosZoomAnchorYRatio = (viewport[1] + viewport[3] - 1 - projected[1]) / viewport[3];
 }
 
+// Canonical screen-up for the current mount frame, mirroring
+// StelMovementMgr::panView(): the mount frame's +Z projected onto the view plane,
+// with the same polar clamp. The projection degenerates near the pole (its length
+// is sin(angle to the pole), so its direction amplifies any view jitter by
+// 1/sin), therefore the roll there is taken from the stored up vector instead.
+// No mountMode branch: the frame conversions already express the mount type
+// (Alt-Az -> zenith, equatorial -> celestial pole, galactic -> galactic pole).
+static Vec3d ohosMountCanonicalUp(Vec3d& viewMount, const Vec3d& previousUpMount, bool freezeRoll)
+{
+	// panView() clamps the mount-frame latitude so the view can never cross the
+	// pole, where the +Z projection would reverse.
+	const double latLimit = M_PI_2 - 1e-6;
+	double lon = 0.0;
+	double lat = 0.0;
+	StelUtils::rectToSphe(&lon, &lat, viewMount);
+	lat = qBound(-latLimit, lat, latLimit);
+	StelUtils::spheToRect(lon, lat, viewMount);
+
+	Vec3d transported = previousUpMount;
+	transported -= viewMount * transported.dot(viewMount);
+	if (transported.normSquared() < 1e-9)
+	{
+		transported = Vec3d(1., 0., 0.);
+		transported -= viewMount * transported.dot(viewMount);
+	}
+	if (transported.normSquared() < 1e-9)
+	{
+		transported = Vec3d(0., 1., 0.);
+		transported -= viewMount * transported.dot(viewMount);
+	}
+	if (transported.normSquared() < 1e-9)
+		return Vec3d(0., 0., 1.);
+	transported.normalize();
+
+	if (freezeRoll)
+		return transported;
+
+	Vec3d canonical(0., 0., 1.);
+	canonical -= viewMount * canonical.dot(viewMount);
+	const double strength = std::sqrt(canonical.normSquared());
+	if (strength < 1e-9)
+		return transported;
+	canonical /= strength;
+	if (canonical.dot(transported) < 0.)
+		canonical = -canonical;
+	// Same hand-over window ohosApplyPanDelta() uses for its horizon blend.
+	const double blend = qBound(0.0, (strength - 0.05) / 0.20, 1.0);
+	Vec3d up = transported * (1.0 - blend) + canonical * blend;
+	up.normalize();
+	return up;
+}
+
 static void ohosAnchorSkyDirection(const Vec3d& directionJ2000, double xRatio, double yRatio)
 {
 	// Do not solve an anchor that is outside the viewport. Inverse projection
@@ -2526,6 +2578,12 @@ static void ohosAnchorSkyDirection(const Vec3d& directionJ2000, double xRatio, d
 	desiredDirection.normalize();
 	targetDirection.normalize();
 	const double cosine = qBound(-1.0, desiredDirection.dot(targetDirection), 1.0);
+	// Sub-pixel anchor errors must not drive the camera. The two-finger centroid
+	// jitters by about a pixel per sample; at high zoom (and especially near the
+	// pole or the zenith) that tiny rotation is amplified into a visible shake.
+	const double pixelsPerRad = static_cast<double>(projector->getPixelPerRadAtCenter());
+	if (pixelsPerRad > 1e-9 && std::acos(cosine) * pixelsPerRad < 0.5)
+		return;
 	const Vec3d rotationAxis = desiredDirection ^ targetDirection;
 	if (cosine < -0.999999 || rotationAxis.normSquared() < 1e-24)
 		return;
@@ -2533,34 +2591,24 @@ static void ohosAnchorSkyDirection(const Vec3d& directionJ2000, double xRatio, d
 		return vector + (rotationAxis ^ vector) + (rotationAxis ^ (rotationAxis ^ vector)) / (1.0 + cosine);
 	};
 	Vec3d view = rotate(core->j2000ToAltAz(movementMgr->getViewDirectionJ2000(), StelCore::RefractionOff));
-	// Rebuild the screen-up vector from the local zenith instead of rotating
-	// the previous inertial up vector.  The latter is mathematically valid for
-	// a fixed J2000 camera, but it makes the horizon roll whenever simulation
-	// time changes while a selected object is kept at a fixed screen position.
-	// Keeping zenith in the image plane makes the selected-object anchor and
-	// the horizon-level interaction model agree. Near zenith, retain the old
-	// vector because the horizon direction is undefined there.
-	Vec3d up = Vec3d(0., 0., 1.) - view * view[2];
-	if (up.normSquared() < 1e-18)
-		up = rotate(core->j2000ToAltAz(movementMgr->getViewUpVectorJ2000(), StelCore::RefractionOff));
-	view.normalize();
-	up -= view * up.dot(view);
-	if (up.normSquared() < 1e-18)
+	if (view.normSquared() < 1e-18)
 		return;
-	up.normalize();
-	// Keep the local-zenith solution on the same screen-up branch as the
-	// previous frame. Without this sign continuity, a time-wheel update near
-	// the zenith can select the mathematically equivalent opposite vector and
-	// make the horizon appear to roll or flip for one frame.
-	Vec3d previousUp = core->j2000ToAltAz(movementMgr->getViewUpVectorJ2000(), StelCore::RefractionOff);
-	if (previousUp.normSquared() > 1e-18)
-	{
-		previousUp.normalize();
-		if (up.dot(previousUp) < 0.0)
-			up = -up;
-	}
-	movementMgr->setViewUpVectorJ2000(core->altAzToJ2000(up, StelCore::RefractionOff));
-	movementMgr->setViewDirectionJ2000(core->altAzToJ2000(view, StelCore::RefractionOff));
+	view.normalize();
+	// Same split as StelMovementMgr::panView(): resolve the view and its up in the
+	// mount frame, then write both through the movement manager. This keeps the
+	// camera's roll convention identical to the kernel's, so an equatorial mount
+	// keeps its polar tilt instead of being levelled to the local zenith.
+	Vec3d viewMount = movementMgr->j2000ToMountFrame(core->altAzToJ2000(view, StelCore::RefractionOff));
+	viewMount.normalize();
+	const Vec3d previousUpMount = movementMgr->j2000ToMountFrame(movementMgr->getViewUpVectorJ2000());
+	// Zooming must never rotate the camera. While a pinch (or its settle tail)
+	// owns the view, keep the stored roll and only transport it, so the 1/sin
+	// sensitivity of the canonical up near a pole/zenith cannot shake the image.
+	const bool freezeRoll = s_ohosPinchActive || s_ohosPinchSettleActive;
+	const Vec3d upMount = ohosMountCanonicalUp(viewMount, previousUpMount, freezeRoll);
+	// Order matters: setViewDirectionJ2000() re-reads the current up vector.
+	movementMgr->setViewUpVector(upMount);
+	movementMgr->setViewDirectionJ2000(movementMgr->mountFrameToJ2000(viewMount));
 	if (s_ohosAnchorProbeEnabled)
 	{
 		Vec3d projected;
@@ -2673,6 +2721,9 @@ static void ohosMaintainSelectedZoomAnchor()
 	if (!core || !objectMgr || !movementMgr || objectMgr->getSelectedObject().isEmpty())
 		return;
 	if (movementMgr->getFlagTracking())
+		return;
+	// A centering animation owns the camera while it runs; never anchor against it.
+	if (movementMgr->getFlagAutoMove())
 		return;
 	const StelObjectP selectedObject = objectMgr->getSelectedObject().constFirst();
 	const SatelliteP satellite = qSharedPointerDynamicCast<Satellite>(selectedObject);
@@ -6296,7 +6347,6 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				s_ohosPanInertiaActive = false;
 				movementMgr->cancelAutoZoom();
 				movementMgr->setFlagTracking(false);
-				movementMgr->setFlagLockEquPos(false);
 				s_ohosPinchStartFov = movementMgr->getCurrentFov();
 				s_ohosPinchSettleVelocity = 0.0;
 				s_ohosPinchSettleElapsedSec = 0.0;
@@ -6661,6 +6711,25 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			result["maxErrorPixels"] = s_ohosAnchorProbeMaxErrorPixels;
 			result["maxSolveMs"] = s_ohosAnchorProbeMaxSolveMs;
 			result["fov"] = movementMgr ? movementMgr->getCurrentFov() : 0.0;
+			if (movementMgr)
+			{
+				// Roll error against the mount frame's canonical up. 0 means the camera
+				// matches panView()/moveToObject(); a jump towards 90-|lat| means some
+				// path still rebuilt the up vector from the local zenith.
+				Vec3d viewJ2000 = movementMgr->getViewDirectionJ2000();
+				Vec3d mountUpJ2000 = movementMgr->mountFrameToJ2000(Vec3d(0., 0., 1.));
+				Vec3d cameraUpJ2000 = movementMgr->getViewUpVectorJ2000();
+				viewJ2000.normalize();
+				mountUpJ2000 -= viewJ2000 * mountUpJ2000.dot(viewJ2000);
+				cameraUpJ2000 -= viewJ2000 * cameraUpJ2000.dot(viewJ2000);
+				if (mountUpJ2000.normSquared() > 1e-18 && cameraUpJ2000.normSquared() > 1e-18)
+				{
+					mountUpJ2000.normalize();
+					cameraUpJ2000.normalize();
+					result["rollErrorDeg"] =
+						std::acos(qBound(-1.0, mountUpJ2000.dot(cameraUpJ2000), 1.0)) * 180.0 / M_PI;
+				}
+			}
 			return result;
 		}
 

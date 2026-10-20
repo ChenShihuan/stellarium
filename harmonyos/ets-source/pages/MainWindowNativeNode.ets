@@ -4346,6 +4346,7 @@ export struct WindowNativeNode {
     const quickId = this.compactQuickIdAt(x, y)
     if (quickId === 'gyro') {
       this.resetPanelIdle()
+      if (!this.gyroStore.gyroscopeVisualEnabled()) this.syncEquatorialOffForGyro()
       this.gyroCtl().requestGyroscopeToggle(!this.gyroStore.gyroscopeVisualEnabled())
       return true
     }
@@ -4864,6 +4865,15 @@ export struct WindowNativeNode {
     }
   }
 
+  // 陀螺仪驱动时引擎会强制 Alt-Az；先清掉赤道仪开关，避免两个模式同时写星图。
+  private syncEquatorialOffForGyro(): void {
+    if (this.telescopeStore.equatorialMount) {
+      this.telescopeStore.equatorialMount = false
+      this.telescopeStore.persistEquatorialMount()
+      this.layerCtl().applyLayerSwitch('actionSwitch_Equatorial_Mount', '', false)
+    }
+  }
+
   // 快捷操作面板的动作分发：入口类跳面板，开关类各走本域既有入口，图层类走 applyLayerSwitch。
   private quickToggle(id: string, value: boolean): void {
     const item = quickActionById(id)
@@ -4878,6 +4888,7 @@ export struct WindowNativeNode {
       return
     }
     if (id === 'gyroscope') {
+      if (value) this.syncEquatorialOffForGyro()
       this.gyroCtl().requestGyroscopeToggle(value)
       return
     }
@@ -4886,8 +4897,10 @@ export struct WindowNativeNode {
       return
     }
     if (id === 'equatorial_mount') {
-      // 引擎侧不回读该位（getState 无对应字段），故与「更多 > 设置 > 配置」的同一开关同法：
-      // 先乐观写 store 再下发；setLayer 回包后 persistEquatorialMount() 落盘、refreshState() 刷新宿主。
+      // 陀螺仪会持续把引擎拉回 Alt-Az，选赤道仪前先停掉它，避免来回切换。
+      if (value && this.gyroStore.gyroscopeVisualEnabled()) {
+        this.gyroCtl().requestGyroscopeToggle(false)
+      }
       this.telescopeStore.equatorialMount = value
       this.layerCtl().applyLayerSwitch('actionSwitch_Equatorial_Mount', '', value)
       return
@@ -7413,6 +7426,7 @@ export struct WindowNativeNode {
                 onGyro: () => {
                   hilog.info(0x0000, 'StellariumArkUI', '[DIAG] gyro button CLICKED gyroscopeEnabled=%{public}s', this.gyroStore.gyroscopeEnabled.toString())
                   this.resetPanelIdle()
+                  if (!this.gyroStore.gyroscopeEnabled) this.syncEquatorialOffForGyro()
                   this.gyroCtl().toggleGyroscope(!this.gyroStore.gyroscopeEnabled)
                 },
                 onAudio: () => {
