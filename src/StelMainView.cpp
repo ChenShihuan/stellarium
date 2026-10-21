@@ -6865,9 +6865,13 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 		if (commandName == "setLanguage")
 		{
 			StelLocaleMgr& localeMgr = StelApp::getInstance().getLocaleMgr();
+			// Language is an engine behavior: persist it as the authoritative
+			// localization/app_locale entry, not only in the ArkUI mirror.
+			StelApp::immediateSaveNow("localization/app_locale", arg);
 			localeMgr.setAppLanguage(arg);
 			markOhosInteraction();
 			result["ok"] = true;
+			result["saved"] = true;
 			result["appLanguage"] = localeMgr.getAppLanguage();
 			result["skyLanguage"] = localeMgr.getSkyLanguage();
 			return result;
@@ -10400,8 +10404,16 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 
 		if (commandName == "saveAllSettings")
 		{
-			StelApp::getInstance().getSettings()->sync();
-			result["ok"] = true;
+			const bool ok = StelApp::flushSettings("manual");
+			result["ok"] = ok;
+			if (ok)
+			{
+				result["configPath"] = StelApp::getInstance().getSettings()->fileName();
+			}
+			else
+			{
+				result["error"] = "config write failed";
+			}
 			return result;
 		}
 

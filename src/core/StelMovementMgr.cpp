@@ -285,7 +285,6 @@ void StelMovementMgr::setEquatorialMount(bool b)
 		return;
 
 	setMountMode(b ? MountEquinoxEquatorial : MountAltAzimuthal);
-	StelApp::immediateSave("navigation/viewing_mode", b ? "equator" : "horizon");
 
 	if (getFlagIndicationMountMode())
 	{
@@ -308,6 +307,10 @@ void StelMovementMgr::setEquatorialMount(bool b)
 
 void StelMovementMgr::setMountMode(MountMode m)
 {
+	const QString wanted = (m==MountEquinoxEquatorial) ? QStringLiteral("equator") : QStringLiteral("horizon");
+	QSettings* conf = StelApp::getInstance().getSettings();
+	if (conf && conf->value("navigation/viewing_mode", "horizon").toString() != wanted)
+		StelApp::immediateSaveNow("navigation/viewing_mode", wanted);
 	mountMode = m;
 	setViewDirectionJ2000(viewDirectionJ2000);
 	// TODO: Decide whether re-setting Up-vector is required here.

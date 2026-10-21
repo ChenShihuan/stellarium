@@ -105,6 +105,7 @@ import { DeltaTStore } from '../state/DeltaTStore'
 import { TimeSettingsStore } from '../state/TimeSettingsStore'
 import { SettingsChoiceButton } from '../common/ui/SettingsChoiceButton'
 import { NightModeStore } from '../state/NightModeStore'
+import { SettingsRepository, SettingsPersistencePort, UiSettings, UI_SETTINGS_STORE, UI_SETTINGS_KEY } from '../state/SettingsRepository'
 import { accentForNightMode, slotsForNightMode, stellariumTheme, AstroColors, DEFAULT_SLOTS, ThemeSlots } from '../state/StellariumTheme'
 import { TimeWheelController } from '../state/TimeWheelController'
 import { BookmarkStore } from '../state/BookmarkStore'
@@ -945,6 +946,59 @@ class HostLocationPort implements LocationPort {
   }
 }
 
+// 宿主 → SettingsPersistencePort 的具名适配器：承载 @ohos.data.preferences，
+// 使 SettingsRepository 不 import NAPI。store 名与 key 由 SettingsRepository 定义。
+class HostSettingsPort implements SettingsPersistencePort {
+  private contextFactory: (() => common.UIAbilityContext) | null = null
+
+  configure(contextFactory: () => common.UIAbilityContext): void {
+    this.contextFactory = contextFactory
+  }
+
+  private context(): common.UIAbilityContext {
+    const factory = this.contextFactory
+    if (factory === null) {
+      throw new Error('HostSettingsPort not configured')
+    }
+    return factory()
+  }
+
+  async read(): Promise<string | null> {
+    try {
+      const store = await preferences.getPreferences(this.context(), UI_SETTINGS_STORE)
+      const value = await store.get(UI_SETTINGS_KEY, '')
+      return typeof value === 'string' && value.length > 0 ? value : null
+    } catch (error) {
+      hilog.warn(0x0000, 'StellariumArkUI', '[settings] read failed')
+      return null
+    }
+  }
+
+  async write(json: string): Promise<boolean> {
+    try {
+      const store = await preferences.getPreferences(this.context(), UI_SETTINGS_STORE)
+      await store.put(UI_SETTINGS_KEY, json)
+      await store.flush()
+      return true
+    } catch (error) {
+      hilog.warn(0x0000, 'StellariumArkUI', '[settings] write failed')
+      return false
+    }
+  }
+
+  async clear(): Promise<boolean> {
+    try {
+      const store = await preferences.getPreferences(this.context(), UI_SETTINGS_STORE)
+      await store.delete(UI_SETTINGS_KEY)
+      await store.flush()
+      return true
+    } catch (error) {
+      hilog.warn(0x0000, 'StellariumArkUI', '[settings] clear failed')
+      return false
+    }
+  }
+}
+
 @Component
 export struct WindowNativeNode {
   @State private createInfo: WindowNativeNodeCreateInfo | undefined = undefined
@@ -1013,6 +1067,10 @@ export struct WindowNativeNode {
   private hostSensorPort: HostSensorPort = new HostSensorPort()
   // 位置域端口适配器（aboutToAppear 里 configure UI 上下文）。
   private hostLocationPort: HostLocationPort = new HostLocationPort()
+  // 统一 UI 偏好持久化（Preferences 端口在 aboutToAppear 注入）。
+  private hostSettingsPort: HostSettingsPort = new HostSettingsPort()
+  private settingsRepository: SettingsRepository = new SettingsRepository()
+  private persistedSettingsApplied: boolean = false
   // 位置域控制器（惰性构造；NAPI 经 LocationPort，跨域写经 LocationHostHooks）。
   private locationControllerImpl: LocationController | null = null
   // 启动桥服务（惰性构造，持有跨域 store 引用与宿主生命周期 hooks）。
@@ -1531,6 +1589,10 @@ export struct WindowNativeNode {
     )
     // 配置位置端口适配器（权限/定位/preferences NAPI 在此收口）。
     this.hostLocationPort.configure((): common.UIAbilityContext => this.getUIContext().getHostContext() as common.UIAbilityContext)
+    // 配置统一设置持久化端口，并异步加载上次保存的 UI 偏好（引擎权威项不在此列）。
+    this.hostSettingsPort.configure((): common.UIAbilityContext => this.getUIContext().getHostContext() as common.UIAbilityContext)
+    this.settingsRepository.attachPort(this.hostSettingsPort)
+    this.loadPersistedUiSettings()
     // 把宿主桥注入 ToolsStore。ToolsStore 消费方均为 @ObjectLink，字段赋值即刷新，
     // 故此处 onChanged 注入等价空实现（该域无 publish* 发布点）。
     const hostPort = this.commandPort()
@@ -1542,7 +1604,8 @@ export struct WindowNativeNode {
       saveAppSettings: (): void => { this.saveAppSettings() },
       copyConfigExportText: (text: string, successHint: ResourceStr): void => {
         copyTextToClipboard(this.hostPlatformPort, text, successHint, { flashHint: (hint: ResourceStr): void => this.flashHint(hint) })
-      }
+      },
+      resetUiSettings: (): void => { this.settingsRepository.resetToDefaults() }
     })
     // （解散 SettingsController）：信息模式 / 导航 / 星历 / 显示四域设置动作并回各 store。
     // 均复用同一 HostCommandPort；可观测状态写各 store（无 publish* 发布点，不注入 onChanged），
@@ -3322,6 +3385,71 @@ export struct WindowNativeNode {
       eclipseMonths: this.astroStore.eclipseMonths.toString(),
       moonPhaseDays: this.astroStore.moonPhaseDays.toString()
     }))
+    // 统一持久化：纯 UI 偏好写入 Preferences（stellarium_ui）。夜间模式、赤道仪是
+    // 引擎行为，由各自的 C++ setter 写 config.ini，不进入 UI 仓库。
+    this.settingsRepository.patch(this.collectUiSettings())
+  }
+
+  // 聚合当前纯 UI 偏好。字段与 SettingsRepository.UiSettings 一一对应。
+  private collectUiSettings(): UiSettings {
+    const current = this.settingsRepository.snapshot()
+    const next: UiSettings = {
+      schemaVersion: current.schemaVersion,
+      musicEnabled: this.audioStore.musicEnabled,
+      useMetricUnits: this.viewSettingsStore.useMetricUnits,
+      viewCoordinatesVisible: this.overlayStore.viewCoordinatesVisible,
+      viewCoordinateFamily: this.overlayStore.viewCoordinateFamily,
+      viewEquatorialEpoch: this.overlayStore.viewEquatorialEpoch,
+      objectDetailConnectorVisible: this.overlayStore.objectDetailConnectorVisible,
+      astroTab: this.astroStore.astroTab,
+      astroGroup: this.astroStore.astroGroup,
+      positionMode: this.astroStore.positionMode,
+      celestialPositionCategory: this.astroStore.celestialPositionCategory,
+      celestialPositionMagnitude: this.astroStore.celestialPositionMagnitude,
+      celestialPositionHorizontal: this.astroStore.celestialPositionHorizontal,
+      ephemerisMode: this.astroStore.ephemerisMode,
+      ephemerisDays: this.astroStore.ephemerisDays,
+      ephemerisStepHours: this.astroStore.ephemerisStepHours,
+      rtsCalendarDays: this.astroStore.rtsCalendarDays,
+      graphMode: this.astroStore.graphMode,
+      eclipseMonths: this.astroStore.eclipseMonths,
+      moonPhaseDays: this.astroStore.moonPhaseDays
+    }
+    return next
+  }
+
+  // 启动时从 Preferences 载入 UI 偏好；有数据时填充 AppStorage 镜像并触发现有恢复流程。
+  private async loadPersistedUiSettings(): Promise<void> {
+    const hasPersisted = await this.settingsRepository.load()
+    if (!hasPersisted || this.persistedSettingsApplied) {
+      return
+    }
+    this.persistedSettingsApplied = true
+    const settings = this.settingsRepository.snapshot()
+    AppStorage.setOrCreate('stellariumSettings', JSON.stringify({
+      useMetricUnits: settings.useMetricUnits,
+      musicEnabled: settings.musicEnabled,
+      viewCoordinatesVisible: settings.viewCoordinatesVisible,
+      viewCoordinateFamily: settings.viewCoordinateFamily,
+      viewEquatorialEpoch: settings.viewEquatorialEpoch,
+      objectDetailConnectorVisible: settings.objectDetailConnectorVisible,
+      astroTab: settings.astroTab.toString(),
+      astroGroup: settings.astroGroup.toString(),
+      positionMode: settings.positionMode.toString(),
+      celestialPositionCategory: settings.celestialPositionCategory,
+      celestialPositionMagnitude: settings.celestialPositionMagnitude.toString(),
+      celestialPositionHorizontal: settings.celestialPositionHorizontal.toString(),
+      ephemerisMode: settings.ephemerisMode.toString(),
+      ephemerisDays: settings.ephemerisDays.toString(),
+      ephemerisStepHours: settings.ephemerisStepHours.toString(),
+      rtsCalendarDays: settings.rtsCalendarDays.toString(),
+      graphMode: settings.graphMode.toString(),
+      eclipseMonths: settings.eclipseMonths.toString(),
+      moonPhaseDays: settings.moonPhaseDays.toString()
+    }))
+    if (this.startupBridgeImpl !== null) {
+      this.startupBridge().restoreStartupSettings()
+    }
   }
 
   // "返回可消费"镜像：ApplicationRoot.onBackPress 据此决定系统返回是否由应用接管。
