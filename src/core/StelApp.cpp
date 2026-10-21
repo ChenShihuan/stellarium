@@ -87,6 +87,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLVertexArrayObject>
+#include <QSettings>
 #include <QOpenGLFramebufferObject>
 #include <QString>
 #include <QStringList>
@@ -1292,7 +1293,7 @@ void StelApp::setVisionModeNight(bool b)
 	if (flagNightVision!=b)
 	{
 		flagNightVision=b;
-		immediateSave("viewing/flag_night", b);
+		immediateSaveNow("viewing/flag_night", b);
 		emit visionNightModeChanged(b);
 	}
 }
@@ -1412,6 +1413,30 @@ void StelApp::immediateSave(const QString &key, const QVariant &value)
 {
 	if (getInstance().getFlagImmediateSave())
 		getInstance().getSettings()->setValue(key, value);
+}
+
+void StelApp::immediateSaveNow(const QString &key, const QVariant &value)
+{
+	QSettings* conf = getInstance().getSettings();
+	if (!conf)
+		return;
+	conf->setValue(key, value);
+	conf->sync();
+	const bool ok = conf->status() == QSettings::NoError;
+	if (!ok)
+		qWarning() << "Stellarium: failed to persist" << key << "to" << conf->fileName();
+}
+
+bool StelApp::flushSettings(const QString &reason)
+{
+	QSettings* conf = getInstance().getSettings();
+	if (!conf)
+		return false;
+	conf->sync();
+	const bool ok = conf->status() == QSettings::NoError;
+	if (!ok)
+		qWarning() << "Stellarium: failed to flush settings (" << reason << ") to" << conf->fileName();
+	return ok;
 }
 
 

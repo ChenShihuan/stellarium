@@ -61,13 +61,8 @@ export class NightModeStore {
   }
 
   persistNightMode(): void {
-    let obj: Record<string, boolean | string> = {}
-    const cur = AppStorage.get<string>('stellariumSettings')
-    if (cur) {
-      try { obj = JSON.parse(cur) as Record<string, boolean | string> } catch (e) { }
-    }
-    obj['nightMode'] = this.nightMode
-    AppStorage.setOrCreate('stellariumSettings', JSON.stringify(obj))
+    // 夜间模式是引擎行为，权威值是 config.ini 的 viewing/flag_night（由 C++ setter 写入）。
+    // 这里只更新首帧主题缓存，不写 UI 设置 JSON，避免形成第二个权威源。
     AppStorage.setOrCreate('stellariumNightMode', this.nightMode)
     if (this.persistFn) { this.persistFn(this.nightMode) }
   }

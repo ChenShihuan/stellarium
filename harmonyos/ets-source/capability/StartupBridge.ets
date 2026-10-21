@@ -161,31 +161,29 @@ export class StartupBridge {
   restoreStartupSettings(): void {
     this.skyCultureViewStore.loadSkyCultureList()
     this.pluginStore.loadPluginList()
+    // 赤道仪/地平仪是引擎行为：无论是否有 UI 偏好缓存，都回读引擎真实状态。
+    // 夜间模式由 QAbility 的首帧缓存 + 后续 getNightMode 回读负责，不在此下发。
+    this.port.requestWhenReady('getMountMode', '', (r: StellariumBridgeResponse) => {
+      this.telescopeStore.equatorialMount = r.equatorial === true
+    })
+    // 语言同样是引擎行为：从 getAppState 回读 config.ini 的 app_locale，
+    // 只刷新 ArkUI 的翻译器与显示状态，不再把 UI 缓存下发回引擎。
+    this.port.requestWhenReady('getAppState', '', (r: StellariumBridgeResponse) => {
+      const language = r.language
+      if (typeof language === 'string' && language.length > 0) {
+        this.languageStore.selectedLanguage = language
+        I18n.setLanguage(I18n.fromStellariumCode(language))
+      }
+    })
     const settings = AppStorage.get<string>("stellariumSettings")
     if (settings) {
       try {
         const saved = JSON.parse(settings) as Record<string, boolean | string>
-        if (saved.nightMode !== undefined) {
-          this.nightModeStore.nightMode = saved.nightMode as boolean
-          AppStorage.setOrCreate('stellariumNightMode', saved.nightMode as boolean)
-          this.port.requestWhenReady('setActionChecked', 'actionShow_Night_Mode|' + (this.nightModeStore.nightMode ? '1' : '0'), () => {})
-        }
-        if (saved.equatorialMount !== undefined) {
-          this.telescopeStore.equatorialMount = saved.equatorialMount as boolean
-          this.port.requestWhenReady('setActionChecked', 'actionSwitch_Equatorial_Mount|' + (this.telescopeStore.equatorialMount ? '1' : '0'), () => {})
-        }
         if (saved.gyroscopeEnabled !== undefined) {
           this.gyroStore.gyroscopeEnabled = false
           this.gyroStore.gyroscopeStatus = I18n.t('m_gyro_off')
         }
         if (saved.gyroscopeSensitivityText !== undefined) { this.gyroStore.gyroscopeSensitivityText = saved.gyroscopeSensitivityText as string }
-        if (saved.selectedLanguage !== undefined) {
-          const language = saved.selectedLanguage as string
-          if (language !== this.languageStore.selectedLanguage) {
-            I18n.setLanguage(I18n.fromStellariumCode(language))
-            this.hooks.setLanguage(language)
-          }
-        }
         if (saved.musicEnabled !== undefined) { this.audioStore.musicEnabled = saved.musicEnabled as boolean }
         if (saved.useMetricUnits !== undefined) { this.viewSettingsStore.useMetricUnits = saved.useMetricUnits as boolean }
         if (saved.viewCoordinatesVisible !== undefined) { this.overlayStore.viewCoordinatesVisible = saved.viewCoordinatesVisible as boolean }

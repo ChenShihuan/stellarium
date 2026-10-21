@@ -1,5 +1,23 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-21] 设置保存重构：UI 偏好统一持久化 + 引擎权威键
+
+- **依据**：按 `docs/harmonyos/specs/SETTINGS-PERSISTENCE.md` 实施 S1–S4 与 S5 的收口项。
+- **引擎行为回归 `config.ini`**：
+  - 夜间模式：`setVisionModeNight` 改用 `immediateSaveNow("viewing/flag_night")`；`night_mode_store` 仅保留首帧缓存，不再反向下发引擎。
+  - 赤道仪/地平仪：`StelMovementMgr::setMountMode` 写回 `navigation/viewing_mode`（`equator`/`horizon`）；启动改为 `getMountMode` 回读，不再从 UI 缓存下发。
+  - 语言：`setLanguage` 写入 `localization/app_locale` 并立即落盘。
+- **保存通道**：新增 `StelApp::immediateSaveNow()`（绕过 `gui/immediate_save_details` 门控）与 `flushSettings(reason)`；`saveAllSettings` 返回 `configPath`/`error`，失败不再静默。
+- **UI 偏好**：新增 `state/SettingsRepository.ets`（Preferences `stellarium_ui`、`schemaVersion=2`、迁移/读写/重置）；`AppStorage['stellariumSettings']` 降级为内存镜像，启动时由仓库加载填充；`saveAppSettings` 同步写入仓库；恢复默认时清理 UI 仓库。
+- **修复**：星云/流星/星空文化常用名等 `immediateSave` 在默认门控下失效；语言、赤道仪、音乐、单位等重启丢失。
+- **验证**：`arkts_check` 7 文件通过；引擎增量编译 `cmake --build build --target libstellarium.so` 成功（427/427）；`devecocli build` 成功（exitCode=0，HAP 已重新打包）。
+- **真机验证（HUAWEI Mate 80 Pro，192.168.43.1:36717）**：
+  - 设置赤道仪 / 夜间模式 / 语言 `en` → `aa force-stop` → 重启：`getMountMode=equatorial`、`getNightMode=true`、`language=en` 全部保持；`config.ini` 为 `viewing_mode=equator`、`flag_night=true`、`app_locale=en`。
+  - 打开天文计算面板切到 tab 4 → 强杀 → 重启：`getAstroPanelState.tab=4` 保持；`haps/entry/preferences/stellarium_ui` 中 `schemaVersion=2`。
+  - 语言 UI 缓存不再反向覆盖引擎：旧 `stellarium_ui` 中的 `selectedLanguage=en` 被忽略，重启后 `getAppState.language` 为 `zh_CN`。
+  - 测试后已恢复原状（alt-az / 夜间关 / `zh_CN` / tab 5）。
+- **未纳入**：导出/导入扩展为 JSON 全量包（S5 格式项），留作后续。
+
 ## [2026-10-20] 赤道仪/天顶附近缩放抖动修复
 
 手势锚点改用挂载系规范 up，极点附近按 `sin ε` 交接 transported up，避免 `1/sin` 放大；手势期间冻结 roll；0.5 px 亚像素死区阻断质心抖动。
