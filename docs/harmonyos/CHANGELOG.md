@@ -1,5 +1,12 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-22] 修复恢复默认后首次启动闪退
+
+- **现象**：设置 → 主设置 → 重置 → 恢复（应用自动退出）后，再次打开应用闪退。
+- **根因**：`src/main.cpp` 的 `copyDefaultConfigFile` 用 `QFile::copy` 复制默认配置；恢复默认路径先把 `config.ini` 重命名为 `config.old`，该重命名可能失败（旧备份/文件占用），目标 `config.ini` 仍存在，而 `QFile::copy` 拒绝覆盖已存在文件 → `qFatal` → SIGABRT（`QtMainThread`）。
+- **修复**：改为用 `QFile` 以 `WriteOnly | Truncate` 打开目标后写入默认配置内容，不再依赖“目标不存在”的前提；源/目标打开失败或写入长度不符时给出明确 `qFatal` 信息。
+- **验证**：真机「重置 → 恢复」自动退出后重新启动，进程稳定（pid 存活），`config.ini` 重建为默认配置，日志无 `copyDefaultConfigFile` / `dlopen` 失败。
+
 ## [2026-10-21] 设置面板：恢复默认入口与语言下拉
 
 - **主设置第一条目**：新增「恢复默认设置」row（标题 + 说明 + 右侧胶囊形「重置」大按钮，与界面语言值同高），点击弹二次确认；确认后调用 `restoreCoreDefaults`，成功回包后重置 UI 偏好并**自动退出应用**（延迟 800ms 调 `terminateSelf`），下次启动应用默认配置。移除「设备与隐私」页的临时按钮。
