@@ -1,5 +1,11 @@
 > **身份图例**：本文件真机记录中出现的 `com.cnchensh.stellarium` 是**本机调试签名身份**（本机 DevEco 自动生成，非发布身份）；发布身份为 `com.joinother.skyinstrument`。构建脚本 `build-ohos-hap-windows.ps1 -Install` 从产物 `pack.info` 读取实际包名，仓库不写死任何签名身份（见 `docs/harmonyos/release/BUNDLE-IDENTITY-CLEANUP.md`）。
 
+## [2026-10-21] 设置面板：恢复默认入口与语言下拉
+
+- **主设置第一条目**：新增「恢复默认设置」row（标题 + 说明 + 右侧胶囊形「重置」大按钮，与界面语言值同高），点击弹二次确认；确认后调用 `restoreCoreDefaults`，成功回包后重置 UI 偏好并**自动退出应用**（延迟 800ms 调 `terminateSelf`），下次启动应用默认配置。移除「设备与隐私」页的临时按钮。
+- **界面语言**：由横向 chip 改为单 row + `Select`，点击当前值展开上下滚动列表；颜色沿用 ThemeSlots。
+- **验证**：`arkts_check` 通过；`devecocli build` 成功；真机布局确认第一条目为恢复默认、第二条目为界面语言，点击 Select 弹出语言 `Option` 列表；重置按钮为 40vp 高胶囊（与语言值同高）；点击「重置 → 恢复」后应用进程退出（`pidof` 无输出），`config.ini` 写入 `restore_defaults=true`。
+
 ## [2026-10-21] 设置保存重构：UI 偏好统一持久化 + 引擎权威键
 
 - **依据**：按 `docs/harmonyos/specs/SETTINGS-PERSISTENCE.md` 实施 S1–S4 与 S5 的收口项。
