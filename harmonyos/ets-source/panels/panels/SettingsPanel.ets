@@ -166,6 +166,39 @@ export struct SettingsPanel {
               onClearReminders: () => { this.clearAstronomyReminders() }
             })
           } else if (this.configTab === 0) {
+            Row() {
+              Column() {
+                Text('恢复默认设置').fontSize(14).fontColor(this.c.text).width('100%')
+                Text('重置引擎配置与界面偏好；收藏、观测列表等用户数据保留').fontSize(10).fontColor(this.c.sub).width('100%')
+              }
+              .layoutWeight(1)
+              .alignItems(HorizontalAlign.Start)
+              .padding({ left: 10, right: 8 })
+              Button('重置', { type: ButtonType.Capsule })
+                .fontSize(13)
+                .fontColor(this.c.errorText)
+                .backgroundColor(this.c.errorBg)
+                .height(40)
+                .padding({ left: 24, right: 24 })
+                .margin({ right: 10 })
+            }
+            .height(48)
+            .width('100%')
+            .margin({ bottom: 4 })
+            .onClick(() => {
+              AlertDialog.show({
+                title: '恢复默认设置',
+                message: '将重置引擎配置与界面偏好；收藏、观测列表等用户数据会保留。需要重启应用生效。',
+                primaryButton: {
+                  value: '取消',
+                  action: () => {}
+                },
+                secondaryButton: {
+                  value: '恢复',
+                  action: () => { this.restoreCoreDefaults() }
+                }
+              })
+            })
             LanguageRow({ selectedLanguage: this.selectedLanguage, onSelect: (code: string) => { this.setLanguage(code) } })
             Text('行星历表').fontSize(12).fontColor(this.c.sub).width('100%').padding({ left: 8 }).margin({ top: 6, bottom: 4 })
             Text('用于行星位置计算的 JPL 数值星历。仅显示设备中已安装的文件。').fontSize(10).fontColor(this.c.sub).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 5 })

@@ -1,6 +1,5 @@
 ﻿import { Theme } from '@kit.ArkUI'
 import { I18n, LANGUAGE_DISPLAY, SUPPORTED_LANGUAGES } from '../../pages/I18n'
-import { LangOption } from '../../pages/StellariumTypes'
 import { UI_RADIUS_CONTROL } from '../../common/ui/UiTokens'
 import { AppFilingInfo } from '../../common/ui/AppFilingInfo'
 import { DEFAULT_SLOTS, ThemeSlots, slotsFromTheme } from '../../state/StellariumTheme'
@@ -10,7 +9,7 @@ import { DEFAULT_SLOTS, ThemeSlots, slotsFromTheme } from '../../state/Stellariu
 // `DevicePrivacySection` 内部直接渲染 `GyroscopeRow`，宿主只注入陀螺仪开关值与写回回调；
 // 语言行只用 `selectedLanguage` 与选中回调（其余颜色为内联常量）。
 
-// 语言选择行（横向可滚动 chip）。
+// 语言选择行：单 row，点击右侧当前值展开上下滚动的下拉选框。
 @Component
 export struct LanguageRow {
   @Prop selectedLanguage: string
@@ -21,35 +20,48 @@ export struct LanguageRow {
     this.c = slotsFromTheme(theme)
   }
 
+  private currentIndex(): number {
+    const index = SUPPORTED_LANGUAGES.indexOf(this.selectedLanguage)
+    return index < 0 ? 0 : index
+  }
+
+  private languageOptions(): SelectOption[] {
+    const options: SelectOption[] = []
+    for (let index = 0; index < SUPPORTED_LANGUAGES.length; index += 1) {
+      const code = SUPPORTED_LANGUAGES[index]
+      const option: SelectOption = { value: LANGUAGE_DISPLAY[code] ?? code }
+      options.push(option)
+    }
+    return options
+  }
+
   build() {
     Row() {
       Text(I18n.t('i0029'))
         .fontSize(14)
         .fontColor(this.c.text)
-        .width(72)
-      Scroll() {
-        Row({ space: 6 }) {
-          ForEach(SUPPORTED_LANGUAGES.map((code: string): LangOption => ({
-            code: code,
-            name: LANGUAGE_DISPLAY[code] ?? code
-          })), (lang: LangOption) => {
-            Text(lang.name)
-              .fontSize(12)
-              .fontColor(this.selectedLanguage === lang.code ? this.c.onAccent : this.c.chipInactiveText)
-              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-              .backgroundColor(this.selectedLanguage === lang.code ? this.c.accent : this.c.bg)
-              .borderRadius(UI_RADIUS_CONTROL)
-              .onClick(() => { this.onSelect(lang.code) })
-          }, (lang: LangOption) => lang.code)
-        }
-        .padding({ left: 4, right: 4 })
-      }
-      .layoutWeight(1)
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
+        .layoutWeight(1)
+      Select(this.languageOptions())
+        .selected(this.currentIndex())
+        .value(LANGUAGE_DISPLAY[this.selectedLanguage] ?? this.selectedLanguage)
+        .font({ size: 12 })
+        .fontColor(this.c.text)
+        .selectedOptionFontColor(this.c.onAccent)
+        .optionFontColor(this.c.text)
+        .backgroundColor(this.c.bg)
+        .selectedOptionBgColor(this.c.accent)
+        .optionBgColor(this.c.bg)
+        .width(170)
+        .onSelect((index: number, value: string) => {
+          const code = SUPPORTED_LANGUAGES[index]
+          if (code !== undefined) {
+            this.onSelect(code)
+          }
+        })
     }
     .height(40)
     .width('100%')
+    .padding({ left: 10, right: 10 })
   }
 }
 

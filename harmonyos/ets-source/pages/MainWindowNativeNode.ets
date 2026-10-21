@@ -1605,7 +1605,8 @@ export struct WindowNativeNode {
       copyConfigExportText: (text: string, successHint: ResourceStr): void => {
         copyTextToClipboard(this.hostPlatformPort, text, successHint, { flashHint: (hint: ResourceStr): void => this.flashHint(hint) })
       },
-      resetUiSettings: (): void => { this.settingsRepository.resetToDefaults() }
+      resetUiSettings: (): void => { this.settingsRepository.resetToDefaults() },
+      exitAppAfterRestore: (): void => { this.exitAppAfterRestore() }
     })
     // （解散 SettingsController）：信息模式 / 导航 / 星历 / 显示四域设置动作并回各 store。
     // 均复用同一 HostCommandPort；可观测状态写各 store（无 publish* 发布点，不注入 onChanged），
@@ -3418,9 +3419,21 @@ export struct WindowNativeNode {
     return next
   }
 
+  // 恢复默认设置成功后退出应用：main/restore_defaults 只在下一次启动时生效。
+  // 退出前再清空一次 UI 偏好，覆盖退出窗口内可能发生的 saveAppSettings 回写。
+  private exitAppAfterRestore(): void {
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+    setTimeout(() => {
+      this.settingsRepository.resetToDefaults().then(() => {
+        context.terminateSelf().catch(() => {})
+      }).catch(() => {
+        context.terminateSelf().catch(() => {})
+      })
+    }, 800)
+  }
+
   // 启动时从 Preferences 载入 UI 偏好；有数据时填充 AppStorage 镜像并触发现有恢复流程。
-  private async loadPersistedUiSettings(): Promise<void> {
-    const hasPersisted = await this.settingsRepository.load()
+  private async loadPersistedUiSettings(): Promise<void> {    const hasPersisted = await this.settingsRepository.load()
     if (!hasPersisted || this.persistedSettingsApplied) {
       return
     }
