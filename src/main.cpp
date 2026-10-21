@@ -128,8 +128,22 @@ void copyDefaultConfigFile(const QString& newPath)
 	QString defaultConfigFilePath = StelFileMgr::findFile("data/default_cfg.ini");
 	if (defaultConfigFilePath.isEmpty())
 		qFatal("ERROR copyDefaultConfigFile failed to locate data/default_cfg.ini. Please check your installation.");
-	QFile::copy(defaultConfigFilePath, newPath);
-	if (!StelFileMgr::exists(newPath))
+	// Copy by truncating the destination instead of QFile::copy(): copy() refuses
+	// to overwrite an existing file, so the restore-defaults path aborted whenever
+	// the previous config.ini could not be renamed away. Truncate always works.
+	QFile source(defaultConfigFilePath);
+	QFile destination(newPath);
+	if (!source.open(QIODevice::ReadOnly))
+		qFatal("ERROR copyDefaultConfigFile failed to open %s for reading.",
+			qPrintable(defaultConfigFilePath));
+	if (!destination.open(QIODevice::WriteOnly | QIODevice::Truncate))
+		qFatal("ERROR copyDefaultConfigFile failed to open %s for writing.",
+			qPrintable(newPath));
+	const QByteArray contents = source.readAll();
+	const qint64 written = destination.write(contents);
+	destination.close();
+	source.close();
+	if (contents.isEmpty() || written != contents.size())
 	{
 		qFatal("ERROR copyDefaultConfigFile failed to copy file %s  to %s. You could try to copy it by hand.",
 			qPrintable(defaultConfigFilePath), qPrintable(newPath));
