@@ -8,6 +8,7 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { systemShare } from '@kit.ShareKit'
 import { privacyManager } from '@kit.AppGalleryKit'
 import { hasCurrentPrivacyConsent } from '../qability/PrivacyConsent'
+import { isPresentationReady } from 'libentry.so'
 import { writeClipboardText } from '../qability/ClipboardService'
 import { fileIo, fileUri, picker } from '@kit.CoreFileKit'
 import { util } from '@kit.ArkTS'
@@ -1180,6 +1181,8 @@ export struct WindowNativeNode {
   @State private dockClockText: string = ''
   /** Dock 时钟的独立轻量刷新定时器（1s），不并入时间面板 125ms 高频刷新。 */
   private dockClockTimer: number = 0
+  /** 引擎（Qt 核心）已确认可响应命令；此前的轮询/回读全部跳过，避免同步桥调用堵塞 UI 线程。 */
+  private engineReady: boolean = false
   /** 时间域状态（速度档位索引/速率文本/恒星时/手工时间选择器）；换挡行为在 capability/TimeController.ets。 */
   @State private timeStore: TimeStore = new TimeStore()
   // 原生命令在下一渲染帧才生效。此窗口内忽略轮询到的旧速率，避免按钮
@@ -1379,6 +1382,8 @@ export struct WindowNativeNode {
     if (!foreground && this.guideStore.guideState.phase === 'observing') this.guideCtl().pausePlayer()
     this.objectModelRendererCtl().setForeground(foreground)
     if (foreground) {
+      // 回前台时引擎可能已被外部（CLI/配置）改变；引擎就绪后立即同步一次 UI store。
+      if (this.engineReady) this.refreshStateNow()
       if (this.foregroundRefreshPaused) {
         this.foregroundRefreshPaused = false
         if (this.activePanel === 'time' && this.panelVisible) {
@@ -2461,7 +2466,10 @@ export struct WindowNativeNode {
           runSelftest: (): void => this.selfTestCtl().selfTestAllActions(),
           restoreObserverLocation: (): void => { this.locationCtl().restoreObserverLocation() },
           setScriptMetadata: (raw: Object | undefined): void => { this.scriptPlaybackCtl().setScriptMetadata(raw) },
-          reloadConfigurationSettings: (): void => { this.settingsCtl().loadConfigurationSettings() }
+          reloadConfigurationSettings: (): void => { this.settingsCtl().loadConfigurationSettings() },
+          // 引擎启动确认后由 StartupBridge 调用；立即读引擎状态，不排队、不延时。
+          refreshRuntimeState: (): void => { this.engineReady = true; this.refreshStateNow() },
+          enginePresentationReady: (): boolean => isPresentationReady()
         },
         this.skyCultureViewStore, this.pluginStore, this.nightModeStore, this.telescopeStore,
         this.gyroStore, this.languageStore, this.audioStore, this.viewSettingsStore,
@@ -6433,6 +6441,9 @@ export struct WindowNativeNode {
   }
 
   private refreshDockClock(): void {
+    // 引擎未就绪时 command() 会同步等待 Qt 线程（启动期还在加载插件），
+    // 反复轮询会把 UI 线程占满并触发 appfreeze。就绪由 StartupBridge 事件置位。
+    if (!this.engineReady) { return }
     this.callInteractive('getSimulationTime', '', (r: StellariumBridgeResponse) => {
       if (r.ok !== true || r.jd === undefined) { return }
       const jd: number = r.jd as number
@@ -6806,6 +6817,7 @@ export struct WindowNativeNode {
     if (result.actionShow_Hips_Surveys !== undefined) this.layerStore.hipsSurveys = result.actionShow_Hips_Surveys === true
     if (result.actionShow_Toast_Survey !== undefined) this.layerStore.toastSurvey = result.actionShow_Toast_Survey === true
     this.layerStore.meteors = result.meteors === true
+    if (result.satHints !== undefined) this.satelliteStore.satHints = result.satHints === true
     if (result.bortleScale !== undefined) this.layerViewStore.bortleScale = Math.round(result.bortleScale as number)
     if (result.milkyWayIntensity !== undefined) this.layerViewStore.milkyWayBright = Math.max(0, Math.min(6, Math.round((result.milkyWayIntensity as number) * 3)))
     if (result.luminanceAdaptation !== undefined) this.layerStore.luminanceAdaptation = result.luminanceAdaptation === true

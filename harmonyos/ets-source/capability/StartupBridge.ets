@@ -49,11 +49,18 @@ export interface StartupHooks {
   setScriptMetadata(raw: Object | undefined): void
   // 配置回读加载由 capability/SettingsController 提供；本服务不持有该控制器，经此 hook 触发。
   reloadConfigurationSettings(): void
+  // 引擎就绪后回读一次完整运行时状态（getState），把图层/快捷面板等 UI store
+  // 与 config.ini 中的引擎值对齐。宿主持有该刷新逻辑。
+  refreshRuntimeState(): void
+  // 引擎是否已开始呈现画面（native 原子量，不经过 Qt 线程）。
+  // 未就绪前不得向 Qt 队列投放命令：启动期同步桥调用会拖死 UI 线程导致 appfreeze。
+  enginePresentationReady(): boolean
 }
 
 export class StartupBridge {
   private port: CommandPort
   private hooks: StartupHooks
+  private startupTasksStarted: boolean = false
   private skyCultureViewStore: SkyCultureViewStore
   private pluginStore: PluginStore
   private nightModeStore: NightModeStore
@@ -103,20 +110,45 @@ export class StartupBridge {
   }
 
   // 启动期只用一个轻量查询确认 Qt 核心就绪；成功后拉取天文化列表并放行后续启动任务。
+  // 就绪判断走 native 呈现状态（纯原子量读取），未出帧前一个命令都不发。
   startupBridgeSync(): void {
     if (this.hooks.bridgeSyncStarted()) { return }
     this.hooks.setBridgeSyncStarted(true)
+    this.awaitEngineReady(0)
+  }
+
+  private awaitEngineReady(attempt: number): void {
+    if (this.hooks.enginePresentationReady()) {
+      this.requestSkyCultures(0)
+      return
+    }
+    // 30s 上限：仍不就绪时保持启动壳，不再向队列投放命令（避免拖死 UI 线程）。
+    if (attempt >= 150) { return }
+    setTimeout(() => this.awaitEngineReady(attempt + 1), 200)
+  }
+
+  private requestSkyCultures(attempt: number): void {
     this.port.requestWhenReady("getSkyCultures", "", (r: StellariumBridgeResponse) => {
+      if ((r.ok !== true || !Array.isArray(r.items)) && attempt < 10) {
+        setTimeout(() => this.requestSkyCultures(attempt + 1), 500)
+        return
+      }
       if (r.ok !== true || !Array.isArray(r.items)) { return }
       this.skyCultureViewStore.skyCultures = r.items as string[]
       this.skyCultureViewStore.currentSkyCulture = r.current as string
       this.hooks.dismissSplash()
+      // 引擎已确认可响应命令：先同步一次完整运行时状态（图层/快捷面板等 UI store），
+      // 再放行其余启动任务。这是事件驱动的时序，不依赖定时器。
+      this.hooks.refreshRuntimeState()
       this.runStartupBridgeTasks()
     })
   }
 
   // 分批执行其余启动查询。
   runStartupBridgeTasks(): void {
+    // 只放行一次：重复调用会把每条查询的重试链叠加，启动期直接把 UI 线程压死。
+    if (this.startupTasksStarted) { return }
+    this.startupTasksStarted = true
     const tasks: Array<() => void> = [
       () => this.port.requestWhenReady('setLanguage', this.languageStore.selectedLanguage, () => {}),
       () => this.layerViewStore.loadLandscapeList(),
@@ -165,6 +197,14 @@ export class StartupBridge {
     // 夜间模式由 QAbility 的首帧缓存 + 后续 getNightMode 回读负责，不在此下发。
     this.port.requestWhenReady('getMountMode', '', (r: StellariumBridgeResponse) => {
       this.telescopeStore.equatorialMount = r.equatorial === true
+    })
+    // 星等上限以引擎为准（config.ini astro/star_magnitude_limit）；启动时回读，
+    // 避免滑块显示值与实际渲染上限不一致。
+    this.port.requestWhenReady('getLimitMagnitude', '', (r: StellariumBridgeResponse) => {
+      const customLimit = r.customStarMagLimit
+      if (typeof customLimit === 'number' && Number.isFinite(customLimit)) {
+        this.layerViewStore.starMagLimit = customLimit
+      }
     })
     // 语言同样是引擎行为：从 getAppState 回读 config.ini 的 app_locale，
     // 只刷新 ArkUI 的翻译器与显示状态，不再把 UI 缓存下发回引擎。
