@@ -3790,6 +3790,8 @@ QJsonObject currentStateJson()
 
 		if (SporadicMeteorMgr* mmgr = GETSTELMODULE(SporadicMeteorMgr))
 			result["meteors"] = mmgr->getFlagShow();
+		if (auto* satellites = static_cast<Satellites*>(StelApp::getInstance().getModuleMgr().getModule(QStringLiteral("Satellites"), true)))
+			result["satHints"] = satellites->getFlagHintsVisible();
 		if (NebulaMgr* nmgr = GETSTELMODULE(NebulaMgr))
 			result["dsoLabels"] = nmgr->getDesignationUsage();
 		if (movementMgr)
@@ -10905,7 +10907,12 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				// The custom value alone is inert in Stellarium. It takes effect only
 				// while the explicit user magnitude-limit flag is enabled.
 				drawer->setFlagStarMagnitudeLimit(true);
-				drawer->setCustomStarMagnitudeLimit(std::clamp(mag, 2.0, 9.0));
+				drawer->setCustomStarMagnitudeLimit(std::clamp(mag, 2.0, 21.0));
+				// Keep the limit across restarts: the setters above use the
+				// gated immediateSave(), which is disabled by default on OHOS.
+				StelApp::immediateSaveNow("astro/flag_star_magnitude_limit", true);
+				StelApp::immediateSaveNow("astro/star_magnitude_limit",
+					drawer->getCustomStarMagnitudeLimit());
 				result["ok"] = true;
 				result["customStarMagLimit"] = drawer->getCustomStarMagnitudeLimit();
 				result["starMagnitudeLimitEnabled"] = drawer->getFlagStarMagnitudeLimit();

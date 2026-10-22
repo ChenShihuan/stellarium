@@ -66,7 +66,7 @@ export struct LayerSkyTab {
         Slider({
           value: this.layerViewStore.starMagLimit,
           min: 2.0,
-          max: 9.0,
+          max: this.layerViewStore.starMagLimitMax,
           step: 0.5,
           style: SliderStyle.OutSet
         })
@@ -78,7 +78,7 @@ export struct LayerSkyTab {
           .onChange((value: number) => {
             this.onStarMagLimit(Math.round(value * 10) / 10)
           })
-        Text(this.layerViewStore.starMagLimit.toFixed(1)).fontSize(12).fontColor(this.c.text).width(28).textAlign(TextAlign.End)
+        Text(this.layerViewStore.starMagLimit.toFixed(1)).fontSize(12).fontColor(this.c.text).width(36).textAlign(TextAlign.End)
       }.height(34).width('100%').padding({ left: 10, right: 10 }).margin({ bottom: 4 })
       LayerSwitchRow({ label: '亮星光晕', isOn: this.layerStore.bigStarHalo, onToggle: (value: boolean) => { this.onToggleLayer('bigStarHalo', 'setSkyDisplayBigStarHalo', value) } })
       LayerSwitchRow({ label: '星芒效果', isOn: this.layerStore.starSpiky, onToggle: (value: boolean) => { this.onToggleLayer('starSpiky', 'setSkyDisplayStarSpiky', value) } })
