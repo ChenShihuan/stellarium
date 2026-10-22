@@ -3117,6 +3117,15 @@ QJsonObject selectedObjectJson(StelCore* core = nullptr, bool includeDetails = f
 		if (!catalogId.isEmpty())
 			result["catalogId"] = catalogId;
 	}
+	// Stars always carry a Hipparcos/Gaia identifier. Expose it even when the
+	// localized name is already non-empty, so the detail card can show both the
+	// proper name and the catalog number.
+	if (object->getType() == QLatin1String("Star"))
+	{
+		const QString starId = object->getID().trimmed();
+		if (!starId.isEmpty())
+			result["catalogId"] = starId;
+	}
 	const QJsonObject detailMedia = constellationDetailMediaJson(object);
 	for (auto it = detailMedia.constBegin(); it != detailMedia.constEnd(); ++it)
 		result[it.key()] = it.value();
