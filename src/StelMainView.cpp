@@ -18299,8 +18299,47 @@ void StelMainView::renderOhosFrameNow()
 
 	StelApp& app = StelApp::getInstance();
 	app.setDevicePixelsPerPixel(devicePixelRatioF());
-	gl->glBindFramebuffer(GL_FRAMEBUFFER, glWidget->defaultFramebufferObject());
+	const GLuint targetFbo = glWidget->defaultFramebufferObject();
+	gl->glBindFramebuffer(GL_FRAMEBUFFER, targetFbo);
 	gl->glViewport(0, 0, width, height);
+	// During the launch transition OHOS may hand us a surface whose framebuffer
+	// has no complete attachments yet. Drawing into it makes every GL call fail
+	// (Planet.cpp asserts on the first GL error) even though the next resize
+	// would fix it, so skip the frame until the target is complete.
+	if (QOpenGLExtraFunctions* extraFunctions = currentContext->extraFunctions())
+	{
+		const GLenum status = extraFunctions->glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		const bool incomplete = status == GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT ||
+			status == GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT ||
+#if defined(GL_FRAMEBUFFER_UNDEFINED)
+			// GLES3 returns this for the default framebuffer while the OHOS
+			// surface has no buffers yet (the 105x231 launch window).
+			status == GL_FRAMEBUFFER_UNDEFINED ||
+#endif
+#if defined(GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS)
+			status == GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS ||
+#endif
+			status == GL_FRAMEBUFFER_UNSUPPORTED ||
+#if defined(GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE)
+			status == GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE ||
+#endif
+#if defined(GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS)
+			status == GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS ||
+#endif
+			false;
+		if (incomplete)
+		{
+			static int s_incompleteFboSkips = 0;
+			if (s_incompleteFboSkips < 3)
+			{
+				qWarning().nospace() << "OHOS framebuffer incomplete (0x" << Qt::hex << status
+					<< "), skipping frame " << glWidget->width() << "x" << glWidget->height();
+				++s_incompleteFboSkips;
+			}
+			requestOhosSceneRepaint();
+			return;
+		}
+	}
 
 	const double t2 = StelApp::getTotalRunTime();
 	ohosUpdatePointTracking();
