@@ -8,7 +8,7 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { systemShare } from '@kit.ShareKit'
 import { privacyManager } from '@kit.AppGalleryKit'
 import { hasCurrentPrivacyConsent } from '../qability/PrivacyConsent'
-import { isPresentationReady } from 'libentry.so'
+import { isEngineReady } from 'libentry.so'
 import { writeClipboardText } from '../qability/ClipboardService'
 import { fileIo, fileUri, picker } from '@kit.CoreFileKit'
 import { util } from '@kit.ArkTS'
@@ -2469,7 +2469,9 @@ export struct WindowNativeNode {
           reloadConfigurationSettings: (): void => { this.settingsCtl().loadConfigurationSettings() },
           // 引擎启动确认后由 StartupBridge 调用；立即读引擎状态，不排队、不延时。
           refreshRuntimeState: (): void => { this.engineReady = true; this.refreshStateNow() },
-          enginePresentationReady: (): boolean => isPresentationReady()
+          // Startbridge 的「引擎就绪」以 StelApp::isInitialized() 为准：
+          // 出帧就绪可能早于 init 完成，提前投放查询会在 init 期间堆积重试链。
+          enginePresentationReady: (): boolean => isEngineReady()
         },
         this.skyCultureViewStore, this.pluginStore, this.nightModeStore, this.telescopeStore,
         this.gyroStore, this.languageStore, this.audioStore, this.viewSettingsStore,

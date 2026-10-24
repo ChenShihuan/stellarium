@@ -4623,6 +4623,14 @@ static QJsonObject archiveVideoFrames()
 
 }
 
+// Cheap readiness probe for ArkUI: no Qt round-trip, no command queue. ArkTS
+// must not queue bridge commands before StelApp::init() finishes, otherwise the
+// 200ms retry chains pile up and block the UI thread (appfreeze at startup).
+extern "C" __attribute__((visibility("default"))) bool StellariumOhos_isInitialized()
+{
+	return StelApp::isInitialized();
+}
+
 extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_command(const char* command, const char* payload)
 {
 	static QByteArray response;

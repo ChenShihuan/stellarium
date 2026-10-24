@@ -718,6 +718,26 @@ StellariumCommandFunc resolveStellariumCommand()
     return command;
 }
 
+using StellariumReadyFunc = bool (*)();
+
+static StellariumReadyFunc resolveStellariumReady()
+{
+    // Same rule as resolveStellariumCommand(): only look at an already loaded
+    // engine, never trigger its initial load from the ArkUI thread.
+    void* handle = dlopen("libstellarium.so", RTLD_NOW | RTLD_NOLOAD);
+    if (!handle)
+        return nullptr;
+    return reinterpret_cast<StellariumReadyFunc>(dlsym(handle, "StellariumOhos_isInitialized"));
+}
+
+static napi_value IsEngineReady(napi_env env, napi_callback_info info)
+{
+    StellariumReadyFunc ready = resolveStellariumReady();
+    napi_value result;
+    napi_get_boolean(env, ready != nullptr && ready(), &result);
+    return result;
+}
+
 static napi_value Command(napi_env env, napi_callback_info info)
 {
     size_t argc = 2;
@@ -776,6 +796,9 @@ static napi_value Init(napi_env env, napi_value exports)
         // 纯原子量读取，不经过 Qt 线程：ArkTS 用它判断引擎是否已开始出帧，
         // 未就绪前不向 Qt 队列投放任何命令（启动期同步桥调用会拖死 UI 线程）。
         { "isPresentationReady", nullptr, IsPresentationReady, nullptr, nullptr, nullptr, napi_default, nullptr },
+        // StelApp::isInitialized()：引擎真正初始化完成（早于出帧），
+        // 启动查询必须等它，否则重试链在 init 期间堆积触发 appfreeze。
+        { "isEngineReady", nullptr, IsEngineReady, nullptr, nullptr, nullptr, napi_default, nullptr },
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     registerNativeXComponent(env, exports);
