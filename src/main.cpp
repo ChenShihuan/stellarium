@@ -399,10 +399,21 @@ int main(int argc, char **argv)
 			if (QFileInfo::exists(backupFile))
 				QFile(backupFile).remove();
 
-			QFile(configFileFullPath).rename(backupFile);
+			// QSaveFile leaves config.ini.XXXXXX temp files behind when the app is
+			// killed mid-save; they would survive the reset as leftovers.
+			const QFileInfo configInfo(configFileFullPath);
+			QDir configDir = configInfo.dir();
+			const QStringList staleConfigs = configDir.entryList(
+				QStringList() << (configInfo.fileName() + QStringLiteral(".*")), QDir::Files);
+			for (const QString& stale : staleConfigs)
+				configDir.remove(stale);
+
+			// Restore in place (truncate + write). No backup copy: the user asked for a
+			// complete reset with no leftovers, and keeping config.old also kept the old
+			// night-mode / viewing flags around as a second authoritative file.
 			copyDefaultConfigFile(configFileFullPath);
 			confSettings = new QSettings(configFileFullPath, StelIniFormat);
-			qWarning().noquote() << "Resetting defaults config file. Previous config file was backed up in" << QDir::toNativeSeparators(backupFile);
+			qWarning().noquote() << "Resetting defaults config file. Previous config file was removed.";
 			clearCache();
 		}
 	}

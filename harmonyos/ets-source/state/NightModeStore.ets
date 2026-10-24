@@ -28,8 +28,14 @@ export class NightModeStore {
       this.pendingNightMode = undefined
       this.pendingNightModeUntilMs = 0
     }
+    const changed = this.nightMode !== engineNight
     this.nightMode = engineNight
     AppStorage.setOrCreate('stellariumNightMode', engineNight)
+    // Keep the first-frame cache in step with the engine. It used to be written
+    // only by ArkTS-initiated toggles, so a night mode restored from config.ini
+    // (or changed through the CLI) left the next launch's splash/UI in day mode
+    // until the engine sync arrived.
+    if (changed) { this.persistNightMode() }
   }
 
   // 夜间模式写回：用带回执的交互请求，失败自动重试一次，避免首击命令丢失。

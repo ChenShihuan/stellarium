@@ -3435,11 +3435,31 @@ export struct WindowNativeNode {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext
     setTimeout(() => {
       this.settingsRepository.resetToDefaults().then(() => {
+        return this.clearUiBehaviorPreferences()
+      }).then(() => {
         context.terminateSelf().catch(() => {})
       }).catch(() => {
         context.terminateSelf().catch(() => {})
       })
     }, 800)
+  }
+
+  // 「恢复默认」必须连 UI 行为缓存一起清掉：夜间模式/快捷面板排序/信息窗模式各自
+  // 存在独立 Preferences 里，只清 stellarium_ui 会让下次启动继续用夜间首帧主题。
+  private async clearUiBehaviorPreferences(): Promise<void> {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+    const storeNames: string[] = [NIGHT_MODE_STORE, QUICK_PANEL_STORE, INFO_WINDOW_STORE]
+    for (let index = 0; index < storeNames.length; index++) {
+      try {
+        const store = await preferences.getPreferences(ctx, storeNames[index])
+        await store.clear()
+        await store.flush()
+      } catch (error) {
+        hilog.warn(0x0000, 'StellariumArkUI', '[reset] clear preference failed: %{public}s', storeNames[index])
+      }
+    }
+    this.nightModeStore.nightMode = false
+    AppStorage.setOrCreate('stellariumNightMode', false)
   }
 
   // 启动时从 Preferences 载入 UI 偏好；有数据时填充 AppStorage 镜像并触发现有恢复流程。
