@@ -149,7 +149,7 @@ export struct SettingsPanel {
               .clickEffect({ level: ClickEffectLevel.LIGHT })
               .animation({ duration: 180, curve: curves.springMotion(0.5, 1.0) })
               .onClick(() => { this.selectConfigTab(tab.id) })
-          }, (tab: TabItem, index: number) => tab.id.toString())
+          }, (tab: TabItem, index: number) => tab.id.toString() + '-' + this.i18nLang)
           }.padding({ left: 2, right: 2 })
         }.width('100%').height(34).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
           .margin({ top: 4, bottom: 8 }).id('config-tabs-' + this.i18nLang)
