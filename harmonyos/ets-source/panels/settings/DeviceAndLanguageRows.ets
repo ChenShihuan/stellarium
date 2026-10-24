@@ -14,10 +14,19 @@ import { DEFAULT_SLOTS, ThemeSlots, slotsFromTheme } from '../../state/Stellariu
 export struct LanguageRow {
   @Prop selectedLanguage: string
   @State c: ThemeSlots = DEFAULT_SLOTS
+  // 主题槽位 bg 是半透明色，Select 菜单默认还叠了一层 COMPONENT_ULTRA_THICK
+  // 模糊材质（浅色），夜间会变成白底红字。菜单必须用不透明夜间底色并关掉模糊。
+  @StorageLink('stellariumNightMode') private nightMode: boolean = false
   onSelect: (code: string) => void = () => {}
 
   onWillApplyTheme(theme: Theme): void {
     this.c = slotsFromTheme(theme)
+  }
+
+  private menuBackground(): ResourceColor {
+    // 日间主题的文字是白色（#E5FFFFFF），弹层必须用不透明的深色面板底，
+    // 否则白字落在近白菜单上完全不可读。夜间沿用深红黑。
+    return this.nightMode ? '#150505' : '#101E2C'
   }
 
   private currentIndex(): number {
@@ -50,7 +59,10 @@ export struct LanguageRow {
         .optionFontColor(this.c.text)
         .backgroundColor(this.c.bg)
         .selectedOptionBgColor(this.c.accent)
-        .optionBgColor(this.c.bg)
+        .optionBgColor(this.menuBackground())
+        .menuBackgroundColor(this.menuBackground())
+        // 默认 COMPONENT_ULTRA_THICK 会在不透明底色上再叠一层浅色材质。
+        .menuBackgroundBlurStyle(BlurStyle.NONE)
         .width(170)
         .onSelect((index: number, value: string) => {
           const code = SUPPORTED_LANGUAGES[index]
