@@ -6,6 +6,7 @@ import Window from '@ohos.window'
 import hilog from '@ohos.hilog';
 import deviceInfo from '@ohos.deviceInfo';
 import preferences from '@ohos.data.preferences';
+import { fileIo } from '@kit.CoreFileKit';
 import BuildProfile from 'BuildProfile';
 import qpa from 'libqohos.so';
 import { command } from 'libentry.so';
@@ -995,10 +996,34 @@ export default class QAbility extends UIAbility {
   private async readEarlyNightMode(): Promise<void> {
     try {
       const store = await preferences.getPreferences(this.context, NIGHT_MODE_STORE);
-      const nightMode = store.getSync('nightMode', false) as boolean;
+      const cached = store.getSync('nightMode', false) as boolean;
+      // The engine config is authoritative. The first-frame splash must match
+      // config.ini (viewing/flag_night), otherwise a stale preference shows a
+      // red night splash while the engine is actually in day mode.
+      const engineNight = this.readNightModeFromEngineConfig();
+      const nightMode = engineNight === undefined ? cached : engineNight;
+      if (engineNight !== undefined && engineNight !== cached) {
+        await store.put('nightMode', engineNight);
+        await store.flush();
+      }
       AppStorage.setOrCreate('stellariumNightMode', nightMode);
     } catch (e) {
       AppStorage.setOrCreate('stellariumNightMode', false);
+    }
+  }
+
+  private readNightModeFromEngineConfig(): boolean | undefined {
+    try {
+      const path = this.context.filesDir + '/stellarium_userdir/config.ini';
+      const text = fileIo.readTextSync(path);
+      const match = text.match(/^\s*flag_night\s*=\s*([A-Za-z0-9]+)/m);
+      if (match === null || match.length < 2) {
+        return undefined;
+      }
+      const value = match[1].toLowerCase();
+      return value === 'true' || value === '1';
+    } catch (e) {
+      return undefined;
     }
   }
 
