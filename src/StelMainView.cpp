@@ -4888,8 +4888,10 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				// Event lookup is read-only. Restoring both camera vectors prevents
 				// a satellite pass query from changing the horizon or selecting the
 				// opposite roll branch before the UI starts its animated jump.
-				movementMgr->setViewDirectionJ2000(originalView);
+				// Up first: setViewDirectionJ2000() re-reads the up vector, so the
+				// previous order applied the old roll and only stored the new one.
 				movementMgr->setViewUpVectorJ2000(originalUp);
+				movementMgr->setViewDirectionJ2000(originalView);
 			};
 			double targetJD = 0.0;
 			int year = 0, month = 0, day = 0;
@@ -6843,9 +6845,10 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			const Vec3d viewUp = movementMgr->getViewUpVectorJ2000();
 			const bool preserveDirection = !movementMgr->getFlagTracking();
 			core->setJD(core->getJD() + hours / 24.0);
+			// Up first: setViewDirectionJ2000() re-reads the up vector.
+			movementMgr->setViewUpVectorJ2000(viewUp);
 			if (preserveDirection)
 				movementMgr->setViewDirectionJ2000(viewDirection);
-			movementMgr->setViewUpVectorJ2000(viewUp);
 			markOhosInteraction();
 			result["ok"] = true;
 			result["jd"] = core->getJD();
@@ -9222,9 +9225,10 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 			const Vec3d viewUp = movementMgr->getViewUpVectorJ2000();
 			const bool preserveDirection = !movementMgr->getFlagTracking();
 			core->setJD(jd);
+			// Up first: setViewDirectionJ2000() re-reads the up vector.
+			movementMgr->setViewUpVectorJ2000(viewUp);
 			if (preserveDirection)
 				movementMgr->setViewDirectionJ2000(viewDirection);
-			movementMgr->setViewUpVectorJ2000(viewUp);
 			core->setTimeRate(0.0);
 			result["ok"] = true;
 			result["jd"] = jd;
@@ -11555,8 +11559,9 @@ extern "C" __attribute__((visibility("default"))) const char* StellariumOhos_com
 				// Rise/transit/set is a read-only query. It must not leave the
 				// camera in a different orientation after probing neighbouring
 				// dates, especially while a selected satellite is screen-anchored.
-				movementMgr->setViewDirectionJ2000(originalView);
+				// Up first: setViewDirectionJ2000() re-reads the up vector.
 				movementMgr->setViewUpVectorJ2000(originalUp);
+				movementMgr->setViewDirectionJ2000(originalView);
 			};
 
 			const SatelliteP satellite = qSharedPointerDynamicCast<Satellite>(object);
