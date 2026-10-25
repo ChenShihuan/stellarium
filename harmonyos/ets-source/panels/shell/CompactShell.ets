@@ -1,6 +1,6 @@
 import { curves, Theme } from '@kit.ArkUI'
 import { ShellAction } from '../../pages/StellariumTypes'
-import { BottomDock } from './BottomDock'
+import { BottomNav } from '../../common/nav/BottomNav'
 import { CompactTopQuickControls } from './CompactTopQuickControls'
 import { DockClockLayer, DockFovLayer, SkyZoomLayer } from './PanelChromeExtras'
 import { GyroCalibPanel } from '../sensors/GyroCalibPanel'
@@ -156,7 +156,7 @@ export struct CompactShell {
         .zIndex(1)
 
       Row() {
-         BottomDock({
+         BottomNav({
           actions: this.actions, isExpanded: this.isExpandedLayout,
           panelVisible: this.panelVisible, chromeOpacity: this.chromeOpacity,
           isGlass: this.chromeIsGlass, widthPercent: this.dockWidthPercent,

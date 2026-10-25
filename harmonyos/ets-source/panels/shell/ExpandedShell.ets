@@ -1,6 +1,6 @@
 import { curves, Theme } from '@kit.ArkUI'
 import { ShellAction } from '../../pages/StellariumTypes'
-import { BottomDock } from './BottomDock'
+import { BottomNav } from '../../common/nav/BottomNav'
 import { DockClockLayer, DockFovLayer, SkyZoomLayer } from './PanelChromeExtras'
 import { GyroCalibPanel } from '../sensors/GyroCalibPanel'
 import { ObjectDetailConnectorLayer } from '../overlay/ObjectDetailConnectorLayer'
@@ -150,7 +150,7 @@ export struct ExpandedShell {
       // Pad 横屏把入口统一放到底部 Dock，避免左侧竖轨侵占观测区。
       if (this.expandedUiAllowed) {
         Row() {
-          BottomDock({
+          BottomNav({
             actions: this.actions, isExpanded: this.isExpandedLayout,
             panelVisible: this.panelVisible, chromeOpacity: this.chromeOpacity,
             isGlass: this.chromeIsGlass, widthPercent: this.dockWidthPercent,

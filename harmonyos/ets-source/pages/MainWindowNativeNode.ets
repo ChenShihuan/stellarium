@@ -42,6 +42,7 @@ import { primaryDockActions, moreActions, observingHubActions, skyDataHubActions
 import { quickActionById, quickCandidateRowsFor } from '../common/derive/quickActions'
 import { pointInsideRect, pointOverlapsUiObstacle, touchScreenX, touchScreenY, touchWindowX, touchWindowY, azBarHeight, compactTopQuickY, baseCompactObjectPeekY, expandedDetailSummaryHeight, isPhoneDetailPeek, useTabletObjectInspector, useExpandedDetailSummary, railTop, expandedMainPanelLeft, panelLeft, panelRight, baseExpandedDetailSummaryX, baseExpandedDetailSummaryY, baseTabletInspectorX, baseTabletInspectorY, tabletInspectorHeight, baseBottomCardX, baseBottomCardY, expandedDockWidth, expandedDockLeft, dockWidthPixels, dockLeft, chromeRowPosXLeft, chromeRowPosXRight, guideCardHeight, guideCardX, guideCardY, scriptControlWidth, scriptControlX, scriptControlY, isPanelBackPoint, isDockPoint, isObjectDetailCardPoint, canShowExpandedDetailSummary, expandedDetailSummaryWidth } from '../common/derive/geometry'
 import { catalogIconForModule, catalogIconForObjectType, wutCategoryOptions, wutCategoryKey, wutDirectionLabel } from '../common/derive/catalog'
+import { bottomNavHeight, bottomNavTop, NAV_PANEL_GAP } from '../common/nav/BottomNavMetrics'
 import { objectInspectorFallbackVisualKind, objectInspectorStarColor } from '../common/derive/media'
 import { BridgeClient } from '../bridge/BridgeClient'
 import { CommandPort } from '../bridge/CommandPort'
@@ -5204,16 +5205,12 @@ export struct WindowNativeNode {
   }
 
   private dockTop(): number {
-    // ExpandedShell draws the dock at skyHeight - 62 with a fixed 54vp height,
-    // so the hit target and the panels must use that same baseline.
-    if (this.isExpandedLayout) {
-      return Math.max(0, this.skyHeight - 62)
-    }
-    return Math.max(0, this.skyHeight - this.dockHeight() - this.dockBottomClearance())
+    // 与 ExpandedShell / CompactShell 的 Dock 绘制共用同一基线（§12 导航基底）。
+    return bottomNavTop(this.isExpandedLayout, this.skyHeight, this.dockBottomClearance())
   }
 
   private dockHeight(): number {
-    return this.isExpandedLayout ? 54 : 66
+    return bottomNavHeight(this.isExpandedLayout)
   }
 
   private isLargeDesktopCanvas(): boolean {
@@ -5238,16 +5235,16 @@ export struct WindowNativeNode {
   }
 
   private compactPanelBottom(): number {
-    return this.dockTop() - 10
+    return this.dockTop() - NAV_PANEL_GAP
   }
 
   private panelTop(): number {
     return this.isExpandedLayout ? this.expandedPanelTop() : (this.EDGE_MARGIN + this.panelOffsetY)
   }
 
-  // 展开布局的底部面板可用高度：Dock 上沿 - 10vp 间距 - 顶部安全边距。
+  // 展开布局的底部面板可用高度：Dock 上沿 - 面板间距 - 顶部安全边距。
   private expandedPanelUsableHeight(): number {
-    return Math.max(220, this.dockTop() - 10 - this.EDGE_MARGIN)
+    return Math.max(220, this.dockTop() - NAV_PANEL_GAP - this.EDGE_MARGIN)
   }
 
   // 展开布局面板高度：quick 由内容决定并可拖拽展开；时间与手机一致，默认 0.6
@@ -5266,9 +5263,9 @@ export struct WindowNativeNode {
     return usable
   }
 
-  // 底部对齐：面板下沿固定在 Dock 上方 10vp。
+  // 底部对齐：面板下沿固定在 Dock 上方 NAV_PANEL_GAP。
   private expandedPanelTop(): number {
-    return Math.max(this.EDGE_MARGIN, this.dockTop() - 10 - this.expandedPanelHeight())
+    return Math.max(this.EDGE_MARGIN, this.dockTop() - NAV_PANEL_GAP - this.expandedPanelHeight())
   }
 
   private objectInspectorInlineModelSize(): number {

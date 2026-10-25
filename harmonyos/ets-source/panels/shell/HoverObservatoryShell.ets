@@ -1,6 +1,6 @@
 import { Theme } from '@kit.ArkUI'
 import { ShellAction } from '../../pages/StellariumTypes'
-import { BottomDock } from './BottomDock'
+import { BottomNav } from '../../common/nav/BottomNav'
 import { ObjectDetailConnectorLayer } from '../overlay/ObjectDetailConnectorLayer'
 import { UnifiedObjectDetailCard } from '../object/UnifiedObjectDetailCard'
 import { ObjectDetailStore } from '../../state/ObjectDetailStore'
@@ -171,7 +171,7 @@ export struct HoverObservatoryShell {
         .hitTestBehavior(HitTestMode.None)
 
       Row() {
-        BottomDock({
+        BottomNav({
           actions: this.actions, isExpanded: this.isExpandedLayout,
           panelVisible: this.panelVisible, chromeOpacity: this.chromeOpacity,
           isGlass: this.chromeIsGlass, widthPercent: this.dockWidthPercent,
