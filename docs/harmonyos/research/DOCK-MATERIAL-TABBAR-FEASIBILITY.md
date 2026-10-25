@@ -375,6 +375,19 @@ panels/shell/BottomDock.ets          // 皮肤 B：现有自绘（保留，作�
 
 **结论**：T0 可上线（行为不变）；T1 保留为可切换皮肤，`DEFAULT_BOTTOM_NAV_SURFACE` 仍为 `CUSTOM`。剩余 T2 工作：栏宽回填 → 读数行/命中/面板锚点跟随；夜间主题取舍；`auto` 默认切换与验收矩阵全跑。
 
+**真机补充实测（SGT-AL00B / HarmonyOS 7.0.0 / API 26，surface=system 临时切换）**
+
+| 观察 | 结论 |
+|---|---|
+| 连接方式 | `hdc tconn <ip>:<port>` 可用；`devecocli run --skip-build --device <serial>` 可直接安装/拉起 |
+| 明亮地景上材质清晰可见，但整条栏被染成**黄绿色** | 系统材质的互补色适配生效；与当前中性/夜间红色调冲突，需产品确认或用 26 的 `materialColor` 压制 |
+| 页签栏盒子 `[0,2552,1280,2783]`（66vp），宿主 `dockTop` 对应 713–779vp，实际视觉在 729–795vp | 视觉与命中基线相差 **16vp**（CompactShell 绘制在 `skyHeight - 80`，宿主按 `skyHeight - 96` 计算），栏底部约 16vp 不可点 |
+| 点按页签（y=2715）能打开“图层”面板 | 宿主命中层仍生效；`hitTestBehavior(None)` 未拦截 |
+| 手机端栏宽 ≈350vp，与 chrome 行宽度接近 | 手机端偶然对齐；平板端 328vp vs 640vp 的偏差仍需宽度回填 |
+| 真机在测试尾声锁屏，`aa start` 返回 10106102 | 与代码无关；后续手势/夜间模式验收需解锁后继续 |
+
+> 真机结论：**材质确实存在且效果明显**，但"视觉盒子 ≠ 命中盒子"和配色是启用前必须解决的问题；这也是 §12.7 把 T2 单独列出的原因。
+
 ## 13. 参考
 
 - 本地文档：`API参考/UI_Design_Kit_UI设计套件/ArkTS组件/HdsTabs_底部页签/ui-design-hdstabs`
