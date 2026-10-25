@@ -173,7 +173,8 @@ export struct CompactShell {
         .width('100%')
         .height(66)
         .justifyContent(FlexAlign.Center)
-        .position({ x: 0, y: this.skyHeight - 80 })
+        // 与宿主命中层/面板锚点共用同一基线（BottomNavMetrics），避免视觉与命中差 16vp。
+        .position({ x: 0, y: this.dockTop })
         .hitTestBehavior(HitTestMode.Block)
         .zIndex(40)
 

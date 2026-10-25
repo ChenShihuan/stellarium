@@ -164,10 +164,10 @@ export struct ExpandedShell {
             onPanelTouch: (event: TouchEvent) => { this.onPanelTouch(event) }
           })
         }
-          .width(this.expandedDockWidth)
+          .width(this.dockWidth)
           .height(54)
           .justifyContent(FlexAlign.Center)
-          .position({ x: this.expandedDockLeft, y: this.skyHeight - 62 })
+          .position({ x: this.dockLeft, y: this.dockTop })
           .hitTestBehavior(HitTestMode.Block)
           .zIndex(40)
           .animation({ duration: 300, curve: curves.springMotion(0.46, 0.86) })
